@@ -28,6 +28,7 @@ Implementation code: P00-P08B complete
 - Verification scenarios are categorized checks, not all browser E2E.
 - No backup, rebase, quota engine, migration engine or MCP.
 - Localization uses extensible locale packs; Russian is mandatory for v0.1 and English is the source fallback.
+- External agent edits refresh open read-only UI through polling; changed fields receive a short, coalesced, non-flashing highlight with reduced-motion support.
 - API and CLI JSON stay locale-neutral; user-authored repository content is not translated automatically.
 - P00 closes on reproducible local verification and repository evidence; an external remote, clean-Linux CI run and ARCH/QA acceptance are not exit requirements.
 

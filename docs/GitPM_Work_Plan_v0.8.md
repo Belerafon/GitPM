@@ -966,7 +966,7 @@
 - Estimate: `4-7 engineer-days`
 - Dependencies: `P02, P03, P05, P06`
 - Accountable: `BE`
-- Responsible: `BE, QA`
+- Responsible: `BE, FE, QA`
 - Acceptance: `ARCH, QA`
 - Milestone: `beta`
 
@@ -986,21 +986,27 @@
 - CLI scope and explicit delete flag.
 - Format, validate, semantic diff, commit all, push and MR commands.
 - UI read-only enforcement during external mode.
+- Poll-driven reconciliation of agent file changes into affected UI read-models.
+- Ephemeral field/entity highlight state with coalescing, expiry and `prefers-reduced-motion` behavior.
 
 ### Artifacts
 
 - agent CLI workflow
 - agent usage guide
+- external-update reconciliation and highlight component
 
 ### Automated verification
 
-- agent-local verification with scope violation and valid MR flow
+- agent-local and browser verification with live read-model refresh, scope violation and valid MR flow
 
 ### Manual acceptance
 
-1. Запустить scripted agent fixture в external mode.
-2. Подтвердить deny для изменения другого Project.
-3. Сохранить CLI transcript and final diff.
+1. Запустить scripted agent fixture в external mode при открытом UI.
+2. Изменить несколько полей и подтвердить обновление UI не позднее следующего polling cycle плюс processing delay, без ручного reload.
+3. Подтвердить мягкую подсветку только изменившихся полей/сущностей, автоматическое затухание и отсутствие focus/scroll jump.
+4. Выполнить два быстрых изменения одного поля и подтвердить coalescing без повторного мигания; проверить статическую индикацию с `prefers-reduced-motion`.
+5. Подтвердить deny для изменения другого Project.
+6. Сохранить CLI transcript, browser trace, screenshots and final diff.
 
 ### Owned verification checks
 

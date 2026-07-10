@@ -269,6 +269,7 @@ stages:
   accountable: BE
   responsible:
   - BE
+  - FE
   - QA
   acceptance:
   - ARCH
@@ -670,6 +671,18 @@ requirements:
   release_gate: beta
   acceptance_criteria:
   - External writer workflow enforces scope and uses commit all.
+  checks:
+  - VFY-029
+- id: LIVE-UPDATE-001
+  description: Внешние изменения агента появляются в открытом UI через polling с ненавязчивой временной подсветкой изменившихся полей
+  source:
+    document: GitPM_Implementation_Plan_v0.7.md
+    section: 21. Агент через files и CLI
+  owner: FE
+  stage: P12
+  release_gate: beta
+  acceptance_criteria:
+  - External-mode read-model обновляется без ручного reload; changed fields отмечаются временно, coalesce без мигания и учитывают reduced motion.
   checks:
   - VFY-029
 - id: NO-QUOTA-001
@@ -1413,18 +1426,26 @@ verification_checks:
   - external-mode draft and scripted agent
   steps:
   - edit allowed Project
+  - keep UI open and observe two consecutive agent writes
+  - enable reduced-motion preference and repeat an update
   - attempt out-of-scope edit
   - format, validate, diff, commit all, push and create MR
   expected_result:
   - UI remains read-only
+  - affected read-models refresh through polling without manual reload
+  - only changed fields or collapsed entity indicators receive a temporary non-flashing highlight
+  - consecutive updates coalesce and reduced-motion uses a static indicator
   - scope violation fails
   - valid workflow produces branch and MR contract
   evidence:
   - CLI transcript
+  - Playwright trace
+  - field-highlight screenshots
   - Git diff
   - captured MR payload
   requirements:
   - AGENT-001
+  - LIVE-UPDATE-001
   - WRITER-001
 - id: VFY-030
   title: Security hostile-content suite
