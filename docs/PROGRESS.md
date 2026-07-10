@@ -70,11 +70,22 @@ Commits: `6d7d451`, `d271a9b`
 
 ### 2026-07-10 - Planning revision v0.5
 
-Status: prepared, pending commit evidence
+Status: done
+Accountable: ARCH
+Commit: `a077215` `docs: simplify v0.1 architecture and delivery plan`
+
+Evidence:
+
+- `python3 scripts/validate_planning.py`: passed;
+- result: 21 stages, 32 structured E2E tests, 27 requirements;
+- DAG is acyclic and critical path is derived from dependencies;
+- `python3 scripts/test_planning_validator.py`: 8 mutations rejected;
+- `python3 -m py_compile scripts/validate_planning.py scripts/test_planning_validator.py`: passed;
+- `git diff --check`: passed;
+- active versioned planning files are unique;
+- no safety-ref, migration, quota, rebase, MCP or live-GitLab-test stage remains;
+- planning maintenance workflow is documented.
 
 Next:
 
-- run planning validation;
-- commit revision;
-- record commit SHA and validation output;
 - start P00.
