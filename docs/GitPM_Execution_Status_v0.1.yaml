@@ -227,3 +227,7 @@ verification_checks:
     status: pending
     evidence: []
     notes: ''
+  VFY-032:
+    status: pending
+    evidence: []
+    notes: ''

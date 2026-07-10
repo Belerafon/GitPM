@@ -19,7 +19,7 @@ def main()->int:
         baseline=run(root)
         if baseline.returncode==0:
             print('Pending baseline gate unexpectedly passed'); print(baseline.stdout); return 1
-        trace=yaml.safe_load((root/'docs/GitPM_Requirements_Traceability_v0.4.yaml').read_text(encoding='utf-8'))
+        trace=yaml.safe_load((root/'docs/GitPM_Requirements_Traceability_v0.5.yaml').read_text(encoding='utf-8'))
         status_path=root/'docs/GitPM_Execution_Status_v0.1.yaml'
         status=yaml.safe_load(status_path.read_text(encoding='utf-8'))
         evidence=root/'evidence/selftest/pass.txt'; evidence.parent.mkdir(parents=True); evidence.write_text('self-test evidence\n',encoding='utf-8')

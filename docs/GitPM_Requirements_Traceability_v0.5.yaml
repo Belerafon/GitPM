@@ -1,10 +1,10 @@
-version: '0.4'
+version: '0.5'
 documents:
-  implementation_plan: GitPM_Implementation_Plan_v0.6.md
-  work_plan: GitPM_Work_Plan_v0.5.md
-  delivery_policies: GitPM_Delivery_Policies_v0.4.md
-  security_baseline: GitPM_Security_Baseline_v0.4.md
-  maintenance_guide: GitPM_Planning_Maintenance_Guide_v0.2.md
+  implementation_plan: GitPM_Implementation_Plan_v0.7.md
+  work_plan: GitPM_Work_Plan_v0.6.md
+  delivery_policies: GitPM_Delivery_Policies_v0.5.md
+  security_baseline: GitPM_Security_Baseline_v0.5.md
+  maintenance_guide: GitPM_Planning_Maintenance_Guide_v0.3.md
   execution_status: GitPM_Execution_Status_v0.1.yaml
   progress: PROGRESS.md
 milestones:
@@ -337,7 +337,7 @@ requirements:
 - id: ARCH-001
   description: Git является единственным источником бизнес-данных
   source:
-    document: GitPM_Implementation_Plan_v0.6.md
+    document: GitPM_Implementation_Plan_v0.7.md
     section: 1. Цель и источник истины
   owner: ARCH
   stage: P01
@@ -349,7 +349,7 @@ requirements:
 - id: REPO-001
   description: v0.1 использует выделенный GitPM repository
   source:
-    document: GitPM_Implementation_Plan_v0.6.md
+    document: GitPM_Implementation_Plan_v0.7.md
     section: 3. Выделенный repository
   owner: ARCH
   stage: P01
@@ -361,7 +361,7 @@ requirements:
 - id: IDENT-001
   description: Один immutable ID и явное Project path exception
   source:
-    document: GitPM_Implementation_Plan_v0.6.md
+    document: GitPM_Implementation_Plan_v0.7.md
     section: 4. Единая идентичность
   owner: ARCH
   stage: P01
@@ -374,7 +374,7 @@ requirements:
 - id: DOMAIN-001
   description: Schema v1 baseline утвержден до parser implementation
   source:
-    document: GitPM_Implementation_Plan_v0.6.md
+    document: GitPM_Implementation_Plan_v0.7.md
     section: 6. Schema v1 baseline
   owner: ARCH
   stage: P01
@@ -387,7 +387,7 @@ requirements:
 - id: YAML-001
   description: Канонический и безопасный YAML profile
   source:
-    document: GitPM_Implementation_Plan_v0.6.md
+    document: GitPM_Implementation_Plan_v0.7.md
     section: 7. YAML profile
   owner: BE
   stage: P02
@@ -400,7 +400,7 @@ requirements:
 - id: VALID-001
   description: Структурная, ссылочная и циклическая валидация
   source:
-    document: GitPM_Implementation_Plan_v0.6.md
+    document: GitPM_Implementation_Plan_v0.7.md
     section: 13. Validation и CLI
   owner: BE
   stage: P02
@@ -413,7 +413,7 @@ requirements:
 - id: CAL-001
   description: Calendar schema и date utilities определены до API/UI
   source:
-    document: GitPM_Implementation_Plan_v0.6.md
+    document: GitPM_Implementation_Plan_v0.7.md
     section: 6.7. Calendar
   owner: BE
   stage: P02
@@ -428,7 +428,7 @@ requirements:
 - id: GIT-SYNC-001
   description: Новый draft создается только после успешного fetch от current remote main
   source:
-    document: GitPM_Implementation_Plan_v0.6.md
+    document: GitPM_Implementation_Plan_v0.7.md
     section: 8. Git clone, fetch и main synchronization
   owner: BE
   stage: P03
@@ -440,7 +440,7 @@ requirements:
 - id: DRAFT-001
   description: Draft имеет owner, explicit lifecycle и conservative cleanup
   source:
-    document: GitPM_Implementation_Plan_v0.6.md
+    document: GitPM_Implementation_Plan_v0.7.md
     section: 9. Draft lifecycle и ownership
   owner: BE
   stage: P03
@@ -453,7 +453,7 @@ requirements:
 - id: WRITER-001
   description: В одном draft одновременно разрешен один writer mode
   source:
-    document: GitPM_Implementation_Plan_v0.6.md
+    document: GitPM_Implementation_Plan_v0.7.md
     section: 9. Draft lifecycle и ownership
   owner: BE
   stage: P03
@@ -467,7 +467,7 @@ requirements:
 - id: DURABILITY-001
   description: Локальная сохранность ограничена persistent volume
   source:
-    document: GitPM_Implementation_Plan_v0.6.md
+    document: GitPM_Implementation_Plan_v0.7.md
     section: 11. Локальная сохранность без backup
   owner: BE
   stage: P03
@@ -480,7 +480,7 @@ requirements:
 - id: DELETE-001
   description: Archive и physical delete являются разными операциями
   source:
-    document: GitPM_Implementation_Plan_v0.6.md
+    document: GitPM_Implementation_Plan_v0.7.md
     section: 12. Delete и archive
   owner: BE
   stage: P04
@@ -493,7 +493,7 @@ requirements:
 - id: RESTORE-001
   description: Восстановление выполняется штатными Git operations
   source:
-    document: GitPM_Implementation_Plan_v0.6.md
+    document: GitPM_Implementation_Plan_v0.7.md
     section: 14. Changes и restore
   owner: BE
   stage: P05
@@ -508,7 +508,7 @@ requirements:
 - id: AUTH-001
   description: GitLab access level напрямую определяет простую роль GitPM
   source:
-    document: GitPM_Implementation_Plan_v0.6.md
+    document: GitPM_Implementation_Plan_v0.7.md
     section: 17. Простая модель прав
   owner: SEC
   stage: P06
@@ -522,7 +522,7 @@ requirements:
 - id: TOKEN-001
   description: OAuth token хранится только в памяти и безопасно передается Git
   source:
-    document: GitPM_Implementation_Plan_v0.6.md
+    document: GitPM_Implementation_Plan_v0.7.md
     section: 16. OAuth 2.0 и GitLab integration
   owner: SEC
   stage: P06
@@ -536,7 +536,7 @@ requirements:
 - id: GITLAB-001
   description: GitLab OAuth/API и push проверяются local test doubles
   source:
-    document: GitPM_Implementation_Plan_v0.6.md
+    document: GitPM_Implementation_Plan_v0.7.md
     section: 16. OAuth 2.0 и GitLab integration
   owner: BE
   stage: P06
@@ -550,7 +550,7 @@ requirements:
 - id: NO-WEBHOOK-001
   description: Webhook отсутствует в v0.1; status обновляется polling
   source:
-    document: GitPM_Implementation_Plan_v0.6.md
+    document: GitPM_Implementation_Plan_v0.7.md
     section: 16. OAuth 2.0 и GitLab integration
   owner: ARCH
   stage: P06
@@ -563,7 +563,7 @@ requirements:
 - id: SINGLE-REPO-001
   description: Server обслуживает один configured repository
   source:
-    document: GitPM_Implementation_Plan_v0.6.md
+    document: GitPM_Implementation_Plan_v0.7.md
     section: 3. Выделенный repository
   owner: ARCH
   stage: P06
@@ -576,7 +576,7 @@ requirements:
 - id: UI-CORE-001
   description: Core UI редактирует Project, Task и Milestone
   source:
-    document: GitPM_Implementation_Plan_v0.6.md
+    document: GitPM_Implementation_Plan_v0.7.md
     section: 18. UI decisions
   owner: FE
   stage: P08A
@@ -589,7 +589,7 @@ requirements:
 - id: UI-ADMIN-001
   description: Administration UI управляет Person, Team, Calendar, statuses и issue types
   source:
-    document: GitPM_Implementation_Plan_v0.6.md
+    document: GitPM_Implementation_Plan_v0.7.md
     section: 17. Простая модель прав
   owner: FE
   stage: P08B
@@ -602,7 +602,7 @@ requirements:
 - id: DIFF-001
   description: Semantic diff ограничен operations, fields, files and projects
   source:
-    document: GitPM_Implementation_Plan_v0.6.md
+    document: GitPM_Implementation_Plan_v0.7.md
     section: 19. Упрощенный semantic diff
   owner: BE
   stage: P09
@@ -616,7 +616,7 @@ requirements:
 - id: HISTORY-001
   description: History и revert работают без rebase
   source:
-    document: GitPM_Implementation_Plan_v0.6.md
+    document: GitPM_Implementation_Plan_v0.7.md
     section: 15. History без rebase
   owner: BE
   stage: P10
@@ -628,7 +628,7 @@ requirements:
 - id: BOARD-001
   description: Board поддерживает status drag и Saved Views без swimlanes
   source:
-    document: GitPM_Implementation_Plan_v0.6.md
+    document: GitPM_Implementation_Plan_v0.7.md
     section: 18. UI decisions
   owner: FE
   stage: P11A
@@ -640,7 +640,7 @@ requirements:
 - id: GANTT-001
   description: Gantt доступен только для чтения
   source:
-    document: GitPM_Implementation_Plan_v0.6.md
+    document: GitPM_Implementation_Plan_v0.7.md
     section: 20. Calendar, read-only Gantt и Workload
   owner: FE
   stage: P11C
@@ -652,7 +652,7 @@ requirements:
 - id: WORKLOAD-001
   description: Workload использует документированную приблизительную формулу
   source:
-    document: GitPM_Implementation_Plan_v0.6.md
+    document: GitPM_Implementation_Plan_v0.7.md
     section: 20. Calendar, read-only Gantt и Workload
   owner: BE
   stage: P11D
@@ -664,7 +664,7 @@ requirements:
 - id: AGENT-001
   description: Agent работает через files and CLI without MCP
   source:
-    document: GitPM_Implementation_Plan_v0.6.md
+    document: GitPM_Implementation_Plan_v0.7.md
     section: 21. Агент через files и CLI
   owner: BE
   stage: P12
@@ -676,7 +676,7 @@ requirements:
 - id: NO-QUOTA-001
   description: Quota engine отсутствует
   source:
-    document: GitPM_Implementation_Plan_v0.6.md
+    document: GitPM_Implementation_Plan_v0.7.md
     section: 22. Security baseline
   owner: ARCH
   stage: P04
@@ -688,7 +688,7 @@ requirements:
 - id: SEC-001
   description: Filesystem, Git runner, browser and OAuth surfaces защищены
   source:
-    document: GitPM_Implementation_Plan_v0.6.md
+    document: GitPM_Implementation_Plan_v0.7.md
     section: 22. Security baseline
   owner: SEC
   stage: P13A
@@ -703,7 +703,7 @@ requirements:
 - id: OBS-001
   description: Минимальная наблюдаемость доступна с bootstrap
   source:
-    document: GitPM_Implementation_Plan_v0.6.md
+    document: GitPM_Implementation_Plan_v0.7.md
     section: 23. Минимальная наблюдаемость
   owner: OPS
   stage: P00
@@ -715,7 +715,7 @@ requirements:
 - id: PERF-001
   description: Performance smoke воспроизводим на pinned runner
   source:
-    document: GitPM_Implementation_Plan_v0.6.md
+    document: GitPM_Implementation_Plan_v0.7.md
     section: 24. Reproducible performance smoke
   owner: OPS
   stage: P13B
@@ -727,7 +727,7 @@ requirements:
 - id: PLAN-001
   description: Planning artifacts обновляются по формальной инструкции
   source:
-    document: GitPM_Implementation_Plan_v0.6.md
+    document: GitPM_Implementation_Plan_v0.7.md
     section: 26. Исполнение, evidence и release gates
   owner: ARCH
   stage: P00
@@ -740,7 +740,7 @@ requirements:
 - id: GATE-001
   description: Release gates проверяют фактические statuses and evidence
   source:
-    document: GitPM_Implementation_Plan_v0.6.md
+    document: GitPM_Implementation_Plan_v0.7.md
     section: 26. Исполнение, evidence и release gates
   owner: QA
   stage: P00
@@ -750,6 +750,21 @@ requirements:
   checks:
   - VFY-002
   - VFY-024
+- id: I18N-001
+  description: UI и human-readable CLI поддерживают locale packs, русский обязателен для v0.1
+  source:
+    document: GitPM_Implementation_Plan_v0.7.md
+    section: 27. Локализация
+  owner: FE
+  stage: P07
+  release_gate: release
+  acceptance_criteria:
+  - All mandatory user-facing strings use registered message keys.
+  - Russian locale has complete key, placeholder and plural-branch parity with source locale.
+  - Locale switching changes presentation only and does not change YAML, Git diff or machine-readable API/CLI output.
+  - Russian date, number and plural formatting pass release acceptance.
+  checks:
+  - VFY-032
 verification_checks:
 - id: VFY-001
   title: Clean install и health
@@ -1459,6 +1474,35 @@ verification_checks:
   requirements:
   - PERF-001
   - DURABILITY-001
+- id: VFY-032
+  title: Localization framework and mandatory Russian release acceptance
+  stage: P14
+  mandatory_from: release
+  test_type: acceptance
+  environment: browser-local
+  actor: QA
+  preconditions:
+  - feature-complete release candidate
+  - registered en and ru locale packs
+  - synthetic third-locale fixture for registry test
+  steps:
+  - run locale key, placeholder, plural-branch and raw-HTML validation
+  - select ru and traverse all mandatory UI areas including representative validation and Git errors
+  - verify Russian date-only, number, duration and plural formatting
+  - run human-readable CLI with --locale ru and locale-neutral CLI JSON output
+  - reload browser and confirm locale persistence, then register synthetic test locale without component changes
+  expected_result:
+  - ru has no missing keys, fallback strings or placeholder mismatches
+  - all mandatory UI and human-readable CLI surfaces are understandable in Russian
+  - locale change modifies no YAML files, Git status or API/JSON contracts
+  - html lang and dir match locale metadata and selected locale persists after reload
+  - third locale is enabled only by locale pack and registry metadata
+  evidence:
+  - localization completeness report
+  - Playwright trace and Russian screenshots
+  - CLI transcript and JSON contract comparison
+  requirements:
+  - I18N-001
 release_gates:
   alpha:
     required_stages:
@@ -1601,6 +1645,7 @@ release_gates:
     - VFY-029
     - VFY-030
     - VFY-031
+    - VFY-032
   release:
     required_stages:
     - P00
@@ -1655,3 +1700,4 @@ release_gates:
     - VFY-029
     - VFY-030
     - VFY-031
+    - VFY-032

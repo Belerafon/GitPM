@@ -10,9 +10,9 @@ from typing import Callable
 import yaml
 
 SOURCE_ROOT = Path(__file__).resolve().parents[1]
-TRACE_REL = Path('docs/GitPM_Requirements_Traceability_v0.4.yaml')
-IMPL_REL = Path('docs/GitPM_Implementation_Plan_v0.6.md')
-WORK_REL = Path('docs/GitPM_Work_Plan_v0.5.md')
+TRACE_REL = Path('docs/GitPM_Requirements_Traceability_v0.5.yaml')
+IMPL_REL = Path('docs/GitPM_Implementation_Plan_v0.7.md')
+WORK_REL = Path('docs/GitPM_Work_Plan_v0.6.md')
 STATUS_REL = Path('docs/GitPM_Execution_Status_v0.1.yaml')
 VALIDATOR_REL = Path('scripts/validate_planning.py')
 
@@ -64,6 +64,11 @@ def done_without_evidence(root:Path):
 def reintroduce_webhook(root:Path):
     p=root/IMPL_REL; p.write_text(p.read_text(encoding='utf-8')+'\nwebhook handler\n',encoding='utf-8')
 
+def remove_mandatory_russian(root:Path):
+    p=root/IMPL_REL
+    txt=p.read_text(encoding='utf-8').replace('русский `ru` является обязательным','русский `ru` доступен',1)
+    p.write_text(txt,encoding='utf-8')
+
 def late_mandatory_check(root:Path):
     d=load(root,TRACE_REL); d['verification_checks'][2]['mandatory_from']='release'; save(root,TRACE_REL,d)
 
@@ -72,7 +77,7 @@ MUTATIONS:list[tuple[str,Callable[[Path],None]]]=[
  ('empty requirement acceptance',empty_acceptance),('inexact release gate',inexact_gate),('duplicate YAML key',duplicate_yaml_key),
  ('reintroduced rebase API',reintroduce_rebase),('live GitLab environment',live_gitlab_env),('missing source heading',missing_source_heading),
  ('work plan metadata mismatch',work_metadata_mismatch),('done stage without evidence',done_without_evidence),('reintroduced webhook',reintroduce_webhook),
- ('check mandatory later than owning stage',late_mandatory_check),
+ ('check mandatory later than owning stage',late_mandatory_check),('mandatory Russian removed',remove_mandatory_russian),
 ]
 
 def main()->int:

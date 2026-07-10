@@ -1,6 +1,6 @@
 # GitPM: политики поставки и эксплуатации
 
-Версия документа: 0.4  
+Версия документа: 0.5  
 Статус: обязательный baseline v0.1
 
 ## 1. Milestones
@@ -89,3 +89,15 @@ Calendar is date-only. Gantt is read-only. Workload is approximation and explain
 ## 16. Planning maintenance
 
 Scope or architecture changes require synchronized updates of active docs, registry, execution status and validators according to the Maintenance Guide.
+
+
+## 17. Localization
+
+- UI and human-readable CLI use registered locale packs; user-facing strings are not hard-coded.
+- Russian `ru` is mandatory and complete for release v0.1.
+- English `en` is the source locale and fallback.
+- Default locale is configurable and defaults to `ru`; browser choice is stored only in localStorage.
+- API and CLI JSON output remain locale-neutral and use stable codes.
+- Repository content and user-authored text are not translated automatically.
+- Date-only values remain ISO in YAML and are formatted without timezone date shifts.
+- Release gate requires key/placeholder parity and Russian UI/CLI acceptance evidence.

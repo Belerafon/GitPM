@@ -8,7 +8,7 @@ import yaml
 
 ROOT=Path(__file__).resolve().parents[1]
 DOCS=ROOT/'docs'
-TRACE=DOCS/'GitPM_Requirements_Traceability_v0.4.yaml'
+TRACE=DOCS/'GitPM_Requirements_Traceability_v0.5.yaml'
 STATUS=DOCS/'GitPM_Execution_Status_v0.1.yaml'
 
 def load(path:Path):

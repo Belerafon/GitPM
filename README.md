@@ -8,13 +8,13 @@ Git-first система управления проектами и задача
 
 ## Active documents
 
-- `docs/GitPM_Implementation_Plan_v0.6.md` - architecture and normative domain model;
-- `docs/GitPM_Work_Plan_v0.5.md` - executable stages and acceptance;
-- `docs/GitPM_Requirements_Traceability_v0.4.yaml` - DAG, requirements, verification checks and gate composition;
+- `docs/GitPM_Implementation_Plan_v0.7.md` - architecture and normative domain model;
+- `docs/GitPM_Work_Plan_v0.6.md` - executable stages and acceptance;
+- `docs/GitPM_Requirements_Traceability_v0.5.yaml` - DAG, requirements, verification checks and gate composition;
 - `docs/GitPM_Execution_Status_v0.1.yaml` - actual stage/check status and evidence;
-- `docs/GitPM_Delivery_Policies_v0.4.md` - product and operational boundaries;
-- `docs/GitPM_Security_Baseline_v0.4.md` - early security controls;
-- `docs/GitPM_Planning_Maintenance_Guide_v0.2.md` - how to maintain planning artifacts;
+- `docs/GitPM_Delivery_Policies_v0.5.md` - product and operational boundaries;
+- `docs/GitPM_Security_Baseline_v0.5.md` - early security controls;
+- `docs/GitPM_Planning_Maintenance_Guide_v0.3.md` - how to maintain planning and localization artifacts;
 - `docs/PROGRESS.md` - decisions, blockers and next action.
 
 Old versions remain only in Git history.
@@ -45,3 +45,4 @@ The planning validator checks document consistency. The gate checker checks actu
 - Read-only Gantt and approximate Workload.
 - Agent edits files and uses CLI; no MCP.
 - Physical delete and archive are both supported.
+- Locale packs support multiple languages; Russian is mandatory and complete for v0.1.

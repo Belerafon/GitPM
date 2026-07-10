@@ -1,13 +1,13 @@
 # GitPM: инструкция по поддержке планов и evidence
 
-Версия документа: 0.2  
+Версия документа: 0.3  
 Статус: обязательная рабочая инструкция
 
 ## 1. Назначение файлов
 
-- `GitPM_Implementation_Plan_v0.6.md`: что строится и какие решения нормативны.
-- `GitPM_Work_Plan_v0.5.md`: в каком порядке выполняется работа и как принимается stage.
-- `GitPM_Requirements_Traceability_v0.4.yaml`: machine-readable DAG, requirements, verification checks and gates.
+- `GitPM_Implementation_Plan_v0.7.md`: что строится и какие решения нормативны.
+- `GitPM_Work_Plan_v0.6.md`: в каком порядке выполняется работа и как принимается stage.
+- `GitPM_Requirements_Traceability_v0.5.yaml`: machine-readable DAG, requirements, verification checks and gates.
 - `GitPM_Execution_Status_v0.1.yaml`: единственный machine-readable источник фактического выполнения.
 - `PROGRESS.md`: краткий человеческий журнал решений, blockers and next action.
 - Delivery Policies and Security Baseline: cross-cutting constraints.
@@ -126,3 +126,19 @@ PROGRESS хранит только:
 - Stage metadata matches registry?
 - Execution status contains exact IDs?
 - Gate checker fails on pending evidence?
+- Russian locale complete and `VFY-032` synchronized with mandatory UI surfaces?
+
+
+## 11. Поддержка локализации
+
+При добавлении или изменении user-facing сообщения:
+
+1. Добавить или изменить key в source locale `en`.
+2. В том же commit обновить обязательный `ru` locale.
+3. Не добавлять raw HTML; dynamic values передавать placeholders.
+4. Для чисел, дат и plural forms использовать locale-aware formatter, а не собирать строку вручную.
+5. Запустить key/placeholder parity check и browser smoke для `ru`.
+6. При добавлении locale зарегистрировать language tag, display name и direction.
+7. Не переводить API codes, JSON field names и repository content.
+
+Release не допускается, если `ru` использует fallback, содержит missing key или не прошел `VFY-032`. При изменении состава обязательных экранов обновляются шаги и evidence `VFY-032`, а не создается параллельный неучтенный checklist.

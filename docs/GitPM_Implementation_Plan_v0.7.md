@@ -1,6 +1,6 @@
 # GitPM: архитектура и техническая спецификация
 
-Версия документа: 0.6  
+Версия документа: 0.7  
 Статус: активная архитектура v0.1
 
 ## 1. Цель и источник истины
@@ -22,7 +22,8 @@ Git является единственным источником бизнес-
 - commit всех изменений draft, push и GitLab Merge Request;
 - read-only Gantt;
 - приблизительный Workload;
-- работа агента через отдельный worktree и общий CLI.
+- работа агента через отдельный worktree и общий CLI;
+- расширяемая локализация UI и CLI через locale packs; русский язык обязателен для v0.1.
 
 В v0.1 не входят:
 
@@ -437,6 +438,7 @@ v0.1 использует browser polling каждые 3 секунды, а не
 
 Обязательные области:
 
+- переключатель locale в пользовательском меню;
 - Portfolio;
 - Projects and Tasks;
 - Board без swimlanes;
@@ -448,7 +450,7 @@ v0.1 использует browser polling каждые 3 секунды, а не
 - Changes;
 - History.
 
-Repository selector и server configuration UI отсутствуют. Специальная virtualization не является требованием v0.1; она добавляется только при нарушении performance smoke.
+Repository selector и server configuration UI отсутствуют. Выбранный locale хранится в browser localStorage и не является бизнес-данными. Специальная virtualization не является требованием v0.1; она добавляется только при нарушении performance smoke.
 
 ## 19. Упрощенный semantic diff
 
@@ -555,10 +557,80 @@ Server configuration задается config file, environment и mounted secret
 
 ## 26. Исполнение, evidence и release gates
 
-Исполнимый порядок находится в `GitPM_Work_Plan_v0.5.md`.
+Исполнимый порядок находится в `GitPM_Work_Plan_v0.6.md`.
 
-Формальный DAG, requirements, verification checks и gate composition находятся в `GitPM_Requirements_Traceability_v0.4.yaml`.
+Формальный DAG, requirements, verification checks и gate composition находятся в `GitPM_Requirements_Traceability_v0.5.yaml`.
 
 Фактические статусы и evidence находятся в `GitPM_Execution_Status_v0.1.yaml`. Команда `scripts/check_release_gate.py` проверяет реальное выполнение gate, а не только структуру плана.
 
-Правила поддержки находятся в `GitPM_Planning_Maintenance_Guide_v0.2.md`.
+Правила поддержки находятся в `GitPM_Planning_Maintenance_Guide_v0.3.md`.
+
+## 27. Локализация
+
+GitPM проектируется как многоязычное приложение с зарегистрированными locale packs. Добавление нового языка не должно требовать изменения доменной модели, API или компонентов UI, кроме регистрации нового набора сообщений и locale metadata.
+
+### 27.1. Обязательные locale v0.1
+
+- русский `ru` является обязательным и должен иметь 100% покрытие пользовательских сообщений к release v0.1;
+- английский `en` является source locale и техническим fallback;
+- server default locale задается `GITPM_DEFAULT_LOCALE`, значение по умолчанию `ru`;
+- при первом открытии применяется первый поддерживаемый locale из `navigator.languages`, иначе server default;
+- явный выбор пользователя сохраняется в browser localStorage и имеет приоритет при следующих открытиях.
+
+Наличие английского source locale не снижает обязательность русского: release gate падает при отсутствующем русском ключе, несовпадающих placeholders или использовании fallback на обязательных экранах.
+
+### 27.2. Область локализации
+
+Локализуются:
+
+- весь application chrome и навигация;
+- формы, действия, подтверждения и сообщения об ошибках;
+- Changes, History, Board, Gantt и Workload UI;
+- human-readable output CLI;
+- даты, числа, длительности, plural forms и относительное время.
+
+Не локализуются автоматически:
+
+- названия и описания Project, Task, Milestone, Person, Team и Calendar;
+- repository-defined titles из `statuses.yaml` и `issue-types.yaml`;
+- commit messages, branch names и GitLab content;
+- machine-readable JSON output CLI и API contracts.
+
+API возвращает стабильный error code и параметры сообщения. UI и CLI локализуют сообщение на своей стороне. Persisted date-only значения остаются ISO `YYYY-MM-DD`; отображение locale-aware не должно менять дату через timezone conversion.
+
+### 27.3. Формат сообщений
+
+- сообщения хранятся в version-controlled JSON locale packs в code repository, а не в portfolio repository;
+- ключи являются стабильными namespaced identifiers, например `task.delete.confirmation`;
+- pluralization и параметризация используют ICU MessageFormat или эквивалентную семантику;
+- placeholders обязаны совпадать во всех locale;
+- HTML в переводах запрещен; dynamic values экранируются;
+- locale metadata содержит `languageTag`, отображаемое имя и `direction: ltr|rtl`;
+- root element получает корректные `lang` и `dir`;
+- v0.1 проверяет `ltr` для `ru` и `en`, но архитектура не блокирует последующее добавление RTL locale.
+
+### 27.4. CLI
+
+Human-readable CLI принимает locale в следующем порядке приоритета:
+
+1. `--locale`;
+2. `GITPM_LOCALE`;
+3. server default locale или `ru` для standalone CLI.
+
+`--format json` всегда использует стабильные codes, field names и values, не зависящие от locale. Это необходимо для агентов и автоматизации.
+
+### 27.5. Проверки локализации
+
+CI обязан проверять:
+
+- отсутствие пропущенных и лишних message keys относительно source locale;
+- совпадение placeholders и plural branches;
+- 100% полноту `ru`;
+- отсутствие raw HTML в сообщениях;
+- отсутствие hard-coded user-facing strings в обязательных UI surfaces, кроме allowlist;
+- корректное форматирование date-only, чисел и plural forms для `ru`;
+- переключение locale без изменения YAML, Git diff или API payload;
+- сохранение выбранного locale после reload;
+- возможность подключить тестовый третий locale только через registry и locale pack.
+
+Полный localization acceptance выполняется перед Release Candidate. Перевод пользовательского контента и runtime upload переводов в v0.1 отсутствуют.

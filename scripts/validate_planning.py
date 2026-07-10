@@ -13,15 +13,15 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs"
 EXPECTED = {
-    "implementation_plan": "GitPM_Implementation_Plan_v0.6.md",
-    "work_plan": "GitPM_Work_Plan_v0.5.md",
-    "delivery_policies": "GitPM_Delivery_Policies_v0.4.md",
-    "security_baseline": "GitPM_Security_Baseline_v0.4.md",
-    "maintenance_guide": "GitPM_Planning_Maintenance_Guide_v0.2.md",
+    "implementation_plan": "GitPM_Implementation_Plan_v0.7.md",
+    "work_plan": "GitPM_Work_Plan_v0.6.md",
+    "delivery_policies": "GitPM_Delivery_Policies_v0.5.md",
+    "security_baseline": "GitPM_Security_Baseline_v0.5.md",
+    "maintenance_guide": "GitPM_Planning_Maintenance_Guide_v0.3.md",
     "execution_status": "GitPM_Execution_Status_v0.1.yaml",
     "progress": "PROGRESS.md",
 }
-TRACE_NAME = "GitPM_Requirements_Traceability_v0.4.yaml"
+TRACE_NAME = "GitPM_Requirements_Traceability_v0.5.yaml"
 ALLOWED_ACTIVE_PATTERNS = {
     "GitPM_Implementation_Plan_v*.md": EXPECTED["implementation_plan"],
     "GitPM_Work_Plan_v*.md": EXPECTED["work_plan"],
@@ -79,10 +79,18 @@ progress = read(EXPECTED["progress"])
 registry = load_yaml(DOCS / TRACE_NAME)
 execution = load_yaml(DOCS / EXPECTED["execution_status"])
 
-if registry.get("version") != "0.4":
-    fail("traceability version must be 0.4")
+if registry.get("version") != "0.5":
+    fail("traceability version must be 0.5")
 if registry.get("documents") != EXPECTED:
     fail(f"registry documents mismatch: expected {EXPECTED}, got {registry.get('documents')}")
+
+# Active normative documents may not point to superseded active-version filenames.
+active_text = "\n".join([impl, work, delivery, security, maintenance, progress, (ROOT / "README.md").read_text(encoding="utf-8")])
+for pattern, expected_name in ALLOWED_ACTIVE_PATTERNS.items():
+    prefix, suffix = pattern.split("*")
+    for match in re.findall(re.escape(prefix) + r"[^`\s]+" + re.escape(suffix), active_text):
+        if match != expected_name:
+            fail(f"stale normative document reference found: {match}; expected {expected_name}")
 
 # Normative architectural decisions that must remain unambiguous.
 required_phrases = {
@@ -95,8 +103,10 @@ required_phrases = {
         "Webhook отсутствует в v0.1",
         "Commit в v0.1 всегда включает все изменения draft",
         "Gantt только читает",
+        "русский `ru` является обязательным",
+        "API возвращает стабильный error code",
     ],
-    "delivery": ["one writer mode", "commit always includes all draft changes", "Webhook is absent"],
+    "delivery": ["one writer mode", "commit always includes all draft changes", "Webhook is absent", "Russian `ru` is mandatory"],
     "maintenance": ["Gate checker confirms actual execution" if False else "Gate checker"],
 }
 for phrase in required_phrases["implementation"]:

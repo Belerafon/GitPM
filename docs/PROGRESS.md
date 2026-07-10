@@ -5,12 +5,12 @@ Implementation code: not started
 
 ## Current active revision
 
-- Implementation Plan: v0.6
-- Work Plan: v0.5
-- Traceability: v0.4
-- Delivery Policies: v0.4
-- Security Baseline: v0.4
-- Maintenance Guide: v0.2
+- Implementation Plan: v0.7
+- Work Plan: v0.6
+- Traceability: v0.5
+- Delivery Policies: v0.5
+- Security Baseline: v0.5
+- Maintenance Guide: v0.3
 - Execution Status: v0.1
 
 ## Decisions closed in this revision
@@ -25,12 +25,14 @@ Implementation code: not started
 - Release checks use machine-readable execution status and evidence.
 - Verification scenarios are categorized checks, not all browser E2E.
 - No backup, rebase, quota engine, migration engine or MCP.
+- Localization uses extensible locale packs; Russian is mandatory for v0.1 and English is the source fallback.
+- API and CLI JSON stay locale-neutral; user-authored repository content is not translated automatically.
 
 ## Last planning evidence
 
 - Architecture review resolution commit: `b40a9bb`
-- Planning validator: `20 stages, 31 verification checks, 32 requirements`
-- Mutation self-tests: `13 mutations rejected`
+- Planning validator: pending rerun for localization revision
+- Mutation self-tests: pending rerun for localization revision
 - Release gate self-test: pending rejected, complete evidence passed, missing evidence rejected
 - Alpha gate currently reports `NOT READY`, as expected before implementation
 

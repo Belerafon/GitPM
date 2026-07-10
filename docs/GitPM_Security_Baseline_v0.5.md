@@ -1,6 +1,6 @@
 # GitPM: ранний baseline безопасности
 
-Версия документа: 0.4  
+Версия документа: 0.5  
 Статус: обязательный до P03
 
 ## 1. Принцип
@@ -64,6 +64,8 @@ Webhook secret, backup assets, safety refs, token keyring, quota state and MCP c
 - binary/large files not rendered inline;
 - diff rendering limits;
 - DOM XSS tests.
+- locale messages are trusted code assets but may not contain raw HTML; interpolated values are escaped.
+- locale selection cannot alter API authorization, filesystem paths or persisted domain values.
 
 ## 7. OAuth 2.0
 
@@ -114,6 +116,7 @@ Webhook secret, backup assets, safety refs, token keyring, quota state and MCP c
 - GIT_ASKPASS token leakage inspection;
 - YAML resource exhaustion;
 - XSS through repository and GitLab metadata.
+- unsafe translation markup and placeholder injection.
 
 ## 12. P13A confirmation
 

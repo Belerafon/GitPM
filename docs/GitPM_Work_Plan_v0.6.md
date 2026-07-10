@@ -1,14 +1,14 @@
 # GitPM: исполнимый план работ, верификации и поставки
 
-Версия документа: 0.5  
+Версия документа: 0.6  
 Статус: активный план v0.1
 
 ## 1. Источники истины
 
-- Архитектура: `GitPM_Implementation_Plan_v0.6.md`.
-- Формальный DAG, requirements и verification checks: `GitPM_Requirements_Traceability_v0.4.yaml`.
+- Архитектура: `GitPM_Implementation_Plan_v0.7.md`.
+- Формальный DAG, requirements и verification checks: `GitPM_Requirements_Traceability_v0.5.yaml`.
 - Фактические statuses and evidence: `GitPM_Execution_Status_v0.1.yaml`.
-- Правила поддержки: `GitPM_Planning_Maintenance_Guide_v0.2.md`.
+- Правила поддержки: `GitPM_Planning_Maintenance_Guide_v0.3.md`.
 - Человекочитаемый журнал: `PROGRESS.md`.
 
 ## 2. Milestones
@@ -539,12 +539,15 @@
 - Draft create, open, close, reopen and explicit cleanup.
 - Polling every 3 seconds for draft and MR status.
 - Writer mode indicator and local-only warning.
+- Locale registry, message provider and locale selector.
+- Browser preference persistence and `lang`/`dir` root attributes.
 
 ### Artifacts
 
 - React shell
 - draft context
 - shared components
+- i18n runtime and `en`/`ru` locale packs
 
 ### Automated verification
 
@@ -553,8 +556,9 @@
 ### Manual acceptance
 
 1. Войти, создать draft и увидеть branch, dirty, validation and writer mode.
-2. Закрыть и reopen clean draft.
-3. Сохранить screenshots and Playwright trace.
+2. Переключить `ru`/`en`, reload browser и подтвердить сохранение locale без изменения worktree.
+3. Закрыть и reopen clean draft.
+4. Сохранить screenshots and Playwright trace.
 
 ### Owned verification checks
 
@@ -704,6 +708,7 @@
 - Commit dialog that always includes all draft changes.
 - Push and create MR UI.
 - Alpha acceptance and limitations record.
+- All Alpha UI strings routed through localization keys; Russian Alpha screens reviewed.
 
 ### Artifacts
 
@@ -721,7 +726,8 @@
 1. Создать, изменить и удалить Task.
 2. Восстановить deleted file, затем повторить delete and commit all.
 3. Push branch and create MR through test double.
-4. Сохранить Playwright trace, final diff and accepted limitations.
+4. Переключить UI на русский и подтвердить отсутствие hard-coded English на Alpha workflow.
+5. Сохранить Playwright trace, final diff and accepted limitations.
 
 ### Owned verification checks
 
@@ -1133,7 +1139,8 @@
 
 ### Work packages
 
-- Run machine-readable release-candidate gate check.
+- Run localization completeness and Russian acceptance check.
+- Run machine-readable release-candidate gate check after owned checks pass.
 - Review changelog, limitations and evidence links.
 - Prepare the final release command; the release gate is executed only after P14 is marked done.
 - Confirm clean working tree before tagging.
@@ -1142,22 +1149,26 @@
 
 - release checklist
 - changelog
+- localization completeness report
+- Russian UI/CLI acceptance evidence
 - release-candidate evidence package
 
 ### Automated verification
 
+- localization key, placeholder and hard-coded-string checks
 - scripts/check_release_gate.py --gate release_candidate
 
 ### Manual acceptance
 
-1. Получить successful release-candidate gate report.
-2. PO, ARCH and QA фиксируют acceptance и переводят P14 в `done`.
-3. Запустить `scripts/check_release_gate.py --gate release`, затем создать tag v0.1.
-4. Сохранить final gate report, tag SHA and release notes.
+1. Выполнить `VFY-032`: пройти обязательные UI surfaces на русском и проверить human-readable CLI.
+2. Получить successful release-candidate gate report.
+3. PO, ARCH and QA фиксируют acceptance и переводят P14 в `done`.
+4. Запустить `scripts/check_release_gate.py --gate release`, затем создать tag v0.1.
+5. Сохранить localization report, final gate report, tag SHA and release notes.
 
 ### Owned verification checks
 
-- none
+- `VFY-032`
 
 ### Exit gate
 
