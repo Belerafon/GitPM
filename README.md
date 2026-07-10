@@ -1,54 +1,54 @@
 # GitPM
 
-Git-first система управления проектами и задачами с веб-интерфейсом, GitLab Merge Request workflow и поддержкой агентов.
+Git-first система управления проектами и задачами с web UI, GitLab Merge Request workflow и поддержкой агентов.
 
-## Текущий статус
+## Current status
 
-Репозиторий находится на стадии `planning_ready`. Программная реализация еще не начата. План переработан после инженерного review: ранняя безопасность, миграции, сохранность dirty draft, real GitLab gate, измеримые performance budgets и трассировка требований теперь являются обязательными до соответствующих этапов.
+Статус: `planning_ready`. Реализация не начата. Planning revision v0.4 устраняет противоречия identity model, DAG, traceability, permissions, browser/Git security, observability и E2E specifications.
 
-## Актуальные документы
+GitPM v0.1 намеренно не реализует резервное копирование. Локальные safety refs помогают при сбое процесса или потере worktree directory, но не при потере persistent volume.
 
-- `docs/GitPM_Implementation_Plan_v0.3.md` - архитектура, формат данных, API и продуктовые решения;
-- `docs/GitPM_Work_Plan_v0.2.md` - единственный исполнимый план этапов, владельцев, размеров и проверок;
-- `docs/GitPM_Delivery_Policies_v0.1.md` - scope v0.1, права, квоты, RPO/RTO и performance budgets;
-- `docs/GitPM_Security_Baseline_v0.1.md` - ранняя модель угроз, key lifecycle и обязательные контрмеры;
-- `docs/GitPM_Requirements_Traceability_v0.1.yaml` - связь требований, этапов и E2E;
-- `docs/PROGRESS.md` - живой журнал evidence, блокировок, решений и следующего действия.
+## Active documents
 
-Старые версии планов доступны в Git history, но не остаются активными файлами в рабочем дереве.
+- `docs/GitPM_Implementation_Plan_v0.4.md` - architecture and technical specification;
+- `docs/GitPM_Work_Plan_v0.3.md` - executable stage plan;
+- `docs/GitPM_Requirements_Traceability_v0.2.yaml` - formal DAG, requirements, E2E specifications and exact release gates;
+- `docs/GitPM_Delivery_Policies_v0.2.md` - milestones, identity, permissions, quotas, durability and performance;
+- `docs/GitPM_Security_Baseline_v0.2.md` - early security controls;
+- `docs/PROGRESS.md` - actual evidence and next action.
 
-## Проверка планирования
+Old versions remain available only in Git history.
+
+## Planning validation
 
 ```bash
 python3 scripts/validate_planning.py
+python3 scripts/test_planning_validator.py
 ```
 
-Проверка подтверждает:
+The validator parses YAML and checks:
 
-- наличие актуальных документов;
-- отсутствие одновременно активных устаревших планов;
-- уникальность 18 stage IDs;
-- наличие 45 E2E scenarios;
-- корректность ссылок traceability registry;
-- покрытие каждого E2E хотя бы одним requirement.
+- exactly one active version of each plan family;
+- duplicate and missing stage/E2E/requirement IDs;
+- stage dependency existence and DAG cycles;
+- stage headings against the registry;
+- exact E2E sequence `E2E-001` through `E2E-045`;
+- requirement fields, acceptance criteria and bidirectional test links;
+- exact release-gate coverage;
+- obsolete architecture decisions such as `restore/lines`, repository picker or production key in environment;
+- no executable backup subsystem in v0.1 planning.
 
-## Как вести работу
+## Core principles
 
-1. Открыть текущий stage в `docs/PROGRESS.md`.
-2. Выполнять entry criteria, work packages и проверки соответствующего раздела Work Plan.
-3. Записать commit SHA, pipeline/report, E2E IDs и manual acceptance в PROGRESS.
-4. Переводить stage в `done` только после exit gate.
-5. Изменения sequence/scope оформлять новой версией Work Plan; архитектурные решения - новой версией Implementation Plan или ADR.
-
-## Основные принципы
-
-- Git является источником истины.
-- Каждая сущность хранится в отдельном YAML-файле.
-- Пользователи и агенты работают в отдельных ветках и Git worktree.
-- Изменения проходят через commit, push и GitLab Merge Request.
-- Архивирование и физическое удаление являются отдельными операциями.
-- Восстановление и откат выполняются штатными средствами Git.
-- Собственная база данных и отдельный механизм Undo в первой версии не используются.
-- v0.1 обслуживает один configured portfolio repository.
-- Security controls реализуются на ранних этапах, а не откладываются в hardening.
-- Прогресс подтверждается тестами и evidence, а не процентом готовности.
+- Immutable ULID is canonical identity.
+- Display key is a mutable presentation attribute.
+- Git is the business source of truth.
+- One entity per YAML file named by ULID.
+- One branch/worktree per draft.
+- Changes go through validation, commit, push and GitLab MR.
+- Physical delete and archive are separate operations.
+- Restore uses native Git file/hunk/commit workflows.
+- No database for business data and no custom Undo.
+- One configured repository per server in v0.1.
+- Alpha is the MVP.
+- No backup subsystem in v0.1.

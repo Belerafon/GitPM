@@ -1,137 +1,92 @@
 # GitPM: прогресс реализации
 
-Версия документа: 0.2
-Связанный план работ: `GitPM_Work_Plan_v0.2.md`
-Связанная архитектура: `GitPM_Implementation_Plan_v0.3.md`
-Политики поставки: `GitPM_Delivery_Policies_v0.1.md`
-Security baseline: `GitPM_Security_Baseline_v0.1.md`
-Трассировка: `GitPM_Requirements_Traceability_v0.1.yaml`
+Версия документа: 0.3
+Связанный план работ: `GitPM_Work_Plan_v0.3.md`
+Связанная архитектура: `GitPM_Implementation_Plan_v0.4.md`
+Политики поставки: `GitPM_Delivery_Policies_v0.2.md`
+Security baseline: `GitPM_Security_Baseline_v0.2.md`
+Трассировка: `GitPM_Requirements_Traceability_v0.2.yaml`
 Последнее обновление: 2026-07-10
 
-## 1. Текущее состояние
+## 1. Current state
 
-- Общий статус: `planning_ready`;
-- Текущий этап: `P00 - Bootstrap и воспроизводимое окружение`;
-- Статус текущего этапа: `not_started`;
-- Владелец: `ARCH`;
-- Последний завершенный этап реализации: отсутствует;
-- Текущий release gate: до Alpha;
-- Программная реализация: не начата.
+- Overall status: `planning_ready`;
+- Current stage: `P00`;
+- Stage status: `not_started`;
+- Accountable: `ARCH`;
+- Current gate: before Alpha/MVP;
+- Software implementation: not started.
 
-## 2. Следующее проверяемое действие
+## 2. Next verifiable action
 
-Начать P00 и получить первый зеленый pipeline:
+Start P00 and obtain a green clean-install pipeline with health endpoints, structured logs and planning validation.
 
-```text
-clean checkout -> pnpm install --frozen-lockfile -> lint -> typecheck -> test -> build -> planning validation
-```
+## 3. Active blockers
 
-## 3. Активные блокировки
+- P00 has no blocker.
+- P00S and P06B require a disposable real GitLab test project matching production major/minor version.
+- No backup infrastructure is required or planned.
 
-- Для P00 блокировок нет.
-- До P00S нужен disposable GitLab test project той же major/minor версии, что production, для GitLab-specific spikes.
-- P06 не может стать `done` без реального GitLab test project и OAuth application.
+## 4. Decisions in planning revision v0.4
 
-## 4. Принятые решения после инженерного review
+- Canonical identity is immutable ULID.
+- Display key is mutable and never used in filenames, internal references or mutation routes.
+- Formal DAG is stored in traceability YAML; manual parallelism field removed.
+- P06 split into P06A contract/security and P06B real GitLab integration.
+- Alpha and MVP are the same milestone.
+- `restore/lines` removed from architecture and v0.1 API.
+- One configured repository; no repository picker.
+- Off-volume backup and all backup scheduling/retention are explicitly excluded.
+- Local safety refs protect only while persistent volume survives.
+- Permission matrix has explicit precedence and critical-operation refresh.
+- Browser and malicious-Git surfaces are included in early security work.
+- Observability starts in P00 and grows with each component.
+- Obvious XL work split into P06A/P06B, P08A/P08B, P10A/P10B, P11B/P11C/P11D and P13A/P13B.
+- E2E scenarios are structured specifications with preconditions, steps, expected results and evidence.
+- Release gates have exact machine-checked lists.
 
-- Security threat modeling начинается в P00S до Git core.
-- P13 только подтверждает и испытывает security controls.
-- Master key/keyring lifecycle решен до P06 в Security Baseline.
-- Архитектурный документ больше не содержит второй исполнимый stage plan.
-- P08 не зависит от Changes UI; restore UI проверяется в P09.
-- Real GitLab integration является обязательным gate P06.
-- Restore arbitrary selected lines исключен из Alpha/MVP.
-- Прежний P11 разделен на P11A Board, P11B Calendar/Gantt и P11C Workload.
-- Migration mechanism реализуется в P02 до Alpha.
-- Dirty draft имеет safety refs и измеримые RPO/RTO.
-- v0.1 ограничен одним configured repository.
-- Performance budgets, permission matrix и quotas зафиксированы.
-- У каждого этапа есть owner и size; XL запрещен.
-- YAML comments в доменных файлах не поддерживаются.
-- PROGRESS.md больше не дублирует статические task checklists Work Plan.
+## 5. Stage summary
 
-## 5. Сводка этапов
-
-- P00: `not_started`;
-- P00S: `not_started`;
-- P01: `not_started`;
-- P02: `not_started`;
-- P03: `not_started`;
-- P04: `not_started`;
-- P05: `not_started`;
-- P06: `not_started`;
-- P07: `not_started`;
-- P08: `not_started`;
-- P09: `not_started`;
-- P10: `not_started`;
-- P11A: `not_started`;
-- P11B: `not_started`;
-- P11C: `not_started`;
-- P12: `not_started`;
-- P13: `not_started`;
-- P14: `not_started`.
-
-Детальные неизменные чек-листы находятся только в `GitPM_Work_Plan_v0.2.md`.
+All 23 stages are `not_started`. Static work packages remain only in `GitPM_Work_Plan_v0.3.md`.
 
 ## 6. Evidence index
 
-Пока существует только planning evidence:
+Planning evidence:
 
 - Git repository initialized;
-- архитектурный и work plans находятся под version control;
-- planning traceability validator добавлен;
-- программные tests еще не существуют.
+- active plans versioned;
+- formal YAML registry created;
+- robust planning validator and mutation self-tests added;
+- software tests do not exist yet.
 
-## 7. Журнал прогресса
+## 7. Progress log
 
-## 2026-07-10 - Инициализация проекта
+### 2026-07-10 - Repository initialization
 
 Status: done
+Commit: `c1cc756`
 
-Commit:
-
-- `c1cc756` `docs: initialize GitPM project and add implementation plan`
-
-Evidence:
-
-- repository создан;
-- initial ZIP с `.git` проверен распаковкой.
-
-## 2026-07-10 - Первый исполнимый план
+### 2026-07-10 - Work Plan v0.1
 
 Status: superseded
+Commits: `e4ba32a`, `2570793`
 
-Commits:
+### 2026-07-10 - Planning revision v0.3
 
-- `e4ba32a` `docs: add phased delivery and verification plan`;
-- `2570793` `docs: record planning milestone`.
+Status: superseded
+Commits: `e92b036`, `618bf81`
 
-Result:
+### 2026-07-10 - Planning revision v0.4
 
-- создан Work Plan v0.1;
-- создан первый PROGRESS;
-- после инженерного review план признан требующим архитектурных правок до P00.
+Status: in_progress until commit is recorded.
 
-## 2026-07-10 - Инженерный review и план v0.2
+Expected evidence:
 
-Status: done
-Owner: ARCH/QA
-Commit: `e92b036` `docs: resolve delivery plan architecture review`
-
-Evidence:
-
-- `python3 scripts/validate_planning.py`: passed;
-- `git diff --check`: passed;
-- old active plan versions отсутствуют в рабочем дереве;
-- Work Plan содержит 18 stages и 45 E2E scenarios;
-- traceability registry содержит 29 requirements и покрывает все E2E;
-- Implementation Plan больше не содержит дублирующий исполнимый stage plan.
-
-Exceptions:
-
-- программная реализация не начата;
-- реальные GitLab integration tests начнутся в P00S/P06.
-
-Next:
-
-- начать P00.
+- `python3 scripts/validate_planning.py` passes;
+- `python3 scripts/test_planning_validator.py` rejects all planned mutations;
+- `git diff --check` passes;
+- one active file per versioned plan family;
+- 23-stage acyclic DAG;
+- 45 structured E2E specifications;
+- all E2E linked to non-aggregate requirements;
+- no backup subsystem or off-volume durability claim.

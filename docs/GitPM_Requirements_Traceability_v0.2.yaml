@@ -1,0 +1,1984 @@
+version: '0.2'
+documents:
+  implementation_plan: GitPM_Implementation_Plan_v0.4.md
+  work_plan: GitPM_Work_Plan_v0.3.md
+  delivery_policies: GitPM_Delivery_Policies_v0.2.md
+  security_baseline: GitPM_Security_Baseline_v0.2.md
+  progress: PROGRESS.md
+milestones:
+  alpha: MVP and first supported useful version
+  beta: Feature-complete v0.1 before hardening
+  release_candidate: Operationally and security ready candidate
+  release: Tagged v0.1
+stages:
+- id: P00
+  title: Bootstrap, CI и базовая наблюдаемость
+  size: M
+  estimate: 4-7
+  dependencies: []
+  accountable: ARCH
+  responsible:
+  - BE
+  - FE
+  - QA
+  acceptance:
+  - ARCH
+  - QA
+  milestone: foundation
+- id: P00S
+  title: Модель угроз и риск-ориентированные spikes
+  size: M
+  estimate: 4-7
+  dependencies:
+  - P00
+  accountable: SEC
+  responsible:
+  - ARCH
+  - BE
+  - QA
+  acceptance:
+  - SEC
+  - ARCH
+  milestone: foundation
+- id: P01
+  title: Идентичность сущностей и формат репозитория
+  size: L
+  estimate: 8-12
+  dependencies:
+  - P00
+  accountable: ARCH
+  responsible:
+  - BE
+  - QA
+  acceptance:
+  - ARCH
+  - QA
+  milestone: foundation
+- id: P02
+  title: Parser, formatter, validation и миграции
+  size: L
+  estimate: 8-12
+  dependencies:
+  - P01
+  accountable: BE
+  responsible:
+  - BE
+  - QA
+  acceptance:
+  - ARCH
+  - QA
+  milestone: foundation
+- id: P03
+  title: Git core, worktree и локальная сохранность draft
+  size: L
+  estimate: 8-12
+  dependencies:
+  - P00S
+  - P02
+  accountable: BE
+  responsible:
+  - BE
+  - SEC
+  - QA
+  acceptance:
+  - SEC
+  - QA
+  milestone: foundation
+- id: P04
+  title: Backend draft API и доменные операции
+  size: L
+  estimate: 8-12
+  dependencies:
+  - P03
+  accountable: BE
+  responsible:
+  - BE
+  - QA
+  acceptance:
+  - ARCH
+  - QA
+  milestone: alpha
+- id: P05
+  title: Git changes API и restore file/hunk
+  size: M
+  estimate: 4-7
+  dependencies:
+  - P04
+  accountable: BE
+  responsible:
+  - BE
+  - QA
+  acceptance:
+  - QA
+  milestone: alpha
+- id: P06A
+  title: OIDC contract, keyring и authorization engine
+  size: M
+  estimate: 4-7
+  dependencies:
+  - P00S
+  - P04
+  accountable: SEC
+  responsible:
+  - BE
+  - SEC
+  - QA
+  acceptance:
+  - SEC
+  - ARCH
+  milestone: alpha
+- id: P06B
+  title: 'Реальная интеграция GitLab: push, MR и webhooks'
+  size: L
+  estimate: 8-12
+  dependencies:
+  - P05
+  - P06A
+  accountable: BE
+  responsible:
+  - BE
+  - SEC
+  - QA
+  acceptance:
+  - SEC
+  - QA
+  milestone: alpha
+- id: P07
+  title: Frontend shell и управление draft
+  size: M
+  estimate: 4-7
+  dependencies:
+  - P04
+  - P06A
+  accountable: FE
+  responsible:
+  - FE
+  - BE
+  - QA
+  acceptance:
+  - FE
+  - QA
+  milestone: alpha
+- id: P08A
+  title: 'Core UI: Project, Task и Milestone'
+  size: L
+  estimate: 8-12
+  dependencies:
+  - P07
+  accountable: FE
+  responsible:
+  - FE
+  - BE
+  - QA
+  acceptance:
+  - PO
+  - QA
+  milestone: alpha
+- id: P08B
+  title: 'Administration UI: Person, Team и базовые настройки'
+  size: M
+  estimate: 4-7
+  dependencies:
+  - P07
+  - P02
+  accountable: FE
+  responsible:
+  - FE
+  - BE
+  - QA
+  acceptance:
+  - PO
+  - QA
+  milestone: alpha
+- id: P09
+  title: Changes UI, semantic diff, commit и Alpha/MVP gate
+  size: L
+  estimate: 8-12
+  dependencies:
+  - P05
+  - P06B
+  - P08A
+  - P08B
+  accountable: ARCH
+  responsible:
+  - FE
+  - BE
+  - QA
+  acceptance:
+  - PO
+  - QA
+  - SEC
+  milestone: alpha
+- id: P10A
+  title: История и revert workflow
+  size: M
+  estimate: 4-7
+  dependencies:
+  - P09
+  accountable: BE
+  responsible:
+  - BE
+  - FE
+  - QA
+  acceptance:
+  - QA
+  milestone: beta
+- id: P10B
+  title: Rebase и conflict resolution
+  size: L
+  estimate: 8-12
+  dependencies:
+  - P10A
+  accountable: BE
+  responsible:
+  - BE
+  - FE
+  - QA
+  acceptance:
+  - ARCH
+  - QA
+  milestone: beta
+- id: P11A
+  title: Board и сохраненные views
+  size: M
+  estimate: 4-7
+  dependencies:
+  - P09
+  accountable: FE
+  responsible:
+  - FE
+  - BE
+  - QA
+  acceptance:
+  - PO
+  - QA
+  milestone: beta
+- id: P11B
+  title: Calendar administration и scheduling model
+  size: M
+  estimate: 4-7
+  dependencies:
+  - P08B
+  - P09
+  accountable: BE
+  responsible:
+  - BE
+  - FE
+  - QA
+  acceptance:
+  - PO
+  - QA
+  milestone: beta
+- id: P11C
+  title: Gantt
+  size: L
+  estimate: 8-12
+  dependencies:
+  - P11B
+  accountable: FE
+  responsible:
+  - FE
+  - BE
+  - QA
+  acceptance:
+  - PO
+  - QA
+  milestone: beta
+- id: P11D
+  title: Workload, capacity и overload
+  size: L
+  estimate: 8-12
+  dependencies:
+  - P11B
+  accountable: BE
+  responsible:
+  - BE
+  - FE
+  - QA
+  acceptance:
+  - PO
+  - QA
+  milestone: beta
+- id: P12
+  title: MCP и безопасная работа агентов
+  size: L
+  estimate: 8-12
+  dependencies:
+  - P10B
+  - P11A
+  accountable: BE
+  responsible:
+  - BE
+  - SEC
+  - QA
+  acceptance:
+  - SEC
+  - PO
+  - QA
+  milestone: beta
+- id: P13A
+  title: Security и fault hardening
+  size: L
+  estimate: 8-12
+  dependencies:
+  - P10B
+  - P11C
+  - P11D
+  - P12
+  accountable: SEC
+  responsible:
+  - SEC
+  - BE
+  - FE
+  - QA
+  acceptance:
+  - SEC
+  - ARCH
+  - QA
+  milestone: release_candidate
+- id: P13B
+  title: Operations, performance и observability completion
+  size: L
+  estimate: 8-12
+  dependencies:
+  - P13A
+  accountable: SRE
+  responsible:
+  - SRE
+  - BE
+  - QA
+  acceptance:
+  - SRE
+  - ARCH
+  - QA
+  milestone: release_candidate
+- id: P14
+  title: Release acceptance v0.1
+  size: M
+  estimate: 4-7
+  dependencies:
+  - P13B
+  accountable: PO
+  responsible:
+  - PO
+  - QA
+  - ARCH
+  acceptance:
+  - PO
+  - QA
+  - ARCH
+  milestone: release
+requirements:
+- id: ID-ULID-001
+  description: ULID is the immutable canonical identity for every entity; filenames, internal references and mutation routes
+    use ULID.
+  source:
+    document: GitPM_Implementation_Plan_v0.4.md
+    section: '4'
+  owner: ARCH
+  stage: P01
+  release_gate: alpha
+  acceptance_criteria:
+  - Changing display key does not rename files or rewrite references.
+  - Mutation routes reject display key as canonical ID.
+  tests:
+  - E2E-002
+  - E2E-003
+  - E2E-041
+- id: ID-KEY-001
+  description: Display key is a mutable human-readable attribute resolved to ULID for lookup only.
+  source:
+    document: GitPM_Implementation_Plan_v0.4.md
+    section: '4'
+  owner: ARCH
+  stage: P01
+  release_gate: alpha
+  acceptance_criteria:
+  - Display key uniqueness rules are validated.
+  - Rename produces a one-file diff.
+  tests:
+  - E2E-003
+- id: ARCH-GIT-001
+  description: Git is the source of truth and all accepted changes are commits and Merge Requests.
+  source:
+    document: GitPM_Implementation_Plan_v0.4.md
+    section: '3'
+  owner: ARCH
+  stage: P03
+  release_gate: alpha
+  acceptance_criteria:
+  - No business entity exists only in application state.
+  - Main is changed only through GitLab MR.
+  tests:
+  - E2E-010
+  - E2E-011
+  - E2E-012
+  - E2E-014
+- id: ARCH-NODB-001
+  description: v0.1 has no persistent database for business data.
+  source:
+    document: GitPM_Implementation_Plan_v0.4.md
+    section: '7'
+  owner: ARCH
+  stage: P04
+  release_gate: alpha
+  acceptance_criteria:
+  - Restart reconstructs models from Git/files.
+  tests:
+  - E2E-020
+  - E2E-033
+- id: REPO-SINGLE-001
+  description: One configured portfolio repository is supported per v0.1 server instance.
+  source:
+    document: GitPM_Delivery_Policies_v0.2.md
+    section: '3'
+  owner: ARCH
+  stage: P06B
+  release_gate: alpha
+  acceptance_criteria:
+  - UI has no repository selector.
+  - Foreign project webhooks do not mutate state.
+  tests:
+  - E2E-001
+  - E2E-043
+- id: DATA-FILE-001
+  description: One entity is stored per canonical YAML file named by ULID.
+  source:
+    document: GitPM_Implementation_Plan_v0.4.md
+    section: '5'
+  owner: BE
+  stage: P01
+  release_gate: alpha
+  acceptance_criteria:
+  - Create/update/delete map to one entity file unless relationships are explicitly changed.
+  tests:
+  - E2E-002
+  - E2E-003
+  - E2E-005
+- id: DATA-YAML-001
+  description: Canonical YAML forbids comments in domain files, aliases, anchors, custom tags and duplicate keys.
+  source:
+    document: GitPM_Delivery_Policies_v0.2.md
+    section: '6'
+  owner: BE
+  stage: P02
+  release_gate: alpha
+  acceptance_criteria:
+  - Formatter is idempotent.
+  - Unsupported syntax fails explicitly.
+  tests:
+  - E2E-009
+  - E2E-031
+- id: DATA-MIGRATE-001
+  description: Schema migration is explicit, dry-runnable, Git-visible and reversible by Git.
+  source:
+    document: GitPM_Implementation_Plan_v0.4.md
+    section: '9'
+  owner: BE
+  stage: P02
+  release_gate: alpha
+  acceptance_criteria:
+  - No implicit migration on read.
+  - Dry-run writes nothing.
+  tests:
+  - E2E-031
+  - E2E-032
+- id: DATA-DELETE-001
+  description: Physical delete is allowed and uses referential restrict by default.
+  source:
+    document: GitPM_Implementation_Plan_v0.4.md
+    section: '8'
+  owner: BE
+  stage: P04
+  release_gate: alpha
+  acceptance_criteria:
+  - Unreferenced entity can be deleted.
+  - Referenced entity deletion is atomic and blocked.
+  tests:
+  - E2E-005
+  - E2E-006
+  - E2E-007
+- id: GIT-WORKTREE-001
+  description: Each draft has a separate branch and worktree.
+  source:
+    document: GitPM_Implementation_Plan_v0.4.md
+    section: '10'
+  owner: BE
+  stage: P03
+  release_gate: alpha
+  acceptance_criteria:
+  - Drafts do not share writable working directories.
+  tests:
+  - E2E-001
+  - E2E-020
+- id: GIT-LOCAL-DURABILITY-001
+  description: Dirty drafts survive process/container restart on the same persistent volume and can recover a lost worktree
+    from a local safety ref.
+  source:
+    document: GitPM_Delivery_Policies_v0.2.md
+    section: '8'
+  owner: BE
+  stage: P03
+  release_gate: alpha
+  acceptance_criteria:
+  - No off-volume backup is implemented or promised.
+  - Loss of the entire persistent volume is documented as unrecoverable for unpushed data.
+  tests:
+  - E2E-033
+  - E2E-034
+- id: GIT-RESTORE-001
+  description: v0.1 restores whole files, deleted files and hunks; arbitrary selected-line restore is excluded.
+  source:
+    document: GitPM_Implementation_Plan_v0.4.md
+    section: '11'
+  owner: BE
+  stage: P05
+  release_gate: alpha
+  acceptance_criteria:
+  - Restore checks stale diff and revalidates YAML.
+  tests:
+  - E2E-007
+  - E2E-008
+- id: GIT-HISTORY-001
+  description: History, revert, rebase and conflict operations remain native Git workflows.
+  source:
+    document: GitPM_Implementation_Plan_v0.4.md
+    section: '12'
+  owner: BE
+  stage: P10B
+  release_gate: beta
+  acceptance_criteria:
+  - Revert uses a new draft/MR.
+  - Abort rebase restores prior state.
+  tests:
+  - E2E-015
+  - E2E-017
+  - E2E-018
+  - E2E-019
+- id: SEC-GIT-001
+  description: Git commands run through an allowlisted isolated runner resistant to hooks, filters, external diff, unsafe
+    protocols and command injection.
+  source:
+    document: GitPM_Security_Baseline_v0.2.md
+    section: '5'
+  owner: SEC
+  stage: P03
+  release_gate: alpha
+  acceptance_criteria:
+  - No shell execution.
+  - Malicious repository fixtures cannot execute code.
+  tests:
+  - E2E-026
+  - E2E-028
+- id: SEC-BROWSER-001
+  description: Browser rendering is protected by sanitization, CSP, clickjacking and URL policies.
+  source:
+    document: GitPM_Security_Baseline_v0.2.md
+    section: '7'
+  owner: SEC
+  stage: P07
+  release_gate: alpha
+  acceptance_criteria:
+  - Task, Markdown, commit and GitLab metadata XSS payloads do not execute.
+  tests:
+  - E2E-002
+  - E2E-013
+- id: SEC-TOKEN-001
+  description: OAuth tokens are encrypted with a mounted-secret keyring and never exposed in logs, URLs or process arguments.
+  source:
+    document: GitPM_Security_Baseline_v0.2.md
+    section: '8'
+  owner: SEC
+  stage: P06A
+  release_gate: alpha
+  acceptance_criteria:
+  - Rotation preserves access.
+  - Lost key forces re-authentication only.
+  tests:
+  - E2E-026
+  - E2E-035
+  - E2E-036
+- id: SEC-WEBHOOK-001
+  description: Webhooks are authenticated, replay-resistant, idempotent and bound to the configured GitLab project.
+  source:
+    document: GitPM_Security_Baseline_v0.2.md
+    section: '9'
+  owner: SEC
+  stage: P06B
+  release_gate: alpha
+  acceptance_criteria:
+  - Forged, replayed and foreign-project events cause no mutation.
+  tests:
+  - E2E-013
+  - E2E-027
+  - E2E-043
+- id: AUTHZ-MATRIX-001
+  description: A single authorization engine maps GitLab identity and GitPM policies to decisions and rechecks critical operations.
+  source:
+    document: GitPM_Delivery_Policies_v0.2.md
+    section: '9'
+  owner: SEC
+  stage: P06A
+  release_gate: alpha
+  acceptance_criteria:
+  - Deny has priority.
+  - Commit, push and MR recheck permissions.
+  - Config changes are diff-checked.
+  tests:
+  - E2E-006
+  - E2E-025
+- id: OPS-QUOTA-001
+  description: Server quotas bound drafts, worktrees, file sizes, requests, diffs and agent bulk operations atomically.
+  source:
+    document: GitPM_Delivery_Policies_v0.2.md
+    section: '10'
+  owner: SRE
+  stage: P04
+  release_gate: alpha
+  acceptance_criteria:
+  - Quota violation writes nothing.
+  tests:
+  - E2E-029
+- id: OBS-EARLY-001
+  description: Health, structured logs, correlation IDs and component metrics are added when each risky component appears.
+  source:
+    document: GitPM_Implementation_Plan_v0.4.md
+    section: '18'
+  owner: SRE
+  stage: P00
+  release_gate: alpha
+  acceptance_criteria:
+  - Git, HTTP, OAuth and webhook failures are diagnosable before P13.
+  tests:
+  - E2E-020
+  - E2E-021
+  - E2E-027
+- id: GITLAB-REAL-001
+  description: P06B and Alpha require evidence from a real self-hosted GitLab test project.
+  source:
+    document: GitPM_Work_Plan_v0.3.md
+    section: P06B
+  owner: QA
+  stage: P06B
+  release_gate: alpha
+  acceptance_criteria:
+  - Scopes, authorship, protected branch and webhooks are tested against real GitLab.
+  tests:
+  - E2E-001
+  - E2E-011
+  - E2E-012
+  - E2E-013
+  - E2E-025
+- id: UI-CORE-001
+  description: Core UI supports projects, tasks, milestones, people and teams according to the editable entity matrix.
+  source:
+    document: GitPM_Implementation_Plan_v0.4.md
+    section: '15'
+  owner: FE
+  stage: P08B
+  release_gate: alpha
+  acceptance_criteria:
+  - CRUD and role behavior match policies.
+  tests:
+  - E2E-002
+  - E2E-003
+  - E2E-004
+  - E2E-005
+  - E2E-006
+  - E2E-041
+- id: UI-CHANGES-001
+  description: Changes UI exposes file and semantic diff, validation, restore, commit, push and MR.
+  source:
+    document: GitPM_Implementation_Plan_v0.4.md
+    section: '16'
+  owner: FE
+  stage: P09
+  release_gate: alpha
+  acceptance_criteria:
+  - Full workflow works without terminal.
+  tests:
+  - E2E-007
+  - E2E-008
+  - E2E-009
+  - E2E-010
+  - E2E-011
+  - E2E-012
+- id: UI-BOARD-001
+  description: Board and saved views persist only through Git-backed entities.
+  source:
+    document: GitPM_Implementation_Plan_v0.4.md
+    section: '15'
+  owner: FE
+  stage: P11A
+  release_gate: beta
+  acceptance_criteria:
+  - Drag and saved view changes appear in YAML diff.
+  tests:
+  - E2E-037
+  - E2E-042
+- id: SCHED-CALENDAR-001
+  description: Calendars and scheduling rules are explicit, timezone-aware and tested for DST.
+  source:
+    document: GitPM_Implementation_Plan_v0.4.md
+    section: '17'
+  owner: BE
+  stage: P11B
+  release_gate: beta
+  acceptance_criteria:
+  - Calendar changes deterministically affect scheduling.
+  tests:
+  - E2E-039
+- id: UI-GANTT-001
+  description: Gantt edits write canonical schedule fields and pass normal validation.
+  source:
+    document: GitPM_Implementation_Plan_v0.4.md
+    section: '17'
+  owner: FE
+  stage: P11C
+  release_gate: beta
+  acceptance_criteria:
+  - Date drag changes YAML and semantic diff.
+  tests:
+  - E2E-038
+- id: UI-WORKLOAD-001
+  description: Workload calculates explainable allocation and overload from calendars and capacity.
+  source:
+    document: GitPM_Implementation_Plan_v0.4.md
+    section: '17'
+  owner: BE
+  stage: P11D
+  release_gate: beta
+  acceptance_criteria:
+  - Known fixtures produce exact allocations.
+  tests:
+  - E2E-040
+  - E2E-041
+- id: AGENT-SCOPE-001
+  description: Agents use scoped domain tools and cannot expand scope, call raw Git or bypass server-side gates.
+  source:
+    document: GitPM_Implementation_Plan_v0.4.md
+    section: '19'
+  owner: SEC
+  stage: P12
+  release_gate: beta
+  acceptance_criteria:
+  - Cross-project changes are denied before write.
+  - Delete requires explicit permission and limit.
+  tests:
+  - E2E-022
+  - E2E-023
+  - E2E-024
+- id: PERF-ALPHA-001
+  description: Alpha performance is measured by a fixed 3 000-task benchmark protocol.
+  source:
+    document: GitPM_Delivery_Policies_v0.2.md
+    section: '11'
+  owner: SRE
+  stage: P09
+  release_gate: alpha
+  acceptance_criteria:
+  - Raw samples and runner manifest are retained.
+  tests:
+  - E2E-044
+- id: PERF-RELEASE-001
+  description: Release performance includes 10 000 tasks, 30 simulated users and 10 active drafts.
+  source:
+    document: GitPM_Delivery_Policies_v0.2.md
+    section: '11'
+  owner: SRE
+  stage: P13B
+  release_gate: release
+  acceptance_criteria:
+  - p95 and memory budgets pass on stable runner.
+  tests:
+  - E2E-045
+- id: NO-BACKUP-001
+  description: GitPM v0.1 performs no backup, replication or off-volume copy of repositories, safety refs or dirty worktrees.
+  source:
+    document: GitPM_Delivery_Policies_v0.2.md
+    section: '8'
+  owner: ARCH
+  stage: P03
+  release_gate: alpha
+  acceptance_criteria:
+  - UI and runbooks state that loss of persistent volume loses unpushed data.
+  - No backup scheduler, remote or retention subsystem exists.
+  tests:
+  - E2E-033
+  - E2E-034
+- id: DRAFT-CONCURRENCY-001
+  description: Optimistic concurrency rejects stale writes without data loss.
+  source:
+    document: GitPM_Implementation_Plan_v0.4.md
+    section: '13'
+  owner: BE
+  stage: P04
+  release_gate: alpha
+  acceptance_criteria:
+  - Stale blob SHA returns conflict.
+  tests:
+  - E2E-016
+- id: CLEAN-INSTALL-001
+  description: Supported clean installation is reproducible from locked sources.
+  source:
+    document: GitPM_Work_Plan_v0.3.md
+    section: P00
+  owner: ARCH
+  stage: P00
+  release_gate: alpha
+  acceptance_criteria:
+  - Clean Linux pipeline passes.
+  tests:
+  - E2E-030
+- id: FAIL-GITLAB-001
+  description: GitLab outages do not corrupt or discard local commits.
+  source:
+    document: GitPM_Implementation_Plan_v0.4.md
+    section: '14'
+  owner: BE
+  stage: P06B
+  release_gate: alpha
+  acceptance_criteria:
+  - Push/MR failures are retryable and idempotent.
+  tests:
+  - E2E-021
+e2e:
+- id: E2E-001
+  title: Login and create draft
+  stage: P09
+  mandatory_from: alpha
+  environment: real-gitlab
+  actor: Contributor
+  preconditions:
+  - Configured single repository
+  - Real GitLab OAuth app
+  steps:
+  - Login through GitLab
+  - Create draft from main
+  expected_result:
+  - User identity is preserved
+  - Separate branch/worktree exists
+  evidence:
+  - browser trace
+  - Git refs
+  - server log correlation id
+  requirements:
+  - REPO-SINGLE-001
+  - GIT-WORKTREE-001
+  - GITLAB-REAL-001
+- id: E2E-002
+  title: Create task through UI
+  stage: P08A
+  mandatory_from: alpha
+  environment: browser-local
+  actor: Contributor
+  preconditions:
+  - Open writable draft
+  steps:
+  - Create task with project and assignee
+  expected_result:
+  - File named by task ULID is created
+  - Display key is stored only as attribute
+  evidence:
+  - screenshot
+  - file diff
+  - API trace
+  requirements:
+  - ID-ULID-001
+  - DATA-FILE-001
+  - SEC-BROWSER-001
+  - UI-CORE-001
+- id: E2E-003
+  title: Update task and rename display key
+  stage: P08A
+  mandatory_from: alpha
+  environment: browser-local
+  actor: Contributor
+  preconditions:
+  - Existing linked task
+  steps:
+  - Change title and display key
+  expected_result:
+  - Only task file changes
+  - References and path remain unchanged
+  evidence:
+  - semantic diff
+  - Git diff
+  requirements:
+  - ID-ULID-001
+  - ID-KEY-001
+  - DATA-FILE-001
+  - UI-CORE-001
+- id: E2E-004
+  title: Archive task
+  stage: P08A
+  mandatory_from: alpha
+  environment: browser-local
+  actor: Contributor
+  preconditions:
+  - Active task
+  steps:
+  - Press Archive
+  expected_result:
+  - lifecycle becomes archived
+  - File remains
+  evidence:
+  - file diff
+  - UI state
+  requirements:
+  - UI-CORE-001
+- id: E2E-005
+  title: Physically delete task
+  stage: P08A
+  mandatory_from: alpha
+  environment: browser-local
+  actor: Contributor
+  preconditions:
+  - Unreferenced task
+  - Delete allowed
+  steps:
+  - Confirm Delete
+  expected_result:
+  - Task file is deleted
+  - Deleted entity shown by ULID/key
+  evidence:
+  - Git status
+  - semantic diff
+  requirements:
+  - DATA-FILE-001
+  - DATA-DELETE-001
+  - UI-CORE-001
+- id: E2E-006
+  title: Block deletion of referenced task
+  stage: P08A
+  mandatory_from: alpha
+  environment: browser-local
+  actor: Contributor
+  preconditions:
+  - Task has child or reverse dependency
+  steps:
+  - Attempt delete
+  expected_result:
+  - HTTP conflict with references
+  - No file changes
+  evidence:
+  - HTTP response
+  - clean Git status
+  requirements:
+  - DATA-DELETE-001
+  - AUTHZ-MATRIX-001
+  - UI-CORE-001
+- id: E2E-007
+  title: Restore deleted file
+  stage: P09
+  mandatory_from: alpha
+  environment: browser-local
+  actor: Contributor
+  preconditions:
+  - Deleted task in dirty draft
+  steps:
+  - Open Changes
+  - Restore file
+  expected_result:
+  - Original file restored
+  - Validation passes
+  evidence:
+  - before/after diff
+  - validation report
+  requirements:
+  - DATA-DELETE-001
+  - GIT-RESTORE-001
+  - UI-CHANGES-001
+- id: E2E-008
+  title: Restore selected hunk
+  stage: P09
+  mandatory_from: alpha
+  environment: browser-local
+  actor: Contributor
+  preconditions:
+  - File with two independent hunks
+  steps:
+  - Restore one hunk
+  expected_result:
+  - Only selected hunk reversed
+  - YAML remains valid
+  evidence:
+  - patch artifact
+  - file diff
+  requirements:
+  - GIT-RESTORE-001
+  - UI-CHANGES-001
+- id: E2E-009
+  title: Validation blocks commit
+  stage: P09
+  mandatory_from: alpha
+  environment: browser-local
+  actor: Contributor
+  preconditions:
+  - Draft contains broken reference
+  steps:
+  - Attempt commit
+  expected_result:
+  - Commit rejected with structured issue
+  - HEAD unchanged
+  evidence:
+  - validation JSON
+  - Git log
+  requirements:
+  - DATA-YAML-001
+  - UI-CHANGES-001
+- id: E2E-010
+  title: Commit draft
+  stage: P09
+  mandatory_from: alpha
+  environment: browser-local
+  actor: Contributor
+  preconditions:
+  - Valid dirty draft
+  steps:
+  - Commit with message
+  expected_result:
+  - Commit author and trailers correct
+  - Working tree clean
+  evidence:
+  - commit object
+  - Git status
+  requirements:
+  - ARCH-GIT-001
+  - UI-CHANGES-001
+- id: E2E-011
+  title: Push branch to real GitLab
+  stage: P09
+  mandatory_from: alpha
+  environment: real-gitlab
+  actor: Contributor
+  preconditions:
+  - Local commit
+  - Valid user token
+  steps:
+  - Push branch
+  expected_result:
+  - Remote branch created by user
+  - Token absent from outputs
+  evidence:
+  - GitLab branch API
+  - process/log scan
+  requirements:
+  - ARCH-GIT-001
+  - GITLAB-REAL-001
+  - UI-CHANGES-001
+- id: E2E-012
+  title: Create Merge Request
+  stage: P09
+  mandatory_from: alpha
+  environment: real-gitlab
+  actor: Contributor
+  preconditions:
+  - Pushed branch
+  steps:
+  - Create draft MR
+  expected_result:
+  - MR targets main
+  - Semantic summary attached
+  evidence:
+  - GitLab MR JSON
+  - UI status
+  requirements:
+  - ARCH-GIT-001
+  - GITLAB-REAL-001
+  - UI-CHANGES-001
+- id: E2E-013
+  title: Webhook updates UI
+  stage: P09
+  mandatory_from: alpha
+  environment: real-gitlab
+  actor: Contributor
+  preconditions:
+  - Open MR
+  - Webhook configured
+  steps:
+  - Change MR or pipeline state
+  expected_result:
+  - UI updates once
+  - Event is idempotent
+  evidence:
+  - webhook event id
+  - UI trace
+  requirements:
+  - SEC-BROWSER-001
+  - SEC-WEBHOOK-001
+  - GITLAB-REAL-001
+- id: E2E-014
+  title: Merge and refresh main
+  stage: P09
+  mandatory_from: alpha
+  environment: real-gitlab
+  actor: Maintainer
+  preconditions:
+  - Approved green MR
+  steps:
+  - Merge in GitLab
+  - Refresh GitPM main
+  expected_result:
+  - Main revision updates
+  - Merged draft state shown
+  evidence:
+  - merge commit
+  - server event
+  requirements:
+  - ARCH-GIT-001
+- id: E2E-015
+  title: Revert merged commit through MR
+  stage: P10A
+  mandatory_from: beta
+  environment: real-gitlab
+  actor: Maintainer
+  preconditions:
+  - Merged change
+  steps:
+  - Create revert draft
+  - Push revert MR
+  expected_result:
+  - Inverse diff is reviewable
+  - Main not directly changed
+  evidence:
+  - revert commit
+  - MR
+  requirements:
+  - GIT-HISTORY-001
+- id: E2E-016
+  title: Reject stale edit
+  stage: P04
+  mandatory_from: alpha
+  environment: integration-local
+  actor: Contributor
+  preconditions:
+  - Two clients know same blob SHA
+  steps:
+  - Client A writes
+  - Client B writes stale version
+  expected_result:
+  - Second write returns 409
+  - First write preserved
+  evidence:
+  - HTTP traces
+  - file hash
+  requirements:
+  - DRAFT-CONCURRENCY-001
+- id: E2E-017
+  title: Rebase without conflict
+  stage: P10B
+  mandatory_from: beta
+  environment: real-gitlab
+  actor: Contributor
+  preconditions:
+  - Draft behind main without overlap
+  steps:
+  - Rebase onto main
+  expected_result:
+  - Branch updated
+  - Changes preserved
+  evidence:
+  - Git graph
+  - validation
+  requirements:
+  - GIT-HISTORY-001
+- id: E2E-018
+  title: Resolve YAML three-way conflict
+  stage: P10B
+  mandatory_from: beta
+  environment: browser-local
+  actor: Contributor
+  preconditions:
+  - Both branches changed same entity field
+  steps:
+  - Start rebase
+  - Resolve in conflict UI
+  - Continue
+  expected_result:
+  - Valid chosen value committed
+  - No unrelated loss
+  evidence:
+  - three-way fixture
+  - Git graph
+  - validation
+  requirements:
+  - GIT-HISTORY-001
+- id: E2E-019
+  title: Abort rebase
+  stage: P10B
+  mandatory_from: beta
+  environment: integration-local
+  actor: Contributor
+  preconditions:
+  - Rebase conflict in progress
+  steps:
+  - Abort rebase
+  expected_result:
+  - Pre-rebase branch and worktree restored
+  evidence:
+  - before/after refs
+  - status
+  requirements:
+  - GIT-HISTORY-001
+- id: E2E-020
+  title: Recover after process/container restart
+  stage: P03
+  mandatory_from: alpha
+  environment: fault-local
+  actor: Contributor
+  preconditions:
+  - Dirty draft on persistent volume
+  steps:
+  - Kill process/container
+  - Restart with same volume
+  expected_result:
+  - Draft and files rediscovered
+  - No completed write lost
+  evidence:
+  - fault log
+  - hash comparison
+  requirements:
+  - ARCH-NODB-001
+  - GIT-WORKTREE-001
+  - OBS-EARLY-001
+- id: E2E-021
+  title: GitLab unavailable without local data loss
+  stage: P06B
+  mandatory_from: alpha
+  environment: real-gitlab
+  actor: Contributor
+  preconditions:
+  - Valid local commit
+  - GitLab endpoint unavailable
+  steps:
+  - Attempt push/MR
+  expected_result:
+  - Operation fails retryably
+  - Local branch/commit unchanged
+  evidence:
+  - error code
+  - Git refs
+  requirements:
+  - OBS-EARLY-001
+  - FAIL-GITLAB-001
+- id: E2E-022
+  title: Scoped agent creates tasks
+  stage: P12
+  mandatory_from: beta
+  environment: agent-real-gitlab
+  actor: Agent
+  preconditions:
+  - Agent draft limited to one project
+  steps:
+  - Bulk create tasks
+  - Validate
+  - Create MR
+  expected_result:
+  - Only allowed project files change
+  - MR identifies agent
+  evidence:
+  - policy report
+  - semantic diff
+  - MR
+  requirements:
+  - AGENT-SCOPE-001
+- id: E2E-023
+  title: Block cross-project agent deletion
+  stage: P12
+  mandatory_from: beta
+  environment: agent-local
+  actor: Agent
+  preconditions:
+  - Agent scope project A
+  - Task in project B
+  steps:
+  - Attempt delete task B
+  expected_result:
+  - Denied before write
+  - Git status clean
+  evidence:
+  - policy decision
+  - Git status
+  requirements:
+  - AGENT-SCOPE-001
+- id: E2E-024
+  title: Allow trusted agent deletion within limit
+  stage: P12
+  mandatory_from: beta
+  environment: agent-local
+  actor: Agent
+  preconditions:
+  - allow_delete true
+  - limit 2
+  steps:
+  - Delete two unreferenced tasks
+  expected_result:
+  - Two files deleted
+  - Third deletion would be denied
+  evidence:
+  - semantic diff
+  - policy counters
+  requirements:
+  - AGENT-SCOPE-001
+- id: E2E-025
+  title: Protected main rejects direct push
+  stage: P06B
+  mandatory_from: alpha
+  environment: real-gitlab
+  actor: Contributor
+  preconditions:
+  - Protected main configured
+  steps:
+  - Attempt direct push
+  expected_result:
+  - GitLab rejects push
+  - GitPM reports actionable error
+  evidence:
+  - GitLab response
+  - UI error
+  requirements:
+  - AUTHZ-MATRIX-001
+  - GITLAB-REAL-001
+- id: E2E-026
+  title: Token absent from logs, URL and process arguments
+  stage: P06B
+  mandatory_from: alpha
+  environment: security-real-gitlab
+  actor: Contributor
+  preconditions:
+  - Tracing and process inspection enabled
+  steps:
+  - Login, refresh and push
+  expected_result:
+  - No token appears in captured surfaces
+  evidence:
+  - redacted logs
+  - process snapshot
+  - HTTP capture
+  requirements:
+  - SEC-GIT-001
+  - SEC-TOKEN-001
+- id: E2E-027
+  title: Reject forged and replayed webhook
+  stage: P06B
+  mandatory_from: alpha
+  environment: security-real-gitlab
+  actor: Attacker
+  preconditions:
+  - Known valid event fixture
+  steps:
+  - Send bad secret
+  - Replay valid event
+  expected_result:
+  - Bad secret rejected
+  - Replay produces no duplicate effect
+  evidence:
+  - HTTP status
+  - event store/cache evidence
+  requirements:
+  - SEC-WEBHOOK-001
+  - OBS-EARLY-001
+- id: E2E-028
+  title: Reject path traversal and symlink swap
+  stage: P03
+  mandatory_from: alpha
+  environment: security-local
+  actor: Contributor
+  preconditions:
+  - Writable draft
+  - race harness
+  steps:
+  - Submit traversal path
+  - Swap path component with symlink
+  expected_result:
+  - No access outside worktree
+  - Operation fails atomically
+  evidence:
+  - filesystem snapshot
+  - security log
+  requirements:
+  - SEC-GIT-001
+- id: E2E-029
+  title: Quota violation is atomic
+  stage: P04
+  mandatory_from: alpha
+  environment: integration-local
+  actor: Contributor
+  preconditions:
+  - Quota below requested bulk size
+  steps:
+  - Submit oversized bulk change
+  expected_result:
+  - No partial files written
+  - Quota error returned
+  evidence:
+  - Git status
+  - HTTP response
+  requirements:
+  - OPS-QUOTA-001
+- id: E2E-030
+  title: Clean installation
+  stage: P00
+  mandatory_from: alpha
+  environment: ci-clean-linux
+  actor: Operator
+  preconditions:
+  - Empty supported Linux VM/container
+  steps:
+  - Checkout
+  - Install locked dependencies
+  - Run CI commands
+  expected_result:
+  - All commands pass without undocumented dependencies
+  evidence:
+  - pipeline link
+  - environment manifest
+  requirements:
+  - CLEAN-INSTALL-001
+- id: E2E-031
+  title: Migration dry-run produces diff only
+  stage: P02
+  mandatory_from: alpha
+  environment: integration-local
+  actor: Maintainer
+  preconditions:
+  - Previous-version fixture
+  steps:
+  - Run migrate --dry-run
+  expected_result:
+  - Diff/report produced
+  - Filesystem and HEAD unchanged
+  evidence:
+  - hash tree
+  - migration report
+  requirements:
+  - DATA-YAML-001
+  - DATA-MIGRATE-001
+- id: E2E-032
+  title: Migration commit and revert
+  stage: P02
+  mandatory_from: alpha
+  environment: integration-local
+  actor: Maintainer
+  preconditions:
+  - Previous-version draft
+  steps:
+  - Apply migration
+  - Validate
+  - Commit
+  - Revert
+  expected_result:
+  - New version valid
+  - Revert restores exact old tree
+  evidence:
+  - commits
+  - tree hashes
+  requirements:
+  - DATA-MIGRATE-001
+- id: E2E-033
+  title: Dirty draft survives restart
+  stage: P03
+  mandatory_from: alpha
+  environment: fault-local
+  actor: Contributor
+  preconditions:
+  - Dirty worktree with local safety ref
+  steps:
+  - Restart process and container with same volume
+  expected_result:
+  - Dirty state and safety state restored
+  evidence:
+  - state JSON
+  - Git refs
+  - file hashes
+  requirements:
+  - ARCH-NODB-001
+  - GIT-LOCAL-DURABILITY-001
+  - NO-BACKUP-001
+- id: E2E-034
+  title: Recover lost worktree from local safety ref
+  stage: P03
+  mandatory_from: alpha
+  environment: fault-local
+  actor: Maintainer
+  preconditions:
+  - Bare repository and safety ref intact
+  - Worktree directory removed
+  steps:
+  - Run recovery
+  expected_result:
+  - Worktree recreated from local safety ref
+  - Unpushed content restored
+  evidence:
+  - ref SHA
+  - recovered tree hash
+  requirements:
+  - GIT-LOCAL-DURABILITY-001
+  - NO-BACKUP-001
+- id: E2E-035
+  title: Master key rotation preserves token access
+  stage: P06A
+  mandatory_from: alpha
+  environment: integration-local
+  actor: Administrator
+  preconditions:
+  - Encrypted token with old key
+  steps:
+  - Add new active key
+  - Rotate records
+  - Restart
+  expected_result:
+  - Token decrypts with new key
+  - Old key no longer needed after window
+  evidence:
+  - key IDs
+  - rotation report
+  requirements:
+  - SEC-TOKEN-001
+- id: E2E-036
+  title: Lost key forces re-authentication
+  stage: P06A
+  mandatory_from: alpha
+  environment: integration-local
+  actor: Administrator
+  preconditions:
+  - Encrypted token whose key is removed
+  steps:
+  - Restart service
+  expected_result:
+  - Affected token unusable
+  - Project files untouched
+  - User prompted to login
+  evidence:
+  - readiness/auth events
+  - repository hash
+  requirements:
+  - SEC-TOKEN-001
+- id: E2E-037
+  title: Board drag changes YAML and diff
+  stage: P11A
+  mandatory_from: beta
+  environment: browser-local
+  actor: Contributor
+  preconditions:
+  - Board with task
+  steps:
+  - Drag task to another status
+  expected_result:
+  - Task status changes
+  - Diff visible
+  evidence:
+  - UI trace
+  - file diff
+  requirements:
+  - UI-BOARD-001
+- id: E2E-038
+  title: Gantt date change changes YAML and diff
+  stage: P11C
+  mandatory_from: beta
+  environment: browser-local
+  actor: Contributor
+  preconditions:
+  - Scheduled task
+  steps:
+  - Drag task dates
+  expected_result:
+  - start/due fields change
+  - Validation and semantic diff update
+  evidence:
+  - screenshot
+  - file diff
+  requirements:
+  - UI-GANTT-001
+- id: E2E-039
+  title: Calendar CRUD changes scheduling
+  stage: P11B
+  mandatory_from: beta
+  environment: browser-local
+  actor: Maintainer
+  preconditions:
+  - Task using calendar
+  steps:
+  - Add holiday
+  expected_result:
+  - Schedule result changes deterministically
+  evidence:
+  - calendar diff
+  - schedule report
+  requirements:
+  - SCHED-CALENDAR-001
+- id: E2E-040
+  title: Workload overload warning
+  stage: P11D
+  mandatory_from: beta
+  environment: browser-local
+  actor: Contributor
+  preconditions:
+  - Assignments exceed capacity
+  steps:
+  - Open workload
+  expected_result:
+  - Overload shown with explainable calculation
+  evidence:
+  - calculation JSON
+  - screenshot
+  requirements:
+  - UI-WORKLOAD-001
+- id: E2E-041
+  title: Team membership and capacity administration
+  stage: P08B
+  mandatory_from: alpha
+  environment: browser-local
+  actor: Maintainer
+  preconditions:
+  - Existing people and team
+  steps:
+  - Change membership and capacity
+  expected_result:
+  - YAML uses ULID references
+  - Workload input updates
+  evidence:
+  - file diff
+  - UI state
+  requirements:
+  - ID-ULID-001
+  - UI-CORE-001
+  - UI-WORKLOAD-001
+- id: E2E-042
+  title: Saved view persists as ViewConfiguration
+  stage: P11A
+  mandatory_from: beta
+  environment: browser-local
+  actor: Contributor
+  preconditions:
+  - Task list filters configured
+  steps:
+  - Save view
+  - Reload draft
+  expected_result:
+  - View restored from Git-backed file
+  evidence:
+  - ViewConfiguration file
+  - UI trace
+  requirements:
+  - UI-BOARD-001
+- id: E2E-043
+  title: Reject foreign GitLab project webhook
+  stage: P06B
+  mandatory_from: alpha
+  environment: real-gitlab
+  actor: Attacker
+  preconditions:
+  - Single configured project ID
+  steps:
+  - Send validly signed event for another project
+  expected_result:
+  - Event rejected or ignored
+  - No state mutation
+  evidence:
+  - webhook log
+  - state hash
+  requirements:
+  - REPO-SINGLE-001
+  - SEC-WEBHOOK-001
+- id: E2E-044
+  title: Meet 3 000-task Alpha performance budget
+  stage: P09
+  mandatory_from: alpha
+  environment: perf-runner
+  actor: QA
+  preconditions:
+  - Stable runner
+  - 3 000-task fixture
+  steps:
+  - Run defined cold/warm/concurrency protocol
+  expected_result:
+  - All Alpha thresholds pass
+  evidence:
+  - raw samples
+  - summary report
+  - runner manifest
+  requirements:
+  - PERF-ALPHA-001
+- id: E2E-045
+  title: Meet 10 000-task release performance budget
+  stage: P13B
+  mandatory_from: release
+  environment: perf-runner
+  actor: QA
+  preconditions:
+  - Stable runner
+  - 10 000-task fixture
+  - 10 active drafts
+  steps:
+  - Run defined protocol with 30 simulated users
+  expected_result:
+  - Release thresholds and memory limits pass
+  evidence:
+  - raw samples
+  - summary report
+  - runner manifest
+  requirements:
+  - PERF-RELEASE-001
+release_gates:
+  alpha:
+    meaning: Alpha is the MVP. It proves the complete human workflow through a real GitLab MR.
+    required_stages:
+    - P00
+    - P00S
+    - P01
+    - P02
+    - P03
+    - P04
+    - P05
+    - P06A
+    - P06B
+    - P07
+    - P08A
+    - P08B
+    - P09
+    required_e2e:
+    - E2E-001
+    - E2E-002
+    - E2E-003
+    - E2E-004
+    - E2E-005
+    - E2E-006
+    - E2E-007
+    - E2E-008
+    - E2E-009
+    - E2E-010
+    - E2E-011
+    - E2E-012
+    - E2E-013
+    - E2E-014
+    - E2E-016
+    - E2E-020
+    - E2E-021
+    - E2E-025
+    - E2E-026
+    - E2E-027
+    - E2E-028
+    - E2E-029
+    - E2E-030
+    - E2E-031
+    - E2E-032
+    - E2E-033
+    - E2E-034
+    - E2E-035
+    - E2E-036
+    - E2E-041
+    - E2E-043
+    - E2E-044
+  beta:
+    meaning: Beta adds history/conflicts, board, calendars, Gantt, workload and agents.
+    required_stages:
+    - P00
+    - P00S
+    - P01
+    - P02
+    - P03
+    - P04
+    - P05
+    - P06A
+    - P06B
+    - P07
+    - P08A
+    - P08B
+    - P09
+    - P10A
+    - P10B
+    - P11A
+    - P11B
+    - P11C
+    - P11D
+    - P12
+    required_e2e:
+    - E2E-001
+    - E2E-002
+    - E2E-003
+    - E2E-004
+    - E2E-005
+    - E2E-006
+    - E2E-007
+    - E2E-008
+    - E2E-009
+    - E2E-010
+    - E2E-011
+    - E2E-012
+    - E2E-013
+    - E2E-014
+    - E2E-015
+    - E2E-016
+    - E2E-017
+    - E2E-018
+    - E2E-019
+    - E2E-020
+    - E2E-021
+    - E2E-022
+    - E2E-023
+    - E2E-024
+    - E2E-025
+    - E2E-026
+    - E2E-027
+    - E2E-028
+    - E2E-029
+    - E2E-030
+    - E2E-031
+    - E2E-032
+    - E2E-033
+    - E2E-034
+    - E2E-035
+    - E2E-036
+    - E2E-037
+    - E2E-038
+    - E2E-039
+    - E2E-040
+    - E2E-041
+    - E2E-042
+    - E2E-043
+    - E2E-044
+  release_candidate:
+    meaning: Release Candidate adds final security, fault, performance and operations evidence.
+    required_stages:
+    - P00
+    - P00S
+    - P01
+    - P02
+    - P03
+    - P04
+    - P05
+    - P06A
+    - P06B
+    - P07
+    - P08A
+    - P08B
+    - P09
+    - P10A
+    - P10B
+    - P11A
+    - P11B
+    - P11C
+    - P11D
+    - P12
+    - P13A
+    - P13B
+    required_e2e:
+    - E2E-001
+    - E2E-002
+    - E2E-003
+    - E2E-004
+    - E2E-005
+    - E2E-006
+    - E2E-007
+    - E2E-008
+    - E2E-009
+    - E2E-010
+    - E2E-011
+    - E2E-012
+    - E2E-013
+    - E2E-014
+    - E2E-015
+    - E2E-016
+    - E2E-017
+    - E2E-018
+    - E2E-019
+    - E2E-020
+    - E2E-021
+    - E2E-022
+    - E2E-023
+    - E2E-024
+    - E2E-025
+    - E2E-026
+    - E2E-027
+    - E2E-028
+    - E2E-029
+    - E2E-030
+    - E2E-031
+    - E2E-032
+    - E2E-033
+    - E2E-034
+    - E2E-035
+    - E2E-036
+    - E2E-037
+    - E2E-038
+    - E2E-039
+    - E2E-040
+    - E2E-041
+    - E2E-042
+    - E2E-043
+    - E2E-044
+    - E2E-045
+  release:
+    meaning: v0.1 release requires every stage and every mandatory E2E.
+    required_stages:
+    - P00
+    - P00S
+    - P01
+    - P02
+    - P03
+    - P04
+    - P05
+    - P06A
+    - P06B
+    - P07
+    - P08A
+    - P08B
+    - P09
+    - P10A
+    - P10B
+    - P11A
+    - P11B
+    - P11C
+    - P11D
+    - P12
+    - P13A
+    - P13B
+    - P14
+    required_e2e:
+    - E2E-001
+    - E2E-002
+    - E2E-003
+    - E2E-004
+    - E2E-005
+    - E2E-006
+    - E2E-007
+    - E2E-008
+    - E2E-009
+    - E2E-010
+    - E2E-011
+    - E2E-012
+    - E2E-013
+    - E2E-014
+    - E2E-015
+    - E2E-016
+    - E2E-017
+    - E2E-018
+    - E2E-019
+    - E2E-020
+    - E2E-021
+    - E2E-022
+    - E2E-023
+    - E2E-024
+    - E2E-025
+    - E2E-026
+    - E2E-027
+    - E2E-028
+    - E2E-029
+    - E2E-030
+    - E2E-031
+    - E2E-032
+    - E2E-033
+    - E2E-034
+    - E2E-035
+    - E2E-036
+    - E2E-037
+    - E2E-038
+    - E2E-039
+    - E2E-040
+    - E2E-041
+    - E2E-042
+    - E2E-043
+    - E2E-044
+    - E2E-045
