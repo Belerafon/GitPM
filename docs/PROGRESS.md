@@ -114,17 +114,18 @@ Result:
 
 ## 2026-07-10 - Инженерный review и план v0.2
 
-Status: verification
+Status: done
 Owner: ARCH/QA
-Commit: будет записан следующей записью после фиксации документации
+Commit: `e92b036` `docs: resolve delivery plan architecture review`
 
-Evidence expected:
+Evidence:
 
 - `python3 scripts/validate_planning.py`: passed;
+- `git diff --check`: passed;
 - old active plan versions отсутствуют в рабочем дереве;
 - Work Plan содержит 18 stages и 45 E2E scenarios;
-- traceability registry покрывает все E2E;
-- Git working tree clean после commit.
+- traceability registry содержит 29 requirements и покрывает все E2E;
+- Implementation Plan больше не содержит дублирующий исполнимый stage plan.
 
 Exceptions:
 
