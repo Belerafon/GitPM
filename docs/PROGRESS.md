@@ -1,7 +1,7 @@
 # GitPM progress
 
-Current phase: `P01_implementation_complete_pending_acceptance`
-Implementation code: P00 complete; P01 schema baseline implemented
+Current phase: `P00S_P01_implementation_complete_pending_acceptance`
+Implementation code: P00 complete; P00S security spikes and P01 schema baseline implemented
 
 ## Current active revision
 
@@ -55,13 +55,20 @@ Implementation code: P00 complete; P01 schema baseline implemented
 - Deterministic demo portfolio contains 14 YAML documents.
 - VFY-004 rejects Project directory mismatch, cross-project dependency and invalid estimate with stable codes.
 
+## Last security evidence
+
+- Threat model and ADR fix browser, filesystem, Git process and OAuth boundaries before Git core.
+- `@gitpm/security` provides strict branch/HTTPS URL validation, controlled Git environment and safe atomic domain writes.
+- Six VFY-003 regressions cover injection, malicious inherited config, traversal, symlink swap and ASKPASS token transfer.
+- Sanitized process inspection contains no token or absolute worktree path.
+
 ## Current blockers
 
-P01 implementation has no code blocker; its declared ARCH/PO/QA acceptance is not yet recorded. P00S is independently unblocked by completed P00.
+P00S and P01 have no implementation blocker. Their declared SEC/ARCH and ARCH/PO/QA acceptance records are not yet recorded, so P02/P03 remain gated by stage status.
 
 ## Next action
 
-Start P00S threat-model spikes while P01 awaits its declared acceptance record.
+Record the declared P00S/P01 acceptance or revise those gates, then close both stages and start P02.
 
 ## Evidence policy
 

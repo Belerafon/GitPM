@@ -138,13 +138,13 @@
 
 ### Artifacts
 
-- threat model
-- ADRs or rejected approaches
-- security fixtures
+- `GitPM_Threat_Model_v1.md`
+- `adr/0001-safe-git-filesystem-credential-boundaries.md`
+- reusable `@gitpm/security` spike primitives and hostile regression fixtures
 
 ### Automated verification
 
-- regression tests for accepted spike solutions
+- `corepack pnpm security:verify` runs hostile regression tests and sanitized process inspection
 
 ### Manual acceptance
 

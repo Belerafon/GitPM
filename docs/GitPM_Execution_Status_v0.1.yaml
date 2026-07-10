@@ -1,6 +1,6 @@
 version: '0.1'
 updated_at: '2026-07-10'
-current_phase: P01_implementation_complete_pending_acceptance
+current_phase: P00S_P01_implementation_complete_pending_acceptance
 stages:
   P00:
     status: done
@@ -12,10 +12,12 @@ stages:
     notes: Implementation and required local verification are complete; external remote, clean-Linux CI and role acceptance
       are not P00 exit requirements.
   P00S:
-    status: not_started
+    status: in_progress
     accepted_by: []
-    evidence: []
-    notes: ''
+    evidence:
+    - file:evidence/P00S/vfy-003-security-report.txt
+    - file:evidence/P00S/residual-risks.md
+    notes: Threat model and accepted filesystem, Git process and credential spike controls are complete; SEC/ARCH acceptance is pending.
   P01:
     status: in_progress
     accepted_by: []
@@ -119,9 +121,10 @@ verification_checks:
     - file:evidence/P00/vfy-002-local-planning.txt
     notes: Local validator, mutation and gate self-tests passed.
   VFY-003:
-    status: pending
-    evidence: []
-    notes: ''
+    status: passed
+    evidence:
+    - file:evidence/P00S/vfy-003-security-report.txt
+    notes: Six hostile regression tests and sanitized credential process inspection passed.
   VFY-004:
     status: passed
     evidence:

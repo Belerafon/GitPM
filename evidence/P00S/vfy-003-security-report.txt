@@ -1,0 +1,36 @@
+Command: corepack pnpm security:verify
+Date: 2026-07-10
+Environment: Node.js 20.19.2 on Windows
+
+Security regression suite: 1 test file, 6 tests passed.
+
+Covered hostile cases:
+- option/ref and repository URL injection rejected;
+- inherited Git configuration removed;
+- credential-free HTTPS URL and argv-only Git invocation enforced;
+- traversal and symlink component rejected;
+- same-directory temp write followed by atomic rename;
+- parent symlink swap detected before rename without an outside write;
+- static ASKPASS transferred the token only through child environment.
+
+Sanitized process inspection:
+{
+  "executable": "git",
+  "argv": [
+    "-C",
+    "<worktree>",
+    "fetch",
+    "--no-tags",
+    "--prune",
+    "--",
+    "https://gitlab.example.test/group/gitpm.git",
+    "+refs/heads/main:refs/remotes/origin/main"
+  ],
+  "inherited_git_config_removed": true,
+  "token_transport": "child-environment-only",
+  "token_environment_key": "GITPM_ASKPASS_TOKEN",
+  "askpass_round_trip_ok": true,
+  "token_in_argv_url_or_git_config": false,
+  "token_in_files": false,
+  "token_in_report": false
+}

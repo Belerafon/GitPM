@@ -23,10 +23,11 @@
     "planning:test": "python scripts/test_planning_validator.py && python scripts/test_release_gate.py",
     "planning:verify": "corepack pnpm planning:check && corepack pnpm planning:test",
     "schema:verify": "node scripts/verify-schema-v1.mjs",
+    "security:verify": "corepack pnpm --filter @gitpm/security build && vitest run packages/security/src/security-boundary.test.ts && node scripts/security-spike-report.mjs",
     "smoke": "node scripts/smoke-health.mjs",
     "test": "vitest run",
     "typecheck": "corepack pnpm -r --if-present typecheck",
-    "verify": "corepack pnpm clean && corepack pnpm build && corepack pnpm lint && corepack pnpm typecheck && corepack pnpm test && corepack pnpm smoke && corepack pnpm schema:verify && corepack pnpm planning:verify"
+    "verify": "corepack pnpm clean && corepack pnpm build && corepack pnpm lint && corepack pnpm typecheck && corepack pnpm test && corepack pnpm smoke && corepack pnpm schema:verify && node scripts/security-spike-report.mjs && corepack pnpm planning:verify"
   },
   "devDependencies": {
     "@types/node": "20.19.43",

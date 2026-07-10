@@ -4,7 +4,7 @@ Git-first система управления проектами и задача
 
 ## Current status
 
-Статус: `P01_implementation_complete_pending_acceptance`. P00 закрыт локальными evidence. Для P01 реализованы schema v1, repository format и deterministic fixtures; VFY-004 проходит. P00S доступен параллельно согласно DAG.
+Статус: `P00S_P01_implementation_complete_pending_acceptance`. P00 закрыт. Schema v1 baseline и security spikes реализованы; VFY-003/VFY-004 проходят. Для закрытия P00S/P01 остаются объявленные в этих этапах acceptance records.
 
 ## Development
 
