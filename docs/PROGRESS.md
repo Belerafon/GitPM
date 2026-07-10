@@ -1,7 +1,7 @@
 # GitPM progress
 
-Current phase: `P03_in_progress`
-Implementation code: P00-P02 complete; P03 controlled Git client implemented
+Current phase: `P03_complete_P04_ready`
+Implementation code: P00-P03 complete
 
 ## Current active revision
 
@@ -70,13 +70,21 @@ Implementation code: P00-P02 complete; P03 controlled Git client implemented
 - CLI provides format/check, validate/changed, semantic diff skeleton, doctor and locale-neutral JSON output.
 - Full verify passes 8 test files and 36 tests.
 
+## Last P03 evidence
+
+- Bare repository initialization and explicit fetch refspec use a controlled Git process.
+- Draft creation fetches under a repository lock and records exact origin/default commit.
+- Metadata, writer mode, fingerprint and blob revisions survive runtime restart.
+- External edit, stale mutation, cleanup confirmation and orphan recovery return stable codes.
+- P03 integration/fault suite adds 10 tests; full suite contains 46 tests.
+
 ## Current blockers
 
-None. P03 is in progress.
+None. P03 is accepted and P04 is unblocked.
 
 ## Next action
 
-Implement P03 repository/draft locks, persisted metadata, one-writer runtime and restart recovery on the controlled Git client.
+Start P04 backend draft API and domain operations.
 
 ## Evidence policy
 

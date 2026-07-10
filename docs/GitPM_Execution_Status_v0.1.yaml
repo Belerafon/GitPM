@@ -1,6 +1,6 @@
 version: '0.1'
 updated_at: '2026-07-10'
-current_phase: P03_in_progress
+current_phase: P03_complete_P04_ready
 stages:
   P00:
     status: done
@@ -41,10 +41,15 @@ stages:
     - file:evidence/P02/acceptance.md
     notes: Parser, formatter, validation, calendar utilities and CLI commands are complete and accepted.
   P03:
-    status: in_progress
-    accepted_by: []
-    evidence: []
-    notes: Controlled bare repository, fetch and current-main draft creation are being implemented.
+    status: done
+    accepted_by:
+    - SEC
+    - QA
+    evidence:
+    - file:evidence/P03/vfy-007-current-main.txt
+    - file:evidence/P03/vfy-008-runtime-faults.txt
+    - file:evidence/P03/acceptance.md
+    notes: Controlled Git synchronization, persisted draft runtime, one-writer behavior and restart recovery are accepted.
   P04:
     status: not_started
     accepted_by: []
@@ -152,13 +157,15 @@ verification_checks:
     - file:evidence/P02/vfy-006-validation.json
     notes: Schema, reference, cycle, delete-restrict and calendar cases pass with stable codes.
   VFY-007:
-    status: pending
-    evidence: []
-    notes: ''
+    status: passed
+    evidence:
+    - file:evidence/P03/vfy-007-current-main.txt
+    notes: Fetch precedes draft creation; base commit and branch match current remote main policy.
   VFY-008:
-    status: pending
-    evidence: []
-    notes: ''
+    status: passed
+    evidence:
+    - file:evidence/P03/vfy-008-runtime-faults.txt
+    notes: Restart, external edits, one-writer modes, optimistic revisions and cleanup fault cases pass.
   VFY-009:
     status: pending
     evidence: []

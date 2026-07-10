@@ -1,0 +1,306 @@
+import { createHash } from "node:crypto";
+import { mkdir, readFile, readdir, realpath, rm, stat } from "node:fs/promises";
+import path from "node:path";
+import type { GitClient } from "@gitpm/git-client";
+import { atomicWriteDomainFile, resolveDomainPath } from "@gitpm/security";
+
+export type WriterMode = "ui" | "external";
+export type DraftState = "open" | "closed" | "published" | "abandoned";
+
+export interface DraftMetadata {
+  readonly version: 1;
+  readonly draft_id: string;
+  readonly owner_gitlab_user_id: string;
+  readonly branch: string;
+  readonly base_commit: string;
+  readonly worktree_path: string;
+  readonly writer_mode: WriterMode;
+  readonly state: DraftState;
+  readonly merge_request_iid?: number;
+  readonly fingerprint: string;
+  readonly created_at: string;
+  readonly updated_at: string;
+}
+
+export interface RecoveryReport {
+  readonly drafts: readonly DraftMetadata[];
+  readonly orphaned_worktrees: readonly string[];
+  readonly missing_worktrees: readonly string[];
+}
+
+export class DraftRuntimeError extends Error {
+  constructor(
+    public readonly code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = "DraftRuntimeError";
+  }
+}
+
+class AsyncMutex {
+  private tail: Promise<void> = Promise.resolve();
+
+  async run<T>(operation: () => Promise<T>): Promise<T> {
+    let release = (): void => undefined;
+    const current = new Promise<void>((resolve) => { release = resolve; });
+    const previous = this.tail;
+    this.tail = previous.then(() => current);
+    await previous;
+    try {
+      return await operation();
+    } finally {
+      release();
+    }
+  }
+}
+
+function safeComponent(value: string, label: string): string {
+  if (!/^[A-Za-z0-9][A-Za-z0-9-]{0,127}$/u.test(value)) {
+    throw new DraftRuntimeError("DRAFT_IDENTITY_INVALID", `${label} is invalid`);
+  }
+  return value;
+}
+
+async function yamlFiles(directory: string): Promise<string[]> {
+  const result: string[] = [];
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    if (entry.name === ".git") continue;
+    const absolute = path.join(directory, entry.name);
+    if (entry.isDirectory()) result.push(...await yamlFiles(absolute));
+    else if (entry.name.endsWith(".yaml")) result.push(absolute);
+  }
+  return result.sort();
+}
+
+export class DraftManager {
+  private readonly dataDirectory: string;
+  private readonly metadataDirectory: string;
+  private readonly repositoryLock = new AsyncMutex();
+  private readonly draftLocks = new Map<string, AsyncMutex>();
+
+  constructor(
+    private readonly git: GitClient,
+    dataDirectory: string,
+  ) {
+    this.dataDirectory = path.resolve(dataDirectory);
+    this.metadataDirectory = path.join(this.dataDirectory, "drafts");
+  }
+
+  private lock(draftId: string): AsyncMutex {
+    let lock = this.draftLocks.get(draftId);
+    if (!lock) {
+      lock = new AsyncMutex();
+      this.draftLocks.set(draftId, lock);
+    }
+    return lock;
+  }
+
+  private metadataRelativePath(draftId: string): string {
+    return `drafts/${safeComponent(draftId, "draft ID")}.json`;
+  }
+
+  private async persist(metadata: DraftMetadata): Promise<void> {
+    await atomicWriteDomainFile(this.dataDirectory, this.metadataRelativePath(metadata.draft_id), `${JSON.stringify(metadata, null, 2)}\n`);
+  }
+
+  private async readMetadata(draftId: string): Promise<DraftMetadata> {
+    const metadataPath = await resolveDomainPath(this.dataDirectory, this.metadataRelativePath(draftId));
+    try {
+      const value = JSON.parse(await readFile(metadataPath, "utf8")) as DraftMetadata;
+      if (value.version !== 1 || value.draft_id !== draftId) throw new Error("metadata identity mismatch");
+      return value;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new DraftRuntimeError("DRAFT_NOT_FOUND", `Draft ${draftId} not found`);
+      throw new DraftRuntimeError("DRAFT_METADATA_INVALID", error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async fingerprint(worktree: string): Promise<string> {
+    const canonical = await realpath(worktree);
+    const hash = createHash("sha256");
+    hash.update(await this.git.statusPorcelain(canonical));
+    for (const file of await yamlFiles(canonical)) {
+      const details = await stat(file);
+      hash.update(path.relative(canonical, file).split(path.sep).join("/"));
+      hash.update(String(details.size));
+      hash.update(String(details.mtimeMs));
+      hash.update(createHash("sha256").update(await readFile(file)).digest());
+    }
+    return hash.digest("hex");
+  }
+
+  async createDraft(draftIdInput: string, ownerInput: string): Promise<DraftMetadata> {
+    const draftId = safeComponent(draftIdInput, "draft ID");
+    const owner = safeComponent(ownerInput, "owner");
+    await mkdir(this.dataDirectory, { recursive: true, mode: 0o700 });
+    await mkdir(this.metadataDirectory, { recursive: true, mode: 0o700 });
+    return await this.repositoryLock.run(async () => {
+      try {
+        await this.readMetadata(draftId);
+        throw new DraftRuntimeError("DRAFT_EXISTS", `Draft ${draftId} already exists`);
+      } catch (error) {
+        if (!(error instanceof DraftRuntimeError) || error.code !== "DRAFT_NOT_FOUND") throw error;
+      }
+      await this.git.initialize();
+      const baseCommit = await this.git.fetch();
+      const branch = `gitpm/${owner}/${draftId}`;
+      const worktree = await this.git.addWorktree(branch, draftId, baseCommit);
+      const now = new Date().toISOString();
+      const metadata: DraftMetadata = {
+        version: 1,
+        draft_id: draftId,
+        owner_gitlab_user_id: owner,
+        branch,
+        base_commit: baseCommit,
+        worktree_path: worktree,
+        writer_mode: "ui",
+        state: "open",
+        fingerprint: await this.fingerprint(worktree),
+        created_at: now,
+        updated_at: now,
+      };
+      await this.persist(metadata);
+      return metadata;
+    });
+  }
+
+  async getDraft(draftId: string): Promise<DraftMetadata> {
+    return await this.readMetadata(safeComponent(draftId, "draft ID"));
+  }
+
+  async poll(draftId: string): Promise<{ metadata: DraftMetadata; currentFingerprint: string; changedExternally: boolean }> {
+    const metadata = await this.getDraft(draftId);
+    const currentFingerprint = await this.fingerprint(metadata.worktree_path);
+    return { metadata, currentFingerprint, changedExternally: currentFingerprint !== metadata.fingerprint };
+  }
+
+  async setWriterMode(draftId: string, owner: string, mode: WriterMode): Promise<DraftMetadata> {
+    return await this.lock(safeComponent(draftId, "draft ID")).run(async () => {
+      const metadata = await this.getDraft(draftId);
+      this.assertOwnerAndOpen(metadata, owner);
+      const next: DraftMetadata = {
+        ...metadata,
+        writer_mode: mode,
+        fingerprint: await this.fingerprint(metadata.worktree_path),
+        updated_at: new Date().toISOString(),
+      };
+      await this.persist(next);
+      return next;
+    });
+  }
+
+  async closeDraft(draftId: string, owner: string): Promise<DraftMetadata> {
+    return await this.transitionState(draftId, owner, "closed");
+  }
+
+  async reopenDraft(draftId: string, owner: string): Promise<DraftMetadata> {
+    return await this.lock(safeComponent(draftId, "draft ID")).run(async () => {
+      const metadata = await this.getDraft(draftId);
+      if (metadata.owner_gitlab_user_id !== owner) throw new DraftRuntimeError("DRAFT_FORBIDDEN", "Draft owner mismatch");
+      if (metadata.state !== "closed") throw new DraftRuntimeError("DRAFT_STATE_INVALID", "Only a closed draft can be reopened");
+      const next: DraftMetadata = { ...metadata, state: "open", updated_at: new Date().toISOString() };
+      await this.persist(next);
+      return next;
+    });
+  }
+
+  async cleanupDraft(draftId: string, destructiveConfirmation: string): Promise<void> {
+    const safeDraftId = safeComponent(draftId, "draft ID");
+    if (destructiveConfirmation !== safeDraftId) {
+      throw new DraftRuntimeError("CLEANUP_CONFIRMATION_REQUIRED", "Cleanup requires the exact draft ID");
+    }
+    await this.repositoryLock.run(async () => await this.lock(safeDraftId).run(async () => {
+      const metadata = await this.getDraft(safeDraftId);
+      if (metadata.state === "open") throw new DraftRuntimeError("DRAFT_STATE_INVALID", "Close or abandon the draft before cleanup");
+      const dirty = (await this.git.statusPorcelain(metadata.worktree_path)).trim() !== "";
+      await this.git.removeWorktree(metadata.worktree_path, metadata.branch, dirty);
+      const metadataPath = await resolveDomainPath(this.dataDirectory, this.metadataRelativePath(safeDraftId));
+      await rm(metadataPath);
+    }));
+  }
+
+  async withUiMutation<T>(
+    draftId: string,
+    owner: string,
+    expectedFingerprint: string,
+    mutation: (metadata: DraftMetadata) => Promise<T>,
+  ): Promise<{ result: T; metadata: DraftMetadata }> {
+    return await this.lock(safeComponent(draftId, "draft ID")).run(async () => {
+      const metadata = await this.getDraft(draftId);
+      this.assertOwnerAndOpen(metadata, owner);
+      if (metadata.writer_mode !== "ui") throw new DraftRuntimeError("DRAFT_READ_ONLY", "UI is read-only in external writer mode");
+      const current = await this.fingerprint(metadata.worktree_path);
+      if (current !== metadata.fingerprint || current !== expectedFingerprint) {
+        throw new DraftRuntimeError("DRAFT_CHANGED_EXTERNALLY", "Draft worktree changed outside the UI runtime");
+      }
+      const result = await mutation(metadata);
+      const next: DraftMetadata = {
+        ...metadata,
+        fingerprint: await this.fingerprint(metadata.worktree_path),
+        updated_at: new Date().toISOString(),
+      };
+      await this.persist(next);
+      return { result, metadata: next };
+    });
+  }
+
+  async fileBlobId(draftId: string, relativePath: string): Promise<string> {
+    const metadata = await this.getDraft(draftId);
+    const file = await resolveDomainPath(metadata.worktree_path, relativePath);
+    return await this.git.hashObject(await readFile(file, "utf8"));
+  }
+
+  async assertFileBlobId(draftId: string, relativePath: string, expectedBlobId: string): Promise<string> {
+    const current = await this.fileBlobId(draftId, relativePath);
+    if (current !== expectedBlobId) {
+      throw new DraftRuntimeError("FILE_VERSION_MISMATCH", "File content changed after the client revision");
+    }
+    return current;
+  }
+
+  async recover(): Promise<RecoveryReport> {
+    await mkdir(this.metadataDirectory, { recursive: true, mode: 0o700 });
+    await mkdir(this.git.worktreesDirectory, { recursive: true, mode: 0o700 });
+    const drafts: DraftMetadata[] = [];
+    const missingWorktrees: string[] = [];
+    for (const entry of await readdir(this.metadataDirectory)) {
+      if (!entry.endsWith(".json")) continue;
+      const draftId = entry.slice(0, -5);
+      const metadata = await this.readMetadata(draftId);
+      try {
+        await realpath(metadata.worktree_path);
+        drafts.push(metadata);
+      } catch {
+        missingWorktrees.push(draftId);
+      }
+    }
+    const knownPaths = new Set(drafts.map((draft) => path.resolve(draft.worktree_path)));
+    const orphanedWorktrees: string[] = [];
+    for (const entry of await readdir(this.git.worktreesDirectory, { withFileTypes: true })) {
+      if (entry.isDirectory() && !knownPaths.has(path.resolve(this.git.worktreesDirectory, entry.name))) {
+        orphanedWorktrees.push(entry.name);
+      }
+    }
+    return {
+      drafts: drafts.sort((left, right) => left.draft_id.localeCompare(right.draft_id)),
+      orphaned_worktrees: orphanedWorktrees.sort(),
+      missing_worktrees: missingWorktrees.sort(),
+    };
+  }
+
+  private assertOwnerAndOpen(metadata: DraftMetadata, owner: string): void {
+    if (metadata.owner_gitlab_user_id !== owner) throw new DraftRuntimeError("DRAFT_FORBIDDEN", "Draft owner mismatch");
+    if (metadata.state !== "open") throw new DraftRuntimeError("DRAFT_NOT_OPEN", "Draft is not open");
+  }
+
+  private async transitionState(draftId: string, owner: string, state: DraftState): Promise<DraftMetadata> {
+    return await this.lock(safeComponent(draftId, "draft ID")).run(async () => {
+      const metadata = await this.getDraft(draftId);
+      this.assertOwnerAndOpen(metadata, owner);
+      const next: DraftMetadata = { ...metadata, state, updated_at: new Date().toISOString() };
+      await this.persist(next);
+      return next;
+    });
+  }
+}

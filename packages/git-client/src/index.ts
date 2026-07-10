@@ -198,6 +198,20 @@ export class GitClient {
     return result.stdout;
   }
 
+  async removeWorktree(worktree: string, branch: string, force: boolean): Promise<void> {
+    const safeBranch = assertSafeBranchName(branch);
+    const canonical = await realpath(worktree);
+    await this.git([
+      "--git-dir",
+      this.bareRepository,
+      "worktree",
+      "remove",
+      ...(force ? ["--force"] : []),
+      canonical,
+    ]);
+    await this.git(["--git-dir", this.bareRepository, "branch", "-D", safeBranch]);
+  }
+
   async hashObject(content: string): Promise<string> {
     const started = performance.now();
     return await new Promise((resolve, reject) => {

@@ -1,0 +1,19 @@
+Command: corepack pnpm exec vitest run packages/git-client/src/index.test.ts packages/drafts/src/index.test.ts
+Date: 2026-07-10
+Environment: Git 2.53.0.windows.1, Node.js 20.19.2
+
+Sanitized command sequence:
+1. git init --bare <data>/repository.git
+2. git --git-dir <data>/repository.git remote add origin <local-test-remote>
+3. git -c protocol.file.allow=always --git-dir <data>/repository.git fetch --prune origin +refs/heads/*:refs/remotes/origin/*
+4. git --git-dir <data>/repository.git rev-parse refs/remotes/origin/main^{commit}
+5. git --git-dir <data>/repository.git worktree add -b gitpm/42/DRF-001 <worktree> <base-commit>
+
+Assertions:
+- remote main was advanced after the first fetch;
+- createDraft fetched again under the repository lock;
+- metadata.base_commit equaled the new remote main commit;
+- worktree HEAD equaled metadata.base_commit;
+- branch was gitpm/42/DRF-001;
+- failed fetch rejected creation instead of using stale local state;
+- concurrent createDraft calls produced fetch/worktree/fetch/worktree ordering.

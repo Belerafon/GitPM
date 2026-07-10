@@ -1,0 +1,16 @@
+Command: corepack pnpm exec vitest run packages/drafts/src/index.test.ts
+Date: 2026-07-10
+
+Passed runtime/fault cases:
+- persisted metadata and completed worktree writes recovered after a new manager instance;
+- external edit in ui mode returned DRAFT_CHANGED_EXTERNALLY;
+- UI mutation in external mode returned DRAFT_READ_ONLY;
+- stale file blob returned FILE_VERSION_MISMATCH;
+- concurrent stale UI mutation could not overwrite the first writer;
+- orphaned worktree without metadata was reported during recovery;
+- close/reopen preserved worktree and branch;
+- cleanup required exact draft ID and explicit closed state;
+- dirty destructive cleanup happened only after explicit confirmation.
+
+Stable runtime codes map to HTTP 409/403 responses in P04; no HTTP transport is
+introduced in P03 itself.

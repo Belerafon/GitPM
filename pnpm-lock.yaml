@@ -79,6 +79,15 @@ importers:
 
   packages/calendar: {}
 
+  packages/drafts:
+    dependencies:
+      '@gitpm/git-client':
+        specifier: workspace:*
+        version: link:../git-client
+      '@gitpm/security':
+        specifier: workspace:*
+        version: link:../security
+
   packages/git-client:
     dependencies:
       '@gitpm/security':
