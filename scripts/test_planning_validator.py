@@ -13,7 +13,7 @@ import yaml
 SOURCE_ROOT = Path(__file__).resolve().parents[1]
 TRACE_REL = Path('docs/GitPM_Requirements_Traceability_v0.5.yaml')
 IMPL_REL = Path('docs/GitPM_Implementation_Plan_v0.7.md')
-WORK_REL = Path('docs/GitPM_Work_Plan_v0.7.md')
+WORK_REL = Path('docs/GitPM_Work_Plan_v0.8.md')
 STATUS_REL = Path('docs/GitPM_Execution_Status_v0.1.yaml')
 VALIDATOR_REL = Path('scripts/validate_planning.py')
 

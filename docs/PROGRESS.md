@@ -6,7 +6,7 @@ Implementation code: P00 foundation implemented
 ## Current active revision
 
 - Implementation Plan: v0.7
-- Work Plan: v0.7
+- Work Plan: v0.8
 - Traceability: v0.5
 - Delivery Policies: v0.5
 - Security Baseline: v0.5
@@ -16,7 +16,7 @@ Implementation code: P00 foundation implemented
 ## Decisions closed in this revision
 
 - Work stages require regular independently verifiable commits after every completed work package and before planned pause or handoff.
-- Stage evidence records the implementing commit SHA or commit-series range.
+- Stage evidence contains only acceptance artifacts; Git history tracks implementation changes without duplicated metadata.
 - Project path exception is explicit.
 - Schema v1 baseline is a P01 exit artifact, not a draft.
 - Bare clone, fetch-before-draft and exact base commit are defined.

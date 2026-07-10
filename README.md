@@ -23,7 +23,7 @@ Server предоставляет `GET /health/live` и `GET /health/ready` на
 ## Active documents
 
 - `docs/GitPM_Implementation_Plan_v0.7.md` - architecture and normative domain model;
-- `docs/GitPM_Work_Plan_v0.7.md` - executable stages, commit cadence and acceptance;
+- `docs/GitPM_Work_Plan_v0.8.md` - executable stages, commit cadence and acceptance;
 - `docs/GitPM_Requirements_Traceability_v0.5.yaml` - DAG, requirements, verification checks and gate composition;
 - `docs/GitPM_Execution_Status_v0.1.yaml` - actual stage/check status and evidence;
 - `docs/GitPM_Delivery_Policies_v0.5.md` - product and operational boundaries;
