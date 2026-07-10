@@ -557,7 +557,7 @@ Server configuration задается config file, environment и mounted secret
 
 ## 26. Исполнение, evidence и release gates
 
-Исполнимый порядок находится в `GitPM_Work_Plan_v0.6.md`.
+Исполнимый порядок находится в `GitPM_Work_Plan_v0.7.md`.
 
 Формальный DAG, requirements, verification checks и gate composition находятся в `GitPM_Requirements_Traceability_v0.5.yaml`.
 

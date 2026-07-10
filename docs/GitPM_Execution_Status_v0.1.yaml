@@ -1,12 +1,15 @@
 version: '0.1'
 updated_at: '2026-07-10'
-current_phase: planning_reviewed_ready_for_P00_P01_P00S
+current_phase: P00_implementation_complete_pending_CI_acceptance
 stages:
   P00:
-    status: not_started
+    status: in_progress
     accepted_by: []
-    evidence: []
-    notes: ''
+    evidence:
+    - file:evidence/P00/README.md
+    - file:evidence/P00/vfy-001-local-health.json
+    - file:evidence/P00/vfy-002-local-planning.txt
+    notes: Implementation and local verification are complete; clean-Linux CI URL and ARCH/QA acceptance are pending.
   P00S:
     status: not_started
     accepted_by: []
@@ -104,13 +107,15 @@ stages:
     notes: ''
 verification_checks:
   VFY-001:
-    status: pending
-    evidence: []
-    notes: ''
+    status: running
+    evidence:
+    - file:evidence/P00/vfy-001-local-health.json
+    notes: Local clean build and smoke passed; required ci-clean-linux job URL is pending.
   VFY-002:
-    status: pending
-    evidence: []
-    notes: ''
+    status: running
+    evidence:
+    - file:evidence/P00/vfy-002-local-planning.txt
+    notes: Local validator, mutation and gate self-tests passed; required ci-clean-linux run is pending.
   VFY-003:
     status: pending
     evidence: []

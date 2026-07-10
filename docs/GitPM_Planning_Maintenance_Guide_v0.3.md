@@ -6,7 +6,7 @@
 ## 1. Назначение файлов
 
 - `GitPM_Implementation_Plan_v0.7.md`: что строится и какие решения нормативны.
-- `GitPM_Work_Plan_v0.6.md`: в каком порядке выполняется работа и как принимается stage.
+- `GitPM_Work_Plan_v0.7.md`: в каком порядке выполняется работа, как поддерживается ритм коммитов и как принимается stage.
 - `GitPM_Requirements_Traceability_v0.5.yaml`: machine-readable DAG, requirements, verification checks and gates.
 - `GitPM_Execution_Status_v0.1.yaml`: единственный machine-readable источник фактического выполнения.
 - `PROGRESS.md`: краткий человеческий журнал решений, blockers and next action.
@@ -31,6 +31,8 @@
 ```bash
 python3 scripts/update_execution_status.py stage P03 in_progress
 ```
+
+Во время реализации делать независимо проверяемые commits не реже чем после каждого завершенного work package и перед плановой паузой или передачей работы. В stage evidence записывать commit SHA или диапазон commit series.
 
 Во время работы evidence хранится в стабильном URL или repository path, например:
 

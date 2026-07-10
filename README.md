@@ -4,12 +4,26 @@ Git-first система управления проектами и задача
 
 ## Current status
 
-Статус: `ready_for_foundation`. Реализация не начата. План готов к P00; P01 и P00S выполняются после P00 согласно DAG.
+Статус: `P00_implementation_complete_pending_CI_acceptance`. Каркас monorepo, CI и минимальная наблюдаемость реализованы и локально проверены. Для закрытия P00 ещё нужны clean-Linux CI URL и приёмка ARCH/QA; P01 и P00S выполняются после P00 согласно DAG.
+
+## Development
+
+Требуются Node.js 20.19.2, pnpm 10.12.1 через Corepack и Python 3.11 с PyYAML.
+
+```bash
+corepack pnpm install --frozen-lockfile
+corepack pnpm verify
+corepack pnpm dev:server
+```
+
+Server предоставляет `GET /health/live` и `GET /health/ready` на
+`http://127.0.0.1:3000`. Каждый ответ возвращает `x-correlation-id`, а
+структурный request log содержит тот же идентификатор.
 
 ## Active documents
 
 - `docs/GitPM_Implementation_Plan_v0.7.md` - architecture and normative domain model;
-- `docs/GitPM_Work_Plan_v0.6.md` - executable stages and acceptance;
+- `docs/GitPM_Work_Plan_v0.7.md` - executable stages, commit cadence and acceptance;
 - `docs/GitPM_Requirements_Traceability_v0.5.yaml` - DAG, requirements, verification checks and gate composition;
 - `docs/GitPM_Execution_Status_v0.1.yaml` - actual stage/check status and evidence;
 - `docs/GitPM_Delivery_Policies_v0.5.md` - product and operational boundaries;

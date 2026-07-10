@@ -1,0 +1,38 @@
+{
+  "name": "gitpm",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Git-first project management monorepo",
+  "license": "UNLICENSED",
+  "packageManager": "pnpm@10.12.1",
+  "engines": {
+    "node": ">=20.19.2 <21",
+    "pnpm": "10.12.1"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  },
+  "scripts": {
+    "build": "corepack pnpm -r --if-present build",
+    "clean": "corepack pnpm -r --if-present clean",
+    "dev:server": "corepack pnpm --filter @gitpm/server dev",
+    "lint": "eslint apps packages scripts --max-warnings 0",
+    "planning:check": "python scripts/validate_planning.py",
+    "planning:test": "python scripts/test_planning_validator.py && python scripts/test_release_gate.py",
+    "planning:verify": "corepack pnpm planning:check && corepack pnpm planning:test",
+    "smoke": "node scripts/smoke-health.mjs",
+    "test": "vitest run",
+    "typecheck": "corepack pnpm -r --if-present typecheck",
+    "verify": "corepack pnpm clean && corepack pnpm build && corepack pnpm lint && corepack pnpm typecheck && corepack pnpm test && corepack pnpm smoke && corepack pnpm planning:verify"
+  },
+  "devDependencies": {
+    "@types/node": "20.19.43",
+    "@typescript-eslint/eslint-plugin": "8.63.0",
+    "@typescript-eslint/parser": "8.63.0",
+    "eslint": "9.39.4",
+    "typescript": "5.9.3",
+    "vitest": "4.1.10"
+  }
+}

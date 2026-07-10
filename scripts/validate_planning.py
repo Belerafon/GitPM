@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs"
 EXPECTED = {
     "implementation_plan": "GitPM_Implementation_Plan_v0.7.md",
-    "work_plan": "GitPM_Work_Plan_v0.6.md",
+    "work_plan": "GitPM_Work_Plan_v0.7.md",
     "delivery_policies": "GitPM_Delivery_Policies_v0.5.md",
     "security_baseline": "GitPM_Security_Baseline_v0.5.md",
     "maintenance_guide": "GitPM_Planning_Maintenance_Guide_v0.3.md",
@@ -107,6 +107,10 @@ required_phrases = {
         "API возвращает стабильный error code",
     ],
     "delivery": ["one writer mode", "commit always includes all draft changes", "Webhook is absent", "Russian `ru` is mandatory"],
+    "work": [
+        "не реже чем после каждого завершенного work package",
+        "Stage evidence содержит commit SHA или диапазон commit series",
+    ],
     "maintenance": ["Gate checker confirms actual execution" if False else "Gate checker"],
 }
 for phrase in required_phrases["implementation"]:
@@ -115,6 +119,9 @@ for phrase in required_phrases["implementation"]:
 for phrase in required_phrases["delivery"]:
     if phrase not in delivery:
         fail(f"delivery policy missing required decision: {phrase}")
+for phrase in required_phrases["work"]:
+    if phrase not in work:
+        fail(f"work plan missing required commit cadence: {phrase}")
 if "Gate checker" not in maintenance and "gate checker" not in maintenance:
     fail("maintenance guide must explain gate checker")
 

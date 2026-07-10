@@ -1,0 +1,22 @@
+{
+  "command": "corepack pnpm smoke",
+  "environment": {
+    "node": "20.19.2",
+    "os": "windows",
+    "pnpm": "10.12.1"
+  },
+  "live": {
+    "correlation_id": "p00-smoke-correlation",
+    "status": "ok"
+  },
+  "ready": {
+    "correlation_id": "p00-smoke-correlation",
+    "status": "ok"
+  },
+  "sanitized_log": {
+    "correlation_id": "p00-smoke-correlation",
+    "message": "request started",
+    "method": "GET",
+    "path": "/health/live"
+  }
+}

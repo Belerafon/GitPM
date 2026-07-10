@@ -1,0 +1,12 @@
+Command: corepack pnpm planning:verify
+Date: 2026-07-10
+Environment: Python 3.11.9 on Windows
+
+Planning validation passed: 20 stages, 32 verification checks, 33 requirements
+DAG is acyclic
+Execution status shape is valid
+Planning validator self-test passed: 15 mutations rejected
+Release gate self-test passed: pending rejected, complete passed, missing evidence rejected
+Actual alpha gate report: NOT READY with 36 unmet conditions, including P00=in_progress and VFY-001/VFY-002=running
+
+Clean-Linux CI evidence remains pending.

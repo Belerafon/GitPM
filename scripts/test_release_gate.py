@@ -4,18 +4,26 @@ from __future__ import annotations
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import yaml
 
 SOURCE=Path(__file__).resolve().parents[1]
 
 def run(root:Path)->subprocess.CompletedProcess[str]:
-    return subprocess.run(['python3','scripts/check_release_gate.py','--gate','alpha'],cwd=root,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,check=False)
+    return subprocess.run([sys.executable,'scripts/check_release_gate.py','--gate','alpha'],cwd=root,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,check=False)
 
 def main()->int:
     with tempfile.TemporaryDirectory(prefix='gitpm-gate-selftest-') as td:
         root=Path(td)/'repo'
-        shutil.copytree(SOURCE,root,ignore=shutil.ignore_patterns('.git','__pycache__','*.pyc','*.zip'))
+        shutil.copytree(
+            SOURCE,
+            root,
+            ignore=shutil.ignore_patterns(
+                '.git', 'node_modules', 'dist', 'coverage', '.pnpm-store',
+                '__pycache__', '*.pyc', '*.zip', '*.tsbuildinfo',
+            ),
+        )
         baseline=run(root)
         if baseline.returncode==0:
             print('Pending baseline gate unexpectedly passed'); print(baseline.stdout); return 1

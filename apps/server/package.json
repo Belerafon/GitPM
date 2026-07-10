@@ -1,0 +1,23 @@
+{
+  "name": "@gitpm/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@gitpm/logging": "workspace:*",
+    "@gitpm/shared": "workspace:*",
+    "fastify": "5.10.0",
+    "pino": "10.3.1"
+  },
+  "devDependencies": {
+    "tsx": "4.23.0"
+  }
+}

@@ -1,12 +1,12 @@
 # GitPM progress
 
-Current phase: `planning_reviewed_ready_for_P00_P01_P00S`  
-Implementation code: not started
+Current phase: `P00_implementation_complete_pending_CI_acceptance`
+Implementation code: P00 foundation implemented
 
 ## Current active revision
 
 - Implementation Plan: v0.7
-- Work Plan: v0.6
+- Work Plan: v0.7
 - Traceability: v0.5
 - Delivery Policies: v0.5
 - Security Baseline: v0.5
@@ -15,6 +15,8 @@ Implementation code: not started
 
 ## Decisions closed in this revision
 
+- Work stages require regular independently verifiable commits after every completed work package and before planned pause or handoff.
+- Stage evidence records the implementing commit SHA or commit-series range.
 - Project path exception is explicit.
 - Schema v1 baseline is a P01 exit artifact, not a draft.
 - Bare clone, fetch-before-draft and exact base commit are defined.
@@ -28,21 +30,29 @@ Implementation code: not started
 - Localization uses extensible locale packs; Russian is mandatory for v0.1 and English is the source fallback.
 - API and CLI JSON stay locale-neutral; user-authored repository content is not translated automatically.
 
+## Last implementation evidence
+
+- P00 monorepo contains web, server, CLI, shared and logging workspaces.
+- Pinned toolchain: Node.js 20.19.2 and pnpm 10.12.1 with a frozen lockfile.
+- Local `corepack pnpm verify` passed clean build, lint, typecheck, 6 unit tests and health smoke.
+- `/health/live` and `/health/ready` returned success; the response correlation ID appeared in structured logs.
+- Evidence is recorded under `evidence/P00/`.
+
 ## Last planning evidence
 
 - Localization planning revision commit: `abf001d`
 - Planning validator: `20 stages, 32 verification checks, 33 requirements`
-- Mutation self-tests: `14 mutations rejected`
+- Mutation self-tests: `15 mutations rejected`
 - Release gate self-test: pending rejected, complete evidence passed, missing evidence rejected
 - Alpha gate currently reports `NOT READY`, as expected before implementation
 
 ## Current blockers
 
-None for starting P00. P01 and P00S may start after P00 according to DAG.
+P00 implementation has no code blocker. Stage completion still requires a clean-Linux CI job URL and ARCH/QA acceptance; P01 and P00S remain behind that gate.
 
 ## Next action
 
-Start P00 and create the monorepo skeleton, CI and minimal observability.
+Run the new CI workflow on a remote, record its URL, obtain ARCH/QA acceptance and close P00. Then start P01 and P00S according to the DAG.
 
 ## Evidence policy
 
