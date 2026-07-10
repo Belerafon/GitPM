@@ -12,6 +12,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@gitpm/changes": "workspace:*",
     "@gitpm/drafts": "workspace:*",
     "@gitpm/domain": "workspace:*",
     "@gitpm/git-client": "workspace:*",

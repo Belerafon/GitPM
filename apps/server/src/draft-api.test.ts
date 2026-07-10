@@ -2,6 +2,8 @@ import type { DraftManager, DraftMetadata } from "@gitpm/drafts";
 import { DraftRuntimeError } from "@gitpm/drafts";
 import type { EntityStore } from "@gitpm/domain";
 import { DomainOperationError } from "@gitpm/domain";
+import type { ChangesService } from "@gitpm/changes";
+import { ChangesError } from "@gitpm/changes";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildApp } from "./app.js";
 import type { RequestActor } from "./draft-api.js";
@@ -159,5 +161,30 @@ describe("entity API contract", () => {
     expect(response.statusCode).toBe(403);
     expect(response.json()).toMatchObject({ error: { code: "DRAFT_FORBIDDEN" } });
     expect(entityStore.updateConfiguration).not.toHaveBeenCalled();
+  });
+});
+
+describe("changes API contract", () => {
+  it("returns change summaries and maps stale hunk tokens", async () => {
+    const changesService = {
+      list: vi.fn(async () => ({ files: [], changed_files_count: 0, affected_projects: [] })),
+      restoreHunk: vi.fn(async () => { throw new ChangesError("STALE_DIFF", "stale"); }),
+    } as unknown as ChangesService;
+    const app = buildApp({
+      authenticate: () => ({ userId: "42", role: "Developer" }),
+      changesService,
+      draftManager: manager(),
+    });
+    apps.push(app);
+    const listed = await app.inject({ method: "GET", url: "/api/drafts/DRF-API/changes" });
+    expect(listed.statusCode).toBe(200);
+    expect(listed.json()).toMatchObject({ changed_files_count: 0 });
+    const stale = await app.inject({
+      method: "POST",
+      url: "/api/drafts/DRF-API/changes/restore-hunk",
+      payload: { expected_fingerprint: metadata.fingerprint, path: "project.yaml", diff_token: "old", hunk_index: 0 },
+    });
+    expect(stale.statusCode).toBe(409);
+    expect(stale.json()).toMatchObject({ error: { code: "STALE_DIFF" } });
   });
 });

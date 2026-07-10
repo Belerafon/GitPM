@@ -198,6 +198,30 @@ export class GitClient {
     return result.stdout;
   }
 
+  async statusPorcelainZ(worktree: string): Promise<string> {
+    const result = await this.git(["-C", await realpath(worktree), "status", "--porcelain=v2", "-z", "--untracked-files=all"]);
+    return result.stdout;
+  }
+
+  async diffFile(worktree: string, relativePath: string, contextLines = 3): Promise<string> {
+    const result = await this.git([
+      "-C",
+      await realpath(worktree),
+      "diff",
+      "--no-color",
+      "--no-ext-diff",
+      `--unified=${contextLines}`,
+      "--",
+      relativePath,
+    ]);
+    return result.stdout;
+  }
+
+  async showHeadFile(worktree: string, relativePath: string): Promise<string> {
+    const result = await this.git(["-C", await realpath(worktree), "show", `HEAD:${relativePath}`]);
+    return result.stdout;
+  }
+
   async removeWorktree(worktree: string, branch: string, force: boolean): Promise<void> {
     const safeBranch = assertSafeBranchName(branch);
     const canonical = await realpath(worktree);

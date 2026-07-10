@@ -1,0 +1,7 @@
+P05 restore-file verification, 2026-07-10
+
+- Modified Project YAML contained two independent Unicode changes.
+- POST restore-file replaced the selected file with HEAD content.
+- Restored bytes matched the original file exactly.
+- A separately modified/deleted file remained changed.
+- Repository validation passed after restore.

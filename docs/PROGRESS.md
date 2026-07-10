@@ -1,7 +1,7 @@
 # GitPM progress
 
-Current phase: `P04_complete_P05_ready`
-Implementation code: P00-P04 complete
+Current phase: `P05_complete_P06_ready`
+Implementation code: P00-P05 complete
 
 ## Current active revision
 
@@ -86,13 +86,20 @@ Implementation code: P00-P04 complete
 - Maintainer-only configuration and static request/YAML limits are enforced without quota state.
 - Full suite contains 13 test files and 56 tests.
 
+## Last P05 evidence
+
+- Changes API exposes Added, Modified and Deleted with unified diff and stable token.
+- Modified/deleted file restore uses controlled HEAD content and atomic write.
+- Selected reverse hunk preserves other hunks and rejects stale tokens.
+- Unicode and CRLF diff cases pass; full suite contains 14 files and 60 tests.
+
 ## Current blockers
 
-None. P04 is accepted and P05 is unblocked.
+None. P05 is accepted and P06 is unblocked by completed P00S/P05.
 
 ## Next action
 
-Start P05 Git changes API and restore file/hunk operations.
+Start P06 OAuth, role refresh, push and Merge Request integration through test doubles.
 
 ## Evidence policy
 

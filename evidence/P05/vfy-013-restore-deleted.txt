@@ -1,0 +1,8 @@
+P05 deleted-file verification, 2026-07-10
+
+- Task TSK-01J2BZ7G4VJ57PX9K2Q0C6C5XQ was physically removed.
+- Changes summary reported kind=Deleted.
+- restore-file loaded HEAD:<path> through controlled Git and used atomic write.
+- Restored Task matched HEAD byte-for-byte.
+- Other Project modification remained present.
+- Repository validation returned valid=true.

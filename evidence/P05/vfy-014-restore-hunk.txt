@@ -1,0 +1,16 @@
+P05 selected-hunk verification, 2026-07-10
+
+Before:
+- Project name changed to Unicode `GitPM запуск`.
+- Distant label changed to Unicode `продукт`.
+- Unified diff contained at least two hunks and a SHA-256 diff token.
+
+Operation:
+- restore-hunk index 0 reversed only the first current-content-matching hunk.
+
+After:
+- Project name returned to `GitPM launch`.
+- Label `продукт` remained changed.
+- Validation passed.
+- Reusing the old token returned STALE_DIFF and made no write.
+- CRLF-formatted unified diff text parsed to the same hunk coordinates.

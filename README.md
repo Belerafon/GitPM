@@ -4,7 +4,7 @@ Git-first система управления проектами и задача
 
 ## Current status
 
-Статус: `P04_complete_P05_ready`. P00-P04 закрыты. Draft/entity REST API, all-entity CRUD, optimistic revisions, archive/delete-restrict, Maintainer config и static limits готовы; следующий этап — changes/restore API.
+Статус: `P05_complete_P06_ready`. P00-P05 закрыты. Changes summary, semantic base, restore modified/deleted file, selected-hunk restore и stale-diff protection готовы; следующий этап — OAuth, role refresh, push и MR test double.
 
 ## Development
 

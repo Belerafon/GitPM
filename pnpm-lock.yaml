@@ -50,6 +50,9 @@ importers:
 
   apps/server:
     dependencies:
+      '@gitpm/changes':
+        specifier: workspace:*
+        version: link:../../packages/changes
       '@gitpm/domain':
         specifier: workspace:*
         version: link:../../packages/domain
@@ -90,6 +93,21 @@ importers:
         version: 8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(tsx@4.23.0)(yaml@2.8.1)
 
   packages/calendar: {}
+
+  packages/changes:
+    dependencies:
+      '@gitpm/drafts':
+        specifier: workspace:*
+        version: link:../drafts
+      '@gitpm/git-client':
+        specifier: workspace:*
+        version: link:../git-client
+      '@gitpm/security':
+        specifier: workspace:*
+        version: link:../security
+      '@gitpm/validation':
+        specifier: workspace:*
+        version: link:../validation
 
   packages/domain:
     dependencies:

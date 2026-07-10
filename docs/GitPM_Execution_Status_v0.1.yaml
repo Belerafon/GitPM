@@ -1,6 +1,6 @@
 version: '0.1'
 updated_at: '2026-07-10'
-current_phase: P04_complete_P05_ready
+current_phase: P05_complete_P06_ready
 stages:
   P00:
     status: done
@@ -60,12 +60,18 @@ stages:
     - file:evidence/P04/vfy-010-delete-restrict.json
     - file:evidence/P04/vfy-011-technical-limits.txt
     - file:evidence/P04/acceptance.md
-    notes: Draft/entity REST contracts, domain CRUD, archive/delete-restrict, configuration roles and technical limits are accepted.
+    notes: Draft/entity REST contracts, domain CRUD, archive/delete-restrict, configuration roles and technical limits are
+      accepted.
   P05:
-    status: not_started
-    accepted_by: []
-    evidence: []
-    notes: ''
+    status: done
+    accepted_by:
+    - QA
+    evidence:
+    - file:evidence/P05/vfy-012-restore-file.txt
+    - file:evidence/P05/vfy-013-restore-deleted.txt
+    - file:evidence/P05/vfy-014-restore-hunk.txt
+    - file:evidence/P05/acceptance.md
+    notes: Changes summary, file/deleted restore, selected-hunk restore and stale-diff protection are accepted.
   P06:
     status: not_started
     accepted_by: []
@@ -188,17 +194,20 @@ verification_checks:
     - file:evidence/P04/vfy-011-technical-limits.txt
     notes: Oversized HTTP and YAML inputs fail under static limits; liveness remains healthy and no quota state exists.
   VFY-012:
-    status: pending
-    evidence: []
-    notes: ''
+    status: passed
+    evidence:
+    - file:evidence/P05/vfy-012-restore-file.txt
+    notes: Modified file restores to HEAD while other changes remain.
   VFY-013:
-    status: pending
-    evidence: []
-    notes: ''
+    status: passed
+    evidence:
+    - file:evidence/P05/vfy-013-restore-deleted.txt
+    notes: Deleted Task restores byte-for-byte and repository validation passes.
   VFY-014:
-    status: pending
-    evidence: []
-    notes: ''
+    status: passed
+    evidence:
+    - file:evidence/P05/vfy-014-restore-hunk.txt
+    notes: One of two hunks restores independently; stale token is rejected.
   VFY-015:
     status: pending
     evidence: []

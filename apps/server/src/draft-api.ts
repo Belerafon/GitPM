@@ -5,6 +5,8 @@ import { GitCommandError } from "@gitpm/git-client";
 import { assertEntityType, DomainOperationError } from "@gitpm/domain";
 import type { EntityStore } from "@gitpm/domain";
 import type { GitPmDocument } from "@gitpm/repository-format";
+import { ChangesError } from "@gitpm/changes";
+import type { ChangesService } from "@gitpm/changes";
 
 export type ProjectRole = "Reporter" | "Developer" | "Maintainer";
 
@@ -78,6 +80,10 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
       else if (["ENTITY_TYPE_INVALID", "ENTITY_ID_INVALID", "ENTITY_PROJECT_INVALID"].includes(error.code)) status = 400;
       else if (error.code === "VALIDATION_FAILED") status = 422;
       else status = 409;
+    } else if (error instanceof ChangesError) {
+      code = error.code;
+      message = error.message;
+      status = error.code === "CHANGE_PATH_INVALID" ? 400 : 409;
     } else if ((error as { code?: string }).code === "FST_ERR_CTP_BODY_TOO_LARGE") {
       status = 413;
       code = "REQUEST_TOO_LARGE";
@@ -127,6 +133,53 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
     await manager.cleanupDraft(request.params.draftId, request.body.confirmation);
     await reply.code(204).send();
   });
+}
+
+export function registerChangesApi(
+  app: FastifyInstance,
+  manager: DraftManager,
+  changes: ChangesService,
+  authenticate: Authenticate,
+): void {
+  app.get<{ Params: { draftId: string } }>("/api/drafts/:draftId/changes", async (request) => {
+    const actor = await authenticate(request);
+    await requireDraftRead(manager, actor, request.params.draftId);
+    return await changes.list(request.params.draftId);
+  });
+
+  app.post<{ Params: { draftId: string }; Body: { expected_fingerprint: string; path: string } }>(
+    "/api/drafts/:draftId/changes/restore-file",
+    async (request) => {
+      const actor = await authenticate(request);
+      requireMutationRole(actor);
+      return await changes.restoreFile(request.params.draftId, actor.userId, request.body.expected_fingerprint, request.body.path);
+    },
+  );
+
+  app.post<{ Params: { draftId: string }; Body: { expected_fingerprint: string; path: string; diff_token: string; hunk_index: number } }>(
+    "/api/drafts/:draftId/changes/restore-hunk",
+    async (request) => {
+      const actor = await authenticate(request);
+      requireMutationRole(actor);
+      return await changes.restoreHunk(
+        request.params.draftId,
+        actor.userId,
+        request.body.expected_fingerprint,
+        request.body.path,
+        request.body.diff_token,
+        request.body.hunk_index,
+      );
+    },
+  );
+
+  app.post<{ Params: { draftId: string }; Body: { expected_fingerprint: string } }>(
+    "/api/drafts/:draftId/changes/discard-all",
+    async (request) => {
+      const actor = await authenticate(request);
+      requireMutationRole(actor);
+      return await changes.discardAll(request.params.draftId, actor.userId, request.body.expected_fingerprint);
+    },
+  );
 }
 
 export function registerEntityApi(

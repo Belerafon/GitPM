@@ -4,8 +4,9 @@ import { createLogger } from "@gitpm/logging";
 import type { HealthPayload } from "@gitpm/shared";
 import type { DraftManager } from "@gitpm/drafts";
 import type { EntityStore } from "@gitpm/domain";
+import type { ChangesService } from "@gitpm/changes";
 import Fastify, { LogController, type FastifyBaseLogger } from "fastify";
-import { registerDraftApi, registerEntityApi } from "./draft-api.js";
+import { registerChangesApi, registerDraftApi, registerEntityApi } from "./draft-api.js";
 import type { Authenticate } from "./draft-api.js";
 
 const MAX_CORRELATION_ID_LENGTH = 128;
@@ -13,6 +14,7 @@ const SAFE_CORRELATION_ID = /^[A-Za-z0-9._:-]+$/u;
 
 export interface AppOptions {
   authenticate?: Authenticate;
+  changesService?: ChangesService;
   draftManager?: DraftManager;
   entityStore?: EntityStore;
   isReady?: () => boolean | Promise<boolean>;
@@ -85,6 +87,7 @@ export function buildApp(options: AppOptions = {}) {
     });
     registerDraftApi(app, options.draftManager, authenticate);
     if (options.entityStore) registerEntityApi(app, options.draftManager, options.entityStore, authenticate);
+    if (options.changesService) registerChangesApi(app, options.draftManager, options.changesService, authenticate);
   }
 
   return app;
