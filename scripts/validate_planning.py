@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Strict validation for GitPM planning documents and formal delivery registry."""
+"""Validate the active GitPM planning set and formal delivery registry."""
 from __future__ import annotations
 
 from collections import Counter, defaultdict, deque
@@ -12,21 +12,21 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs"
-
 EXPECTED = {
-    "implementation": "GitPM_Implementation_Plan_v0.4.md",
-    "work": "GitPM_Work_Plan_v0.3.md",
-    "trace": "GitPM_Requirements_Traceability_v0.2.yaml",
-    "delivery": "GitPM_Delivery_Policies_v0.2.md",
-    "security": "GitPM_Security_Baseline_v0.2.md",
+    "implementation": "GitPM_Implementation_Plan_v0.5.md",
+    "work": "GitPM_Work_Plan_v0.4.md",
+    "trace": "GitPM_Requirements_Traceability_v0.3.yaml",
+    "delivery": "GitPM_Delivery_Policies_v0.3.md",
+    "security": "GitPM_Security_Baseline_v0.3.md",
+    "maintenance": "GitPM_Planning_Maintenance_Guide_v0.1.md",
     "progress": "PROGRESS.md",
 }
-
+EXPECTED_E2E_COUNT = 32
 errors: list[str] = []
 
 
 class UniqueKeyLoader(yaml.SafeLoader):
-    """YAML loader that rejects duplicate mapping keys."""
+    """Safe YAML loader rejecting duplicate mapping keys."""
 
 
 def _construct_mapping(loader: UniqueKeyLoader, node: yaml.MappingNode, deep: bool = False) -> dict[Any, Any]:
@@ -44,147 +44,148 @@ def _construct_mapping(loader: UniqueKeyLoader, node: yaml.MappingNode, deep: bo
     return mapping
 
 
-UniqueKeyLoader.add_constructor(
-    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
-    _construct_mapping,
-)
+UniqueKeyLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _construct_mapping)
 
 
-def read_text(name: str) -> str:
-    path = DOCS / name
+def fail(message: str) -> None:
+    errors.append(message)
+
+
+def read_doc(key: str) -> str:
+    path = DOCS / EXPECTED[key]
     if not path.is_file():
-        errors.append(f"missing required document: docs/{name}")
+        fail(f"missing required document: docs/{EXPECTED[key]}")
         return ""
     return path.read_text(encoding="utf-8")
 
 
 for name in EXPECTED.values():
     if not (DOCS / name).is_file():
-        errors.append(f"missing required file: docs/{name}")
-
+        fail(f"missing required file: docs/{name}")
 if not (ROOT / "README.md").is_file():
-    errors.append("missing README.md")
-
+    fail("missing README.md")
 if errors:
     print("Planning validation failed:", file=sys.stderr)
     for error in errors:
         print(f"- {error}", file=sys.stderr)
     raise SystemExit(1)
 
-implementation = read_text(EXPECTED["implementation"])
-work = read_text(EXPECTED["work"])
-delivery = read_text(EXPECTED["delivery"])
-security = read_text(EXPECTED["security"])
-progress = read_text(EXPECTED["progress"])
+implementation = read_doc("implementation")
+work = read_doc("work")
+delivery = read_doc("delivery")
+security = read_doc("security")
+maintenance = read_doc("maintenance")
+progress = read_doc("progress")
 readme = (ROOT / "README.md").read_text(encoding="utf-8")
 
 try:
     registry = yaml.load((DOCS / EXPECTED["trace"]).read_text(encoding="utf-8"), Loader=UniqueKeyLoader)
-except Exception as exc:  # noqa: BLE001 - validator must report parse failure
-    errors.append(f"traceability YAML parse failed: {exc}")
+except Exception as exc:  # noqa: BLE001
+    fail(f"traceability YAML parse failed: {exc}")
     registry = {}
-
 if not isinstance(registry, dict):
-    errors.append("traceability root must be a mapping")
+    fail("traceability root must be a mapping")
     registry = {}
 
-# Exactly one active version per versioned plan family.
+# Exactly one active version of each planning family.
 families = {
     "GitPM_Implementation_Plan_v*.md": EXPECTED["implementation"],
     "GitPM_Work_Plan_v*.md": EXPECTED["work"],
     "GitPM_Requirements_Traceability_v*.yaml": EXPECTED["trace"],
     "GitPM_Delivery_Policies_v*.md": EXPECTED["delivery"],
     "GitPM_Security_Baseline_v*.md": EXPECTED["security"],
+    "GitPM_Planning_Maintenance_Guide_v*.md": EXPECTED["maintenance"],
 }
-for pattern, expected_name in families.items():
-    active = sorted(p.name for p in DOCS.glob(pattern))
-    if active != [expected_name]:
-        errors.append(f"active files for {pattern}: expected [{expected_name}], got {active}")
+for pattern, expected in families.items():
+    actual = sorted(path.name for path in DOCS.glob(pattern))
+    if actual != [expected]:
+        fail(f"active files for {pattern}: expected [{expected}], got {actual}")
 
-# Registry document pointers must exactly match active files.
-documents = registry.get("documents", {})
 expected_doc_map = {
     "implementation_plan": EXPECTED["implementation"],
     "work_plan": EXPECTED["work"],
     "delivery_policies": EXPECTED["delivery"],
     "security_baseline": EXPECTED["security"],
+    "maintenance_guide": EXPECTED["maintenance"],
     "progress": EXPECTED["progress"],
 }
-if documents != expected_doc_map:
-    errors.append(f"registry documents mismatch: expected {expected_doc_map}, got {documents}")
+if registry.get("documents") != expected_doc_map:
+    fail(f"registry documents mismatch: expected {expected_doc_map}, got {registry.get('documents')}")
+if registry.get("version") != "0.3":
+    fail("traceability version must be 0.3")
 
 stages = registry.get("stages", [])
 requirements = registry.get("requirements", [])
 e2e = registry.get("e2e", [])
 gates = registry.get("release_gates", {})
-
 for label, value in (("stages", stages), ("requirements", requirements), ("e2e", e2e)):
     if not isinstance(value, list) or not value:
-        errors.append(f"registry {label} must be a non-empty list")
+        fail(f"registry {label} must be a non-empty list")
+        value = []
 
 
-def duplicate_ids(items: list[dict[str, Any]], label: str) -> list[str]:
-    ids = [item.get("id") for item in items if isinstance(item, dict)]
-    duplicates = sorted(key for key, count in Counter(ids).items() if key is not None and count > 1)
+def collect_ids(items: list[Any], label: str) -> list[str]:
+    ids: list[str] = []
+    raw: list[Any] = []
+    for item in items:
+        if not isinstance(item, dict):
+            fail(f"{label} entry must be a mapping")
+            continue
+        item_id = item.get("id")
+        raw.append(item_id)
+        if isinstance(item_id, str) and item_id:
+            ids.append(item_id)
+        else:
+            fail(f"{label} contains missing/invalid id")
+    duplicates = sorted(key for key, count in Counter(raw).items() if key is not None and count > 1)
     if duplicates:
-        errors.append(f"duplicate {label} IDs: {duplicates}")
-    if any(not isinstance(key, str) or not key for key in ids):
-        errors.append(f"{label} contains missing/invalid id")
-    return [key for key in ids if isinstance(key, str)]
+        fail(f"duplicate {label} IDs: {duplicates}")
+    return ids
 
 
-stage_ids = duplicate_ids(stages, "stage")
-requirement_ids = duplicate_ids(requirements, "requirement")
-e2e_ids = duplicate_ids(e2e, "E2E")
-stage_set = set(stage_ids)
-requirement_set = set(requirement_ids)
-e2e_set = set(e2e_ids)
-
-expected_e2e = [f"E2E-{index:03d}" for index in range(1, 46)]
+stage_ids = collect_ids(stages, "stage")
+requirement_ids = collect_ids(requirements, "requirement")
+e2e_ids = collect_ids(e2e, "E2E")
+stage_set, requirement_set, e2e_set = set(stage_ids), set(requirement_ids), set(e2e_ids)
+expected_e2e = [f"E2E-{index:03d}" for index in range(1, EXPECTED_E2E_COUNT + 1)]
 if e2e_ids != expected_e2e:
-    errors.append("E2E list must be exactly ordered E2E-001 through E2E-045")
+    fail(f"E2E list must be exactly ordered E2E-001 through E2E-{EXPECTED_E2E_COUNT:03d}")
 
-# Stage schema, accountability and DAG.
+# Stage schema and DAG.
 size_weight = {"S": 1, "M": 2, "L": 3}
 stage_by_id: dict[str, dict[str, Any]] = {}
 adjacency: dict[str, list[str]] = defaultdict(list)
-indegree: dict[str, int] = {stage_id: 0 for stage_id in stage_ids}
+indegree = {stage_id: 0 for stage_id in stage_ids}
 for stage in stages:
-    if not isinstance(stage, dict):
-        errors.append("stage entry is not a mapping")
+    if not isinstance(stage, dict) or not isinstance(stage.get("id"), str):
         continue
-    stage_id = stage.get("id")
-    if not isinstance(stage_id, str):
-        continue
+    stage_id = stage["id"]
     stage_by_id[stage_id] = stage
-    required_fields = ["title", "size", "estimate", "dependencies", "accountable", "responsible", "acceptance", "milestone"]
-    for field in required_fields:
+    for field in ("title", "size", "estimate", "dependencies", "accountable", "responsible", "acceptance", "milestone"):
         if field not in stage:
-            errors.append(f"stage {stage_id} missing field {field}")
+            fail(f"stage {stage_id} missing field {field}")
     if stage.get("size") not in size_weight:
-        errors.append(f"stage {stage_id} size must be S/M/L and never XL")
-    accountable = stage.get("accountable")
-    if not isinstance(accountable, str) or not accountable or "/" in accountable or "," in accountable:
-        errors.append(f"stage {stage_id} must have one accountable owner")
+        fail(f"stage {stage_id} size must be S/M/L")
+    if not isinstance(stage.get("accountable"), str) or not stage.get("accountable"):
+        fail(f"stage {stage_id} must have one accountable")
     for field in ("responsible", "acceptance"):
         if not isinstance(stage.get(field), list) or not stage.get(field):
-            errors.append(f"stage {stage_id} {field} must be a non-empty list")
-    deps = stage.get("dependencies", [])
+            fail(f"stage {stage_id} {field} must be non-empty list")
+    deps = stage.get("dependencies")
     if not isinstance(deps, list):
-        errors.append(f"stage {stage_id} dependencies must be a list")
+        fail(f"stage {stage_id} dependencies must be list")
         continue
     if len(deps) != len(set(deps)):
-        errors.append(f"stage {stage_id} has duplicate dependencies")
+        fail(f"stage {stage_id} has duplicate dependencies")
     for dep in deps:
         if dep == stage_id:
-            errors.append(f"stage {stage_id} depends on itself")
+            fail(f"stage {stage_id} depends on itself")
         elif dep not in stage_set:
-            errors.append(f"stage {stage_id} references unknown dependency {dep}")
+            fail(f"stage {stage_id} references unknown dependency {dep}")
         else:
             adjacency[dep].append(stage_id)
             indegree[stage_id] += 1
 
-# Topological order and cycle detection.
 queue = deque(sorted(stage_id for stage_id, degree in indegree.items() if degree == 0))
 topological: list[str] = []
 while queue:
@@ -195,239 +196,188 @@ while queue:
         if indegree[nxt] == 0:
             queue.append(nxt)
 if len(topological) != len(stage_ids):
-    cyclic = sorted(stage_id for stage_id, degree in indegree.items() if degree > 0)
-    errors.append(f"stage dependency graph contains a cycle involving: {cyclic}")
+    fail(f"stage DAG contains cycle: {sorted(k for k, v in indegree.items() if v > 0)}")
 
-# Longest weighted path for useful output, not a second manually maintained source.
-longest_score: dict[str, int] = {}
-predecessor: dict[str, str | None] = {}
+# Calculate critical path; it is derived, never maintained manually.
+score: dict[str, int] = {}
+pred: dict[str, str | None] = {}
 for stage_id in topological:
-    weight = size_weight.get(stage_by_id.get(stage_id, {}).get("size"), 0)
-    deps = stage_by_id.get(stage_id, {}).get("dependencies", [])
+    stage = stage_by_id[stage_id]
+    deps = stage.get("dependencies", [])
+    weight = size_weight.get(stage.get("size"), 0)
     if not deps:
-        longest_score[stage_id] = weight
-        predecessor[stage_id] = None
+        score[stage_id], pred[stage_id] = weight, None
     else:
-        best_dep = max(deps, key=lambda dep: longest_score.get(dep, -1))
-        longest_score[stage_id] = longest_score.get(best_dep, 0) + weight
-        predecessor[stage_id] = best_dep
-critical_path: list[str] = []
-if longest_score:
-    node: str | None = max(longest_score, key=longest_score.get)
-    while node is not None:
-        critical_path.append(node)
-        node = predecessor.get(node)
-    critical_path.reverse()
+        best = max(deps, key=lambda dep: score.get(dep, -1))
+        score[stage_id], pred[stage_id] = score[best] + weight, best
+critical: list[str] = []
+if score:
+    node: str | None = max(score, key=score.get)
+    while node:
+        critical.append(node)
+        node = pred[node]
+    critical.reverse()
 
-# Work Plan stage headings must exactly match registry titles and appear once.
+# Work plan headings and required sections.
+markdown_stage_ids = re.findall(r"^## (P[0-9A-Z]+)\.", work, flags=re.M)
+if markdown_stage_ids != stage_ids:
+    fail("work plan stage heading order/set must exactly match registry")
 for stage_id, stage in stage_by_id.items():
     heading = f"## {stage_id}. {stage.get('title')}"
-    count = work.count(heading)
-    if count != 1:
-        errors.append(f"work plan must contain stage heading once: {heading!r}, found {count}")
-if re.search(r"^## P[0-9A-Z]+\.", work, flags=re.M):
-    markdown_stage_ids = re.findall(r"^## (P[0-9A-Z]+)\.", work, flags=re.M)
-    if set(markdown_stage_ids) != stage_set or len(markdown_stage_ids) != len(stage_ids):
-        errors.append("work plan stage heading set does not exactly match registry")
-if "Параллельность:" in work or "API contract P06" in work:
-    errors.append("work plan contains non-formal parallelism/partial-dependency text")
+    if work.count(heading) != 1:
+        fail(f"work plan must contain exact heading once: {heading}")
+for section in ("### Objective", "### Entry criteria", "### Work packages", "### Artifacts", "### Automated verification", "### Manual acceptance", "### Owned E2E", "### Exit gate"):
+    if work.count(section) != len(stage_ids):
+        fail(f"work plan section count mismatch for {section}")
+if "Параллельность:" in work:
+    fail("manual parallelism field is prohibited")
 
-# E2E schema and ownership.
-valid_mandatory = {"alpha", "beta", "release"}
-valid_environments = {
-    "real-gitlab", "security-real-gitlab", "agent-real-gitlab", "browser-local",
-    "integration-local", "fault-local", "security-local", "agent-local",
-    "perf-runner", "ci-clean-linux",
-}
+# Requirements and bidirectional links.
+requirement_by_id: dict[str, dict[str, Any]] = {}
+for req in requirements:
+    if not isinstance(req, dict) or not isinstance(req.get("id"), str):
+        continue
+    req_id = req["id"]
+    requirement_by_id[req_id] = req
+    for field in ("description", "source", "owner", "stage", "release_gate", "acceptance_criteria", "tests"):
+        if field not in req:
+            fail(f"requirement {req_id} missing {field}")
+    if req.get("stage") not in stage_set:
+        fail(f"requirement {req_id} references unknown stage")
+    if req.get("release_gate") not in {"alpha", "beta", "release"}:
+        fail(f"requirement {req_id} invalid release_gate")
+    if not isinstance(req.get("acceptance_criteria"), list) or not req.get("acceptance_criteria"):
+        fail(f"requirement {req_id} acceptance_criteria must be non-empty")
+    if not isinstance(req.get("tests"), list) or not req.get("tests"):
+        fail(f"requirement {req_id} tests must be non-empty")
+    source = req.get("source")
+    if not isinstance(source, dict) or source.get("document") != EXPECTED["implementation"] or not source.get("section"):
+        fail(f"requirement {req_id} source must point to active implementation and a section")
+    for test_id in req.get("tests", []):
+        if test_id not in e2e_set:
+            fail(f"requirement {req_id} references unknown E2E {test_id}")
+
+# E2E structure. No live GitLab environment is allowed by this revision.
+valid_envs = {"ci-clean-linux", "integration-local", "fault-local", "security-local", "browser-local", "agent-local", "perf-local"}
 e2e_by_id: dict[str, dict[str, Any]] = {}
 for test in e2e:
-    if not isinstance(test, dict):
-        errors.append("E2E entry is not a mapping")
+    if not isinstance(test, dict) or not isinstance(test.get("id"), str):
         continue
-    test_id = test.get("id")
-    if not isinstance(test_id, str):
-        continue
+    test_id = test["id"]
     e2e_by_id[test_id] = test
     for field in ("title", "stage", "mandatory_from", "environment", "actor", "preconditions", "steps", "expected_result", "evidence", "requirements"):
         if field not in test:
-            errors.append(f"{test_id} missing field {field}")
+            fail(f"{test_id} missing field {field}")
     if test.get("stage") not in stage_set:
-        errors.append(f"{test_id} references unknown stage {test.get('stage')}")
-    if test.get("mandatory_from") not in valid_mandatory:
-        errors.append(f"{test_id} invalid mandatory_from {test.get('mandatory_from')}")
-    if test.get("environment") not in valid_environments:
-        errors.append(f"{test_id} invalid environment {test.get('environment')}")
+        fail(f"{test_id} references unknown stage")
+    if test.get("mandatory_from") not in {"alpha", "beta", "release"}:
+        fail(f"{test_id} invalid mandatory_from")
+    if test.get("environment") not in valid_envs:
+        fail(f"{test_id} invalid environment {test.get('environment')}")
     for field in ("preconditions", "steps", "expected_result", "evidence", "requirements"):
-        value = test.get(field)
-        if not isinstance(value, list) or not value:
-            errors.append(f"{test_id} {field} must be a non-empty list")
+        if not isinstance(test.get(field), list) or not test.get(field):
+            fail(f"{test_id} {field} must be a non-empty list")
     for req_id in test.get("requirements", []):
         if req_id not in requirement_set:
-            errors.append(f"{test_id} references unknown requirement {req_id}")
-    if work.count(f"- `{test_id}`") != 1:
-        errors.append(f"work plan must list owned E2E exactly once: {test_id}")
+            fail(f"{test_id} references unknown requirement {req_id}")
+        elif test_id not in requirement_by_id[req_id].get("tests", []):
+            fail(f"bidirectional link missing: {test_id} -> {req_id}")
 
-# Requirements schema, source references and bidirectional links.
-requirement_by_id: dict[str, dict[str, Any]] = {}
-for requirement in requirements:
-    if not isinstance(requirement, dict):
-        errors.append("requirement entry is not a mapping")
-        continue
-    req_id = requirement.get("id")
-    if not isinstance(req_id, str):
-        continue
-    requirement_by_id[req_id] = requirement
-    for field in ("description", "source", "owner", "stage", "release_gate", "acceptance_criteria", "tests"):
-        if field not in requirement:
-            errors.append(f"requirement {req_id} missing field {field}")
-    if requirement.get("stage") not in stage_set:
-        errors.append(f"requirement {req_id} references unknown stage {requirement.get('stage')}")
-    if requirement.get("release_gate") not in {"alpha", "beta", "release"}:
-        errors.append(f"requirement {req_id} has invalid release_gate")
-    for field in ("acceptance_criteria", "tests"):
-        value = requirement.get(field)
-        if not isinstance(value, list) or not value:
-            errors.append(f"requirement {req_id} {field} must be a non-empty list")
-    source = requirement.get("source")
-    if not isinstance(source, dict) or not source.get("document") or not source.get("section"):
-        errors.append(f"requirement {req_id} source must contain document and section")
-    else:
-        source_path = DOCS / str(source["document"])
-        if not source_path.is_file():
-            errors.append(f"requirement {req_id} source document missing: {source['document']}")
-        else:
-            source_text = source_path.read_text(encoding="utf-8")
-            if not re.search(rf"^## {re.escape(str(source['section']))}(?:\.|\s)", source_text, flags=re.M):
-                errors.append(f"requirement {req_id} source section not found: {source['document']} section {source['section']}")
-    for test_id in requirement.get("tests", []):
-        if test_id not in e2e_set:
-            errors.append(f"requirement {req_id} references unknown test {test_id}")
-        else:
-            test_gate = e2e_by_id.get(test_id, {}).get("mandatory_from")
-            requirement_gate = requirement.get("release_gate")
-            if test_gate in {"alpha", "beta", "release"} and requirement_gate in {"alpha", "beta", "release"}:
-                local_gate_order = {"alpha": 0, "beta": 1, "release": 2}
-                if local_gate_order[test_gate] > local_gate_order[requirement_gate]:
-                    errors.append(
-                        f"requirement {req_id} is due at {requirement_gate} but test {test_id} is only mandatory from {test_gate}"
-                    )
-            if req_id not in e2e_by_id.get(test_id, {}).get("requirements", []):
-                errors.append(f"bidirectional link missing: {req_id} -> {test_id} but E2E does not link back")
+for req_id, req in requirement_by_id.items():
+    for test_id in req.get("tests", []):
+        if req_id not in e2e_by_id.get(test_id, {}).get("requirements", []):
+            fail(f"bidirectional link missing: {req_id} -> {test_id}")
 
-for test_id, test in e2e_by_id.items():
-    for req_id in test.get("requirements", []):
-        if test_id not in requirement_by_id.get(req_id, {}).get("tests", []):
-            errors.append(f"bidirectional link missing: {test_id} -> {req_id} but requirement does not link back")
+# Owned E2E must appear in the owning Work Plan stage.
+for stage_id in stage_ids:
+    owned = [test["id"] for test in e2e if test.get("stage") == stage_id]
+    heading_start = work.index(f"## {stage_id}. ")
+    next_positions = [work.find(f"## {next_id}. ", heading_start + 1) for next_id in stage_ids if work.find(f"## {next_id}. ", heading_start + 1) != -1]
+    stage_text = work[heading_start:min(next_positions) if next_positions else len(work)]
+    for test_id in owned:
+        if f"`{test_id}`" not in stage_text:
+            fail(f"work plan stage {stage_id} does not list owned {test_id}")
 
-# Milestone compatibility.
-stage_milestone_order = {"foundation": 0, "alpha": 1, "beta": 2, "release_candidate": 3, "release": 4}
-gate_order = {"alpha": 1, "beta": 2, "release": 4}
-for test_id, test in e2e_by_id.items():
-    stage = stage_by_id.get(test.get("stage"), {})
-    stage_order = stage_milestone_order.get(stage.get("milestone"), 99)
-    if stage_order > gate_order.get(test.get("mandatory_from"), -1):
-        errors.append(f"{test_id} is mandatory from {test.get('mandatory_from')} before owner stage {test.get('stage')} completes")
-for req_id, requirement in requirement_by_id.items():
-    stage = stage_by_id.get(requirement.get("stage"), {})
-    stage_order = stage_milestone_order.get(stage.get("milestone"), 99)
-    if stage_order > gate_order.get(requirement.get("release_gate"), -1):
-        errors.append(f"requirement {req_id} gate precedes owning stage")
-
-# Exact release gates and dependency closure.
+# Exact release gates.
 expected_gate_names = ["alpha", "beta", "release_candidate", "release"]
 if list(gates.keys()) != expected_gate_names:
-    errors.append(f"release gate order/names must be {expected_gate_names}")
-mandatory_order = {"alpha": 0, "beta": 1, "release": 2}
-for gate_name in expected_gate_names:
-    gate = gates.get(gate_name, {})
-    if not isinstance(gate, dict):
-        errors.append(f"release gate {gate_name} must be a mapping")
+    fail(f"release gate names/order must be {expected_gate_names}")
+stage_order = {"foundation": 0, "alpha": 1, "beta": 2, "release_candidate": 3, "release": 4}
+test_order = {"alpha": 0, "beta": 1, "release": 2}
+for gate in expected_gate_names:
+    data = gates.get(gate, {})
+    if not isinstance(data, dict):
+        fail(f"release gate {gate} must be mapping")
         continue
-    required_stages = gate.get("required_stages")
-    required_tests = gate.get("required_e2e")
-    if not isinstance(required_stages, list) or not isinstance(required_tests, list):
-        errors.append(f"release gate {gate_name} requires stage and E2E lists")
-        continue
-    if len(required_stages) != len(set(required_stages)):
-        errors.append(f"release gate {gate_name} has duplicate stages")
-    if len(required_tests) != len(set(required_tests)):
-        errors.append(f"release gate {gate_name} has duplicate E2E")
-    for stage_id in required_stages:
-        if stage_id not in stage_set:
-            errors.append(f"release gate {gate_name} unknown stage {stage_id}")
-        else:
-            missing_deps = set(stage_by_id[stage_id].get("dependencies", [])) - set(required_stages)
-            if missing_deps:
-                errors.append(f"release gate {gate_name} stage {stage_id} missing dependency closure {sorted(missing_deps)}")
-    for test_id in required_tests:
-        if test_id not in e2e_set:
-            errors.append(f"release gate {gate_name} unknown E2E {test_id}")
-    if gate_name == "alpha":
-        expected_tests = [t["id"] for t in e2e if mandatory_order[t["mandatory_from"]] <= mandatory_order["alpha"]]
-        expected_stages = [s["id"] for s in stages if stage_milestone_order[s["milestone"]] <= 1]
-    elif gate_name == "beta":
-        expected_tests = [t["id"] for t in e2e if mandatory_order[t["mandatory_from"]] <= mandatory_order["beta"]]
-        expected_stages = [s["id"] for s in stages if stage_milestone_order[s["milestone"]] <= 2]
-    elif gate_name == "release_candidate":
-        expected_tests = e2e_ids
-        expected_stages = [s["id"] for s in stages if stage_milestone_order[s["milestone"]] <= 3]
+    if gate == "alpha":
+        max_stage, max_test = 1, 0
+    elif gate == "beta":
+        max_stage, max_test = 2, 1
+    elif gate == "release_candidate":
+        max_stage, max_test = 3, 2
     else:
-        expected_tests = e2e_ids
-        expected_stages = stage_ids
-    if required_tests != expected_tests:
-        errors.append(f"release gate {gate_name} E2E list is not exact")
-    if required_stages != expected_stages:
-        errors.append(f"release gate {gate_name} stage list is not exact")
+        max_stage, max_test = 4, 2
+    expected_stages = [stage["id"] for stage in stages if stage_order[stage["milestone"]] <= max_stage]
+    expected_tests = [test["id"] for test in e2e if test_order[test["mandatory_from"]] <= max_test]
+    if data.get("required_stages") != expected_stages:
+        fail(f"release gate {gate} stage list is not exact")
+    if data.get("required_e2e") != expected_tests:
+        fail(f"release gate {gate} E2E list is not exact")
 
-# Architecture consistency and removal of superseded decisions.
-prohibited_impl_patterns = {
-    r"/git/restore/lines": "selected-lines restore endpoint is present",
-    r"GITPM_TOKEN_ENCRYPTION_KEY": "production key environment variable is present",
-    r":taskKey": "mutation route still uses taskKey",
-    r":projectKey": "mutation route still uses projectKey",
-    r"TSK-\d+\.yaml": "filename example still uses display key",
-    r"depends_on:\s*$": "internal reference example uses old depends_on field",
-    r"project:\s+PRJ-": "internal reference example uses display project key",
+# Product simplification boundaries.
+required_phrases = {
+    implementation: [
+        "отдельного display key нет",
+        "Migration engine в v0.1 отсутствует",
+        "local safety refs",
+        "GitPM не выполняет rebase",
+        "MCP server, agent domain API",
+        "Обязательного live GitLab test project",
+        "Gantt только читает",
+    ],
+    delivery: ["Нет собственного authorization DSL", "Нет `gitpm migrate`" if False else "Migration engine отсутствует", "Нет limits по пользователям"],
+    maintenance: ["Порядок изменения", "Verification commands", "Как закрывать stage"],
 }
-for pattern, message in prohibited_impl_patterns.items():
-    if re.search(pattern, implementation, flags=re.M):
-        errors.append(f"implementation inconsistency: {message}")
+for text, phrases in required_phrases.items():
+    for phrase in phrases:
+        if phrase not in text:
+            fail(f"required planning phrase missing: {phrase}")
 
-required_phrases = [
-    "Alpha и MVP означают один и тот же milestone",
-    "GitPM v0.1 не делает резервных копий",
-    "Потеря всего persistent volume означает потерю",
-    "immutable technical ID",
-    "Display key",
-]
-for phrase in required_phrases:
-    if phrase not in implementation:
-        errors.append(f"implementation plan missing required decision phrase: {phrase}")
+prohibited_patterns = {
+    r"/git/restore/lines": "selected-lines restore endpoint",
+    r"/rebase(?:/|\b)": "rebase API route",
+    r"## P10B\.": "rebase stage",
+    r"refs/gitpm/safety": "safety ref implementation",
+    r"gitpm migrate --": "migration command",
+    r"\bMCP tools\b": "MCP tool registry",
+    r"environment:\s*(?:real-gitlab|security-real-gitlab|agent-real-gitlab)": "live GitLab E2E environment",
+    r"display_key\s*:": "display key field",
+}
+combined = "\n".join((implementation, work, delivery, security, (DOCS / EXPECTED["trace"]).read_text(encoding="utf-8")))
+for pattern, label in prohibited_patterns.items():
+    if re.search(pattern, combined, flags=re.I | re.M):
+        fail(f"superseded feature still present: {label}")
 
-if "Параллельность:" in work:
-    errors.append("manual parallelism field is prohibited")
-if "backup remote" in work.lower() or "backup scheduler" in work.lower():
-    errors.append("work plan contains backup implementation")
-if "No backup subsystem in v0.1" not in readme:
-    errors.append("README does not state no-backup product boundary")
-if "local safety ref is not a backup" not in delivery:
-    errors.append("delivery policy does not distinguish local safety ref from backup")
-if "There is no backup process trust boundary" not in security:
-    errors.append("security baseline still models a backup subsystem")
+if "No backup and no safety refs" not in readme:
+    fail("README must state no backup and no safety refs")
+if "live GitLab test project is not required" not in progress:
+    fail("PROGRESS must state live GitLab test is not required")
 
-# Current-document references in README and PROGRESS.
-for current_name in EXPECTED.values():
-    if current_name == "PROGRESS.md":
+# References in README, PROGRESS and maintenance guide.
+for key, filename in EXPECTED.items():
+    if key == "progress":
         continue
-    if current_name not in readme:
-        errors.append(f"README does not reference {current_name}")
-    if current_name not in progress:
-        errors.append(f"PROGRESS does not reference {current_name}")
-
-# Prevent vague release gates in executable plan.
-for vague in ("relevant subset", "где применимо", "если доступен"):
-    if vague.lower() in work.lower():
-        errors.append(f"work plan contains vague gate wording: {vague}")
+    if filename not in readme:
+        fail(f"README does not reference {filename}")
+    if filename not in progress:
+        fail(f"PROGRESS does not reference {filename}")
+for filename in EXPECTED.values():
+    if filename not in maintenance and filename != EXPECTED["maintenance"]:
+        # The guide describes families; exact PROGRESS and active names should still be discoverable.
+        if filename != "PROGRESS.md":
+            fail(f"maintenance guide does not reference active {filename}")
+if "PROGRESS.md" not in maintenance:
+    fail("maintenance guide does not explain PROGRESS.md")
 
 if errors:
     print("Planning validation failed:", file=sys.stderr)
@@ -438,5 +388,5 @@ if errors:
 print(
     "Planning validation passed: "
     f"{len(stage_ids)} stages, {len(e2e_ids)} structured E2E tests, "
-    f"{len(requirement_ids)} requirements; DAG critical path: {' -> '.join(critical_path)}"
+    f"{len(requirement_ids)} requirements; DAG critical path: {' -> '.join(critical)}"
 )

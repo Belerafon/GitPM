@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mutation tests proving that the planning validator rejects structural defects."""
+"""Mutation tests proving the planning validator rejects structural and scope regressions."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -11,7 +11,8 @@ from typing import Callable
 import yaml
 
 SOURCE_ROOT = Path(__file__).resolve().parents[1]
-TRACE_REL = Path("docs/GitPM_Requirements_Traceability_v0.2.yaml")
+TRACE_REL = Path("docs/GitPM_Requirements_Traceability_v0.3.yaml")
+IMPL_REL = Path("docs/GitPM_Implementation_Plan_v0.5.md")
 VALIDATOR_REL = Path("scripts/validate_planning.py")
 
 
@@ -81,6 +82,17 @@ def mutation_duplicate_yaml_key(root: Path) -> None:
     trace.write_text(trace.read_text(encoding="utf-8") + "\nversion: duplicate\n", encoding="utf-8")
 
 
+def mutation_reintroduce_rebase_api(root: Path) -> None:
+    path = root / IMPL_REL
+    path.write_text(path.read_text(encoding="utf-8") + "\nPOST /api/drafts/:id/rebase\n", encoding="utf-8")
+
+
+def mutation_live_gitlab_environment(root: Path) -> None:
+    data = load_registry(root)
+    data["e2e"][0]["environment"] = "real-gitlab"
+    save_registry(root, data)
+
+
 MUTATIONS: list[tuple[str, Callable[[Path], None]]] = [
     ("duplicate stage ID", mutation_duplicate_stage),
     ("dependency cycle", mutation_cycle),
@@ -88,6 +100,8 @@ MUTATIONS: list[tuple[str, Callable[[Path], None]]] = [
     ("empty acceptance criteria", mutation_empty_acceptance),
     ("inexact release gate", mutation_inexact_release_gate),
     ("duplicate YAML mapping key", mutation_duplicate_yaml_key),
+    ("reintroduced rebase API", mutation_reintroduce_rebase_api),
+    ("reintroduced live GitLab E2E", mutation_live_gitlab_environment),
 ]
 
 
