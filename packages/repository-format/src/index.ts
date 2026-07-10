@@ -1,0 +1,116 @@
+import { isAlias, parseDocument, stringify, visit } from "yaml";
+
+const MAX_BYTES = 1_048_576;
+const MAX_LINE_LENGTH = 20_000;
+const MAX_NODES = 20_000;
+const MAX_DEPTH = 64;
+
+export class RepositoryFormatError extends Error {
+  constructor(
+    public readonly code: string,
+    message: string,
+    public readonly source?: string,
+  ) {
+    super(message);
+    this.name = "RepositoryFormatError";
+  }
+}
+
+export interface GitPmDocument {
+  readonly schema: string;
+  readonly [key: string]: unknown;
+}
+
+function fail(code: string, message: string, source?: string): never {
+  throw new RepositoryFormatError(code, message, source);
+}
+
+export function parseYamlDocument(text: string, source?: string): GitPmDocument {
+  if (Buffer.byteLength(text, "utf8") > MAX_BYTES) fail("YAML_SIZE_LIMIT", "YAML file exceeds the byte limit", source);
+  if (text.includes("\r")) fail("YAML_LINE_ENDING", "YAML must use LF line endings", source);
+  if (text.includes("\0")) fail("YAML_NUL", "YAML must not contain NUL", source);
+  if (text.split("\n").some((line) => line.length > MAX_LINE_LENGTH)) {
+    fail("YAML_LINE_LIMIT", "YAML line exceeds the length limit", source);
+  }
+
+  const parsed = parseDocument(text, {
+    prettyErrors: false,
+    strict: true,
+    uniqueKeys: true,
+  });
+  if (parsed.errors.length > 0) {
+    const duplicate = parsed.errors.some((error) => error.code === "DUPLICATE_KEY");
+    fail(duplicate ? "YAML_DUPLICATE_KEY" : "YAML_SYNTAX", parsed.errors[0]?.message ?? "Invalid YAML", source);
+  }
+
+  let nodeCount = 0;
+  visit(parsed, (_key, node, path) => {
+    nodeCount += 1;
+    if (nodeCount > MAX_NODES) fail("YAML_NODE_LIMIT", "YAML exceeds the node limit", source);
+    if (path.length > MAX_DEPTH) fail("YAML_DEPTH_LIMIT", "YAML exceeds the depth limit", source);
+    if (isAlias(node)) fail("YAML_ALIAS", "YAML aliases are not supported", source);
+    if (typeof node === "object" && node !== null && "anchor" in node && typeof node.anchor === "string") {
+      fail("YAML_ANCHOR", "YAML anchors are not supported", source);
+    }
+    if (typeof node === "object" && node !== null && "tag" in node && typeof node.tag === "string" && node.tag.startsWith("!")) {
+      fail("YAML_CUSTOM_TAG", "YAML custom tags are not supported", source);
+    }
+  });
+
+  const value: unknown = parsed.toJS({ maxAliasCount: 0, mapAsMap: false });
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    fail("YAML_ROOT_TYPE", "YAML root must be a mapping", source);
+  }
+  const record = value as Record<string, unknown>;
+  if (typeof record.schema !== "string") fail("SCHEMA_MISSING", "YAML document must contain schema", source);
+  return record as GitPmDocument;
+}
+
+const fieldOrder: Record<string, readonly string[]> = {
+  "gitpm/project@1": ["schema", "id", "name", "status", "lifecycle", "description_markdown", "owner", "start", "due", "labels"],
+  "gitpm/task@1": ["schema", "id", "project", "title", "type", "status", "lifecycle", "description_markdown", "acceptance_criteria_markdown", "parent", "milestone", "assignees", "estimate_hours", "start", "due", "depends_on", "labels"],
+  "gitpm/milestone@1": ["schema", "id", "project", "name", "lifecycle", "description_markdown", "due"],
+  "gitpm/person@1": ["schema", "id", "name", "weekly_capacity_hours", "calendar", "lifecycle", "email"],
+  "gitpm/team@1": ["schema", "id", "name", "members", "lifecycle"],
+  "gitpm/calendar@1": ["schema", "id", "name", "working_weekdays", "holidays", "lifecycle"],
+  "gitpm/saved-view@1": ["schema", "id", "project", "name", "kind", "filters", "group_by", "lifecycle"],
+  "gitpm/repository@1": ["schema", "default_branch", "default_calendar", "allowed_top_level_files", "ui_poll_interval_seconds"],
+  "gitpm/statuses@1": ["schema", "statuses"],
+  "gitpm/issue-types@1": ["schema", "issue_types"],
+};
+
+function orderedRecord(value: Record<string, unknown>, order: readonly string[]): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const key of order) {
+    if (value[key] !== undefined) result[key] = value[key];
+  }
+  for (const key of Object.keys(value).sort()) {
+    if (!(key in result)) result[key] = value[key];
+  }
+  return result;
+}
+
+function normalizeNested(document: GitPmDocument): Record<string, unknown> {
+  const result = orderedRecord(document as Record<string, unknown>, fieldOrder[document.schema] ?? ["schema"]);
+  if (document.schema === "gitpm/saved-view@1" && result.filters && typeof result.filters === "object") {
+    result.filters = orderedRecord(result.filters as Record<string, unknown>, ["statuses", "types", "assignees", "milestones", "labels"]);
+  }
+  const listKey = document.schema === "gitpm/statuses@1" ? "statuses" : document.schema === "gitpm/issue-types@1" ? "issue_types" : undefined;
+  if (listKey && Array.isArray(result[listKey])) {
+    result[listKey] = (result[listKey] as Record<string, unknown>[]).map((item) =>
+      orderedRecord(item, ["slug", "title", "color", "active"]));
+  }
+  return result;
+}
+
+export function formatYamlDocument(document: GitPmDocument): string {
+  return stringify(normalizeNested(document), {
+    indent: 2,
+    lineWidth: 0,
+    sortMapEntries: false,
+  });
+}
+
+export function formatYamlText(text: string, source?: string): string {
+  return formatYamlDocument(parseYamlDocument(text, source));
+}

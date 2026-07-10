@@ -4,7 +4,7 @@ Git-first система управления проектами и задача
 
 ## Current status
 
-Статус: `P00S_P01_complete_P02_ready`. P00, P00S и P01 закрыты по локальным evidence и role review. Schema v1 baseline и security boundary готовы; следующий этап — production parser, formatter, validation, calendar utilities и CLI.
+Статус: `P02_in_progress`. P00, P00S и P01 закрыты. Production safe YAML parser и canonical formatter реализованы; validation, calendar utilities и CLI находятся в работе.
 
 ## Development
 

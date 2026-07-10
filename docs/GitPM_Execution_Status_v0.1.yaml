@@ -1,6 +1,6 @@
 version: '0.1'
 updated_at: '2026-07-10'
-current_phase: P00S_P01_complete_P02_ready
+current_phase: P02_in_progress
 stages:
   P00:
     status: done
@@ -31,10 +31,10 @@ stages:
     - file:evidence/P01/acceptance.md
     notes: Schema baseline, repository format and deterministic fixtures are approved.
   P02:
-    status: not_started
+    status: in_progress
     accepted_by: []
     evidence: []
-    notes: ''
+    notes: Production YAML parser and canonical formatter are being implemented.
   P03:
     status: not_started
     accepted_by: []

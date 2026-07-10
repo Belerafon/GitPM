@@ -1,7 +1,7 @@
 # GitPM progress
 
-Current phase: `P00S_P01_complete_P02_ready`
-Implementation code: P00, P00S and P01 complete
+Current phase: `P02_in_progress`
+Implementation code: P00, P00S and P01 complete; P02 parser/formatter implemented
 
 ## Current active revision
 
@@ -64,11 +64,11 @@ Implementation code: P00, P00S and P01 complete
 
 ## Current blockers
 
-None. P00S residual risks and P01 schema baseline have evidence-based acceptance records; P02 is unblocked.
+None. P02 is in progress.
 
 ## Next action
 
-Start P02 production parser, canonical formatter, validation, calendar utilities and CLI.
+Implement P02 JSON Schema/domain validation, calendar utilities and CLI on the shared parser/formatter.
 
 ## Evidence policy
 
