@@ -11,6 +11,7 @@
   "locale.en": "English",
   "locale.ru": "Русский",
   "nav.portfolio": "Портфель",
+  "nav.drafts": "Черновики",
   "nav.projects": "Проекты",
   "nav.tasks": "Задачи",
   "nav.board": "Доска",
@@ -51,4 +52,28 @@
   "status.error": "Не удалось выполнить действие: {message}",
   "status.retry": "Повторить",
   "common.notAvailable": "Недоступно"
+  ,"core.heading": "Работа портфеля"
+  ,"core.projects": "Проекты"
+  ,"core.milestones": "Вехи"
+  ,"core.tasks": "Задачи"
+  ,"core.name": "Название"
+  ,"core.title": "Заголовок"
+  ,"core.description": "Описание (Markdown)"
+  ,"core.status": "Статус"
+  ,"core.due": "Срок"
+  ,"core.milestone": "Веха"
+  ,"core.noMilestone": "Без вехи"
+  ,"core.createProject": "Создать проект"
+  ,"core.createMilestone": "Создать веху"
+  ,"core.createTask": "Создать задачу"
+  ,"core.save": "Сохранить"
+  ,"core.archive": "Архивировать"
+  ,"core.delete": "Удалить"
+  ,"core.details": "Детали задачи"
+  ,"core.filter": "Фильтр задач"
+  ,"core.allStatuses": "Все статусы"
+  ,"core.empty": "Здесь пока пусто."
+  ,"core.selectProject": "Выберите проект для управления работой."
+  ,"core.safePreview": "Безопасный просмотр Markdown"
+  ,"core.readOnly": "Редактирование недоступно для этого черновика."
 }

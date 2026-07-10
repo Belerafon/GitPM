@@ -1,0 +1,9 @@
+VFY-019 browser mutation path ledger (Git name-status equivalent)
+
+A  projects/PRJ-8ZV41YZV3SNMGZ770M8RHACWVD/project.yaml
+A  projects/PRJ-8ZV41YZV3SNMGZ770M8RHACWVD/milestones/MLS-B9K21Z8SAW62AVXWPEDNVM8S95.yaml
+A  projects/PRJ-8ZV41YZV3SNMGZ770M8RHACWVD/tasks/TSK-JS20RB899KDAS285QRHS7QVC20.yaml
+M  projects/PRJ-8ZV41YZV3SNMGZ770M8RHACWVD/tasks/TSK-JS20RB899KDAS285QRHS7QVC20.yaml  (Markdown/relationship/status/lifecycle)
+
+No Person, Team, Calendar, configuration or server files were included in the browser mutation ledger.
+The production domain integration suite independently verifies that these entity API operations write only the expected YAML paths in a real Git worktree.

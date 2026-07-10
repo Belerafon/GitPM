@@ -84,6 +84,25 @@ async function exists(file: string): Promise<boolean> {
 export class EntityStore {
   constructor(private readonly drafts: DraftManager) {}
 
+  async list(draftId: string, entityType: string, project?: string): Promise<readonly EntityResult[]> {
+    const metadata = await this.drafts.getDraft(draftId);
+    const schema = typeSchemas[entityType];
+    if (!schema) throw new DomainOperationError("ENTITY_TYPE_INVALID", `Unknown entity type ${entityType}`);
+    const result: EntityResult[] = [];
+    for (const absolute of await yamlFiles(metadata.worktree_path)) {
+      const relative = path.relative(metadata.worktree_path, absolute).split(path.sep).join("/");
+      const document = parseYamlDocument(await readFile(absolute, "utf8"), relative);
+      if (document.schema !== schema || (project !== undefined && document.project !== project)) continue;
+      result.push({
+        document,
+        path: relative,
+        blob_id: await this.drafts.fileBlobId(draftId, relative),
+        draft_fingerprint: metadata.fingerprint,
+      });
+    }
+    return result.sort((left, right) => String(left.document.id).localeCompare(String(right.document.id)));
+  }
+
   private async find(metadata: DraftMetadata, entityType: string, id: string): Promise<{ document: GitPmDocument; relative: string; absolute: string }> {
     const schema = typeSchemas[entityType];
     if (!schema) throw new DomainOperationError("ENTITY_TYPE_INVALID", `Unknown entity type ${entityType}`);

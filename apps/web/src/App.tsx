@@ -2,6 +2,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import type { GitPmApi } from "./api.js";
 import { DraftProvider, useDrafts } from "./draft-context.js";
 import { formatDateTime, localeRegistry, LOCALE_STORAGE_KEY, message, selectLocale, type Locale, type MessageKey } from "./i18n.js";
+import { CoreWorkspace } from "./core-ui.js";
 
 interface AppProps {
   readonly api: GitPmApi;
@@ -12,7 +13,7 @@ interface AppProps {
 }
 
 const navigation: readonly MessageKey[] = [
-  "nav.portfolio", "nav.projects", "nav.tasks", "nav.board", "nav.people",
+  "nav.drafts", "nav.portfolio", "nav.projects", "nav.tasks", "nav.board", "nav.people",
   "nav.calendar", "nav.workload", "nav.gantt", "nav.changes", "nav.history",
 ];
 
@@ -25,6 +26,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
 }) {
   const drafts = useDrafts();
   const [draftId, setDraftId] = useState("");
+  const [view, setView] = useState<MessageKey>("nav.drafts");
   const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -50,7 +52,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand"><span className="brand-mark">G</span><strong>{t("app.title")}</strong></div>
-        <nav>{navigation.map((key, index) => <button className={index === 0 ? "active" : ""} key={key}>{t(key)}</button>)}</nav>
+        <nav>{navigation.map((key) => <button className={view === key ? "active" : ""} key={key} onClick={() => setView(key)}>{t(key)}</button>)}</nav>
         <div className="repository-card"><span>{t("app.singleRepository")}</span><strong>{t("app.repository")}</strong></div>
       </aside>
       <main className="workspace">
@@ -59,7 +61,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
           <div className="top-actions"><LocalePicker locale={locale} setLocale={setLocale} t={t} /><button onClick={() => { void drafts.logout(); }}>{t("auth.logout")}</button></div>
         </header>
         {drafts.error !== null && <div className="alert error">{t("status.error", { message: drafts.error })}<button onClick={() => { void drafts.refresh(); }}>{t("status.retry")}</button></div>}
-        <section className="draft-layout">
+        {view === "nav.drafts" && <section className="draft-layout">
           <div className="draft-list card">
             <h2>{t("drafts.heading")}</h2>
             <form onSubmit={submit}><label htmlFor="draft-id">{t("drafts.id")}</label><div className="inline"><input id="draft-id" value={draftId} onChange={(event) => setDraftId(event.target.value)} pattern="[A-Za-z0-9][A-Za-z0-9-]{0,127}" required /><button className="primary" disabled={drafts.busy || drafts.session.role === "Reporter"}>{t("drafts.create")}</button></div></form>
@@ -92,7 +94,11 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
               <p className="polling">{t("drafts.polling")} {t("drafts.updated", { time: formatDateTime(locale, active.updated_at) })}</p>
             </>}
           </div>
-        </section>
+        </section>}
+        {["nav.portfolio", "nav.projects", "nav.tasks"].includes(view) && (active === undefined
+          ? <div className="card empty-workspace">{t("core.selectProject")}</div>
+          : <CoreWorkspace api={api} draft={active} locale={locale} onChanged={drafts.refresh} />)}
+        {!["nav.drafts", "nav.portfolio", "nav.projects", "nav.tasks"].includes(view) && <div className="card empty-workspace">{t("common.notAvailable")}</div>}
       </main>
     </div>
   );

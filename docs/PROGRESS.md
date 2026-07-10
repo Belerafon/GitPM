@@ -1,7 +1,7 @@
 # GitPM progress
 
-Current phase: `P07_complete_P08A_P08B_ready`
-Implementation code: P00-P07 complete
+Current phase: `P08A_complete_P08B_ready`
+Implementation code: P00-P08A complete
 
 ## Current active revision
 
@@ -109,13 +109,21 @@ Implementation code: P00-P07 complete
 - Version-controlled `en`/`ru` packs pass key, placeholder and no-HTML checks; locale persists through reload and updates root `lang`/`dir`.
 - Browser-local VFY-018, lint, typecheck, build and the full 18-file/72-test suite pass.
 
+## Last P08A evidence
+
+- Owner-checked collection API lists Project, Milestone and Task read models with optional Project filtering.
+- Core UI supports create, edit, archive and delete, plus Task filters, inline status edit and side-panel relationship editing.
+- Status and issue type options come from repository configuration.
+- Safe Markdown renders supported structure through React nodes; raw HTML is inert text.
+- Browser-local VFY-019 records exactly three expected YAML paths and hides the archived Task from the active list.
+
 ## Current blockers
 
-None. P07 is accepted; P08A and P08B are unblocked.
+None. P08A is accepted; P08B remains unblocked.
 
 ## Next action
 
-Start P08A core Project/Task/Milestone UI, then P08B administration UI.
+Start P08B Person, Team, Calendar and repository-settings administration UI.
 
 ## Evidence policy
 

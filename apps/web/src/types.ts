@@ -45,3 +45,12 @@ export interface DraftSnapshot {
   readonly validation: ValidationSummary;
   readonly mergeRequest?: MergeRequestStatus;
 }
+
+export type GitPmDocument = Readonly<Record<string, unknown>> & { readonly schema: string; readonly id: string; readonly lifecycle: "active" | "archived" };
+
+export interface EntityResult {
+  readonly document: GitPmDocument;
+  readonly path: string;
+  readonly blob_id: string;
+  readonly draft_fingerprint: string;
+}

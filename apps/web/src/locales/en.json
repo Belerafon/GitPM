@@ -11,6 +11,7 @@
   "locale.en": "English",
   "locale.ru": "Русский",
   "nav.portfolio": "Portfolio",
+  "nav.drafts": "Drafts",
   "nav.projects": "Projects",
   "nav.tasks": "Tasks",
   "nav.board": "Board",
@@ -51,4 +52,28 @@
   "status.error": "Could not complete the action: {message}",
   "status.retry": "Retry",
   "common.notAvailable": "Not available"
+  ,"core.heading": "Portfolio work"
+  ,"core.projects": "Projects"
+  ,"core.milestones": "Milestones"
+  ,"core.tasks": "Tasks"
+  ,"core.name": "Name"
+  ,"core.title": "Title"
+  ,"core.description": "Description (Markdown)"
+  ,"core.status": "Status"
+  ,"core.due": "Due date"
+  ,"core.milestone": "Milestone"
+  ,"core.noMilestone": "No milestone"
+  ,"core.createProject": "Create project"
+  ,"core.createMilestone": "Create milestone"
+  ,"core.createTask": "Create task"
+  ,"core.save": "Save"
+  ,"core.archive": "Archive"
+  ,"core.delete": "Delete"
+  ,"core.details": "Task details"
+  ,"core.filter": "Filter tasks"
+  ,"core.allStatuses": "All statuses"
+  ,"core.empty": "Nothing here yet."
+  ,"core.selectProject": "Select a project to manage its work."
+  ,"core.safePreview": "Safe Markdown preview"
+  ,"core.readOnly": "Core editing is read-only for this draft."
 }

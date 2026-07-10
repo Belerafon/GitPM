@@ -106,6 +106,18 @@ describe("draft lifecycle API", () => {
 });
 
 describe("entity API contract", () => {
+  it("lists entities through an owner-checked read model", async () => {
+    const entityStore = {
+      list: vi.fn(async () => [{ document: { schema: "gitpm/project@1", id: "PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP" }, path: "projects/PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP/project.yaml", blob_id: "a".repeat(40), draft_fingerprint: metadata.fingerprint }]),
+    } as unknown as EntityStore;
+    const app = buildApp({ authenticate: () => ({ userId: "42", role: "Developer" }), draftManager: manager(), entityStore });
+    apps.push(app);
+    const response = await app.inject({ method: "GET", url: "/api/drafts/DRF-API/entities/projects" });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toHaveLength(1);
+    expect(entityStore.list).toHaveBeenCalledWith("DRF-API", "projects", undefined);
+  });
+
   it("creates an entity through the domain store", async () => {
     const entityStore = {
       create: vi.fn(async () => ({

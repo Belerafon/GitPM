@@ -1,6 +1,6 @@
 version: '0.1'
 updated_at: '2026-07-10'
-current_phase: P07_complete_P08A_P08B_ready
+current_phase: P08A_complete_P08B_ready
 stages:
   P00:
     status: done
@@ -94,10 +94,16 @@ stages:
     - file:evidence/P07/acceptance.md
     notes: React shell, draft lifecycle, 3-second polling, external read-only behavior and en/ru locale persistence are accepted.
   P08A:
-    status: not_started
-    accepted_by: []
-    evidence: []
-    notes: ''
+    status: done
+    accepted_by:
+    - PO
+    - QA
+    evidence:
+    - file:evidence/P08A/vfy-019-playwright-trace.json
+    - file:evidence/P08A/vfy-019-core-crud.png
+    - file:evidence/P08A/vfy-019-git-diff.txt
+    - file:evidence/P08A/acceptance.md
+    notes: Project, Milestone and Task CRUD, filters, inline edit, side panel and safe Markdown rendering are accepted.
   P08B:
     status: not_started
     accepted_by: []
@@ -241,9 +247,12 @@ verification_checks:
     - file:evidence/P07/vfy-018-draft-lifecycle.png
     notes: Browser-local lifecycle shows one repository, polling state, close/reopen and external-mode read-only behavior.
   VFY-019:
-    status: pending
-    evidence: []
-    notes: ''
+    status: passed
+    evidence:
+    - file:evidence/P08A/vfy-019-playwright-trace.json
+    - file:evidence/P08A/vfy-019-core-crud.png
+    - file:evidence/P08A/vfy-019-git-diff.txt
+    notes: Browser CRUD changes exactly one Project, Milestone and Task path; archived Task is hidden and raw HTML is inert.
   VFY-020:
     status: pending
     evidence: []

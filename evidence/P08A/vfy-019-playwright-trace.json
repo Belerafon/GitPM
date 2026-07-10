@@ -1,0 +1,20 @@
+{
+  "check": "VFY-019",
+  "environment": "browser-local",
+  "runner": "in-app Browser Playwright API",
+  "assertions": {
+    "projectCreated": true,
+    "milestoneCreated": true,
+    "taskCreated": true,
+    "markdownEdited": true,
+    "relationshipEdited": true,
+    "inlineStatusEdited": "done",
+    "taskArchivedAndHidden": true,
+    "rawHtmlElementCount": 0,
+    "changedPaths": [
+      "projects/PRJ-8ZV41YZV3SNMGZ770M8RHACWVD/milestones/MLS-B9K21Z8SAW62AVXWPEDNVM8S95.yaml",
+      "projects/PRJ-8ZV41YZV3SNMGZ770M8RHACWVD/project.yaml",
+      "projects/PRJ-8ZV41YZV3SNMGZ770M8RHACWVD/tasks/TSK-JS20RB899KDAS285QRHS7QVC20.yaml"
+    ]
+  }
+}

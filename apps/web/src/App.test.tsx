@@ -5,7 +5,7 @@ import { App } from "./App.js";
 import type { GitPmApi } from "./api.js";
 import { POLL_INTERVAL_MS } from "./draft-context.js";
 import { assertLocalePacks, localeRegistry, LOCALE_STORAGE_KEY, message, selectLocale } from "./i18n.js";
-import type { DraftSnapshot, DraftStatus, PublicSession, WriterMode } from "./types.js";
+import type { DraftSnapshot, DraftStatus, EntityResult, PublicSession, WriterMode } from "./types.js";
 
 const session: PublicSession = {
   user: { id: "42", username: "developer" },
@@ -47,6 +47,12 @@ class FakeApi implements GitPmApi {
   async closeDraft(draftId: string) { return this.replace(draftId, { state: "closed" }); }
   async reopenDraft(draftId: string) { return this.replace(draftId, { state: "open" }); }
   async cleanupDraft(draftId: string) { this.drafts = this.drafts.filter((item) => item.draft_id !== draftId); }
+  async listEntities() { return []; }
+  async createEntity(): Promise<EntityResult> { throw new Error("not used"); }
+  async updateEntity(): Promise<EntityResult> { throw new Error("not used"); }
+  async archiveEntity(): Promise<EntityResult> { throw new Error("not used"); }
+  async deleteEntity() { /* not used */ }
+  async getConfiguration(): Promise<EntityResult> { throw new Error("not used"); }
   private replace(draftId: string, values: Partial<DraftStatus>) { const next = { ...(this.drafts.find((item) => item.draft_id === draftId) ?? draft({ draft_id: draftId })), ...values }; this.drafts = [next]; return next; }
 }
 

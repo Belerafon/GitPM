@@ -1,4 +1,4 @@
-import type { DraftSnapshot, DraftStatus, MergeRequestStatus, PublicSession, ValidationSummary, WriterMode, ChangesSummary } from "./types.js";
+import type { DraftSnapshot, DraftStatus, EntityResult, GitPmDocument, MergeRequestStatus, PublicSession, ValidationSummary, WriterMode, ChangesSummary } from "./types.js";
 
 export class ApiError extends Error {
   constructor(public readonly code: string, message: string) {
@@ -18,6 +18,12 @@ export interface GitPmApi {
   closeDraft(draftId: string): Promise<DraftStatus>;
   reopenDraft(draftId: string): Promise<DraftStatus>;
   cleanupDraft(draftId: string): Promise<void>;
+  listEntities(draftId: string, entityType: string, project?: string): Promise<readonly EntityResult[]>;
+  createEntity(draftId: string, entityType: string, fingerprint: string, document: GitPmDocument): Promise<EntityResult>;
+  updateEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string, document: GitPmDocument): Promise<EntityResult>;
+  archiveEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string): Promise<EntityResult>;
+  deleteEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string): Promise<void>;
+  getConfiguration(draftId: string, kind: "statuses" | "issue-types"): Promise<EntityResult>;
 }
 
 interface ErrorBody { readonly error?: { readonly code?: string; readonly message?: string } }
@@ -79,5 +85,25 @@ export class HttpGitPmApi implements GitPmApi {
   }
   async cleanupDraft(draftId: string): Promise<void> {
     await this.request(`/api/drafts/${encodeURIComponent(draftId)}`, { method: "DELETE", body: JSON.stringify({ confirmation: draftId }) });
+  }
+
+  async listEntities(draftId: string, entityType: string, project?: string): Promise<readonly EntityResult[]> {
+    const query = project === undefined ? "" : `?project=${encodeURIComponent(project)}`;
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/entities/${encodeURIComponent(entityType)}${query}`);
+  }
+  async createEntity(draftId: string, entityType: string, expected_fingerprint: string, document: GitPmDocument): Promise<EntityResult> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/entities/${encodeURIComponent(entityType)}`, { method: "POST", body: JSON.stringify({ expected_fingerprint, document }) });
+  }
+  async updateEntity(draftId: string, entityType: string, entity: EntityResult, expected_fingerprint: string, document: GitPmDocument): Promise<EntityResult> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entity.document.id)}`, { method: "PUT", body: JSON.stringify({ expected_fingerprint, expected_blob_id: entity.blob_id, document }) });
+  }
+  async archiveEntity(draftId: string, entityType: string, entity: EntityResult, expected_fingerprint: string): Promise<EntityResult> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entity.document.id)}/archive`, { method: "POST", body: JSON.stringify({ expected_fingerprint, expected_blob_id: entity.blob_id }) });
+  }
+  async deleteEntity(draftId: string, entityType: string, entity: EntityResult, expected_fingerprint: string): Promise<void> {
+    await this.request(`/api/drafts/${encodeURIComponent(draftId)}/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entity.document.id)}`, { method: "DELETE", body: JSON.stringify({ expected_fingerprint, expected_blob_id: entity.blob_id }) });
+  }
+  async getConfiguration(draftId: string, kind: "statuses" | "issue-types"): Promise<EntityResult> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/config/${kind}`);
   }
 }

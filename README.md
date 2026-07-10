@@ -4,7 +4,7 @@ Git-first система управления проектами и задача
 
 ## Current status
 
-Статус: `P07_complete_P08A_P08B_ready`. P00-P07 закрыты. Frontend shell, draft lifecycle, polling и `ru`/`en` локализация готовы; следующие этапы — основной и административный UI.
+Статус: `P08A_complete_P08B_ready`. P00-P08A закрыты. Core Project/Task/Milestone UI готов; следующий этап — административный UI Person/Team/Calendar/settings.
 
 ## Development
 
