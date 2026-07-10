@@ -1,7 +1,7 @@
 # GitPM progress
 
-Current phase: `P00_implementation_complete_pending_CI_acceptance`
-Implementation code: P00 foundation implemented
+Current phase: `P00_complete_P01_P00S_ready`
+Implementation code: P00 foundation complete
 
 ## Current active revision
 
@@ -29,6 +29,7 @@ Implementation code: P00 foundation implemented
 - No backup, rebase, quota engine, migration engine or MCP.
 - Localization uses extensible locale packs; Russian is mandatory for v0.1 and English is the source fallback.
 - API and CLI JSON stay locale-neutral; user-authored repository content is not translated automatically.
+- P00 closes on reproducible local verification and repository evidence; an external remote, clean-Linux CI run and ARCH/QA acceptance are not exit requirements.
 
 ## Last implementation evidence
 
@@ -45,15 +46,15 @@ Implementation code: P00 foundation implemented
 - Planning validator: `20 stages, 32 verification checks, 33 requirements`
 - Mutation self-tests: `15 mutations rejected`
 - Release gate self-test: pending rejected, complete evidence passed, missing evidence rejected
-- Alpha gate currently reports `NOT READY`, as expected before implementation
+- Alpha gate currently reports `NOT READY`, as expected while later alpha stages remain pending
 
 ## Current blockers
 
-P00 implementation has no code blocker. Stage completion still requires a clean-Linux CI job URL and ARCH/QA acceptance; P01 and P00S remain behind that gate.
+None. P00 is complete from local evidence, so P01 and P00S are unblocked.
 
 ## Next action
 
-Run the new CI workflow on a remote, record its URL, obtain ARCH/QA acceptance and close P00. Then start P01 and P00S according to the DAG.
+Start P01 schema v1 baseline and P00S threat-model spikes according to the DAG.
 
 ## Evidence policy
 

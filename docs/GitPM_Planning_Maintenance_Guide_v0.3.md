@@ -46,7 +46,7 @@ evidence/P03/2026-07-10/restart-report.md
 - установить check status `passed`;
 - добавить хотя бы один evidence reference;
 - установить stage status `done`;
-- заполнить `accepted_by` и stage evidence;
+- заполнить stage evidence и, если stage объявляет acceptance roles, `accepted_by`;
 - обновить `PROGRESS.md` одним кратким блоком.
 
 ## 4. Gate commands

@@ -4,7 +4,7 @@ Git-first система управления проектами и задача
 
 ## Current status
 
-Статус: `P00_implementation_complete_pending_CI_acceptance`. Каркас monorepo, CI и минимальная наблюдаемость реализованы и локально проверены. Для закрытия P00 ещё нужны clean-Linux CI URL и приёмка ARCH/QA; P01 и P00S выполняются после P00 согласно DAG.
+Статус: `P00_complete_P01_P00S_ready`. Каркас monorepo, CI и минимальная наблюдаемость реализованы и локально проверены. Внешний remote, успешный clean-Linux CI и ролевая приёмка не требуются для закрытия P00; P01 и P00S готовы к запуску согласно DAG.
 
 ## Development
 

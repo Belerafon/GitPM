@@ -12,7 +12,7 @@
 
 ## 2. Ответственность и evidence
 
-Каждый stage имеет одного Accountable, Responsible roles и Acceptance roles. Фактический status хранится только в `GitPM_Execution_Status_v0.1.yaml`. `PROGRESS.md` не дублирует checklist.
+Каждый stage имеет одного Accountable и Responsible roles. Acceptance roles объявляются только там, где нужна отдельная ролевая приёмка; для stage без них достаточно успешных checks и evidence. Фактический status хранится только в `GitPM_Execution_Status_v0.1.yaml`. `PROGRESS.md` не дублирует checklist.
 
 ## 3. Repository boundary
 

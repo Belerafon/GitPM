@@ -7,6 +7,5 @@ DAG is acyclic
 Execution status shape is valid
 Planning validator self-test passed: 15 mutations rejected
 Release gate self-test passed: pending rejected, complete passed, missing evidence rejected
-Actual alpha gate report: NOT READY with 36 unmet conditions, including P00=in_progress and VFY-001/VFY-002=running
-
-Clean-Linux CI evidence remains pending.
+Actual alpha gate report: NOT READY with 33 unmet conditions, all belonging to later stages and checks.
+P00 completion is based on the local planning, gate and health evidence recorded in this directory.

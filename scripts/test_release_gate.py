@@ -33,8 +33,9 @@ def main()->int:
         evidence=root/'evidence/selftest/pass.txt'; evidence.parent.mkdir(parents=True); evidence.write_text('self-test evidence\n',encoding='utf-8')
         ref='file:evidence/selftest/pass.txt'
         gate=trace['release_gates']['alpha']
+        stages={stage['id']:stage for stage in trace['stages']}
         for sid in gate['required_stages']:
-            status['stages'][sid].update(status='done',accepted_by=['QA'],evidence=[ref])
+            status['stages'][sid].update(status='done',accepted_by=stages[sid]['acceptance'][:1],evidence=[ref])
         for cid in gate['required_checks']:
             status['verification_checks'][cid].update(status='passed',evidence=[ref])
         status_path.write_text(yaml.safe_dump(status,allow_unicode=True,sort_keys=False,width=120),encoding='utf-8')

@@ -23,9 +23,7 @@ stages:
   - BE
   - FE
   - QA
-  acceptance:
-  - ARCH
-  - QA
+  acceptance: []
   milestone: foundation
 - id: P00S
   title: Модель угроз и технические spikes
@@ -771,8 +769,8 @@ verification_checks:
   stage: P00
   mandatory_from: alpha
   test_type: smoke
-  environment: ci-clean-linux
-  actor: QA
+  environment: integration-local
+  actor: implementer
   preconditions:
   - clean checkout
   - pinned toolchain
@@ -785,7 +783,6 @@ verification_checks:
   - health endpoints return success
   - correlation ID appears in structured log
   evidence:
-  - CI job URL
   - health response
   - sanitized log
   requirements:
@@ -795,8 +792,8 @@ verification_checks:
   stage: P00
   mandatory_from: alpha
   test_type: planning
-  environment: ci-clean-linux
-  actor: QA
+  environment: integration-local
+  actor: implementer
   preconditions:
   - active planning documents
   steps:

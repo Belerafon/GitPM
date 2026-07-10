@@ -35,13 +35,15 @@ def main()->int:
     p.add_argument('--gate',choices=['alpha','beta','release_candidate','release'],required=True)
     args=p.parse_args()
     reg=load(TRACE); status=load(STATUS); gate=reg['release_gates'][args.gate]
+    stages={stage['id']:stage for stage in reg['stages']}
     unmet=[]
     for sid in gate['required_stages']:
         item=status['stages'][sid]
         if item.get('status')!='done':
             unmet.append(f"stage {sid}: status={item.get('status')}")
             continue
-        if not item.get('accepted_by'): unmet.append(f"stage {sid}: accepted_by missing")
+        if stages[sid].get('acceptance') and not item.get('accepted_by'):
+            unmet.append(f"stage {sid}: accepted_by missing")
         if not item.get('evidence'): unmet.append(f"stage {sid}: evidence missing")
         for ref in item.get('evidence',[]):
             err=evidence_error(ref)

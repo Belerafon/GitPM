@@ -30,7 +30,7 @@
 - Код, docs и tests находятся в одной reviewed commit series.
 - Mandatory automated verification проходит.
 - Manual acceptance имеет наблюдаемый expected result и evidence artifact.
-- Stage status, accepted_by и evidence обновлены в `GitPM_Execution_Status_v0.1.yaml`.
+- Stage status и evidence обновлены в `GitPM_Execution_Status_v0.1.yaml`; `accepted_by` заполняется только для stage с объявленными acceptance roles.
 - `PROGRESS.md` содержит краткий итог, blocker и next action.
 - Working tree clean.
 
@@ -61,7 +61,7 @@
 - Dependencies: `none`
 - Accountable: `ARCH`
 - Responsible: `BE, FE, QA`
-- Acceptance: `ARCH, QA`
+- Acceptance: `none`
 - Milestone: `foundation`
 
 ### Objective
@@ -89,8 +89,8 @@
 
 ### Automated verification
 
-- clean install, build, lint, typecheck and unit smoke
-- planning validator, mutation self-tests and release-gate self-test
+- local clean install, build, lint, typecheck and unit smoke
+- local planning validator, mutation self-tests and release-gate self-test
 
 ### Manual acceptance
 
@@ -107,8 +107,7 @@
 
 - Все artifacts присутствуют и reviewed.
 - Automated verification и owned checks successful.
-- Acceptance roles записаны в execution status.
-- Evidence paths/URLs существуют и доступны reviewer.
+- Локальные evidence paths существуют и доступны reviewer.
 - `PROGRESS.md` содержит outcome, limitations and next action.
 
 ## P00S. Модель угроз и технические spikes

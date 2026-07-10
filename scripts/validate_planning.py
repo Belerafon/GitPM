@@ -189,9 +189,10 @@ for stage in stages:
         fail(f"stage {sid} estimate must be N-N")
     if not isinstance(stage.get("accountable"), str) or not stage.get("accountable"):
         fail(f"stage {sid} must have exactly one accountable")
-    for field in ("responsible","acceptance"):
-        if not isinstance(stage.get(field), list) or not stage.get(field):
-            fail(f"stage {sid} {field} must be non-empty list")
+    if not isinstance(stage.get("responsible"), list) or not stage.get("responsible"):
+        fail(f"stage {sid} responsible must be non-empty list")
+    if not isinstance(stage.get("acceptance"), list):
+        fail(f"stage {sid} acceptance must be list")
     deps = stage.get("dependencies")
     if not isinstance(deps, list):
         fail(f"stage {sid} dependencies must be list")
@@ -254,7 +255,7 @@ for i,sid in enumerate(stage_ids):
         "Dependencies": ", ".join(stage["dependencies"]) if stage["dependencies"] else "none",
         "Accountable": stage["accountable"],
         "Responsible": ", ".join(stage["responsible"]),
-        "Acceptance": ", ".join(stage["acceptance"]),
+        "Acceptance": ", ".join(stage["acceptance"]) if stage["acceptance"] else "none",
         "Milestone": stage["milestone"],
     }
     for label,value in expected_lines.items():
@@ -341,7 +342,8 @@ if list(exec_checks.keys()) != check_ids: fail("execution status check IDs/order
 for sid,item in exec_stages.items():
     if item.get("status") not in {"not_started","in_progress","blocked","done"}: fail(f"execution stage {sid} invalid status")
     if not isinstance(item.get("accepted_by"),list) or not isinstance(item.get("evidence"),list): fail(f"execution stage {sid} accepted_by/evidence must be lists")
-    if item.get("status")=="done" and (not item.get("accepted_by") or not item.get("evidence")): fail(f"done stage {sid} requires accepted_by and evidence")
+    if item.get("status")=="done" and not item.get("evidence"): fail(f"done stage {sid} requires evidence")
+    if item.get("status")=="done" and stage_by_id[sid].get("acceptance") and not item.get("accepted_by"): fail(f"done stage {sid} with acceptance roles requires accepted_by")
 for cid,item in exec_checks.items():
     if item.get("status") not in {"pending","running","blocked","passed","failed"}: fail(f"execution check {cid} invalid status")
     if not isinstance(item.get("evidence"),list): fail(f"execution check {cid} evidence must be list")

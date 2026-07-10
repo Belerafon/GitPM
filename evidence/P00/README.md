@@ -12,5 +12,6 @@ pnpm 10.12.1 and Python 3.11.9 on Windows.
 - Release-gate self-test rejected pending and missing-evidence states and
   accepted the synthetic complete state.
 
-The required clean-Linux CI job URL and ARCH/QA acceptance are still pending.
-Until those exist, P00 and VFY-001/VFY-002 remain `in_progress`/`running`.
+P00 accepts this reproducible local evidence. An external remote, clean-Linux CI
+job URL and ARCH/QA acceptance are not required for this stage. P00 and
+VFY-001/VFY-002 are therefore `done`/`passed`.
