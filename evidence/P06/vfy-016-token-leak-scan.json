@@ -1,0 +1,16 @@
+{
+  "token_transport": "GITPM_ASKPASS_TOKEN child environment only",
+  "token_in_argv": false,
+  "token_in_remote_url": false,
+  "token_in_git_config": false,
+  "token_in_files": false,
+  "token_in_logs": false,
+  "token_in_sanitized_protocol_captures": false,
+  "oauth_query_in_request_logs": false,
+  "session_available_after_new_service_instance": false,
+  "cookie": {
+    "http_only": true,
+    "secure": true,
+    "same_site": "Strict"
+  }
+}

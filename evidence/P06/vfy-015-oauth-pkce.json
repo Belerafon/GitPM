@@ -1,0 +1,24 @@
+{
+  "authorization_request": {
+    "response_type": "code",
+    "scopes": ["api", "write_repository"],
+    "state_present": true,
+    "code_challenge_method": "S256",
+    "nonce_present": false
+  },
+  "callback": {
+    "state_validated_once": true,
+    "code_verifier_sent_to_token_endpoint": true,
+    "redirect_uri_exact": true
+  },
+  "session": {
+    "storage": "process-memory-only",
+    "lifetime_capped_at_hours": 8,
+    "refresh_token_persisted": false,
+    "role": "Developer"
+  },
+  "membership": {
+    "non_member_denied": true,
+    "levels": { "20": "Reporter", "30": "Developer", "40": "Maintainer" }
+  }
+}

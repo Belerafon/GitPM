@@ -5,20 +5,25 @@ import type { HealthPayload } from "@gitpm/shared";
 import type { DraftManager } from "@gitpm/drafts";
 import type { EntityStore } from "@gitpm/domain";
 import type { ChangesService } from "@gitpm/changes";
+import type { AuthService } from "@gitpm/gitlab";
+import type { PublishingService } from "@gitpm/publishing";
 import Fastify, { LogController, type FastifyBaseLogger } from "fastify";
 import { registerChangesApi, registerDraftApi, registerEntityApi } from "./draft-api.js";
 import type { Authenticate } from "./draft-api.js";
+import { registerAuthAndPublishingApi } from "./auth-api.js";
 
 const MAX_CORRELATION_ID_LENGTH = 128;
 const SAFE_CORRELATION_ID = /^[A-Za-z0-9._:-]+$/u;
 
 export interface AppOptions {
   authenticate?: Authenticate;
+  authService?: AuthService;
   changesService?: ChangesService;
   draftManager?: DraftManager;
   entityStore?: EntityStore;
   isReady?: () => boolean | Promise<boolean>;
   logger?: FastifyBaseLogger;
+  publishingService?: PublishingService;
 }
 
 function requestId(request: IncomingMessage): string {
@@ -37,6 +42,10 @@ function requestId(request: IncomingMessage): string {
   return randomUUID();
 }
 
+function requestPath(url: string): string {
+  return url.split("?", 1)[0] ?? "/";
+}
+
 export function buildApp(options: AppOptions = {}) {
   const app = Fastify({
     bodyLimit: 1_048_576,
@@ -49,7 +58,7 @@ export function buildApp(options: AppOptions = {}) {
   app.addHook("onRequest", async (request, reply) => {
     reply.header("x-correlation-id", request.id);
     request.log.info(
-      { correlation_id: request.id, method: request.method, path: request.url },
+      { correlation_id: request.id, method: request.method, path: requestPath(request.url) },
       "request started",
     );
   });
@@ -60,7 +69,7 @@ export function buildApp(options: AppOptions = {}) {
         correlation_id: request.id,
         duration_ms: reply.elapsedTime,
         method: request.method,
-        path: request.url,
+        path: requestPath(request.url),
         status_code: reply.statusCode,
       },
       "request completed",
@@ -89,6 +98,7 @@ export function buildApp(options: AppOptions = {}) {
     if (options.entityStore) registerEntityApi(app, options.draftManager, options.entityStore, authenticate);
     if (options.changesService) registerChangesApi(app, options.draftManager, options.changesService, authenticate);
   }
+  if (options.authService) registerAuthAndPublishingApi(app, options.authService, options.publishingService);
 
   return app;
 }

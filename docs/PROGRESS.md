@@ -1,7 +1,7 @@
 # GitPM progress
 
-Current phase: `P06_in_progress`
-Implementation code: P00-P05 complete; P06 OAuth/session/role layer implemented
+Current phase: `P06_complete_P07_ready`
+Implementation code: P00-P06 complete
 
 ## Current active revision
 
@@ -93,13 +93,21 @@ Implementation code: P00-P05 complete; P06 OAuth/session/role layer implemented
 - Selected reverse hunk preserves other hunks and rejects stale tokens.
 - Unicode and CRLF diff cases pass; full suite contains 14 files and 60 tests.
 
+## Last P06 evidence
+
+- OAuth Authorization Code uses PKCE S256, one-time state and exact scopes.
+- Sessions and access tokens live only in process memory; secure cookie carries only session ID.
+- Role is refreshed before commit, push and MR; Reporter remains read-only.
+- Commit-all/push creates the expected remote branch; MR create/poll matches sanitized test-double capture.
+- Token leak scan is clean; full suite contains 17 files and 66 tests.
+
 ## Current blockers
 
-None. P06 is in progress.
+None. P06 is accepted and P07 is unblocked by completed P04/P06.
 
 ## Next action
 
-Implement P06 controlled commit-all/push, MR client, polling and protocol-level test double.
+Start P07 frontend shell, localization packs and draft lifecycle management.
 
 ## Evidence policy
 

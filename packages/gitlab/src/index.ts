@@ -28,6 +28,31 @@ export interface GitLabProtocol {
   projectAccessLevel(accessToken: string): Promise<number | null>;
 }
 
+export interface MergeRequestPayload {
+  readonly source_branch: string;
+  readonly target_branch: string;
+  readonly title: string;
+  readonly description?: string;
+}
+
+export interface MergeRequestState {
+  readonly iid: number;
+  readonly state: "opened" | "merged" | "closed";
+  readonly source_branch: string;
+  readonly target_branch: string;
+  readonly web_url: string;
+}
+
+export interface GitLabMergeRequestProtocol {
+  createMergeRequest(accessToken: string, payload: MergeRequestPayload): Promise<MergeRequestState>;
+  getMergeRequest(accessToken: string, iid: number): Promise<MergeRequestState>;
+}
+
+export interface SanitizedCapture {
+  readonly operation: string;
+  readonly payload?: unknown;
+}
+
 export interface AuthServiceOptions {
   readonly authorizeUrl: string;
   readonly clientId: string;
@@ -157,5 +182,57 @@ export class AuthService {
       role: session.role,
       expires_at: new Date(session.expiresAt).toISOString(),
     };
+  }
+}
+
+export class GitLabProtocolTestDouble implements GitLabProtocol, GitLabMergeRequestProtocol {
+  readonly captures: SanitizedCapture[] = [];
+  accessLevel: number | null = 30;
+  user: GitLabUser = { id: "42", username: "developer" };
+  private readonly mergeRequests = new Map<number, MergeRequestState>();
+  private nextIid = 1;
+
+  async exchangeAuthorizationCode(input: { code: string; codeVerifier: string; redirectUri: string }): Promise<OAuthTokenResponse> {
+    this.captures.push({
+      operation: "oauth-token",
+      payload: {
+        code: input.code,
+        code_verifier_sha256: createHash("sha256").update(input.codeVerifier).digest("hex"),
+        redirect_uri: input.redirectUri,
+      },
+    });
+    return { access_token: "gitlab-test-double-access-token", expires_in: 3600 };
+  }
+
+  async currentUser(_accessToken: string): Promise<GitLabUser> {
+    this.captures.push({ operation: "current-user" });
+    return this.user;
+  }
+
+  async projectAccessLevel(_accessToken: string): Promise<number | null> {
+    this.captures.push({ operation: "project-role" });
+    return this.accessLevel;
+  }
+
+  async createMergeRequest(_accessToken: string, payload: MergeRequestPayload): Promise<MergeRequestState> {
+    const iid = this.nextIid;
+    this.nextIid += 1;
+    const mergeRequest: MergeRequestState = {
+      iid,
+      state: "opened",
+      source_branch: payload.source_branch,
+      target_branch: payload.target_branch,
+      web_url: `https://gitlab.example.test/group/gitpm/-/merge_requests/${iid}`,
+    };
+    this.mergeRequests.set(iid, mergeRequest);
+    this.captures.push({ operation: "create-mr", payload });
+    return mergeRequest;
+  }
+
+  async getMergeRequest(_accessToken: string, iid: number): Promise<MergeRequestState> {
+    this.captures.push({ operation: "get-mr", payload: { iid } });
+    const mergeRequest = this.mergeRequests.get(iid);
+    if (!mergeRequest) throw new AuthError("MR_NOT_FOUND", `Merge Request ${iid} not found`);
+    return mergeRequest;
   }
 }

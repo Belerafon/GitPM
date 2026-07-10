@@ -270,6 +270,35 @@ export class DraftManager {
     return current;
   }
 
+  async refreshFingerprint(draftId: string): Promise<DraftMetadata> {
+    return await this.lock(safeComponent(draftId, "draft ID")).run(async () => {
+      const metadata = await this.getDraft(draftId);
+      const next: DraftMetadata = {
+        ...metadata,
+        fingerprint: await this.fingerprint(metadata.worktree_path),
+        updated_at: new Date().toISOString(),
+      };
+      await this.persist(next);
+      return next;
+    });
+  }
+
+  async markPublished(draftId: string, owner: string, mergeRequestIid: number): Promise<DraftMetadata> {
+    if (!Number.isInteger(mergeRequestIid) || mergeRequestIid <= 0) throw new DraftRuntimeError("MR_IID_INVALID", "Merge Request IID is invalid");
+    return await this.lock(safeComponent(draftId, "draft ID")).run(async () => {
+      const metadata = await this.getDraft(draftId);
+      this.assertOwnerAndOpen(metadata, owner);
+      const next: DraftMetadata = {
+        ...metadata,
+        state: "published",
+        merge_request_iid: mergeRequestIid,
+        updated_at: new Date().toISOString(),
+      };
+      await this.persist(next);
+      return next;
+    });
+  }
+
   async recover(): Promise<RecoveryReport> {
     await mkdir(this.metadataDirectory, { recursive: true, mode: 0o700 });
     await mkdir(this.git.worktreesDirectory, { recursive: true, mode: 0o700 });

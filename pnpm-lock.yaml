@@ -62,9 +62,15 @@ importers:
       '@gitpm/git-client':
         specifier: workspace:*
         version: link:../../packages/git-client
+      '@gitpm/gitlab':
+        specifier: workspace:*
+        version: link:../../packages/gitlab
       '@gitpm/logging':
         specifier: workspace:*
         version: link:../../packages/logging
+      '@gitpm/publishing':
+        specifier: workspace:*
+        version: link:../../packages/publishing
       '@gitpm/repository-format':
         specifier: workspace:*
         version: link:../../packages/repository-format
@@ -150,6 +156,25 @@ importers:
       pino:
         specifier: 10.3.1
         version: 10.3.1
+
+  packages/publishing:
+    dependencies:
+      '@gitpm/drafts':
+        specifier: workspace:*
+        version: link:../drafts
+      '@gitpm/git-client':
+        specifier: workspace:*
+        version: link:../git-client
+      '@gitpm/gitlab':
+        specifier: workspace:*
+        version: link:../gitlab
+      '@gitpm/validation':
+        specifier: workspace:*
+        version: link:../validation
+    devDependencies:
+      '@gitpm/security':
+        specifier: workspace:*
+        version: link:../security
 
   packages/repository-format:
     dependencies:

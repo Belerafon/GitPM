@@ -7,6 +7,8 @@ import type { EntityStore } from "@gitpm/domain";
 import type { GitPmDocument } from "@gitpm/repository-format";
 import { ChangesError } from "@gitpm/changes";
 import type { ChangesService } from "@gitpm/changes";
+import { AuthError } from "@gitpm/gitlab";
+import { PublishingError } from "@gitpm/publishing";
 
 export type ProjectRole = "Reporter" | "Developer" | "Maintainer";
 
@@ -84,6 +86,14 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
       code = error.code;
       message = error.message;
       status = error.code === "CHANGE_PATH_INVALID" ? 400 : 409;
+    } else if (error instanceof AuthError) {
+      code = error.code;
+      message = error.message;
+      status = error.code === "ROLE_READ_ONLY" || error.code === "PROJECT_MEMBERSHIP_REQUIRED" ? 403 : 401;
+    } else if (error instanceof PublishingError) {
+      code = error.code;
+      message = error.message;
+      status = error.code === "VALIDATION_FAILED" ? 422 : 409;
     } else if ((error as { code?: string }).code === "FST_ERR_CTP_BODY_TOO_LARGE") {
       status = 413;
       code = "REQUEST_TOO_LARGE";

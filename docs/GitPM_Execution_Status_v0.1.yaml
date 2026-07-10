@@ -1,6 +1,6 @@
 version: '0.1'
 updated_at: '2026-07-10'
-current_phase: P06_in_progress
+current_phase: P06_complete_P07_ready
 stages:
   P00:
     status: done
@@ -73,10 +73,16 @@ stages:
     - file:evidence/P05/acceptance.md
     notes: Changes summary, file/deleted restore, selected-hunk restore and stale-diff protection are accepted.
   P06:
-    status: in_progress
-    accepted_by: []
-    evidence: []
-    notes: OAuth PKCE, memory-only sessions and GitLab role mapping are being implemented.
+    status: done
+    accepted_by:
+    - SEC
+    - QA
+    evidence:
+    - file:evidence/P06/vfy-015-oauth-pkce.json
+    - file:evidence/P06/vfy-016-token-leak-scan.json
+    - file:evidence/P06/vfy-017-push-mr.txt
+    - file:evidence/P06/acceptance.md
+    notes: OAuth PKCE, memory sessions, role refresh, commit-all, controlled push and MR polling are accepted.
   P07:
     status: not_started
     accepted_by: []
@@ -209,17 +215,20 @@ verification_checks:
     - file:evidence/P05/vfy-014-restore-hunk.txt
     notes: One of two hunks restores independently; stale token is rejected.
   VFY-015:
-    status: pending
-    evidence: []
-    notes: ''
+    status: passed
+    evidence:
+    - file:evidence/P06/vfy-015-oauth-pkce.json
+    notes: State/PKCE and exact scopes pass; session is memory-only and non-member is denied.
   VFY-016:
-    status: pending
-    evidence: []
-    notes: ''
+    status: passed
+    evidence:
+    - file:evidence/P06/vfy-016-token-leak-scan.json
+    notes: Token is absent from argv, URL, config, files, logs and captures; restart loses session.
   VFY-017:
-    status: pending
-    evidence: []
-    notes: ''
+    status: passed
+    evidence:
+    - file:evidence/P06/vfy-017-push-mr.txt
+    notes: Commit-all/push/MR/poll contract passes through local remote and protocol test double with role refresh.
   VFY-018:
     status: pending
     evidence: []

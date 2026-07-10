@@ -1,0 +1,14 @@
+P06 push/MR contract, 2026-07-10
+
+1. Developer session completed OAuth PKCE login.
+2. Role endpoint was called before commit, push and MR creation.
+3. commit-all staged every draft change and produced one commit.
+4. Controlled push used no force and created refs/heads/gitpm/42/DRF-PUBLISH
+   in the local bare remote at the exact committed SHA.
+5. Test-double MR payload:
+   source_branch: gitpm/42/DRF-PUBLISH
+   target_branch: main
+   title: Update project
+   description: Automated test
+6. MR response/poll: iid=1, state=opened, source/target unchanged.
+7. No webhook endpoint or delivery occurred; status was fetched by explicit poll.

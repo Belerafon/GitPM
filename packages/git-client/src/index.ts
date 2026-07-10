@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { mkdir, realpath, stat } from "node:fs/promises";
 import path from "node:path";
-import { assertSafeBranchName, assertSafeRepositoryUrl } from "@gitpm/security";
+import { assertSafeBranchName, assertSafeRepositoryUrl, createGitProcessEnvironment } from "@gitpm/security";
 
 const MAX_OUTPUT_BYTES = 1_048_576;
 
@@ -27,6 +27,7 @@ export interface GitClientOptions {
   readonly remoteUrl: string;
   readonly defaultBranch: string;
   readonly allowLocalTestRemote?: boolean;
+  readonly askPassPath?: string;
   readonly timeoutMs?: number;
   readonly onCommand?: (record: GitCommandRecord) => void;
 }
@@ -112,6 +113,7 @@ export class GitClient {
   private readonly remoteUrl: string;
   private readonly defaultBranch: string;
   private readonly allowLocalTestRemote: boolean;
+  private readonly askPassPath?: string;
   private readonly timeoutMs: number;
   private readonly onCommand?: (record: GitCommandRecord) => void;
 
@@ -121,6 +123,7 @@ export class GitClient {
     this.homeDirectory = path.resolve(options.dataDirectory, "git-home");
     this.defaultBranch = assertSafeBranchName(options.defaultBranch);
     this.allowLocalTestRemote = options.allowLocalTestRemote ?? false;
+    this.askPassPath = options.askPassPath;
     this.remoteUrl = this.allowLocalTestRemote ? path.resolve(options.remoteUrl) : assertSafeRepositoryUrl(options.remoteUrl);
     this.timeoutMs = options.timeoutMs ?? 30_000;
     this.onCommand = options.onCommand;
@@ -128,6 +131,10 @@ export class GitClient {
 
   private async git(args: readonly string[]): Promise<CommandResult> {
     return await executeGit(args, safeEnvironment(this.homeDirectory), this.timeoutMs, this.onCommand);
+  }
+
+  private async gitWithEnvironment(args: readonly string[], environment: NodeJS.ProcessEnv): Promise<CommandResult> {
+    return await executeGit(args, environment, this.timeoutMs, this.onCommand);
   }
 
   private localProtocolArgs(): string[] {
@@ -234,6 +241,45 @@ export class GitClient {
       canonical,
     ]);
     await this.git(["--git-dir", this.bareRepository, "branch", "-D", safeBranch]);
+  }
+
+  async commitAll(worktree: string, message: string, authorName: string, authorEmail: string): Promise<string> {
+    if (!message.trim() || message.length > 500 || /[\r\n\0]/u.test(message)) {
+      throw new GitCommandError("COMMIT_MESSAGE_INVALID", "Commit message must be one non-empty line up to 500 characters");
+    }
+    if (!authorName.trim() || /[\r\n\0]/u.test(authorName) || !/^[^\s@]+@[^\s@]+$/u.test(authorEmail)) {
+      throw new GitCommandError("GIT_AUTHOR_INVALID", "Git author identity is invalid");
+    }
+    const canonical = await realpath(worktree);
+    await this.git(["-C", canonical, "add", "--all"]);
+    await this.git([
+      "-c", `user.name=${authorName}`,
+      "-c", `user.email=${authorEmail}`,
+      "-C", canonical,
+      "commit", "-m", message,
+    ]);
+    return await this.headCommit(canonical);
+  }
+
+  async pushBranch(worktree: string, branch: string, accessToken: string): Promise<void> {
+    const safeBranch = assertSafeBranchName(branch);
+    if (!this.askPassPath) throw new GitCommandError("GIT_ASKPASS_REQUIRED", "Controlled ASKPASS path is required for push");
+    const environment = createGitProcessEnvironment({
+      askPassPath: this.askPassPath,
+      hooksPath: path.join(this.homeDirectory, "hooks"),
+      isolatedHome: this.homeDirectory,
+      token: accessToken,
+      baseEnvironment: process.env,
+    });
+    await this.gitWithEnvironment([
+      ...this.localProtocolArgs(),
+      "-C",
+      await realpath(worktree),
+      "push",
+      "--set-upstream",
+      "origin",
+      `refs/heads/${safeBranch}:refs/heads/${safeBranch}`,
+    ], environment);
   }
 
   async hashObject(content: string): Promise<string> {
