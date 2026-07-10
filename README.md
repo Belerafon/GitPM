@@ -4,7 +4,7 @@ Git-first система управления проектами и задача
 
 ## Current status
 
-Статус: `P06_complete_P07_ready`. P00-P06 закрыты. OAuth PKCE, memory-only sessions, role refresh, commit-all, controlled push и MR polling готовы; следующий этап — frontend shell/draft management.
+Статус: `P07_complete_P08A_P08B_ready`. P00-P07 закрыты. Frontend shell, draft lifecycle, polling и `ru`/`en` локализация готовы; следующие этапы — основной и административный UI.
 
 ## Development
 

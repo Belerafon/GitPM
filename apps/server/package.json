@@ -21,6 +21,7 @@
     "@gitpm/shared": "workspace:*",
     "@gitpm/repository-format": "workspace:*",
     "@gitpm/publishing": "workspace:*",
+    "@gitpm/validation": "workspace:*",
     "fastify": "5.10.0",
     "pino": "10.3.1"
   },

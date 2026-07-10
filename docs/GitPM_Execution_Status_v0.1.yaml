@@ -1,6 +1,6 @@
 version: '0.1'
 updated_at: '2026-07-10'
-current_phase: P06_complete_P07_ready
+current_phase: P07_complete_P08A_P08B_ready
 stages:
   P00:
     status: done
@@ -84,10 +84,15 @@ stages:
     - file:evidence/P06/acceptance.md
     notes: OAuth PKCE, memory sessions, role refresh, commit-all, controlled push and MR polling are accepted.
   P07:
-    status: not_started
-    accepted_by: []
-    evidence: []
-    notes: ''
+    status: done
+    accepted_by:
+    - FE
+    - QA
+    evidence:
+    - file:evidence/P07/vfy-018-playwright-trace.json
+    - file:evidence/P07/vfy-018-draft-lifecycle.png
+    - file:evidence/P07/acceptance.md
+    notes: React shell, draft lifecycle, 3-second polling, external read-only behavior and en/ru locale persistence are accepted.
   P08A:
     status: not_started
     accepted_by: []
@@ -230,9 +235,11 @@ verification_checks:
     - file:evidence/P06/vfy-017-push-mr.txt
     notes: Commit-all/push/MR/poll contract passes through local remote and protocol test double with role refresh.
   VFY-018:
-    status: pending
-    evidence: []
-    notes: ''
+    status: passed
+    evidence:
+    - file:evidence/P07/vfy-018-playwright-trace.json
+    - file:evidence/P07/vfy-018-draft-lifecycle.png
+    notes: Browser-local lifecycle shows one repository, polling state, close/reopen and external-mode read-only behavior.
   VFY-019:
     status: pending
     evidence: []

@@ -1,7 +1,7 @@
 # GitPM progress
 
-Current phase: `P06_complete_P07_ready`
-Implementation code: P00-P06 complete
+Current phase: `P07_complete_P08A_P08B_ready`
+Implementation code: P00-P07 complete
 
 ## Current active revision
 
@@ -101,13 +101,21 @@ Implementation code: P00-P06 complete
 - Commit-all/push creates the expected remote branch; MR create/poll matches sanitized test-double capture.
 - Token leak scan is clean; full suite contains 17 files and 66 tests.
 
+## Last P07 evidence
+
+- React shell displays one configured repository, application navigation and multiple drafts without a repository selector.
+- Draft context supports create/open/close/reopen/explicit cleanup and polls draft, changes, validation and MR status every 3 seconds.
+- External writer mode displays a read-only contract; branch, dirty files and validation status remain visible.
+- Version-controlled `en`/`ru` packs pass key, placeholder and no-HTML checks; locale persists through reload and updates root `lang`/`dir`.
+- Browser-local VFY-018, lint, typecheck, build and the full 18-file/72-test suite pass.
+
 ## Current blockers
 
-None. P06 is accepted and P07 is unblocked by completed P04/P06.
+None. P07 is accepted; P08A and P08B are unblocked.
 
 ## Next action
 
-Start P07 frontend shell, localization packs and draft lifecycle management.
+Start P08A core Project/Task/Milestone UI, then P08B administration UI.
 
 ## Evidence policy
 

@@ -26,6 +26,11 @@ export function registerAuthAndPublishingApi(
 ): void {
   app.get("/api/auth/login", async () => auth.startLogin());
 
+  app.get("/api/auth/session", async (request) => {
+    const authorization = await auth.authorize(sessionId(request), "read");
+    return authorization.session;
+  });
+
   app.get<{ Querystring: { state: string; code: string } }>("/api/auth/callback", async (request, reply) => {
     const session = await auth.completeLogin(request.query.state, request.query.code);
     const maxAge = Math.max(0, Math.floor((Date.parse(session.expires_at) - Date.now()) / 1000));

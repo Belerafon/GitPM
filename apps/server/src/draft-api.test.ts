@@ -27,6 +27,7 @@ function manager(overrides: Partial<DraftManager> = {}): DraftManager {
   return {
     createDraft: vi.fn(async () => metadata),
     getDraft: vi.fn(async () => metadata),
+    listDrafts: vi.fn(async () => [metadata]),
     poll: vi.fn(async () => ({ metadata, currentFingerprint: metadata.fingerprint, changedExternally: false })),
     setWriterMode: vi.fn(async () => ({ ...metadata, writer_mode: "external" })),
     closeDraft: vi.fn(async () => ({ ...metadata, state: "closed" })),
@@ -51,6 +52,16 @@ describe("draft lifecycle API", () => {
     expect(response.statusCode).toBe(201);
     expect(response.json()).toMatchObject({ draft_id: "DRF-API", branch: "gitpm/42/DRF-API" });
     expect(response.body).not.toContain("secret/server/worktree");
+  });
+
+  it("lists only drafts visible to the current user", async () => {
+    const other = { ...metadata, draft_id: "DRF-OTHER", owner_gitlab_user_id: "99" };
+    const draftManager = manager({ listDrafts: vi.fn(async () => [metadata, other]) });
+    const app = appFor({ userId: "42", role: "Developer" }, draftManager);
+    const response = await app.inject({ method: "GET", url: "/api/drafts" });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual([expect.objectContaining({ draft_id: "DRF-API" })]);
+    expect(response.body).not.toContain("worktree");
   });
 
   it("rejects mutation for a read-only role with a stable error", async () => {

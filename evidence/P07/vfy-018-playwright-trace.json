@@ -1,0 +1,18 @@
+{
+  "check": "VFY-018",
+  "environment": "browser-local",
+  "runner": "in-app Browser Playwright API",
+  "assertions": {
+    "singleRepositoryWithoutSelector": true,
+    "branchVisible": "gitpm/42/DRF-BROWSER",
+    "dirtyFiles": 2,
+    "validation": "valid",
+    "pollBefore": 1,
+    "pollAfter": 2,
+    "externalModeReadOnlyWarning": true,
+    "closeAndReopen": true,
+    "localePersistedAfterReload": true,
+    "rootLanguage": "en",
+    "rootDirection": "ltr"
+  }
+}

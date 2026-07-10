@@ -4,10 +4,11 @@
     "declaration": false,
     "declarationMap": false,
     "lib": ["DOM", "ES2022"],
+    "jsx": "react-jsx",
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "noEmit": true,
     "types": ["vite/client"]
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
 }

@@ -169,6 +169,16 @@ export class DraftManager {
     return await this.readMetadata(safeComponent(draftId, "draft ID"));
   }
 
+  async listDrafts(): Promise<readonly DraftMetadata[]> {
+    await mkdir(this.metadataDirectory, { recursive: true, mode: 0o700 });
+    const drafts: DraftMetadata[] = [];
+    for (const entry of await readdir(this.metadataDirectory)) {
+      if (!entry.endsWith(".json")) continue;
+      drafts.push(await this.readMetadata(entry.slice(0, -5)));
+    }
+    return drafts.sort((left, right) => right.updated_at.localeCompare(left.updated_at));
+  }
+
   async poll(draftId: string): Promise<{ metadata: DraftMetadata; currentFingerprint: string; changedExternally: boolean }> {
     const metadata = await this.getDraft(draftId);
     const currentFingerprint = await this.fingerprint(metadata.worktree_path);

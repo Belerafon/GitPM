@@ -9,6 +9,7 @@ import { ChangesError } from "@gitpm/changes";
 import type { ChangesService } from "@gitpm/changes";
 import { AuthError } from "@gitpm/gitlab";
 import { PublishingError } from "@gitpm/publishing";
+import { validateRepository } from "@gitpm/validation";
 
 export type ProjectRole = "Reporter" | "Developer" | "Maintainer";
 
@@ -110,6 +111,14 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
     await reply.code(201).send(publicMetadata(metadata));
   });
 
+  app.get("/api/drafts", async (request) => {
+    const actor = await authenticate(request);
+    const drafts = await manager.listDrafts();
+    return drafts
+      .filter((draft) => draft.owner_gitlab_user_id === actor.userId || actor.role === "Maintainer")
+      .map(publicMetadata);
+  });
+
   app.get<{ Params: { draftId: string } }>("/api/drafts/:draftId", async (request) => {
     const actor = await authenticate(request);
     const status = await manager.poll(request.params.draftId);
@@ -117,6 +126,19 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
       throw new DraftRuntimeError("DRAFT_FORBIDDEN", "Draft owner mismatch");
     }
     return { ...publicMetadata(status.metadata), changed_externally: status.changedExternally };
+  });
+
+  app.get<{ Params: { draftId: string } }>("/api/drafts/:draftId/validation", async (request) => {
+    const actor = await authenticate(request);
+    await requireDraftRead(manager, actor, request.params.draftId);
+    const metadata = await manager.getDraft(request.params.draftId);
+    const report = await validateRepository(metadata.worktree_path);
+    return {
+      valid: report.valid,
+      error_count: report.errors.length,
+      warning_count: report.warnings.length,
+      document_count: report.documentCount,
+    };
   });
 
   app.patch<{ Params: { draftId: string }; Body: { writer_mode: WriterMode } }>("/api/drafts/:draftId/writer-mode", async (request) => {

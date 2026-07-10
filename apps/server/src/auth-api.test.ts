@@ -41,6 +41,14 @@ describe("OAuth and publishing HTTP contract", () => {
     expect(setCookie).toContain("SameSite=Strict");
     const sessionCookie = setCookie.split(";")[0]!;
 
+    const currentSession = await app.inject({
+      headers: { cookie: sessionCookie },
+      method: "GET",
+      url: "/api/auth/session",
+    });
+    expect(currentSession.statusCode).toBe(200);
+    expect(currentSession.json()).toMatchObject({ user: { id: "42" }, role: "Developer" });
+
     const committed = await app.inject({
       headers: { cookie: sessionCookie },
       method: "POST",
