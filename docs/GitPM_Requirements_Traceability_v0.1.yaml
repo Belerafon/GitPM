@@ -1,0 +1,91 @@
+version: 0.1
+work_plan: GitPM_Work_Plan_v0.2.md
+implementation_plan: GitPM_Implementation_Plan_v0.3.md
+requirements:
+  - id: ARCH-GIT-001
+    stage: P03
+    tests: E2E-010,E2E-011,E2E-014,E2E-015
+  - id: ARCH-NODB-001
+    stage: P04
+    tests: E2E-020,E2E-033,E2E-034
+  - id: REPO-SINGLE-001
+    stage: P04
+    tests: E2E-043
+  - id: DATA-ENTITY-FILE-001
+    stage: P01
+    tests: E2E-002,E2E-003,E2E-005
+  - id: DATA-YAML-COMMENTS-001
+    stage: P01
+    tests: E2E-009
+  - id: DATA-MIGRATE-001
+    stage: P02
+    tests: E2E-031,E2E-032
+  - id: DATA-DELETE-001
+    stage: P04
+    tests: E2E-005,E2E-006,E2E-007
+  - id: GIT-WORKTREE-001
+    stage: P03
+    tests: E2E-001,E2E-020
+  - id: GIT-SAFETY-001
+    stage: P03
+    tests: E2E-033,E2E-034
+  - id: GIT-RESTORE-001
+    stage: P05
+    tests: E2E-007,E2E-008
+  - id: GIT-HISTORY-001
+    stage: P10
+    tests: E2E-014,E2E-015,E2E-017,E2E-018,E2E-019
+  - id: SEC-EARLY-THREAT-001
+    stage: P00S
+    tests: E2E-026,E2E-027,E2E-028
+  - id: SEC-PATH-001
+    stage: P03
+    tests: E2E-028
+  - id: SEC-TOKEN-001
+    stage: P06
+    tests: E2E-026,E2E-035,E2E-036
+  - id: SEC-WEBHOOK-001
+    stage: P06
+    tests: E2E-013,E2E-027,E2E-043
+  - id: SEC-AGENT-001
+    stage: P12
+    tests: E2E-022,E2E-023,E2E-024,E2E-029
+  - id: GITLAB-REAL-001
+    stage: P06
+    tests: E2E-001,E2E-011,E2E-012,E2E-013,E2E-025
+  - id: AUTHZ-MATRIX-001
+    stage: P06
+    tests: E2E-023,E2E-024,E2E-025,E2E-043
+  - id: OPS-QUOTA-001
+    stage: P04
+    tests: E2E-029
+  - id: DUR-RPO-RTO-001
+    stage: P13
+    tests: E2E-033,E2E-034
+  - id: UI-CORE-001
+    stage: P08
+    tests: E2E-002,E2E-003,E2E-004,E2E-005,E2E-006,E2E-016
+  - id: UI-CHANGES-001
+    stage: P09
+    tests: E2E-007,E2E-008,E2E-009,E2E-010,E2E-011,E2E-012
+  - id: UI-BOARD-001
+    stage: P11A
+    tests: E2E-037,E2E-042
+  - id: UI-GANTT-001
+    stage: P11B
+    tests: E2E-038,E2E-039
+  - id: UI-WORKLOAD-001
+    stage: P11C
+    tests: E2E-040,E2E-041
+  - id: ENTITY-ADMIN-001
+    stage: P11B
+    tests: E2E-039,E2E-041
+  - id: PERF-3000-001
+    stage: P09
+    tests: E2E-044
+  - id: PERF-10000-001
+    stage: P11C
+    tests: E2E-045
+  - id: RELEASE-E2E-001
+    stage: P14
+    tests: E2E-001,E2E-002,E2E-003,E2E-004,E2E-005,E2E-006,E2E-007,E2E-008,E2E-009,E2E-010,E2E-011,E2E-012,E2E-013,E2E-014,E2E-015,E2E-016,E2E-017,E2E-018,E2E-019,E2E-020,E2E-021,E2E-022,E2E-023,E2E-024,E2E-025,E2E-026,E2E-027,E2E-028,E2E-029,E2E-030,E2E-031,E2E-032,E2E-033,E2E-034,E2E-035,E2E-036,E2E-037,E2E-038,E2E-039,E2E-040,E2E-041,E2E-042,E2E-043,E2E-044,E2E-045

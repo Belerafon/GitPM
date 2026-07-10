@@ -1,8 +1,17 @@
 # GitPM: подробный план реализации
 
-Версия документа: 0.2
-Статус: архитектурная спецификация, дополненная исполнимым планом работ
+Версия документа: 0.3
+Статус: актуальная архитектурная спецификация
 Назначение: спецификация для последовательной разработки Git-first системы управления проектами и задачами с веб-интерфейсом, GitLab и агентами.
+
+Авторитетные исполнимые документы:
+
+- `GitPM_Work_Plan_v0.2.md` - этапы, зависимости, владельцы, проверки и release gates;
+- `GitPM_Delivery_Policies_v0.1.md` - границы v0.1, права, квоты, сохранность draft и бюджеты производительности;
+- `GitPM_Security_Baseline_v0.1.md` - ранняя модель угроз и обязательные контрмеры;
+- `GitPM_Requirements_Traceability_v0.1.yaml` - машинно-проверяемая трассировка требований и тестов.
+
+Архитектурный документ намеренно не дублирует исполнимый план этапов.
 
 
 ## 0. Связанные документы и порядок работы
@@ -11,7 +20,7 @@
 
 Исполнение проекта ведется по отдельным документам:
 
-- `docs/GitPM_Work_Plan_v0.1.md` - этапы разработки, зависимости, задачи, проверки, E2E-сценарии и критерии выхода;
+- `docs/GitPM_Work_Plan_v0.2.md` - этапы разработки, зависимости, задачи, проверки, E2E-сценарии и критерии выхода;
 - `docs/PROGRESS.md` - текущее состояние, завершенные работы, результаты проверок, блокировки и следующий шаг.
 
 Правило работы:
@@ -841,21 +850,21 @@ UI предоставляет:
 
 - Restore entire file;
 - Restore selected hunk;
-- Restore selected lines;
 - Restore deleted file;
 - Restore file from commit;
 - Discard all uncommitted changes.
+
+Restore произвольного набора строк не входит в Alpha и MVP. Он рассматривается после Alpha только при наличии подтвержденной пользовательской потребности и отдельного набора property-based и cross-platform patch tests.
 
 Реализация:
 
 - файл: `git restore -- path`;
 - staged файл: `git restore --staged -- path`;
 - hunk: построение reverse patch и `git apply -R`;
-- строки: построение минимального patch;
 - удаленный файл: `git restore --source=HEAD -- path`;
 - файл из commit: `git restore --source=<sha> -- path`.
 
-Операции над hunk и строками должны выполняться только после проверки, что файл не изменился с момента построения diff.
+Операция над hunk должна выполняться только после проверки, что файл не изменился с момента построения diff.
 
 ### 9.4. История
 
@@ -1512,6 +1521,8 @@ limits:
 
 ## 16. Безопасность
 
+Обязательный baseline и ранняя модель угроз определены в `GitPM_Security_Baseline_v0.1.md`. Контрмеры реализуются вместе с соответствующими компонентами; финальный hardening только подтверждает их полноту.
+
 ### 16.1. Path traversal
 
 Любой путь нормализуется и проверяется:
@@ -1762,399 +1773,39 @@ GITPM_REPOSITORY_URL
 GITPM_DEFAULT_BRANCH
 ```
 
-### 20.3. Backup
+### 20.3. Backup и сохранность dirty draft
 
-Репозиторий уже находится в GitLab.
+Committed и pushed данные находятся в GitLab. Dirty draft до пользовательского commit дополнительно защищается safety snapshots.
 
-Дополнительно резервируются:
+Обязательная модель v0.1:
 
-- server configuration;
-- encryption key;
-- OAuth metadata;
-- незапушенные worktree.
+- текущий worktree хранится на persistent volume;
+- GitPM создает commit object текущего tree и обновляет `refs/gitpm/safety/<draft-id>`, не перемещая пользовательскую branch и не добавляя WIP commit в MR history;
+- bare repository вместе с safety refs резервируется на отдельный носитель или backup remote;
+- UI показывает состояния `local only`, `safety snapshotted` и `pushed`;
+- RPO и RTO определены в `GitPM_Delivery_Policies_v0.1.md`;
+- hard-kill, primary-volume loss и restore входят в обязательные E2E/fault tests.
 
-Незапушенные черновики являются единственной частью, которой нет в GitLab. Поэтому рекомендуется:
+Master key не архивируется вместе с application data без отдельной защищенной процедуры. Его lifecycle, rotation и recovery определены в `GitPM_Security_Baseline_v0.1.md`.
 
-- автоматически создавать локальные commit в draft по явной настройке;
-- либо периодически предлагать пользователю commit/push;
-- либо создавать hidden safety commit в отдельной служебной ref.
+## 21. Исполнимый план поставки
 
-В первой версии скрытые commit не делать. UI должен явно предупреждать о незапушенных изменениях.
+Архитектурная спецификация не содержит второго набора этапов реализации.
 
-## 21. План реализации по этапам
+Единственным авторитетным источником последовательности работ, зависимостей, владельцев, размеров, критериев входа и выхода, автоматической верификации, ручной приемки и release gates является:
 
-## Этап 0. Уточнение формата и ADR
-
-Результат:
-
-- Architecture Decision Records;
-- финальный формат ID;
-- финальная структура YAML;
-- решение по attachments;
-- решение по staging;
-- решение по Gantt-библиотеке;
-- правила delete dependencies.
-
-Задачи:
-
-- создать monorepo;
-- настроить TypeScript;
-- настроить lint/test/build;
-- написать ADR-001 Git as source of truth;
-- ADR-002 one entity per file;
-- ADR-003 worktree per draft;
-- ADR-004 no database;
-- ADR-005 delete allowed, restore through Git;
-- ADR-006 no custom undo.
-
-Критерий завершения:
-
-- пример portfolio проходит ручное обсуждение;
-- нет открытых принципиальных вопросов по формату.
-
-## Этап 1. Repository format
-
-Результат:
-
-- схемы;
-- parser;
-- formatter;
-- loader;
-- demo portfolio.
-
-Задачи:
-
-- определить типы сущностей;
-- создать JSON Schema;
-- реализовать строгий YAML parser;
-- реализовать formatter;
-- реализовать обход репозитория;
-- реализовать индексы;
-- реализовать ошибки с кодами;
-- написать fixture repository.
-
-Критерий завершения:
-
-```bash
-gitpm validate examples/demo-portfolio
-gitpm format --check examples/demo-portfolio
+```text
+docs/GitPM_Work_Plan_v0.2.md
 ```
 
-завершаются успешно.
-
-## Этап 2. Validation engine
-
-Результат:
-
-- ссылки;
-- циклы;
-- даты;
-- path/ID;
-- policy validation;
-- JSON output.
-
-Задачи:
-
-- cross-reference validation;
-- dependency graph;
-- parent graph;
-- deletion restrict;
-- scope policies;
-- max change limits;
-- base revision validation;
-- explain error command.
-
-Критерий завершения:
-
-- тесты покрывают основные классы ошибок;
-- агент получает структурированное описание проблемы.
-
-## Этап 3. Git core
-
-Результат:
-
-- bare clone;
-- worktree manager;
-- status;
-- diff;
-- restore;
-- commit;
-- push;
-- rebase;
-- revert.
-
-Задачи:
-
-- обертка над системным Git;
-- безопасный command runner;
-- worktree registry;
-- lock manager;
-- branch naming;
-- file diff parser;
-- hunk parser;
-- reverse patch;
-- commit author;
-- credentials helper.
-
-Критерий завершения:
-
-- все операции проходят integration tests на временном remote.
-
-## Этап 4. Backend API
-
-Результат:
-
-- Fastify server;
-- repository endpoints;
-- draft endpoints;
-- CRUD;
-- Git endpoints;
-- event stream.
-
-Задачи:
-
-- API contract;
-- request validation;
-- error mapping;
-- draft lifecycle;
-- model cache;
-- atomic writes;
-- optimistic blob SHA;
-- SSE/WebSocket events.
-
-Критерий завершения:
-
-- полный workflow выполняется через curl или CLI.
-
-## Этап 5. GitLab authentication and integration
-
-Результат:
-
-- OIDC login;
-- OAuth tokens;
-- push as user;
-- create MR;
-- webhooks.
-
-Задачи:
-
-- OAuth application;
-- callback;
-- encrypted token storage;
-- Git credentials;
-- permissions check;
-- MR API;
-- webhook receiver;
-- pipeline status.
-
-Критерий завершения:
-
-- пользователь входит через GitLab;
-- создает draft;
-- commit;
-- push;
-- MR появляется в GitLab.
-
-## Этап 6. Frontend shell
-
-Результат:
-
-- login;
-- repository selection;
-- draft selection;
-- navigation;
-- shared UI components;
-- error handling.
-
-Задачи:
-
-- app shell;
-- route structure;
-- query client;
-- draft context;
-- event subscription;
-- top Git status bar;
-- notifications.
-
-Критерий завершения:
-
-- пользователь видит текущую ветку, dirty state и validation status.
-
-## Этап 7. Project and task UI
-
-Результат:
-
-- projects;
-- task list;
-- task panel;
-- create/edit/delete/archive.
-
-Задачи:
-
-- portfolio page;
-- project page;
-- task table;
-- task editor;
-- people selector;
-- dependency selector;
-- delete confirmation;
-- archive/unarchive;
-- optimistic UI.
-
-Критерий завершения:
-
-- все основные сущности редактируются без прямой работы с YAML.
-
-## Этап 8. Changes and Git UI
-
-Результат:
-
-- status;
-- file diff;
-- semantic diff;
-- restore;
-- commit dialog;
-- push;
-- MR creation.
-
-Задачи:
-
-- file tree;
-- Monaco diff;
-- hunk selection;
-- line selection;
-- restore actions;
-- deleted file restore;
-- commit history;
-- branch status;
-- conflict indicators.
-
-Критерий завершения:
-
-- пользователь может исправить ошибочное изменение исключительно через UI.
-
-## Этап 9. Board
-
-Результат:
-
-- Kanban;
-- drag-and-drop;
-- filters;
-- swimlanes.
-
-Задачи:
-
-- status columns;
-- DnD;
-- bulk updates;
-- virtualization;
-- saved filters.
-
-Критерий завершения:
-
-- изменения карточек корректно отражаются в YAML и diff.
-
-## Этап 10. GitLab MR workflow
-
-Результат:
-
-- MR status in UI;
-- pipeline;
-- approval state;
-- merge state;
-- links.
-
-Задачи:
-
-- create draft MR;
-- update description;
-- webhook updates;
-- reopen/close;
-- remove source branch;
-- cleanup draft.
-
-Критерий завершения:
-
-- полный путь от UI до merge работает без терминала.
-
-## Этап 11. Gantt and workload
-
-Результат:
-
-- Gantt;
-- workload;
-- capacity;
-- calendars.
-
-Задачи:
-
-- schedule model;
-- date drag;
-- dependency lines;
-- weekly allocation;
-- overload detection;
-- filters;
-- semantic diff aggregates.
-
-Критерий завершения:
-
-- изменение сроков видно в файлах, Gantt и workload.
-
-## Этап 12. Agent and MCP
-
-Результат:
-
-- MCP server;
-- scoped drafts;
-- task bulk operations;
-- validate/diff/commit/MR.
-
-Задачи:
-
-- MCP transport;
-- authentication;
-- policy binding;
-- structured errors;
-- bulk create;
-- agent examples;
-- prompt guidance;
-- direct file mode documentation.
-
-Критерий завершения:
-
-- агент получает ТЗ, создает задачи в разрешенном проекте и формирует draft MR.
-
-## Этап 13. Hardening
-
-Результат:
-
-- security;
-- fault tolerance;
-- observability;
-- packaging.
-
-Задачи:
-
-- threat model;
-- path traversal tests;
-- command injection tests;
-- token rotation;
-- recovery after crash;
-- cleanup worker;
-- metrics;
-- Docker image;
-- upgrade procedure.
-
-Критерий завершения:
-
-- production checklist закрыт.
+Изменение последовательности поставки выполняется только выпуском новой версии Work Plan. Архитектурный документ обновляется лишь тогда, когда меняются архитектурные или продуктовые решения.
 
 ## 22. Приоритет MVP
 
 Обязательное:
 
 - GitLab login;
-- один repository;
+- ровно один сконфигурированный portfolio repository на экземпляр GitPM; пользователь не может добавлять репозитории через UI;
 - draft/worktree;
 - projects;
 - tasks;
@@ -2182,12 +1833,12 @@ gitpm format --check examples/demo-portfolio
 - Gantt;
 - workload;
 - MCP;
-- multi-repository;
+- multi-repository и пользовательское подключение новых репозиториев;
 - attachments.
 
 Не включать в MVP:
 
-- комментарии вне Git;
+- комментарии к задачам вне Git; YAML-комментарии в доменных файлах запрещены, поскольку канонический formatter является авторитетным;
 - чат;
 - уведомления по email;
 - real-time collaborative editing;
@@ -2202,7 +1853,9 @@ gitpm format --check examples/demo-portfolio
 
 ## 23. Критические технические риски
 
-### 23.1. Частичный restore строк
+### 23.1. Частичный restore строк после Alpha
+
+Эта функция не входит в Alpha и MVP. До включения в план должна быть подтверждена отдельным продуктовым решением.
 
 Риск:
 
@@ -2287,10 +1940,12 @@ gitpm format --check examples/demo-portfolio
 
 Меры:
 
-- persistent volume;
-- предупреждения;
-- регулярные backup volume;
-- optional autosave commit в будущей версии.
+- гарантии сохранности и RPO/RTO определяются до Alpha в `GitPM_Delivery_Policies_v0.1.md`;
+- dirty worktree переживает restart процесса и контейнера на persistent volume;
+- safety snapshot создается как отдельный Git ref без изменения пользовательской ветки;
+- bare repository и safety refs резервируются на отдельный носитель;
+- UI явно показывает, какие изменения еще не имеют удаленной копии;
+- восстановление dirty draft входит в обязательные fault и E2E tests.
 
 ## 24. Правила разработки проекта
 

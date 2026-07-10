@@ -1,334 +1,136 @@
 # GitPM: прогресс реализации
 
-Версия документа: 0.1
-Связанный план работ: `GitPM_Work_Plan_v0.1.md`
-Связанная архитектура: `GitPM_Implementation_Plan_v0.2.md`
+Версия документа: 0.2
+Связанный план работ: `GitPM_Work_Plan_v0.2.md`
+Связанная архитектура: `GitPM_Implementation_Plan_v0.3.md`
+Политики поставки: `GitPM_Delivery_Policies_v0.1.md`
+Security baseline: `GitPM_Security_Baseline_v0.1.md`
+Трассировка: `GitPM_Requirements_Traceability_v0.1.yaml`
 Последнее обновление: 2026-07-10
 
 ## 1. Текущее состояние
 
-Общий статус: `planning`
-Текущий этап: `P00 - Bootstrap и воспроизводимое окружение`
-Статус текущего этапа: `not_started`
-Последний завершенный этап: отсутствует
-Текущий release gate: до Alpha
-
-Готовность по фактическим критериям:
-
-- Архитектурная спецификация: готова.
-- Исполнимый план работ: готов.
-- Репозиторий разработки: инициализирован.
+- Общий статус: `planning_ready`;
+- Текущий этап: `P00 - Bootstrap и воспроизводимое окружение`;
+- Статус текущего этапа: `not_started`;
+- Владелец: `ARCH`;
+- Последний завершенный этап реализации: отсутствует;
+- Текущий release gate: до Alpha;
 - Программная реализация: не начата.
-- Автоматические тесты: не созданы.
-- E2E-тесты: не созданы.
-- Production readiness: не начата.
 
-## 2. Следующий конкретный шаг
+## 2. Следующее проверяемое действие
 
-Начать P00:
-
-- создать pnpm monorepo;
-- зафиксировать версии Node.js, pnpm и Git;
-- настроить lint, typecheck, test и build;
-- создать минимальный GitLab CI pipeline;
-- подтвердить clean installation.
-
-## 3. Блокировки
-
-Активных блокировок нет.
-
-## 4. Решения, которые нужно принять до соответствующего этапа
-
-- До P01: окончательно утвердить формат ULID и display key.
-- До P06: создать GitLab OAuth application и test project.
-- До P11: выбрать Gantt-библиотеку после отдельного технического прототипа.
-- До P13: определить production reverse proxy и способ хранения encryption key.
-
-## 5. Состояние этапов
-
-### P00. Bootstrap и воспроизводимое окружение
-
-Статус: `not_started`
-
-- [ ] Monorepo создан.
-- [ ] Локальная сборка воспроизводима.
-- [ ] CI pipeline зеленый.
-- [ ] Smoke tests проходят.
-- [ ] Доказательства записаны.
-
-### P01. Формат репозитория и доменная модель
-
-Статус: `not_started`
-
-- [ ] Схемы зафиксированы.
-- [ ] Parser и formatter реализованы.
-- [ ] Demo portfolio создан.
-- [ ] Round-trip и idempotence tests проходят.
-- [ ] Доказательства записаны.
-
-### P02. Валидатор, линтер и семантическая целостность
-
-Статус: `not_started`
-
-- [ ] Validation engine реализован.
-- [ ] CLI реализован.
-- [ ] Policy validation реализован.
-- [ ] Regression tests критичных ошибок проходят.
-- [ ] Доказательства записаны.
-
-### P03. Git core и управление worktree
-
-Статус: `not_started`
-
-- [ ] Worktree lifecycle реализован.
-- [ ] Commit, push, rebase и revert реализованы.
-- [ ] Recovery после restart проверен.
-- [ ] Integration suite проходит.
-- [ ] Доказательства записаны.
-
-### P04. Backend draft API и файловые операции
-
-Статус: `not_started`
-
-- [ ] Draft API реализован.
-- [ ] CRUD и delete/archive реализованы.
-- [ ] Atomic write и optimistic concurrency реализованы.
-- [ ] API E2E проходит.
-- [ ] Доказательства записаны.
-
-### P05. Git changes API и восстановление средствами Git
-
-Статус: `not_started`
-
-- [ ] Diff API реализован.
-- [ ] Restore file, hunk и lines реализованы.
-- [ ] History API реализован.
-- [ ] Patch tests проходят.
-- [ ] Доказательства записаны.
-
-### P06. GitLab OIDC, push и Merge Request
-
-Статус: `not_started`
-
-- [ ] GitLab login реализован.
-- [ ] Push от имени пользователя реализован.
-- [ ] MR и webhook реализованы.
-- [ ] Token secrecy проверена.
-- [ ] Доказательства записаны.
-
-### P07. Frontend shell и управление draft
-
-Статус: `not_started`
-
-- [ ] App shell реализован.
-- [ ] Draft selector реализован.
-- [ ] Git status bar реализован.
-- [ ] Frontend smoke E2E проходит.
-- [ ] Доказательства записаны.
-
-### P08. Projects, Tasks, People и базовое редактирование
-
-Статус: `not_started`
-
-- [ ] Portfolio и Project screens реализованы.
-- [ ] Task CRUD реализован.
-- [ ] Archive и Delete различаются.
-- [ ] Stale edit защищен.
-- [ ] Доказательства записаны.
-
-### P09. Changes UI, semantic diff, commit и push
-
-Статус: `not_started`
-
-- [ ] Changes screen реализован.
-- [ ] Semantic diff реализован.
-- [ ] Restore UI реализован.
-- [ ] UI -> MR E2E проходит.
-- [ ] Alpha gate подтвержден.
-
-### P10. История, revert и разрешение конфликтов
-
-Статус: `not_started`
-
-- [ ] History реализована.
-- [ ] Revert draft реализован.
-- [ ] Conflict UI реализован.
-- [ ] Rebase recovery E2E проходит.
-- [ ] Доказательства записаны.
-
-### P11. Board, Gantt и Workload
-
-Статус: `not_started`
-
-- [ ] Board реализован.
-- [ ] Gantt реализован.
-- [ ] Workload реализован.
-- [ ] Представления подтверждены как проекции YAML.
-- [ ] Доказательства записаны.
-
-### P12. MCP и безопасная работа агентов
-
-Статус: `not_started`
-
-- [ ] MCP server реализован.
-- [ ] Scoped policies реализованы.
-- [ ] Agent MR workflow проходит.
-- [ ] Cross-project deletion блокируется.
-- [ ] Beta gate подтвержден.
-
-### P13. Надежность, безопасность и эксплуатация
-
-Статус: `not_started`
-
-- [ ] Threat model завершен.
-- [ ] Fault tests проходят.
-- [ ] Security tests проходят.
-- [ ] Recovery runbook проверен.
-- [ ] Release candidate gate подтвержден.
-
-### P14. Release candidate и приемка v0.1
-
-Статус: `not_started`
-
-- [ ] Full regression suite проходит.
-- [ ] Full mandatory E2E suite проходит.
-- [ ] Acceptance report подписан.
-- [ ] Release tag и image опубликованы.
-- [ ] Release v0.1 подтвержден.
-
-## 6. Состояние обязательных E2E-сценариев
-
-Все сценарии E2E-001 - E2E-030 имеют статус `not_implemented`.
-
-После появления теста для каждого сценария здесь должна быть запись вида:
+Начать P00 и получить первый зеленый pipeline:
 
 ```text
-E2E-005: passed
-Run: <pipeline/job URL or local report path>
-Commit: <sha>
-Environment: <description>
+clean checkout -> pnpm install --frozen-lockfile -> lint -> typecheck -> test -> build -> planning validation
 ```
 
-## 7. Последние результаты проверок
+## 3. Активные блокировки
 
-Автоматические проверки программного кода еще не запускались, поскольку программная реализация не начата.
+- Для P00 блокировок нет.
+- До P00S нужен disposable GitLab test project той же major/minor версии, что production, для GitLab-specific spikes.
+- P06 не может стать `done` без реального GitLab test project и OAuth application.
 
-Проверки документации:
+## 4. Принятые решения после инженерного review
 
-- структура Git-репозитория существует;
-- архитектурный план находится под Git;
-- план работ и файл прогресса подготовлены;
-- новый commit должен содержать только документальные изменения.
+- Security threat modeling начинается в P00S до Git core.
+- P13 только подтверждает и испытывает security controls.
+- Master key/keyring lifecycle решен до P06 в Security Baseline.
+- Архитектурный документ больше не содержит второй исполнимый stage plan.
+- P08 не зависит от Changes UI; restore UI проверяется в P09.
+- Real GitLab integration является обязательным gate P06.
+- Restore arbitrary selected lines исключен из Alpha/MVP.
+- Прежний P11 разделен на P11A Board, P11B Calendar/Gantt и P11C Workload.
+- Migration mechanism реализуется в P02 до Alpha.
+- Dirty draft имеет safety refs и измеримые RPO/RTO.
+- v0.1 ограничен одним configured repository.
+- Performance budgets, permission matrix и quotas зафиксированы.
+- У каждого этапа есть owner и size; XL запрещен.
+- YAML comments в доменных файлах не поддерживаются.
+- PROGRESS.md больше не дублирует статические task checklists Work Plan.
 
-## 8. Журнал прогресса
+## 5. Сводка этапов
+
+- P00: `not_started`;
+- P00S: `not_started`;
+- P01: `not_started`;
+- P02: `not_started`;
+- P03: `not_started`;
+- P04: `not_started`;
+- P05: `not_started`;
+- P06: `not_started`;
+- P07: `not_started`;
+- P08: `not_started`;
+- P09: `not_started`;
+- P10: `not_started`;
+- P11A: `not_started`;
+- P11B: `not_started`;
+- P11C: `not_started`;
+- P12: `not_started`;
+- P13: `not_started`;
+- P14: `not_started`.
+
+Детальные неизменные чек-листы находятся только в `GitPM_Work_Plan_v0.2.md`.
+
+## 6. Evidence index
+
+Пока существует только planning evidence:
+
+- Git repository initialized;
+- архитектурный и work plans находятся под version control;
+- planning traceability validator добавлен;
+- программные tests еще не существуют.
+
+## 7. Журнал прогресса
 
 ## 2026-07-10 - Инициализация проекта
 
-Статус этапа: planning
-
-Выполнено:
-
-- создан Git-репозиторий;
-- добавлена архитектурная спецификация;
-- зафиксированы Git-first, worktree и GitLab MR принципы.
+Status: done
 
 Commit:
 
 - `c1cc756` `docs: initialize GitPM project and add implementation plan`
 
-Проверки:
+Evidence:
 
-- `git status --short --branch` - passed, рабочее дерево было чистым после commit;
-- ZIP с `.git` был создан и проверен распаковкой.
+- repository создан;
+- initial ZIP с `.git` проверен распаковкой.
 
-E2E:
+## 2026-07-10 - Первый исполнимый план
 
-- не запускались, программной реализации еще нет.
+Status: superseded
 
-Известные проблемы:
+Commits:
 
-- исходный план не содержал достаточно строгой этапности и quality gates.
+- `e4ba32a` `docs: add phased delivery and verification plan`;
+- `2570793` `docs: record planning milestone`.
 
-Следующий шаг:
+Result:
 
-- добавить исполнимый план работ и этот журнал прогресса отдельным commit.
+- создан Work Plan v0.1;
+- создан первый PROGRESS;
+- после инженерного review план признан требующим архитектурных правок до P00.
 
-## 2026-07-10 - Добавлен исполнимый план работ
+## 2026-07-10 - Инженерный review и план v0.2
 
-Статус этапа: planning / ready_for_P00
+Status: verification
+Owner: ARCH/QA
+Commit: будет записан следующей записью после фиксации документации
 
-Выполнено:
+Evidence expected:
 
-- архитектурная спецификация обновлена до версии 0.2;
-- добавлены 15 этапов реализации с зависимостями и критериями выхода;
-- добавлены автоматическая верификация и ручная приемка каждого этапа;
-- определены 30 обязательных E2E-сценариев;
-- добавлены Alpha, Beta, Release Candidate и v0.1 gates;
-- создан живой журнал прогресса без версии в имени.
+- `python3 scripts/validate_planning.py`: passed;
+- old active plan versions отсутствуют в рабочем дереве;
+- Work Plan содержит 18 stages и 45 E2E scenarios;
+- traceability registry покрывает все E2E;
+- Git working tree clean после commit.
 
-Измененные файлы:
+Exceptions:
 
-- `README.md`;
-- `docs/GitPM_Implementation_Plan_v0.2.md`;
-- `docs/GitPM_Work_Plan_v0.1.md`;
-- `docs/PROGRESS.md`.
+- программная реализация не начата;
+- реальные GitLab integration tests начнутся в P00S/P06.
 
-Commit:
+Next:
 
-- `e4ba32a` `docs: add phased delivery and verification plan`
-
-Проверки:
-
-- проверено наличие 15 этапов;
-- проверено наличие уникальных E2E-001 - E2E-030;
-- проверено соответствие 15 разделов этапов в журнале прогресса;
-- `git diff --cached --check` - passed перед commit;
-- рабочее дерево после commit - clean.
-
-E2E:
-
-- не запускались, программная реализация еще не начата.
-
-Известные проблемы:
-
-- отсутствуют, применимые к стадии планирования.
-
-Следующий шаг:
-
-- начать P00: создать воспроизводимый monorepo и минимальный CI.
-
-## 9. Шаблон следующего обновления
-
-```markdown
-## YYYY-MM-DD HH:MM - <краткое название>
-
-Статус этапа: Pxx / in_progress|verification|done|blocked
-
-Выполнено:
-
-- ...
-
-Измененные файлы:
-
-- ...
-
-Commit:
-
-- `<sha>` `<message>`
-
-Проверки:
-
-- `command` - passed/failed, краткий результат
-
-E2E:
-
-- E2E-xxx - passed/failed/not_run
-
-Известные проблемы:
-
-- ...
-
-Следующий шаг:
-
-- ...
-```
+- начать P00.
