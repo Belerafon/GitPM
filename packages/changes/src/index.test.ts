@@ -93,4 +93,27 @@ describe("changes and restore service", () => {
     const diff = "@@ -1,2 +1,2 @@\r\n-old\r\n+новый\r\n context\r\n";
     expect(parseUnifiedDiff(diff)).toEqual([expect.objectContaining({ old_start: 1, new_start: 1, old_count: 2, new_count: 2 })]);
   });
+
+  it("describes created, updated, archived and deleted domain documents", async () => {
+    const { draft, service } = await runtime();
+    const projectAbsolute = path.join(draft.worktree_path, ...projectFile.split("/"));
+    const deletedAbsolute = path.join(draft.worktree_path, ...deletedTask.split("/"));
+    const archivedTask = "projects/PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP/tasks/TSK-01J2BZ7G4VJ57PX9K2Q0C6C5XP.yaml";
+    const archivedAbsolute = path.join(draft.worktree_path, ...archivedTask.split("/"));
+    const createdTask = "projects/PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP/tasks/TSK-01J2BZ7G4VJ57PX9K2Q0C6C5XZ.yaml";
+    await writeFile(projectAbsolute, (await readFile(projectAbsolute, "utf8")).replace("GitPM launch", "GitPM alpha"), "utf8");
+    await writeFile(archivedAbsolute, (await readFile(archivedAbsolute, "utf8")).replace("lifecycle: active", "lifecycle: archived"), "utf8");
+    await rm(deletedAbsolute);
+    await writeFile(path.join(draft.worktree_path, ...createdTask.split("/")), [
+      "schema: gitpm/task@1", "id: TSK-01J2BZ7G4VJ57PX9K2Q0C6C5XZ", "project: PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP",
+      "title: New task", "type: task", "status: todo", "lifecycle: active", "description_markdown: New", "acceptance_criteria_markdown: Done", "assignees: []", "depends_on: []", "labels: []", "",
+    ].join("\n"), "utf8");
+
+    const semantic = await service.semantic("DRF-CHANGES");
+    expect(semantic.counts).toEqual({ created: 1, updated: 1, archived: 1, deleted: 1 });
+    expect(semantic.updated[0]).toMatchObject({ id: "PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP", fields: expect.arrayContaining([expect.objectContaining({ field: "name", before: "GitPM launch", after: "GitPM alpha" })]) });
+    expect(semantic.archived[0]).toMatchObject({ fields: expect.arrayContaining([expect.objectContaining({ field: "lifecycle", before: "active", after: "archived" })]) });
+    expect(semantic.affected_projects).toEqual(["PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP"]);
+    expect((await service.list("DRF-CHANGES")).files.find((file) => file.kind === "Added")?.diff).toContain("--- /dev/null");
+  });
 });

@@ -186,6 +186,12 @@ export function registerChangesApi(
     return await changes.list(request.params.draftId);
   });
 
+  app.get<{ Params: { draftId: string } }>("/api/drafts/:draftId/changes/semantic", async (request) => {
+    const actor = await authenticate(request);
+    await requireDraftRead(manager, actor, request.params.draftId);
+    return await changes.semantic(request.params.draftId);
+  });
+
   app.post<{ Params: { draftId: string }; Body: { expected_fingerprint: string; path: string } }>(
     "/api/drafts/:draftId/changes/restore-file",
     async (request) => {

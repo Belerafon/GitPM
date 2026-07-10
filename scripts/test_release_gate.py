@@ -24,15 +24,18 @@ def main()->int:
                 '__pycache__', '*.pyc', '*.zip', '*.tsbuildinfo',
             ),
         )
-        baseline=run(root)
-        if baseline.returncode==0:
-            print('Pending baseline gate unexpectedly passed'); print(baseline.stdout); return 1
         trace=yaml.safe_load((root/'docs/GitPM_Requirements_Traceability_v0.5.yaml').read_text(encoding='utf-8'))
         status_path=root/'docs/GitPM_Execution_Status_v0.1.yaml'
         status=yaml.safe_load(status_path.read_text(encoding='utf-8'))
+        gate=trace['release_gates']['alpha']
+        pending_stage=gate['required_stages'][0]
+        status['stages'][pending_stage].update(status='not_started',accepted_by=[],evidence=[])
+        status_path.write_text(yaml.safe_dump(status,allow_unicode=True,sort_keys=False,width=120),encoding='utf-8')
+        baseline=run(root)
+        if baseline.returncode==0:
+            print('Pending fixture gate unexpectedly passed'); print(baseline.stdout); return 1
         evidence=root/'evidence/selftest/pass.txt'; evidence.parent.mkdir(parents=True); evidence.write_text('self-test evidence\n',encoding='utf-8')
         ref='file:evidence/selftest/pass.txt'
-        gate=trace['release_gates']['alpha']
         stages={stage['id']:stage for stage in trace['stages']}
         for sid in gate['required_stages']:
             status['stages'][sid].update(status='done',accepted_by=stages[sid]['acceptance'][:1],evidence=[ref])

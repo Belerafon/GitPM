@@ -1,6 +1,6 @@
 version: '0.1'
 updated_at: '2026-07-10'
-current_phase: P08B_complete_P09_ready
+current_phase: P09_complete_P10_ready
 stages:
   P00:
     status: done
@@ -118,10 +118,22 @@ stages:
     - file:evidence/P08B/acceptance.md
     notes: Maintainer administration UI and backend role enforcement for Person, Team, Calendar and repository settings are accepted.
   P09:
-    status: not_started
-    accepted_by: []
-    evidence: []
-    notes: ''
+    status: done
+    accepted_by:
+    - PO
+    - QA
+    - SEC
+    evidence:
+    - file:evidence/P09/vfy-021-file-changes.json
+    - file:evidence/P09/vfy-022-semantic-diff.json
+    - file:evidence/P09/vfy-023-playwright-trace.json
+    - file:evidence/P09/vfy-023-commit-tree.json
+    - file:evidence/P09/vfy-023-mr-payload.json
+    - file:evidence/P09/changes-semantic-ru.png
+    - file:evidence/P09/published-ru.png
+    - file:evidence/P09/vfy-024-alpha-gate.txt
+    - file:evidence/P09/acceptance.md
+    notes: Changes, semantic diff, restore, commit-all, push and Merge Request UI complete the accepted Alpha slice.
   P10:
     status: not_started
     accepted_by: []
@@ -271,21 +283,31 @@ verification_checks:
     - file:evidence/P08B/vfy-020-git-diff.txt
     notes: Maintainer changes only five expected admin paths; Developer UI is read-only and backend returns stable 403.
   VFY-021:
-    status: pending
-    evidence: []
-    notes: ''
+    status: passed
+    evidence:
+    - file:evidence/P09/vfy-021-file-changes.json
+    - file:evidence/P09/changes-semantic-ru.png
+    notes: Added, Modified and Deleted diffs match fixtures; file and hunk restore update the change set.
   VFY-022:
-    status: pending
-    evidence: []
-    notes: ''
+    status: passed
+    evidence:
+    - file:evidence/P09/vfy-022-semantic-diff.json
+    notes: Created, updated, archived and deleted entity groups include affected projects and field values before and after.
   VFY-023:
-    status: pending
-    evidence: []
-    notes: ''
+    status: passed
+    evidence:
+    - file:evidence/P09/vfy-023-playwright-trace.json
+    - file:evidence/P09/vfy-023-commit-tree.json
+    - file:evidence/P09/vfy-023-mr-payload.json
+    - file:evidence/P09/published-ru.png
+    notes: Commit-all has no staging selection, pushes the branch, creates the expected MR payload and polls MR state.
   VFY-024:
-    status: pending
-    evidence: []
-    notes: ''
+    status: passed
+    evidence:
+    - file:evidence/P09/vfy-024-alpha-gate.txt
+    - file:evidence/P09/vfy-023-playwright-trace.json
+    - file:evidence/P09/acceptance.md
+    notes: Primary login-to-MR browser flow and accepted limitations satisfy the Alpha gate.
   VFY-025:
     status: pending
     evidence: []

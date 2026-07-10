@@ -19,6 +19,7 @@
   "dependencies": {
     "@gitpm/drafts": "workspace:*",
     "@gitpm/git-client": "workspace:*",
+    "@gitpm/repository-format": "workspace:*",
     "@gitpm/security": "workspace:*",
     "@gitpm/validation": "workspace:*"
   }

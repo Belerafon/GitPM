@@ -1,0 +1,4 @@
+Command: python scripts/check_release_gate.py --gate alpha
+Result: PASSED
+
+Gate alpha PASSED: 12 stages and 24 checks

@@ -1,0 +1,12 @@
+{
+  "check": "VFY-022",
+  "result": "passed",
+  "counts": { "created": 1, "updated": 1, "archived": 1, "deleted": 1 },
+  "affected_projects": ["PRJ-ALPHA"],
+  "field_changes": [
+    { "id": "PRJ-ALPHA", "field": "name", "before": "Alpha", "after": "Alpha launch" },
+    { "id": "TSK-ARCHIVED", "field": "lifecycle", "before": "active", "after": "archived" }
+  ],
+  "backend_fixture": "packages/changes/src/index.test.ts",
+  "browser_visible": true
+}

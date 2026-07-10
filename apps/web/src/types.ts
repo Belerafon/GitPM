@@ -26,6 +26,56 @@ export interface ChangesSummary {
   readonly changed_files_count: number;
 }
 
+export type ChangeKind = "Added" | "Modified" | "Deleted";
+
+export interface DiffHunk {
+  readonly old_start: number;
+  readonly old_count: number;
+  readonly new_start: number;
+  readonly new_count: number;
+  readonly lines: readonly string[];
+}
+
+export interface FileChange {
+  readonly path: string;
+  readonly kind: ChangeKind;
+  readonly diff: string;
+  readonly diff_token: string;
+  readonly hunks: readonly DiffHunk[];
+}
+
+export interface ChangesList extends ChangesSummary {
+  readonly files: readonly FileChange[];
+  readonly affected_projects: readonly string[];
+}
+
+export interface SemanticFieldChange {
+  readonly field: string;
+  readonly before?: unknown;
+  readonly after?: unknown;
+}
+
+export interface SemanticChange {
+  readonly path: string;
+  readonly id: string;
+  readonly schema: string;
+  readonly project?: string;
+  readonly fields: readonly SemanticFieldChange[];
+}
+
+export interface SemanticDiff {
+  readonly created: readonly SemanticChange[];
+  readonly updated: readonly SemanticChange[];
+  readonly archived: readonly SemanticChange[];
+  readonly deleted: readonly SemanticChange[];
+  readonly counts: Readonly<Record<"created" | "updated" | "archived" | "deleted", number>>;
+  readonly affected_projects: readonly string[];
+  readonly unclassified_files: readonly string[];
+}
+
+export interface CommitResult { readonly commit: string; readonly branch: string; readonly draft_fingerprint: string }
+export interface PushResult { readonly branch: string; readonly commit: string }
+
 export interface ValidationSummary {
   readonly valid: boolean;
   readonly error_count: number;

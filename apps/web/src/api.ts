@@ -1,4 +1,4 @@
-import type { DraftSnapshot, DraftStatus, EntityResult, GitPmDocument, MergeRequestStatus, PublicSession, ValidationSummary, WriterMode, ChangesSummary } from "./types.js";
+import type { ChangesList, CommitResult, DraftSnapshot, DraftStatus, EntityResult, GitPmDocument, MergeRequestStatus, PublicSession, PushResult, SemanticDiff, ValidationSummary, WriterMode, ChangesSummary } from "./types.js";
 
 export class ApiError extends Error {
   constructor(public readonly code: string, message: string) {
@@ -25,6 +25,15 @@ export interface GitPmApi {
   deleteEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string): Promise<void>;
   getConfiguration(draftId: string, kind: "statuses" | "issue-types"): Promise<EntityResult>;
   updateConfiguration(draftId: string, kind: "statuses" | "issue-types", entity: EntityResult, fingerprint: string, document: GitPmDocument): Promise<EntityResult>;
+  listChanges(draftId: string): Promise<ChangesList>;
+  semanticChanges(draftId: string): Promise<SemanticDiff>;
+  restoreFile(draftId: string, fingerprint: string, path: string): Promise<void>;
+  restoreHunk(draftId: string, fingerprint: string, path: string, diffToken: string, hunkIndex: number): Promise<void>;
+  discardAll(draftId: string, fingerprint: string): Promise<void>;
+  commitAll(draftId: string, message: string): Promise<CommitResult>;
+  push(draftId: string): Promise<PushResult>;
+  createMergeRequest(draftId: string, title: string, description?: string): Promise<MergeRequestStatus>;
+  pollMergeRequest(draftId: string): Promise<MergeRequestStatus>;
 }
 
 interface ErrorBody { readonly error?: { readonly code?: string; readonly message?: string } }
@@ -109,5 +118,32 @@ export class HttpGitPmApi implements GitPmApi {
   }
   async updateConfiguration(draftId: string, kind: "statuses" | "issue-types", entity: EntityResult, expected_fingerprint: string, document: GitPmDocument): Promise<EntityResult> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/config/${kind}`, { method: "PUT", body: JSON.stringify({ expected_fingerprint, expected_blob_id: entity.blob_id, document }) });
+  }
+  async listChanges(draftId: string): Promise<ChangesList> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/changes`);
+  }
+  async semanticChanges(draftId: string): Promise<SemanticDiff> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/changes/semantic`);
+  }
+  async restoreFile(draftId: string, expected_fingerprint: string, path: string): Promise<void> {
+    await this.request(`/api/drafts/${encodeURIComponent(draftId)}/changes/restore-file`, { method: "POST", body: JSON.stringify({ expected_fingerprint, path }) });
+  }
+  async restoreHunk(draftId: string, expected_fingerprint: string, path: string, diff_token: string, hunk_index: number): Promise<void> {
+    await this.request(`/api/drafts/${encodeURIComponent(draftId)}/changes/restore-hunk`, { method: "POST", body: JSON.stringify({ expected_fingerprint, path, diff_token, hunk_index }) });
+  }
+  async discardAll(draftId: string, expected_fingerprint: string): Promise<void> {
+    await this.request(`/api/drafts/${encodeURIComponent(draftId)}/changes/discard-all`, { method: "POST", body: JSON.stringify({ expected_fingerprint }) });
+  }
+  async commitAll(draftId: string, message: string): Promise<CommitResult> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/commit`, { method: "POST", body: JSON.stringify({ message }) });
+  }
+  async push(draftId: string): Promise<PushResult> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/push`, { method: "POST" });
+  }
+  async createMergeRequest(draftId: string, title: string, description?: string): Promise<MergeRequestStatus> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/merge-request`, { method: "POST", body: JSON.stringify({ title, ...(description?.trim() ? { description } : {}) }) });
+  }
+  async pollMergeRequest(draftId: string): Promise<MergeRequestStatus> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/merge-request`);
   }
 }

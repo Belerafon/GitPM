@@ -1,0 +1,29 @@
+{
+  "check": "VFY-023",
+  "environment": "browser-local",
+  "runner": "in-app Browser Playwright API",
+  "locale": "ru",
+  "events": [
+    { "action": "create draft", "draft": "DRF-ALPHA", "result": "open with four file changes" },
+    { "action": "open Changes", "result": "file and semantic diffs visible" },
+    { "action": "restore deleted file", "path": "projects/PRJ-ALPHA/tasks/TSK-DELETED.yaml", "result": "restored then re-deleted by acceptance fixture" },
+    { "action": "open commit dialog", "result": "four-file commit-all scope and zero staging checkboxes" },
+    { "action": "commit all", "message": "Alpha: публикация черновика", "result": "clean worktree" },
+    { "action": "push", "result": "branch pushed" },
+    { "action": "create merge request", "iid": 17, "result": "opened" },
+    { "action": "poll merge request", "poll_count": 1, "result": "opened" }
+  ],
+  "committed_paths": [
+    "projects/PRJ-ALPHA/project.yaml",
+    "projects/PRJ-ALPHA/tasks/TSK-ARCHIVED.yaml",
+    "projects/PRJ-ALPHA/tasks/TSK-CREATED.yaml",
+    "projects/PRJ-ALPHA/tasks/TSK-DELETED.yaml"
+  ],
+  "mr_payload": {
+    "source_branch": "gitpm/42/DRF-ALPHA",
+    "target_branch": "main",
+    "title": "GitPM Alpha готова",
+    "description": "Проверены Changes, commit-all и публикация."
+  },
+  "screenshots": ["changes-semantic-ru.png", "published-ru.png"]
+}

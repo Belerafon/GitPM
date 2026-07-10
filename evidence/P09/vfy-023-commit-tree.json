@@ -1,0 +1,12 @@
+{
+  "commit": "1111111111111111111111111111111111111111",
+  "branch": "gitpm/42/DRF-ALPHA",
+  "commit_all": true,
+  "selective_staging_controls": 0,
+  "paths": [
+    "projects/PRJ-ALPHA/project.yaml",
+    "projects/PRJ-ALPHA/tasks/TSK-ARCHIVED.yaml",
+    "projects/PRJ-ALPHA/tasks/TSK-CREATED.yaml",
+    "projects/PRJ-ALPHA/tasks/TSK-DELETED.yaml"
+  ]
+}

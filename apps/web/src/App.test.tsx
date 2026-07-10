@@ -5,7 +5,7 @@ import { App } from "./App.js";
 import type { GitPmApi } from "./api.js";
 import { POLL_INTERVAL_MS } from "./draft-context.js";
 import { assertLocalePacks, localeRegistry, LOCALE_STORAGE_KEY, message, selectLocale } from "./i18n.js";
-import type { DraftSnapshot, DraftStatus, EntityResult, PublicSession, WriterMode } from "./types.js";
+import type { ChangesList, CommitResult, DraftSnapshot, DraftStatus, EntityResult, MergeRequestStatus, PublicSession, PushResult, SemanticDiff, WriterMode } from "./types.js";
 
 const session: PublicSession = {
   user: { id: "42", username: "developer" },
@@ -54,6 +54,15 @@ class FakeApi implements GitPmApi {
   async deleteEntity() { /* not used */ }
   async getConfiguration(): Promise<EntityResult> { throw new Error("not used"); }
   async updateConfiguration(): Promise<EntityResult> { throw new Error("not used"); }
+  async listChanges(): Promise<ChangesList> { throw new Error("not used"); }
+  async semanticChanges(): Promise<SemanticDiff> { throw new Error("not used"); }
+  async restoreFile() { throw new Error("not used"); }
+  async restoreHunk() { throw new Error("not used"); }
+  async discardAll() { throw new Error("not used"); }
+  async commitAll(): Promise<CommitResult> { throw new Error("not used"); }
+  async push(): Promise<PushResult> { throw new Error("not used"); }
+  async createMergeRequest(): Promise<MergeRequestStatus> { throw new Error("not used"); }
+  async pollMergeRequest(): Promise<MergeRequestStatus> { throw new Error("not used"); }
   private replace(draftId: string, values: Partial<DraftStatus>) { const next = { ...(this.drafts.find((item) => item.draft_id === draftId) ?? draft({ draft_id: draftId })), ...values }; this.drafts = [next]; return next; }
 }
 

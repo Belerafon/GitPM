@@ -1,7 +1,7 @@
 # GitPM progress
 
-Current phase: `P08B_complete_P09_ready`
-Implementation code: P00-P08B complete
+Current phase: `P09_complete_P10_ready`
+Implementation code: P00-P09 complete; Alpha gate ready
 
 ## Current active revision
 
@@ -126,13 +126,22 @@ Implementation code: P00-P08B complete
 - Repository settings expose statuses and issue types without server, GitLab or OAuth configuration.
 - Browser-local VFY-020 records exactly five expected administrative paths and role-matrix screenshots.
 
+## Last P09 and Alpha evidence
+
+- Changes shows exact Added, Modified and Deleted diffs, with file and hunk restore actions.
+- Semantic diff groups created, updated, archived and deleted entities and shows field values before and after.
+- Commit dialog has a fixed commit-all scope and no staging selection; the accepted browser flow commits four fixture paths.
+- Push, Merge Request creation and polling complete in the publishing test double with the expected branch payload.
+- Russian localization and explicit Alpha limitations remain visible through the primary Changes-to-MR flow.
+- Final clean verification passes 21 test files and 81 tests, smoke, schema, security and planning checks.
+
 ## Current blockers
 
-None. P08A and P08B are accepted; P09 is unblocked.
+None. P09 and the Alpha slice are accepted; P10 is unblocked.
 
 ## Next action
 
-Start P09 Changes UI, semantic diff, commit and Alpha/MVP acceptance.
+Start P10 deployability, observability and operations hardening.
 
 ## Evidence policy
 

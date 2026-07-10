@@ -1,0 +1,15 @@
+{
+  "check": "VFY-021",
+  "result": "passed",
+  "categories": ["Added", "Modified", "Deleted"],
+  "unexpected_categories": [],
+  "added_diff_has_dev_null_header": true,
+  "modified_diff_matches_git_fixture": true,
+  "deleted_file_restore": {
+    "path": "projects/PRJ-ALPHA/tasks/TSK-DELETED.yaml",
+    "restored": true,
+    "redeleted_before_commit": true
+  },
+  "hunk_restore_component_test": "passed",
+  "screenshots": ["changes-semantic-ru.png"]
+}

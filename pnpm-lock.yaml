@@ -129,6 +129,9 @@ importers:
       '@gitpm/git-client':
         specifier: workspace:*
         version: link:../git-client
+      '@gitpm/repository-format':
+        specifier: workspace:*
+        version: link:../repository-format
       '@gitpm/security':
         specifier: workspace:*
         version: link:../security

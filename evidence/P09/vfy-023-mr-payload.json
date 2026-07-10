@@ -1,0 +1,9 @@
+{
+  "source_branch": "gitpm/42/DRF-ALPHA",
+  "target_branch": "main",
+  "title": "GitPM Alpha готова",
+  "description": "Проверены Changes, commit-all и публикация.",
+  "iid": 17,
+  "state": "opened",
+  "poll_count": 1
+}
