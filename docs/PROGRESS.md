@@ -78,15 +78,23 @@ Commits: `e92b036`, `618bf81`
 
 ### 2026-07-10 - Planning revision v0.4
 
-Status: in_progress until commit is recorded.
+Status: done
+Accountable: ARCH
+Commit: `6d7d451` `docs: formalize planning DAG and no-backup architecture`
 
-Expected evidence:
+Evidence:
 
-- `python3 scripts/validate_planning.py` passes;
-- `python3 scripts/test_planning_validator.py` rejects all planned mutations;
-- `git diff --check` passes;
+- `python3 scripts/validate_planning.py`: passed;
+- result: 23 stages, 45 structured E2E tests, 34 requirements;
+- `python3 scripts/test_planning_validator.py`: 6 mutations rejected;
+- `python3 -m py_compile scripts/validate_planning.py scripts/test_planning_validator.py`: passed;
+- `git diff --check`: passed;
 - one active file per versioned plan family;
-- 23-stage acyclic DAG;
-- 45 structured E2E specifications;
-- all E2E linked to non-aggregate requirements;
+- formal DAG is acyclic and critical path is calculated from dependencies;
+- all E2E have structured preconditions, steps, expected results and evidence;
+- all E2E are linked bidirectionally to non-aggregate requirements;
 - no backup subsystem or off-volume durability claim.
+
+Next:
+
+- start P00.
