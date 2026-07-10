@@ -1,7 +1,7 @@
 # GitPM progress
 
 Current phase: `P02_in_progress`
-Implementation code: P00, P00S and P01 complete; P02 parser/formatter implemented
+Implementation code: P00, P00S and P01 complete; P02 parser/formatter/validation/calendar implemented
 
 ## Current active revision
 
@@ -68,7 +68,7 @@ None. P02 is in progress.
 
 ## Next action
 
-Implement P02 JSON Schema/domain validation, calendar utilities and CLI on the shared parser/formatter.
+Integrate P02 format, validate, semantic diff skeleton and doctor commands into CLI and record VFY-005/VFY-006 evidence.
 
 ## Evidence policy
 
