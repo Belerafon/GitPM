@@ -26,6 +26,14 @@ Implementation code: not started
 - Verification scenarios are categorized checks, not all browser E2E.
 - No backup, rebase, quota engine, migration engine or MCP.
 
+## Last planning evidence
+
+- Architecture review resolution commit: `b40a9bb`
+- Planning validator: `20 stages, 31 verification checks, 32 requirements`
+- Mutation self-tests: `13 mutations rejected`
+- Release gate self-test: pending rejected, complete evidence passed, missing evidence rejected
+- Alpha gate currently reports `NOT READY`, as expected before implementation
+
 ## Current blockers
 
 None for starting P00. P01 and P00S may start after P00 according to DAG.
