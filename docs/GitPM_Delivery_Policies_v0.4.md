@@ -1,0 +1,91 @@
+# GitPM: политики поставки и эксплуатации
+
+Версия документа: 0.4  
+Статус: обязательный baseline v0.1
+
+## 1. Milestones
+
+- Alpha = MVP: UI -> files -> diff -> commit all -> push -> MR.
+- Beta: Board, History, read-only Gantt, Workload and agent CLI workflow.
+- Release Candidate: security hardening and reproducible operational smoke complete.
+- Release: factual execution gate passes and tag v0.1 is created.
+
+## 2. Ответственность и evidence
+
+Каждый stage имеет одного Accountable, Responsible roles и Acceptance roles. Фактический status хранится только в `GitPM_Execution_Status_v0.1.yaml`. `PROGRESS.md` не дублирует checklist.
+
+## 3. Repository boundary
+
+v0.1 обслуживает один выделенный GitPM repository. Repository selector, mixed source-code repository и multi-repository isolation отсутствуют.
+
+## 4. Identity
+
+- один immutable prefixed ULID;
+- Project ID равен имени Project directory, остальные entity filenames равны ID;
+- internal references and mutation routes use ID;
+- current-state uniqueness is validated;
+- историческая гарантия непереиспользования deleted ID не заявляется.
+
+## 5. Schema baseline
+
+P01 должен завершиться approved schema v1 baseline. Parser implementation не начинается на schema drafts. Calendar and date-only rules входят в baseline до API and UI.
+
+## 6. Editable entities
+
+Normal UI: Project, Task, Milestone and Saved View.
+
+Maintainer UI: Person, Team, Calendar, statuses and issue types.
+
+Server repository URL, GitLab project ID, OAuth secret and read credential изменяются только external configuration.
+
+## 7. YAML
+
+Formatter authoritative. Domain YAML comments не гарантируются. Unknown schema version отклоняется. Migration engine отсутствует.
+
+## 8. Draft consistency
+
+- один owner;
+- one writer mode: `ui` or `external`;
+- multiple readers allowed;
+- browser uses polling every 3 seconds;
+- commit always includes all draft changes;
+- dirty draft is never auto-cleaned;
+- close does not delete worktree or branch.
+
+## 9. No backup
+
+Нет safety refs, backup, replication or off-volume copy. Persistent volume is the only local durability boundary. Loss of volume can destroy unpushed data.
+
+## 10. Authorization
+
+- Guest/non-member: deny;
+- Reporter: read-only;
+- Developer: own drafts and normal entities;
+- Maintainer: administrative entities and explicit cleanup;
+- Administrator: external server operator, no server-settings UI.
+
+Role is refreshed before mutation, commit, push and MR. GitLab remains final control for push/MR.
+
+## 11. OAuth and GitLab
+
+OAuth 2.0 Authorization Code with PKCE is the only login flow. Access token is memory-only. Webhook is absent; MR status is polled. Automated tests use local test doubles, not a live GitLab project.
+
+## 12. Delete and restore
+
+Physical delete and archive are separate. Delete uses `restrict`. Restore supports whole file, deleted file and hunk. Selected lines are absent.
+
+## 13. No quota engine
+
+Only static process-protection limits exist. No counters, billing state, per-user quotas or quota UI.
+
+## 14. Git divergence
+
+No rebase and no conflict editor. Conflict resolution is external or the user creates a new draft from current remote main.
+
+## 15. Calendar, Gantt and Workload
+
+Calendar is date-only. Gantt is read-only. Workload is approximation and explains its formula.
+
+## 16. Planning maintenance
+
+Scope or architecture changes require synchronized updates of active docs, registry, execution status and validators according to the Maintenance Guide.

@@ -1,91 +1,39 @@
-# GitPM: прогресс реализации
+# GitPM progress
 
-Версия документа: 0.4
-Связанный план работ: `GitPM_Work_Plan_v0.4.md`
-Связанная архитектура: `GitPM_Implementation_Plan_v0.5.md`
-Политики поставки: `GitPM_Delivery_Policies_v0.3.md`
-Security baseline: `GitPM_Security_Baseline_v0.3.md`
-Трассировка: `GitPM_Requirements_Traceability_v0.3.yaml`
-Инструкция поддержки: `GitPM_Planning_Maintenance_Guide_v0.1.md`
-Последнее обновление: 2026-07-10
+Current phase: `planning_reviewed_ready_for_P00_P01_P00S`  
+Implementation code: not started
 
-## 1. Current state
+## Current active revision
 
-- Overall status: `planning_ready`;
-- Current stage: `P00`;
-- Stage status: `not_started`;
-- Accountable: `ARCH`;
-- Current gate: before Alpha/MVP;
-- Software implementation: not started.
+- Implementation Plan: v0.6
+- Work Plan: v0.5
+- Traceability: v0.4
+- Delivery Policies: v0.4
+- Security Baseline: v0.4
+- Maintenance Guide: v0.2
+- Execution Status: v0.1
 
-## 2. Next verifiable action
+## Decisions closed in this revision
 
-Start P00 and obtain a green clean-install pipeline with health endpoints, structured logs and planning validation.
+- Project path exception is explicit.
+- Schema v1 baseline is a P01 exit artifact, not a draft.
+- Bare clone, fetch-before-draft and exact base commit are defined.
+- One writer mode per draft is mandatory.
+- OAuth 2.0 Authorization Code with PKCE is the only login flow.
+- Webhook is removed; UI polls GitLab API.
+- Calendar model moves to P01-P02; late P11B is removed.
+- Release checks use machine-readable execution status and evidence.
+- Verification scenarios are categorized checks, not all browser E2E.
+- No backup, rebase, quota engine, migration engine or MCP.
 
-## 3. Active blockers
+## Current blockers
 
-- P00 has no blocker.
-- A live GitLab test project is not required by the plan.
-- No backup infrastructure is required or planned.
+None for starting P00. P01 and P00S may start after P00 according to DAG.
 
-## 4. Decisions in planning revision v0.5
+## Next action
 
-- Removed local safety refs and all recovery claims beyond the surviving persistent volume.
-- Removed schema migration engine; unknown versions fail validation.
-- Removed dual ULID/display-key identity; one prefixed ULID is used everywhere.
-- Replaced custom authorization engine with direct GitLab role mapping.
-- OAuth access token exists only in process memory; restart requires login.
-- Removed quota engine; only static technical safety limits remain.
-- Kept Administration UI, Board, History, read-only Gantt and simplified Workload.
-- Removed rebase, conflict editor and three-way merge UI.
-- Removed MCP; agents edit files and use shared CLI.
-- Simplified semantic diff, performance methodology and observability.
-- Removed mandatory real GitLab integration test; local protocol test double is the automated boundary.
-- Added mandatory Planning Maintenance Guide.
+Start P00 and create the monorepo skeleton, CI and minimal observability.
 
-## 5. Stage summary
+## Evidence policy
 
-All 21 stages are `not_started`. Static work packages remain only in `GitPM_Work_Plan_v0.4.md`.
-
-## 6. Evidence index
-
-Planning evidence before commit:
-
-- active documents rewritten to revision v0.5;
-- formal registry simplified;
-- validator updated;
-- software tests do not exist yet.
-
-## 7. Progress log
-
-### 2026-07-10 - Repository initialization
-
-Status: done
-Commit: `c1cc756`
-
-### 2026-07-10 - Planning revision v0.4
-
-Status: superseded
-Commits: `6d7d451`, `d271a9b`
-
-### 2026-07-10 - Planning revision v0.5
-
-Status: done
-Accountable: ARCH
-Commit: `a077215` `docs: simplify v0.1 architecture and delivery plan`
-
-Evidence:
-
-- `python3 scripts/validate_planning.py`: passed;
-- result: 21 stages, 32 structured E2E tests, 27 requirements;
-- DAG is acyclic and critical path is derived from dependencies;
-- `python3 scripts/test_planning_validator.py`: 8 mutations rejected;
-- `python3 -m py_compile scripts/validate_planning.py scripts/test_planning_validator.py`: passed;
-- `git diff --check`: passed;
-- active versioned planning files are unique;
-- no safety-ref, migration, quota, rebase, MCP or live-GitLab-test stage remains;
-- planning maintenance workflow is documented.
-
-Next:
-
-- start P00.
+Detailed stage and check status is maintained only in `GitPM_Execution_Status_v0.1.yaml`. This file records decisions and next action, not duplicate checklists.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the active GitPM planning set and formal delivery registry."""
+"""Validate consistency of GitPM planning documents, DAG, traceability and execution-state shape."""
 from __future__ import annotations
 
 from collections import Counter, defaultdict, deque
@@ -13,116 +13,119 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs"
 EXPECTED = {
-    "implementation": "GitPM_Implementation_Plan_v0.5.md",
-    "work": "GitPM_Work_Plan_v0.4.md",
-    "trace": "GitPM_Requirements_Traceability_v0.3.yaml",
-    "delivery": "GitPM_Delivery_Policies_v0.3.md",
-    "security": "GitPM_Security_Baseline_v0.3.md",
-    "maintenance": "GitPM_Planning_Maintenance_Guide_v0.1.md",
+    "implementation_plan": "GitPM_Implementation_Plan_v0.6.md",
+    "work_plan": "GitPM_Work_Plan_v0.5.md",
+    "delivery_policies": "GitPM_Delivery_Policies_v0.4.md",
+    "security_baseline": "GitPM_Security_Baseline_v0.4.md",
+    "maintenance_guide": "GitPM_Planning_Maintenance_Guide_v0.2.md",
+    "execution_status": "GitPM_Execution_Status_v0.1.yaml",
     "progress": "PROGRESS.md",
 }
-EXPECTED_E2E_COUNT = 32
+TRACE_NAME = "GitPM_Requirements_Traceability_v0.4.yaml"
+ALLOWED_ACTIVE_PATTERNS = {
+    "GitPM_Implementation_Plan_v*.md": EXPECTED["implementation_plan"],
+    "GitPM_Work_Plan_v*.md": EXPECTED["work_plan"],
+    "GitPM_Requirements_Traceability_v*.yaml": TRACE_NAME,
+    "GitPM_Delivery_Policies_v*.md": EXPECTED["delivery_policies"],
+    "GitPM_Security_Baseline_v*.md": EXPECTED["security_baseline"],
+    "GitPM_Planning_Maintenance_Guide_v*.md": EXPECTED["maintenance_guide"],
+}
+
 errors: list[str] = []
-
-
-class UniqueKeyLoader(yaml.SafeLoader):
-    """Safe YAML loader rejecting duplicate mapping keys."""
-
-
-def _construct_mapping(loader: UniqueKeyLoader, node: yaml.MappingNode, deep: bool = False) -> dict[Any, Any]:
-    mapping: dict[Any, Any] = {}
-    for key_node, value_node in node.value:
-        key = loader.construct_object(key_node, deep=deep)
-        if key in mapping:
-            raise yaml.constructor.ConstructorError(
-                "while constructing a mapping",
-                node.start_mark,
-                f"duplicate key: {key!r}",
-                key_node.start_mark,
-            )
-        mapping[key] = loader.construct_object(value_node, deep=deep)
-    return mapping
-
-
-UniqueKeyLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _construct_mapping)
-
 
 def fail(message: str) -> None:
     errors.append(message)
 
+class UniqueKeyLoader(yaml.SafeLoader):
+    pass
 
-def read_doc(key: str) -> str:
-    path = DOCS / EXPECTED[key]
-    if not path.is_file():
-        fail(f"missing required document: docs/{EXPECTED[key]}")
+def construct_mapping(loader: UniqueKeyLoader, node: yaml.nodes.MappingNode, deep: bool = False) -> dict[Any, Any]:
+    mapping: dict[Any, Any] = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        if key in mapping:
+            raise yaml.constructor.ConstructorError("while constructing a mapping", node.start_mark, f"duplicate key: {key}", key_node.start_mark)
+        mapping[key] = loader.construct_object(value_node, deep=deep)
+    return mapping
+
+UniqueKeyLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, construct_mapping)
+
+def load_yaml(path: Path) -> Any:
+    try:
+        return yaml.load(path.read_text(encoding="utf-8"), Loader=UniqueKeyLoader)
+    except Exception as exc:
+        fail(f"cannot parse YAML {path.name}: {exc}")
+        return {}
+
+def read(name: str) -> str:
+    path = DOCS / name
+    if not path.exists():
+        fail(f"missing document: {name}")
         return ""
     return path.read_text(encoding="utf-8")
 
+# Active-version hygiene.
+for pattern, expected in ALLOWED_ACTIVE_PATTERNS.items():
+    names = sorted(p.name for p in DOCS.glob(pattern))
+    if names != [expected]:
+        fail(f"active files for {pattern} must be exactly [{expected}], got {names}")
 
-for name in EXPECTED.values():
-    if not (DOCS / name).is_file():
-        fail(f"missing required file: docs/{name}")
-if not (ROOT / "README.md").is_file():
-    fail("missing README.md")
-if errors:
-    print("Planning validation failed:", file=sys.stderr)
-    for error in errors:
-        print(f"- {error}", file=sys.stderr)
-    raise SystemExit(1)
+impl = read(EXPECTED["implementation_plan"])
+work = read(EXPECTED["work_plan"])
+delivery = read(EXPECTED["delivery_policies"])
+security = read(EXPECTED["security_baseline"])
+maintenance = read(EXPECTED["maintenance_guide"])
+progress = read(EXPECTED["progress"])
+registry = load_yaml(DOCS / TRACE_NAME)
+execution = load_yaml(DOCS / EXPECTED["execution_status"])
 
-implementation = read_doc("implementation")
-work = read_doc("work")
-delivery = read_doc("delivery")
-security = read_doc("security")
-maintenance = read_doc("maintenance")
-progress = read_doc("progress")
-readme = (ROOT / "README.md").read_text(encoding="utf-8")
+if registry.get("version") != "0.4":
+    fail("traceability version must be 0.4")
+if registry.get("documents") != EXPECTED:
+    fail(f"registry documents mismatch: expected {EXPECTED}, got {registry.get('documents')}")
 
-try:
-    registry = yaml.load((DOCS / EXPECTED["trace"]).read_text(encoding="utf-8"), Loader=UniqueKeyLoader)
-except Exception as exc:  # noqa: BLE001
-    fail(f"traceability YAML parse failed: {exc}")
-    registry = {}
-if not isinstance(registry, dict):
-    fail("traceability root must be a mapping")
-    registry = {}
-
-# Exactly one active version of each planning family.
-families = {
-    "GitPM_Implementation_Plan_v*.md": EXPECTED["implementation"],
-    "GitPM_Work_Plan_v*.md": EXPECTED["work"],
-    "GitPM_Requirements_Traceability_v*.yaml": EXPECTED["trace"],
-    "GitPM_Delivery_Policies_v*.md": EXPECTED["delivery"],
-    "GitPM_Security_Baseline_v*.md": EXPECTED["security"],
-    "GitPM_Planning_Maintenance_Guide_v*.md": EXPECTED["maintenance"],
+# Normative architectural decisions that must remain unambiguous.
+required_phrases = {
+    "implementation": [
+        "для Project ID равен имени каталога",
+        "P01 завершается не schema drafts",
+        "Перед каждым созданием draft server под repository-wide lock выполняет fetch",
+        "одновременно разрешен ровно один writer mode",
+        "OAuth 2.0 Authorization Code Flow with PKCE",
+        "Webhook отсутствует в v0.1",
+        "Commit в v0.1 всегда включает все изменения draft",
+        "Gantt только читает",
+    ],
+    "delivery": ["one writer mode", "commit always includes all draft changes", "Webhook is absent"],
+    "maintenance": ["Gate checker confirms actual execution" if False else "Gate checker"],
 }
-for pattern, expected in families.items():
-    actual = sorted(path.name for path in DOCS.glob(pattern))
-    if actual != [expected]:
-        fail(f"active files for {pattern}: expected [{expected}], got {actual}")
+for phrase in required_phrases["implementation"]:
+    if phrase not in impl:
+        fail(f"implementation missing required decision: {phrase}")
+for phrase in required_phrases["delivery"]:
+    if phrase not in delivery:
+        fail(f"delivery policy missing required decision: {phrase}")
+if "Gate checker" not in maintenance and "gate checker" not in maintenance:
+    fail("maintenance guide must explain gate checker")
 
-expected_doc_map = {
-    "implementation_plan": EXPECTED["implementation"],
-    "work_plan": EXPECTED["work"],
-    "delivery_policies": EXPECTED["delivery"],
-    "security_baseline": EXPECTED["security"],
-    "maintenance_guide": EXPECTED["maintenance"],
-    "progress": EXPECTED["progress"],
-}
-if registry.get("documents") != expected_doc_map:
-    fail(f"registry documents mismatch: expected {expected_doc_map}, got {registry.get('documents')}")
-if registry.get("version") != "0.3":
-    fail("traceability version must be 0.3")
+for forbidden in [
+    "/rebase", "restore/lines", "SSE or polling", "optional swimlane", "mandatory live GitLab",
+    "webhook handler", "GitLab -> webhook", "planning_ready",
+]:
+    combined = "\n".join([impl, work, delivery, security, maintenance, progress])
+    if forbidden.lower() in combined.lower():
+        fail(f"forbidden obsolete decision found: {forbidden}")
+if re.search(r"\bE2E-\d{3}\b", "\n".join([impl, work, delivery, security, maintenance, progress])):
+    fail("obsolete E2E IDs found in active Markdown documents")
 
 stages = registry.get("stages", [])
 requirements = registry.get("requirements", [])
-e2e = registry.get("e2e", [])
+checks = registry.get("verification_checks", [])
 gates = registry.get("release_gates", {})
-for label, value in (("stages", stages), ("requirements", requirements), ("e2e", e2e)):
+for label, value in (("stages", stages), ("requirements", requirements), ("verification_checks", checks)):
     if not isinstance(value, list) or not value:
         fail(f"registry {label} must be a non-empty list")
         value = []
-
 
 def collect_ids(items: list[Any], label: str) -> list[str]:
     ids: list[str] = []
@@ -142,251 +145,201 @@ def collect_ids(items: list[Any], label: str) -> list[str]:
         fail(f"duplicate {label} IDs: {duplicates}")
     return ids
 
-
 stage_ids = collect_ids(stages, "stage")
-requirement_ids = collect_ids(requirements, "requirement")
-e2e_ids = collect_ids(e2e, "E2E")
-stage_set, requirement_set, e2e_set = set(stage_ids), set(requirement_ids), set(e2e_ids)
-expected_e2e = [f"E2E-{index:03d}" for index in range(1, EXPECTED_E2E_COUNT + 1)]
-if e2e_ids != expected_e2e:
-    fail(f"E2E list must be exactly ordered E2E-001 through E2E-{EXPECTED_E2E_COUNT:03d}")
+req_ids = collect_ids(requirements, "requirement")
+check_ids = collect_ids(checks, "verification check")
+stage_set, req_set, check_set = set(stage_ids), set(req_ids), set(check_ids)
+expected_checks = [f"VFY-{i:03d}" for i in range(1, len(check_ids) + 1)]
+if check_ids != expected_checks:
+    fail(f"verification check IDs must be contiguous and ordered: {expected_checks[:1]}..{expected_checks[-1:]}")
 
 # Stage schema and DAG.
 size_weight = {"S": 1, "M": 2, "L": 3}
 stage_by_id: dict[str, dict[str, Any]] = {}
 adjacency: dict[str, list[str]] = defaultdict(list)
-indegree = {stage_id: 0 for stage_id in stage_ids}
+indegree = {sid: 0 for sid in stage_ids}
 for stage in stages:
     if not isinstance(stage, dict) or not isinstance(stage.get("id"), str):
         continue
-    stage_id = stage["id"]
-    stage_by_id[stage_id] = stage
-    for field in ("title", "size", "estimate", "dependencies", "accountable", "responsible", "acceptance", "milestone"):
+    sid = stage["id"]
+    stage_by_id[sid] = stage
+    for field in ("title","size","estimate","dependencies","accountable","responsible","acceptance","milestone"):
         if field not in stage:
-            fail(f"stage {stage_id} missing field {field}")
+            fail(f"stage {sid} missing field {field}")
     if stage.get("size") not in size_weight:
-        fail(f"stage {stage_id} size must be S/M/L")
+        fail(f"stage {sid} size must be S/M/L")
+    if not re.fullmatch(r"\d+-\d+", str(stage.get("estimate",""))):
+        fail(f"stage {sid} estimate must be N-N")
     if not isinstance(stage.get("accountable"), str) or not stage.get("accountable"):
-        fail(f"stage {stage_id} must have one accountable")
-    for field in ("responsible", "acceptance"):
+        fail(f"stage {sid} must have exactly one accountable")
+    for field in ("responsible","acceptance"):
         if not isinstance(stage.get(field), list) or not stage.get(field):
-            fail(f"stage {stage_id} {field} must be non-empty list")
+            fail(f"stage {sid} {field} must be non-empty list")
     deps = stage.get("dependencies")
     if not isinstance(deps, list):
-        fail(f"stage {stage_id} dependencies must be list")
+        fail(f"stage {sid} dependencies must be list")
         continue
     if len(deps) != len(set(deps)):
-        fail(f"stage {stage_id} has duplicate dependencies")
+        fail(f"stage {sid} has duplicate dependencies")
     for dep in deps:
-        if dep == stage_id:
-            fail(f"stage {stage_id} depends on itself")
+        if dep == sid:
+            fail(f"stage {sid} depends on itself")
         elif dep not in stage_set:
-            fail(f"stage {stage_id} references unknown dependency {dep}")
+            fail(f"stage {sid} references unknown dependency {dep}")
         else:
-            adjacency[dep].append(stage_id)
-            indegree[stage_id] += 1
+            adjacency[dep].append(sid)
+            indegree[sid] += 1
 
-queue = deque(sorted(stage_id for stage_id, degree in indegree.items() if degree == 0))
+queue = deque(sorted(s for s,d in indegree.items() if d == 0))
 topological: list[str] = []
 while queue:
-    current = queue.popleft()
-    topological.append(current)
-    for nxt in sorted(adjacency[current]):
+    cur = queue.popleft(); topological.append(cur)
+    for nxt in sorted(adjacency[cur]):
         indegree[nxt] -= 1
         if indegree[nxt] == 0:
             queue.append(nxt)
 if len(topological) != len(stage_ids):
-    fail(f"stage DAG contains cycle: {sorted(k for k, v in indegree.items() if v > 0)}")
+    fail(f"stage DAG contains cycle: {sorted(k for k,v in indegree.items() if v>0)}")
 
-# Calculate critical path; it is derived, never maintained manually.
-score: dict[str, int] = {}
-pred: dict[str, str | None] = {}
-for stage_id in topological:
-    stage = stage_by_id[stage_id]
-    deps = stage.get("dependencies", [])
-    weight = size_weight.get(stage.get("size"), 0)
-    if not deps:
-        score[stage_id], pred[stage_id] = weight, None
+# Qualitative critical path.
+score: dict[str,int] = {}; pred: dict[str,str|None] = {}
+for sid in topological:
+    deps = stage_by_id[sid].get("dependencies", [])
+    weight = size_weight.get(stage_by_id[sid].get("size"), 0)
+    if not deps: score[sid], pred[sid] = weight, None
     else:
-        best = max(deps, key=lambda dep: score.get(dep, -1))
-        score[stage_id], pred[stage_id] = score[best] + weight, best
-critical: list[str] = []
+        best=max(deps,key=lambda d: score.get(d,-1)); score[sid]=score[best]+weight; pred[sid]=best
+critical=[]
 if score:
-    node: str | None = max(score, key=score.get)
+    node=max(score,key=score.get)
     while node:
-        critical.append(node)
-        node = pred[node]
+        critical.append(node); node=pred[node]
     critical.reverse()
 
-# Work plan headings and required sections.
+# Work Plan headings, sections and metadata must match registry exactly.
 markdown_stage_ids = re.findall(r"^## (P[0-9A-Z]+)\.", work, flags=re.M)
 if markdown_stage_ids != stage_ids:
     fail("work plan stage heading order/set must exactly match registry")
-for stage_id, stage in stage_by_id.items():
-    heading = f"## {stage_id}. {stage.get('title')}"
-    if work.count(heading) != 1:
-        fail(f"work plan must contain exact heading once: {heading}")
-for section in ("### Objective", "### Entry criteria", "### Work packages", "### Artifacts", "### Automated verification", "### Manual acceptance", "### Owned E2E", "### Exit gate"):
+for section in ("### Objective","### Entry criteria","### Work packages","### Artifacts","### Automated verification","### Manual acceptance","### Owned verification checks","### Exit gate"):
     if work.count(section) != len(stage_ids):
         fail(f"work plan section count mismatch for {section}")
 if "Параллельность:" in work:
     fail("manual parallelism field is prohibited")
 
-# Requirements and bidirectional links.
-requirement_by_id: dict[str, dict[str, Any]] = {}
+for i,sid in enumerate(stage_ids):
+    start = work.index(f"## {sid}. ")
+    end = work.index(f"## {stage_ids[i+1]}. ") if i+1 < len(stage_ids) else len(work)
+    block = work[start:end]
+    stage = stage_by_id[sid]
+    expected_lines = {
+        "Size": stage["size"],
+        "Estimate": f"{stage['estimate']} engineer-days",
+        "Dependencies": ", ".join(stage["dependencies"]) if stage["dependencies"] else "none",
+        "Accountable": stage["accountable"],
+        "Responsible": ", ".join(stage["responsible"]),
+        "Acceptance": ", ".join(stage["acceptance"]),
+        "Milestone": stage["milestone"],
+    }
+    for label,value in expected_lines.items():
+        if f"- {label}: `{value}`" not in block:
+            fail(f"work plan metadata mismatch for {sid} {label}: expected {value}")
+
+# Exact implementation headings for trace sources.
+headings = set(re.findall(r"^##+\s+(.+?)\s*$", impl, flags=re.M))
+req_by_id: dict[str,dict[str,Any]] = {}
 for req in requirements:
-    if not isinstance(req, dict) or not isinstance(req.get("id"), str):
-        continue
-    req_id = req["id"]
-    requirement_by_id[req_id] = req
-    for field in ("description", "source", "owner", "stage", "release_gate", "acceptance_criteria", "tests"):
-        if field not in req:
-            fail(f"requirement {req_id} missing {field}")
-    if req.get("stage") not in stage_set:
-        fail(f"requirement {req_id} references unknown stage")
-    if req.get("release_gate") not in {"alpha", "beta", "release"}:
-        fail(f"requirement {req_id} invalid release_gate")
-    if not isinstance(req.get("acceptance_criteria"), list) or not req.get("acceptance_criteria"):
-        fail(f"requirement {req_id} acceptance_criteria must be non-empty")
-    if not isinstance(req.get("tests"), list) or not req.get("tests"):
-        fail(f"requirement {req_id} tests must be non-empty")
-    source = req.get("source")
-    if not isinstance(source, dict) or source.get("document") != EXPECTED["implementation"] or not source.get("section"):
-        fail(f"requirement {req_id} source must point to active implementation and a section")
-    for test_id in req.get("tests", []):
-        if test_id not in e2e_set:
-            fail(f"requirement {req_id} references unknown E2E {test_id}")
+    if not isinstance(req, dict) or not isinstance(req.get("id"), str): continue
+    rid=req["id"]; req_by_id[rid]=req
+    for field in ("description","source","owner","stage","release_gate","acceptance_criteria","checks"):
+        if field not in req: fail(f"requirement {rid} missing {field}")
+    if req.get("stage") not in stage_set: fail(f"requirement {rid} unknown stage")
+    if req.get("release_gate") not in {"alpha","beta","release"}: fail(f"requirement {rid} invalid release_gate")
+    if not isinstance(req.get("acceptance_criteria"),list) or not req.get("acceptance_criteria"): fail(f"requirement {rid} acceptance_criteria must be non-empty")
+    if not isinstance(req.get("checks"),list) or not req.get("checks"): fail(f"requirement {rid} checks must be non-empty")
+    source=req.get("source")
+    if not isinstance(source,dict) or source.get("document") != EXPECTED["implementation_plan"]:
+        fail(f"requirement {rid} source document mismatch")
+    elif source.get("section") not in headings:
+        fail(f"requirement {rid} source.section does not exist exactly: {source.get('section')}")
+    for cid in req.get("checks",[]):
+        if cid not in check_set: fail(f"requirement {rid} references unknown check {cid}")
 
-# E2E structure. No live GitLab environment is allowed by this revision.
-valid_envs = {"ci-clean-linux", "integration-local", "fault-local", "security-local", "browser-local", "agent-local", "perf-local"}
-e2e_by_id: dict[str, dict[str, Any]] = {}
-for test in e2e:
-    if not isinstance(test, dict) or not isinstance(test.get("id"), str):
-        continue
-    test_id = test["id"]
-    e2e_by_id[test_id] = test
-    for field in ("title", "stage", "mandatory_from", "environment", "actor", "preconditions", "steps", "expected_result", "evidence", "requirements"):
-        if field not in test:
-            fail(f"{test_id} missing field {field}")
-    if test.get("stage") not in stage_set:
-        fail(f"{test_id} references unknown stage")
-    if test.get("mandatory_from") not in {"alpha", "beta", "release"}:
-        fail(f"{test_id} invalid mandatory_from")
-    if test.get("environment") not in valid_envs:
-        fail(f"{test_id} invalid environment {test.get('environment')}")
-    for field in ("preconditions", "steps", "expected_result", "evidence", "requirements"):
-        if not isinstance(test.get(field), list) or not test.get(field):
-            fail(f"{test_id} {field} must be a non-empty list")
-    for req_id in test.get("requirements", []):
-        if req_id not in requirement_set:
-            fail(f"{test_id} references unknown requirement {req_id}")
-        elif test_id not in requirement_by_id[req_id].get("tests", []):
-            fail(f"bidirectional link missing: {test_id} -> {req_id}")
+# Verification checks and milestone consistency.
+valid_types={"smoke","planning","unit","integration","fault","security","browser","agent","performance","acceptance"}
+valid_envs={"ci-clean-linux","integration-local","fault-local","security-local","browser-local","agent-local","perf-local"}
+check_by_id: dict[str,dict[str,Any]]={}
+stage_milestone_rank={"foundation":0,"alpha":0,"beta":1,"release_candidate":2,"release":2}
+mandatory_rank={"alpha":0,"beta":1,"release":2}
+for check in checks:
+    if not isinstance(check,dict) or not isinstance(check.get("id"),str): continue
+    cid=check["id"]; check_by_id[cid]=check
+    for field in ("title","stage","mandatory_from","test_type","environment","actor","preconditions","steps","expected_result","evidence","requirements"):
+        if field not in check: fail(f"{cid} missing field {field}")
+    if check.get("stage") not in stage_set: fail(f"{cid} unknown stage")
+    if check.get("mandatory_from") not in mandatory_rank: fail(f"{cid} invalid mandatory_from")
+    if check.get("test_type") not in valid_types: fail(f"{cid} invalid test_type")
+    if check.get("environment") not in valid_envs: fail(f"{cid} invalid environment")
+    for field in ("preconditions","steps","expected_result","evidence","requirements"):
+        if not isinstance(check.get(field),list) or not check.get(field): fail(f"{cid} {field} must be non-empty list")
+    if check.get("stage") in stage_by_id and check.get("mandatory_from") in mandatory_rank:
+        if mandatory_rank[check["mandatory_from"]] > stage_milestone_rank[stage_by_id[check["stage"]]["milestone"]]:
+            fail(f"{cid} becomes mandatory later than its owning stage can close")
+    for rid in check.get("requirements",[]):
+        if rid not in req_set: fail(f"{cid} references unknown requirement {rid}")
+        elif cid not in req_by_id[rid].get("checks",[]): fail(f"bidirectional link missing: {cid} -> {rid}")
+for rid,req in req_by_id.items():
+    for cid in req.get("checks",[]):
+        if rid not in check_by_id.get(cid,{}).get("requirements",[]): fail(f"bidirectional link missing: {rid} -> {cid}")
 
-for req_id, req in requirement_by_id.items():
-    for test_id in req.get("tests", []):
-        if req_id not in e2e_by_id.get(test_id, {}).get("requirements", []):
-            fail(f"bidirectional link missing: {req_id} -> {test_id}")
+# Owned checks must appear in work plan stage.
+for i,sid in enumerate(stage_ids):
+    start=work.index(f"## {sid}. "); end=work.index(f"## {stage_ids[i+1]}. ") if i+1<len(stage_ids) else len(work)
+    block=work[start:end]
+    owned=[c["id"] for c in checks if c.get("stage")==sid]
+    if owned:
+        for cid in owned:
+            if f"`{cid}`" not in block: fail(f"work plan stage {sid} does not list owned {cid}")
+    elif "- none" not in block:
+        fail(f"work plan stage {sid} must explicitly list no owned checks")
 
-# Owned E2E must appear in the owning Work Plan stage.
-for stage_id in stage_ids:
-    owned = [test["id"] for test in e2e if test.get("stage") == stage_id]
-    heading_start = work.index(f"## {stage_id}. ")
-    next_positions = [work.find(f"## {next_id}. ", heading_start + 1) for next_id in stage_ids if work.find(f"## {next_id}. ", heading_start + 1) != -1]
-    stage_text = work[heading_start:min(next_positions) if next_positions else len(work)]
-    for test_id in owned:
-        if f"`{test_id}`" not in stage_text:
-            fail(f"work plan stage {stage_id} does not list owned {test_id}")
-
-# Exact release gates.
-expected_gate_names = ["alpha", "beta", "release_candidate", "release"]
-if list(gates.keys()) != expected_gate_names:
-    fail(f"release gate names/order must be {expected_gate_names}")
-stage_order = {"foundation": 0, "alpha": 1, "beta": 2, "release_candidate": 3, "release": 4}
-test_order = {"alpha": 0, "beta": 1, "release": 2}
+# Exact computed gates.
+expected_gate_names=["alpha","beta","release_candidate","release"]
+if list(gates.keys()) != expected_gate_names: fail(f"release gate names/order must be {expected_gate_names}")
+stage_order={"foundation":0,"alpha":1,"beta":2,"release_candidate":3,"release":4}
+check_order={"alpha":0,"beta":1,"release":2}
 for gate in expected_gate_names:
-    data = gates.get(gate, {})
-    if not isinstance(data, dict):
-        fail(f"release gate {gate} must be mapping")
-        continue
-    if gate == "alpha":
-        max_stage, max_test = 1, 0
-    elif gate == "beta":
-        max_stage, max_test = 2, 1
-    elif gate == "release_candidate":
-        max_stage, max_test = 3, 2
-    else:
-        max_stage, max_test = 4, 2
-    expected_stages = [stage["id"] for stage in stages if stage_order[stage["milestone"]] <= max_stage]
-    expected_tests = [test["id"] for test in e2e if test_order[test["mandatory_from"]] <= max_test]
-    if data.get("required_stages") != expected_stages:
-        fail(f"release gate {gate} stage list is not exact")
-    if data.get("required_e2e") != expected_tests:
-        fail(f"release gate {gate} E2E list is not exact")
+    data=gates.get(gate,{})
+    max_stage={"alpha":1,"beta":2,"release_candidate":3,"release":4}[gate]
+    max_check={"alpha":0,"beta":1,"release_candidate":2,"release":2}[gate]
+    expected_stages=[s["id"] for s in stages if stage_order[s["milestone"]] <= max_stage]
+    expected_checks=[c["id"] for c in checks if check_order[c["mandatory_from"]] <= max_check]
+    if data.get("required_stages") != expected_stages: fail(f"release gate {gate} stage list is not exact")
+    if data.get("required_checks") != expected_checks: fail(f"release gate {gate} check list is not exact")
 
-# Product simplification boundaries.
-required_phrases = {
-    implementation: [
-        "отдельного display key нет",
-        "Migration engine в v0.1 отсутствует",
-        "local safety refs",
-        "GitPM не выполняет rebase",
-        "MCP server, agent domain API",
-        "Обязательного live GitLab test project",
-        "Gantt только читает",
-    ],
-    delivery: ["Нет собственного authorization DSL", "Нет `gitpm migrate`" if False else "Migration engine отсутствует", "Нет limits по пользователям"],
-    maintenance: ["Порядок изменения", "Verification commands", "Как закрывать stage"],
-}
-for text, phrases in required_phrases.items():
-    for phrase in phrases:
-        if phrase not in text:
-            fail(f"required planning phrase missing: {phrase}")
+# Execution status shape. Planning validation does not require completion.
+if execution.get("version") != "0.1": fail("execution status version must be 0.1")
+exec_stages=execution.get("stages",{}); exec_checks=execution.get("verification_checks",{})
+if list(exec_stages.keys()) != stage_ids: fail("execution status stage IDs/order must exactly match registry")
+if list(exec_checks.keys()) != check_ids: fail("execution status check IDs/order must exactly match registry")
+for sid,item in exec_stages.items():
+    if item.get("status") not in {"not_started","in_progress","blocked","done"}: fail(f"execution stage {sid} invalid status")
+    if not isinstance(item.get("accepted_by"),list) or not isinstance(item.get("evidence"),list): fail(f"execution stage {sid} accepted_by/evidence must be lists")
+    if item.get("status")=="done" and (not item.get("accepted_by") or not item.get("evidence")): fail(f"done stage {sid} requires accepted_by and evidence")
+for cid,item in exec_checks.items():
+    if item.get("status") not in {"pending","running","blocked","passed","failed"}: fail(f"execution check {cid} invalid status")
+    if not isinstance(item.get("evidence"),list): fail(f"execution check {cid} evidence must be list")
+    if item.get("status")=="passed" and not item.get("evidence"): fail(f"passed check {cid} requires evidence")
 
-prohibited_patterns = {
-    r"/git/restore/lines": "selected-lines restore endpoint",
-    r"/rebase(?:/|\b)": "rebase API route",
-    r"## P10B\.": "rebase stage",
-    r"refs/gitpm/safety": "safety ref implementation",
-    r"gitpm migrate --": "migration command",
-    r"\bMCP tools\b": "MCP tool registry",
-    r"environment:\s*(?:real-gitlab|security-real-gitlab|agent-real-gitlab)": "live GitLab E2E environment",
-    r"display_key\s*:": "display key field",
-}
-combined = "\n".join((implementation, work, delivery, security, (DOCS / EXPECTED["trace"]).read_text(encoding="utf-8")))
-for pattern, label in prohibited_patterns.items():
-    if re.search(pattern, combined, flags=re.I | re.M):
-        fail(f"superseded feature still present: {label}")
-
-if "No backup and no safety refs" not in readme:
-    fail("README must state no backup and no safety refs")
-if "live GitLab test project is not required" not in progress:
-    fail("PROGRESS must state live GitLab test is not required")
-
-# References in README, PROGRESS and maintenance guide.
-for key, filename in EXPECTED.items():
-    if key == "progress":
-        continue
-    if filename not in readme:
-        fail(f"README does not reference {filename}")
-    if filename not in progress:
-        fail(f"PROGRESS does not reference {filename}")
-for filename in EXPECTED.values():
-    if filename not in maintenance and filename != EXPECTED["maintenance"]:
-        # The guide describes families; exact PROGRESS and active names should still be discoverable.
-        if filename != "PROGRESS.md":
-            fail(f"maintenance guide does not reference active {filename}")
-if "PROGRESS.md" not in maintenance:
-    fail("maintenance guide does not explain PROGRESS.md")
+# Required maintenance commands and README references.
+for cmd in ("validate_planning.py","test_planning_validator.py","test_release_gate.py","check_release_gate.py"):
+    if cmd not in maintenance or cmd not in (ROOT/'README.md').read_text(encoding='utf-8'):
+        fail(f"maintenance guide and README must mention {cmd}")
 
 if errors:
-    print("Planning validation failed:", file=sys.stderr)
-    for error in errors:
-        print(f"- {error}", file=sys.stderr)
-    raise SystemExit(1)
-
-print(
-    "Planning validation passed: "
-    f"{len(stage_ids)} stages, {len(e2e_ids)} structured E2E tests, "
-    f"{len(requirement_ids)} requirements; DAG critical path: {' -> '.join(critical)}"
-)
+    print("Planning validation failed:")
+    for e in errors: print(f"- {e}")
+    sys.exit(1)
+print(f"Planning validation passed: {len(stage_ids)} stages, {len(check_ids)} verification checks, {len(req_ids)} requirements")
+print("DAG is acyclic")
+print("Qualitative critical path: " + " -> ".join(critical))
+print("Execution status shape is valid; milestone completion is checked separately")

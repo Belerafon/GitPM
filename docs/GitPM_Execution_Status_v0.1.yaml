@@ -1,0 +1,229 @@
+version: '0.1'
+updated_at: '2026-07-10'
+current_phase: planning_reviewed_ready_for_P00_P01_P00S
+stages:
+  P00:
+    status: not_started
+    accepted_by: []
+    evidence: []
+    notes: ''
+  P00S:
+    status: not_started
+    accepted_by: []
+    evidence: []
+    notes: ''
+  P01:
+    status: not_started
+    accepted_by: []
+    evidence: []
+    notes: ''
+  P02:
+    status: not_started
+    accepted_by: []
+    evidence: []
+    notes: ''
+  P03:
+    status: not_started
+    accepted_by: []
+    evidence: []
+    notes: ''
+  P04:
+    status: not_started
+    accepted_by: []
+    evidence: []
+    notes: ''
+  P05:
+    status: not_started
+    accepted_by: []
+    evidence: []
+    notes: ''
+  P06:
+    status: not_started
+    accepted_by: []
+    evidence: []
+    notes: ''
+  P07:
+    status: not_started
+    accepted_by: []
+    evidence: []
+    notes: ''
+  P08A:
+    status: not_started
+    accepted_by: []
+    evidence: []
+    notes: ''
+  P08B:
+    status: not_started
+    accepted_by: []
+    evidence: []
+    notes: ''
+  P09:
+    status: not_started
+    accepted_by: []
+    evidence: []
+    notes: ''
+  P10:
+    status: not_started
+    accepted_by: []
+    evidence: []
+    notes: ''
+  P11A:
+    status: not_started
+    accepted_by: []
+    evidence: []
+    notes: ''
+  P11C:
+    status: not_started
+    accepted_by: []
+    evidence: []
+    notes: ''
+  P11D:
+    status: not_started
+    accepted_by: []
+    evidence: []
+    notes: ''
+  P12:
+    status: not_started
+    accepted_by: []
+    evidence: []
+    notes: ''
+  P13A:
+    status: not_started
+    accepted_by: []
+    evidence: []
+    notes: ''
+  P13B:
+    status: not_started
+    accepted_by: []
+    evidence: []
+    notes: ''
+  P14:
+    status: not_started
+    accepted_by: []
+    evidence: []
+    notes: ''
+verification_checks:
+  VFY-001:
+    status: pending
+    evidence: []
+    notes: ''
+  VFY-002:
+    status: pending
+    evidence: []
+    notes: ''
+  VFY-003:
+    status: pending
+    evidence: []
+    notes: ''
+  VFY-004:
+    status: pending
+    evidence: []
+    notes: ''
+  VFY-005:
+    status: pending
+    evidence: []
+    notes: ''
+  VFY-006:
+    status: pending
+    evidence: []
+    notes: ''
+  VFY-007:
+    status: pending
+    evidence: []
+    notes: ''
+  VFY-008:
+    status: pending
+    evidence: []
+    notes: ''
+  VFY-009:
+    status: pending
+    evidence: []
+    notes: ''
+  VFY-010:
+    status: pending
+    evidence: []
+    notes: ''
+  VFY-011:
+    status: pending
+    evidence: []
+    notes: ''
+  VFY-012:
+    status: pending
+    evidence: []
+    notes: ''
+  VFY-013:
+    status: pending
+    evidence: []
+    notes: ''
+  VFY-014:
+    status: pending
+    evidence: []
+    notes: ''
+  VFY-015:
+    status: pending
+    evidence: []
+    notes: ''
+  VFY-016:
+    status: pending
+    evidence: []
+    notes: ''
+  VFY-017:
+    status: pending
+    evidence: []
+    notes: ''
+  VFY-018:
+    status: pending
+    evidence: []
+    notes: ''
+  VFY-019:
+    status: pending
+    evidence: []
+    notes: ''
+  VFY-020:
+    status: pending
+    evidence: []
+    notes: ''
+  VFY-021:
+    status: pending
+    evidence: []
+    notes: ''
+  VFY-022:
+    status: pending
+    evidence: []
+    notes: ''
+  VFY-023:
+    status: pending
+    evidence: []
+    notes: ''
+  VFY-024:
+    status: pending
+    evidence: []
+    notes: ''
+  VFY-025:
+    status: pending
+    evidence: []
+    notes: ''
+  VFY-026:
+    status: pending
+    evidence: []
+    notes: ''
+  VFY-027:
+    status: pending
+    evidence: []
+    notes: ''
+  VFY-028:
+    status: pending
+    evidence: []
+    notes: ''
+  VFY-029:
+    status: pending
+    evidence: []
+    notes: ''
+  VFY-030:
+    status: pending
+    evidence: []
+    notes: ''
+  VFY-031:
+    status: pending
+    evidence: []
+    notes: ''
