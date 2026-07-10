@@ -32,6 +32,7 @@ Implementation code: P00 foundation implemented
 
 ## Last implementation evidence
 
+- P00 implementation commit: `f347849`.
 - P00 monorepo contains web, server, CLI, shared and logging workspaces.
 - Pinned toolchain: Node.js 20.19.2 and pnpm 10.12.1 with a frozen lockfile.
 - Local `corepack pnpm verify` passed clean build, lint, typecheck, 6 unit tests and health smoke.

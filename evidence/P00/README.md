@@ -3,6 +3,8 @@
 Local verification was completed on 2026-07-10 with Node.js 20.19.2,
 pnpm 10.12.1 and Python 3.11.9 on Windows.
 
+Implementation commit: `f347849` (`feat: bootstrap P00 foundation and delivery workflow`).
+
 - `corepack pnpm verify` passed from a clean application build.
 - Unit suite: 4 test files, 6 tests passed.
 - Health smoke: `/health/live` and `/health/ready` returned HTTP 200 and the
