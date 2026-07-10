@@ -30,9 +30,9 @@ Implementation code: not started
 
 ## Last planning evidence
 
-- Architecture review resolution commit: `b40a9bb`
-- Planning validator: pending rerun for localization revision
-- Mutation self-tests: pending rerun for localization revision
+- Localization planning revision commit: `abf001d`
+- Planning validator: `20 stages, 32 verification checks, 33 requirements`
+- Mutation self-tests: `14 mutations rejected`
 - Release gate self-test: pending rejected, complete evidence passed, missing evidence rejected
 - Alpha gate currently reports `NOT READY`, as expected before implementation
 
