@@ -53,6 +53,7 @@ class FakeApi implements GitPmApi {
   async archiveEntity(): Promise<EntityResult> { throw new Error("not used"); }
   async deleteEntity() { /* not used */ }
   async getConfiguration(): Promise<EntityResult> { throw new Error("not used"); }
+  async updateConfiguration(): Promise<EntityResult> { throw new Error("not used"); }
   private replace(draftId: string, values: Partial<DraftStatus>) { const next = { ...(this.drafts.find((item) => item.draft_id === draftId) ?? draft({ draft_id: draftId })), ...values }; this.drafts = [next]; return next; }
 }
 

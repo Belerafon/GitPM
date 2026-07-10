@@ -24,6 +24,7 @@ export interface GitPmApi {
   archiveEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string): Promise<EntityResult>;
   deleteEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string): Promise<void>;
   getConfiguration(draftId: string, kind: "statuses" | "issue-types"): Promise<EntityResult>;
+  updateConfiguration(draftId: string, kind: "statuses" | "issue-types", entity: EntityResult, fingerprint: string, document: GitPmDocument): Promise<EntityResult>;
 }
 
 interface ErrorBody { readonly error?: { readonly code?: string; readonly message?: string } }
@@ -105,5 +106,8 @@ export class HttpGitPmApi implements GitPmApi {
   }
   async getConfiguration(draftId: string, kind: "statuses" | "issue-types"): Promise<EntityResult> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/config/${kind}`);
+  }
+  async updateConfiguration(draftId: string, kind: "statuses" | "issue-types", entity: EntityResult, expected_fingerprint: string, document: GitPmDocument): Promise<EntityResult> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/config/${kind}`, { method: "PUT", body: JSON.stringify({ expected_fingerprint, expected_blob_id: entity.blob_id, document }) });
   }
 }

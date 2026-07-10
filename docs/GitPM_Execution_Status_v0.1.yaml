@@ -1,6 +1,6 @@
 version: '0.1'
 updated_at: '2026-07-10'
-current_phase: P08A_complete_P08B_ready
+current_phase: P08B_complete_P09_ready
 stages:
   P00:
     status: done
@@ -105,10 +105,18 @@ stages:
     - file:evidence/P08A/acceptance.md
     notes: Project, Milestone and Task CRUD, filters, inline edit, side panel and safe Markdown rendering are accepted.
   P08B:
-    status: not_started
-    accepted_by: []
-    evidence: []
-    notes: ''
+    status: done
+    accepted_by:
+    - PO
+    - QA
+    evidence:
+    - file:evidence/P08B/vfy-020-playwright-trace.json
+    - file:evidence/P08B/vfy-020-maintainer.png
+    - file:evidence/P08B/vfy-020-developer-readonly.png
+    - file:evidence/P08B/vfy-020-http-deny.json
+    - file:evidence/P08B/vfy-020-git-diff.txt
+    - file:evidence/P08B/acceptance.md
+    notes: Maintainer administration UI and backend role enforcement for Person, Team, Calendar and repository settings are accepted.
   P09:
     status: not_started
     accepted_by: []
@@ -254,9 +262,14 @@ verification_checks:
     - file:evidence/P08A/vfy-019-git-diff.txt
     notes: Browser CRUD changes exactly one Project, Milestone and Task path; archived Task is hidden and raw HTML is inert.
   VFY-020:
-    status: pending
-    evidence: []
-    notes: ''
+    status: passed
+    evidence:
+    - file:evidence/P08B/vfy-020-playwright-trace.json
+    - file:evidence/P08B/vfy-020-maintainer.png
+    - file:evidence/P08B/vfy-020-developer-readonly.png
+    - file:evidence/P08B/vfy-020-http-deny.json
+    - file:evidence/P08B/vfy-020-git-diff.txt
+    notes: Maintainer changes only five expected admin paths; Developer UI is read-only and backend returns stable 403.
   VFY-021:
     status: pending
     evidence: []

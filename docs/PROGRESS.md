@@ -1,7 +1,7 @@
 # GitPM progress
 
-Current phase: `P08A_complete_P08B_ready`
-Implementation code: P00-P08A complete
+Current phase: `P08B_complete_P09_ready`
+Implementation code: P00-P08B complete
 
 ## Current active revision
 
@@ -117,13 +117,21 @@ Implementation code: P00-P08A complete
 - Safe Markdown renders supported structure through React nodes; raw HTML is inert text.
 - Browser-local VFY-019 records exactly three expected YAML paths and hides the archived Task from the active list.
 
+## Last P08B evidence
+
+- Administration UI covers Calendar weekdays/holidays, Person weekly capacity/calendar, Team membership and repository status/type packs.
+- Person, Team and Calendar mutation routes now enforce Maintainer independently of UI visibility.
+- Developer receives stable 403 `DRAFT_FORBIDDEN`; the domain store is not called.
+- Repository settings expose statuses and issue types without server, GitLab or OAuth configuration.
+- Browser-local VFY-020 records exactly five expected administrative paths and role-matrix screenshots.
+
 ## Current blockers
 
-None. P08A is accepted; P08B remains unblocked.
+None. P08A and P08B are accepted; P09 is unblocked.
 
 ## Next action
 
-Start P08B Person, Team, Calendar and repository-settings administration UI.
+Start P09 Changes UI, semantic diff, commit and Alpha/MVP acceptance.
 
 ## Evidence policy
 

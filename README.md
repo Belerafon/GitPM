@@ -4,7 +4,7 @@ Git-first система управления проектами и задача
 
 ## Current status
 
-Статус: `P08A_complete_P08B_ready`. P00-P08A закрыты. Core Project/Task/Milestone UI готов; следующий этап — административный UI Person/Team/Calendar/settings.
+Статус: `P08B_complete_P09_ready`. P00-P08B закрыты. Core и административный UI готовы; следующий этап — Changes, semantic diff, commit и Alpha/MVP acceptance.
 
 ## Development
 

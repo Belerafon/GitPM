@@ -49,6 +49,13 @@ function requireMutationRole(actor: RequestActor): void {
   }
 }
 
+function requireEntityMutationRole(actor: RequestActor, entityType: string): void {
+  requireMutationRole(actor);
+  if (["people", "teams", "calendars"].includes(entityType) && actor.role !== "Maintainer") {
+    throw new DraftRuntimeError("DRAFT_FORBIDDEN", "Administrative mutation requires Maintainer");
+  }
+}
+
 async function requireDraftRead(manager: DraftManager, actor: RequestActor, draftId: string): Promise<void> {
   const metadata = await manager.getDraft(draftId);
   if (metadata.owner_gitlab_user_id !== actor.userId && actor.role !== "Maintainer") {
@@ -242,7 +249,7 @@ export function registerEntityApi(
     "/api/drafts/:draftId/entities/:entityType",
     async (request, reply) => {
       const actor = await authenticate(request);
-      requireMutationRole(actor);
+      requireEntityMutationRole(actor, request.params.entityType);
       assertEntityType(request.params.entityType, request.body.document);
       const result = await store.create(request.params.draftId, actor.userId, request.body.expected_fingerprint, request.body.document);
       await reply.code(201).send(result);
@@ -253,7 +260,7 @@ export function registerEntityApi(
     "/api/drafts/:draftId/entities/:entityType/:id",
     async (request) => {
       const actor = await authenticate(request);
-      requireMutationRole(actor);
+      requireEntityMutationRole(actor, request.params.entityType);
       return await store.update(
         request.params.draftId,
         actor.userId,
@@ -270,7 +277,7 @@ export function registerEntityApi(
     "/api/drafts/:draftId/entities/:entityType/:id/archive",
     async (request) => {
       const actor = await authenticate(request);
-      requireMutationRole(actor);
+      requireEntityMutationRole(actor, request.params.entityType);
       return await store.archive(
         request.params.draftId,
         actor.userId,
@@ -286,7 +293,7 @@ export function registerEntityApi(
     "/api/drafts/:draftId/entities/:entityType/:id",
     async (request) => {
       const actor = await authenticate(request);
-      requireMutationRole(actor);
+      requireEntityMutationRole(actor, request.params.entityType);
       return await store.delete(
         request.params.draftId,
         actor.userId,

@@ -44,7 +44,7 @@ async function runtime() {
   const manager = new DraftManager(client, data);
   const store = new EntityStore(manager);
   const app = buildApp({
-    authenticate: () => ({ userId: "42", role: "Developer" }),
+    authenticate: () => ({ userId: "42", role: "Maintainer" }),
     draftManager: manager,
     entityStore: store,
   });

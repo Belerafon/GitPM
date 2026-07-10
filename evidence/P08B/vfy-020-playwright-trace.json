@@ -1,0 +1,29 @@
+{
+  "check": "VFY-020",
+  "environment": "browser-local",
+  "runner": "in-app Browser Playwright API",
+  "maintainer": {
+    "calendarCreated": true,
+    "personCreated": true,
+    "weeklyCapacity": 32,
+    "teamCreated": true,
+    "membershipEdited": true,
+    "statusTitleEdited": "Queue",
+    "issueTypeTitleEdited": "Work item",
+    "serverConfigurationExposed": false,
+    "changedPaths": [
+      ".gitpm/issue-types.yaml",
+      ".gitpm/statuses.yaml",
+      "calendars/CAL-PTCM94D1VPX8C1QRCXN3AVANFN.yaml",
+      "people/PER-Z7FKCH0ZD14E6QS8X8WDP1HEG5.yaml",
+      "teams/TEM-SW9B1HCDY1EAJS3G0CGW41WHFE.yaml"
+    ]
+  },
+  "developer": {
+    "role": "Developer",
+    "maintainerWarningVisible": true,
+    "createCalendarDisabled": true,
+    "backendAdministrativeMutationStatus": 403,
+    "backendErrorCode": "DRAFT_FORBIDDEN"
+  }
+}

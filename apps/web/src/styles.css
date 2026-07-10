@@ -88,3 +88,17 @@ textarea { min-height: 76px; resize: vertical; border: 1px solid #c9cbc5; border
 .empty-workspace { margin-top: 1.5rem; }
 @media (max-width: 1000px) { .task-create { grid-template-columns: 1fr 1fr; } .task-layout { grid-template-columns: 1fr; } .task-panel { border-left: 0; border-top: 1px solid #dedfd9; padding: 1rem 0 0; } }
 @media (max-width: 700px) { .core-columns { grid-template-columns: 1fr; } .task-row { grid-template-columns: 1fr; } }
+.admin-workspace { margin-top: 1.5rem; }
+.admin-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; }
+.admin-create { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .55rem; align-items: start; }
+.admin-create select, .admin-card select { border: 1px solid #c9cbc5; border-radius: 8px; background: #fff; padding: .62rem; }
+.admin-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; margin-top: 1rem; }
+.admin-card, .config-editor { display: grid; align-content: start; gap: .5rem; border: 1px solid #dedfd9; border-radius: 9px; padding: .75rem; }
+.admin-card input { width: 100%; }
+.admin-actions { display: flex; flex-wrap: wrap; gap: .35rem; }
+fieldset { display: flex; flex-wrap: wrap; gap: .5rem; border: 1px solid #dedfd9; border-radius: 8px; }
+fieldset label { display: flex; gap: .25rem; align-items: center; }
+.config-row { display: grid; grid-template-columns: .7fr 1fr .6fr auto; gap: .4rem; align-items: center; }
+.config-row label { display: flex; gap: .25rem; align-items: center; }
+@media (max-width: 900px) { .admin-columns, .admin-grid { grid-template-columns: 1fr; } .admin-create { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .admin-create, .config-row { grid-template-columns: 1fr; } }

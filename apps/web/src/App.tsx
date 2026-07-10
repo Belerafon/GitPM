@@ -3,6 +3,7 @@ import type { GitPmApi } from "./api.js";
 import { DraftProvider, useDrafts } from "./draft-context.js";
 import { formatDateTime, localeRegistry, LOCALE_STORAGE_KEY, message, selectLocale, type Locale, type MessageKey } from "./i18n.js";
 import { CoreWorkspace } from "./core-ui.js";
+import { AdminWorkspace } from "./admin-ui.js";
 
 interface AppProps {
   readonly api: GitPmApi;
@@ -14,7 +15,7 @@ interface AppProps {
 
 const navigation: readonly MessageKey[] = [
   "nav.drafts", "nav.portfolio", "nav.projects", "nav.tasks", "nav.board", "nav.people",
-  "nav.calendar", "nav.workload", "nav.gantt", "nav.changes", "nav.history",
+  "nav.calendar", "nav.settings", "nav.workload", "nav.gantt", "nav.changes", "nav.history",
 ];
 
 function Shell({ locale, setLocale, api, navigate, confirmAction }: {
@@ -98,7 +99,10 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
         {["nav.portfolio", "nav.projects", "nav.tasks"].includes(view) && (active === undefined
           ? <div className="card empty-workspace">{t("core.selectProject")}</div>
           : <CoreWorkspace api={api} draft={active} locale={locale} onChanged={drafts.refresh} />)}
-        {!["nav.drafts", "nav.portfolio", "nav.projects", "nav.tasks"].includes(view) && <div className="card empty-workspace">{t("common.notAvailable")}</div>}
+        {["nav.people", "nav.calendar", "nav.settings"].includes(view) && (active === undefined
+          ? <div className="card empty-workspace">{t("core.selectProject")}</div>
+          : <AdminWorkspace api={api} draft={active} role={drafts.session.role} locale={locale} surface={view === "nav.people" ? "people" : view === "nav.calendar" ? "calendar" : "settings"} onChanged={drafts.refresh} />)}
+        {!["nav.drafts", "nav.portfolio", "nav.projects", "nav.tasks", "nav.people", "nav.calendar", "nav.settings"].includes(view) && <div className="card empty-workspace">{t("common.notAvailable")}</div>}
       </main>
     </div>
   );

@@ -17,6 +17,7 @@
   "nav.board": "Доска",
   "nav.people": "Люди",
   "nav.calendar": "Календарь",
+  "nav.settings": "Настройки репозитория",
   "nav.workload": "Загрузка",
   "nav.gantt": "Диаграмма Ганта",
   "nav.changes": "Изменения",
@@ -76,4 +77,25 @@
   ,"core.selectProject": "Выберите проект для управления работой."
   ,"core.safePreview": "Безопасный просмотр Markdown"
   ,"core.readOnly": "Редактирование недоступно для этого черновика."
+  ,"admin.heading": "Администрирование"
+  ,"admin.people": "Люди"
+  ,"admin.teams": "Команды"
+  ,"admin.calendars": "Календари"
+  ,"admin.settings": "Статусы и типы задач"
+  ,"admin.email": "Электронная почта"
+  ,"admin.capacity": "Недельная ёмкость (часы)"
+  ,"admin.calendar": "Календарь"
+  ,"admin.members": "Участники"
+  ,"admin.weekdays": "Рабочие дни недели (1–7)"
+  ,"admin.holidays": "Праздники (ГГГГ-ММ-ДД, через запятую)"
+  ,"admin.createPerson": "Создать сотрудника"
+  ,"admin.createTeam": "Создать команду"
+  ,"admin.createCalendar": "Создать календарь"
+  ,"admin.maintainerOnly": "Административные изменения требуют роли Maintainer."
+  ,"admin.slug": "Slug"
+  ,"admin.color": "Цвет"
+  ,"admin.active": "Активен"
+  ,"admin.statuses": "Статусы"
+  ,"admin.issueTypes": "Типы задач"
+  ,"admin.noServerConfig": "Настройки сервера и OAuth намеренно не представлены в этом интерфейсе."
 }

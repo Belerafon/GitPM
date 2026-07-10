@@ -106,6 +106,19 @@ describe("draft lifecycle API", () => {
 });
 
 describe("entity API contract", () => {
+  it("denies administrative entity mutation to Developer", async () => {
+    const entityStore = { create: vi.fn() } as unknown as EntityStore;
+    const app = buildApp({ authenticate: () => ({ userId: "42", role: "Developer" }), draftManager: manager(), entityStore });
+    apps.push(app);
+    const response = await app.inject({
+      method: "POST", url: "/api/drafts/DRF-API/entities/people",
+      payload: { expected_fingerprint: metadata.fingerprint, document: { schema: "gitpm/person@1", id: "PER-01J2C01M9QHPMQ2ZK5F7N8S4VA", name: "Denied", weekly_capacity_hours: 40, calendar: "CAL-01J2C01M9QHPMQ2ZK5F7N8S4VA", lifecycle: "active" } },
+    });
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toMatchObject({ error: { code: "DRAFT_FORBIDDEN", message: "Administrative mutation requires Maintainer" } });
+    expect(entityStore.create).not.toHaveBeenCalled();
+  });
+
   it("lists entities through an owner-checked read model", async () => {
     const entityStore = {
       list: vi.fn(async () => [{ document: { schema: "gitpm/project@1", id: "PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP" }, path: "projects/PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP/project.yaml", blob_id: "a".repeat(40), draft_fingerprint: metadata.fingerprint }]),
@@ -150,7 +163,7 @@ describe("entity API contract", () => {
       delete: vi.fn(async () => { throw new DomainOperationError("DELETE_RESTRICTED", "referenced"); }),
     } as unknown as EntityStore;
     const app = buildApp({
-      authenticate: () => ({ userId: "42", role: "Developer" }),
+      authenticate: () => ({ userId: "42", role: "Maintainer" }),
       draftManager: manager(),
       entityStore,
     });

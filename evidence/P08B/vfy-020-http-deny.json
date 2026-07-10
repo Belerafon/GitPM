@@ -1,0 +1,15 @@
+{
+  "request": {
+    "actor_role": "Developer",
+    "method": "POST",
+    "path": "/api/drafts/DRF-API/entities/people"
+  },
+  "response": {
+    "status": 403,
+    "error": {
+      "code": "DRAFT_FORBIDDEN",
+      "message": "Administrative mutation requires Maintainer"
+    }
+  },
+  "entity_store_called": false
+}

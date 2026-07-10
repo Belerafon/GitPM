@@ -17,6 +17,7 @@
   "nav.board": "Board",
   "nav.people": "People",
   "nav.calendar": "Calendar",
+  "nav.settings": "Repository settings",
   "nav.workload": "Workload",
   "nav.gantt": "Gantt",
   "nav.changes": "Changes",
@@ -76,4 +77,25 @@
   ,"core.selectProject": "Select a project to manage its work."
   ,"core.safePreview": "Safe Markdown preview"
   ,"core.readOnly": "Core editing is read-only for this draft."
+  ,"admin.heading": "Administration"
+  ,"admin.people": "People"
+  ,"admin.teams": "Teams"
+  ,"admin.calendars": "Calendars"
+  ,"admin.settings": "Statuses and issue types"
+  ,"admin.email": "Email"
+  ,"admin.capacity": "Weekly capacity (hours)"
+  ,"admin.calendar": "Calendar"
+  ,"admin.members": "Members"
+  ,"admin.weekdays": "Working weekdays (1–7)"
+  ,"admin.holidays": "Holidays (YYYY-MM-DD, comma-separated)"
+  ,"admin.createPerson": "Create person"
+  ,"admin.createTeam": "Create team"
+  ,"admin.createCalendar": "Create calendar"
+  ,"admin.maintainerOnly": "Administrative changes require Maintainer."
+  ,"admin.slug": "Slug"
+  ,"admin.color": "Color"
+  ,"admin.active": "Active"
+  ,"admin.statuses": "Statuses"
+  ,"admin.issueTypes": "Issue types"
+  ,"admin.noServerConfig": "Server and OAuth configuration is intentionally not exposed here."
 }
