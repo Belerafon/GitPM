@@ -234,7 +234,18 @@ export class DraftManager {
       if (current !== metadata.fingerprint || current !== expectedFingerprint) {
         throw new DraftRuntimeError("DRAFT_CHANGED_EXTERNALLY", "Draft worktree changed outside the UI runtime");
       }
-      const result = await mutation(metadata);
+      let result: T;
+      try {
+        result = await mutation(metadata);
+      } catch (error) {
+        const refreshed: DraftMetadata = {
+          ...metadata,
+          fingerprint: await this.fingerprint(metadata.worktree_path),
+          updated_at: new Date().toISOString(),
+        };
+        await this.persist(refreshed);
+        throw error;
+      }
       const next: DraftMetadata = {
         ...metadata,
         fingerprint: await this.fingerprint(metadata.worktree_path),

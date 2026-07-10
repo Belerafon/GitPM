@@ -1,0 +1,142 @@
+import { execFile } from "node:child_process";
+import { cp, mkdtemp, mkdir, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { promisify } from "node:util";
+import { afterEach, describe, expect, it } from "vitest";
+import { DraftManager } from "@gitpm/drafts";
+import { EntityStore } from "@gitpm/domain";
+import { GitClient } from "@gitpm/git-client";
+import type { GitPmDocument } from "@gitpm/repository-format";
+import { buildApp } from "./app.js";
+
+const execFileAsync = promisify(execFile);
+const roots: string[] = [];
+const apps: ReturnType<typeof buildApp>[] = [];
+const demo = path.join(process.cwd(), "fixtures", "schema-v1", "demo");
+
+interface ApiEntityResult {
+  readonly document: GitPmDocument;
+  readonly path: string;
+  readonly blob_id: string;
+  readonly draft_fingerprint: string;
+}
+
+async function git(cwd: string, ...args: string[]): Promise<void> {
+  await execFileAsync("git", args, { cwd, windowsHide: true });
+}
+
+async function runtime() {
+  const root = await mkdtemp(path.join(os.tmpdir(), "gitpm-domain-api-"));
+  roots.push(root);
+  const source = path.join(root, "source");
+  const remote = path.join(root, "remote.git");
+  const data = path.join(root, "data");
+  await mkdir(source);
+  await cp(demo, source, { recursive: true });
+  await git(source, "init", "-b", "main");
+  await git(source, "add", ".");
+  await git(source, "-c", "user.name=GitPM Test", "-c", "user.email=gitpm@example.test", "commit", "-m", "fixture");
+  await git(root, "init", "--bare", remote);
+  await git(source, "remote", "add", "origin", remote);
+  await git(source, "push", "origin", "main");
+  const client = new GitClient({ dataDirectory: data, remoteUrl: remote, defaultBranch: "main", allowLocalTestRemote: true });
+  const manager = new DraftManager(client, data);
+  const store = new EntityStore(manager);
+  const app = buildApp({
+    authenticate: () => ({ userId: "42", role: "Developer" }),
+    draftManager: manager,
+    entityStore: store,
+  });
+  apps.push(app);
+  return { app, client, manager };
+}
+
+afterEach(async () => {
+  await Promise.all(apps.splice(0).map(async (app) => app.close()));
+  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+});
+
+describe("domain API integration", () => {
+  it("creates and updates all editable types, archives, deletes and restricts references", async () => {
+    const { app, client, manager } = await runtime();
+    const draft = await manager.createDraft("DRF-HTTP", "42");
+    let fingerprint = draft.fingerprint;
+    const entities: Array<{ type: string; document: GitPmDocument }> = [
+      { type: "calendars", document: { schema: "gitpm/calendar@1", id: "CAL-01J2C01M9QHPMQ2ZK5F7N8S4VB", name: "HTTP calendar", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" } },
+      { type: "people", document: { schema: "gitpm/person@1", id: "PER-01J2C01M9QHPMQ2ZK5F7N8S4VC", name: "HTTP person", weekly_capacity_hours: 40, calendar: "CAL-01J2C01M9QHPMQ2ZK5F7N8S4VB", lifecycle: "active" } },
+      { type: "teams", document: { schema: "gitpm/team@1", id: "TEM-01J2C01M9QHPMQ2ZK5F7N8S4VB", name: "HTTP team", members: ["PER-01J2C01M9QHPMQ2ZK5F7N8S4VC"], lifecycle: "active" } },
+      { type: "projects", document: { schema: "gitpm/project@1", id: "PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYR", name: "HTTP project", status: "backlog", lifecycle: "active" } },
+      { type: "milestones", document: { schema: "gitpm/milestone@1", id: "MLS-01J2C01M9QHPMQ2ZK5F7N8S4VB", project: "PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYR", name: "HTTP milestone", lifecycle: "active" } },
+      { type: "tasks", document: { schema: "gitpm/task@1", id: "TSK-01J2BZ7G4VJ57PX9K2Q0C6C5XS", project: "PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYR", title: "HTTP task", type: "task", status: "backlog", lifecycle: "active" } },
+      { type: "views", document: { schema: "gitpm/saved-view@1", id: "VIW-01J2C01M9QHPMQ2ZK5F7N8S4VB", project: "PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYR", name: "HTTP view", kind: "list", filters: {}, lifecycle: "active" } },
+    ];
+    const current = new Map<string, ApiEntityResult>();
+    for (const entity of entities) {
+      const response = await app.inject({
+        method: "POST",
+        url: `/api/drafts/DRF-HTTP/entities/${entity.type}`,
+        payload: { expected_fingerprint: fingerprint, document: entity.document },
+      });
+      expect(response.statusCode).toBe(201);
+      const result = response.json<ApiEntityResult>();
+      current.set(entity.type, result);
+      fingerprint = result.draft_fingerprint;
+    }
+
+    for (const entity of entities) {
+      const previous = current.get(entity.type)!;
+      const key = entity.type === "tasks" ? "title" : "name";
+      const document = { ...previous.document, [key]: `${String(previous.document[key])} updated` };
+      const response = await app.inject({
+        method: "PUT",
+        url: `/api/drafts/DRF-HTTP/entities/${entity.type}/${String(document.id)}`,
+        payload: { expected_fingerprint: fingerprint, expected_blob_id: previous.blob_id, document },
+      });
+      expect(response.statusCode).toBe(200);
+      const result = response.json<ApiEntityResult>();
+      current.set(entity.type, result);
+      fingerprint = result.draft_fingerprint;
+    }
+
+    const task = current.get("tasks")!;
+    const archivedResponse = await app.inject({
+      method: "POST",
+      url: `/api/drafts/DRF-HTTP/entities/tasks/${String(task.document.id)}/archive`,
+      payload: { expected_fingerprint: fingerprint, expected_blob_id: task.blob_id },
+    });
+    expect(archivedResponse.statusCode).toBe(200);
+    const archived = archivedResponse.json<ApiEntityResult>();
+    expect(archived.document.lifecycle).toBe("archived");
+    fingerprint = archived.draft_fingerprint;
+
+    const deleteResponse = await app.inject({
+      method: "DELETE",
+      url: `/api/drafts/DRF-HTTP/entities/tasks/${String(task.document.id)}`,
+      payload: { expected_fingerprint: fingerprint, expected_blob_id: archived.blob_id },
+    });
+    expect(deleteResponse.statusCode).toBe(200);
+    fingerprint = deleteResponse.json<{ draft_fingerprint: string }>().draft_fingerprint;
+
+    const person = current.get("people")!;
+    const restricted = await app.inject({
+      method: "DELETE",
+      url: `/api/drafts/DRF-HTTP/entities/people/${String(person.document.id)}`,
+      payload: { expected_fingerprint: fingerprint, expected_blob_id: person.blob_id },
+    });
+    expect(restricted.statusCode).toBe(409);
+    expect(restricted.json()).toMatchObject({ error: { code: "DELETE_RESTRICTED" } });
+
+    const changed = await client.statusPorcelain(draft.worktree_path);
+    const expectedPaths = [
+      "calendars/CAL-01J2C01M9QHPMQ2ZK5F7N8S4VB.yaml",
+      "people/PER-01J2C01M9QHPMQ2ZK5F7N8S4VC.yaml",
+      "teams/TEM-01J2C01M9QHPMQ2ZK5F7N8S4VB.yaml",
+      "projects/PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYR/project.yaml",
+      "projects/PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYR/milestones/MLS-01J2C01M9QHPMQ2ZK5F7N8S4VB.yaml",
+      "projects/PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYR/views/VIW-01J2C01M9QHPMQ2ZK5F7N8S4VB.yaml",
+    ];
+    for (const expected of expectedPaths) expect(changed).toContain(expected);
+    expect(changed).not.toContain("TSK-01J2BZ7G4VJ57PX9K2Q0C6C5XS.yaml");
+  }, 60_000);
+});

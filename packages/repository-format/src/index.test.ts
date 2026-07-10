@@ -43,4 +43,12 @@ describe("safe YAML profile", () => {
       expect(error).toMatchObject({ code });
     }
   });
+
+  it("enforces static line and depth limits", () => {
+    expect(() => parseYamlDocument(`schema: gitpm/project@1\nvalue: ${"x".repeat(20_001)}\n`))
+      .toThrowError(expect.objectContaining({ code: "YAML_LINE_LIMIT" }));
+    const nested = `${Array.from({ length: 70 }, (_, index) => `${"  ".repeat(index)}level${index}:`).join("\n")}\n${"  ".repeat(70)}value\n`;
+    expect(() => parseYamlDocument(`schema: gitpm/project@1\nnested:\n${nested}`))
+      .toThrowError(expect.objectContaining({ code: "YAML_DEPTH_LIMIT" }));
+  });
 });

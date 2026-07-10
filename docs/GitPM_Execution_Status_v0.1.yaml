@@ -1,6 +1,6 @@
 version: '0.1'
 updated_at: '2026-07-10'
-current_phase: P04_in_progress
+current_phase: P04_complete_P05_ready
 stages:
   P00:
     status: done
@@ -51,10 +51,16 @@ stages:
     - file:evidence/P03/acceptance.md
     notes: Controlled Git synchronization, persisted draft runtime, one-writer behavior and restart recovery are accepted.
   P04:
-    status: in_progress
-    accepted_by: []
-    evidence: []
-    notes: Draft lifecycle API and domain operations are being implemented.
+    status: done
+    accepted_by:
+    - ARCH
+    - QA
+    evidence:
+    - file:evidence/P04/vfy-009-domain-crud.txt
+    - file:evidence/P04/vfy-010-delete-restrict.json
+    - file:evidence/P04/vfy-011-technical-limits.txt
+    - file:evidence/P04/acceptance.md
+    notes: Draft/entity REST contracts, domain CRUD, archive/delete-restrict, configuration roles and technical limits are accepted.
   P05:
     status: not_started
     accepted_by: []
@@ -167,17 +173,20 @@ verification_checks:
     - file:evidence/P03/vfy-008-runtime-faults.txt
     notes: Restart, external edits, one-writer modes, optimistic revisions and cleanup fault cases pass.
   VFY-009:
-    status: pending
-    evidence: []
-    notes: ''
+    status: passed
+    evidence:
+    - file:evidence/P04/vfy-009-domain-crud.txt
+    notes: All seven editable entity types pass HTTP create/update; archive and delete touch only expected YAML files.
   VFY-010:
-    status: pending
-    evidence: []
-    notes: ''
+    status: passed
+    evidence:
+    - file:evidence/P04/vfy-010-delete-restrict.json
+    notes: Referenced Person deletion returns stable 409 DELETE_RESTRICTED without repository mutation.
   VFY-011:
-    status: pending
-    evidence: []
-    notes: ''
+    status: passed
+    evidence:
+    - file:evidence/P04/vfy-011-technical-limits.txt
+    notes: Oversized HTTP and YAML inputs fail under static limits; liveness remains healthy and no quota state exists.
   VFY-012:
     status: pending
     evidence: []

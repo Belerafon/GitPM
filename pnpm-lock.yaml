@@ -50,6 +50,9 @@ importers:
 
   apps/server:
     dependencies:
+      '@gitpm/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@gitpm/drafts':
         specifier: workspace:*
         version: link:../../packages/drafts
@@ -59,6 +62,9 @@ importers:
       '@gitpm/logging':
         specifier: workspace:*
         version: link:../../packages/logging
+      '@gitpm/repository-format':
+        specifier: workspace:*
+        version: link:../../packages/repository-format
       '@gitpm/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -84,6 +90,25 @@ importers:
         version: 8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(tsx@4.23.0)(yaml@2.8.1)
 
   packages/calendar: {}
+
+  packages/domain:
+    dependencies:
+      '@gitpm/drafts':
+        specifier: workspace:*
+        version: link:../drafts
+      '@gitpm/repository-format':
+        specifier: workspace:*
+        version: link:../repository-format
+      '@gitpm/security':
+        specifier: workspace:*
+        version: link:../security
+      '@gitpm/validation':
+        specifier: workspace:*
+        version: link:../validation
+    devDependencies:
+      '@gitpm/git-client':
+        specifier: workspace:*
+        version: link:../git-client
 
   packages/drafts:
     dependencies:

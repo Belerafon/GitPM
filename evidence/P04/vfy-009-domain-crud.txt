@@ -1,0 +1,24 @@
+Command: corepack pnpm exec vitest run apps/server/src/domain-api.integration.test.ts
+Date: 2026-07-10
+
+HTTP transcript summary for draft DRF-HTTP:
+- POST /entities/calendars -> 201
+- POST /entities/people -> 201
+- POST /entities/teams -> 201
+- POST /entities/projects -> 201
+- POST /entities/milestones -> 201
+- POST /entities/tasks -> 201
+- POST /entities/views -> 201
+- PUT each of the seven created entities -> 200
+- POST /entities/tasks/<id>/archive -> 200, lifecycle=archived
+- DELETE /entities/tasks/<id> -> 200, deleted=true
+
+Sanitized Git status contained only:
+- calendars/CAL-01J2C01M9QHPMQ2ZK5F7N8S4VB.yaml
+- people/PER-01J2C01M9QHPMQ2ZK5F7N8S4VC.yaml
+- teams/TEM-01J2C01M9QHPMQ2ZK5F7N8S4VB.yaml
+- projects/PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYR/project.yaml
+- projects/PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYR/milestones/MLS-01J2C01M9QHPMQ2ZK5F7N8S4VB.yaml
+- projects/PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYR/views/VIW-01J2C01M9QHPMQ2ZK5F7N8S4VB.yaml
+
+The archived Task file disappeared only after the explicit delete request.

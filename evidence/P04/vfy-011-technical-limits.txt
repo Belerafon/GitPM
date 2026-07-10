@@ -1,0 +1,10 @@
+Static protection verification, 2026-07-10:
+
+- Fastify bodyLimit: 1,048,576 bytes.
+- Oversized POST returned HTTP 413 and REQUEST_TOO_LARGE.
+- GET /health/live returned HTTP 200 immediately after rejection.
+- YAML line over 20,000 characters returned YAML_LINE_LIMIT.
+- YAML nesting over 64 levels returned YAML_DEPTH_LIMIT.
+- YAML file byte, node and alias limits are static process controls.
+- No user/project quota counters, persistence or quota state exist.
+- Developer configuration mutation returned HTTP 403; Maintainer route is explicit.

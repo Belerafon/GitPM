@@ -2,6 +2,9 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { DraftRuntimeError } from "@gitpm/drafts";
 import type { DraftManager, DraftMetadata, WriterMode } from "@gitpm/drafts";
 import { GitCommandError } from "@gitpm/git-client";
+import { assertEntityType, DomainOperationError } from "@gitpm/domain";
+import type { EntityStore } from "@gitpm/domain";
+import type { GitPmDocument } from "@gitpm/repository-format";
 
 export type ProjectRole = "Reporter" | "Developer" | "Maintainer";
 
@@ -41,6 +44,13 @@ function requireMutationRole(actor: RequestActor): void {
   }
 }
 
+async function requireDraftRead(manager: DraftManager, actor: RequestActor, draftId: string): Promise<void> {
+  const metadata = await manager.getDraft(draftId);
+  if (metadata.owner_gitlab_user_id !== actor.userId && actor.role !== "Maintainer") {
+    throw new DraftRuntimeError("DRAFT_FORBIDDEN", "Draft owner mismatch");
+  }
+}
+
 function statusFor(error: DraftRuntimeError): number {
   if (error.code === "DRAFT_NOT_FOUND") return 404;
   if (error.code === "DRAFT_FORBIDDEN") return 403;
@@ -61,6 +71,13 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
       status = error.code === "GIT_TIMEOUT" ? 504 : 502;
       code = error.code;
       message = error.message;
+    } else if (error instanceof DomainOperationError) {
+      code = error.code;
+      message = error.message;
+      if (error.code === "ENTITY_NOT_FOUND") status = 404;
+      else if (["ENTITY_TYPE_INVALID", "ENTITY_ID_INVALID", "ENTITY_PROJECT_INVALID"].includes(error.code)) status = 400;
+      else if (error.code === "VALIDATION_FAILED") status = 422;
+      else status = 409;
     } else if ((error as { code?: string }).code === "FST_ERR_CTP_BODY_TOO_LARGE") {
       status = 413;
       code = "REQUEST_TOO_LARGE";
@@ -110,4 +127,105 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
     await manager.cleanupDraft(request.params.draftId, request.body.confirmation);
     await reply.code(204).send();
   });
+}
+
+export function registerEntityApi(
+  app: FastifyInstance,
+  manager: DraftManager,
+  store: EntityStore,
+  authenticate: Authenticate,
+): void {
+  app.get<{ Params: { draftId: string; entityType: string; id: string } }>(
+    "/api/drafts/:draftId/entities/:entityType/:id",
+    async (request) => {
+      const actor = await authenticate(request);
+      await requireDraftRead(manager, actor, request.params.draftId);
+      return await store.get(request.params.draftId, request.params.entityType, request.params.id);
+    },
+  );
+
+  app.post<{ Params: { draftId: string; entityType: string }; Body: { expected_fingerprint: string; document: GitPmDocument } }>(
+    "/api/drafts/:draftId/entities/:entityType",
+    async (request, reply) => {
+      const actor = await authenticate(request);
+      requireMutationRole(actor);
+      assertEntityType(request.params.entityType, request.body.document);
+      const result = await store.create(request.params.draftId, actor.userId, request.body.expected_fingerprint, request.body.document);
+      await reply.code(201).send(result);
+    },
+  );
+
+  app.put<{ Params: { draftId: string; entityType: string; id: string }; Body: { expected_fingerprint: string; expected_blob_id: string; document: GitPmDocument } }>(
+    "/api/drafts/:draftId/entities/:entityType/:id",
+    async (request) => {
+      const actor = await authenticate(request);
+      requireMutationRole(actor);
+      return await store.update(
+        request.params.draftId,
+        actor.userId,
+        request.params.entityType,
+        request.params.id,
+        request.body.expected_fingerprint,
+        request.body.expected_blob_id,
+        request.body.document,
+      );
+    },
+  );
+
+  app.post<{ Params: { draftId: string; entityType: string; id: string }; Body: { expected_fingerprint: string; expected_blob_id: string } }>(
+    "/api/drafts/:draftId/entities/:entityType/:id/archive",
+    async (request) => {
+      const actor = await authenticate(request);
+      requireMutationRole(actor);
+      return await store.archive(
+        request.params.draftId,
+        actor.userId,
+        request.params.entityType,
+        request.params.id,
+        request.body.expected_fingerprint,
+        request.body.expected_blob_id,
+      );
+    },
+  );
+
+  app.delete<{ Params: { draftId: string; entityType: string; id: string }; Body: { expected_fingerprint: string; expected_blob_id: string } }>(
+    "/api/drafts/:draftId/entities/:entityType/:id",
+    async (request) => {
+      const actor = await authenticate(request);
+      requireMutationRole(actor);
+      return await store.delete(
+        request.params.draftId,
+        actor.userId,
+        request.params.entityType,
+        request.params.id,
+        request.body.expected_fingerprint,
+        request.body.expected_blob_id,
+      );
+    },
+  );
+
+  app.get<{ Params: { draftId: string; kind: "statuses" | "issue-types" } }>(
+    "/api/drafts/:draftId/config/:kind",
+    async (request) => {
+      const actor = await authenticate(request);
+      await requireDraftRead(manager, actor, request.params.draftId);
+      return await store.getConfiguration(request.params.draftId, request.params.kind);
+    },
+  );
+
+  app.put<{ Params: { draftId: string; kind: "statuses" | "issue-types" }; Body: { expected_fingerprint: string; expected_blob_id: string; document: GitPmDocument } }>(
+    "/api/drafts/:draftId/config/:kind",
+    async (request) => {
+      const actor = await authenticate(request);
+      if (actor.role !== "Maintainer") throw new DraftRuntimeError("DRAFT_FORBIDDEN", "Configuration mutation requires Maintainer");
+      return await store.updateConfiguration(
+        request.params.draftId,
+        actor.userId,
+        request.params.kind,
+        request.body.expected_fingerprint,
+        request.body.expected_blob_id,
+        request.body.document,
+      );
+    },
+  );
 }

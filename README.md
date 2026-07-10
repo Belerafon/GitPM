@@ -4,7 +4,7 @@ Git-first система управления проектами и задача
 
 ## Current status
 
-Статус: `P04_in_progress`. P00-P03 закрыты. Draft lifecycle/status API, role checks, stable error mapping и static request limit реализованы; domain CRUD находится в работе.
+Статус: `P04_complete_P05_ready`. P00-P04 закрыты. Draft/entity REST API, all-entity CRUD, optimistic revisions, archive/delete-restrict, Maintainer config и static limits готовы; следующий этап — changes/restore API.
 
 ## Development
 

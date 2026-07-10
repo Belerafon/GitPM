@@ -1,5 +1,7 @@
 import type { DraftManager, DraftMetadata } from "@gitpm/drafts";
 import { DraftRuntimeError } from "@gitpm/drafts";
+import type { EntityStore } from "@gitpm/domain";
+import { DomainOperationError } from "@gitpm/domain";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildApp } from "./app.js";
 import type { RequestActor } from "./draft-api.js";
@@ -22,6 +24,7 @@ const metadata: DraftMetadata = {
 function manager(overrides: Partial<DraftManager> = {}): DraftManager {
   return {
     createDraft: vi.fn(async () => metadata),
+    getDraft: vi.fn(async () => metadata),
     poll: vi.fn(async () => ({ metadata, currentFingerprint: metadata.fingerprint, changedExternally: false })),
     setWriterMode: vi.fn(async () => ({ ...metadata, writer_mode: "external" })),
     closeDraft: vi.fn(async () => ({ ...metadata, state: "closed" })),
@@ -86,5 +89,75 @@ describe("draft lifecycle API", () => {
     expect(response.statusCode).toBe(413);
     expect(response.json()).toMatchObject({ error: { code: "REQUEST_TOO_LARGE" } });
     expect((await app.inject({ method: "GET", url: "/health/live" })).statusCode).toBe(200);
+  });
+});
+
+describe("entity API contract", () => {
+  it("creates an entity through the domain store", async () => {
+    const entityStore = {
+      create: vi.fn(async () => ({
+        document: { schema: "gitpm/project@1", id: "PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP" },
+        path: "projects/PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP/project.yaml",
+        blob_id: "a".repeat(40),
+        draft_fingerprint: "b".repeat(64),
+      })),
+    } as unknown as EntityStore;
+    const app = buildApp({
+      authenticate: () => ({ userId: "42", role: "Developer" }),
+      draftManager: manager(),
+      entityStore,
+    });
+    apps.push(app);
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/drafts/DRF-API/entities/projects",
+      payload: {
+        expected_fingerprint: metadata.fingerprint,
+        document: { schema: "gitpm/project@1", id: "PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP" },
+      },
+    });
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({ path: "projects/PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP/project.yaml" });
+  });
+
+  it("maps delete restrict to a stable conflict response", async () => {
+    const entityStore = {
+      delete: vi.fn(async () => { throw new DomainOperationError("DELETE_RESTRICTED", "referenced"); }),
+    } as unknown as EntityStore;
+    const app = buildApp({
+      authenticate: () => ({ userId: "42", role: "Developer" }),
+      draftManager: manager(),
+      entityStore,
+    });
+    apps.push(app);
+    const response = await app.inject({
+      method: "DELETE",
+      url: "/api/drafts/DRF-API/entities/people/PER-01J2C01M9QHPMQ2ZK5F7N8S4VA",
+      payload: { expected_fingerprint: metadata.fingerprint, expected_blob_id: "a".repeat(40) },
+    });
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ error: { code: "DELETE_RESTRICTED" } });
+  });
+
+  it("reserves repository configuration mutation for Maintainer", async () => {
+    const entityStore = { updateConfiguration: vi.fn() } as unknown as EntityStore;
+    const app = buildApp({
+      authenticate: () => ({ userId: "42", role: "Developer" }),
+      draftManager: manager(),
+      entityStore,
+    });
+    apps.push(app);
+    const response = await app.inject({
+      method: "PUT",
+      url: "/api/drafts/DRF-API/config/statuses",
+      payload: {
+        expected_fingerprint: metadata.fingerprint,
+        expected_blob_id: "a".repeat(40),
+        document: { schema: "gitpm/statuses@1", statuses: [] },
+      },
+    });
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toMatchObject({ error: { code: "DRAFT_FORBIDDEN" } });
+    expect(entityStore.updateConfiguration).not.toHaveBeenCalled();
   });
 });

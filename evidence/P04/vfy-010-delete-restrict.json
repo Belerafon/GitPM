@@ -1,0 +1,12 @@
+{
+  "request": {
+    "method": "DELETE",
+    "path": "/api/drafts/DRF-HTTP/entities/people/PER-01J2C01M9QHPMQ2ZK5F7N8S4VC"
+  },
+  "response": {
+    "status": 409,
+    "error_code": "DELETE_RESTRICTED"
+  },
+  "reason": "Person remains referenced by Team TEM-01J2C01M9QHPMQ2ZK5F7N8S4VB",
+  "repository_unchanged_by_failed_request": true
+}

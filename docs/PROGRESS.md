@@ -1,7 +1,7 @@
 # GitPM progress
 
-Current phase: `P04_in_progress`
-Implementation code: P00-P03 complete; P04 draft lifecycle API implemented
+Current phase: `P04_complete_P05_ready`
+Implementation code: P00-P04 complete
 
 ## Current active revision
 
@@ -78,13 +78,21 @@ Implementation code: P00-P03 complete; P04 draft lifecycle API implemented
 - External edit, stale mutation, cleanup confirmation and orphan recovery return stable codes.
 - P03 integration/fault suite adds 10 tests; full suite contains 46 tests.
 
+## Last P04 evidence
+
+- Draft lifecycle and entity REST contracts return stable errors with correlation IDs.
+- HTTP integration creates and updates all seven editable entity types.
+- Archive preserves a file; explicit delete removes it; referenced delete returns 409 without mutation.
+- Maintainer-only configuration and static request/YAML limits are enforced without quota state.
+- Full suite contains 13 test files and 56 tests.
+
 ## Current blockers
 
-None. P04 is in progress.
+None. P04 is accepted and P05 is unblocked.
 
 ## Next action
 
-Implement P04 entity CRUD, archive/delete-restrict and Maintainer configuration routes.
+Start P05 Git changes API and restore file/hunk operations.
 
 ## Evidence policy
 
