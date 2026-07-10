@@ -11,4 +11,5 @@
   behavior are implemented with the components that introduce those surfaces
   and are rechecked in P13A.
 
-SEC/ARCH acceptance remains to be recorded in execution status.
+Acceptance decision (2026-07-10): SEC and ARCH accept these residual risks for
+v0.1 under the deployment boundary and follow-up stages stated above.

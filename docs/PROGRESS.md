@@ -1,7 +1,7 @@
 # GitPM progress
 
-Current phase: `P00S_P01_implementation_complete_pending_acceptance`
-Implementation code: P00 complete; P00S security spikes and P01 schema baseline implemented
+Current phase: `P00S_P01_complete_P02_ready`
+Implementation code: P00, P00S and P01 complete
 
 ## Current active revision
 
@@ -64,11 +64,11 @@ Implementation code: P00 complete; P00S security spikes and P01 schema baseline 
 
 ## Current blockers
 
-P00S and P01 have no implementation blocker. Their declared SEC/ARCH and ARCH/PO/QA acceptance records are not yet recorded, so P02/P03 remain gated by stage status.
+None. P00S residual risks and P01 schema baseline have evidence-based acceptance records; P02 is unblocked.
 
 ## Next action
 
-Record the declared P00S/P01 acceptance or revise those gates, then close both stages and start P02.
+Start P02 production parser, canonical formatter, validation, calendar utilities and CLI.
 
 ## Evidence policy
 

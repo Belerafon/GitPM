@@ -4,7 +4,7 @@ Git-first система управления проектами и задача
 
 ## Current status
 
-Статус: `P00S_P01_implementation_complete_pending_acceptance`. P00 закрыт. Schema v1 baseline и security spikes реализованы; VFY-003/VFY-004 проходят. Для закрытия P00S/P01 остаются объявленные в этих этапах acceptance records.
+Статус: `P00S_P01_complete_P02_ready`. P00, P00S и P01 закрыты по локальным evidence и role review. Schema v1 baseline и security boundary готовы; следующий этап — production parser, formatter, validation, calendar utilities и CLI.
 
 ## Development
 

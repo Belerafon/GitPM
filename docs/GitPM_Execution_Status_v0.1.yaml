@@ -1,6 +1,6 @@
 version: '0.1'
 updated_at: '2026-07-10'
-current_phase: P00S_P01_implementation_complete_pending_acceptance
+current_phase: P00S_P01_complete_P02_ready
 stages:
   P00:
     status: done
@@ -12,18 +12,24 @@ stages:
     notes: Implementation and required local verification are complete; external remote, clean-Linux CI and role acceptance
       are not P00 exit requirements.
   P00S:
-    status: in_progress
-    accepted_by: []
+    status: done
+    accepted_by:
+    - SEC
+    - ARCH
     evidence:
     - file:evidence/P00S/vfy-003-security-report.txt
     - file:evidence/P00S/residual-risks.md
-    notes: Threat model and accepted filesystem, Git process and credential spike controls are complete; SEC/ARCH acceptance is pending.
+    notes: Threat model, spike controls and residual risks are accepted.
   P01:
-    status: in_progress
-    accepted_by: []
+    status: done
+    accepted_by:
+    - ARCH
+    - PO
+    - QA
     evidence:
     - file:evidence/P01/vfy-004-schema-fixtures.txt
-    notes: Schema baseline, repository format and deterministic fixtures are complete; declared role acceptance is pending.
+    - file:evidence/P01/acceptance.md
+    notes: Schema baseline, repository format and deterministic fixtures are approved.
   P02:
     status: not_started
     accepted_by: []
