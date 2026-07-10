@@ -1,6 +1,6 @@
 version: '0.1'
 updated_at: '2026-07-10'
-current_phase: P05_complete_P06_ready
+current_phase: P06_in_progress
 stages:
   P00:
     status: done
@@ -73,10 +73,10 @@ stages:
     - file:evidence/P05/acceptance.md
     notes: Changes summary, file/deleted restore, selected-hunk restore and stale-diff protection are accepted.
   P06:
-    status: not_started
+    status: in_progress
     accepted_by: []
     evidence: []
-    notes: ''
+    notes: OAuth PKCE, memory-only sessions and GitLab role mapping are being implemented.
   P07:
     status: not_started
     accepted_by: []

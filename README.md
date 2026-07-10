@@ -4,7 +4,7 @@ Git-first система управления проектами и задача
 
 ## Current status
 
-Статус: `P05_complete_P06_ready`. P00-P05 закрыты. Changes summary, semantic base, restore modified/deleted file, selected-hunk restore и stale-diff protection готовы; следующий этап — OAuth, role refresh, push и MR test double.
+Статус: `P06_in_progress`. P00-P05 закрыты. OAuth Authorization Code + PKCE/state, memory-only sessions и exact role refresh реализованы; controlled push/MR находится в работе.
 
 ## Development
 

@@ -1,7 +1,7 @@
 # GitPM progress
 
-Current phase: `P05_complete_P06_ready`
-Implementation code: P00-P05 complete
+Current phase: `P06_in_progress`
+Implementation code: P00-P05 complete; P06 OAuth/session/role layer implemented
 
 ## Current active revision
 
@@ -95,11 +95,11 @@ Implementation code: P00-P05 complete
 
 ## Current blockers
 
-None. P05 is accepted and P06 is unblocked by completed P00S/P05.
+None. P06 is in progress.
 
 ## Next action
 
-Start P06 OAuth, role refresh, push and Merge Request integration through test doubles.
+Implement P06 controlled commit-all/push, MR client, polling and protocol-level test double.
 
 ## Evidence policy
 
