@@ -5,10 +5,11 @@ title: Approve schema v1
 type: task
 status: done
 lifecycle: active
+milestone: MLS-01J2C01M9QHPMQ2ZK5F7N8S4VA
 assignees:
   - PER-01J2C01M9QHPMQ2ZK5F7N8S4VA
 estimate_hours: 8
 start: 2026-07-01
 due: 2026-07-02
-milestone: MLS-01J2C01M9QHPMQ2ZK5F7N8S4VA
-labels: [architecture]
+labels:
+  - architecture

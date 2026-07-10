@@ -5,9 +5,9 @@ title: Implement parser
 type: task
 status: backlog
 lifecycle: active
+milestone: MLS-01J2C01M9QHPMQ2ZK5F7N8S4VA
 assignees:
   - PER-01J2C01M9QHPMQ2ZK5F7N8S4VB
 estimate_hours: 24.25
 depends_on:
   - TSK-01J2BZ7G4VJ57PX9K2Q0C6C5XP
-milestone: MLS-01J2C01M9QHPMQ2ZK5F7N8S4VA

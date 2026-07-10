@@ -35,9 +35,18 @@ importers:
 
   apps/cli:
     dependencies:
+      '@gitpm/repository-format':
+        specifier: workspace:*
+        version: link:../../packages/repository-format
+      '@gitpm/security':
+        specifier: workspace:*
+        version: link:../../packages/security
       '@gitpm/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@gitpm/validation':
+        specifier: workspace:*
+        version: link:../../packages/validation
 
   apps/server:
     dependencies:

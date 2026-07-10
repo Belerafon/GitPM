@@ -1,7 +1,7 @@
 # GitPM progress
 
-Current phase: `P02_in_progress`
-Implementation code: P00, P00S and P01 complete; P02 parser/formatter/validation/calendar implemented
+Current phase: `P02_complete_P03_ready`
+Implementation code: P00-P02 complete
 
 ## Current active revision
 
@@ -62,13 +62,21 @@ Implementation code: P00, P00S and P01 complete; P02 parser/formatter/validation
 - Six VFY-003 regressions cover injection, malicious inherited config, traversal, symlink swap and ASKPASS token transfer.
 - Sanitized process inspection contains no token or absolute worktree path.
 
+## Last P02 evidence
+
+- Safe YAML parser and canonical formatter pass round-trip on 14 demo documents.
+- Validation covers JSON Schema, path/ID, configuration and entity references, cycles, dates, archived warnings and delete restrict.
+- Calendar utilities use UTC date-only operations, ISO weekdays and explicit holidays.
+- CLI provides format/check, validate/changed, semantic diff skeleton, doctor and locale-neutral JSON output.
+- Full verify passes 8 test files and 36 tests.
+
 ## Current blockers
 
-None. P02 is in progress.
+None. P02 is accepted and P03 is unblocked by completed P00S/P02.
 
 ## Next action
 
-Integrate P02 format, validate, semantic diff skeleton and doctor commands into CLI and record VFY-005/VFY-006 evidence.
+Start P03 Git synchronization, worktree and draft runtime.
 
 ## Evidence policy
 

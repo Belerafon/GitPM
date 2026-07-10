@@ -1,0 +1,34 @@
+{
+  "command": "corepack pnpm verify",
+  "date": "2026-07-10",
+  "valid_demo": {
+    "valid": true,
+    "document_count": 14,
+    "errors": [],
+    "warnings": []
+  },
+  "rejected_cases": [
+    "SCHEMA_INVALID",
+    "PATH_PROJECT_DIRECTORY",
+    "REF_CROSS_PROJECT",
+    "REF_MISSING",
+    "TASK_PARENT_CYCLE",
+    "TASK_DEPENDENCY_CYCLE",
+    "DATE_INVALID",
+    "DATE_RANGE",
+    "DELETE_RESTRICTED"
+  ],
+  "warning_cases": [
+    "REF_ARCHIVED"
+  ],
+  "calendar_cases": {
+    "iso_weekdays": true,
+    "weekends_excluded": true,
+    "holidays_excluded": true,
+    "impossible_dates_rejected": true
+  },
+  "test_result": {
+    "files_passed": 8,
+    "tests_passed": 36
+  }
+}

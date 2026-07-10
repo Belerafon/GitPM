@@ -4,7 +4,9 @@ project: PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP
 name: Active work
 kind: board
 filters:
-  statuses: [backlog, in-progress]
+  statuses:
+    - backlog
+    - in-progress
   assignees:
     - PER-01J2C01M9QHPMQ2ZK5F7N8S4VA
     - PER-01J2C01M9QHPMQ2ZK5F7N8S4VB

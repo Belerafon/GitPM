@@ -1,6 +1,6 @@
 version: '0.1'
 updated_at: '2026-07-10'
-current_phase: P02_in_progress
+current_phase: P02_complete_P03_ready
 stages:
   P00:
     status: done
@@ -31,10 +31,15 @@ stages:
     - file:evidence/P01/acceptance.md
     notes: Schema baseline, repository format and deterministic fixtures are approved.
   P02:
-    status: in_progress
-    accepted_by: []
-    evidence: []
-    notes: Production YAML parser and canonical formatter are being implemented.
+    status: done
+    accepted_by:
+    - ARCH
+    - QA
+    evidence:
+    - file:evidence/P02/vfy-005-format.txt
+    - file:evidence/P02/vfy-006-validation.json
+    - file:evidence/P02/acceptance.md
+    notes: Parser, formatter, validation, calendar utilities and CLI commands are complete and accepted.
   P03:
     status: not_started
     accepted_by: []
@@ -137,13 +142,15 @@ verification_checks:
     - file:evidence/P01/vfy-004-schema-fixtures.txt
     notes: Valid demo passed; path mismatch, cross-project dependency and invalid estimate fixtures returned stable codes.
   VFY-005:
-    status: pending
-    evidence: []
-    notes: ''
+    status: passed
+    evidence:
+    - file:evidence/P02/vfy-005-format.txt
+    notes: All 14 demo YAML documents format idempotently; comments and unsafe YAML features are handled by policy.
   VFY-006:
-    status: pending
-    evidence: []
-    notes: ''
+    status: passed
+    evidence:
+    - file:evidence/P02/vfy-006-validation.json
+    notes: Schema, reference, cycle, delete-restrict and calendar cases pass with stable codes.
   VFY-007:
     status: pending
     evidence: []

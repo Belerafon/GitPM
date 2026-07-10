@@ -7,4 +7,5 @@ description_markdown: Build the first useful GitPM workflow.
 owner: PER-01J2C01M9QHPMQ2ZK5F7N8S4VA
 start: 2026-07-01
 due: 2026-09-30
-labels: [product]
+labels:
+  - product

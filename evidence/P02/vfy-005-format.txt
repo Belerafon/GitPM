@@ -1,0 +1,13 @@
+Commands:
+  node apps/cli/dist/index.js format --root fixtures/schema-v1/demo
+  node apps/cli/dist/index.js format --check --root fixtures/schema-v1/demo
+Date: 2026-07-10
+Environment: Node.js 20.19.2 on Windows
+
+Initial canonicalization: Formatted 5 file(s)
+Final check: Formatted 0 file(s)
+
+Repository-format tests parse and format all 14 YAML documents twice. The
+second output is byte-identical to the first, ends with LF, uses two-space YAML,
+and contains no source comments. Unsafe profile cases for duplicate keys,
+anchors, aliases, custom tags and CRLF are rejected with stable codes.
