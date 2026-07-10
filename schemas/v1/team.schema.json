@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gitpm.dev/schemas/v1/team.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "id", "name", "members", "lifecycle"],
+  "properties": {
+    "schema": {"const": "gitpm/team@1"},
+    "id": {"$ref": "common.schema.json#/$defs/teamId"},
+    "name": {"type": "string", "minLength": 1},
+    "members": {
+      "type": "array",
+      "items": {"$ref": "common.schema.json#/$defs/personId"},
+      "uniqueItems": true
+    },
+    "lifecycle": {"$ref": "common.schema.json#/$defs/lifecycle"}
+  }
+}

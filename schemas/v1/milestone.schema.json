@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gitpm.dev/schemas/v1/milestone.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "id", "project", "name", "lifecycle"],
+  "properties": {
+    "schema": {"const": "gitpm/milestone@1"},
+    "id": {"$ref": "common.schema.json#/$defs/milestoneId"},
+    "project": {"$ref": "common.schema.json#/$defs/projectId"},
+    "name": {"type": "string", "minLength": 1},
+    "lifecycle": {"$ref": "common.schema.json#/$defs/lifecycle"},
+    "description_markdown": {"type": "string"},
+    "due": {"$ref": "common.schema.json#/$defs/date"}
+  }
+}

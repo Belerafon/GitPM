@@ -1,0 +1,7 @@
+schema: gitpm/task@1
+id: TSK-01J2BZ7G4VJ57PX9K2Q0C6C5XR
+project: PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYQ
+title: Prepare operations
+type: task
+status: backlog
+lifecycle: active

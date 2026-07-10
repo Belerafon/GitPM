@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gitpm.dev/schemas/v1/project.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "id", "name", "status", "lifecycle"],
+  "properties": {
+    "schema": {"const": "gitpm/project@1"},
+    "id": {"$ref": "common.schema.json#/$defs/projectId"},
+    "name": {"type": "string", "minLength": 1},
+    "status": {"$ref": "common.schema.json#/$defs/slug"},
+    "lifecycle": {"$ref": "common.schema.json#/$defs/lifecycle"},
+    "description_markdown": {"type": "string"},
+    "owner": {"$ref": "common.schema.json#/$defs/personId"},
+    "start": {"$ref": "common.schema.json#/$defs/date"},
+    "due": {"$ref": "common.schema.json#/$defs/date"},
+    "labels": {"$ref": "common.schema.json#/$defs/labels"}
+  }
+}

@@ -1,0 +1,7 @@
+schema: gitpm/team@1
+id: TEM-01J2C01M9QHPMQ2ZK5F7N8S4VA
+name: Core team
+members:
+  - PER-01J2C01M9QHPMQ2ZK5F7N8S4VA
+  - PER-01J2C01M9QHPMQ2ZK5F7N8S4VB
+lifecycle: active

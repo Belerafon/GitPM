@@ -1,0 +1,18 @@
+schema: gitpm/schema-fixture-cases@1
+base: demo
+cases:
+  - name: project-directory-mismatch
+    file: projects/PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP/project.yaml
+    field: id
+    value: PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYQ
+    expected_code: PATH_PROJECT_DIRECTORY
+  - name: cross-project-dependency
+    file: projects/PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP/tasks/TSK-01J2BZ7G4VJ57PX9K2Q0C6C5XQ.yaml
+    field: depends_on.0
+    value: TSK-01J2BZ7G4VJ57PX9K2Q0C6C5XR
+    expected_code: REF_CROSS_PROJECT
+  - name: invalid-estimate-step
+    file: projects/PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP/tasks/TSK-01J2BZ7G4VJ57PX9K2Q0C6C5XQ.yaml
+    field: estimate_hours
+    value: 1.1
+    expected_code: SCHEMA_INVALID

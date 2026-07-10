@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gitpm.dev/schemas/v1/repository.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "default_branch", "default_calendar", "allowed_top_level_files", "ui_poll_interval_seconds"],
+  "properties": {
+    "schema": {"const": "gitpm/repository@1"},
+    "default_branch": {"type": "string", "minLength": 1, "pattern": "^[^\\s~^:?*\\[\\]\\\\]+$"},
+    "default_calendar": {"$ref": "common.schema.json#/$defs/calendarId"},
+    "allowed_top_level_files": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1, "pattern": "^[^/\\\\]+$"},
+      "uniqueItems": true
+    },
+    "ui_poll_interval_seconds": {"type": "integer", "minimum": 2, "maximum": 10}
+  }
+}

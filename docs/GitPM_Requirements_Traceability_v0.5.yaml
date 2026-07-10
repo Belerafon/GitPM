@@ -5,6 +5,7 @@ documents:
   delivery_policies: GitPM_Delivery_Policies_v0.5.md
   security_baseline: GitPM_Security_Baseline_v0.5.md
   maintenance_guide: GitPM_Planning_Maintenance_Guide_v0.3.md
+  repository_format: GitPM_Repository_Format_v1.md
   execution_status: GitPM_Execution_Status_v0.1.yaml
   progress: PROGRESS.md
 milestones:

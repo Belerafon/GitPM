@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gitpm.dev/schemas/v1/calendar.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "id", "name", "working_weekdays", "holidays", "lifecycle"],
+  "properties": {
+    "schema": {"const": "gitpm/calendar@1"},
+    "id": {"$ref": "common.schema.json#/$defs/calendarId"},
+    "name": {"type": "string", "minLength": 1},
+    "working_weekdays": {
+      "type": "array",
+      "items": {"type": "integer", "minimum": 1, "maximum": 7},
+      "uniqueItems": true
+    },
+    "holidays": {
+      "type": "array",
+      "items": {"$ref": "common.schema.json#/$defs/date"},
+      "uniqueItems": true
+    },
+    "lifecycle": {"$ref": "common.schema.json#/$defs/lifecycle"}
+  }
+}

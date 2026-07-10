@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gitpm.dev/schemas/v1/statuses.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "statuses"],
+  "properties": {
+    "schema": {"const": "gitpm/statuses@1"},
+    "statuses": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "common.schema.json#/$defs/configValue"}
+    }
+  }
+}

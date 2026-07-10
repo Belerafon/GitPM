@@ -26,6 +26,6 @@ def main()->int:
     if args.kind=='stage' and args.accepted_by: item['accepted_by']=args.accepted_by
     if args.notes is not None: item['notes']=args.notes
     data['updated_at']=date.today().isoformat()
-    PATH.write_text(yaml.safe_dump(data,allow_unicode=True,sort_keys=False,width=120),encoding='utf-8')
+    PATH.write_text(yaml.safe_dump(data,allow_unicode=True,sort_keys=False,width=120),encoding='utf-8',newline='\n')
     return 0
 if __name__=='__main__': raise SystemExit(main())

@@ -17,6 +17,9 @@ importers:
       '@typescript-eslint/parser':
         specifier: 8.63.0
         version: 8.63.0(eslint@9.39.4)(typescript@5.9.3)
+      ajv:
+        specifier: 8.17.1
+        version: 8.17.1
       eslint:
         specifier: 9.39.4
         version: 9.39.4
@@ -25,7 +28,10 @@ importers:
         version: 5.9.3
       vitest:
         specifier: 4.1.10
-        version: 4.1.10(@types/node@20.19.43)(vite@8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(tsx@4.23.0))
+        version: 4.1.10(@types/node@20.19.43)(vite@8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(tsx@4.23.0)(yaml@2.8.1))
+      yaml:
+        specifier: 2.8.1
+        version: 2.8.1
 
   apps/cli:
     dependencies:
@@ -60,7 +66,7 @@ importers:
     devDependencies:
       vite:
         specifier: 8.1.4
-        version: 8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(tsx@4.23.0)
+        version: 8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(tsx@4.23.0)(yaml@2.8.1)
 
   packages/logging:
     dependencies:
@@ -552,6 +558,9 @@ packages:
 
   ajv@6.15.0:
     resolution: {integrity: sha512-fgFx7Hfoq60ytK2c7DhnF8jIvzYgOMxfugjLOSMHjLIPgenqa7S7oaagATUq99mV6IYvN2tRmC0wnTYX6iPbMw==}
+
+  ajv@8.17.1:
+    resolution: {integrity: sha512-B/gBuNg5SiMTrPkC+A2+cW0RszwxYmn6VYxB/inlBStS5nx6xHIt/ehKRhIMhqusl7a8LjQoZnjCs5vhwxOQ1g==}
 
   ajv@8.20.0:
     resolution: {integrity: sha512-Thbli+OlOj+iMPYFBVBfJ3OmCAnaSyNn4M1vz9T6Gka5Jt9ba/HIR56joy65tY6kx/FCF5VXNB819Y7/GUrBGA==}
@@ -1248,6 +1257,11 @@ packages:
     resolution: {integrity: sha512-BN22B5eaMMI9UMtjrGd5g5eCYPpCPDUy0FJXbYsaT5zYxjFOckS53SQDE3pWkVoWpHXVb3BrYcEN4Twa55B5cA==}
     engines: {node: '>=0.10.0'}
 
+  yaml@2.8.1:
+    resolution: {integrity: sha512-lcYcMxX2PO9XMGvAJkJ3OsNMw+/7FKes7/hgerGUYWIoWu5j/+YQqcZr5JnPZWzOsEBgMbSbiSTn/dv/69Mkpw==}
+    engines: {node: '>= 14.6'}
+    hasBin: true
+
   yocto-queue@0.1.0:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
     engines: {node: '>=10'}
@@ -1619,13 +1633,13 @@ snapshots:
       chai: 6.2.2
       tinyrainbow: 3.1.0
 
-  '@vitest/mocker@4.1.10(vite@8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(tsx@4.23.0))':
+  '@vitest/mocker@4.1.10(vite@8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(tsx@4.23.0)(yaml@2.8.1))':
     dependencies:
       '@vitest/spy': 4.1.10
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
-      vite: 8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(tsx@4.23.0)
+      vite: 8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(tsx@4.23.0)(yaml@2.8.1)
 
   '@vitest/pretty-format@4.1.10':
     dependencies:
@@ -1669,6 +1683,13 @@ snapshots:
       fast-json-stable-stringify: 2.1.0
       json-schema-traverse: 0.4.1
       uri-js: 4.4.1
+
+  ajv@8.17.1:
+    dependencies:
+      fast-deep-equal: 3.1.3
+      fast-uri: 3.1.3
+      json-schema-traverse: 1.0.0
+      require-from-string: 2.0.2
 
   ajv@8.20.0:
     dependencies:
@@ -2244,7 +2265,7 @@ snapshots:
     dependencies:
       punycode: 2.3.1
 
-  vite@8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(tsx@4.23.0):
+  vite@8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(tsx@4.23.0)(yaml@2.8.1):
     dependencies:
       lightningcss: 1.32.0
       picomatch: 4.0.5
@@ -2256,11 +2277,12 @@ snapshots:
       esbuild: 0.28.1
       fsevents: 2.3.3
       tsx: 4.23.0
+      yaml: 2.8.1
 
-  vitest@4.1.10(@types/node@20.19.43)(vite@8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(tsx@4.23.0)):
+  vitest@4.1.10(@types/node@20.19.43)(vite@8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(tsx@4.23.0)(yaml@2.8.1)):
     dependencies:
       '@vitest/expect': 4.1.10
-      '@vitest/mocker': 4.1.10(vite@8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(tsx@4.23.0))
+      '@vitest/mocker': 4.1.10(vite@8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(tsx@4.23.0)(yaml@2.8.1))
       '@vitest/pretty-format': 4.1.10
       '@vitest/runner': 4.1.10
       '@vitest/snapshot': 4.1.10
@@ -2277,7 +2299,7 @@ snapshots:
       tinyexec: 1.2.4
       tinyglobby: 0.2.17
       tinyrainbow: 3.1.0
-      vite: 8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(tsx@4.23.0)
+      vite: 8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(tsx@4.23.0)(yaml@2.8.1)
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 20.19.43
@@ -2294,5 +2316,7 @@ snapshots:
       stackback: 0.0.2
 
   word-wrap@1.2.5: {}
+
+  yaml@2.8.1: {}
 
   yocto-queue@0.1.0: {}

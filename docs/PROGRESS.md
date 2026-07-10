@@ -1,7 +1,7 @@
 # GitPM progress
 
-Current phase: `P00_complete_P01_P00S_ready`
-Implementation code: P00 foundation complete
+Current phase: `P01_implementation_complete_pending_acceptance`
+Implementation code: P00 complete; P01 schema baseline implemented
 
 ## Current active revision
 
@@ -48,13 +48,20 @@ Implementation code: P00 foundation complete
 - Release gate self-test: pending rejected, complete evidence passed, missing evidence rejected
 - Alpha gate currently reports `NOT READY`, as expected while later alpha stages remain pending
 
+## Last schema evidence
+
+- JSON Schema 2020-12 baseline covers all seven entities and three repository configuration files.
+- Repository path/reference rules are fixed in `GitPM_Repository_Format_v1.md`.
+- Deterministic demo portfolio contains 14 YAML documents.
+- VFY-004 rejects Project directory mismatch, cross-project dependency and invalid estimate with stable codes.
+
 ## Current blockers
 
-None. P00 is complete from local evidence, so P01 and P00S are unblocked.
+P01 implementation has no code blocker; its declared ARCH/PO/QA acceptance is not yet recorded. P00S is independently unblocked by completed P00.
 
 ## Next action
 
-Start P01 schema v1 baseline and P00S threat-model spikes according to the DAG.
+Start P00S threat-model spikes while P01 awaits its declared acceptance record.
 
 ## Evidence policy
 

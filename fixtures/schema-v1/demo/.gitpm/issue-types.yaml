@@ -1,0 +1,10 @@
+schema: gitpm/issue-types@1
+issue_types:
+  - slug: task
+    title: Task
+    color: blue
+    active: true
+  - slug: bug
+    title: Bug
+    color: red
+    active: true

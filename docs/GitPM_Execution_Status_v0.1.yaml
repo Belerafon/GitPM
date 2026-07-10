@@ -1,6 +1,6 @@
 version: '0.1'
 updated_at: '2026-07-10'
-current_phase: P00_complete_P01_P00S_ready
+current_phase: P01_implementation_complete_pending_acceptance
 stages:
   P00:
     status: done
@@ -9,17 +9,19 @@ stages:
     - file:evidence/P00/README.md
     - file:evidence/P00/vfy-001-local-health.json
     - file:evidence/P00/vfy-002-local-planning.txt
-    notes: Implementation and required local verification are complete; external remote, clean-Linux CI and role acceptance are not P00 exit requirements.
+    notes: Implementation and required local verification are complete; external remote, clean-Linux CI and role acceptance
+      are not P00 exit requirements.
   P00S:
     status: not_started
     accepted_by: []
     evidence: []
     notes: ''
   P01:
-    status: not_started
+    status: in_progress
     accepted_by: []
-    evidence: []
-    notes: ''
+    evidence:
+    - file:evidence/P01/vfy-004-schema-fixtures.txt
+    notes: Schema baseline, repository format and deterministic fixtures are complete; declared role acceptance is pending.
   P02:
     status: not_started
     accepted_by: []
@@ -121,9 +123,10 @@ verification_checks:
     evidence: []
     notes: ''
   VFY-004:
-    status: pending
-    evidence: []
-    notes: ''
+    status: passed
+    evidence:
+    - file:evidence/P01/vfy-004-schema-fixtures.txt
+    notes: Valid demo passed; path mismatch, cross-project dependency and invalid estimate fixtures returned stable codes.
   VFY-005:
     status: pending
     evidence: []

@@ -126,7 +126,7 @@
 
 ### Entry criteria
 
-- Stages P00 имеют status `done`, accepted_by и evidence.
+- Stage P00 имеет status `done` и required evidence; `accepted_by` требуется только для stage с acceptance roles.
 - Нет unresolved blocker, запрещающего работу этапа.
 
 ### Work packages
@@ -193,14 +193,14 @@
 
 ### Artifacts
 
-- approved schema v1 baseline
-- repository format specification
-- demo portfolio
-- invalid fixtures
+- approved schema v1 baseline in `schemas/v1/`
+- `GitPM_Repository_Format_v1.md`
+- deterministic demo portfolio in `fixtures/schema-v1/demo/`
+- invalid cases in `fixtures/schema-v1/invalid-cases.yaml`
 
 ### Automated verification
 
-- schema fixtures validate field, path and reference rules
+- `corepack pnpm schema:verify` validates field, path and reference rules
 
 ### Manual acceptance
 

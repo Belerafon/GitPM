@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gitpm.dev/schemas/v1/person.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "id", "name", "weekly_capacity_hours", "calendar", "lifecycle"],
+  "properties": {
+    "schema": {"const": "gitpm/person@1"},
+    "id": {"$ref": "common.schema.json#/$defs/personId"},
+    "name": {"type": "string", "minLength": 1},
+    "weekly_capacity_hours": {"type": "number", "minimum": 0},
+    "calendar": {"$ref": "common.schema.json#/$defs/calendarId"},
+    "lifecycle": {"$ref": "common.schema.json#/$defs/lifecycle"},
+    "email": {"type": "string", "minLength": 3}
+  }
+}

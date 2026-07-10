@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gitpm.dev/schemas/v1/saved-view.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "id", "project", "name", "kind", "filters", "lifecycle"],
+  "properties": {
+    "schema": {"const": "gitpm/saved-view@1"},
+    "id": {"$ref": "common.schema.json#/$defs/viewId"},
+    "project": {"$ref": "common.schema.json#/$defs/projectId"},
+    "name": {"type": "string", "minLength": 1},
+    "kind": {"enum": ["list", "board"]},
+    "filters": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "statuses": {"type": "array", "items": {"$ref": "common.schema.json#/$defs/slug"}, "uniqueItems": true},
+        "types": {"type": "array", "items": {"$ref": "common.schema.json#/$defs/slug"}, "uniqueItems": true},
+        "assignees": {"type": "array", "items": {"$ref": "common.schema.json#/$defs/personId"}, "uniqueItems": true},
+        "milestones": {"type": "array", "items": {"$ref": "common.schema.json#/$defs/milestoneId"}, "uniqueItems": true},
+        "labels": {"$ref": "common.schema.json#/$defs/labels"}
+      }
+    },
+    "group_by": {"enum": ["status"]},
+    "lifecycle": {"$ref": "common.schema.json#/$defs/lifecycle"}
+  }
+}

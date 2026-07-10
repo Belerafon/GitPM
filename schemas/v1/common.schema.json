@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gitpm.dev/schemas/v1/common.schema.json",
+  "title": "GitPM schema v1 common definitions",
+  "$defs": {
+    "lifecycle": {
+      "enum": ["active", "archived"]
+    },
+    "date": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$"
+    },
+    "slug": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+    },
+    "colorToken": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+    },
+    "projectId": {
+      "type": "string",
+      "pattern": "^PRJ-[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "taskId": {
+      "type": "string",
+      "pattern": "^TSK-[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "milestoneId": {
+      "type": "string",
+      "pattern": "^MLS-[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "personId": {
+      "type": "string",
+      "pattern": "^PER-[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "teamId": {
+      "type": "string",
+      "pattern": "^TEM-[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "calendarId": {
+      "type": "string",
+      "pattern": "^CAL-[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "viewId": {
+      "type": "string",
+      "pattern": "^VIW-[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "labels": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    },
+    "configValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["slug", "title", "color", "active"],
+      "properties": {
+        "slug": {"$ref": "#/$defs/slug"},
+        "title": {"type": "string", "minLength": 1},
+        "color": {"$ref": "#/$defs/colorToken"},
+        "active": {"type": "boolean"}
+      }
+    }
+  }
+}

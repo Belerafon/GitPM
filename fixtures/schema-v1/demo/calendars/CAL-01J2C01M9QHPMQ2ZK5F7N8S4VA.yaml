@@ -1,0 +1,7 @@
+schema: gitpm/calendar@1
+id: CAL-01J2C01M9QHPMQ2ZK5F7N8S4VA
+name: Standard work week
+working_weekdays: [1, 2, 3, 4, 5]
+holidays:
+  - 2026-01-01
+lifecycle: active

@@ -22,17 +22,20 @@
     "planning:check": "python scripts/validate_planning.py",
     "planning:test": "python scripts/test_planning_validator.py && python scripts/test_release_gate.py",
     "planning:verify": "corepack pnpm planning:check && corepack pnpm planning:test",
+    "schema:verify": "node scripts/verify-schema-v1.mjs",
     "smoke": "node scripts/smoke-health.mjs",
     "test": "vitest run",
     "typecheck": "corepack pnpm -r --if-present typecheck",
-    "verify": "corepack pnpm clean && corepack pnpm build && corepack pnpm lint && corepack pnpm typecheck && corepack pnpm test && corepack pnpm smoke && corepack pnpm planning:verify"
+    "verify": "corepack pnpm clean && corepack pnpm build && corepack pnpm lint && corepack pnpm typecheck && corepack pnpm test && corepack pnpm smoke && corepack pnpm schema:verify && corepack pnpm planning:verify"
   },
   "devDependencies": {
     "@types/node": "20.19.43",
     "@typescript-eslint/eslint-plugin": "8.63.0",
     "@typescript-eslint/parser": "8.63.0",
+    "ajv": "8.17.1",
     "eslint": "9.39.4",
     "typescript": "5.9.3",
-    "vitest": "4.1.10"
+    "vitest": "4.1.10",
+    "yaml": "2.8.1"
   }
 }

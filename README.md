@@ -4,7 +4,7 @@ Git-first система управления проектами и задача
 
 ## Current status
 
-Статус: `P00_complete_P01_P00S_ready`. Каркас monorepo, CI и минимальная наблюдаемость реализованы и локально проверены. Внешний remote, успешный clean-Linux CI и ролевая приёмка не требуются для закрытия P00; P01 и P00S готовы к запуску согласно DAG.
+Статус: `P01_implementation_complete_pending_acceptance`. P00 закрыт локальными evidence. Для P01 реализованы schema v1, repository format и deterministic fixtures; VFY-004 проходит. P00S доступен параллельно согласно DAG.
 
 ## Development
 
@@ -29,6 +29,7 @@ Server предоставляет `GET /health/live` и `GET /health/ready` на
 - `docs/GitPM_Delivery_Policies_v0.5.md` - product and operational boundaries;
 - `docs/GitPM_Security_Baseline_v0.5.md` - early security controls;
 - `docs/GitPM_Planning_Maintenance_Guide_v0.3.md` - how to maintain planning and localization artifacts;
+- `docs/GitPM_Repository_Format_v1.md` - approved schema v1 repository layout and reference rules;
 - `docs/PROGRESS.md` - decisions, blockers and next action.
 
 Old versions remain only in Git history.
@@ -40,6 +41,7 @@ python3 scripts/validate_planning.py
 python3 scripts/test_planning_validator.py
 python3 scripts/test_release_gate.py
 python3 scripts/check_release_gate.py --gate alpha
+corepack pnpm schema:verify
 ```
 
 The planning validator checks document consistency. The gate checker checks actual status and evidence and is expected to fail until the milestone is completed.

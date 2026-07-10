@@ -1,0 +1,17 @@
+Command: corepack pnpm schema:verify
+Date: 2026-07-10
+Environment: Node.js 20.19.2 on Windows
+
+VALID demo portfolio: 14 YAML documents
+REJECTED project-directory-mismatch: PATH_PROJECT_DIRECTORY
+REJECTED cross-project-dependency: REF_CROSS_PROJECT
+REJECTED invalid-estimate-step: SCHEMA_INVALID
+Schema v1 fixture verification passed: 3 invalid cases rejected
+
+Artifacts:
+- schemas/v1/*.schema.json
+- docs/GitPM_Repository_Format_v1.md
+- fixtures/schema-v1/demo/
+- fixtures/schema-v1/invalid-cases.yaml
+
+Production YAML parsing, formatting and full domain validation remain P02 work.

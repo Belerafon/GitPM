@@ -1,0 +1,14 @@
+schema: gitpm/statuses@1
+statuses:
+  - slug: backlog
+    title: Backlog
+    color: gray
+    active: true
+  - slug: in-progress
+    title: In progress
+    color: blue
+    active: true
+  - slug: done
+    title: Done
+    color: green
+    active: true

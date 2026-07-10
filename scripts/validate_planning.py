@@ -18,6 +18,7 @@ EXPECTED = {
     "delivery_policies": "GitPM_Delivery_Policies_v0.5.md",
     "security_baseline": "GitPM_Security_Baseline_v0.5.md",
     "maintenance_guide": "GitPM_Planning_Maintenance_Guide_v0.3.md",
+    "repository_format": "GitPM_Repository_Format_v1.md",
     "execution_status": "GitPM_Execution_Status_v0.1.yaml",
     "progress": "PROGRESS.md",
 }
@@ -29,6 +30,7 @@ ALLOWED_ACTIVE_PATTERNS = {
     "GitPM_Delivery_Policies_v*.md": EXPECTED["delivery_policies"],
     "GitPM_Security_Baseline_v*.md": EXPECTED["security_baseline"],
     "GitPM_Planning_Maintenance_Guide_v*.md": EXPECTED["maintenance_guide"],
+    "GitPM_Repository_Format_v*.md": EXPECTED["repository_format"],
 }
 
 errors: list[str] = []
@@ -75,6 +77,7 @@ work = read(EXPECTED["work_plan"])
 delivery = read(EXPECTED["delivery_policies"])
 security = read(EXPECTED["security_baseline"])
 maintenance = read(EXPECTED["maintenance_guide"])
+repository_format = read(EXPECTED["repository_format"])
 progress = read(EXPECTED["progress"])
 registry = load_yaml(DOCS / TRACE_NAME)
 execution = load_yaml(DOCS / EXPECTED["execution_status"])
@@ -85,7 +88,7 @@ if registry.get("documents") != EXPECTED:
     fail(f"registry documents mismatch: expected {EXPECTED}, got {registry.get('documents')}")
 
 # Active normative documents may not point to superseded active-version filenames.
-active_text = "\n".join([impl, work, delivery, security, maintenance, progress, (ROOT / "README.md").read_text(encoding="utf-8")])
+active_text = "\n".join([impl, work, delivery, security, maintenance, repository_format, progress, (ROOT / "README.md").read_text(encoding="utf-8")])
 for pattern, expected_name in ALLOWED_ACTIVE_PATTERNS.items():
     prefix, suffix = pattern.split("*")
     for match in re.findall(re.escape(prefix) + r"[^`\s]+" + re.escape(suffix), active_text):

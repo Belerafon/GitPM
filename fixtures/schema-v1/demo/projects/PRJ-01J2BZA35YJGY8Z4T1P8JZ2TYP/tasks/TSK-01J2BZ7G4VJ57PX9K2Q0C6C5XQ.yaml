@@ -1,0 +1,13 @@
+schema: gitpm/task@1
+id: TSK-01J2BZ7G4VJ57PX9K2Q0C6C5XQ
+project: PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP
+title: Implement parser
+type: task
+status: backlog
+lifecycle: active
+assignees:
+  - PER-01J2C01M9QHPMQ2ZK5F7N8S4VB
+estimate_hours: 24.25
+depends_on:
+  - TSK-01J2BZ7G4VJ57PX9K2Q0C6C5XP
+milestone: MLS-01J2C01M9QHPMQ2ZK5F7N8S4VA

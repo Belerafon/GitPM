@@ -1,0 +1,7 @@
+schema: gitpm/person@1
+id: PER-01J2C01M9QHPMQ2ZK5F7N8S4VA
+name: Anna Petrova
+weekly_capacity_hours: 40
+calendar: CAL-01J2C01M9QHPMQ2ZK5F7N8S4VA
+lifecycle: active
+email: anna@example.test

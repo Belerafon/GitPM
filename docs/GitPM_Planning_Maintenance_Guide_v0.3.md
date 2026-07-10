@@ -9,6 +9,7 @@
 - `GitPM_Work_Plan_v0.8.md`: в каком порядке выполняется работа, как поддерживается ритм коммитов и как принимается stage.
 - `GitPM_Requirements_Traceability_v0.5.yaml`: machine-readable DAG, requirements, verification checks and gates.
 - `GitPM_Execution_Status_v0.1.yaml`: единственный machine-readable источник фактического выполнения.
+- `GitPM_Repository_Format_v1.md` и `schemas/v1/`: утвержденный repository/schema contract.
 - `PROGRESS.md`: краткий человеческий журнал решений, blockers and next action.
 - Delivery Policies and Security Baseline: cross-cutting constraints.
 
