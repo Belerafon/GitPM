@@ -12,6 +12,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@gitpm/drafts": "workspace:*",
+    "@gitpm/git-client": "workspace:*",
     "@gitpm/logging": "workspace:*",
     "@gitpm/shared": "workspace:*",
     "fastify": "5.10.0",

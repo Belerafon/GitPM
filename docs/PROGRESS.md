@@ -1,7 +1,7 @@
 # GitPM progress
 
-Current phase: `P03_complete_P04_ready`
-Implementation code: P00-P03 complete
+Current phase: `P04_in_progress`
+Implementation code: P00-P03 complete; P04 draft lifecycle API implemented
 
 ## Current active revision
 
@@ -80,11 +80,11 @@ Implementation code: P00-P03 complete
 
 ## Current blockers
 
-None. P03 is accepted and P04 is unblocked.
+None. P04 is in progress.
 
 ## Next action
 
-Start P04 backend draft API and domain operations.
+Implement P04 entity CRUD, archive/delete-restrict and Maintainer configuration routes.
 
 ## Evidence policy
 

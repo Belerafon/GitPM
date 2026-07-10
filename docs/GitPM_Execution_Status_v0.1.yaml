@@ -1,6 +1,6 @@
 version: '0.1'
 updated_at: '2026-07-10'
-current_phase: P03_complete_P04_ready
+current_phase: P04_in_progress
 stages:
   P00:
     status: done
@@ -51,10 +51,10 @@ stages:
     - file:evidence/P03/acceptance.md
     notes: Controlled Git synchronization, persisted draft runtime, one-writer behavior and restart recovery are accepted.
   P04:
-    status: not_started
+    status: in_progress
     accepted_by: []
     evidence: []
-    notes: ''
+    notes: Draft lifecycle API and domain operations are being implemented.
   P05:
     status: not_started
     accepted_by: []

@@ -4,7 +4,7 @@ Git-first система управления проектами и задача
 
 ## Current status
 
-Статус: `P03_complete_P04_ready`. P00-P03 закрыты. Controlled Git synchronization, persisted draft runtime, one-writer modes, optimistic blob revisions и restart recovery готовы; следующий этап — backend draft API.
+Статус: `P04_in_progress`. P00-P03 закрыты. Draft lifecycle/status API, role checks, stable error mapping и static request limit реализованы; domain CRUD находится в работе.
 
 ## Development
 

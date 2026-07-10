@@ -2,12 +2,17 @@ import { randomUUID } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 import { createLogger } from "@gitpm/logging";
 import type { HealthPayload } from "@gitpm/shared";
+import type { DraftManager } from "@gitpm/drafts";
 import Fastify, { LogController, type FastifyBaseLogger } from "fastify";
+import { registerDraftApi } from "./draft-api.js";
+import type { Authenticate } from "./draft-api.js";
 
 const MAX_CORRELATION_ID_LENGTH = 128;
 const SAFE_CORRELATION_ID = /^[A-Za-z0-9._:-]+$/u;
 
 export interface AppOptions {
+  authenticate?: Authenticate;
+  draftManager?: DraftManager;
   isReady?: () => boolean | Promise<boolean>;
   logger?: FastifyBaseLogger;
 }
@@ -30,6 +35,7 @@ function requestId(request: IncomingMessage): string {
 
 export function buildApp(options: AppOptions = {}) {
   const app = Fastify({
+    bodyLimit: 1_048_576,
     genReqId: requestId,
     logController: new LogController({ disableRequestLogging: true }),
     loggerInstance: options.logger ?? createLogger(),
@@ -70,6 +76,13 @@ export function buildApp(options: AppOptions = {}) {
 
     return { correlation_id: request.id, status: "ok" };
   });
+
+  if (options.draftManager) {
+    const authenticate = options.authenticate ?? (() => {
+      throw new Error("Authentication adapter is not configured");
+    });
+    registerDraftApi(app, options.draftManager, authenticate);
+  }
 
   return app;
 }

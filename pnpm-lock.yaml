@@ -50,6 +50,12 @@ importers:
 
   apps/server:
     dependencies:
+      '@gitpm/drafts':
+        specifier: workspace:*
+        version: link:../../packages/drafts
+      '@gitpm/git-client':
+        specifier: workspace:*
+        version: link:../../packages/git-client
       '@gitpm/logging':
         specifier: workspace:*
         version: link:../../packages/logging
