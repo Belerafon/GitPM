@@ -79,6 +79,12 @@ importers:
 
   packages/calendar: {}
 
+  packages/git-client:
+    dependencies:
+      '@gitpm/security':
+        specifier: workspace:*
+        version: link:../security
+
   packages/logging:
     dependencies:
       pino:

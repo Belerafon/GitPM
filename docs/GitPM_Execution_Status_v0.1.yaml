@@ -1,6 +1,6 @@
 version: '0.1'
 updated_at: '2026-07-10'
-current_phase: P02_complete_P03_ready
+current_phase: P03_in_progress
 stages:
   P00:
     status: done
@@ -41,10 +41,10 @@ stages:
     - file:evidence/P02/acceptance.md
     notes: Parser, formatter, validation, calendar utilities and CLI commands are complete and accepted.
   P03:
-    status: not_started
+    status: in_progress
     accepted_by: []
     evidence: []
-    notes: ''
+    notes: Controlled bare repository, fetch and current-main draft creation are being implemented.
   P04:
     status: not_started
     accepted_by: []

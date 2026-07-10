@@ -1,7 +1,7 @@
 # GitPM progress
 
-Current phase: `P02_complete_P03_ready`
-Implementation code: P00-P02 complete
+Current phase: `P03_in_progress`
+Implementation code: P00-P02 complete; P03 controlled Git client implemented
 
 ## Current active revision
 
@@ -72,11 +72,11 @@ Implementation code: P00-P02 complete
 
 ## Current blockers
 
-None. P02 is accepted and P03 is unblocked by completed P00S/P02.
+None. P03 is in progress.
 
 ## Next action
 
-Start P03 Git synchronization, worktree and draft runtime.
+Implement P03 repository/draft locks, persisted metadata, one-writer runtime and restart recovery on the controlled Git client.
 
 ## Evidence policy
 

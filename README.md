@@ -4,7 +4,7 @@ Git-first система управления проектами и задача
 
 ## Current status
 
-Статус: `P02_complete_P03_ready`. P00-P02 закрыты. Safe YAML, canonical formatting, schema/domain validation, calendar utilities и CLI готовы; следующий этап — Git synchronization, worktree и draft runtime.
+Статус: `P03_in_progress`. P00-P02 закрыты. Controlled bare repository, explicit fetch и exact-remote-main worktree creation реализованы; draft/runtime recovery находится в работе.
 
 ## Development
 
