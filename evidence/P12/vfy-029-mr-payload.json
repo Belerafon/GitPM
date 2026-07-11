@@ -1,0 +1,8 @@
+{
+  "source_branch": "gitpm/42/DRF-CLI",
+  "target_branch": "main",
+  "title": "Agent CLI delivery",
+  "iid": 1,
+  "state": "opened",
+  "token_present": false
+}

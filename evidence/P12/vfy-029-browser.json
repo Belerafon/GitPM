@@ -1,0 +1,27 @@
+{
+  "check": "VFY-029",
+  "environment": "browser-local",
+  "locale": "ru",
+  "draft": "DRF-AGENT",
+  "writer_mode": "external",
+  "manual_reload": false,
+  "poll_count_when_observed": 2,
+  "agent_writes_before_poll": 2,
+  "displayed_title": "Agent write two",
+  "highlighted_fields": ["description_markdown", "status", "title"],
+  "highlighted": true,
+  "disabled_mutation_controls": 23,
+  "focus_preserved": true,
+  "scroll_before": 364,
+  "scroll_after": 364,
+  "reduced_motion": {
+    "preference_detected": true,
+    "animation_name": "none",
+    "background_color": "rgb(255, 243, 201)",
+    "static_indicator": true
+  },
+  "screenshots": [
+    "evidence/P12/vfy-029-external-highlight.png",
+    "evidence/P12/vfy-029-reduced-motion.png"
+  ]
+}

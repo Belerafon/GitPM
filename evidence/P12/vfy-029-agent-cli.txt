@@ -1,0 +1,36 @@
+VFY-029 scripted agent CLI transcript
+Environment: agent-local temporary bare remote and persisted draft runtime
+Actor: QA scripted agent account 42
+
+$ gitpm draft create --draft DRF-CLI --owner 42 --json
+OK writer_mode=external state=open branch=gitpm/42/DRF-CLI
+
+$ gitpm format --draft DRF-CLI --project PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP --json
+OK changed_files=0 (only already changed scoped files inspected)
+
+$ gitpm validate --changed --draft DRF-CLI --project PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP --json
+OK scope=changed-with-reference-closure
+
+$ gitpm diff --semantic --draft DRF-CLI --project PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP --json
+OK updated=1 affected_projects=[PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP]
+
+$ gitpm validate --changed --draft DRF-CLI --project PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP --json
+REJECTED code=AGENT_SCOPE_VIOLATION path=people/PER-01J2C01M9QHPMQ2ZK5F7N8S4VA.yaml
+
+$ gitpm validate --changed --draft DRF-CLI --project PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP --json
+REJECTED code=AGENT_DELETE_CONFIRMATION_REQUIRED path=projects/PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP/views/VIW-01J2C01M9QHPMQ2ZK5F7N8S4VA.yaml
+
+$ gitpm validate --changed --draft DRF-CLI --project PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP --allow-delete --json
+OK scope=changed-with-reference-closure
+
+$ gitpm commit --all -m "Agent CLI delivery" --draft DRF-CLI --project PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP --json
+OK commit=<40-hex> branch=gitpm/42/DRF-CLI
+
+$ gitpm push --draft DRF-CLI --json
+OK remote ref refs/heads/gitpm/42/DRF-CLI equals committed SHA
+
+$ gitpm mr create --draft DRF-CLI --owner 42 --title "Agent CLI delivery" --json
+OK iid=1 state=opened source_branch=gitpm/42/DRF-CLI target_branch=main
+
+Token checks: access token absent from MR captures, argv, Git config and persisted files.
+Automated source: apps/cli/src/agent-workflow.integration.test.ts

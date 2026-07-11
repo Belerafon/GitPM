@@ -1,0 +1,13 @@
+Semantic diff before commit-all
+
+updated: 1
+affected_projects:
+- PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP
+
+projects/PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP/project.yaml
+- name: GitPM launch
++ name: Agent CLI delivery
+
+Commit scope: all changed draft paths.
+Post-commit worktree: clean.
+Pushed branch SHA: equals commit-all result.

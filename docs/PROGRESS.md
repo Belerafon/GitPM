@@ -1,7 +1,7 @@
 # GitPM progress
 
-Current phase: `P11D_complete_P12_ready`
-Implementation code: P00-P11D complete; Alpha accepted and P12 is the remaining Beta stage
+Current phase: `beta_complete_release_candidate_work_ready`
+Implementation code: P00-P12 complete; Alpha and Beta accepted; P13A/P13B release-candidate work is unblocked
 
 ## Current active revision
 
@@ -171,13 +171,23 @@ Implementation code: P00-P11D complete; Alpha accepted and P12 is the remaining 
 - Archived, undated, unestimated, unassigned and unavailable-assignee Tasks are excluded with visible reason counts.
 - Final clean verification passes 28 test files and 91 tests, smoke, schema, security and planning checks.
 
+## Last P12 evidence
+
+- `@gitpm/agent` creates/opens external-mode drafts, enforces an optional Project scope and requires explicit delete authorization.
+- CLI now supports draft status/writer mode, scoped format/changed validation/semantic diff, commit-all, push and MR creation with locale-neutral JSON.
+- `GitPM_Agent_Workflow_v1.md` documents direct YAML editing, runtime configuration, token boundaries and the publish cycle.
+- Draft polling exposes the current external fingerprint; open Core, Administration, Board, Changes, Gantt and Workload read-models reload without browser refresh.
+- Changed fields are reconciled into one 1.8-second indication; consecutive writes coalesce, focus/scroll stay stable and reduced-motion uses a static marker.
+- Agent-local and Russian browser-local VFY-029 passed scope/delete rejection and the valid branch/MR flow.
+- Final clean verification passes 31 test files and 99 tests, smoke, schema, security and planning checks.
+
 ## Current blockers
 
-None. P11D is accepted; P12 remains unblocked Beta work.
+None. P12 and the Beta milestone are accepted; P13A and P13B are unblocked.
 
 ## Next action
 
-Start P12 agent workflow through files and CLI, the remaining ready Beta stage.
+Start P13A Security hardening. P13B operational verification may proceed independently from the same completed Beta baseline.
 
 ## Evidence policy
 

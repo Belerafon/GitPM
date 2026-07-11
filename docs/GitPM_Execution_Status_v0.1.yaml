@@ -1,6 +1,6 @@
 version: '0.1'
 updated_at: '2026-07-11'
-current_phase: P11D_complete_P12_ready
+current_phase: beta_complete_release_candidate_work_ready
 stages:
   P00:
     status: done
@@ -186,10 +186,21 @@ stages:
     notes: Explainable weekly allocation splits estimates across active assignees and personal working dates, compares holiday-adjusted
       capacity, and excludes archived, undated, unestimated and unassigned Tasks.
   P12:
-    status: not_started
-    accepted_by: []
-    evidence: []
-    notes: ''
+    status: done
+    accepted_by:
+    - ARCH
+    - QA
+    evidence:
+    - file:evidence/P12/vfy-029-agent-cli.txt
+    - file:evidence/P12/vfy-029-browser.json
+    - file:evidence/P12/vfy-029-playwright-trace.json
+    - file:evidence/P12/vfy-029-external-highlight.png
+    - file:evidence/P12/vfy-029-reduced-motion.png
+    - file:evidence/P12/vfy-029-final-diff.txt
+    - file:evidence/P12/vfy-029-mr-payload.json
+    - file:evidence/P12/acceptance.md
+    notes: External draft file editing, scoped CLI validation, explicit delete, commit-all/push/MR and poll-driven read-model
+      reconciliation with coalesced reduced-motion-aware highlights are accepted.
   P13A:
     status: not_started
     accepted_by: []
@@ -373,9 +384,17 @@ verification_checks:
     notes: Three deterministic Person-week values matched the browser fixture; holiday-adjusted capacity and archived/undated exclusion
       passed without repository mutation.
   VFY-029:
-    status: pending
-    evidence: []
-    notes: ''
+    status: passed
+    evidence:
+    - file:evidence/P12/vfy-029-agent-cli.txt
+    - file:evidence/P12/vfy-029-browser.json
+    - file:evidence/P12/vfy-029-playwright-trace.json
+    - file:evidence/P12/vfy-029-external-highlight.png
+    - file:evidence/P12/vfy-029-reduced-motion.png
+    - file:evidence/P12/vfy-029-final-diff.txt
+    - file:evidence/P12/vfy-029-mr-payload.json
+    notes: Scripted agent workflow passed Project scope and explicit-delete guards, commit-all/push/MR, live polling refresh, field-only
+      coalesced highlighting and static reduced-motion indication.
   VFY-030:
     status: pending
     evidence: []

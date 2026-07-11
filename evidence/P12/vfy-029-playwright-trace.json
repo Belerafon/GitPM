@@ -1,0 +1,13 @@
+{
+  "check": "VFY-029",
+  "events": [
+    { "step": 1, "action": "create draft", "result": "external writer mode" },
+    { "step": 2, "action": "open Tasks while UI remains mounted", "result": "all mutation controls disabled" },
+    { "step": 3, "action": "apply two agent writes before the next poll", "result": "one final external fingerprint" },
+    { "step": 4, "action": "observe poll 2", "result": "title/status/description refreshed without reload" },
+    { "step": 5, "action": "inspect external-update marker", "result": "description_markdown,status,title only" },
+    { "step": 6, "action": "repeat with prefers-reduced-motion", "result": "static indicator and animationName=none" }
+  ],
+  "focus": { "before": "TSK-22222222222222222222222222", "after": "TSK-22222222222222222222222222" },
+  "scroll": { "before": 364, "after": 364 }
+}
