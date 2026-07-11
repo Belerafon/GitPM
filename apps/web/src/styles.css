@@ -232,3 +232,26 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
 .gantt-dependencies path { fill: none; stroke: #6c5c91; stroke-width: 2; }
 .gantt-dependencies marker path { fill: #6c5c91; stroke: none; }
 @media (max-width: 700px) { .gantt-toolbar { align-items: stretch; flex-direction: column; } .gantt-scroll { grid-template-columns: 210px minmax(0,1fr); } }
+.workload-workspace { display: grid; gap: 1.25rem; margin-top: 1.5rem; }
+.workload-summary { display: grid; grid-template-columns: repeat(2, minmax(120px, 180px)) 1fr; gap: .75rem 1.25rem; align-items: center; }
+.workload-summary div { display: grid; gap: .2rem; }
+.workload-summary span { color: #687069; font-size: .72rem; text-transform: uppercase; }
+.workload-summary strong { color: #31584c; font-size: 1.7rem; }
+.workload-summary p { grid-column: 3; margin: 0; color: #5d625f; font-size: .78rem; }
+.workload-table-wrap { overflow-x: auto; padding: 0; }
+.workload-table { width: 100%; min-width: 720px; border-collapse: collapse; }
+.workload-table th, .workload-table td { border-right: 1px solid #e2e4df; border-bottom: 1px solid #e2e4df; padding: .75rem; text-align: left; }
+.workload-table thead th { background: #f2f4f0; color: #59625c; font-size: .72rem; white-space: nowrap; }
+.workload-table tbody th { position: sticky; left: 0; z-index: 1; min-width: 170px; background: #fff; font-size: .82rem; }
+.workload-table td { min-width: 145px; }
+.workload-table td strong, .workload-table td span { display: block; }
+.workload-table td strong { font-size: .82rem; }
+.workload-table td span { margin-top: .2rem; color: #66706a; font-size: .68rem; }
+.workload-table td.available { background: #edf6f1; }
+.workload-table td.overloaded { background: #fff0e8; color: #8c3d20; }
+.workload-exclusions h3 { margin-top: 0; }
+.workload-exclusions dl { display: grid; grid-template-columns: repeat(5, minmax(110px, 1fr)); gap: .75rem; margin-bottom: 0; }
+.workload-exclusions dl div { border-radius: 8px; background: #f2f4f0; padding: .7rem; }
+.workload-exclusions dt { color: #687069; font-size: .68rem; }
+.workload-exclusions dd { margin: .25rem 0 0; font-weight: 700; }
+@media (max-width: 800px) { .workload-summary { grid-template-columns: 1fr 1fr; } .workload-summary p { grid-column: 1 / -1; } .workload-exclusions dl { grid-template-columns: 1fr 1fr; } }

@@ -99,6 +99,9 @@ importers:
       '@gitpm/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@gitpm/workload':
+        specifier: workspace:*
+        version: link:../../packages/workload
       react:
         specifier: 19.2.0
         version: 19.2.0
