@@ -17,6 +17,7 @@ export interface DraftStatus {
   readonly state: DraftState;
   readonly merge_request_iid?: number;
   readonly fingerprint: string;
+  readonly external_fingerprint?: string;
   readonly changed_externally?: boolean;
   readonly created_at: string;
   readonly updated_at: string;

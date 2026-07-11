@@ -138,7 +138,7 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
     if (status.metadata.owner_gitlab_user_id !== actor.userId && actor.role !== "Maintainer") {
       throw new DraftRuntimeError("DRAFT_FORBIDDEN", "Draft owner mismatch");
     }
-    return { ...publicMetadata(status.metadata), changed_externally: status.changedExternally };
+    return { ...publicMetadata(status.metadata), changed_externally: status.changedExternally, external_fingerprint: status.currentFingerprint };
   });
 
   app.get<{ Params: { draftId: string } }>("/api/drafts/:draftId/validation", async (request) => {

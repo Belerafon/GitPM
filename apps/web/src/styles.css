@@ -255,3 +255,7 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
 .workload-exclusions dt { color: #687069; font-size: .68rem; }
 .workload-exclusions dd { margin: .25rem 0 0; font-weight: 700; }
 @media (max-width: 800px) { .workload-summary { grid-template-columns: 1fr 1fr; } .workload-summary p { grid-column: 1 / -1; } .workload-exclusions dl { grid-template-columns: 1fr 1fr; } }
+.external-update { position: relative; outline: 2px solid #d9a441; outline-offset: -2px; animation: external-update-fade 1.8s ease-out both; }
+.external-update::after { position: absolute; top: .35rem; right: .45rem; width: .48rem; height: .48rem; border-radius: 50%; background: #d9a441; content: ""; }
+@keyframes external-update-fade { 0%, 70% { background-color: #fff3c9; } 100% { background-color: transparent; outline-color: transparent; } }
+@media (prefers-reduced-motion: reduce) { .external-update { animation: none; background-color: #fff3c9; } }

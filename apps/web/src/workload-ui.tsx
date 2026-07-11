@@ -32,7 +32,7 @@ export function WorkloadWorkspace({ api, draft, locale }: { readonly api: GitPmA
       api.listEntities(draft.draft_id, "tasks"), api.listEntities(draft.draft_id, "people"), api.listEntities(draft.draft_id, "calendars"),
     ]);
     setTasks(nextTasks); setPeople(nextPeople); setCalendars(nextCalendars); setError(null);
-  }, [api, draft.draft_id]);
+  }, [api, draft.draft_id, draft.external_fingerprint]);
   useEffect(() => { void load().catch((caught) => setError(caught instanceof Error ? caught.message : String(caught))); }, [load]);
   const report = useMemo(() => calculateWorkload(tasks.map(task), people.map(person), calendars.map(calendar)), [tasks, people, calendars]);
   const activePeople = [...new Map(report.rows.map((row) => [row.person_id, row.person_name])).entries()];

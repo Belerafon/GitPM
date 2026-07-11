@@ -46,7 +46,7 @@ export function BoardWorkspace({ api, draft, locale, onChanged }: {
     setFingerprint(nextTasks[0]?.draft_fingerprint ?? nextViews[0]?.draft_fingerprint ?? nextProjects[0]?.draft_fingerprint ?? draft.fingerprint);
   }, [api, draft.draft_id, draft.fingerprint, projectId]);
 
-  useEffect(() => { void load().catch(report); }, [draft.draft_id]);
+  useEffect(() => { void load().catch(report); }, [draft.draft_id, draft.external_fingerprint]);
   const report = (caught: unknown) => setError(caught instanceof Error ? caught.message : String(caught));
   const mutate = async (operation: () => Promise<EntityResult>) => {
     setError(null);

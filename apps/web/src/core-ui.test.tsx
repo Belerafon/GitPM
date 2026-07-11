@@ -63,4 +63,20 @@ describe("core UI", () => {
     await waitFor(() => expect(screen.queryByText("First task")).toBeNull());
     expect(entityApi.entities.find((item) => item.document.schema === "gitpm/task@1")?.document.lifecycle).toBe("archived");
   });
+
+  it("reloads external changes, marks only changed fields, and keeps the focused read control", async () => {
+    const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
+    const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: `PRJ-${"1".repeat(26)}`, name: "External project", status: "backlog", lifecycle: "active" });
+    const task = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@1", id: `TSK-${"2".repeat(26)}`, project: project.document.id, title: "Before agent", type: "task", status: "backlog", lifecycle: "active" });
+    const external = { ...draft, writer_mode: "external" as const, changed_externally: false, external_fingerprint: "1".repeat(64) };
+    const rendered = render(<CoreWorkspace api={api} draft={external} locale="en" onChanged={vi.fn(async () => undefined)} />);
+    const readButton = await screen.findByRole("button", { name: /Before agent/u }); readButton.focus(); expect(document.activeElement).toBe(readButton);
+    await entityApi.updateEntity("DRF-CORE", "tasks", task, "", { ...task.document, title: "After agent", status: "done" });
+    rendered.rerender(<CoreWorkspace api={api} draft={{ ...external, external_fingerprint: "2".repeat(64), changed_externally: true }} locale="en" onChanged={vi.fn(async () => undefined)} />);
+    const updated = await screen.findByText("After agent"); const row = updated.closest<HTMLElement>(".task-row")!;
+    await waitFor(() => expect(row.classList.contains("external-update")).toBe(true));
+    expect(row.dataset.externalFields).toBe("status,title");
+    expect(document.activeElement).toBe(readButton);
+    expect((screen.getByLabelText("Status After agent") as HTMLSelectElement).disabled).toBe(true);
+  });
 });

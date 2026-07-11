@@ -28,7 +28,7 @@ export function AdminWorkspace({ api, draft, role, locale, surface, onChanged }:
     ]);
     setCalendars(nextCalendars); setPeople(nextPeople); setTeams(nextTeams); setStatuses(nextStatuses); setIssueTypes(nextIssueTypes);
     setFingerprint(nextCalendars[0]?.draft_fingerprint ?? nextPeople[0]?.draft_fingerprint ?? nextTeams[0]?.draft_fingerprint ?? nextStatuses.draft_fingerprint);
-  }, [api, draft.draft_id]);
+  }, [api, draft.draft_id, draft.external_fingerprint]);
   useEffect(() => { void load().catch((caught) => setError(caught instanceof Error ? caught.message : String(caught))); }, [load]);
 
   const mutate = async (operation: () => Promise<EntityResult>) => { setError(null); try { const result = await operation(); setFingerprint(result.draft_fingerprint); await load(); await onChanged(); } catch (caught) { setError(caught instanceof Error ? caught.message : String(caught)); } };

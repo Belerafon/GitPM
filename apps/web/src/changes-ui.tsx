@@ -75,7 +75,7 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
     setChanges(nextChanges); setSemantic(nextSemantic);
     setSelectedPath((current) => nextChanges.files.some((file) => file.path === current) ? current : nextChanges.files[0]?.path);
   };
-  useEffect(() => { setError(null); void load().catch((caught) => setError(caught instanceof Error ? caught.message : String(caught))); }, [draft.draft_id, draft.fingerprint]);
+  useEffect(() => { setError(null); void load().catch((caught) => setError(caught instanceof Error ? caught.message : String(caught))); }, [draft.draft_id, draft.fingerprint, draft.external_fingerprint]);
   useEffect(() => {
     if (mergeRequest === undefined) return;
     const timer = window.setInterval(() => { void api.pollMergeRequest(draft.draft_id).then(setMergeRequest).catch(() => undefined); }, 3000);

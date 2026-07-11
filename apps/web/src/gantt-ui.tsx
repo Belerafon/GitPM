@@ -77,7 +77,7 @@ export function GanttWorkspace({ api, draft, locale }: { readonly api: GitPmApi;
     const [nextTasks, nextMilestones] = nextProject === "" ? [[], []] : await Promise.all([api.listEntities(draft.draft_id, "tasks", nextProject), api.listEntities(draft.draft_id, "milestones", nextProject)]);
     setProjects(nextProjects); setProjectId(nextProject); setTasks(nextTasks); setMilestones(nextMilestones);
   }, [api, draft.draft_id, projectId]);
-  useEffect(() => { void load().catch((caught) => setError(caught instanceof Error ? caught.message : String(caught))); }, [draft.draft_id]);
+  useEffect(() => { void load().catch((caught) => setError(caught instanceof Error ? caught.message : String(caught))); }, [draft.draft_id, draft.external_fingerprint]);
   const model = useMemo(() => buildGanttModel(tasks, milestones), [tasks, milestones]);
   const rowIndex = new Map(model?.rows.map((row, index) => [row.id, index]) ?? []);
   const milestoneNames = new Map(milestones.map((item) => [item.document.id, text(item.document, "name")]));
