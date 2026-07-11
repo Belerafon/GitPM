@@ -259,3 +259,4 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
 .external-update::after { position: absolute; top: .35rem; right: .45rem; width: .48rem; height: .48rem; border-radius: 50%; background: #d9a441; content: ""; }
 @keyframes external-update-fade { 0%, 70% { background-color: #fff3c9; } 100% { background-color: transparent; outline-color: transparent; } }
 @media (prefers-reduced-motion: reduce) { .external-update { animation: none; background-color: #fff3c9; } }
+.reduced-motion .external-update { animation: none; background-color: #fff3c9; }

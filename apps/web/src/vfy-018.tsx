@@ -16,6 +16,7 @@ class BrowserAcceptanceApi implements GitPmApi {
   private changedFiles: ChangesList["files"] = [];
   private mr: MergeRequestStatus | undefined;
   private mrPollCount = 0;
+  private externalFingerprint: string | undefined;
   constructor(private readonly role: PublicSession["role"] = "Maintainer") {}
   async session() { return { ...session, role: this.role }; }
   async login() { return "#"; }
@@ -23,7 +24,7 @@ class BrowserAcceptanceApi implements GitPmApi {
   async listDrafts() { return this.drafts; }
   async createDraft(draftId: string) {
     const now = new Date().toISOString();
-    const created: DraftStatus = { draft_id: draftId, owner_gitlab_user_id: "42", branch: `gitpm/42/${draftId}`, base_commit: "a".repeat(40), writer_mode: "ui", state: "open", fingerprint: "b".repeat(64), created_at: now, updated_at: now };
+    const created: DraftStatus = { draft_id: draftId, owner_gitlab_user_id: "42", branch: `gitpm/42/${draftId}`, base_commit: "a".repeat(40), writer_mode: window.location.pathname.endsWith("vfy-029.html") ? "external" : "ui", state: "open", fingerprint: "b".repeat(64), external_fingerprint: "b".repeat(64), created_at: now, updated_at: now };
     this.drafts = [created];
     this.changedFiles = [
       { path: "projects/PRJ-ALPHA/project.yaml", kind: "Modified", diff_token: "mod-token", diff: "@@ -2,2 +2,2 @@\n-name: Alpha\n+name: Alpha launch\n lifecycle: active\n", hunks: [{ old_start: 2, old_count: 2, new_start: 2, new_count: 2, lines: ["-name: Alpha", "+name: Alpha launch", " lifecycle: active"] }] },
@@ -71,14 +72,31 @@ class BrowserAcceptanceApi implements GitPmApi {
       ];
       this.changedFiles = [];
     }
+    if (window.location.pathname.endsWith("vfy-029.html")) {
+      const project = `PRJ-${"1".repeat(26)}`; const task = `TSK-${"2".repeat(26)}`;
+      this.entities = [
+        this.entityResult({ schema: "gitpm/project@1", id: project, name: "Agent portfolio", status: "backlog", lifecycle: "active" }),
+        this.entityResult({ schema: "gitpm/task@1", id: task, project, title: "Before agent write", type: "task", status: "backlog", lifecycle: "active", description_markdown: "Initial value" }),
+      ];
+      this.externalFingerprint = "b".repeat(64); this.changedFiles = [];
+    }
     return created;
   }
   async snapshot(draftId: string): Promise<DraftSnapshot> {
     this.pollCount += 1;
     document.documentElement.dataset.pollCount = String(this.pollCount);
+    if (window.location.pathname.endsWith("vfy-029.html") && this.pollCount === 2) {
+      const current = this.entities.find((item) => item.document.schema === "gitpm/task@1");
+      if (current !== undefined) {
+        const first = this.entityResult({ ...current.document, title: "Agent write one", status: "in-progress" });
+        const second = this.entityResult({ ...first.document, title: "Agent write two", description_markdown: "Two quick writes coalesced" });
+        this.entities = this.entities.map((item) => item.document.id === current.document.id ? second : item);
+        this.externalFingerprint = "e".repeat(64); document.documentElement.dataset.agentWrites = "2";
+      }
+    }
     const draft = this.drafts.find((item) => item.draft_id === draftId);
     if (draft === undefined) throw new Error("draft not found");
-    return { draft, changes: { changed_files_count: this.changedFiles.length + this.changedPaths.size }, validation: { valid: true, error_count: 0, warning_count: 0, document_count: 14 + this.entities.length }, ...(this.mr === undefined ? {} : { mergeRequest: this.mr }) };
+    return { draft: { ...draft, ...(this.externalFingerprint === undefined ? {} : { external_fingerprint: this.externalFingerprint, changed_externally: this.externalFingerprint !== draft.fingerprint }) }, changes: { changed_files_count: this.changedFiles.length + this.changedPaths.size }, validation: { valid: true, error_count: 0, warning_count: 0, document_count: 14 + this.entities.length }, ...(this.mr === undefined ? {} : { mergeRequest: this.mr }) };
   }
   async setWriterMode(draftId: string, writer_mode: WriterMode) { return this.replace(draftId, { writer_mode }); }
   async closeDraft(draftId: string) { return this.replace(draftId, { state: "closed" }); }

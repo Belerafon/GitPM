@@ -81,7 +81,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
             {snapshot === null || active === undefined ? <p>{t("drafts.empty")}</p> : <>
               <div className="detail-heading"><div><span className="eyebrow">{t("drafts.id")}</span><h2>{active.draft_id}</h2></div><span className={`state ${active.state}`}>{active.state}</span></div>
               {external && <div className="alert warning">{t("drafts.externalWarning")}</div>}
-              {active.changed_externally === true && <div className="alert error">{t("drafts.changedExternally")}</div>}
+              {!external && active.changed_externally === true && <div className="alert error">{t("drafts.changedExternally")}</div>}
               {snapshot.changes.changed_files_count > 0 && <div className="alert info">{t("drafts.localWarning")}</div>}
               <dl className="status-grid">
                 <div><dt>{t("drafts.branch")}</dt><dd><code>{active.branch}</code></dd></div>

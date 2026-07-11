@@ -40,3 +40,12 @@ export function useExternalHighlights(durationMs = EXTERNAL_HIGHLIGHT_MS) {
   useEffect(() => () => { for (const timer of timers.current.values()) window.clearTimeout(timer); timers.current.clear(); }, []);
   return { highlights, mark };
 }
+
+export function useReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(() => typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true);
+  useEffect(() => {
+    const media = window.matchMedia?.("(prefers-reduced-motion: reduce)"); if (media === undefined) return;
+    const change = () => setReduced(media.matches); media.addEventListener?.("change", change); return () => media.removeEventListener?.("change", change);
+  }, []);
+  return reduced;
+}

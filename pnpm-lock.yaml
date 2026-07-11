@@ -47,6 +47,9 @@ importers:
       '@gitpm/git-client':
         specifier: workspace:*
         version: link:../../packages/git-client
+      '@gitpm/gitlab':
+        specifier: workspace:*
+        version: link:../../packages/gitlab
       '@gitpm/repository-format':
         specifier: workspace:*
         version: link:../../packages/repository-format

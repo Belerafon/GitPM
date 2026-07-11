@@ -16,6 +16,7 @@
     "@gitpm/changes": "workspace:*",
     "@gitpm/drafts": "workspace:*",
     "@gitpm/git-client": "workspace:*",
+    "@gitpm/gitlab": "workspace:*",
     "@gitpm/repository-format": "workspace:*",
     "@gitpm/security": "workspace:*",
     "@gitpm/shared": "workspace:*",

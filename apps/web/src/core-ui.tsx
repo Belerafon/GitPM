@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormE
 import type { GitPmApi } from "./api.js";
 import { message, type Locale, type MessageKey } from "./i18n.js";
 import type { DraftStatus, EntityResult, GitPmDocument } from "./types.js";
-import { changedEntityFields, useExternalHighlights } from "./external-updates.js";
+import { changedEntityFields, useExternalHighlights, useReducedMotion } from "./external-updates.js";
 
 const ID_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 const value = (document: GitPmDocument, key: string) => typeof document[key] === "string" ? document[key] as string : "";
@@ -49,6 +49,7 @@ export function CoreWorkspace({ api, draft, locale, onChanged }: {
   const previousEntities = useRef<readonly EntityResult[]>([]);
   const lastExternalFingerprint = useRef(draft.external_fingerprint);
   const { highlights, mark } = useExternalHighlights();
+  const reducedMotion = useReducedMotion();
   const readOnly = draft.writer_mode !== "ui" || draft.state !== "open" || draft.changed_externally === true;
 
   const load = useCallback(async (preferredProject = projectId, externalUpdate = false) => {
@@ -104,21 +105,21 @@ export function CoreWorkspace({ api, draft, locale, onChanged }: {
     void mutate(async () => await api.createEntity(draft.draft_id, "tasks", fingerprint, document)); event.currentTarget.reset();
   };
 
-  return <section className="core-workspace">
+  return <section className={`core-workspace${reducedMotion ? " reduced-motion" : ""}`} data-reduced-motion={reducedMotion}>
     <div className="section-heading"><div><span className="eyebrow">{draft.draft_id}</span><h2>{t("core.heading")}</h2></div></div>
     {readOnly && <div className="alert warning">{t("core.readOnly")}</div>}{error !== null && <div className="alert error">{error}</div>}
     <div className="core-columns">
       <section className="card entity-column"><h3>{t("core.projects")}</h3>
-        <form onSubmit={createProject}><input name="name" aria-label={t("core.name")} placeholder={t("core.name")} required /><textarea name="description" aria-label={t("core.description")} placeholder={t("core.description")} /><button className="primary" disabled={readOnly}>{t("core.createProject")}</button></form>
+        <form onSubmit={createProject}><input disabled={readOnly} name="name" aria-label={t("core.name")} placeholder={t("core.name")} required /><textarea disabled={readOnly} name="description" aria-label={t("core.description")} placeholder={t("core.description")} /><button className="primary" disabled={readOnly}>{t("core.createProject")}</button></form>
         <div className="entity-list">{activeProjects.length === 0 ? <p>{t("core.empty")}</p> : activeProjects.map((project) => <EntityEditor api={api} key={`${project.document.id}:${project.blob_id}`} entity={project} entityType="projects" draft={draft} fingerprint={fingerprint} readOnly={readOnly} externalFields={highlights[project.document.id]} t={t} selected={projectId === project.document.id} select={() => { setProjectId(project.document.id); void load(project.document.id); }} save={mutate} remove={remove} />)}</div>
       </section>
       <section className="card entity-column"><h3>{t("core.milestones")}</h3>{projectId === "" ? <p>{t("core.selectProject")}</p> : <>
-        <form onSubmit={createMilestone}><input name="name" aria-label={t("core.name")} placeholder={t("core.name")} required /><input name="due" type="date" aria-label={t("core.due")} /><textarea name="description" aria-label={t("core.description")} placeholder={t("core.description")} /><button className="primary" disabled={readOnly}>{t("core.createMilestone")}</button></form>
+        <form onSubmit={createMilestone}><input disabled={readOnly} name="name" aria-label={t("core.name")} placeholder={t("core.name")} required /><input disabled={readOnly} name="due" type="date" aria-label={t("core.due")} /><textarea disabled={readOnly} name="description" aria-label={t("core.description")} placeholder={t("core.description")} /><button className="primary" disabled={readOnly}>{t("core.createMilestone")}</button></form>
         <div className="entity-list">{activeMilestones.map((milestone) => <EntityEditor api={api} key={`${milestone.document.id}:${milestone.blob_id}`} entity={milestone} entityType="milestones" draft={draft} fingerprint={fingerprint} readOnly={readOnly} externalFields={highlights[milestone.document.id]} t={t} save={mutate} remove={remove} />)}</div>
       </>}</section>
     </div>
     {projectId !== "" && <section className="card task-area"><div className="task-toolbar"><h3>{t("core.tasks")}</h3><label>{t("core.filter")}<select value={filter} onChange={(event) => setFilter(event.target.value)}><option value="">{t("core.allStatuses")}</option>{statuses.map((status) => <option key={status} value={status}>{status}</option>)}</select></label></div>
-      <form className="task-create" onSubmit={createTask}><input name="title" aria-label={t("core.title")} placeholder={t("core.title")} required /><select name="status" aria-label={t("core.status")}>{statusOptions.map((status) => <option key={status.slug} value={status.slug}>{status.title}</option>)}</select><select name="milestone" aria-label={t("core.milestone")}><option value="">{t("core.noMilestone")}</option>{activeMilestones.map((milestone) => <option key={milestone.document.id} value={milestone.document.id}>{value(milestone.document, "name")}</option>)}</select><textarea name="description" aria-label={t("core.description")} placeholder={t("core.description")} /><button className="primary" disabled={readOnly}>{t("core.createTask")}</button></form>
+      <form className="task-create" onSubmit={createTask}><input disabled={readOnly} name="title" aria-label={t("core.title")} placeholder={t("core.title")} required /><select disabled={readOnly} name="status" aria-label={t("core.status")}>{statusOptions.map((status) => <option key={status.slug} value={status.slug}>{status.title}</option>)}</select><select disabled={readOnly} name="milestone" aria-label={t("core.milestone")}><option value="">{t("core.noMilestone")}</option>{activeMilestones.map((milestone) => <option key={milestone.document.id} value={milestone.document.id}>{value(milestone.document, "name")}</option>)}</select><textarea disabled={readOnly} name="description" aria-label={t("core.description")} placeholder={t("core.description")} /><button className="primary" disabled={readOnly}>{t("core.createTask")}</button></form>
       <div className="task-layout"><div className="task-table">{filteredTasks.length === 0 ? <p>{t("core.empty")}</p> : filteredTasks.map((item) => <div className={`task-row${highlights[item.document.id] ? " external-update" : ""}`} data-external-fields={highlights[item.document.id]?.join(",")} key={item.document.id}><button onClick={() => setSelectedTask(item.document.id)}><strong>{value(item.document, "title")}</strong><code>{item.document.id}</code></button><select aria-label={`${t("core.status")} ${value(item.document, "title")}`} disabled={readOnly} value={value(item.document, "status")} onChange={(event) => { void mutate(async () => await api.updateEntity(draft.draft_id, "tasks", item, fingerprint, { ...item.document, status: event.target.value })); }}>{statuses.map((status) => <option key={status}>{status}</option>)}</select><button disabled={readOnly} onClick={() => { void mutate(async () => await api.archiveEntity(draft.draft_id, "tasks", item, fingerprint)); if (selectedTask === item.document.id) setSelectedTask(""); }}>{t("core.archive")}</button></div>)}</div>
         {task !== undefined && <TaskPanel api={api} draft={draft} entity={task} fingerprint={fingerprint} milestones={activeMilestones} readOnly={readOnly} externalFields={highlights[task.document.id]} locale={locale} save={mutate} remove={remove} />}
       </div>
