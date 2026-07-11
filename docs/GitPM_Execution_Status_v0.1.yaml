@@ -1,6 +1,6 @@
 version: '0.1'
-updated_at: '2026-07-10'
-current_phase: P11A_complete_beta_work_ready
+updated_at: '2026-07-11'
+current_phase: P11C_complete_beta_work_ready
 stages:
   P00:
     status: done
@@ -116,7 +116,8 @@ stages:
     - file:evidence/P08B/vfy-020-http-deny.json
     - file:evidence/P08B/vfy-020-git-diff.txt
     - file:evidence/P08B/acceptance.md
-    notes: Maintainer administration UI and backend role enforcement for Person, Team, Calendar and repository settings are accepted.
+    notes: Maintainer administration UI and backend role enforcement for Person, Team, Calendar and repository settings are
+      accepted.
   P09:
     status: done
     accepted_by:
@@ -145,7 +146,8 @@ stages:
     - file:evidence/P10/vfy-025-revert-diff.png
     - file:evidence/P10/vfy-025-revert-diff.txt
     - file:evidence/P10/acceptance.md
-    notes: Commit graph/detail, file history and current-main revert drafts are accepted; conflicts move to external mode and no rebase action exists.
+    notes: Commit graph/detail, file history and current-main revert drafts are accepted; conflicts move to external mode
+      and no rebase action exists.
   P11A:
     status: done
     accepted_by:
@@ -159,10 +161,17 @@ stages:
     - file:evidence/P11A/acceptance.md
     notes: Status-column Board, Task drag, filters and schema-v1 Saved View persistence are accepted without swimlanes.
   P11C:
-    status: not_started
-    accepted_by: []
-    evidence: []
-    notes: ''
+    status: done
+    accepted_by:
+    - PO
+    - QA
+    evidence:
+    - file:evidence/P11C/vfy-027-browser.json
+    - file:evidence/P11C/vfy-027-gantt.jpg
+    - file:evidence/P11C/vfy-027-git-status.txt
+    - file:evidence/P11C/acceptance.md
+    notes: Read-only Gantt with dated active Tasks, hierarchy, milestone markers and dependency arrows is accepted; edit gestures
+      do not mutate repository data.
   P11D:
     status: not_started
     accepted_by: []
@@ -330,7 +339,8 @@ verification_checks:
     - file:evidence/P10/vfy-025-history.png
     - file:evidence/P10/vfy-025-revert-diff.png
     - file:evidence/P10/vfy-025-revert-diff.txt
-    notes: Browser-local History matches Git, creates a separate inverse-diff draft from current main, and exposes no rebase action.
+    notes: Browser-local History matches Git, creates a separate inverse-diff draft from current main, and exposes no rebase
+      action.
   VFY-026:
     status: passed
     evidence:
@@ -340,8 +350,11 @@ verification_checks:
     - file:evidence/P11A/vfy-026-git-diff.txt
     notes: Browser-local drag changed one Task status and reopening the persisted Board view restored exact filters.
   VFY-027:
-    status: pending
-    evidence: []
+    status: passed
+    evidence:
+    - file:evidence/P11C/vfy-027-browser.json
+    - file:evidence/P11C/vfy-027-gantt.jpg
+    - file:evidence/P11C/vfy-027-git-status.txt
     notes: ''
   VFY-028:
     status: pending

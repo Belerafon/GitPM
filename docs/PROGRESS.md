@@ -1,7 +1,7 @@
 # GitPM progress
 
-Current phase: `P11A_complete_beta_work_ready`
-Implementation code: P00-P11A complete; Alpha accepted and remaining Beta work unblocked
+Current phase: `P11C_complete_beta_work_ready`
+Implementation code: P00-P11C complete; Alpha accepted and remaining Beta work unblocked
 
 ## Current active revision
 
@@ -153,13 +153,22 @@ Implementation code: P00-P11A complete; Alpha accepted and remaining Beta work u
 - Read-only draft and role rules also apply to drag and Saved View mutation controls.
 - Final clean verification passes 25 test files and 86 tests, smoke, schema, security and planning checks.
 
+## Last P11C evidence
+
+- Read-only Gantt uses the existing entity-list API and exposes no mutation controls.
+- Active Tasks with both `start` and `due` render as inclusive date bars; undated and archived Tasks are excluded.
+- Parent Tasks precede indented children, milestone due dates render as markers and dated `depends_on` references render as arrows.
+- Browser-local VFY-027 matched five fixture bars, three dependency arrows and the Beta release milestone on 2026-07-08.
+- Dragging the first bar changed no dates and produced no repository path mutation.
+- Final clean verification passes 26 test files and 88 tests, smoke, schema, security and planning checks.
+
 ## Current blockers
 
-None. P11A is accepted; P11C, P11D and P12 remain unblocked Beta work.
+None. P11C is accepted; P11D and P12 remain unblocked Beta work.
 
 ## Next action
 
-Start the next ready Beta stage from P11C, P11D or P12 according to delivery priority.
+Start P11D simplified Workload, the next ready Beta stage in Work Plan order.
 
 ## Evidence policy
 
