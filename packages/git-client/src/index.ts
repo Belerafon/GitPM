@@ -37,6 +37,49 @@ interface CommandResult {
   readonly stderr: string;
 }
 
+export interface GitHistoryEntry {
+  readonly commit: string;
+  readonly parents: readonly string[];
+  readonly author_name: string;
+  readonly author_email: string;
+  readonly authored_at: string;
+  readonly subject: string;
+}
+
+export interface GitCommitFile {
+  readonly path: string;
+  readonly additions: number | null;
+  readonly deletions: number | null;
+}
+
+export interface GitCommitDetail extends GitHistoryEntry {
+  readonly body: string;
+  readonly files: readonly GitCommitFile[];
+  readonly diff: string;
+}
+
+export interface GitRevertResult {
+  readonly conflicted: boolean;
+  readonly conflicted_files: readonly string[];
+}
+
+function assertCommitId(commit: string): string {
+  if (!/^[0-9a-f]{40,64}$/u.test(commit)) throw new GitCommandError("GIT_COMMIT_INVALID", "Commit ID is invalid");
+  return commit;
+}
+
+function parseHistoryRecord(record: string): GitHistoryEntry {
+  const [commit = "", parents = "", authorName = "", authorEmail = "", authoredAt = "", subject = ""] = record.split("\x1f");
+  return {
+    commit: assertCommitId(commit),
+    parents: parents === "" ? [] : parents.split(" ").map(assertCommitId),
+    author_name: authorName,
+    author_email: authorEmail,
+    authored_at: authoredAt,
+    subject,
+  };
+}
+
 function safeEnvironment(home: string): NodeJS.ProcessEnv {
   const environment: NodeJS.ProcessEnv = {};
   for (const [key, value] of Object.entries(process.env)) {
@@ -227,6 +270,89 @@ export class GitClient {
   async showHeadFile(worktree: string, relativePath: string): Promise<string> {
     const result = await this.git(["-C", await realpath(worktree), "show", `HEAD:${relativePath}`]);
     return result.stdout;
+  }
+
+  async history(worktree: string, limit = 50): Promise<readonly GitHistoryEntry[]> {
+    if (!Number.isInteger(limit) || limit < 1 || limit > 200) throw new GitCommandError("GIT_HISTORY_LIMIT_INVALID", "History limit must be between 1 and 200");
+    const result = await this.git([
+      "-C", await realpath(worktree), "log", `--max-count=${limit}`, "--date=iso-strict",
+      "--format=%H%x1f%P%x1f%an%x1f%ae%x1f%aI%x1f%s%x1e",
+    ]);
+    return result.stdout.split("\x1e").map((value) => value.trim()).filter(Boolean).map(parseHistoryRecord);
+  }
+
+  async fileHistory(worktree: string, relativePath: string, limit = 50): Promise<readonly GitHistoryEntry[]> {
+    if (!Number.isInteger(limit) || limit < 1 || limit > 200) throw new GitCommandError("GIT_HISTORY_LIMIT_INVALID", "History limit must be between 1 and 200");
+    const result = await this.git([
+      "-C", await realpath(worktree), "log", "--follow", `--max-count=${limit}`, "--date=iso-strict",
+      "--format=%H%x1f%P%x1f%an%x1f%ae%x1f%aI%x1f%s%x1e", "--", relativePath,
+    ]);
+    return result.stdout.split("\x1e").map((value) => value.trim()).filter(Boolean).map(parseHistoryRecord);
+  }
+
+  async commitDetail(worktree: string, commitInput: string): Promise<GitCommitDetail> {
+    const commit = assertCommitId(commitInput);
+    const canonical = await realpath(worktree);
+    await this.assertCommitReachable(canonical, commit);
+    const metadata = await this.git([
+      "-C", canonical, "show", "--no-patch", "--date=iso-strict",
+      "--format=%H%x1f%P%x1f%an%x1f%ae%x1f%aI%x1f%s%x1f%b", commit,
+    ]);
+    const fields = metadata.stdout.trim().split("\x1f");
+    const entry = parseHistoryRecord(fields.slice(0, 6).join("\x1f"));
+    const stats = await this.git(["-C", canonical, "show", "--format=", "--numstat", "--no-renames", commit]);
+    const files = stats.stdout.split(/\r?\n/u).filter(Boolean).map((line): GitCommitFile => {
+      const [added = "-", deleted = "-", ...pathParts] = line.split("\t");
+      return {
+        path: pathParts.join("\t"),
+        additions: added === "-" ? null : Number.parseInt(added, 10),
+        deletions: deleted === "-" ? null : Number.parseInt(deleted, 10),
+      };
+    });
+    const diff = await this.git(["-C", canonical, "show", "--format=", "--no-color", "--no-ext-diff", "--no-renames", "--unified=3", commit]);
+    return { ...entry, body: fields.slice(6).join("\x1f").trim(), files, diff: diff.stdout };
+  }
+
+  async revertNoCommit(worktree: string, commitInput: string): Promise<GitRevertResult> {
+    const commit = assertCommitId(commitInput);
+    const canonical = await realpath(worktree);
+    await this.assertCommitReachable(canonical, commit);
+    const parentLine = (await this.git(["-C", canonical, "rev-list", "--parents", "-n", "1", commit])).stdout.trim();
+    const parentCount = Math.max(0, parentLine.split(" ").length - 1);
+    try {
+      await this.git(["-C", canonical, "revert", "--no-commit", ...(parentCount > 1 ? ["-m", "1"] : []), commit]);
+      return { conflicted: false, conflicted_files: [] };
+    } catch (error) {
+      if (!(error instanceof GitCommandError) || error.code !== "GIT_FAILED") throw error;
+      const conflicts = await this.git(["-C", canonical, "diff", "--name-only", "--diff-filter=U"]);
+      const conflictedFiles = conflicts.stdout.split(/\r?\n/u).filter(Boolean);
+      if (conflictedFiles.length === 0) throw error;
+      return { conflicted: true, conflicted_files: conflictedFiles };
+    }
+  }
+
+  async assertCommitOnRemoteDefault(commitInput: string): Promise<void> {
+    const commit = assertCommitId(commitInput);
+    const remoteCommit = await this.remoteDefaultCommit();
+    try {
+      await this.git(["--git-dir", this.bareRepository, "merge-base", "--is-ancestor", commit, remoteCommit]);
+    } catch (error) {
+      if (error instanceof GitCommandError && error.code === "GIT_FAILED") {
+        throw new GitCommandError("GIT_COMMIT_NOT_ON_MAIN", "Revert commit is not in current remote main history", error.exitCode);
+      }
+      throw error;
+    }
+  }
+
+  private async assertCommitReachable(worktree: string, commit: string): Promise<void> {
+    try {
+      await this.git(["-C", worktree, "merge-base", "--is-ancestor", commit, "HEAD"]);
+    } catch (error) {
+      if (error instanceof GitCommandError && error.code === "GIT_FAILED") {
+        throw new GitCommandError("GIT_COMMIT_NOT_REACHABLE", "Commit is not in the current main history", error.exitCode);
+      }
+      throw error;
+    }
   }
 
   async removeWorktree(worktree: string, branch: string, force: boolean): Promise<void> {

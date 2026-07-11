@@ -7,8 +7,9 @@ import type { EntityStore } from "@gitpm/domain";
 import type { ChangesService } from "@gitpm/changes";
 import type { AuthService } from "@gitpm/gitlab";
 import type { PublishingService } from "@gitpm/publishing";
+import type { HistoryService } from "@gitpm/history";
 import Fastify, { LogController, type FastifyBaseLogger } from "fastify";
-import { registerChangesApi, registerDraftApi, registerEntityApi } from "./draft-api.js";
+import { registerChangesApi, registerDraftApi, registerEntityApi, registerHistoryApi } from "./draft-api.js";
 import type { Authenticate } from "./draft-api.js";
 import { registerAuthAndPublishingApi } from "./auth-api.js";
 
@@ -22,6 +23,7 @@ export interface AppOptions {
   draftManager?: DraftManager;
   entityStore?: EntityStore;
   isReady?: () => boolean | Promise<boolean>;
+  historyService?: HistoryService;
   logger?: FastifyBaseLogger;
   publishingService?: PublishingService;
 }
@@ -97,6 +99,7 @@ export function buildApp(options: AppOptions = {}) {
     registerDraftApi(app, options.draftManager, authenticate);
     if (options.entityStore) registerEntityApi(app, options.draftManager, options.entityStore, authenticate);
     if (options.changesService) registerChangesApi(app, options.draftManager, options.changesService, authenticate);
+    if (options.historyService) registerHistoryApi(app, options.draftManager, options.historyService, authenticate);
   }
   if (options.authService) registerAuthAndPublishingApi(app, options.authService, options.publishingService);
 

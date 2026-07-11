@@ -1,0 +1,15 @@
+{
+  "check": "VFY-025",
+  "environment": "browser-local",
+  "locale": "ru",
+  "history_commit": "9999999999999999999999999999999999999999",
+  "history_subject": "Merged task update",
+  "file_history_path": "projects/PRJ-ALPHA/tasks/TSK-HISTORY.yaml",
+  "revert_draft": "REVERT-99999999",
+  "inverse_diff_visible": true,
+  "rebase_action_present": false,
+  "screenshots": [
+    "evidence/P10/vfy-025-history.png",
+    "evidence/P10/vfy-025-revert-diff.png"
+  ]
+}

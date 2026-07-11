@@ -1,0 +1,11 @@
+VFY-025 inverse diff
+
+Selected commit: 9999999999999999999999999999999999999999
+New draft: REVERT-99999999
+Changed path: projects/PRJ-ALPHA/tasks/TSK-HISTORY.yaml
+
+@@ -1 +1 @@
+-title: After
++title: Before
+
+The browser fixture recorded the selected commit in document state and the Changes UI displayed this inverse diff. No rebase action or endpoint exists.

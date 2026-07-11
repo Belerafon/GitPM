@@ -62,6 +62,9 @@ importers:
       '@gitpm/git-client':
         specifier: workspace:*
         version: link:../../packages/git-client
+      '@gitpm/history':
+        specifier: workspace:*
+        version: link:../../packages/history
       '@gitpm/gitlab':
         specifier: workspace:*
         version: link:../../packages/gitlab
@@ -174,6 +177,15 @@ importers:
         version: link:../security
 
   packages/gitlab: {}
+
+  packages/history:
+    dependencies:
+      '@gitpm/drafts':
+        specifier: workspace:*
+        version: link:../drafts
+      '@gitpm/git-client':
+        specifier: workspace:*
+        version: link:../git-client
 
   packages/logging:
     dependencies:

@@ -1,4 +1,4 @@
-import type { ChangesList, CommitResult, DraftSnapshot, DraftStatus, EntityResult, GitPmDocument, MergeRequestStatus, PublicSession, PushResult, SemanticDiff, ValidationSummary, WriterMode, ChangesSummary } from "./types.js";
+import type { ChangesList, CommitHistoryDetail, CommitHistoryItem, CommitResult, DraftSnapshot, DraftStatus, EntityResult, GitPmDocument, MergeRequestStatus, PublicSession, PushResult, RevertDraftResult, SemanticDiff, ValidationSummary, WriterMode, ChangesSummary } from "./types.js";
 
 export class ApiError extends Error {
   constructor(public readonly code: string, message: string) {
@@ -34,6 +34,10 @@ export interface GitPmApi {
   push(draftId: string): Promise<PushResult>;
   createMergeRequest(draftId: string, title: string, description?: string): Promise<MergeRequestStatus>;
   pollMergeRequest(draftId: string): Promise<MergeRequestStatus>;
+  history(draftId: string): Promise<readonly CommitHistoryItem[]>;
+  commitDetail(draftId: string, commit: string): Promise<CommitHistoryDetail>;
+  fileHistory(draftId: string, path: string): Promise<readonly CommitHistoryItem[]>;
+  createRevertDraft(draftId: string, commit: string, newDraftId: string): Promise<RevertDraftResult>;
 }
 
 interface ErrorBody { readonly error?: { readonly code?: string; readonly message?: string } }
@@ -145,5 +149,17 @@ export class HttpGitPmApi implements GitPmApi {
   }
   async pollMergeRequest(draftId: string): Promise<MergeRequestStatus> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/merge-request`);
+  }
+  async history(draftId: string): Promise<readonly CommitHistoryItem[]> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/history`);
+  }
+  async commitDetail(draftId: string, commit: string): Promise<CommitHistoryDetail> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/history/${encodeURIComponent(commit)}`);
+  }
+  async fileHistory(draftId: string, path: string): Promise<readonly CommitHistoryItem[]> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/file-history?path=${encodeURIComponent(path)}`);
+  }
+  async createRevertDraft(draftId: string, commit: string, draft_id: string): Promise<RevertDraftResult> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/history/${encodeURIComponent(commit)}/revert`, { method: "POST", body: JSON.stringify({ draft_id }) });
   }
 }

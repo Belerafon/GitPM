@@ -1,7 +1,7 @@
 # GitPM progress
 
-Current phase: `P09_complete_P10_ready`
-Implementation code: P00-P09 complete; Alpha gate ready
+Current phase: `P10_complete_beta_work_ready`
+Implementation code: P00-P10 complete; Alpha accepted and Beta work unblocked
 
 ## Current active revision
 
@@ -135,13 +135,22 @@ Implementation code: P00-P09 complete; Alpha gate ready
 - Russian localization and explicit Alpha limitations remain visible through the primary Changes-to-MR flow.
 - Final clean verification passes 21 test files and 81 tests, smoke, schema, security and planning checks.
 
+## Last P10 evidence
+
+- Controlled Git history returns commit graph entries, exact commit/file detail, affected Projects and per-file history.
+- Revert accepts only a commit reachable from current remote main and creates a separately named draft after a fresh fetch.
+- `git revert --no-commit` leaves the inverse diff for the established commit-all workflow without rewriting HEAD; merge commits use parent 1.
+- Conflict drafts are preserved in external writer mode; no rebase or built-in conflict-resolution action exists.
+- Russian browser-local VFY-025 verified History, file history, separate revert draft and inverse Changes diff.
+- Final clean verification passes 24 test files and 85 tests, smoke, schema, security and planning checks.
+
 ## Current blockers
 
-None. P09 and the Alpha slice are accepted; P10 is unblocked.
+None. P10 is accepted; P11A, P11C, P11D and P12 are unblocked Beta work.
 
 ## Next action
 
-Start P10 deployability, observability and operations hardening.
+Start the next ready Beta stage from P11A, P11C, P11D or P12 according to delivery priority.
 
 ## Evidence policy
 

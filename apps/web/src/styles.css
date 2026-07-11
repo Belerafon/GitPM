@@ -166,3 +166,22 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
 .commit-dialog h3, .commit-dialog p { margin: 0; }
 @media (max-width: 1050px) { .semantic-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 800px) { .changes-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .changes-layout { grid-template-columns: 1fr; } .semantic-grid { grid-template-columns: 1fr; } .publish-panel { align-items: stretch; flex-direction: column; } }
+.history-workspace { display: grid; gap: 1.25rem; margin-top: 1.5rem; }
+.history-layout { display: grid; grid-template-columns: minmax(260px, .65fr) minmax(0, 1.7fr); gap: 1.25rem; }
+.history-list, .history-files, .file-history { display: grid; align-content: start; gap: .45rem; }
+.history-item { display: grid; gap: .25rem; text-align: left; }
+.history-item.selected { border-color: #49715d; background: #edf3ee; }
+.history-item code, .history-item span { color: #737873; font-size: .72rem; }
+.history-detail { min-width: 0; }
+.history-files button { display: flex; justify-content: space-between; gap: .7rem; text-align: left; }
+.history-files code { overflow: hidden; text-overflow: ellipsis; }
+.history-files span { color: #657069; font-size: .75rem; }
+.file-history { margin-top: 1rem; border-left: 3px solid #95aa9d; padding-left: .75rem; }
+.file-history h3 { margin: 0; }
+.file-history button { text-align: left; }
+.history-diff { margin-top: 1rem; }
+.history-diff summary { cursor: pointer; }
+.history-diff pre { overflow: auto; max-height: 480px; border-radius: 8px; background: #f6f7f4; padding: .75rem; font-size: .72rem; }
+.revert-form { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: .65rem; margin-top: 1rem; border-top: 1px solid #dedfd9; padding-top: 1rem; }
+.revert-form label { display: grid; gap: .35rem; }
+@media (max-width: 800px) { .history-layout { grid-template-columns: 1fr; } .revert-form { grid-template-columns: 1fr; } }

@@ -1,0 +1,74 @@
+import { useEffect, useState, type FormEvent } from "react";
+import type { GitPmApi } from "./api.js";
+import { formatDateTime, message, type Locale } from "./i18n.js";
+import type { CommitHistoryDetail, CommitHistoryItem, DraftStatus } from "./types.js";
+
+export function HistoryWorkspace({ api, draft, locale, canRevert, onDraftCreated }: {
+  readonly api: GitPmApi;
+  readonly draft: DraftStatus;
+  readonly locale: Locale;
+  readonly canRevert: boolean;
+  readonly onDraftCreated: (draftId: string) => Promise<void>;
+}) {
+  const t = (key: Parameters<typeof message>[1], values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
+  const [items, setItems] = useState<readonly CommitHistoryItem[]>([]);
+  const [detail, setDetail] = useState<CommitHistoryDetail | null>(null);
+  const [fileItems, setFileItems] = useState<readonly CommitHistoryItem[]>([]);
+  const [filePath, setFilePath] = useState<string | null>(null);
+  const [newDraftId, setNewDraftId] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [conflicts, setConflicts] = useState<readonly string[]>([]);
+
+  useEffect(() => {
+    setDetail(null); setFileItems([]); setFilePath(null); setConflicts([]);
+    void api.history(draft.draft_id).then((history) => { setItems(history); if (history[0]) void select(history[0]); }).catch(report);
+  }, [api, draft.draft_id]);
+
+  const report = (caught: unknown) => setError(caught instanceof Error ? caught.message : String(caught));
+  const select = async (item: CommitHistoryItem) => {
+    setError(null); setFileItems([]); setFilePath(null);
+    try { const next = await api.commitDetail(draft.draft_id, item.commit); setDetail(next); setNewDraftId(`REVERT-${item.commit.slice(0, 8).toUpperCase()}`); }
+    catch (caught) { report(caught); }
+  };
+  const showFileHistory = async (path: string) => {
+    setError(null);
+    try { setFilePath(path); setFileItems(await api.fileHistory(draft.draft_id, path)); }
+    catch (caught) { report(caught); }
+  };
+  const submitRevert = async (event: FormEvent) => {
+    event.preventDefault();
+    if (detail === null) return;
+    setBusy(true); setError(null);
+    try {
+      const result = await api.createRevertDraft(draft.draft_id, detail.commit, newDraftId.trim());
+      setConflicts(result.conflicted_files);
+      await onDraftCreated(result.draft.draft_id);
+    } catch (caught) { report(caught); }
+    finally { setBusy(false); }
+  };
+
+  return <section className="history-workspace">
+    <div className="section-heading"><span className="eyebrow">Git</span><h2>{t("history.heading")}</h2><p>{t("history.description")}</p></div>
+    {error !== null && <div className="alert error">{error}</div>}
+    {conflicts.length > 0 && <div className="alert warning">{t("history.conflict", { count: conflicts.length })}</div>}
+    <div className="history-layout">
+      <div className="card history-list">
+        {items.map((item) => <button key={item.commit} className={detail?.commit === item.commit ? "history-item selected" : "history-item"} onClick={() => { void select(item); }}>
+          <strong>{item.subject}</strong><code>{item.commit.slice(0, 10)}</code><span>{item.author_name} · {formatDateTime(locale, item.authored_at)}</span>
+        </button>)}
+      </div>
+      <div className="card history-detail">
+        {detail === null ? <p>{t("history.empty")}</p> : <>
+          <div className="detail-heading"><div><span className="eyebrow">{t("history.commit")}</span><h2>{detail.subject}</h2></div><code>{detail.commit.slice(0, 12)}</code></div>
+          {detail.body !== "" && <p>{detail.body}</p>}
+          <dl className="status-grid"><div><dt>{t("history.author")}</dt><dd>{detail.author_name} &lt;{detail.author_email}&gt;</dd></div><div><dt>{t("history.date")}</dt><dd>{formatDateTime(locale, detail.authored_at)}</dd></div><div><dt>{t("history.files")}</dt><dd>{detail.files.length}</dd></div><div><dt>{t("history.projects")}</dt><dd>{detail.semantic_summary.affected_projects.join(", ") || "—"}</dd></div></dl>
+          <div className="history-files">{detail.files.map((file) => <button key={file.path} onClick={() => { void showFileHistory(file.path); }}><code>{file.path}</code><span>+{file.additions ?? "—"} −{file.deletions ?? "—"}</span></button>)}</div>
+          {filePath !== null && <div className="file-history"><h3>{t("history.fileHistory")}</h3><code>{filePath}</code>{fileItems.map((item) => <button key={item.commit} onClick={() => { void select(item); }}>{item.subject} · {item.commit.slice(0, 8)}</button>)}</div>}
+          <details className="history-diff"><summary>{t("history.diff")}</summary><pre>{detail.diff}</pre></details>
+          {canRevert && <form className="revert-form" onSubmit={submitRevert}><label>{t("history.revertDraft")}<input value={newDraftId} onChange={(event) => setNewDraftId(event.target.value)} pattern="[A-Za-z0-9][A-Za-z0-9-]{0,127}" required /></label><button className="primary" disabled={busy}>{t("history.createRevert")}</button></form>}
+        </>}
+      </div>
+    </div>
+  </section>;
+}

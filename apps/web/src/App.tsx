@@ -5,6 +5,7 @@ import { formatDateTime, localeRegistry, LOCALE_STORAGE_KEY, message, selectLoca
 import { CoreWorkspace } from "./core-ui.js";
 import { AdminWorkspace } from "./admin-ui.js";
 import { ChangesWorkspace } from "./changes-ui.js";
+import { HistoryWorkspace } from "./history-ui.js";
 
 interface AppProps {
   readonly api: GitPmApi;
@@ -104,7 +105,8 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
           ? <div className="card empty-workspace">{t("core.selectProject")}</div>
           : <AdminWorkspace api={api} draft={active} role={drafts.session.role} locale={locale} surface={view === "nav.people" ? "people" : view === "nav.calendar" ? "calendar" : "settings"} onChanged={drafts.refresh} />)}
         {view === "nav.changes" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <ChangesWorkspace api={api} draft={active} role={drafts.session.role} locale={locale} onChanged={drafts.refresh} confirmAction={confirmAction} />)}
-        {!["nav.drafts", "nav.portfolio", "nav.projects", "nav.tasks", "nav.people", "nav.calendar", "nav.settings", "nav.changes"].includes(view) && <div className="card empty-workspace">{t("common.notAvailable")}</div>}
+        {view === "nav.history" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <HistoryWorkspace api={api} draft={active} locale={locale} canRevert={drafts.session.role !== "Reporter"} onDraftCreated={drafts.select} />)}
+        {!["nav.drafts", "nav.portfolio", "nav.projects", "nav.tasks", "nav.people", "nav.calendar", "nav.settings", "nav.changes", "nav.history"].includes(view) && <div className="card empty-workspace">{t("common.notAvailable")}</div>}
       </main>
     </div>
   );

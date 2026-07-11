@@ -9,6 +9,8 @@ import { ChangesError } from "@gitpm/changes";
 import type { ChangesService } from "@gitpm/changes";
 import { AuthError } from "@gitpm/gitlab";
 import { PublishingError } from "@gitpm/publishing";
+import { HistoryError } from "@gitpm/history";
+import type { HistoryService } from "@gitpm/history";
 import { validateRepository } from "@gitpm/validation";
 
 export type ProjectRole = "Reporter" | "Developer" | "Maintainer";
@@ -102,6 +104,10 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
       code = error.code;
       message = error.message;
       status = error.code === "VALIDATION_FAILED" ? 422 : 409;
+    } else if (error instanceof HistoryError) {
+      code = error.code;
+      message = error.message;
+      status = 400;
     } else if ((error as { code?: string }).code === "FST_ERR_CTP_BODY_TOO_LARGE") {
       status = 413;
       code = "REQUEST_TOO_LARGE";
@@ -171,6 +177,41 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
     if (actor.role !== "Maintainer") throw new DraftRuntimeError("DRAFT_FORBIDDEN", "Cleanup requires Maintainer");
     await manager.cleanupDraft(request.params.draftId, request.body.confirmation);
     await reply.code(204).send();
+  });
+}
+
+export function registerHistoryApi(
+  app: FastifyInstance,
+  manager: DraftManager,
+  history: HistoryService,
+  authenticate: Authenticate,
+): void {
+  app.get<{ Params: { draftId: string }; Querystring: { limit?: string } }>("/api/drafts/:draftId/history", async (request) => {
+    const actor = await authenticate(request);
+    await requireDraftRead(manager, actor, request.params.draftId);
+    const limit = request.query.limit === undefined ? 50 : Number.parseInt(request.query.limit, 10);
+    return await history.list(request.params.draftId, limit);
+  });
+
+  app.get<{ Params: { draftId: string; commit: string } }>("/api/drafts/:draftId/history/:commit", async (request) => {
+    const actor = await authenticate(request);
+    await requireDraftRead(manager, actor, request.params.draftId);
+    return await history.detail(request.params.draftId, request.params.commit);
+  });
+
+  app.get<{ Params: { draftId: string }; Querystring: { path: string; limit?: string } }>("/api/drafts/:draftId/file-history", async (request) => {
+    const actor = await authenticate(request);
+    await requireDraftRead(manager, actor, request.params.draftId);
+    const limit = request.query.limit === undefined ? 50 : Number.parseInt(request.query.limit, 10);
+    return await history.fileHistory(request.params.draftId, request.query.path, limit);
+  });
+
+  app.post<{ Params: { draftId: string; commit: string }; Body: { draft_id: string } }>("/api/drafts/:draftId/history/:commit/revert", async (request, reply) => {
+    const actor = await authenticate(request);
+    requireMutationRole(actor);
+    await requireDraftRead(manager, actor, request.params.draftId);
+    const result = await history.createRevertDraft(request.params.draftId, request.params.commit, request.body.draft_id, actor.userId);
+    await reply.code(201).send({ ...result, draft: publicMetadata(result.draft) });
   });
 }
 

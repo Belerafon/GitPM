@@ -5,7 +5,7 @@ import { App } from "./App.js";
 import type { GitPmApi } from "./api.js";
 import { POLL_INTERVAL_MS } from "./draft-context.js";
 import { assertLocalePacks, localeRegistry, LOCALE_STORAGE_KEY, message, selectLocale } from "./i18n.js";
-import type { ChangesList, CommitResult, DraftSnapshot, DraftStatus, EntityResult, MergeRequestStatus, PublicSession, PushResult, SemanticDiff, WriterMode } from "./types.js";
+import type { ChangesList, CommitHistoryDetail, CommitResult, DraftSnapshot, DraftStatus, EntityResult, MergeRequestStatus, PublicSession, PushResult, RevertDraftResult, SemanticDiff, WriterMode } from "./types.js";
 
 const session: PublicSession = {
   user: { id: "42", username: "developer" },
@@ -63,6 +63,10 @@ class FakeApi implements GitPmApi {
   async push(): Promise<PushResult> { throw new Error("not used"); }
   async createMergeRequest(): Promise<MergeRequestStatus> { throw new Error("not used"); }
   async pollMergeRequest(): Promise<MergeRequestStatus> { throw new Error("not used"); }
+  async history() { return []; }
+  async commitDetail(): Promise<CommitHistoryDetail> { throw new Error("not used"); }
+  async fileHistory() { return []; }
+  async createRevertDraft(): Promise<RevertDraftResult> { throw new Error("not used"); }
   private replace(draftId: string, values: Partial<DraftStatus>) { const next = { ...(this.drafts.find((item) => item.draft_id === draftId) ?? draft({ draft_id: draftId })), ...values }; this.drafts = [next]; return next; }
 }
 

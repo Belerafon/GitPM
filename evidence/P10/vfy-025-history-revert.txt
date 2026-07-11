@@ -1,0 +1,17 @@
+VFY-025 History and revert draft: PASS
+
+Automated verification:
+- packages/history/src/index.test.ts verifies ordered commit history, exact commit/file detail, current-main draft base, inverse worktree diff, unchanged HEAD, and normalized file-history paths.
+- apps/server/src/history-api.test.ts verifies read and revert HTTP contracts and confirms that worktree paths are not exposed.
+- apps/web/src/history-ui.test.tsx verifies commit detail, file history, separate revert-draft creation, and absence of a rebase action.
+- Full corepack pnpm verify passed: 24 test files, 85 tests, clean build, lint, typecheck, smoke, schema, security and planning checks.
+
+Browser-local acceptance:
+- Russian History displayed the merged commit, author, timestamp, affected Project, exact file statistics and file history.
+- Creating REVERT-99999999 recorded the selected commit and opened its inverse diff in Changes.
+- No rebase action was present.
+- Screenshots and browser result JSON are stored beside this report.
+
+Conflict behavior:
+- git revert conflicts preserve the new draft and switch it to external writer mode.
+- GitPM does not provide conflict resolution or rebase endpoints.

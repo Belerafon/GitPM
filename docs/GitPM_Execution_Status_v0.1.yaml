@@ -1,6 +1,6 @@
 version: '0.1'
 updated_at: '2026-07-10'
-current_phase: P09_complete_P10_ready
+current_phase: P10_complete_beta_work_ready
 stages:
   P00:
     status: done
@@ -135,10 +135,17 @@ stages:
     - file:evidence/P09/acceptance.md
     notes: Changes, semantic diff, restore, commit-all, push and Merge Request UI complete the accepted Alpha slice.
   P10:
-    status: not_started
-    accepted_by: []
-    evidence: []
-    notes: ''
+    status: done
+    accepted_by:
+    - QA
+    evidence:
+    - file:evidence/P10/vfy-025-history-revert.txt
+    - file:evidence/P10/vfy-025-browser.json
+    - file:evidence/P10/vfy-025-history.png
+    - file:evidence/P10/vfy-025-revert-diff.png
+    - file:evidence/P10/vfy-025-revert-diff.txt
+    - file:evidence/P10/acceptance.md
+    notes: Commit graph/detail, file history and current-main revert drafts are accepted; conflicts move to external mode and no rebase action exists.
   P11A:
     status: not_started
     accepted_by: []
@@ -309,9 +316,14 @@ verification_checks:
     - file:evidence/P09/acceptance.md
     notes: Primary login-to-MR browser flow and accepted limitations satisfy the Alpha gate.
   VFY-025:
-    status: pending
-    evidence: []
-    notes: ''
+    status: passed
+    evidence:
+    - file:evidence/P10/vfy-025-history-revert.txt
+    - file:evidence/P10/vfy-025-browser.json
+    - file:evidence/P10/vfy-025-history.png
+    - file:evidence/P10/vfy-025-revert-diff.png
+    - file:evidence/P10/vfy-025-revert-diff.txt
+    notes: Browser-local History matches Git, creates a separate inverse-diff draft from current main, and exposes no rebase action.
   VFY-026:
     status: pending
     evidence: []

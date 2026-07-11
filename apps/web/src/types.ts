@@ -96,6 +96,36 @@ export interface DraftSnapshot {
   readonly mergeRequest?: MergeRequestStatus;
 }
 
+export interface HistorySemanticSummary {
+  readonly created: number;
+  readonly updated: number;
+  readonly deleted: number;
+  readonly affected_projects: readonly string[];
+}
+
+export interface CommitHistoryItem {
+  readonly commit: string;
+  readonly parents: readonly string[];
+  readonly author_name: string;
+  readonly author_email: string;
+  readonly authored_at: string;
+  readonly subject: string;
+  readonly semantic_summary: HistorySemanticSummary;
+}
+
+export interface CommitHistoryDetail extends CommitHistoryItem {
+  readonly body: string;
+  readonly files: readonly { readonly path: string; readonly additions: number | null; readonly deletions: number | null }[];
+  readonly diff: string;
+}
+
+export interface RevertDraftResult {
+  readonly draft: DraftStatus;
+  readonly reverted_commit: string;
+  readonly conflicted: boolean;
+  readonly conflicted_files: readonly string[];
+}
+
 export type GitPmDocument = Readonly<Record<string, unknown>> & { readonly schema: string; readonly id: string; readonly lifecycle: "active" | "archived" };
 
 export interface EntityResult {
