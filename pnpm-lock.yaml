@@ -62,12 +62,12 @@ importers:
       '@gitpm/git-client':
         specifier: workspace:*
         version: link:../../packages/git-client
-      '@gitpm/history':
-        specifier: workspace:*
-        version: link:../../packages/history
       '@gitpm/gitlab':
         specifier: workspace:*
         version: link:../../packages/gitlab
+      '@gitpm/history':
+        specifier: workspace:*
+        version: link:../../packages/history
       '@gitpm/logging':
         specifier: workspace:*
         version: link:../../packages/logging
@@ -233,6 +233,12 @@ importers:
       ajv:
         specifier: 8.17.1
         version: 8.17.1
+
+  packages/workload:
+    dependencies:
+      '@gitpm/calendar':
+        specifier: workspace:*
+        version: link:../calendar
 
 packages:
 
