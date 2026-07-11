@@ -9,7 +9,7 @@
 - Формальный DAG, requirements и verification checks: `GitPM_Requirements_Traceability_v0.5.yaml`.
 - Фактические statuses and evidence: `GitPM_Execution_Status_v0.1.yaml`.
 - Правила поддержки: `GitPM_Planning_Maintenance_Guide_v0.3.md`.
-- Человекочитаемый журнал: `PROGRESS.md`.
+- Человекочитаемый журнал: `docs/PROGRESS.md`.
 
 ## 2. Milestones
 
@@ -31,7 +31,7 @@
 - Mandatory automated verification проходит.
 - Manual acceptance имеет наблюдаемый expected result и evidence artifact.
 - Stage status и evidence обновлены в `GitPM_Execution_Status_v0.1.yaml`; `accepted_by` заполняется только для stage с объявленными acceptance roles.
-- `PROGRESS.md` содержит краткий итог, blocker и next action.
+- `docs/PROGRESS.md` содержит краткий итог, blocker и next action.
 - Working tree clean.
 
 ### Ритм коммитов
@@ -108,7 +108,7 @@
 - Все artifacts присутствуют и reviewed.
 - Automated verification и owned checks successful.
 - Локальные evidence paths существуют и доступны reviewer.
-- `PROGRESS.md` содержит outcome, limitations and next action.
+- `docs/PROGRESS.md` содержит outcome, limitations and next action.
 
 ## P00S. Модель угроз и технические spikes
 
@@ -162,7 +162,7 @@
 - Automated verification и owned checks successful.
 - Acceptance roles записаны в execution status.
 - Evidence paths/URLs существуют и доступны reviewer.
-- `PROGRESS.md` содержит outcome, limitations and next action.
+- `docs/PROGRESS.md` содержит outcome, limitations and next action.
 
 ## P01. Schema v1 baseline и формат repository
 
@@ -218,7 +218,7 @@
 - Automated verification и owned checks successful.
 - Acceptance roles записаны в execution status.
 - Evidence paths/URLs существуют и доступны reviewer.
-- `PROGRESS.md` содержит outcome, limitations and next action.
+- `docs/PROGRESS.md` содержит outcome, limitations and next action.
 
 ## P02. Parser, formatter, validation, calendar utilities и CLI
 
@@ -278,7 +278,7 @@
 - Automated verification и owned checks successful.
 - Acceptance roles записаны в execution status.
 - Evidence paths/URLs существуют и доступны reviewer.
-- `PROGRESS.md` содержит outcome, limitations and next action.
+- `docs/PROGRESS.md` содержит outcome, limitations and next action.
 
 ## P03. Git synchronization, worktree и draft runtime
 
@@ -340,7 +340,7 @@
 - Automated verification и owned checks successful.
 - Acceptance roles записаны в execution status.
 - Evidence paths/URLs существуют и доступны reviewer.
-- `PROGRESS.md` содержит outcome, limitations and next action.
+- `docs/PROGRESS.md` содержит outcome, limitations and next action.
 
 ## P04. Backend draft API и доменные операции
 
@@ -398,7 +398,7 @@
 - Automated verification и owned checks successful.
 - Acceptance roles записаны в execution status.
 - Evidence paths/URLs существуют и доступны reviewer.
-- `PROGRESS.md` содержит outcome, limitations and next action.
+- `docs/PROGRESS.md` содержит outcome, limitations and next action.
 
 ## P05. Git changes API и restore file/hunk
 
@@ -456,7 +456,7 @@
 - Automated verification и owned checks successful.
 - Acceptance roles записаны в execution status.
 - Evidence paths/URLs существуют и доступны reviewer.
-- `PROGRESS.md` содержит outcome, limitations and next action.
+- `docs/PROGRESS.md` содержит outcome, limitations and next action.
 
 ## P06. GitLab OAuth, push и MR через test double
 
@@ -517,7 +517,7 @@
 - Automated verification и owned checks successful.
 - Acceptance roles записаны в execution status.
 - Evidence paths/URLs существуют и доступны reviewer.
-- `PROGRESS.md` содержит outcome, limitations and next action.
+- `docs/PROGRESS.md` содержит outcome, limitations and next action.
 
 ## P07. Frontend shell и управление draft
 
@@ -576,7 +576,7 @@
 - Automated verification и owned checks successful.
 - Acceptance roles записаны в execution status.
 - Evidence paths/URLs существуют и доступны reviewer.
-- `PROGRESS.md` содержит outcome, limitations and next action.
+- `docs/PROGRESS.md` содержит outcome, limitations and next action.
 
 ## P08A. Core UI: Project, Task и Milestone
 
@@ -631,7 +631,7 @@
 - Automated verification и owned checks successful.
 - Acceptance roles записаны в execution status.
 - Evidence paths/URLs существуют и доступны reviewer.
-- `PROGRESS.md` содержит outcome, limitations and next action.
+- `docs/PROGRESS.md` содержит outcome, limitations and next action.
 
 ## P08B. Administration UI: Person, Team, Calendar и repository settings
 
@@ -685,7 +685,7 @@
 - Automated verification и owned checks successful.
 - Acceptance roles записаны в execution status.
 - Evidence paths/URLs существуют и доступны reviewer.
-- `PROGRESS.md` содержит outcome, limitations and next action.
+- `docs/PROGRESS.md` содержит outcome, limitations and next action.
 
 ## P09. Changes UI, semantic diff, commit и Alpha/MVP
 
@@ -748,7 +748,7 @@
 - Automated verification и owned checks successful.
 - Acceptance roles записаны в execution status.
 - Evidence paths/URLs существуют и доступны reviewer.
-- `PROGRESS.md` содержит outcome, limitations and next action.
+- `docs/PROGRESS.md` содержит outcome, limitations and next action.
 
 ## P10. История и revert workflow без rebase
 
@@ -801,7 +801,7 @@
 - Automated verification и owned checks successful.
 - Acceptance roles записаны в execution status.
 - Evidence paths/URLs существуют и доступны reviewer.
-- `PROGRESS.md` содержит outcome, limitations and next action.
+- `docs/PROGRESS.md` содержит outcome, limitations and next action.
 
 ## P11A. Board и сохраненные представления
 
@@ -854,7 +854,7 @@
 - Automated verification и owned checks successful.
 - Acceptance roles записаны в execution status.
 - Evidence paths/URLs существуют и доступны reviewer.
-- `PROGRESS.md` содержит outcome, limitations and next action.
+- `docs/PROGRESS.md` содержит outcome, limitations and next action.
 
 ## P11C. Read-only Gantt
 
@@ -905,7 +905,7 @@
 - Automated verification и owned checks successful.
 - Acceptance roles записаны в execution status.
 - Evidence paths/URLs существуют и доступны reviewer.
-- `PROGRESS.md` содержит outcome, limitations and next action.
+- `docs/PROGRESS.md` содержит outcome, limitations and next action.
 
 ## P11D. Упрощенный Workload
 
@@ -958,7 +958,7 @@
 - Automated verification и owned checks successful.
 - Acceptance roles записаны в execution status.
 - Evidence paths/URLs существуют и доступны reviewer.
-- `PROGRESS.md` содержит outcome, limitations and next action.
+- `docs/PROGRESS.md` содержит outcome, limitations and next action.
 
 ## P12. Работа агента через files и CLI
 
@@ -1018,7 +1018,7 @@
 - Automated verification и owned checks successful.
 - Acceptance roles записаны в execution status.
 - Evidence paths/URLs существуют и доступны reviewer.
-- `PROGRESS.md` содержит outcome, limitations and next action.
+- `docs/PROGRESS.md` содержит outcome, limitations and next action.
 
 ## P13A. Security hardening
 
@@ -1073,7 +1073,7 @@
 - Automated verification и owned checks successful.
 - Acceptance roles записаны в execution status.
 - Evidence paths/URLs существуют и доступны reviewer.
-- `PROGRESS.md` содержит outcome, limitations and next action.
+- `docs/PROGRESS.md` содержит outcome, limitations and next action.
 
 ## P13B. Эксплуатационная проверка и performance smoke
 
@@ -1128,7 +1128,7 @@
 - Automated verification и owned checks successful.
 - Acceptance roles записаны в execution status.
 - Evidence paths/URLs существуют и доступны reviewer.
-- `PROGRESS.md` содержит outcome, limitations and next action.
+- `docs/PROGRESS.md` содержит outcome, limitations and next action.
 
 ## P14. Release acceptance v0.1
 
@@ -1188,4 +1188,4 @@
 - Automated verification и owned checks successful.
 - Acceptance roles записаны в execution status.
 - Evidence paths/URLs существуют и доступны reviewer.
-- `PROGRESS.md` содержит outcome, limitations and next action.
+- `docs/PROGRESS.md` содержит outcome, limitations and next action.
