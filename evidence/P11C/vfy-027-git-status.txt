@@ -1,0 +1,8 @@
+VFY-027 read-only repository status
+
+Before edit gesture: no fixture paths changed.
+After dragging the first Gantt bar: no fixture paths changed.
+Task dates remained start=2026-07-01 and due=2026-07-05.
+The chart still contained exactly five dated active Task bars.
+
+The acceptance fixture exposes each repository mutation through document.documentElement.dataset.gitDiff; the value remained absent before and after the gesture.

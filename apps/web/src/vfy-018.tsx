@@ -41,6 +41,22 @@ class BrowserAcceptanceApi implements GitPmApi {
       ];
       this.changedFiles = [];
     }
+    if (window.location.pathname.endsWith("vfy-027.html")) {
+      const project = `PRJ-${"1".repeat(26)}`; const milestone = `MLS-${"8".repeat(26)}`;
+      const ids = ["2", "3", "4", "5", "6"].map((value) => `TSK-${value.repeat(26)}`);
+      this.entities = [
+        this.entityResult({ schema: "gitpm/project@1", id: project, name: "Beta portfolio", status: "backlog", lifecycle: "active" }),
+        this.entityResult({ schema: "gitpm/milestone@1", id: milestone, project, name: "Beta release", due: "2026-07-08", lifecycle: "active" }),
+        this.entityResult({ schema: "gitpm/task@1", id: ids[0]!, project, title: "Plan release", type: "task", status: "done", lifecycle: "active", start: "2026-07-01", due: "2026-07-05" }),
+        this.entityResult({ schema: "gitpm/task@1", id: ids[1]!, project, title: "Build API", type: "task", status: "done", lifecycle: "active", start: "2026-07-02", due: "2026-07-03", parent: ids[0], milestone }),
+        this.entityResult({ schema: "gitpm/task@1", id: ids[2]!, project, title: "Ship UI", type: "task", status: "in-progress", lifecycle: "active", start: "2026-07-04", due: "2026-07-06", depends_on: [ids[1]!] }),
+        this.entityResult({ schema: "gitpm/task@1", id: ids[3]!, project, title: "Review", type: "task", status: "backlog", lifecycle: "active", start: "2026-07-06", due: "2026-07-07", depends_on: [ids[2]!] }),
+        this.entityResult({ schema: "gitpm/task@1", id: ids[4]!, project, title: "Launch", type: "task", status: "backlog", lifecycle: "active", start: "2026-07-08", due: "2026-07-08", depends_on: [ids[3]!] }),
+        this.entityResult({ schema: "gitpm/task@1", id: `TSK-${"7".repeat(26)}`, project, title: "Undated hidden", type: "task", status: "backlog", lifecycle: "active" }),
+        this.entityResult({ schema: "gitpm/task@1", id: `TSK-${"9".repeat(26)}`, project, title: "Archived hidden", type: "task", status: "done", lifecycle: "archived", start: "2026-07-01", due: "2026-07-02" }),
+      ];
+      this.changedFiles = [];
+    }
     return created;
   }
   async snapshot(draftId: string): Promise<DraftSnapshot> {

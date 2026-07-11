@@ -1,0 +1,19 @@
+{
+  "check": "VFY-027",
+  "environment": "browser-local",
+  "locale": "ru",
+  "draft": "DRF-GANTT",
+  "project": "PRJ-11111111111111111111111111",
+  "range": { "start": "2026-07-01", "due": "2026-07-08" },
+  "bars": [
+    { "task": "TSK-22222222222222222222222222", "title": "Plan release", "start": "2026-07-01", "due": "2026-07-05" },
+    { "task": "TSK-33333333333333333333333333", "title": "Build API", "start": "2026-07-02", "due": "2026-07-03", "parent": "TSK-22222222222222222222222222", "milestone": "MLS-88888888888888888888888888" },
+    { "task": "TSK-44444444444444444444444444", "title": "Ship UI", "start": "2026-07-04", "due": "2026-07-06", "depends_on": "TSK-33333333333333333333333333" },
+    { "task": "TSK-55555555555555555555555555", "title": "Review", "start": "2026-07-06", "due": "2026-07-07", "depends_on": "TSK-44444444444444444444444444" },
+    { "task": "TSK-66666666666666666666666666", "title": "Launch", "start": "2026-07-08", "due": "2026-07-08", "depends_on": "TSK-55555555555555555555555555" }
+  ],
+  "milestone": { "name": "Beta release", "due": "2026-07-08" },
+  "hidden": ["Undated hidden", "Archived hidden"],
+  "edit_gesture": { "task": "TSK-22222222222222222222222222", "before": ["2026-07-01", "2026-07-05"], "after": ["2026-07-01", "2026-07-05"], "changed_paths": [] },
+  "screenshot": "evidence/P11C/vfy-027-gantt.jpg"
+}
