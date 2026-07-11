@@ -1,7 +1,7 @@
 # GitPM progress
 
-Current phase: `P11C_complete_beta_work_ready`
-Implementation code: P00-P11C complete; Alpha accepted and remaining Beta work unblocked
+Current phase: `P11D_complete_P12_ready`
+Implementation code: P00-P11D complete; Alpha accepted and P12 is the remaining Beta stage
 
 ## Current active revision
 
@@ -162,13 +162,22 @@ Implementation code: P00-P11C complete; Alpha accepted and remaining Beta work u
 - Dragging the first bar changed no dates and produced no repository path mutation.
 - Final clean verification passes 26 test files and 88 tests, smoke, schema, security and planning checks.
 
+## Last P11D evidence
+
+- `@gitpm/workload` splits each estimate equally between active assignees and distributes each share across that person's working dates.
+- ISO-week allocation is compared with calendar-adjusted capacity; holidays proportionally reduce `weekly_capacity_hours`.
+- Workload UI shows the Person-week matrix, utilization, overload state, formula explanations and deterministic exclusion counts.
+- Browser-local VFY-028 matched three precomputed Person-week values in Russian and recorded no repository path mutation.
+- Archived, undated, unestimated, unassigned and unavailable-assignee Tasks are excluded with visible reason counts.
+- Final clean verification passes 28 test files and 91 tests, smoke, schema, security and planning checks.
+
 ## Current blockers
 
-None. P11C is accepted; P11D and P12 remain unblocked Beta work.
+None. P11D is accepted; P12 remains unblocked Beta work.
 
 ## Next action
 
-Start P11D simplified Workload, the next ready Beta stage in Work Plan order.
+Start P12 agent workflow through files and CLI, the remaining ready Beta stage.
 
 ## Evidence policy
 

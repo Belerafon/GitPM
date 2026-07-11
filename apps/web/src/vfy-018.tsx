@@ -57,6 +57,20 @@ class BrowserAcceptanceApi implements GitPmApi {
       ];
       this.changedFiles = [];
     }
+    if (window.location.pathname.endsWith("vfy-028.html")) {
+      const project = `PRJ-${"1".repeat(26)}`; const calendar = `CAL-${"4".repeat(26)}`; const ada = `PER-${"2".repeat(26)}`; const linus = `PER-${"3".repeat(26)}`;
+      this.entities = [
+        this.entityResult({ schema: "gitpm/project@1", id: project, name: "Beta portfolio", status: "backlog", lifecycle: "active" }),
+        this.entityResult({ schema: "gitpm/calendar@1", id: calendar, name: "Engineering", working_weekdays: [1, 2, 3, 4, 5], holidays: ["2026-07-08"], lifecycle: "active" }),
+        this.entityResult({ schema: "gitpm/person@1", id: ada, name: "Ada", weekly_capacity_hours: 40, calendar, lifecycle: "active" }),
+        this.entityResult({ schema: "gitpm/person@1", id: linus, name: "Linus", weekly_capacity_hours: 32, calendar, lifecycle: "active" }),
+        this.entityResult({ schema: "gitpm/task@1", id: `TSK-${"5".repeat(26)}`, project, title: "Shared delivery", type: "task", status: "in-progress", lifecycle: "active", estimate_hours: 40, start: "2026-07-06", due: "2026-07-10", assignees: [ada, linus] }),
+        this.entityResult({ schema: "gitpm/task@1", id: `TSK-${"6".repeat(26)}`, project, title: "Ada follow-up", type: "task", status: "backlog", lifecycle: "active", estimate_hours: 30, start: "2026-07-09", due: "2026-07-15", assignees: [ada] }),
+        this.entityResult({ schema: "gitpm/task@1", id: `TSK-${"7".repeat(26)}`, project, title: "Undated excluded", type: "task", status: "backlog", lifecycle: "active", estimate_hours: 10, assignees: [ada] }),
+        this.entityResult({ schema: "gitpm/task@1", id: `TSK-${"8".repeat(26)}`, project, title: "Archived excluded", type: "task", status: "done", lifecycle: "archived", estimate_hours: 10, start: "2026-07-06", due: "2026-07-10", assignees: [ada] }),
+      ];
+      this.changedFiles = [];
+    }
     return created;
   }
   async snapshot(draftId: string): Promise<DraftSnapshot> {

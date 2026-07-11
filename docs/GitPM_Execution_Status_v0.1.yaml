@@ -1,6 +1,6 @@
 version: '0.1'
 updated_at: '2026-07-11'
-current_phase: P11C_complete_beta_work_ready
+current_phase: P11D_complete_P12_ready
 stages:
   P00:
     status: done
@@ -173,10 +173,18 @@ stages:
     notes: Read-only Gantt with dated active Tasks, hierarchy, milestone markers and dependency arrows is accepted; edit gestures
       do not mutate repository data.
   P11D:
-    status: not_started
-    accepted_by: []
-    evidence: []
-    notes: ''
+    status: done
+    accepted_by:
+    - PO
+    - QA
+    evidence:
+    - file:evidence/P11D/vfy-028-browser.json
+    - file:evidence/P11D/calculation-report.md
+    - file:evidence/P11D/vfy-028-workload.png
+    - file:evidence/P11D/vfy-028-git-status.txt
+    - file:evidence/P11D/acceptance.md
+    notes: Explainable weekly allocation splits estimates across active assignees and personal working dates, compares holiday-adjusted
+      capacity, and excludes archived, undated, unestimated and unassigned Tasks.
   P12:
     status: not_started
     accepted_by: []
@@ -357,9 +365,13 @@ verification_checks:
     - file:evidence/P11C/vfy-027-git-status.txt
     notes: ''
   VFY-028:
-    status: pending
-    evidence: []
-    notes: ''
+    status: passed
+    evidence:
+    - file:evidence/P11D/vfy-028-browser.json
+    - file:evidence/P11D/calculation-report.md
+    - file:evidence/P11D/vfy-028-workload.png
+    notes: Three deterministic Person-week values matched the browser fixture; holiday-adjusted capacity and archived/undated exclusion
+      passed without repository mutation.
   VFY-029:
     status: pending
     evidence: []

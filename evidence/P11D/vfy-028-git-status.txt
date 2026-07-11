@@ -1,0 +1,5 @@
+VFY-028 read-only repository status
+
+Opening Workload and reading all Person-week values produced no fixture path mutation.
+The acceptance fixture exposes repository mutations through document.documentElement.dataset.gitDiff; its value remained an empty JSON array.
+Archived and undated Tasks remained present in the fixture but were excluded from the calculation.

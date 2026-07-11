@@ -1,0 +1,25 @@
+{
+  "check": "VFY-028",
+  "environment": "browser-local",
+  "locale": "ru",
+  "draft": "DRF-WORKLOAD",
+  "formula": "equal-assignee-share/equal-person-working-day/v1",
+  "calendar": {
+    "working_weekdays": [1, 2, 3, 4, 5],
+    "holiday": "2026-07-08"
+  },
+  "person_week_values": [
+    { "person": "Ada", "week": "2026-07-06", "allocated_hours": 32, "capacity_hours": 32, "utilization_percent": 100 },
+    { "person": "Ada", "week": "2026-07-13", "allocated_hours": 18, "capacity_hours": 40, "utilization_percent": 45 },
+    { "person": "Linus", "week": "2026-07-06", "allocated_hours": 20, "capacity_hours": 25.6, "utilization_percent": 78.125 }
+  ],
+  "excluded": {
+    "archived": 1,
+    "undated": 1,
+    "unestimated": 0,
+    "unassigned": 0,
+    "unavailable_assignees": 0
+  },
+  "changed_paths": [],
+  "screenshot": "evidence/P11D/vfy-028-workload.png"
+}
