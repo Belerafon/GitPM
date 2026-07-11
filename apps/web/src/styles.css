@@ -209,3 +209,26 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
 .saved-view-list button.selected { border-color: #49715d; background: #edf3ee; }
 .saved-view-list code { color: #747974; font-size: .65rem; }
 @media (max-width: 900px) { .board-toolbar, .saved-views { grid-template-columns: 1fr; } .board-count { justify-self: start; } }
+.gantt-workspace { display: grid; gap: 1.25rem; margin-top: 1.5rem; }
+.gantt-toolbar { display: flex; align-items: end; gap: 1rem; }
+.gantt-toolbar label { display: grid; min-width: 240px; gap: .3rem; color: #5d625f; font-size: .78rem; }
+.gantt-toolbar select { border: 1px solid #c9cbc5; border-radius: 8px; background: #fff; padding: .62rem; }
+.gantt-toolbar > span:nth-of-type(1) { color: #5d625f; font-size: .8rem; }
+.gantt-scroll { display: grid; grid-template-columns: 260px minmax(0, 1fr); overflow-x: auto; padding: 0; }
+.gantt-labels { position: sticky; z-index: 4; left: 0; border-right: 1px solid #daddd6; background: #fff; box-shadow: 6px 0 12px rgba(31,45,37,.04); }
+.gantt-label-head { height: 42px; border-bottom: 1px solid #daddd6; padding: .8rem; color: #5d625f; font-size: .75rem; font-weight: 700; text-transform: uppercase; }
+.gantt-label { display: grid; align-content: center; height: 58px; border-bottom: 1px solid #eceee9; padding: .45rem .75rem; }
+.gantt-label strong { overflow: hidden; font-size: .82rem; text-overflow: ellipsis; white-space: nowrap; }
+.gantt-label span, .gantt-label small { color: #717772; font-size: .66rem; }
+.gantt-timeline { position: relative; min-height: 180px; }
+.gantt-days { display: grid; height: 42px; border-bottom: 1px solid #daddd6; }
+.gantt-days time { display: grid; place-items: center; border-right: 1px solid #eceee9; color: #3f4943; font-size: .72rem; }
+.gantt-days small { color: #8a908c; font-size: .56rem; }
+.gantt-grid { position: absolute; inset: 42px 0 0; background-image: linear-gradient(to right, #eceee9 1px, transparent 1px); }
+.gantt-bar { position: absolute; z-index: 2; display: flex; align-items: center; overflow: hidden; height: 36px; border: 1px solid #3f7967; border-radius: 7px; background: #68a18e; box-shadow: 0 3px 9px rgba(35,83,67,.16); color: #fff; padding: 0 .55rem; font-size: .7rem; white-space: nowrap; user-select: none; }
+.gantt-milestone { position: absolute; z-index: 3; top: 30px; width: 18px; height: 18px; transform: rotate(45deg); border: 2px solid #8a5b22; background: #f1b966; }
+.gantt-milestone span { position: absolute; top: -18px; left: 12px; width: max-content; transform: rotate(-45deg); color: #79542b; font-size: .62rem; }
+.gantt-dependencies { position: absolute; z-index: 3; top: 42px; left: 0; overflow: visible; pointer-events: none; }
+.gantt-dependencies path { fill: none; stroke: #6c5c91; stroke-width: 2; }
+.gantt-dependencies marker path { fill: #6c5c91; stroke: none; }
+@media (max-width: 700px) { .gantt-toolbar { align-items: stretch; flex-direction: column; } .gantt-scroll { grid-template-columns: 210px minmax(0,1fr); } }

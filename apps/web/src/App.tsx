@@ -7,6 +7,7 @@ import { AdminWorkspace } from "./admin-ui.js";
 import { ChangesWorkspace } from "./changes-ui.js";
 import { HistoryWorkspace } from "./history-ui.js";
 import { BoardWorkspace } from "./board-ui.js";
+import { GanttWorkspace } from "./gantt-ui.js";
 
 interface AppProps {
   readonly api: GitPmApi;
@@ -108,7 +109,8 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
         {view === "nav.changes" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <ChangesWorkspace api={api} draft={active} role={drafts.session.role} locale={locale} onChanged={drafts.refresh} confirmAction={confirmAction} />)}
         {view === "nav.history" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <HistoryWorkspace api={api} draft={active} locale={locale} canRevert={drafts.session.role !== "Reporter"} onDraftCreated={drafts.select} />)}
         {view === "nav.board" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <BoardWorkspace api={api} draft={active} locale={locale} onChanged={drafts.refresh} />)}
-        {!["nav.drafts", "nav.portfolio", "nav.projects", "nav.tasks", "nav.people", "nav.calendar", "nav.settings", "nav.changes", "nav.history", "nav.board"].includes(view) && <div className="card empty-workspace">{t("common.notAvailable")}</div>}
+        {view === "nav.gantt" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <GanttWorkspace api={api} draft={active} locale={locale} />)}
+        {!["nav.drafts", "nav.portfolio", "nav.projects", "nav.tasks", "nav.people", "nav.calendar", "nav.settings", "nav.changes", "nav.history", "nav.board", "nav.gantt"].includes(view) && <div className="card empty-workspace">{t("common.notAvailable")}</div>}
       </main>
     </div>
   );

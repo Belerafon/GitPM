@@ -162,4 +162,13 @@
   ,"board.savedDescription": "Save the current Project, status, and type filters as a Board view."
   ,"board.viewName": "View name"
   ,"board.saveView": "Save view"
+  ,"gantt.heading": "Gantt"
+  ,"gantt.description": "Read Task dates, hierarchy, milestones, and dependencies without changing repository data."
+  ,"gantt.project": "Project"
+  ,"gantt.visible": "Dated Tasks: {count}"
+  ,"gantt.readOnly": "Read-only"
+  ,"gantt.empty": "No active Tasks with both start and due dates."
+  ,"gantt.chart": "Read-only Gantt chart"
+  ,"gantt.tasks": "Tasks"
+  ,"gantt.dependencies": "Task dependencies"
 }
