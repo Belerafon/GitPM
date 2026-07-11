@@ -8,7 +8,7 @@ const value = (document: GitPmDocument, key: string) => typeof document[key] ===
 interface ConfigValue { readonly slug: string; readonly title: string; readonly active: boolean }
 const configValues = (document: GitPmDocument, key: "statuses" | "issue_types"): ConfigValue[] => Array.isArray(document[key]) ? (document[key] as unknown[]).filter((item): item is ConfigValue => typeof item === "object" && item !== null && typeof (item as ConfigValue).slug === "string" && typeof (item as ConfigValue).title === "string" && (item as ConfigValue).active === true) : [];
 
-export function newEntityId(prefix: "PRJ" | "MLS" | "TSK" | "CAL" | "PER" | "TEM", random: () => number = Math.random): string {
+export function newEntityId(prefix: "PRJ" | "MLS" | "TSK" | "CAL" | "PER" | "TEM" | "VIW", random: () => number = Math.random): string {
   let body = "";
   for (let index = 0; index < 26; index += 1) body += ID_ALPHABET[Math.floor(random() * ID_ALPHABET.length)] ?? "0";
   return `${prefix}-${body}`;

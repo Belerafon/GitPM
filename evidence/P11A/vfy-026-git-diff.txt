@@ -1,0 +1,14 @@
+VFY-026 exact YAML changes
+
+Task status move:
+  projects/PRJ-11111111111111111111111111/tasks/TSK-22222222222222222222222222.yaml
+  status: backlog -> done
+
+Saved Board view:
+  projects/PRJ-11111111111111111111111111/views/VIW-71P5YTZBAFCQ6N0X0JT355D5E4.yaml
+  kind: board
+  group_by: status
+  filters.statuses: [done]
+  filters.types: [task]
+
+No other repository paths changed in the browser-local acceptance fixture.

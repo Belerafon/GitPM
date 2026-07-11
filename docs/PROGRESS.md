@@ -1,7 +1,7 @@
 # GitPM progress
 
-Current phase: `P10_complete_beta_work_ready`
-Implementation code: P00-P10 complete; Alpha accepted and Beta work unblocked
+Current phase: `P11A_complete_beta_work_ready`
+Implementation code: P00-P11A complete; Alpha accepted and remaining Beta work unblocked
 
 ## Current active revision
 
@@ -144,13 +144,22 @@ Implementation code: P00-P10 complete; Alpha accepted and Beta work unblocked
 - Russian browser-local VFY-025 verified History, file history, separate revert draft and inverse Changes diff.
 - Final clean verification passes 24 test files and 85 tests, smoke, schema, security and planning checks.
 
+## Last P11A evidence
+
+- Board columns come from repository status configuration and show active Tasks without swimlanes.
+- Native and pointer drag update Task status through the existing optimistic domain API.
+- Project, status and type filters persist in schema-v1 Saved Views with `kind: board` and `group_by: status`.
+- Browser-local VFY-026 moved one Task to Done, reopened a Saved View and recorded exactly one Task YAML plus one View YAML.
+- Read-only draft and role rules also apply to drag and Saved View mutation controls.
+- Final clean verification passes 25 test files and 86 tests, smoke, schema, security and planning checks.
+
 ## Current blockers
 
-None. P10 is accepted; P11A, P11C, P11D and P12 are unblocked Beta work.
+None. P11A is accepted; P11C, P11D and P12 remain unblocked Beta work.
 
 ## Next action
 
-Start the next ready Beta stage from P11A, P11C, P11D or P12 according to delivery priority.
+Start the next ready Beta stage from P11C, P11D or P12 according to delivery priority.
 
 ## Evidence policy
 

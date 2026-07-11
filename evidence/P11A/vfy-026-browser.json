@@ -1,0 +1,17 @@
+{
+  "check": "VFY-026",
+  "environment": "browser-local",
+  "locale": "ru",
+  "draft": "DRF-BOARD",
+  "project": "PRJ-11111111111111111111111111",
+  "dragged_task": "TSK-22222222222222222222222222",
+  "status_before": "backlog",
+  "status_after": "done",
+  "saved_view_name": "Готовые задачи",
+  "reopened_filters": { "statuses": ["done"], "types": ["task"] },
+  "changed_paths": [
+    "projects/PRJ-11111111111111111111111111/tasks/TSK-22222222222222222222222222.yaml",
+    "projects/PRJ-11111111111111111111111111/views/VIW-71P5YTZBAFCQ6N0X0JT355D5E4.yaml"
+  ],
+  "screenshot": "evidence/P11A/vfy-026-board-saved-view.png"
+}

@@ -31,6 +31,16 @@ class BrowserAcceptanceApi implements GitPmApi {
       { path: "projects/PRJ-ALPHA/tasks/TSK-CREATED.yaml", kind: "Added", diff_token: "add-token", diff: "@@ -0,0 +1,2 @@\n+schema: gitpm/task@1\n+id: TSK-CREATED\n", hunks: [{ old_start: 0, old_count: 0, new_start: 1, new_count: 2, lines: ["+schema: gitpm/task@1", "+id: TSK-CREATED"] }] },
       { path: "projects/PRJ-ALPHA/tasks/TSK-ARCHIVED.yaml", kind: "Modified", diff_token: "archive-token", diff: "@@ -6,1 +6,1 @@\n-lifecycle: active\n+lifecycle: archived\n", hunks: [{ old_start: 6, old_count: 1, new_start: 6, new_count: 1, lines: ["-lifecycle: active", "+lifecycle: archived"] }] },
     ];
+    if (window.location.pathname.endsWith("vfy-026.html")) {
+      const project = `PRJ-${"1".repeat(26)}`;
+      this.entities = [
+        this.entityResult({ schema: "gitpm/project@1", id: project, name: "Beta portfolio", status: "backlog", lifecycle: "active" }),
+        this.entityResult({ schema: "gitpm/task@1", id: `TSK-${"2".repeat(26)}`, project, title: "Prepare beta", type: "task", status: "backlog", lifecycle: "active" }),
+        this.entityResult({ schema: "gitpm/task@1", id: `TSK-${"3".repeat(26)}`, project, title: "Review Board", type: "task", status: "in-progress", lifecycle: "active" }),
+        this.entityResult({ schema: "gitpm/task@1", id: `TSK-${"4".repeat(26)}`, project, title: "Alpha accepted", type: "task", status: "done", lifecycle: "active" }),
+      ];
+      this.changedFiles = [];
+    }
     return created;
   }
   async snapshot(draftId: string): Promise<DraftSnapshot> {
@@ -44,7 +54,7 @@ class BrowserAcceptanceApi implements GitPmApi {
   async closeDraft(draftId: string) { return this.replace(draftId, { state: "closed" }); }
   async reopenDraft(draftId: string) { return this.replace(draftId, { state: "open" }); }
   async cleanupDraft(draftId: string) { this.drafts = this.drafts.filter((draft) => draft.draft_id !== draftId); }
-  async listEntities(_draftId: string, entityType: string, project?: string) { const names: Record<string, string> = { people: "person", calendars: "calendar", teams: "team" }; const schema = `gitpm/${names[entityType] ?? entityType.slice(0, -1)}@1`; return this.entities.filter((item) => item.document.schema === schema && (project === undefined || item.document.project === project)); }
+  async listEntities(_draftId: string, entityType: string, project?: string) { const names: Record<string, string> = { people: "person", calendars: "calendar", teams: "team", views: "saved-view" }; const schema = `gitpm/${names[entityType] ?? entityType.slice(0, -1)}@1`; return this.entities.filter((item) => item.document.schema === schema && (project === undefined || item.document.project === project)); }
   async createEntity(_draftId: string, _entityType: string, _fingerprint: string, document: GitPmDocument): Promise<EntityResult> { const result = this.entityResult(document); this.entities.push(result); this.capture(result.path); return result; }
   async updateEntity(_draftId: string, _entityType: string, entity: EntityResult, _fingerprint: string, document: GitPmDocument): Promise<EntityResult> { const result = this.entityResult(document); this.entities = this.entities.map((item) => item.document.id === entity.document.id ? result : item); this.capture(result.path); return result; }
   async archiveEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string): Promise<EntityResult> { return await this.updateEntity(draftId, entityType, entity, fingerprint, { ...entity.document, lifecycle: "archived" }); }
@@ -72,7 +82,7 @@ class BrowserAcceptanceApi implements GitPmApi {
   async commitDetail(_draftId: string, commit: string) { return { ...(await this.history())[0]!, commit, body: "", files: [{ path: "projects/PRJ-ALPHA/tasks/TSK-HISTORY.yaml", additions: 1, deletions: 1 }], diff: "@@ -1 +1 @@\n-title: Before\n+title: After\n" }; }
   async fileHistory() { return await this.history(); }
   async createRevertDraft(_draftId: string, commit: string, newDraftId: string) { const draft = await this.createDraft(newDraftId); this.changedFiles = [{ path: "projects/PRJ-ALPHA/tasks/TSK-HISTORY.yaml", kind: "Modified", diff_token: "revert-token", diff: "@@ -1 +1 @@\n-title: After\n+title: Before\n", hunks: [{ old_start: 1, old_count: 1, new_start: 1, new_count: 1, lines: ["-title: After", "+title: Before"] }] }]; document.documentElement.dataset.revertedCommit = commit; return { draft, reverted_commit: commit, conflicted: false, conflicted_files: [] }; }
-  private entityResult(document: GitPmDocument): EntityResult { const project = String(document.project ?? ""); const paths: Record<string, string> = { "gitpm/calendar@1": `calendars/${document.id}.yaml`, "gitpm/person@1": `people/${document.id}.yaml`, "gitpm/team@1": `teams/${document.id}.yaml` }; const path = document.schema === "gitpm/project@1" ? `projects/${document.id}/project.yaml` : document.schema === "gitpm/task@1" ? `projects/${project}/tasks/${document.id}.yaml` : document.schema === "gitpm/milestone@1" ? `projects/${project}/milestones/${document.id}.yaml` : paths[document.schema] ?? `${document.id}.yaml`; return { document, path, blob_id: "c".repeat(40), draft_fingerprint: "d".repeat(64) }; }
+  private entityResult(document: GitPmDocument): EntityResult { const project = String(document.project ?? ""); const paths: Record<string, string> = { "gitpm/calendar@1": `calendars/${document.id}.yaml`, "gitpm/person@1": `people/${document.id}.yaml`, "gitpm/team@1": `teams/${document.id}.yaml`, "gitpm/saved-view@1": `projects/${project}/views/${document.id}.yaml` }; const path = document.schema === "gitpm/project@1" ? `projects/${document.id}/project.yaml` : document.schema === "gitpm/task@1" ? `projects/${project}/tasks/${document.id}.yaml` : document.schema === "gitpm/milestone@1" ? `projects/${project}/milestones/${document.id}.yaml` : paths[document.schema] ?? `${document.id}.yaml`; return { document, path, blob_id: "c".repeat(40), draft_fingerprint: "d".repeat(64) }; }
   private capture(path: string) { this.changedPaths.add(path); document.documentElement.dataset.gitDiff = JSON.stringify([...this.changedPaths].sort()); }
   private replace(draftId: string, values: Partial<DraftStatus>) {
     const current = this.drafts.find((draft) => draft.draft_id === draftId);

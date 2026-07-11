@@ -1,6 +1,6 @@
 version: '0.1'
 updated_at: '2026-07-10'
-current_phase: P10_complete_beta_work_ready
+current_phase: P11A_complete_beta_work_ready
 stages:
   P00:
     status: done
@@ -147,10 +147,17 @@ stages:
     - file:evidence/P10/acceptance.md
     notes: Commit graph/detail, file history and current-main revert drafts are accepted; conflicts move to external mode and no rebase action exists.
   P11A:
-    status: not_started
-    accepted_by: []
-    evidence: []
-    notes: ''
+    status: done
+    accepted_by:
+    - PO
+    - QA
+    evidence:
+    - file:evidence/P11A/vfy-026-board-saved-view.txt
+    - file:evidence/P11A/vfy-026-browser.json
+    - file:evidence/P11A/vfy-026-board-saved-view.png
+    - file:evidence/P11A/vfy-026-git-diff.txt
+    - file:evidence/P11A/acceptance.md
+    notes: Status-column Board, Task drag, filters and schema-v1 Saved View persistence are accepted without swimlanes.
   P11C:
     status: not_started
     accepted_by: []
@@ -325,9 +332,13 @@ verification_checks:
     - file:evidence/P10/vfy-025-revert-diff.txt
     notes: Browser-local History matches Git, creates a separate inverse-diff draft from current main, and exposes no rebase action.
   VFY-026:
-    status: pending
-    evidence: []
-    notes: ''
+    status: passed
+    evidence:
+    - file:evidence/P11A/vfy-026-board-saved-view.txt
+    - file:evidence/P11A/vfy-026-browser.json
+    - file:evidence/P11A/vfy-026-board-saved-view.png
+    - file:evidence/P11A/vfy-026-git-diff.txt
+    notes: Browser-local drag changed one Task status and reopening the persisted Board view restored exact filters.
   VFY-027:
     status: pending
     evidence: []

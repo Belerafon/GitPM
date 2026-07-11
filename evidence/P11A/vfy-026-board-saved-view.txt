@@ -1,0 +1,19 @@
+VFY-026 Board and Saved View: PASS
+
+Automated verification:
+- apps/web/src/board-ui.test.tsx drags a Task between status columns, persists a schema-v1 Board Saved View, clears the UI filters, and reopens the Saved View to restore them.
+- Read-only behavior derives from draft writer mode, state and external-change status; mutation controls and dragging are disabled.
+- Existing domain/API integration already validates Saved View CRUD and repository path rules.
+- Full `corepack pnpm verify` passed: 25 test files, 86 tests, clean build, lint, typecheck, smoke, schema, security and planning checks.
+
+Browser-local acceptance:
+- Russian Board rendered Backlog, In progress and Done columns from repository status configuration.
+- Pointer drag moved Prepare beta from Backlog to Done.
+- The Готовые задачи view saved status=done and type=task filters.
+- After clearing both filters, reopening the view restored them and showed the two expected Done Tasks.
+- Exact changed paths contain one Task YAML and one Saved View YAML.
+
+Artifacts:
+- vfy-026-browser.json
+- vfy-026-board-saved-view.png
+- vfy-026-git-diff.txt
