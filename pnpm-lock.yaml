@@ -35,6 +35,18 @@ importers:
 
   apps/cli:
     dependencies:
+      '@gitpm/agent':
+        specifier: workspace:*
+        version: link:../../packages/agent
+      '@gitpm/changes':
+        specifier: workspace:*
+        version: link:../../packages/changes
+      '@gitpm/drafts':
+        specifier: workspace:*
+        version: link:../../packages/drafts
+      '@gitpm/git-client':
+        specifier: workspace:*
+        version: link:../../packages/git-client
       '@gitpm/repository-format':
         specifier: workspace:*
         version: link:../../packages/repository-format
