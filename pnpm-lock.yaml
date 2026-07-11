@@ -125,6 +125,27 @@ importers:
         specifier: 8.1.4
         version: 8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(tsx@4.23.0)(yaml@2.8.1)
 
+  packages/agent:
+    dependencies:
+      '@gitpm/changes':
+        specifier: workspace:*
+        version: link:../changes
+      '@gitpm/drafts':
+        specifier: workspace:*
+        version: link:../drafts
+      '@gitpm/git-client':
+        specifier: workspace:*
+        version: link:../git-client
+      '@gitpm/gitlab':
+        specifier: workspace:*
+        version: link:../gitlab
+      '@gitpm/security':
+        specifier: workspace:*
+        version: link:../security
+      '@gitpm/validation':
+        specifier: workspace:*
+        version: link:../validation
+
   packages/calendar: {}
 
   packages/changes:
