@@ -60,4 +60,27 @@ describe("health endpoints", () => {
     expect(response.statusCode).toBe(200);
     expect(response.headers["x-correlation-id"]).not.toBe("unsafe value\n");
   });
+
+  it("sets browser security headers and rejects cross-site mutations", async () => {
+    const app = buildApp();
+    apps.push(app);
+
+    const safe = await app.inject({ method: "GET", url: "/health/live" });
+    expect(safe.headers["content-security-policy"]).toContain("frame-ancestors 'none'");
+    expect(safe.headers["content-security-policy"]).toContain("object-src 'none'");
+    expect(safe.headers["x-frame-options"]).toBe("DENY");
+    expect(safe.headers["x-content-type-options"]).toBe("nosniff");
+
+    const crossSite = await app.inject({
+      headers: {
+        host: "gitpm.example.test",
+        origin: "https://attacker.example.test",
+        "sec-fetch-site": "cross-site",
+      },
+      method: "POST",
+      url: "/api/auth/logout",
+    });
+    expect(crossSite.statusCode).toBe(403);
+    expect(crossSite.json()).toMatchObject({ error: { code: "CSRF_ORIGIN_FORBIDDEN" } });
+  });
 });

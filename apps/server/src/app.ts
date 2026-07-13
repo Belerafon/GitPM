@@ -15,6 +15,18 @@ import { registerAuthAndPublishingApi } from "./auth-api.js";
 
 const MAX_CORRELATION_ID_LENGTH = 128;
 const SAFE_CORRELATION_ID = /^[A-Za-z0-9._:-]+$/u;
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "base-uri 'none'",
+  "connect-src 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+  "img-src 'self' data:",
+  "object-src 'none'",
+  "script-src 'self'",
+  "style-src 'self'",
+].join("; ");
 
 export interface AppOptions {
   authenticate?: Authenticate;
@@ -48,6 +60,25 @@ function requestPath(url: string): string {
   return url.split("?", 1)[0] ?? "/";
 }
 
+function requestHost(request: { headers: IncomingMessage["headers"] }): string | undefined {
+  const forwarded = request.headers["x-forwarded-host"];
+  const candidate = Array.isArray(forwarded) ? forwarded[0] : forwarded ?? request.headers.host;
+  return candidate?.toLowerCase();
+}
+
+function isCrossSiteMutation(request: { method: string; headers: IncomingMessage["headers"] }): boolean {
+  if (SAFE_METHODS.has(request.method)) return false;
+  const fetchSite = request.headers["sec-fetch-site"];
+  if (fetchSite === "cross-site") return true;
+  const origin = request.headers.origin;
+  if (origin === undefined) return false;
+  try {
+    return new URL(origin).host.toLowerCase() !== requestHost(request);
+  } catch {
+    return true;
+  }
+}
+
 export function buildApp(options: AppOptions = {}) {
   const app = Fastify({
     bodyLimit: 1_048_576,
@@ -59,6 +90,21 @@ export function buildApp(options: AppOptions = {}) {
 
   app.addHook("onRequest", async (request, reply) => {
     reply.header("x-correlation-id", request.id);
+    reply.header("content-security-policy", CONTENT_SECURITY_POLICY);
+    reply.header("permissions-policy", "camera=(), geolocation=(), microphone=()");
+    reply.header("referrer-policy", "no-referrer");
+    reply.header("x-content-type-options", "nosniff");
+    reply.header("x-frame-options", "DENY");
+    if (isCrossSiteMutation(request)) {
+      await reply.code(403).send({
+        error: {
+          code: "CSRF_ORIGIN_FORBIDDEN",
+          message: "Cross-site mutation is forbidden",
+          correlation_id: request.id,
+        },
+      });
+      return;
+    }
     request.log.info(
       { correlation_id: request.id, method: request.method, path: requestPath(request.url) },
       "request started",

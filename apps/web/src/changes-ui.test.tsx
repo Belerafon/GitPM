@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GitPmApi } from "./api.js";
-import { ChangesWorkspace } from "./changes-ui.js";
+import { ChangesWorkspace, safeExternalUrl } from "./changes-ui.js";
 import type { ChangesList, DraftStatus, SemanticDiff } from "./types.js";
 
 const draft: DraftStatus = { draft_id: "DRF-CHANGES", owner_gitlab_user_id: "42", branch: "gitpm/42/DRF-CHANGES", base_commit: "a".repeat(40), writer_mode: "ui", state: "open", fingerprint: "b".repeat(64), created_at: "2026-07-10T10:00:00Z", updated_at: "2026-07-10T10:00:00Z" };
@@ -35,6 +35,12 @@ class ChangesApi {
 afterEach(cleanup);
 
 describe("Changes workspace", () => {
+  it("allows only credential-free HTTPS links for untrusted Merge Request metadata", () => {
+    expect(safeExternalUrl("https://gitlab.example.test/group/project/-/merge_requests/7")).toBe("https://gitlab.example.test/group/project/-/merge_requests/7");
+    expect(safeExternalUrl("javascript:alert(1)")).toBeUndefined();
+    expect(safeExternalUrl("https://token@gitlab.example.test/mr/7")).toBeUndefined();
+  });
+
   it("shows only Git change categories, an exact diff, restore controls and semantic before/after values", async () => {
     const fixture = new ChangesApi();
     render(<ChangesWorkspace api={fixture as unknown as GitPmApi} draft={draft} role="Developer" locale="en" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} />);

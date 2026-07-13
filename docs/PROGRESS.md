@@ -1,7 +1,7 @@
 # GitPM progress
 
-Current phase: `beta_complete_release_candidate_work_ready`
-Implementation code: P00-P12 complete; Alpha and Beta accepted; P13A/P13B release-candidate work is unblocked
+Current phase: `release_candidate_security_hardening_in_progress`
+Implementation code: P00-P12 complete; Alpha and Beta accepted; P13A in progress; P13B remains unblocked
 
 ## Current active revision
 
@@ -183,11 +183,11 @@ Implementation code: P00-P12 complete; Alpha and Beta accepted; P13A/P13B releas
 
 ## Current blockers
 
-None. P12 and the Beta milestone are accepted; P13A and P13B are unblocked.
+None. P13A browser security controls are implemented and locally verified; remaining hostile repository, token/role, scan and residual-risk packages are active work.
 
 ## Next action
 
-Start P13A Security hardening. P13B operational verification may proceed independently from the same completed Beta baseline.
+Continue P13A with the malicious repository/Git suite. P13B operational verification may proceed independently from the same completed Beta baseline.
 
 ## Evidence policy
 

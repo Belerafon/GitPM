@@ -1,5 +1,5 @@
 version: '0.1'
-updated_at: '2026-07-11'
+updated_at: '2026-07-13'
 current_phase: beta_complete_release_candidate_work_ready
 stages:
   P00:
@@ -202,7 +202,7 @@ stages:
     notes: External draft file editing, scoped CLI validation, explicit delete, commit-all/push/MR and poll-driven read-model
       reconciliation with coalesced reduced-motion-aware highlights are accepted.
   P13A:
-    status: not_started
+    status: in_progress
     accepted_by: []
     evidence: []
     notes: ''
@@ -381,8 +381,8 @@ verification_checks:
     - file:evidence/P11D/vfy-028-browser.json
     - file:evidence/P11D/calculation-report.md
     - file:evidence/P11D/vfy-028-workload.png
-    notes: Three deterministic Person-week values matched the browser fixture; holiday-adjusted capacity and archived/undated exclusion
-      passed without repository mutation.
+    notes: Three deterministic Person-week values matched the browser fixture; holiday-adjusted capacity and archived/undated
+      exclusion passed without repository mutation.
   VFY-029:
     status: passed
     evidence:
@@ -393,8 +393,8 @@ verification_checks:
     - file:evidence/P12/vfy-029-reduced-motion.png
     - file:evidence/P12/vfy-029-final-diff.txt
     - file:evidence/P12/vfy-029-mr-payload.json
-    notes: Scripted agent workflow passed Project scope and explicit-delete guards, commit-all/push/MR, live polling refresh, field-only
-      coalesced highlighting and static reduced-motion indication.
+    notes: Scripted agent workflow passed Project scope and explicit-delete guards, commit-all/push/MR, live polling refresh,
+      field-only coalesced highlighting and static reduced-motion indication.
   VFY-030:
     status: pending
     evidence: []

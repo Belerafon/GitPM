@@ -9,6 +9,15 @@ const emptySemantic: SemanticDiff = {
   counts: { created: 0, updated: 0, archived: 0, deleted: 0 }, affected_projects: [], unclassified_files: [],
 };
 
+export function safeExternalUrl(value: string): string | undefined {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.username === "" && url.password === "" ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function valueText(value: unknown, empty: string): string {
   if (value === undefined) return empty;
   if (typeof value === "string") return value;
@@ -133,7 +142,9 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
     <div className="card publish-panel"><div><span className="eyebrow">{t("changes.publishEyebrow")}</span><h3>{t("changes.publishHeading")}</h3><p>{t("changes.commitAllHint")}</p></div>
       {commit === undefined ? <button className="primary" disabled={!canMutate || busy || changes.changed_files_count === 0} onClick={() => setCommitOpen(true)}>{t("changes.openCommit")}</button> : <div className="publish-flow">
         <div className="publish-step complete"><span>1</span><div><strong>{t("changes.committed")}</strong><code>{commit.commit.slice(0, 12)}</code></div></div>
-        {!pushed ? <button className="primary" disabled={busy} onClick={() => void push()}>{t("changes.push")}</button> : mergeRequest === undefined ? <div className="mr-form"><label>{t("changes.mrTitle")}<input value={mrTitle} onChange={(event) => setMrTitle(event.target.value)} /></label><label>{t("changes.mrDescription")}<textarea value={mrDescription} onChange={(event) => setMrDescription(event.target.value)} /></label><button className="primary" disabled={busy || !mrTitle.trim()} onClick={() => void createMr()}>{t("changes.createMr")}</button></div> : <a className="mr-result" href={mergeRequest.web_url} target="_blank" rel="noreferrer">{t("changes.mrReady", { iid: mergeRequest.iid, state: mergeRequest.state })}</a>}
+        {!pushed ? <button className="primary" disabled={busy} onClick={() => void push()}>{t("changes.push")}</button> : mergeRequest === undefined ? <div className="mr-form"><label>{t("changes.mrTitle")}<input value={mrTitle} onChange={(event) => setMrTitle(event.target.value)} /></label><label>{t("changes.mrDescription")}<textarea value={mrDescription} onChange={(event) => setMrDescription(event.target.value)} /></label><button className="primary" disabled={busy || !mrTitle.trim()} onClick={() => void createMr()}>{t("changes.createMr")}</button></div> : safeExternalUrl(mergeRequest.web_url) === undefined
+          ? <span className="mr-result">{t("changes.mrReady", { iid: mergeRequest.iid, state: mergeRequest.state })}</span>
+          : <a className="mr-result" href={safeExternalUrl(mergeRequest.web_url)} target="_blank" rel="noreferrer">{t("changes.mrReady", { iid: mergeRequest.iid, state: mergeRequest.state })}</a>}
       </div>}
     </div>
     <p className="alpha-limitations">{t("changes.alphaLimitations")}</p>
