@@ -1,0 +1,35 @@
+{
+  "date": "2026-07-13",
+  "command": "corepack pnpm performance:p13b",
+  "fixture": {
+    "projects": 30,
+    "people": 30,
+    "tasks": 3000,
+    "yaml_documents": 3064
+  },
+  "runs_per_scenario": 3,
+  "measurements_ms": {
+    "cold": [1953.9109, 1997.6227, 1888.5617],
+    "mutation_and_full_validation": [168.6674, 147.4214, 149.307],
+    "semantic_diff_100_files": [1199.5872, 784.3636, 812.6724]
+  },
+  "medians": {
+    "cold_ms": 1953.9109,
+    "mutation_and_full_validation_ms": 149.307,
+    "semantic_diff_100_files_ms": 812.6724,
+    "cold_rss_mib": 100.8477
+  },
+  "budgets": {
+    "cold_ms": 5000,
+    "mutation_and_full_validation_ms": 1000,
+    "semantic_diff_100_files_ms": 3000,
+    "rss_mib": 512
+  },
+  "checks": {
+    "cold": true,
+    "mutation_and_full_validation": true,
+    "semantic_diff_100_files": true,
+    "rss": true
+  },
+  "result": "passed"
+}

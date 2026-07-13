@@ -1,0 +1,29 @@
+VFY-031 Operational and performance smoke
+Date: 2026-07-13
+
+Install:
+  corepack pnpm install --frozen-lockfile
+  Result: all 19 workspace projects already up to date; lockfile unchanged.
+
+Performance:
+  corepack pnpm performance:p13b
+  Result: generated 30 Projects, 30 People, 3000 Tasks and 3064 YAML documents.
+  Three fresh processes per scenario; all median budgets passed.
+  Cold load: 1953.911 ms <= 5000 ms.
+  One Task mutation plus full validation: 149.307 ms <= 1000 ms.
+  Semantic diff of 100 files: 812.672 ms <= 3000 ms.
+  Cold RSS: 100.848 MiB <= 512 MiB.
+
+Restart and cleanup:
+  corepack pnpm operations:p13b
+  Result: first health and restart health returned ok; dirty draft and completed write survived a fresh runtime; dirty draft was not automatically cleaned; incorrect cleanup confirmation was rejected; exact confirmed cleanup removed the draft.
+
+Full regression:
+  corepack pnpm verify
+  Result: clean build, lint, typecheck, 33 test files/104 tests, health smoke, schema fixtures, credential boundary and planning verification passed.
+
+Runbook:
+  docs/runbooks/GitPM_Local_Operations_v0.1.md
+
+Limitation:
+  The measured acceptance runner is Windows x64 and does not match the Linux x64 4-vCPU/8-GiB reference profile. The local deployment budgets pass with substantial margin; network and live GitLab latency are excluded.

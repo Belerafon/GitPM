@@ -1,6 +1,6 @@
 version: '0.1'
 updated_at: '2026-07-13'
-current_phase: security_hardening_complete_operations_ready
+current_phase: release_candidate_work_complete_p14_ready
 stages:
   P00:
     status: done
@@ -215,10 +215,19 @@ stages:
     notes: Security hardening is accepted for the local trusted-user deployment profile with no unresolved high or critical
       finding.
   P13B:
-    status: in_progress
-    accepted_by: []
-    evidence: []
-    notes: ''
+    status: done
+    accepted_by:
+    - OPS
+    - QA
+    evidence:
+    - file:evidence/P13B/runner-metadata.json
+    - file:evidence/P13B/performance-report.json
+    - file:evidence/P13B/operations-report.json
+    - file:evidence/P13B/vfy-031-runbook-transcript.txt
+    - file:evidence/P13B/acceptance.md
+    - file:docs/runbooks/GitPM_Local_Operations_v0.1.md
+    notes: Operational verification and performance smoke are accepted for the local v0.1 deployment profile; all median budgets
+      pass.
   P14:
     status: not_started
     accepted_by: []
@@ -413,9 +422,14 @@ verification_checks:
     notes: Hostile browser/repository and token-role suites passed; production audit is clean, container scan is not applicable
       for the local non-container deployment, and accepted residual risks are documented.
   VFY-031:
-    status: pending
-    evidence: []
-    notes: ''
+    status: passed
+    evidence:
+    - file:evidence/P13B/runner-metadata.json
+    - file:evidence/P13B/performance-report.json
+    - file:evidence/P13B/operations-report.json
+    - file:evidence/P13B/vfy-031-runbook-transcript.txt
+    notes: Frozen install, three fresh-process performance runs, restart durability and explicit cleanup passed on the recorded
+      local runner; the non-reference Windows profile is documented.
   VFY-032:
     status: pending
     evidence: []

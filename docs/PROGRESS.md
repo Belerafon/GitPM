@@ -1,7 +1,7 @@
 # GitPM progress
 
-Current phase: `release_candidate_operations_in_progress`
-Implementation code: P00-P13A complete; Alpha and Beta accepted; P13B operational and performance verification is in progress
+Current phase: `release_candidate_work_complete_p14_ready`
+Implementation code: P00-P13B complete; Alpha and Beta accepted; final P14 release acceptance is ready
 
 ## Current active revision
 
@@ -190,13 +190,23 @@ Implementation code: P00-P13A complete; Alpha and Beta accepted; P13B operationa
 - Container scan is explicitly not applicable because v0.1 has no container build artifact and targets a local Node.js process with system Git.
 - Focused security verification passes 7 files/18 tests; full clean verification passes 33 files/104 tests plus smoke, schema, security and planning checks.
 
+## Last P13B evidence
+
+- Deterministic temporary fixture contains 30 Projects, 30 People, 3000 Tasks and 3064 YAML documents.
+- Three fresh-process runs per scenario produced medians of 1953.911 ms cold load, 149.307 ms mutation plus full validation and 812.672 ms semantic diff for 100 files.
+- Cold RSS median is 100.848 MiB; all four v0.1 budgets pass.
+- Server health survives process restart; draft metadata and a dirty completed write survive a fresh runtime without automatic cleanup.
+- Incorrect cleanup confirmation is rejected and exact confirmed cleanup removes the closed dirty draft.
+- Frozen install leaves the lockfile unchanged; final clean verification passes 33 test files/104 tests plus smoke, schema, security and planning checks.
+- Measurements are an accepted local Windows smoke; runner metadata explicitly records that it is not the Linux reference profile.
+
 ## Current blockers
 
-None. P13B performance budgets, process restart, dirty-draft recovery and explicit cleanup pass locally; final evidence remains.
+None. P13A and P13B are accepted; P14 is unblocked.
 
 ## Next action
 
-Record P13B runner metadata, performance measurements and operational acceptance evidence.
+Start P14 localization and final release acceptance.
 
 ## Evidence policy
 

@@ -1,0 +1,17 @@
+{
+  "date": "2026-07-13",
+  "command": "corepack pnpm operations:p13b",
+  "server": {
+    "first_start_health": "ok",
+    "restart_health": "ok",
+    "graceful_sigterm": true
+  },
+  "draft": {
+    "recovered_after_fresh_runtime": true,
+    "dirty_write_preserved": true,
+    "dirty_draft_not_automatically_cleaned": true,
+    "incorrect_cleanup_confirmation_rejected": true,
+    "explicit_cleanup_removed_draft": true
+  },
+  "result": "passed"
+}

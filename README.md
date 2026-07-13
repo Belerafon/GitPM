@@ -4,7 +4,7 @@ Git-first система управления проектами и задача
 
 ## Current status
 
-Статус: `P13A_complete_P13B_ready`. P00-P13A закрыты, Alpha и Beta приняты. Функциональная реализация завершена, security hardening принят; следующий этап — эксплуатационная и performance-проверка P13B.
+Статус: `P13B_complete_P14_ready`. P00-P13B закрыты, Alpha и Beta приняты. Security, локальная эксплуатация и performance smoke приняты; следующий этап — финальная release acceptance P14.
 
 ## Development
 
