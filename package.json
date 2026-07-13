@@ -23,6 +23,7 @@
     "planning:test": "python scripts/test_planning_validator.py && python scripts/test_release_gate.py",
     "planning:verify": "corepack pnpm planning:check && corepack pnpm planning:test",
     "schema:verify": "node scripts/verify-schema-v1.mjs",
+    "security:p13a": "corepack pnpm build && vitest run apps/server/src/app.test.ts apps/web/src/core-ui.test.tsx apps/web/src/changes-ui.test.tsx apps/web/src/hostile-content.test.tsx packages/git-client/src/malicious-repository.test.ts packages/gitlab/src/index.test.ts packages/publishing/src/index.test.ts && corepack pnpm audit --prod --audit-level high",
     "security:verify": "corepack pnpm --filter @gitpm/security build && vitest run packages/security/src/security-boundary.test.ts && node scripts/security-spike-report.mjs",
     "smoke": "node scripts/smoke-health.mjs",
     "test": "vitest run",
@@ -33,10 +34,10 @@
     "@types/node": "20.19.43",
     "@typescript-eslint/eslint-plugin": "8.63.0",
     "@typescript-eslint/parser": "8.63.0",
-    "ajv": "8.17.1",
+    "ajv": "8.18.0",
     "eslint": "9.39.4",
     "typescript": "5.9.3",
     "vitest": "4.1.10",
-    "yaml": "2.8.1"
+    "yaml": "2.8.3"
   }
 }

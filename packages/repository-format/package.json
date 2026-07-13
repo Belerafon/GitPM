@@ -17,6 +17,6 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "yaml": "2.8.1"
+    "yaml": "2.8.3"
   }
 }
