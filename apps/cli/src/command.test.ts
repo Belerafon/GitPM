@@ -47,6 +47,16 @@ describe("CLI P02 commands", () => {
     expect(JSON.parse(invalid.output).errors).toEqual(expect.arrayContaining([expect.objectContaining({ code: "DATE_INVALID" })]));
   });
 
+  it("preserves UTF-8 Cyrillic content independently of the Windows code page", async () => {
+    const root = await fixture();
+    const file = path.join(root, "projects", "PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYQ", "project.yaml");
+    await writeFile(file, (await readFile(file, "utf8")).replace("name: Operations", "name: Локальный проект"), "utf8");
+
+    expect((await run(["format", "--root", root])).exitCode).toBe(0);
+    expect(await readFile(file, "utf8")).toContain("name: Локальный проект");
+    expect(JSON.parse((await run(["validate", "--json", "--root", root])).output)).toMatchObject({ ok: true, code: "OK" });
+  });
+
   it("provides semantic diff skeleton and doctor output", async () => {
     const diff = await run(["diff", "--semantic", "--json", "--root", demo]);
     expect(JSON.parse(diff.output)).toMatchObject({ ok: true, changed_files_count: 0, affected_projects: [] });

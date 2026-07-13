@@ -125,8 +125,9 @@ function LocalePicker({ locale, setLocale, t }: { readonly locale: Locale; reado
 export function App({ api, storage = window.localStorage, browserLanguages = navigator.languages, navigate = (url) => window.location.assign(url), confirmAction = (value) => window.confirm(value) }: AppProps) {
   const initial = useMemo(() => selectLocale(storage.getItem(LOCALE_STORAGE_KEY), browserLanguages), []);
   const [locale, setLocaleState] = useState<Locale>(initial);
-  const setLocale = (next: Locale) => { storage.setItem(LOCALE_STORAGE_KEY, next); setLocaleState(next); document.documentElement.lang = localeRegistry[next].languageTag; document.documentElement.dir = localeRegistry[next].direction; };
-  document.documentElement.lang = localeRegistry[locale].languageTag;
-  document.documentElement.dir = localeRegistry[locale].direction;
+  const setLocale = (next: Locale) => { const definition = localeRegistry[next] ?? localeRegistry.en; storage.setItem(LOCALE_STORAGE_KEY, next); setLocaleState(next); document.documentElement.lang = definition.languageTag; document.documentElement.dir = definition.direction; };
+  const definition = localeRegistry[locale] ?? localeRegistry.en;
+  document.documentElement.lang = definition.languageTag;
+  document.documentElement.dir = definition.direction;
   return <DraftProvider api={api}><Shell locale={locale} setLocale={setLocale} api={api} navigate={navigate} confirmAction={confirmAction} /></DraftProvider>;
 }

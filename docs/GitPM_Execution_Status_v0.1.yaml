@@ -229,7 +229,7 @@ stages:
     notes: Operational verification and performance smoke are accepted for the local v0.1 deployment profile; all median budgets
       pass.
   P14:
-    status: not_started
+    status: in_progress
     accepted_by: []
     evidence: []
     notes: ''

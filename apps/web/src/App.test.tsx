@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App.js";
 import type { GitPmApi } from "./api.js";
 import { POLL_INTERVAL_MS } from "./draft-context.js";
-import { assertLocalePacks, localeRegistry, LOCALE_STORAGE_KEY, message, selectLocale } from "./i18n.js";
+import { assertLocalePacks, formatDateOnly, formatDurationHours, formatNumber, localeRegistry, LOCALE_STORAGE_KEY, message, pluralCategory, registerLocale, selectLocale } from "./i18n.js";
 import type { ChangesList, CommitHistoryDetail, CommitResult, DraftSnapshot, DraftStatus, EntityResult, MergeRequestStatus, PublicSession, PushResult, RevertDraftResult, SemanticDiff, WriterMode } from "./types.js";
 
 const session: PublicSession = {
@@ -83,6 +83,27 @@ describe("localization runtime", () => {
     expect(selectLocale("en", ["ru-RU"], "ru")).toBe("en");
     expect(selectLocale(null, ["de-DE", "ru-RU"], "en")).toBe("ru");
     expect(selectLocale(null, ["de-DE"], "ru")).toBe("ru");
+  });
+
+  it("uses Russian date, number, duration and plural rules", () => {
+    expect(formatDateOnly("ru", "2026-07-13")).toMatch(/13.*июл.*2026/iu);
+    expect(formatNumber("ru", 1234.5)).toMatch(/1[\s\u00a0\u202f]234,5/u);
+    expect(formatDurationHours("ru", 2)).toMatch(/2 часа/iu);
+    expect([1, 2, 5].map((value) => pluralCategory("ru", value))).toEqual(["one", "few", "many"]);
+  });
+
+  it("enables a synthetic locale by registering pack metadata only", async () => {
+    const synthetic = Object.fromEntries(Object.entries(localeRegistry.en.messages).map(([key, value]) => [key, `T ${value}`])) as typeof localeRegistry.en.messages;
+    const unregister = registerLocale("tt", { languageTag: "tt", direction: "ltr", labelKey: "locale.en", messages: synthetic });
+    try {
+      localStorage.setItem(LOCALE_STORAGE_KEY, "tt");
+      render(<App api={new FakeApi()} />);
+      expect(await screen.findByRole("heading", { name: "T Portfolio repository" })).toBeTruthy();
+      expect(document.documentElement.lang).toBe("tt");
+    } finally {
+      cleanup();
+      unregister();
+    }
   });
 });
 

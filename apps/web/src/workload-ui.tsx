@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { calculateWorkload, type WorkloadCalendar, type WorkloadPerson, type WorkloadTask } from "@gitpm/workload";
 import type { GitPmApi } from "./api.js";
-import { message, type Locale, type MessageKey } from "./i18n.js";
+import { formatDateOnly, formatNumber, message, type Locale, type MessageKey } from "./i18n.js";
 import type { DraftStatus, EntityResult, GitPmDocument } from "./types.js";
 
 const text = (document: GitPmDocument, key: string) => typeof document[key] === "string" ? document[key] as string : undefined;
@@ -49,10 +49,10 @@ export function WorkloadWorkspace({ api, draft, locale }: { readonly api: GitPmA
       <p>{t("workload.capacityFormula")}</p>
     </section>
     {report.weeks.length === 0 || activePeople.length === 0 ? <section className="card empty-workspace">{t("workload.empty")}</section> : <section className="card workload-table-wrap">
-      <table className="workload-table"><thead><tr><th>{t("workload.person")}</th>{report.weeks.map((week) => <th key={week}><time dateTime={week}>{t("workload.week", { date: week })}</time></th>)}</tr></thead>
+      <table className="workload-table"><thead><tr><th>{t("workload.person")}</th>{report.weeks.map((week) => <th key={week}><time dateTime={week}>{t("workload.week", { date: formatDateOnly(locale, week) })}</time></th>)}</tr></thead>
         <tbody>{activePeople.map(([personId, personName]) => <tr key={personId}><th>{personName}</th>{report.weeks.map((week) => {
           const value = rows.get(`${personId}:${week}`)!; const overloaded = value.capacity_hours === 0 ? value.allocated_hours > 0 : value.allocated_hours > value.capacity_hours;
-          return <td className={overloaded ? "overloaded" : "available"} data-person-id={personId} data-week={week} key={week} title={t("workload.tasks", { count: value.task_ids.length })}><strong>{t("workload.hours", { allocated: value.allocated_hours, capacity: value.capacity_hours })}</strong><span>{value.utilization_percent === null ? t("workload.noCapacity") : t("workload.utilization", { percent: value.utilization_percent })}</span></td>;
+          return <td className={overloaded ? "overloaded" : "available"} data-person-id={personId} data-week={week} key={week} title={t("workload.tasks", { count: value.task_ids.length })}><strong>{t("workload.hours", { allocated: formatNumber(locale, value.allocated_hours), capacity: formatNumber(locale, value.capacity_hours) })}</strong><span>{value.utilization_percent === null ? t("workload.noCapacity") : t("workload.utilization", { percent: formatNumber(locale, value.utilization_percent) })}</span></td>;
         })}</tr>)}</tbody></table>
     </section>}
     <section className="card workload-exclusions"><h3>{t("workload.exclusionHeading")}</h3><dl>

@@ -58,7 +58,7 @@ class BrowserAcceptanceApi implements GitPmApi {
       ];
       this.changedFiles = [];
     }
-    if (window.location.pathname.endsWith("vfy-028.html")) {
+    if (window.location.pathname.endsWith("vfy-028.html") || window.location.pathname.endsWith("vfy-032.html")) {
       const project = `PRJ-${"1".repeat(26)}`; const calendar = `CAL-${"4".repeat(26)}`; const ada = `PER-${"2".repeat(26)}`; const linus = `PER-${"3".repeat(26)}`;
       this.entities = [
         this.entityResult({ schema: "gitpm/project@1", id: project, name: "Beta portfolio", status: "backlog", lifecycle: "active" }),
@@ -96,7 +96,8 @@ class BrowserAcceptanceApi implements GitPmApi {
     }
     const draft = this.drafts.find((item) => item.draft_id === draftId);
     if (draft === undefined) throw new Error("draft not found");
-    return { draft: { ...draft, ...(this.externalFingerprint === undefined ? {} : { external_fingerprint: this.externalFingerprint, changed_externally: this.externalFingerprint !== draft.fingerprint }) }, changes: { changed_files_count: this.changedFiles.length + this.changedPaths.size }, validation: { valid: true, error_count: 0, warning_count: 0, document_count: 14 + this.entities.length }, ...(this.mr === undefined ? {} : { mergeRequest: this.mr }) };
+    const localizationAcceptance = window.location.pathname.endsWith("vfy-032.html");
+    return { draft: { ...draft, ...(this.externalFingerprint === undefined ? {} : { external_fingerprint: this.externalFingerprint, changed_externally: this.externalFingerprint !== draft.fingerprint }) }, changes: { changed_files_count: this.changedFiles.length + this.changedPaths.size }, validation: { valid: !localizationAcceptance, error_count: localizationAcceptance ? 2 : 0, warning_count: 0, document_count: 14 + this.entities.length }, ...(this.mr === undefined ? {} : { mergeRequest: this.mr }) };
   }
   async setWriterMode(draftId: string, writer_mode: WriterMode) { return this.replace(draftId, { writer_mode }); }
   async closeDraft(draftId: string) { return this.replace(draftId, { state: "closed" }); }
@@ -109,7 +110,7 @@ class BrowserAcceptanceApi implements GitPmApi {
   async deleteEntity(_draftId: string, _entityType: string, entity: EntityResult) { this.entities = this.entities.filter((item) => item.document.id !== entity.document.id); this.capture(entity.path); }
   async getConfiguration(_draftId: string, kind: "statuses" | "issue-types"): Promise<EntityResult> { const existing = kind === "statuses" ? this.statusConfig : this.issueTypeConfig; if (existing !== undefined) return existing; const document = (kind === "statuses" ? { schema: "gitpm/statuses@1", id: "CONFIG-STATUSES", lifecycle: "active", statuses: [{ slug: "backlog", title: "Backlog", color: "gray", active: true }, { slug: "in-progress", title: "In progress", color: "blue", active: true }, { slug: "done", title: "Done", color: "green", active: true }] } : { schema: "gitpm/issue-types@1", id: "CONFIG-TYPES", lifecycle: "active", issue_types: [{ slug: "task", title: "Task", color: "blue", active: true }] }) as GitPmDocument; const created = { document, path: `.gitpm/${kind}.yaml`, blob_id: "e".repeat(40), draft_fingerprint: "d".repeat(64) }; if (kind === "statuses") this.statusConfig = created; else this.issueTypeConfig = created; return created; }
   async updateConfiguration(_draftId: string, kind: "statuses" | "issue-types", entity: EntityResult, _fingerprint: string, document: GitPmDocument): Promise<EntityResult> { const result = { ...entity, document, blob_id: "f".repeat(40), draft_fingerprint: "d".repeat(64) }; if (kind === "statuses") this.statusConfig = result; else this.issueTypeConfig = result; this.capture(result.path); return result; }
-  async listChanges(): Promise<ChangesList> { return { files: this.changedFiles, changed_files_count: this.changedFiles.length, affected_projects: this.changedFiles.length === 0 ? [] : ["PRJ-ALPHA"] }; }
+  async listChanges(): Promise<ChangesList> { if (new URLSearchParams(window.location.search).get("git_error") === "1") throw new Error("Git diff недоступен: рабочее дерево изменилось"); return { files: this.changedFiles, changed_files_count: this.changedFiles.length, affected_projects: this.changedFiles.length === 0 ? [] : ["PRJ-ALPHA"] }; }
   async semanticChanges(): Promise<SemanticDiff> {
     const paths = new Set(this.changedFiles.map((file) => file.path));
     const item = (id: string, path: string, field: string, before: unknown, after: unknown) => ({ id, path, schema: id === "PRJ-ALPHA" ? "gitpm/project@1" : "gitpm/task@1", project: "PRJ-ALPHA", fields: [{ field, before, after }] });
