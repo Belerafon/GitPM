@@ -8,6 +8,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .primary { border-color: #244f3a; background: #244f3a; color: #fff; }
 .danger { border-color: #a54038; color: #8b2d28; }
 .app-shell { display: grid; grid-template-columns: 236px 1fr; min-height: 100vh; }
+.repository-mode .draft-context-id { display: none; }
 .sidebar { display: flex; flex-direction: column; gap: 1.5rem; background: #18352a; color: #f4f2e9; padding: 1.4rem 1rem; }
 .brand { display: flex; align-items: center; gap: .7rem; padding: 0 .4rem; font-size: 1.15rem; }
 .brand-mark { display: inline-grid; place-items: center; width: 2rem; height: 2rem; border-radius: 8px; background: #c9d96f; color: #18352a; font-weight: 800; }

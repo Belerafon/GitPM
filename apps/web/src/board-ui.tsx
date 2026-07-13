@@ -88,7 +88,7 @@ export function BoardWorkspace({ api, draft, locale, onChanged }: {
   };
 
   return <section className="board-workspace">
-    <div className="section-heading"><span className="eyebrow">{draft.draft_id}</span><h2>{t("board.heading")}</h2><p>{t("board.description")}</p></div>
+    <div className="section-heading"><span className="eyebrow draft-context-id">{draft.draft_id}</span><h2>{t("board.heading")}</h2><p>{t("board.description")}</p></div>
     {readOnly && <div className="alert warning">{t("board.readOnly")}</div>}{error !== null && <div className="alert error">{error}</div>}
     <section className="card board-toolbar">
       <label>{t("board.project")}<select value={projectId} onChange={(event) => { setActiveViewId(""); void load(event.target.value); }}>{projects.map((project) => <option key={project.document.id} value={project.document.id}>{text(project.document, "name")}</option>)}</select></label>

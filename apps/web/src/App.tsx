@@ -61,7 +61,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
   const gitlab = drafts.session.gitlab;
   const loginToGitLab = () => { void api.login().then(navigate); };
   return (
-    <div className="app-shell">
+    <div className={`app-shell${repositoryMode ? " repository-mode" : ""}`}>
       <aside className="sidebar">
         <div className="brand"><span className="brand-mark">G</span><strong>{t("app.title")}</strong></div>
         <nav>{visibleNavigation.map((key) => <button className={view === key ? "active" : ""} key={key} onClick={() => setSelectedView(key)}>{t(key)}</button>)}</nav>

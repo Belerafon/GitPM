@@ -106,7 +106,7 @@ export function CoreWorkspace({ api, draft, locale, onChanged }: {
   };
 
   return <section className={`core-workspace${reducedMotion ? " reduced-motion" : ""}`} data-reduced-motion={reducedMotion}>
-    <div className="section-heading"><div><span className="eyebrow">{draft.draft_id}</span><h2>{t("core.heading")}</h2></div></div>
+    <div className="section-heading"><div><span className="eyebrow draft-context-id">{draft.draft_id}</span><h2>{t("core.heading")}</h2></div></div>
     {readOnly && <div className="alert warning">{t("core.readOnly")}</div>}{error !== null && <div className="alert error">{error}</div>}
     <div className="core-columns">
       <section className="card entity-column"><h3>{t("core.projects")}</h3>

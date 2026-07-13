@@ -123,7 +123,7 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
   };
 
   return <section className="changes-workspace">
-    <div className="section-heading"><span className="eyebrow">{draft.draft_id}</span><h2>{t("changes.heading")}</h2><p>{t("changes.description")}</p></div>
+    <div className="section-heading"><span className="eyebrow draft-context-id">{draft.draft_id}</span><h2>{t("changes.heading")}</h2><p>{t("changes.description")}</p></div>
     {!canMutate && <div className="alert warning">{t("changes.readOnly")}</div>}
     {error !== null && <div className="alert error">{t("status.error", { message: error })}<button onClick={() => void load()}>{t("status.retry")}</button></div>}
     <div className="changes-summary">

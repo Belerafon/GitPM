@@ -6,7 +6,10 @@ test.describe("GitPM browser UI", () => {
     await cleanupDrafts(request);
     await createDraft(request, "DRF-UI-WORKSPACE");
   });
-  test.afterEach(async ({ request }) => await cleanupDrafts(request));
+  test.afterEach(async ({ page, request }) => {
+    await page.close();
+    await cleanupDrafts(request);
+  });
 
   test("loads the authenticated workspace instead of hanging on Loading", async ({ page }) => {
     const errors: string[] = [];
@@ -27,6 +30,7 @@ test.describe("GitPM browser UI", () => {
   test("opens the configured repository directly on its projects", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("button", { name: "Проекты", exact: true })).toHaveClass(/active/u);
+    await expect(page.getByText("DRF-UI-WORKSPACE", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("textbox", { name: "Название GitPM launch", exact: true })).toHaveValue("GitPM launch");
     await expect(page.getByRole("textbox", { name: "Название Operations", exact: true })).toHaveValue("Operations");
   });

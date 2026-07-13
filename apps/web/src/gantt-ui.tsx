@@ -83,7 +83,7 @@ export function GanttWorkspace({ api, draft, locale }: { readonly api: GitPmApi;
   const milestoneNames = new Map(milestones.map((item) => [item.document.id, text(item.document, "name")]));
 
   return <section className="gantt-workspace">
-    <div className="section-heading"><span className="eyebrow">{draft.draft_id}</span><h2>{t("gantt.heading")}</h2><p>{t("gantt.description")}</p></div>
+    <div className="section-heading"><span className="eyebrow draft-context-id">{draft.draft_id}</span><h2>{t("gantt.heading")}</h2><p>{t("gantt.description")}</p></div>
     {error !== null && <div className="alert error">{error}</div>}
     <section className="card gantt-toolbar"><label>{t("gantt.project")}<select value={projectId} onChange={(event) => { void load(event.target.value); }}>{projects.map((project) => <option key={project.document.id} value={project.document.id}>{text(project.document, "name")}</option>)}</select></label><span>{t("gantt.visible", { count: model?.rows.length ?? 0 })}</span><span className="state open">{t("gantt.readOnly")}</span></section>
     {model === null ? <section className="card empty-workspace">{t("gantt.empty")}</section> : <section className="card gantt-scroll" aria-label={t("gantt.chart")} data-start={model.start} data-due={model.due}>

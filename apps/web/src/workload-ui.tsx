@@ -40,7 +40,7 @@ export function WorkloadWorkspace({ api, draft, locale }: { readonly api: GitPmA
   const excluded = Object.values(report.exclusions).reduce((sum, value) => sum + value, 0);
 
   return <section className="workload-workspace">
-    <div className="section-heading"><span className="eyebrow">{draft.draft_id}</span><h2>{t("workload.heading")}</h2><p>{t("workload.description")}</p></div>
+    <div className="section-heading"><span className="eyebrow draft-context-id">{draft.draft_id}</span><h2>{t("workload.heading")}</h2><p>{t("workload.description")}</p></div>
     {error !== null && <div className="alert error">{error}</div>}
     <section className="card workload-summary">
       <div><span>{t("workload.included")}</span><strong>{report.included_tasks}</strong></div>
