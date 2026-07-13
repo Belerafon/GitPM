@@ -192,11 +192,11 @@ Implementation code: P00-P13A complete; Alpha and Beta accepted; P13B operationa
 
 ## Current blockers
 
-None. The P13B deterministic 3000-Task fixture and local three-process performance smoke pass all budgets; operational evidence remains.
+None. P13B performance budgets, process restart, dirty-draft recovery and explicit cleanup pass locally; final evidence remains.
 
 ## Next action
 
-Finish P13B install, restart, explicit cleanup and troubleshooting evidence.
+Record P13B runner metadata, performance measurements and operational acceptance evidence.
 
 ## Evidence policy
 
