@@ -1,0 +1,20 @@
+GitPM P14 localization completeness report
+Date: 2026-07-13
+
+Locale packs: en, ru
+Key parity: PASS
+Placeholder parity: PASS
+Raw HTML rejection: PASS
+Russian date-only formatting: PASS (13 июл. 2026 г.)
+Russian decimal formatting: PASS (25,6; 78,13%)
+Russian duration formatting: PASS (2 часа)
+Russian plural categories: PASS (1=one, 2=few, 5=many)
+Synthetic third locale registration: PASS (tt pack rendered without component changes)
+Locale/API isolation: PASS (locale switch produced no API payloads)
+
+Focused verification:
+- apps/web/src/App.test.tsx
+- apps/web/src/workload-ui.test.tsx
+- apps/web/src/gantt-ui.test.tsx
+- apps/cli/src/command.test.ts
+- 4 files passed, 17 tests passed

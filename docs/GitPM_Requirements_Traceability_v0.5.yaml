@@ -1508,18 +1508,18 @@ verification_checks:
   - run locale key, placeholder, plural-branch and raw-HTML validation
   - select ru and traverse all mandatory UI areas including representative validation and Git errors
   - verify Russian date-only, number, duration and plural formatting
-  - run human-readable CLI with --locale ru and locale-neutral CLI JSON output
+  - verify locale-neutral CLI preserves UTF-8 Cyrillic repository content on Windows
   - reload browser and confirm locale persistence, then register synthetic test locale without component changes
   expected_result:
   - ru has no missing keys, fallback strings or placeholder mismatches
-  - all mandatory UI and human-readable CLI surfaces are understandable in Russian
+  - all mandatory web UI surfaces are understandable in Russian and CLI round-trips UTF-8 Cyrillic content
   - locale change modifies no YAML files, Git status or API/JSON contracts
   - html lang and dir match locale metadata and selected locale persists after reload
   - third locale is enabled only by locale pack and registry metadata
   evidence:
   - localization completeness report
   - Playwright trace and Russian screenshots
-  - CLI transcript and JSON contract comparison
+  - CLI UTF-8 transcript
   requirements:
   - I18N-001
 release_gates:

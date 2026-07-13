@@ -1,7 +1,7 @@
 # GitPM progress
 
-Current phase: `release_candidate_work_complete_p14_ready`
-Implementation code: P00-P13B complete; Alpha and Beta accepted; final P14 release acceptance is ready
+Current phase: `v0.1_release_accepted`
+Implementation code: P00-P14 complete; Alpha, Beta, release candidate and release gates accepted
 
 ## Current active revision
 
@@ -200,13 +200,22 @@ Implementation code: P00-P13B complete; Alpha and Beta accepted; final P14 relea
 - Frozen install leaves the lockfile unchanged; final clean verification passes 33 test files/104 tests plus smoke, schema, security and planning checks.
 - Measurements are an accepted local Windows smoke; runner metadata explicitly records that it is not the Linux reference profile.
 
+## P14 release acceptance
+
+- The Russian web UI was traversed through every mandatory workspace and representative validation/Git error states.
+- Locale packs have complete key and placeholder parity, reject raw HTML, and a synthetic third locale renders from registry metadata without component changes.
+- Russian date, decimal, duration and plural formatting passed; `lang=ru`, `dir=ltr` and the selected locale persist after reload.
+- CLI remains locale-neutral by product-owner direction and passes an explicit UTF-8 Cyrillic round-trip test on Windows.
+- Final clean verification passes 33 test files/107 tests plus smoke, schema, security and planning checks.
+- The release gate passes all 20 stages and 32 verification checks.
+
 ## Current blockers
 
-None. P13A and P13B are accepted; P14 is unblocked.
+None. P00-P14 and the v0.1 release gate are accepted.
 
 ## Next action
 
-Start P14 localization and final release acceptance.
+Create the local `v0.1` release tag on the accepted commit.
 
 ## Evidence policy
 

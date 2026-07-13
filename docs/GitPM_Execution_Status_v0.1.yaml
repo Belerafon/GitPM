@@ -229,10 +229,21 @@ stages:
     notes: Operational verification and performance smoke are accepted for the local v0.1 deployment profile; all median budgets
       pass.
   P14:
-    status: in_progress
-    accepted_by: []
-    evidence: []
-    notes: ''
+    status: done
+    accepted_by:
+    - PO
+    - ARCH
+    - QA
+    evidence:
+    - file:evidence/P14/acceptance.md
+    - file:evidence/P14/localization-completeness-report.txt
+    - file:evidence/P14/vfy-032-browser-transcript.txt
+    - file:evidence/P14/cli-utf8-transcript.txt
+    - file:evidence/P14/vfy-032-workload-ru.png
+    - file:evidence/P14/vfy-032-git-error-ru.png
+    - file:evidence/P14/release-gate.txt
+    notes: Russian web localization and extensible locale registry accepted for local v0.1; CLI remains locale-neutral by
+      product-owner direction and passes UTF-8 Cyrillic round-trip verification. Final release gate passes.
 verification_checks:
   VFY-001:
     status: passed
@@ -431,6 +442,13 @@ verification_checks:
     notes: Frozen install, three fresh-process performance runs, restart durability and explicit cleanup passed on the recorded
       local runner; the non-reference Windows profile is documented.
   VFY-032:
-    status: pending
-    evidence: []
-    notes: ''
+    status: passed
+    evidence:
+    - file:evidence/P14/localization-completeness-report.txt
+    - file:evidence/P14/vfy-032-browser-transcript.txt
+    - file:evidence/P14/cli-utf8-transcript.txt
+    - file:evidence/P14/vfy-032-workload-ru.png
+    - file:evidence/P14/vfy-032-git-error-ru.png
+    - file:evidence/P14/release-gate.txt
+    notes: Mandatory Russian web UI traversal, locale persistence, formatting, validation/Git errors and synthetic third-locale
+      registration passed; CLI UTF-8 passed without CLI message localization; release gate passed.

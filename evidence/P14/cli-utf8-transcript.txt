@@ -1,0 +1,14 @@
+GitPM CLI UTF-8 acceptance
+Date: 2026-07-13
+
+Approved scope: CLI commands and messages remain locale-neutral; UTF-8 data must round-trip correctly on Windows.
+
+Scenario:
+1. Copy the canonical repository fixture to a temporary directory.
+2. Replace a project name with `Локальный проект` using UTF-8.
+3. Run `gitpm format` through the CLI command runtime.
+4. Read the file as UTF-8 and confirm `name: Локальный проект` remains unchanged.
+5. Run `gitpm validate --json` and confirm `{ ok: true, code: "OK" }`.
+
+Result: PASS
+Automated test: apps/cli/src/command.test.ts — preserves UTF-8 Cyrillic content independently of the Windows code page.

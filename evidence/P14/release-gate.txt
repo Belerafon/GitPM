@@ -1,0 +1,13 @@
+GitPM v0.1 release gate
+Date: 2026-07-13
+
+Full verification: PASS
+- clean, build, lint, typecheck
+- 33 test files, 107 tests passed
+- health smoke, schema verification, security spike and planning verification passed
+
+Release gate command:
+python scripts/check_release_gate.py --gate release
+
+Result:
+Gate release PASSED: 20 stages and 32 checks

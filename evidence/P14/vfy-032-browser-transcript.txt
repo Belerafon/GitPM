@@ -1,0 +1,39 @@
+VFY-032 browser-local acceptance transcript
+Date: 2026-07-13
+Fixture: http://127.0.0.1:4174/vfy-032.html
+
+PASS locale metadata and persistence
+- Initial Russian selection: ru
+- After English -> Russian switch: Russian UI rendered
+- After reload: selected=ru, html lang=ru, html dir=ltr
+
+PASS mandatory navigation
+- Портфель -> Работа портфеля
+- Проекты -> Работа портфеля
+- Задачи -> Работа портфеля
+- Доска -> Доска
+- Люди -> Администрирование
+- Календарь -> Администрирование
+- Настройки репозитория -> Администрирование
+- Загрузка -> Загрузка
+- Диаграмма Ганта -> Диаграмма Ганта
+- Изменения -> Изменения
+- История -> История
+
+PASS representative validation state
+- Проверка: Ошибок: 2
+
+PASS representative Git error
+- Не удалось выполнить действие: Git diff недоступен: рабочее дерево изменилось
+
+PASS visible Russian formats
+- Неделя с 6 июл. 2026 г.
+- 20 ч / 25,6 ч
+- Загрузка 78,13%
+
+PASS browser console
+- warnings/errors: none
+
+Screenshots:
+- vfy-032-workload-ru.png
+- vfy-032-git-error-ru.png
