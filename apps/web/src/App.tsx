@@ -32,7 +32,10 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
 }) {
   const drafts = useDrafts();
   const [draftId, setDraftId] = useState("");
-  const [view, setView] = useState<MessageKey>("nav.drafts");
+  const [selectedView, setSelectedView] = useState<MessageKey | null>(null);
+  const repositoryMode = drafts.session?.mode === "repository";
+  const view = selectedView ?? (repositoryMode ? "nav.projects" : "nav.drafts");
+  const visibleNavigation = repositoryMode ? navigation.filter((key) => key !== "nav.drafts") : navigation;
   const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -61,7 +64,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand"><span className="brand-mark">G</span><strong>{t("app.title")}</strong></div>
-        <nav>{navigation.map((key) => <button className={view === key ? "active" : ""} key={key} onClick={() => setView(key)}>{t(key)}</button>)}</nav>
+        <nav>{visibleNavigation.map((key) => <button className={view === key ? "active" : ""} key={key} onClick={() => setSelectedView(key)}>{t(key)}</button>)}</nav>
         <div className="repository-card"><span>{t("app.singleRepository")}</span><strong>{repository?.name ?? t("app.repository")}</strong></div>
       </aside>
       <main className="workspace">
@@ -73,7 +76,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
           </div>
         </header>
         {drafts.error !== null && <div className="alert error">{t("status.error", { message: drafts.error })}<button onClick={() => { void drafts.refresh(); }}>{t("status.retry")}</button></div>}
-        {view === "nav.drafts" && <section className="draft-layout">
+        {!repositoryMode && view === "nav.drafts" && <section className="draft-layout">
           <div className="draft-list card">
             <h2>{t("drafts.heading")}</h2>
             <form onSubmit={submit}><label htmlFor="draft-id">{t("drafts.id")}</label><div className="inline"><input id="draft-id" value={draftId} onChange={(event) => setDraftId(event.target.value)} pattern="[A-Za-z0-9][A-Za-z0-9-]{0,127}" required /><button className="primary" disabled={drafts.busy || drafts.session.role === "Reporter"}>{t("drafts.create")}</button></div></form>

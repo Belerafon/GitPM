@@ -117,8 +117,12 @@ describe("frontend draft lifecycle", () => {
       repository: { name: "portfolio", path: "D:\\portfolio", has_remote: false },
       gitlab: { configured: false },
     };
+    api.drafts = [draft({ draft_id: "DRF-LOCAL", owner_gitlab_user_id: "local-user" })];
     render(<App api={api} browserLanguages={["en"]} />);
     expect(await screen.findByText("D:\\portfolio · Local mode · Role: Maintainer")).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Portfolio work" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Drafts" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Projects" }).className).toContain("active");
     expect(screen.queryByRole("button", { name: "Sign out" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Sign in with GitLab" })).toBeNull();
   });
