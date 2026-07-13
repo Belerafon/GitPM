@@ -1,0 +1,18 @@
+{
+  "date": "2026-07-13",
+  "command": "corepack pnpm audit --prod --audit-level high --json",
+  "scope": "production dependencies from pnpm-lock.yaml",
+  "dependencies": 72,
+  "vulnerabilities": {
+    "info": 0,
+    "low": 0,
+    "moderate": 0,
+    "high": 0,
+    "critical": 0
+  },
+  "remediated_before_final_scan": [
+    "ajv 8.17.1 -> 8.18.0",
+    "yaml 2.8.1 -> 2.8.3"
+  ],
+  "result": "passed"
+}

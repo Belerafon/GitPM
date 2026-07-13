@@ -1,0 +1,11 @@
+{
+  "date": "2026-07-13",
+  "result": "not_applicable",
+  "searched_artifacts": [
+    "Dockerfile*",
+    ".dockerignore",
+    "OCI/container build manifests"
+  ],
+  "artifacts_found": [],
+  "rationale": "GitPM v0.1 defines local deployment as one Node.js process with system Git and persistent data. The repository does not build or publish a container image, so there is no container artifact to scan."
+}

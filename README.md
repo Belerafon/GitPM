@@ -4,7 +4,7 @@ Git-first система управления проектами и задача
 
 ## Current status
 
-Статус: `P09_complete_P10_ready`. P00-P09 закрыты, Alpha gate пройден. Changes, semantic diff и публикация через commit-all/push/Merge Request готовы; следующий этап — эксплуатационная готовность P10.
+Статус: `P13A_complete_P13B_ready`. P00-P13A закрыты, Alpha и Beta приняты. Функциональная реализация завершена, security hardening принят; следующий этап — эксплуатационная и performance-проверка P13B.
 
 ## Development
 

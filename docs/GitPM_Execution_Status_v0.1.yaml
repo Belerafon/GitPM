@@ -1,6 +1,6 @@
 version: '0.1'
 updated_at: '2026-07-13'
-current_phase: beta_complete_release_candidate_work_ready
+current_phase: security_hardening_complete_operations_ready
 stages:
   P00:
     status: done
@@ -202,10 +202,18 @@ stages:
     notes: External draft file editing, scoped CLI validation, explicit delete, commit-all/push/MR and poll-driven read-model
       reconciliation with coalesced reduced-motion-aware highlights are accepted.
   P13A:
-    status: in_progress
-    accepted_by: []
-    evidence: []
-    notes: ''
+    status: done
+    accepted_by:
+    - SEC
+    - ARCH
+    evidence:
+    - file:evidence/P13A/vfy-030-security-report.txt
+    - file:evidence/P13A/dependency-audit.json
+    - file:evidence/P13A/container-scan.json
+    - file:evidence/P13A/residual-risks.md
+    - file:evidence/P13A/acceptance.md
+    notes: Security hardening is accepted for the local trusted-user deployment profile with no unresolved high or critical
+      finding.
   P13B:
     status: not_started
     accepted_by: []
@@ -396,9 +404,14 @@ verification_checks:
     notes: Scripted agent workflow passed Project scope and explicit-delete guards, commit-all/push/MR, live polling refresh,
       field-only coalesced highlighting and static reduced-motion indication.
   VFY-030:
-    status: pending
-    evidence: []
-    notes: ''
+    status: passed
+    evidence:
+    - file:evidence/P13A/vfy-030-security-report.txt
+    - file:evidence/P13A/dependency-audit.json
+    - file:evidence/P13A/container-scan.json
+    - file:evidence/P13A/residual-risks.md
+    notes: Hostile browser/repository and token-role suites passed; production audit is clean, container scan is not applicable
+      for the local non-container deployment, and accepted residual risks are documented.
   VFY-031:
     status: pending
     evidence: []

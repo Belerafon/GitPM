@@ -1,7 +1,7 @@
 # GitPM progress
 
-Current phase: `release_candidate_security_hardening_in_progress`
-Implementation code: P00-P12 complete; Alpha and Beta accepted; P13A in progress; P13B remains unblocked
+Current phase: `security_hardening_complete_operations_ready`
+Implementation code: P00-P13A complete; Alpha and Beta accepted; P13B release-candidate operations work is ready
 
 ## Current active revision
 
@@ -181,13 +181,22 @@ Implementation code: P00-P12 complete; Alpha and Beta accepted; P13A in progress
 - Agent-local and Russian browser-local VFY-029 passed scope/delete rejection and the valid branch/MR flow.
 - Final clean verification passes 31 test files and 99 tests, smoke, schema, security and planning checks.
 
+## Last P13A evidence
+
+- Hostile repository Markdown, Git metadata and diffs remain inert; CSP, clickjacking and cross-site mutation controls are verified.
+- Inherited hooks, filters, textconv and external diff commands do not execute; Git diff also disables textconv explicitly.
+- OAuth state replay, session expiry and immediate role downgrade are rejected with stable codes.
+- `ajv` and `yaml` were upgraded to patched versions; the final production audit reports 0 known vulnerabilities across 72 dependencies.
+- Container scan is explicitly not applicable because v0.1 has no container build artifact and targets a local Node.js process with system Git.
+- Focused security verification passes 7 files/18 tests; full clean verification passes 33 files/104 tests plus smoke, schema, security and planning checks.
+
 ## Current blockers
 
-None. P13A browser, malicious repository, token/role and dependency controls are locally verified; only the residual-risk record and final evidence remain.
+None. P13A is accepted for the local trusted-user deployment model; P13B is unblocked.
 
 ## Next action
 
-Finish the P13A residual-risk review and acceptance evidence. P13B operational verification may proceed independently from the same completed Beta baseline.
+Start P13B operational verification and performance smoke.
 
 ## Evidence policy
 

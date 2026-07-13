@@ -1,0 +1,29 @@
+VFY-030 Security hostile-content suite
+Date: 2026-07-13
+Environment: Node.js 20.19.2, pnpm 10.12.1, Git on Windows
+Deployment profile: local trusted-user installation
+
+Commands:
+- corepack pnpm security:p13a
+- corepack pnpm verify
+- corepack pnpm audit --prod --audit-level high --json
+
+Results:
+- focused security suite: 7 test files, 18 tests passed;
+- full clean verification: 33 test files, 104 tests passed;
+- build, lint, typecheck, health smoke, schema, security spike and planning checks passed;
+- production dependency audit: 72 dependencies, 0 known vulnerabilities;
+- container scan: not applicable because no container artifact exists in the v0.1 local deployment contract;
+- unresolved high findings: 0;
+- unresolved critical findings: 0.
+
+Covered cases:
+- repository Markdown, Git metadata and diffs remain inert browser text;
+- CSP, clickjacking, MIME sniffing and cross-site mutation protections are present;
+- untrusted Merge Request URLs cannot create non-HTTPS or credential-bearing links;
+- inherited hooks, filters, textconv and external diff commands do not execute;
+- Git diff paths explicitly disable external diff and textconv;
+- OAuth state is one-time, expired sessions are removed and role downgrade is applied before mutation;
+- access token remains absent from argv, URLs, Git config, files, reports and sanitized captures.
+
+Initial moderate dependency findings were remediated by upgrading ajv to 8.18.0 and yaml to 2.8.3. The final audit is clean. Residual risks are recorded in residual-risks.md and accepted for the local deployment boundary.
