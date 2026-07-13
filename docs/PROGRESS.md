@@ -1,7 +1,7 @@
 # GitPM progress
 
-Current phase: `security_hardening_complete_operations_ready`
-Implementation code: P00-P13A complete; Alpha and Beta accepted; P13B release-candidate operations work is ready
+Current phase: `release_candidate_operations_in_progress`
+Implementation code: P00-P13A complete; Alpha and Beta accepted; P13B operational and performance verification is in progress
 
 ## Current active revision
 
@@ -192,11 +192,11 @@ Implementation code: P00-P13A complete; Alpha and Beta accepted; P13B release-ca
 
 ## Current blockers
 
-None. P13A is accepted for the local trusted-user deployment model; P13B is unblocked.
+None. The P13B deterministic 3000-Task fixture and local three-process performance smoke pass all budgets; operational evidence remains.
 
 ## Next action
 
-Start P13B operational verification and performance smoke.
+Finish P13B install, restart, explicit cleanup and troubleshooting evidence.
 
 ## Evidence policy
 

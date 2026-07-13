@@ -268,9 +268,77 @@ export class GitClient {
     return result.stdout;
   }
 
+  async diffFiles(worktree: string, relativePaths: readonly string[], contextLines = 3): Promise<ReadonlyMap<string, string>> {
+    if (relativePaths.length === 0) return new Map();
+    if (relativePaths.some((value) => !/^[A-Za-z0-9._/-]+$/u.test(value))) {
+      throw new GitCommandError("GIT_PATH_INVALID", "Batched Git paths must use the repository path allowlist");
+    }
+    const result = await this.git([
+      "-C", await realpath(worktree), "diff", "--no-color", "--no-ext-diff", "--no-textconv", "--no-renames",
+      `--unified=${contextLines}`, "--", ...relativePaths,
+    ]);
+    const requested = new Set(relativePaths);
+    const patches = result.stdout.split(/(?=^diff --git )/mu).filter(Boolean);
+    const mapped = new Map<string, string>();
+    for (const patch of patches) {
+      const header = patch.slice(0, patch.indexOf("\n"));
+      const match = /^diff --git a\/([A-Za-z0-9._/-]+) b\/\1$/u.exec(header);
+      if (match?.[1] && requested.has(match[1])) mapped.set(match[1], patch);
+    }
+    return mapped;
+  }
+
   async showHeadFile(worktree: string, relativePath: string): Promise<string> {
     const result = await this.git(["-C", await realpath(worktree), "show", `HEAD:${relativePath}`]);
     return result.stdout;
+  }
+
+  async showHeadFiles(worktree: string, relativePaths: readonly string[]): Promise<ReadonlyMap<string, string>> {
+    if (relativePaths.length === 0) return new Map();
+    if (relativePaths.some((value) => /[\r\n\0]/u.test(value))) throw new GitCommandError("GIT_PATH_INVALID", "Git path is invalid");
+    const canonical = await realpath(worktree);
+    const args = ["-C", canonical, "cat-file", "--batch"];
+    const output = await new Promise<Buffer>((resolve, reject) => {
+      const child = spawn("git", args, { env: safeEnvironment(this.homeDirectory), shell: false, windowsHide: true });
+      const chunks: Buffer[] = [];
+      let outputBytes = 0;
+      let timedOut = false;
+      let outputLimited = false;
+      const timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, this.timeoutMs);
+      child.stdout.on("data", (chunk: Buffer) => {
+        outputBytes += chunk.length;
+        if (outputBytes > MAX_OUTPUT_BYTES) { outputLimited = true; child.kill("SIGKILL"); }
+        else chunks.push(chunk);
+      });
+      child.stderr.resume();
+      child.once("error", (error) => { clearTimeout(timer); reject(new GitCommandError("GIT_SPAWN_FAILED", error.message)); });
+      child.once("close", (exitCode) => {
+        clearTimeout(timer);
+        const code = exitCode ?? -1;
+        this.onCommand?.({ args, durationMs: 0, exitCode: code });
+        if (timedOut) reject(new GitCommandError("GIT_TIMEOUT", "Git command timed out", code));
+        else if (outputLimited) reject(new GitCommandError("GIT_OUTPUT_LIMIT", "Git command exceeded output limit", code));
+        else if (code !== 0) reject(new GitCommandError("GIT_FAILED", "git cat-file failed", code));
+        else resolve(Buffer.concat(chunks));
+      });
+      child.stdin.end(relativePaths.map((value) => `HEAD:${value}\n`).join(""), "utf8");
+    });
+    const result = new Map<string, string>();
+    let offset = 0;
+    for (const relativePath of relativePaths) {
+      const headerEnd = output.indexOf(0x0a, offset);
+      if (headerEnd < 0) throw new GitCommandError("GIT_OUTPUT_INVALID", "git cat-file header is incomplete");
+      const header = output.subarray(offset, headerEnd).toString("utf8");
+      const match = /^[0-9a-f]{40,64} blob (\d+)$/u.exec(header);
+      if (!match?.[1]) throw new GitCommandError("GIT_OUTPUT_INVALID", `git cat-file rejected ${relativePath}`);
+      const size = Number.parseInt(match[1], 10);
+      const contentStart = headerEnd + 1;
+      const contentEnd = contentStart + size;
+      if (contentEnd >= output.length || output[contentEnd] !== 0x0a) throw new GitCommandError("GIT_OUTPUT_INVALID", "git cat-file content is incomplete");
+      result.set(relativePath, output.subarray(contentStart, contentEnd).toString("utf8"));
+      offset = contentEnd + 1;
+    }
+    return result;
   }
 
   async history(worktree: string, limit = 50): Promise<readonly GitHistoryEntry[]> {

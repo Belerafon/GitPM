@@ -1,4 +1,4 @@
-import { readdir, readFile, realpath } from "node:fs/promises";
+import { readdir, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Ajv2020 } from "ajv/dist/2020.js";
@@ -26,6 +26,15 @@ interface LoadedDocument {
   readonly value: GitPmDocument;
 }
 
+interface CachedDocument {
+  readonly cacheKey: string;
+  readonly document?: LoadedDocument;
+  readonly issues: readonly ValidationIssue[];
+  readonly structurallyValid: boolean;
+}
+
+const documentCache = new Map<string, Map<string, CachedDocument>>();
+
 const schemaIds = new Map([
   ["gitpm/project@1", "https://gitpm.dev/schemas/v1/project.schema.json"],
   ["gitpm/task@1", "https://gitpm.dev/schemas/v1/task.schema.json"],
@@ -42,16 +51,18 @@ const schemaIds = new Map([
 const normalize = (value: string) => value.split(path.sep).join("/");
 
 async function filesUnder(directory: string): Promise<string[]> {
-  const result: string[] = [];
-  for (const entry of await readdir(directory, { withFileTypes: true })) {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const nested = await Promise.all(entries.map(async (entry) => {
     const absolute = path.join(directory, entry.name);
-    if (entry.isDirectory()) result.push(...await filesUnder(absolute));
-    else if (entry.name.endsWith(".yaml")) result.push(absolute);
-  }
-  return result.sort();
+    if (entry.isDirectory()) return await filesUnder(absolute);
+    return entry.name.endsWith(".yaml") ? [absolute] : [];
+  }));
+  return nested.flat().sort();
 }
 
-async function schemaValidators(): Promise<Map<string, ValidateFunction>> {
+let validatorsPromise: Promise<Map<string, ValidateFunction>> | undefined;
+
+async function loadSchemaValidators(): Promise<Map<string, ValidateFunction>> {
   const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
   const schemaDirectory = path.resolve(moduleDirectory, "../../../schemas/v1");
   const ajv = new Ajv2020({ allErrors: true, strict: true });
@@ -67,6 +78,11 @@ async function schemaValidators(): Promise<Map<string, ValidateFunction>> {
     result.set(schema, validator);
   }
   return result;
+}
+
+async function schemaValidators(): Promise<Map<string, ValidateFunction>> {
+  validatorsPromise ??= loadSchemaValidators();
+  return await validatorsPromise;
 }
 
 function expectedPath(document: GitPmDocument): string | undefined {
@@ -149,32 +165,54 @@ export async function validateRepository(repositoryRoot: string): Promise<Valida
   const documents: LoadedDocument[] = [];
   const structurallyValid = new Set<string>();
 
-  for (const absolute of await filesUnder(root)) {
+  const previousCache = documentCache.get(root) ?? new Map<string, CachedDocument>();
+  const nextCache = new Map<string, CachedDocument>();
+  const loaded = await Promise.all((await filesUnder(root)).map(async (absolute): Promise<CachedDocument> => {
     const relative = normalize(path.relative(root, absolute));
+    const metadata = await stat(absolute, { bigint: true });
+    const cacheKey = `${metadata.size}:${metadata.mtimeNs}`;
+    const cached = previousCache.get(relative);
+    if (cached?.cacheKey === cacheKey) {
+      nextCache.set(relative, cached);
+      return cached;
+    }
+    const loadedIssues: ValidationIssue[] = [];
     try {
       const value = parseYamlDocument(await readFile(absolute, "utf8"), relative);
-      documents.push({ path: relative, value });
       const validator = validators.get(value.schema);
+      let structurallyValid = false;
       if (!validator) {
-        add({ severity: "error", code: "SCHEMA_UNKNOWN", path: relative, message: `Unknown schema ${value.schema}` });
+        loadedIssues.push({ severity: "error", code: "SCHEMA_UNKNOWN", path: relative, message: `Unknown schema ${value.schema}` });
       } else if (!validator(value)) {
-        add({ severity: "error", code: "SCHEMA_INVALID", path: relative, message: validator.errors?.[0]?.message ?? "Schema validation failed" });
+        loadedIssues.push({ severity: "error", code: "SCHEMA_INVALID", path: relative, message: validator.errors?.[0]?.message ?? "Schema validation failed" });
       } else {
-        structurallyValid.add(relative);
+        structurallyValid = true;
       }
       const expected = expectedPath(value);
       if (expected && expected !== relative) {
-        add({
+        loadedIssues.push({
           severity: "error",
           code: value.schema === "gitpm/project@1" ? "PATH_PROJECT_DIRECTORY" : "PATH_ENTITY_FILENAME",
           path: relative,
           message: `Expected ${expected}`,
         });
       }
+      const result = { cacheKey, document: { path: relative, value }, issues: loadedIssues, structurallyValid };
+      nextCache.set(relative, result);
+      return result;
     } catch (error) {
       const code = error instanceof RepositoryFormatError ? error.code : "YAML_READ";
-      add({ severity: "error", code, path: relative, message: error instanceof Error ? error.message : String(error) });
+      loadedIssues.push({ severity: "error", code, path: relative, message: error instanceof Error ? error.message : String(error) });
+      const result = { cacheKey, document: undefined, issues: loadedIssues, structurallyValid: false };
+      nextCache.set(relative, result);
+      return result;
     }
+  }));
+  documentCache.set(root, nextCache);
+  for (const item of loaded) {
+    for (const issue of item.issues) add(issue);
+    if (item.document) documents.push(item.document);
+    if (item.document && item.structurallyValid) structurallyValid.add(item.document.path);
   }
 
   const validDocuments = documents.filter((document) => structurallyValid.has(document.path));

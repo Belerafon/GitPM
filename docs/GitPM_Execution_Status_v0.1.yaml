@@ -215,7 +215,7 @@ stages:
     notes: Security hardening is accepted for the local trusted-user deployment profile with no unresolved high or critical
       finding.
   P13B:
-    status: not_started
+    status: in_progress
     accepted_by: []
     evidence: []
     notes: ''

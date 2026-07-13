@@ -71,6 +71,20 @@ function token(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
+async function mapConcurrent<T, R>(values: readonly T[], concurrency: number, operation: (value: T, index: number) => Promise<R>): Promise<R[]> {
+  const result = new Array<R>(values.length);
+  let nextIndex = 0;
+  const worker = async (): Promise<void> => {
+    while (nextIndex < values.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      result[index] = await operation(values[index]!, index);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, worker));
+  return result;
+}
+
 function addedFileDiff(relativePath: string, content: string): string {
   const normalized = content.replaceAll("\r\n", "\n");
   const lines = normalized.endsWith("\n") ? normalized.slice(0, -1).split("\n") : normalized.split("\n");
@@ -175,14 +189,15 @@ export class ChangesService {
   async list(draftId: string): Promise<{ files: readonly FileChange[]; changed_files_count: number; affected_projects: readonly string[] }> {
     const metadata = await this.drafts.getDraft(draftId);
     const status = parseStatus(await this.git.statusPorcelainZ(metadata.worktree_path));
-    const files: FileChange[] = [];
-    for (const change of status) {
+    const batchPaths = status.filter((change) => change.kind !== "Added" && /^[A-Za-z0-9._/-]+$/u.test(change.path)).map((change) => change.path);
+    const batchDiffs = await this.git.diffFiles(metadata.worktree_path, batchPaths, 1);
+    const files = await mapConcurrent(status, 16, async (change): Promise<FileChange> => {
       const relative = safeRelativePath(change.path);
       const diff = change.kind === "Added"
         ? addedFileDiff(relative, await readFile(await resolveDomainPath(metadata.worktree_path, relative), "utf8"))
-        : await this.git.diffFile(metadata.worktree_path, relative, 1);
-      files.push({ path: relative, kind: change.kind, diff, diff_token: token(diff), hunks: parseUnifiedDiff(diff) });
-    }
+        : batchDiffs.get(relative) ?? await this.git.diffFile(metadata.worktree_path, relative, 1);
+      return { path: relative, kind: change.kind, diff, diff_token: token(diff), hunks: parseUnifiedDiff(diff) };
+    });
     const affected = new Set<string>();
     for (const file of files) {
       const match = /^projects\/(PRJ-[^/]+)/u.exec(file.path);
@@ -199,20 +214,28 @@ export class ChangesService {
     };
     const affectedProjects = new Set<string>();
     const unclassifiedFiles: string[] = [];
-    for (const change of changes.files) {
+    const headPaths = changes.files.filter((change) => change.kind !== "Added").map((change) => change.path);
+    const headFiles = await this.git.showHeadFiles(metadata.worktree_path, headPaths);
+    const classified = await mapConcurrent(changes.files, 16, async (change) => {
       try {
-        const before = change.kind === "Added" ? undefined : parseYamlDocument(await this.git.showHeadFile(metadata.worktree_path, change.path), change.path);
+        const beforeText = change.kind === "Added" ? undefined : headFiles.get(change.path);
+        if (change.kind !== "Added" && beforeText === undefined) throw new ChangesError("HEAD_FILE_MISSING", "HEAD file is unavailable");
+        const before = beforeText === undefined ? undefined : parseYamlDocument(beforeText, change.path);
         const after = change.kind === "Deleted" ? undefined : parseYamlDocument(await readFile(await resolveDomainPath(metadata.worktree_path, change.path), "utf8"), change.path);
         const identity = documentIdentity(after ?? before!);
-        if (!identity) { unclassifiedFiles.push(change.path); continue; }
-        if (identity.project !== undefined) affectedProjects.add(identity.project);
+        if (!identity) return { path: change.path };
         const item: SemanticChange = { path: change.path, ...identity, fields: fieldChanges(before, after) };
-        if (change.kind === "Added") result.created.push(item);
-        else if (change.kind === "Deleted") result.deleted.push(item);
-        else if (before?.lifecycle !== "archived" && after?.lifecycle === "archived") result.archived.push(item);
-        else result.updated.push(item);
+        const group: keyof typeof result = change.kind === "Added" ? "created" : change.kind === "Deleted" ? "deleted" : before?.lifecycle !== "archived" && after?.lifecycle === "archived" ? "archived" : "updated";
+        return { path: change.path, project: identity.project, item, group };
       } catch {
-        unclassifiedFiles.push(change.path);
+        return { path: change.path };
+      }
+    });
+    for (const classifiedChange of classified) {
+      if (!classifiedChange.item || !classifiedChange.group) unclassifiedFiles.push(classifiedChange.path);
+      else {
+        if (classifiedChange.project !== undefined) affectedProjects.add(classifiedChange.project);
+        result[classifiedChange.group].push(classifiedChange.item);
       }
     }
     return {
