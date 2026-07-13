@@ -64,6 +64,25 @@ describe("OAuth PKCE and memory-only sessions", () => {
     await expect(restarted.authorize(session.session_id, "read")).rejects.toBeInstanceOf(AuthError);
   });
 
+  it("invalidates expired sessions, rejects replayed state and applies role revocation immediately", async () => {
+    let now = Date.parse("2026-07-10T00:00:00Z");
+    let level = 30;
+    const testDouble = protocol(30);
+    vi.mocked(testDouble.implementation.projectAccessLevel).mockImplementation(async () => level);
+    const auth = service(testDouble.implementation, () => now);
+    const started = auth.startLogin();
+    const session = await auth.completeLogin(started.state, "code");
+    await expect(auth.completeLogin(started.state, "replayed-code")).rejects.toMatchObject({ code: "OAUTH_STATE_INVALID" });
+
+    level = 20;
+    await expect(auth.authorize(session.session_id, "mutation")).rejects.toMatchObject({ code: "ROLE_READ_ONLY" });
+    expect((await auth.authorize(session.session_id, "read")).session.role).toBe("Reporter");
+
+    now += 2 * 60 * 60 * 1000 + 1;
+    await expect(auth.authorize(session.session_id, "read")).rejects.toMatchObject({ code: "SESSION_INVALID" });
+    expect(auth.sessionCount()).toBe(0);
+  });
+
   it("maps GitLab levels exactly", () => {
     expect(mapAccessLevel(20)).toBe("Reporter");
     expect(mapAccessLevel(30)).toBe("Developer");

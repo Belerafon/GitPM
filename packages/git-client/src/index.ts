@@ -260,6 +260,7 @@ export class GitClient {
       "diff",
       "--no-color",
       "--no-ext-diff",
+      "--no-textconv",
       `--unified=${contextLines}`,
       "--",
       relativePath,
@@ -309,7 +310,7 @@ export class GitClient {
         deletions: deleted === "-" ? null : Number.parseInt(deleted, 10),
       };
     });
-    const diff = await this.git(["-C", canonical, "show", "--format=", "--no-color", "--no-ext-diff", "--no-renames", "--unified=3", commit]);
+    const diff = await this.git(["-C", canonical, "show", "--format=", "--no-color", "--no-ext-diff", "--no-textconv", "--no-renames", "--unified=3", commit]);
     return { ...entry, body: fields.slice(6).join("\x1f").trim(), files, diff: diff.stdout };
   }
 

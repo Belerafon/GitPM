@@ -183,11 +183,11 @@ Implementation code: P00-P12 complete; Alpha and Beta accepted; P13A in progress
 
 ## Current blockers
 
-None. P13A browser security controls are implemented and locally verified; remaining hostile repository, token/role, scan and residual-risk packages are active work.
+None. P13A browser, malicious repository and token/role controls are implemented and locally verified; scan and residual-risk packages remain active work.
 
 ## Next action
 
-Continue P13A with the malicious repository/Git suite. P13B operational verification may proceed independently from the same completed Beta baseline.
+Continue P13A with reproducible dependency/container scans and residual-risk review. P13B operational verification may proceed independently from the same completed Beta baseline.
 
 ## Evidence policy
 
