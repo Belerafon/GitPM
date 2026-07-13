@@ -22,9 +22,13 @@ nav button.active, nav button:hover { background: #2b4c3e; color: #fff; }
 .topbar h1 { margin: 0 0 .25rem; font-size: 1.45rem; }
 .topbar p { margin: 0; color: #686c68; }
 .top-actions { display: flex; align-items: end; gap: .7rem; }
+.workspace-switcher { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; min-width: 230px; gap: .2rem .55rem; text-align: left; }
+.workspace-switcher > span:first-child { grid-column: 1 / -1; color: #6b706c; font-size: .7rem; }
+.workspace-switcher strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .locale-picker { display: grid; gap: .25rem; color: #666b67; font-size: .75rem; }
 .locale-picker select { min-width: 112px; border: 1px solid #c9cbc5; border-radius: 7px; background: #fff; padding: .45rem; }
 .draft-layout { display: grid; grid-template-columns: minmax(280px, .8fr) minmax(420px, 1.55fr); gap: 1.25rem; margin-top: 1.5rem; }
+.workspace-description { margin: -.45rem 0 1rem; color: #686e69; font-size: .84rem; line-height: 1.45; }
 .card { border: 1px solid #dedfd9; border-radius: 12px; background: #fff; box-shadow: 0 4px 18px rgba(31, 45, 37, .04); padding: 1.25rem; }
 .card h2 { margin-top: 0; }
 form label { display: block; margin-bottom: .4rem; color: #5d625f; font-size: .84rem; }
@@ -33,6 +37,7 @@ input { min-width: 0; width: 100%; border: 1px solid #c9cbc5; border-radius: 8px
 .draft-items { display: grid; gap: .5rem; margin-top: 1.25rem; }
 .draft-item { display: grid; grid-template-columns: 1fr auto; gap: .25rem .5rem; width: 100%; text-align: left; }
 .draft-item span:not(.state) { overflow: hidden; color: #747974; font-size: .75rem; text-overflow: ellipsis; }
+.draft-item code { overflow: hidden; max-width: 150px; color: #747974; font-size: .68rem; text-overflow: ellipsis; white-space: nowrap; }
 .draft-item.selected { border-color: #49715d; background: #edf3ee; }
 .state { align-self: start; border-radius: 999px; background: #e8eae6; color: #575c58; padding: .16rem .48rem; font-size: .72rem; }
 .state.open { background: #dcecdf; color: #285936; }

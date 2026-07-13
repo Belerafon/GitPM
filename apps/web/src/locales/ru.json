@@ -13,7 +13,7 @@
   "locale.en": "English",
   "locale.ru": "Русский",
   "nav.portfolio": "Портфель",
-  "nav.drafts": "Черновики",
+  "nav.drafts": "Рабочие копии",
   "nav.projects": "Проекты",
   "nav.tasks": "Задачи",
   "nav.board": "Доска",
@@ -24,17 +24,24 @@
   "nav.gantt": "Диаграмма Ганта",
   "nav.changes": "Изменения",
   "nav.history": "История",
-  "drafts.heading": "Черновики",
-  "drafts.create": "Создать черновик",
-  "drafts.id": "ID черновика",
-  "drafts.empty": "Черновиков пока нет.",
+  "drafts.heading": "Рабочие копии",
+  "drafts.description": "Каждая рабочая копия — отдельная Git-ветка и каталог изменений. Переключайтесь между ними, не смешивая независимую работу.",
+  "drafts.current": "Текущая рабочая копия",
+  "drafts.localName": "Основная локальная",
+  "drafts.create": "Создать рабочую копию",
+  "drafts.id": "ID рабочей копии",
+  "drafts.empty": "Рабочих копий пока нет.",
   "drafts.open": "Открыть",
-  "drafts.close": "Закрыть",
+  "drafts.close": "Закрыть для редактирования",
   "drafts.reopen": "Открыть повторно",
-  "drafts.cleanup": "Очистить",
-  "drafts.cleanupConfirm": "Очистить черновик {id}? Его worktree и ветка будут удалены.",
+  "drafts.cleanup": "Удалить рабочую копию",
+  "drafts.cleanupConfirm": "Удалить рабочую копию {id}? Её каталог изменений и ветка будут удалены.",
   "drafts.branch": "Ветка",
   "drafts.state": "Состояние",
+  "drafts.stateOpen": "Открыта",
+  "drafts.stateClosed": "Закрыта",
+  "drafts.statePublished": "Опубликована",
+  "drafts.stateAbandoned": "Оставлена",
   "drafts.writerMode": "Режим записи",
   "drafts.writerUi": "Интерфейс",
   "drafts.writerExternal": "Внешний",
@@ -48,7 +55,7 @@
   "drafts.noMr": "Не создан",
   "drafts.changedExternally": "Worktree изменён вне GitPM. Обновите состояние перед редактированием.",
   "drafts.externalWarning": "Активен внешний режим записи. Действия редактирования доступны только для чтения.",
-  "drafts.localWarning": "Изменения остаются локальными в черновике до commit и push.",
+  "drafts.localWarning": "Изменения остаются в этой рабочей копии до коммита и отправки в remote.",
   "drafts.polling": "Состояние обновляется каждые 3 секунды.",
   "drafts.updated": "Последнее обновление: {time}",
   "status.loading": "Загрузка…",
@@ -78,7 +85,7 @@
   ,"core.empty": "Здесь пока пусто."
   ,"core.selectProject": "Выберите проект для управления работой."
   ,"core.safePreview": "Безопасный просмотр Markdown"
-  ,"core.readOnly": "Редактирование недоступно для этого черновика."
+  ,"core.readOnly": "Редактирование недоступно для этой рабочей копии."
   ,"admin.heading": "Администрирование"
   ,"admin.people": "Люди"
   ,"admin.teams": "Команды"
@@ -101,8 +108,8 @@
   ,"admin.issueTypes": "Типы задач"
   ,"admin.noServerConfig": "Настройки сервера и OAuth намеренно не представлены в этом интерфейсе."
   ,"changes.heading": "Изменения"
-  ,"changes.description": "Проверьте точный Git diff, оцените изменения сущностей и опубликуйте черновик целиком."
-  ,"changes.readOnly": "Для этого черновика или роли изменения доступны только для чтения."
+  ,"changes.description": "Проверьте точный Git diff, оцените изменения сущностей и опубликуйте рабочую копию целиком."
+  ,"changes.readOnly": "Для этой рабочей копии или роли изменения доступны только для чтения."
   ,"changes.files": "файлов"
   ,"changes.created": "Создано"
   ,"changes.updated": "Обновлено"
@@ -110,9 +117,9 @@
   ,"changes.deleted": "Удалено"
   ,"changes.fileChanges": "Изменения файлов"
   ,"changes.discardAll": "Отменить всё"
-  ,"changes.discardConfirm": "Отменить все незакоммиченные изменения этого черновика?"
+  ,"changes.discardConfirm": "Отменить все незакоммиченные изменения этой рабочей копии?"
   ,"changes.clean": "Незакоммиченных изменений нет"
-  ,"changes.cleanHint": "Рабочее дерево черновика совпадает с последним коммитом."
+  ,"changes.cleanHint": "Рабочая копия совпадает с последним коммитом."
   ,"changes.kindAdded": "Добавлен"
   ,"changes.kindModified": "Изменён"
   ,"changes.kindDeleted": "Удалён"
@@ -141,9 +148,9 @@
   ,"changes.mrDescription": "Описание"
   ,"changes.createMr": "Создать Merge Request"
   ,"changes.mrReady": "Merge Request !{iid}: {state}"
-  ,"changes.alphaLimitations": "Ограничения Alpha: один репозиторий и один владелец черновика; коммит всегда включает все изменённые файлы; для Merge Request доступны только заголовок и описание."
+  ,"changes.alphaLimitations": "Ограничения Alpha: один репозиторий и один владелец рабочей копии; коммит всегда включает все изменённые файлы; для Merge Request доступны только заголовок и описание."
   ,"history.heading": "История"
-  ,"history.description": "Просмотрите граф коммитов, файлы и влияние на предметную область или создайте отдельный revert-черновик."
+  ,"history.description": "Просмотрите граф коммитов, файлы и влияние на предметную область или создайте отдельную рабочую копию для отката."
   ,"history.empty": "Выберите коммит для просмотра."
   ,"history.commit": "Коммит"
   ,"history.author": "Автор"
@@ -152,12 +159,12 @@
   ,"history.projects": "Затронутые проекты"
   ,"history.fileHistory": "История файла"
   ,"history.diff": "Точный Git diff"
-  ,"history.revertDraft": "ID нового revert-черновика"
-  ,"history.createRevert": "Создать revert-черновик"
-  ,"history.conflict": "В revert-черновике есть конфликты в файлах: {count}. Он открыт во внешнем режиме."
+  ,"history.revertDraft": "ID рабочей копии для отката"
+  ,"history.createRevert": "Создать рабочую копию для отката"
+  ,"history.conflict": "В рабочей копии отката есть конфликты в файлах: {count}. Она открыта во внешнем режиме."
   ,"board.heading": "Доска"
   ,"board.description": "Перемещайте задачи между колонками статусов и сохраняйте представления с фильтрами."
-  ,"board.readOnly": "Для этого черновика доска доступна только для чтения."
+  ,"board.readOnly": "Для этой рабочей копии доска доступна только для чтения."
   ,"board.project": "Проект"
   ,"board.statusFilter": "Фильтр по статусу"
   ,"board.typeFilter": "Фильтр по типу"

@@ -35,8 +35,9 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
   const [selectedView, setSelectedView] = useState<MessageKey | null>(null);
   const repositoryMode = drafts.session?.mode === "repository";
   const view = selectedView ?? (repositoryMode ? "nav.projects" : "nav.drafts");
-  const visibleNavigation = repositoryMode ? navigation.filter((key) => key !== "nav.drafts") : navigation;
   const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
+  const workspaceName = (id: string) => repositoryMode && id === "DRF-LOCAL" ? t("drafts.localName") : id;
+  const workspaceState = (state: string) => t(({ open: "drafts.stateOpen", closed: "drafts.stateClosed", published: "drafts.statePublished", abandoned: "drafts.stateAbandoned" } as const)[state as "open" | "closed" | "published" | "abandoned"] ?? "drafts.state");
   const submit = (event: FormEvent) => {
     event.preventDefault();
     const value = draftId.trim();
@@ -64,31 +65,36 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
     <div className={`app-shell${repositoryMode ? " repository-mode" : ""}`}>
       <aside className="sidebar">
         <div className="brand"><span className="brand-mark">G</span><strong>{t("app.title")}</strong></div>
-        <nav>{visibleNavigation.map((key) => <button className={view === key ? "active" : ""} key={key} onClick={() => setSelectedView(key)}>{t(key)}</button>)}</nav>
+        <nav>{navigation.map((key) => <button className={view === key ? "active" : ""} key={key} onClick={() => setSelectedView(key)}>{t(key)}</button>)}</nav>
         <div className="repository-card"><span>{t("app.singleRepository")}</span><strong>{repository?.name ?? t("app.repository")}</strong></div>
       </aside>
       <main className="workspace">
         <header className="topbar">
           <div><h1>{repository?.name ?? t("app.repository")}</h1><p>{repository?.path ?? drafts.session.user.username} · {t("auth.localMode")} · {t("auth.role", { role: drafts.session.role })}</p></div>
-          <div className="top-actions"><LocalePicker locale={locale} setLocale={setLocale} t={t} />
+          <div className="top-actions">
+            {active !== undefined && <button aria-label={`${t("drafts.current")}: ${workspaceName(active.draft_id)} · ${workspaceState(active.state)}`} className="workspace-switcher" onClick={() => setSelectedView("nav.drafts")}>
+              <span>{t("drafts.current")}</span><strong>{workspaceName(active.draft_id)}</strong>
+              <span className={`state ${active.state}`}>{workspaceState(active.state)}</span>
+            </button>}
+            <LocalePicker locale={locale} setLocale={setLocale} t={t} />
             {gitlab?.configured === true && gitlab.user === undefined && <button onClick={loginToGitLab}>{t("auth.login")}</button>}
             {gitlab?.user !== undefined && <><span>{gitlab.user.username}</span><button onClick={() => { void drafts.logout(); }}>{t("auth.logoutGitLab")}</button></>}
           </div>
         </header>
         {drafts.error !== null && <div className="alert error">{t("status.error", { message: drafts.error })}<button onClick={() => { void drafts.refresh(); }}>{t("status.retry")}</button></div>}
-        {!repositoryMode && view === "nav.drafts" && <section className="draft-layout">
+        {view === "nav.drafts" && <section className="draft-layout">
           <div className="draft-list card">
-            <h2>{t("drafts.heading")}</h2>
+            <h2>{t("drafts.heading")}</h2><p className="workspace-description">{t("drafts.description")}</p>
             <form onSubmit={submit}><label htmlFor="draft-id">{t("drafts.id")}</label><div className="inline"><input id="draft-id" value={draftId} onChange={(event) => setDraftId(event.target.value)} pattern="[A-Za-z0-9][A-Za-z0-9-]{0,127}" required /><button className="primary" disabled={drafts.busy || drafts.session.role === "Reporter"}>{t("drafts.create")}</button></div></form>
             <div className="draft-items">{drafts.drafts.length === 0 ? <p>{t("drafts.empty")}</p> : drafts.drafts.map((draft) => (
-              <button className={active?.draft_id === draft.draft_id ? "draft-item selected" : "draft-item"} key={draft.draft_id} onClick={() => { void drafts.select(draft.draft_id); }}>
-                <strong>{draft.draft_id}</strong><span>{draft.branch}</span><span className={`state ${draft.state}`}>{draft.state}</span>
+              <button aria-label={`${workspaceName(draft.draft_id)} · ${draft.draft_id} · ${draft.branch} · ${workspaceState(draft.state)}`} className={active?.draft_id === draft.draft_id ? "draft-item selected" : "draft-item"} key={draft.draft_id} onClick={() => { void drafts.select(draft.draft_id); }}>
+                <strong>{workspaceName(draft.draft_id)}</strong><code>{draft.draft_id}</code><span>{draft.branch}</span><span className={`state ${draft.state}`}>{workspaceState(draft.state)}</span>
               </button>
             ))}</div>
           </div>
           <div className="draft-detail card">
             {snapshot === null || active === undefined ? <p>{t("drafts.empty")}</p> : <>
-              <div className="detail-heading"><div><span className="eyebrow">{t("drafts.id")}</span><h2>{active.draft_id}</h2></div><span className={`state ${active.state}`}>{active.state}</span></div>
+              <div className="detail-heading"><div><span className="eyebrow">{t("drafts.current")}</span><h2>{workspaceName(active.draft_id)}</h2><code>{active.draft_id}</code></div><span className={`state ${active.state}`}>{workspaceState(active.state)}</span></div>
               {external && <div className="alert warning">{t("drafts.externalWarning")}</div>}
               {!external && active.changed_externally === true && <div className="alert error">{t("drafts.changedExternally")}</div>}
               {snapshot.changes.changed_files_count > 0 && <div className="alert info">{t("drafts.localWarning")}</div>}
@@ -98,7 +104,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
                 <div><dt>{t("drafts.dirty")}</dt><dd>{snapshot.changes.changed_files_count}</dd></div>
                 <div><dt>{t("drafts.validation")}</dt><dd className={snapshot.validation.valid ? "valid" : "invalid"}>{snapshot.validation.valid ? t("drafts.validationValid") : t("drafts.validationInvalid", { count: snapshot.validation.error_count })}</dd></div>
                 <div><dt>{t("drafts.mr")}</dt><dd>{snapshot.mergeRequest?.state ?? t("drafts.noMr")}</dd></div>
-                <div><dt>{t("drafts.state")}</dt><dd>{active.state}</dd></div>
+                <div><dt>{t("drafts.state")}</dt><dd>{workspaceState(active.state)}</dd></div>
               </dl>
               <div className="actions">
                 {active.state === "open" && <button disabled={drafts.busy} onClick={() => { void drafts.setWriterMode(external ? "ui" : "external"); }}>{t(external ? "drafts.switchToUi" : "drafts.switchToExternal")}</button>}

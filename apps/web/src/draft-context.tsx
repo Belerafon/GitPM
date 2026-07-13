@@ -3,6 +3,20 @@ import type { GitPmApi } from "./api.js";
 import type { DraftSnapshot, DraftStatus, PublicSession, WriterMode } from "./types.js";
 
 export const POLL_INTERVAL_MS = 3_000;
+export const ACTIVE_DRAFT_STORAGE_KEY = "gitpm.activeWorkingCopy";
+
+function storedActiveId(): string | null {
+  try { return typeof window === "undefined" ? null : window.localStorage.getItem(ACTIVE_DRAFT_STORAGE_KEY); }
+  catch { return null; }
+}
+
+function rememberActiveId(draftId: string | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (draftId === null) window.localStorage.removeItem(ACTIVE_DRAFT_STORAGE_KEY);
+    else window.localStorage.setItem(ACTIVE_DRAFT_STORAGE_KEY, draftId);
+  } catch { /* storage can be disabled */ }
+}
 
 interface DraftContextValue {
   readonly session: PublicSession | null | undefined;
@@ -25,7 +39,7 @@ const DraftContext = createContext<DraftContextValue | null>(null);
 export function DraftProvider({ api, children }: { readonly api: GitPmApi; readonly children: ReactNode }) {
   const [session, setSession] = useState<PublicSession | null | undefined>(undefined);
   const [drafts, setDrafts] = useState<readonly DraftStatus[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(storedActiveId);
   const [snapshot, setSnapshot] = useState<DraftSnapshot | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,10 +80,11 @@ export function DraftProvider({ api, children }: { readonly api: GitPmApi; reado
         throw caught;
       }
       setSession(currentSession);
-      if (currentSession === null) { setDrafts([]); setActiveId(null); setSnapshot(null); return; }
+      if (currentSession === null) { setDrafts([]); setActiveId(null); rememberActiveId(null); setSnapshot(null); return; }
       const next = await refreshList();
-      const selected = activeId ?? next[0]?.draft_id ?? null;
+      const selected = activeId !== null && next.some((draft) => draft.draft_id === activeId) ? activeId : next[0]?.draft_id ?? null;
       setActiveId(selected);
+      rememberActiveId(selected);
       if (selected !== null) await poll(selected);
     });
   }, [activeId, api, poll, refreshList, run]);
@@ -83,6 +98,7 @@ export function DraftProvider({ api, children }: { readonly api: GitPmApi; reado
 
   const select = useCallback(async (draftId: string) => {
     setActiveId(draftId);
+    rememberActiveId(draftId);
     await run(async () => await poll(draftId));
   }, [poll, run]);
 
@@ -91,6 +107,7 @@ export function DraftProvider({ api, children }: { readonly api: GitPmApi; reado
       const created = await api.createDraft(draftId);
       await refreshList();
       setActiveId(created.draft_id);
+      rememberActiveId(created.draft_id);
       await poll(created.draft_id);
     });
   }, [api, poll, refreshList, run]);
@@ -107,6 +124,7 @@ export function DraftProvider({ api, children }: { readonly api: GitPmApi; reado
       const next = await refreshList();
       const selected = next[0]?.draft_id ?? null;
       setActiveId(selected);
+      rememberActiveId(selected);
       setSnapshot(selected === null ? null : await api.snapshot(selected));
     });
   }, [activeId, api, refreshList, run]);
@@ -116,7 +134,7 @@ export function DraftProvider({ api, children }: { readonly api: GitPmApi; reado
       await api.logout();
       const currentSession = await api.session();
       setSession(currentSession);
-      if (currentSession === null) { setDrafts([]); setActiveId(null); setSnapshot(null); }
+      if (currentSession === null) { setDrafts([]); setActiveId(null); rememberActiveId(null); setSnapshot(null); }
     });
   }, [api, run]);
 

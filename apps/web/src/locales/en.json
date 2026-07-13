@@ -13,7 +13,7 @@
   "locale.en": "English",
   "locale.ru": "Русский",
   "nav.portfolio": "Portfolio",
-  "nav.drafts": "Drafts",
+  "nav.drafts": "Working copies",
   "nav.projects": "Projects",
   "nav.tasks": "Tasks",
   "nav.board": "Board",
@@ -24,17 +24,24 @@
   "nav.gantt": "Gantt",
   "nav.changes": "Changes",
   "nav.history": "History",
-  "drafts.heading": "Drafts",
-  "drafts.create": "Create draft",
-  "drafts.id": "Draft ID",
-  "drafts.empty": "No drafts yet.",
+  "drafts.heading": "Working copies",
+  "drafts.description": "Each working copy has its own Git branch and worktree, so independent changes stay separate.",
+  "drafts.current": "Current working copy",
+  "drafts.localName": "Main local copy",
+  "drafts.create": "Create working copy",
+  "drafts.id": "Working copy ID",
+  "drafts.empty": "No working copies yet.",
   "drafts.open": "Open",
-  "drafts.close": "Close",
+  "drafts.close": "Close for editing",
   "drafts.reopen": "Reopen",
-  "drafts.cleanup": "Clean up",
-  "drafts.cleanupConfirm": "Clean up draft {id}? This removes its worktree and branch.",
+  "drafts.cleanup": "Remove working copy",
+  "drafts.cleanupConfirm": "Remove working copy {id}? This removes its worktree and branch.",
   "drafts.branch": "Branch",
   "drafts.state": "State",
+  "drafts.stateOpen": "Open",
+  "drafts.stateClosed": "Closed",
+  "drafts.statePublished": "Published",
+  "drafts.stateAbandoned": "Abandoned",
   "drafts.writerMode": "Writer mode",
   "drafts.writerUi": "UI",
   "drafts.writerExternal": "External",
@@ -48,7 +55,7 @@
   "drafts.noMr": "Not created",
   "drafts.changedExternally": "The worktree changed outside GitPM. Refresh before editing.",
   "drafts.externalWarning": "External writer mode is active. Editing actions are read-only.",
-  "drafts.localWarning": "Changes are local to this draft until commit and push.",
+  "drafts.localWarning": "Changes stay in this working copy until commit and push.",
   "drafts.polling": "Status refreshes every 3 seconds.",
   "drafts.updated": "Last update: {time}",
   "status.loading": "Loading…",
@@ -78,7 +85,7 @@
   ,"core.empty": "Nothing here yet."
   ,"core.selectProject": "Select a project to manage its work."
   ,"core.safePreview": "Safe Markdown preview"
-  ,"core.readOnly": "Core editing is read-only for this draft."
+  ,"core.readOnly": "Core editing is read-only for this working copy."
   ,"admin.heading": "Administration"
   ,"admin.people": "People"
   ,"admin.teams": "Teams"
@@ -101,8 +108,8 @@
   ,"admin.issueTypes": "Issue types"
   ,"admin.noServerConfig": "Server and OAuth configuration is intentionally not exposed here."
   ,"changes.heading": "Changes"
-  ,"changes.description": "Review the exact Git diff, understand domain changes, and publish the whole draft."
-  ,"changes.readOnly": "Changes are read-only for this draft or role."
+  ,"changes.description": "Review the exact Git diff, understand domain changes, and publish the whole working copy."
+  ,"changes.readOnly": "Changes are read-only for this working copy or role."
   ,"changes.files": "files"
   ,"changes.created": "Created"
   ,"changes.updated": "Updated"
@@ -110,9 +117,9 @@
   ,"changes.deleted": "Deleted"
   ,"changes.fileChanges": "File changes"
   ,"changes.discardAll": "Discard all"
-  ,"changes.discardConfirm": "Discard every uncommitted change in this draft?"
+  ,"changes.discardConfirm": "Discard every uncommitted change in this working copy?"
   ,"changes.clean": "No uncommitted changes"
-  ,"changes.cleanHint": "The draft worktree matches its latest commit."
+  ,"changes.cleanHint": "The working copy matches its latest commit."
   ,"changes.kindAdded": "Added"
   ,"changes.kindModified": "Modified"
   ,"changes.kindDeleted": "Deleted"
@@ -141,9 +148,9 @@
   ,"changes.mrDescription": "Description"
   ,"changes.createMr": "Create merge request"
   ,"changes.mrReady": "Merge request !{iid}: {state}"
-  ,"changes.alphaLimitations": "Alpha limitation: one repository and one draft owner; commit always includes every changed file; merge-request options are limited to title and description."
+  ,"changes.alphaLimitations": "Alpha limitation: one repository and one working-copy owner; commit always includes every changed file; merge-request options are limited to title and description."
   ,"history.heading": "History"
-  ,"history.description": "Inspect the commit graph, files, domain impact, and create a separate revert draft."
+  ,"history.description": "Inspect the commit graph, files, domain impact, and create a separate working copy for a revert."
   ,"history.empty": "Select a commit to inspect it."
   ,"history.commit": "Commit"
   ,"history.author": "Author"
@@ -152,12 +159,12 @@
   ,"history.projects": "Affected projects"
   ,"history.fileHistory": "File history"
   ,"history.diff": "Exact Git diff"
-  ,"history.revertDraft": "New revert draft ID"
-  ,"history.createRevert": "Create revert draft"
-  ,"history.conflict": "The revert draft has conflicts in {count} files and was opened in external mode."
+  ,"history.revertDraft": "Revert working copy ID"
+  ,"history.createRevert": "Create revert working copy"
+  ,"history.conflict": "The revert working copy has conflicts in {count} files and was opened in external mode."
   ,"board.heading": "Board"
   ,"board.description": "Move Tasks between status columns and preserve reusable filtered views."
-  ,"board.readOnly": "The Board is read-only for this draft."
+  ,"board.readOnly": "The Board is read-only for this working copy."
   ,"board.project": "Project"
   ,"board.statusFilter": "Status filter"
   ,"board.typeFilter": "Type filter"

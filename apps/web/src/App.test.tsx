@@ -37,7 +37,7 @@ class FakeApi implements GitPmApi {
   async login() { return "https://gitlab.example.test/oauth/authorize"; }
   async logout() { this.currentSession = null; }
   async listDrafts() { return this.drafts; }
-  async createDraft(draftId: string) { const created = draft({ draft_id: draftId, branch: `gitpm/42/${draftId}` }); this.payloads.push({ draft_id: draftId }); this.drafts = [created]; return created; }
+  async createDraft(draftId: string) { const created = draft({ draft_id: draftId, branch: `gitpm/42/${draftId}` }); this.payloads.push({ draft_id: draftId }); this.drafts = [...this.drafts, created]; return created; }
   async snapshot(draftId: string): Promise<DraftSnapshot> {
     this.snapshotCalls += 1;
     const current = this.drafts.find((item) => item.draft_id === draftId) ?? draft({ draft_id: draftId });
@@ -121,10 +121,16 @@ describe("frontend draft lifecycle", () => {
     render(<App api={api} browserLanguages={["en"]} />);
     expect(await screen.findByText("D:\\portfolio · Local mode · Role: Maintainer")).toBeTruthy();
     expect(await screen.findByRole("heading", { name: "Portfolio work" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Drafts" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Working copies" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Current working copy: Main local copy · Open" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Projects" }).className).toContain("active");
     expect(screen.queryByRole("button", { name: "Sign out" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Sign in with GitLab" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Working copies" }));
+    expect(await screen.findByRole("heading", { name: "Working copies" })).toBeTruthy();
+    expect(screen.getAllByText("Main local copy").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("DRF-LOCAL").length).toBeGreaterThan(0);
   });
 
   it("persists locale and changes lang/dir without changing API payloads", async () => {
@@ -140,26 +146,26 @@ describe("frontend draft lifecycle", () => {
     expect(api.payloads).toEqual([]);
   });
 
-  it("creates, polls, switches writer mode, closes, reopens and cleans up a draft", async () => {
+  it("creates, polls, switches writer mode, closes, reopens and removes a working copy", async () => {
     const api = new FakeApi();
     render(<App api={api} browserLanguages={["en"]} confirmAction={() => true} />);
-    await screen.findAllByText("No drafts yet.");
-    fireEvent.change(screen.getByLabelText("Draft ID"), { target: { value: "DRF-WEB" } });
-    fireEvent.click(screen.getByRole("button", { name: "Create draft" }));
+    await screen.findAllByText("No working copies yet.");
+    fireEvent.change(screen.getByLabelText("Working copy ID"), { target: { value: "DRF-WEB" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create working copy" }));
     expect((await screen.findAllByText("gitpm/42/DRF-WEB")).length).toBeGreaterThan(0);
     expect(screen.getByText("Changed files").nextElementSibling?.textContent).toBe("2");
     expect(screen.getByText("Valid")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Switch to external writer" }));
     expect(await screen.findByText("External writer mode is active. Editing actions are read-only.")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close for editing" }));
     expect(await screen.findByRole("button", { name: "Reopen" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Reopen" }));
-    expect(await screen.findByRole("button", { name: "Close" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
-    await screen.findByRole("button", { name: "Clean up" });
-    fireEvent.click(screen.getByRole("button", { name: "Clean up" }));
-    expect((await screen.findAllByText("No drafts yet.")).length).toBeGreaterThan(0);
+    expect(await screen.findByRole("button", { name: "Close for editing" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Close for editing" }));
+    await screen.findByRole("button", { name: "Remove working copy" });
+    fireEvent.click(screen.getByRole("button", { name: "Remove working copy" }));
+    expect((await screen.findAllByText("No working copies yet.")).length).toBeGreaterThan(0);
   });
 
   it("refreshes an active draft every three seconds", async () => {
