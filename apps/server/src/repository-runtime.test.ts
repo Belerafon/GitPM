@@ -49,6 +49,15 @@ describe("normal repository runtime", () => {
         repository: { name: "selected-repository", path: fixture.repository, has_remote: false },
         gitlab: { configured: false },
       });
+      const drafts = await app.inject({ method: "GET", url: "/api/drafts" });
+      expect(drafts.statusCode).toBe(200);
+      expect(drafts.json()).toEqual([expect.objectContaining({ draft_id: "DRF-LOCAL", writer_mode: "ui", state: "open" })]);
+      const projects = await app.inject({ method: "GET", url: "/api/drafts/DRF-LOCAL/entities/projects" });
+      expect(projects.statusCode).toBe(200);
+      expect(projects.json()).toEqual(expect.arrayContaining([
+        expect.objectContaining({ document: expect.objectContaining({ schema: "gitpm/project@1", name: "GitPM launch" }) }),
+        expect.objectContaining({ document: expect.objectContaining({ schema: "gitpm/project@1", name: "Operations" }) }),
+      ]));
       const draft = await app.inject({ method: "POST", url: "/api/drafts", payload: { draft_id: "DRF-REAL-REPOSITORY" } });
       expect(draft.statusCode).toBe(201);
       await expect(stat(path.join(fixture.data, "source"))).rejects.toMatchObject({ code: "ENOENT" });

@@ -3,7 +3,7 @@ import { cp, mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { expect, request as playwrightRequest, test } from "@playwright/test";
-import { E2E_TASK_ID, cleanupDrafts, createDraft, taskDocument, type EntityResult } from "./helpers.js";
+import { E2E_TASK_ID, cleanupDrafts, taskDocument, type EntityResult } from "./helpers.js";
 
 const isWindows = process.platform === "win32";
 const workspace = process.cwd();
@@ -65,7 +65,7 @@ async function stopServer(server: RunningServer): Promise<void> {
   ]);
 }
 
-test("recovers a dirty draft and its files after a real server restart", async () => {
+test("creates the default local draft and recovers its dirty files after a real server restart", async () => {
   await rm(persistenceData, { recursive: true, force: true });
   await mkdir(persistenceData, { recursive: true });
   await cp(path.join(workspace, "fixtures", "schema-v1", "demo"), persistenceRepository, { recursive: true });
@@ -76,8 +76,12 @@ test("recovers a dirty draft and its files after a real server restart", async (
   let api = await playwrightRequest.newContext({ baseURL: persistenceUrl });
   try {
     server = await startServer();
-    const draft = await createDraft(api, "DRF-PERSISTENCE");
-    const createdResponse = await api.post("/api/drafts/DRF-PERSISTENCE/entities/tasks", {
+    const initialDraftsResponse = await api.get("/api/drafts");
+    const initialDrafts = await initialDraftsResponse.json() as Array<{ draft_id: string; fingerprint: string }>;
+    expect(initialDrafts).toEqual([expect.objectContaining({ draft_id: "DRF-LOCAL" })]);
+    const draft = initialDrafts[0];
+    if (draft === undefined) throw new Error("Default local draft was not created");
+    const createdResponse = await api.post("/api/drafts/DRF-LOCAL/entities/tasks", {
       data: { expected_fingerprint: draft.fingerprint, document: taskDocument() },
     });
     expect(createdResponse.status(), await createdResponse.text()).toBe(201);
@@ -92,11 +96,11 @@ test("recovers a dirty draft and its files after a real server restart", async (
     const session = await api.get("/api/auth/session");
     expect(await session.json()).toMatchObject({ mode: "repository", repository: { name: "source" }, role: "Maintainer" });
     const drafts = await api.get("/api/drafts");
-    expect(await drafts.json()).toEqual([expect.objectContaining({ draft_id: "DRF-PERSISTENCE", state: "open" })]);
-    const task = await api.get(`/api/drafts/DRF-PERSISTENCE/entities/tasks/${E2E_TASK_ID}`);
+    expect(await drafts.json()).toEqual([expect.objectContaining({ draft_id: "DRF-LOCAL", state: "open" })]);
+    const task = await api.get(`/api/drafts/DRF-LOCAL/entities/tasks/${E2E_TASK_ID}`);
     expect(task.status(), await task.text()).toBe(200);
     expect(await task.json()).toMatchObject({ document: { id: E2E_TASK_ID, title: "E2E task" } });
-    const changes = await api.get("/api/drafts/DRF-PERSISTENCE/changes");
+    const changes = await api.get("/api/drafts/DRF-LOCAL/changes");
     expect(await changes.json()).toMatchObject({ changed_files_count: 1 });
 
     await cleanupDrafts(api);

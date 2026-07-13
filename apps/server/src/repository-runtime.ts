@@ -17,6 +17,7 @@ import { RepositoryPublishingService } from "./repository-publishing.js";
 
 const execFileAsync = promisify(execFile);
 const LOCAL_USER_ID = "local-user";
+const DEFAULT_LOCAL_DRAFT_ID = "DRF-LOCAL";
 const WORKSPACE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
 async function git(repository: string, ...args: string[]): Promise<string> {
@@ -103,7 +104,10 @@ export async function buildRepositoryApp() {
   await gitClient.fetch();
 
   const draftManager = new DraftManager(gitClient, configuration.dataDirectory);
-  await draftManager.recover();
+  const recovery = await draftManager.recover();
+  if (recovery.drafts.length === 0) {
+    await draftManager.createDraft(DEFAULT_LOCAL_DRAFT_ID, LOCAL_USER_ID);
+  }
   const app = buildApp({
     authenticate: () => ({ userId: LOCAL_USER_ID, role: "Maintainer" }),
     changesService: new ChangesService(draftManager, gitClient),
