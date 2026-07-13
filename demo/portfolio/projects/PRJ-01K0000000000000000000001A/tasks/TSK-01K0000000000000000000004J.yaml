@@ -1,0 +1,24 @@
+schema: gitpm/task@1
+id: TSK-01K0000000000000000000004J
+project: PRJ-01K0000000000000000000001A
+title: Настроить маршрутизацию и контроль SLA
+type: feature
+status: planned
+lifecycle: active
+acceptance_criteria_markdown:
+  - Результат проверен ответственным сотрудником.
+  - Связанные материалы сохранены в проекте.
+parent: TSK-01K0000000000000000000004C
+milestone: MLS-01K0000000000000000000001Q
+assignees:
+  - PER-01K0000000000000000000000B
+  - PER-01K0000000000000000000000G
+  - PER-01K0000000000000000000000J
+estimate_hours: 72
+start: 2026-09-07
+due: 2026-10-02
+depends_on:
+  - TSK-01K0000000000000000000004H
+labels:
+  - sla
+  - автоматизация

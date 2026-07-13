@@ -41,7 +41,7 @@ export function assertEntityType(entityType: string, document: GitPmDocument): v
   }
 }
 
-function entityPath(document: GitPmDocument): string {
+export function entityPathForDocument(document: GitPmDocument): string {
   const id = String(document.id ?? "");
   const project = String(document.project ?? "");
   if (!/^[A-Z]{3}-[0-9A-HJKMNP-TV-Z]{26}$/u.test(id)) {
@@ -166,7 +166,7 @@ export class EntityStore {
   }
 
   async create(draftId: string, owner: string, expectedFingerprint: string, document: GitPmDocument): Promise<EntityResult> {
-    const relative = entityPath(document);
+    const relative = entityPathForDocument(document);
     const mutation = await this.drafts.withUiMutation(draftId, owner, expectedFingerprint, async (metadata) => {
       const absolute = path.join(metadata.worktree_path, ...relative.split("/"));
       if (await exists(absolute)) throw new DomainOperationError("ENTITY_EXISTS", `${relative} already exists`);
@@ -195,7 +195,7 @@ export class EntityStore {
   ): Promise<EntityResult> {
     const mutation = await this.drafts.withUiMutation(draftId, owner, expectedFingerprint, async (metadata) => {
       const found = await this.find(metadata, entityType, id);
-      if (document.id !== id || document.schema !== found.document.schema || entityPath(document) !== found.relative) {
+      if (document.id !== id || document.schema !== found.document.schema || entityPathForDocument(document) !== found.relative) {
         throw new DomainOperationError("ENTITY_IDENTITY_IMMUTABLE", "Entity ID, schema and owning project are immutable");
       }
       await this.drafts.assertFileBlobId(draftId, found.relative, expectedBlobId);

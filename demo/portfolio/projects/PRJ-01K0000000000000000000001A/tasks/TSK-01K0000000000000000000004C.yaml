@@ -1,0 +1,22 @@
+schema: gitpm/task@1
+id: TSK-01K0000000000000000000004C
+project: PRJ-01K0000000000000000000001A
+title: Запустить портал клиентской поддержки
+type: epic
+status: in-progress
+lifecycle: active
+acceptance_criteria_markdown:
+  - Результат проверен ответственным сотрудником.
+  - Связанные материалы сохранены в проекте.
+milestone: MLS-01K0000000000000000000001Q
+assignees:
+  - PER-01K0000000000000000000000J
+  - PER-01K0000000000000000000000E
+  - PER-01K0000000000000000000000B
+  - PER-01K0000000000000000000000C
+estimate_hours: 88
+start: 2026-07-13
+due: 2026-10-30
+labels:
+  - портал
+  - управление

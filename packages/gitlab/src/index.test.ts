@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
-import { AuthError, AuthService, mapAccessLevel } from "./index.js";
+import { AuthError, AuthService, GitLabHttpProtocol, mapAccessLevel } from "./index.js";
 import type { GitLabProtocol } from "./index.js";
 
 function protocol(level: number | null = 30) {
@@ -88,5 +88,46 @@ describe("OAuth PKCE and memory-only sessions", () => {
     expect(mapAccessLevel(30)).toBe("Developer");
     expect(mapAccessLevel(40)).toBe("Maintainer");
     expect(() => mapAccessLevel(null)).toThrowError(expect.objectContaining({ code: "PROJECT_MEMBERSHIP_REQUIRED" }));
+  });
+});
+
+describe("GitLab HTTP protocol", () => {
+  it("uses bearer auth, encoded project paths and PKCE token exchange", async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    const fetchImplementation = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      requests.push({ url, init });
+      if (url.endsWith("/oauth/token")) return new Response(JSON.stringify({ access_token: "token", expires_in: 3600 }), { status: 200 });
+      if (url.endsWith("/api/v4/user")) return new Response(JSON.stringify({ id: 42, username: "developer" }), { status: 200 });
+      if (url.includes("/members/all/42")) return new Response(JSON.stringify({ access_level: 30 }), { status: 200 });
+      if (url.endsWith("/merge_requests")) return new Response(JSON.stringify({ iid: 7, state: "opened", source_branch: "feature", target_branch: "main", web_url: "https://gitlab.example.test/group/project/-/merge_requests/7" }), { status: 200 });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    const protocol = new GitLabHttpProtocol({
+      baseUrl: "https://gitlab.example.test",
+      clientId: "gitpm-client",
+      project: "group/project",
+      fetch: fetchImplementation as typeof fetch,
+    });
+
+    await protocol.exchangeAuthorizationCode({ code: "code", codeVerifier: "verifier", redirectUri: "http://127.0.0.1:3000/api/auth/callback" });
+    expect(await protocol.projectAccessLevel("secret-token")).toBe(30);
+    expect((await protocol.createMergeRequest("secret-token", { source_branch: "feature", target_branch: "main", title: "Feature" })).iid).toBe(7);
+    expect(requests.some((request) => request.url.includes("projects/group%2Fproject/members/all/42"))).toBe(true);
+    const authenticated = requests.find((request) => request.url.endsWith("/api/v4/user"));
+    expect(new Headers(authenticated?.init?.headers).get("authorization")).toBe("Bearer secret-token");
+    const tokenBody = String(requests[0]?.init?.body);
+    expect(tokenBody).toContain("code_verifier=verifier");
+    expect(requests.map((request) => request.url).join(" ")).not.toContain("secret-token");
+  });
+
+  it("maps a missing membership to no access and rejects insecure remote instances", async () => {
+    const fetchImplementation = vi.fn(async (input: string | URL | Request) => String(input).endsWith("/api/v4/user")
+      ? new Response(JSON.stringify({ id: 42, username: "developer" }), { status: 200 })
+      : new Response("not found", { status: 404 }));
+    const protocol = new GitLabHttpProtocol({ baseUrl: "https://gitlab.example.test", clientId: "client", project: "group/project", fetch: fetchImplementation as typeof fetch });
+    expect(await protocol.projectAccessLevel("token")).toBeNull();
+    expect(() => new GitLabHttpProtocol({ baseUrl: "http://gitlab.example.test", clientId: "client", project: "group/project" }))
+      .toThrowError(expect.objectContaining({ code: "GITLAB_URL_INVALID" }));
   });
 });

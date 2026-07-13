@@ -14,7 +14,9 @@
   "dependencies": {
     "@gitpm/changes": "workspace:*",
     "@gitpm/drafts": "workspace:*",
+    "@gitpm/domain": "workspace:*",
     "@gitpm/git-client": "workspace:*",
+    "@gitpm/repository-format": "workspace:*",
     "@gitpm/gitlab": "workspace:*",
     "@gitpm/security": "workspace:*",
     "@gitpm/validation": "workspace:*"

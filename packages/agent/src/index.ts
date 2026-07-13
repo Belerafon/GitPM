@@ -1,7 +1,12 @@
+import { lstat, mkdir, rm } from "node:fs/promises";
+import path from "node:path";
 import type { ChangesService, SemanticDiff } from "@gitpm/changes";
 import type { DraftManager, DraftMetadata, WriterMode } from "@gitpm/drafts";
+import { entityPathForDocument } from "@gitpm/domain";
 import type { GitClient } from "@gitpm/git-client";
 import type { GitLabMergeRequestProtocol, MergeRequestPayload, MergeRequestState } from "@gitpm/gitlab";
+import { formatYamlDocument, type GitPmDocument } from "@gitpm/repository-format";
+import { atomicWriteDomainFile } from "@gitpm/security";
 import { validateRepository } from "@gitpm/validation";
 
 export class AgentWorkflowError extends Error {
@@ -71,6 +76,32 @@ export class AgentWorkflow {
   async semanticDiff(draftId: string, scope: AgentScope = {}): Promise<SemanticDiff> {
     await this.assertScope(draftId, scope);
     return await this.changes.semantic(draftId);
+  }
+
+  async createEntity(draftId: string, document: GitPmDocument, scope: AgentScope = {}) {
+    const draft = await this.externalDraft(draftId);
+    const relative = entityPathForDocument(document);
+    const absolute = path.join(draft.worktree_path, ...relative.split("/"));
+    try {
+      await lstat(absolute);
+      throw new AgentWorkflowError("ENTITY_EXISTS", `${relative} already exists`);
+    } catch (error) {
+      if (error instanceof AgentWorkflowError) throw error;
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+    await mkdir(path.dirname(absolute), { recursive: true, mode: 0o700 });
+    await atomicWriteDomainFile(draft.worktree_path, relative, formatYamlDocument(document));
+    try {
+      await this.assertScope(draftId, scope);
+      const validation = await validateRepository(draft.worktree_path);
+      if (!validation.valid) throw new AgentWorkflowError("VALIDATION_FAILED", `Entity ${relative} makes the repository invalid`, validation.errors);
+      const metadata = await this.drafts.refreshFingerprint(draftId);
+      return { path: relative, draft_fingerprint: metadata.fingerprint, document };
+    } catch (error) {
+      await rm(absolute, { force: true });
+      await this.drafts.refreshFingerprint(draftId);
+      throw error;
+    }
   }
 
   async commitAll(draftId: string, message: string, scope: AgentScope = {}) {

@@ -33,7 +33,7 @@ describe("Board and Saved Views", () => {
     const doneColumn = container.querySelector<HTMLElement>('[data-status="done"]')!;
     fireEvent.dragOver(doneColumn, { dataTransfer }); fireEvent.drop(doneColumn, { dataTransfer });
     await waitFor(() => expect(entityApi.entities.find((item) => item.document.id === taskId)?.document.status).toBe("done"));
-    expect(doneColumn.textContent).toContain("Drag me");
+    await waitFor(() => expect(doneColumn.textContent).toContain("Drag me"));
 
     fireEvent.change(screen.getByLabelText("Status filter"), { target: { value: "done" } });
     fireEvent.change(screen.getByLabelText("Type filter"), { target: { value: "task" } });

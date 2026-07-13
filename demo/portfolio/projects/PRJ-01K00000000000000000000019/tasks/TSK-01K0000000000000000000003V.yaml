@@ -1,0 +1,23 @@
+schema: gitpm/task@1
+id: TSK-01K0000000000000000000003V
+project: PRJ-01K00000000000000000000019
+title: Развернуть контуры разработки и эксплуатации
+type: task
+status: in-progress
+lifecycle: active
+acceptance_criteria_markdown:
+  - Результат проверен ответственным сотрудником.
+  - Связанные материалы сохранены в проекте.
+parent: TSK-01K0000000000000000000003R
+milestone: MLS-01K0000000000000000000001M
+assignees:
+  - PER-01K0000000000000000000000D
+  - PER-01K0000000000000000000000H
+estimate_hours: 72
+start: 2026-09-07
+due: 2026-09-30
+depends_on:
+  - TSK-01K0000000000000000000003T
+labels:
+  - devops
+  - инфраструктура

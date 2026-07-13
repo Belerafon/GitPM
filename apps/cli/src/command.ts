@@ -1,7 +1,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { GITPM_VERSION } from "@gitpm/shared";
-import { formatYamlText, RepositoryFormatError } from "@gitpm/repository-format";
+import { formatYamlText, parseYamlDocument, RepositoryFormatError } from "@gitpm/repository-format";
 import { validateRepository } from "@gitpm/validation";
 import { atomicWriteDomainFile } from "@gitpm/security";
 import type { AgentScope, AgentScopeReport, AgentWorkflow } from "@gitpm/agent";
@@ -17,7 +17,10 @@ interface CommonOptions {
   readonly rest: readonly string[];
 }
 
-export interface CliDependencies { readonly agent?: Pick<AgentWorkflow, "assertScope" | "commitAll" | "createDraft" | "createMergeRequest" | "openDraft" | "push" | "semanticDiff" | "setWriterMode" | "status"> }
+type CliAgent = Pick<AgentWorkflow, "assertScope" | "commitAll" | "createDraft" | "createMergeRequest" | "openDraft" | "push" | "semanticDiff" | "setWriterMode" | "status">
+  & Partial<Pick<AgentWorkflow, "createEntity">>;
+
+export interface CliDependencies { readonly agent?: CliAgent }
 
 function flagValue(args: readonly string[], name: string): string | undefined {
   const index = args.indexOf(name); return index < 0 ? undefined : args[index + 1];
@@ -158,6 +161,21 @@ async function runCommit(args: readonly string[], dependencies: CliDependencies)
   return { exitCode: 0, output: render(args.includes("--json"), { ok: true, code: "OK", ...result }, `Committed all changes: ${result.commit}`) };
 }
 
+async function runEntity(args: readonly string[], cwd: string, dependencies: CliDependencies): Promise<CliResult> {
+  if (args[0] !== "create") throw new RepositoryFormatError("CLI_USAGE", "entity requires create");
+  const draftId = required(flagValue(args, "--draft"), "--draft");
+  const file = required(flagValue(args, "--file"), "--file");
+  const agent = requireAgent(dependencies);
+  if (agent.createEntity === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Entity creation is unavailable");
+  const source = path.resolve(cwd, file);
+  const document = parseYamlDocument(await readFile(source, "utf8"), source);
+  const created = await agent.createEntity(draftId, document, agentScope(args));
+  return {
+    exitCode: 0,
+    output: render(args.includes("--json"), { ok: true, code: "OK", ...created }, `Created ${created.path}`),
+  };
+}
+
 async function runPush(args: readonly string[], dependencies: CliDependencies): Promise<CliResult> {
   const result = await requireAgent(dependencies).push(required(flagValue(args, "--draft"), "--draft"));
   return { exitCode: 0, output: render(args.includes("--json"), { ok: true, code: "OK", ...result }, `Pushed ${result.branch} at ${result.commit}`) };
@@ -191,6 +209,7 @@ export async function run(args: readonly string[], cwd = process.cwd(), dependen
   const [command, ...commandArgs] = args;
   try {
     if (command === "draft") return await runDraft(commandArgs, dependencies);
+    if (command === "entity") return await runEntity(commandArgs, cwd, dependencies);
     if (command === "format" && commandArgs.includes("--draft")) { const context = await draftRoot(commandArgs, dependencies); return await runFormat([...commandArgs, "--root", context.root], cwd, context.scope); }
     if (command === "format") return await runFormat(commandArgs, cwd);
     if (command === "validate" && commandArgs.includes("--draft")) { const context = await draftRoot(commandArgs, dependencies); return await runValidate([...commandArgs, "--root", context.root], cwd); }
@@ -204,11 +223,12 @@ export async function run(args: readonly string[], cwd = process.cwd(), dependen
     const json = args.includes("--json");
     return {
       exitCode: 2,
-      output: render(json, { ok: false, code: "CLI_USAGE" }, "Usage: gitpm <draft|format|validate|diff --semantic|commit --all|push|mr create|doctor> [options]"),
+      output: render(json, { ok: false, code: "CLI_USAGE" }, "Usage: gitpm <draft|entity create|format|validate|diff --semantic|commit --all|push|mr create|doctor> [options]"),
     };
   } catch (error) {
     const code = error instanceof RepositoryFormatError || (typeof error === "object" && error !== null && "code" in error && typeof error.code === "string") ? error.code : "CLI_INTERNAL";
     const message = error instanceof Error ? error.message : String(error);
-    return { exitCode: 1, output: JSON.stringify({ ok: false, code, message }, null, 2) };
+    const details = typeof error === "object" && error !== null && "details" in error ? error.details : undefined;
+    return { exitCode: 1, output: JSON.stringify({ ok: false, code, message, ...(details === undefined ? {} : { details }) }, null, 2) };
   }
 }

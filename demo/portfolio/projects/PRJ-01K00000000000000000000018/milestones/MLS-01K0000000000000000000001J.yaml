@@ -1,0 +1,7 @@
+schema: gitpm/milestone@1
+id: MLS-01K0000000000000000000001J
+project: PRJ-01K00000000000000000000018
+name: Закрытое бета-тестирование
+lifecycle: active
+description_markdown: Основные сценарии доступны сотрудникам банка.
+due: 2026-09-25

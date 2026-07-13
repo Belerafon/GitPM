@@ -26,7 +26,12 @@ export interface GitClientOptions {
   readonly dataDirectory: string;
   readonly remoteUrl: string;
   readonly defaultBranch: string;
+  /** Allows a user-selected local repository to be used as the fetch source. */
+  readonly allowLocalRepository?: boolean;
+  /** @deprecated Test compatibility alias. Prefer allowLocalRepository. */
   readonly allowLocalTestRemote?: boolean;
+  /** Optional real upstream used by push while remoteUrl remains the local fetch source. */
+  readonly pushRemoteUrl?: string;
   readonly askPassPath?: string;
   readonly timeoutMs?: number;
   readonly onCommand?: (record: GitCommandRecord) => void;
@@ -155,7 +160,9 @@ export class GitClient {
   private readonly homeDirectory: string;
   private readonly remoteUrl: string;
   private readonly defaultBranch: string;
-  private readonly allowLocalTestRemote: boolean;
+  private readonly allowLocalRepository: boolean;
+  private readonly requirePushRemote: boolean;
+  private readonly pushRemoteUrl?: string;
   private readonly askPassPath?: string;
   private readonly timeoutMs: number;
   private readonly onCommand?: (record: GitCommandRecord) => void;
@@ -165,9 +172,11 @@ export class GitClient {
     this.worktreesDirectory = path.resolve(options.dataDirectory, "worktrees");
     this.homeDirectory = path.resolve(options.dataDirectory, "git-home");
     this.defaultBranch = assertSafeBranchName(options.defaultBranch);
-    this.allowLocalTestRemote = options.allowLocalTestRemote ?? false;
+    this.allowLocalRepository = options.allowLocalRepository ?? options.allowLocalTestRemote ?? false;
+    this.requirePushRemote = options.allowLocalRepository === true && options.allowLocalTestRemote !== true;
     this.askPassPath = options.askPassPath;
-    this.remoteUrl = this.allowLocalTestRemote ? path.resolve(options.remoteUrl) : assertSafeRepositoryUrl(options.remoteUrl);
+    this.remoteUrl = this.allowLocalRepository ? path.resolve(options.remoteUrl) : assertSafeRepositoryUrl(options.remoteUrl);
+    this.pushRemoteUrl = options.pushRemoteUrl === undefined ? undefined : assertSafeRepositoryUrl(options.pushRemoteUrl);
     this.timeoutMs = options.timeoutMs ?? 30_000;
     this.onCommand = options.onCommand;
   }
@@ -181,7 +190,7 @@ export class GitClient {
   }
 
   private localProtocolArgs(): string[] {
-    return this.allowLocalTestRemote ? ["-c", "protocol.file.allow=always"] : [];
+    return this.allowLocalRepository ? ["-c", "protocol.file.allow=always"] : [];
   }
 
   async initialize(): Promise<void> {
@@ -201,6 +210,15 @@ export class GitClient {
     } catch (error) {
       if (!(error instanceof GitCommandError) || error.code !== "GIT_FAILED") throw error;
       await this.git(["--git-dir", this.bareRepository, "remote", "add", "origin", this.remoteUrl]);
+    }
+    if (this.pushRemoteUrl !== undefined) {
+      await this.git(["--git-dir", this.bareRepository, "remote", "set-url", "--push", "origin", this.pushRemoteUrl]);
+    } else {
+      try {
+        await this.git(["--git-dir", this.bareRepository, "config", "--unset-all", "remote.origin.pushurl"]);
+      } catch (error) {
+        if (!(error instanceof GitCommandError) || error.code !== "GIT_FAILED") throw error;
+      }
     }
   }
 
@@ -457,6 +475,9 @@ export class GitClient {
   }
 
   async pushBranch(worktree: string, branch: string, accessToken: string): Promise<void> {
+    if (this.pushRemoteUrl === undefined && this.requirePushRemote) {
+      throw new GitCommandError("GIT_PUSH_REMOTE_MISSING", "The selected repository has no supported remote for push");
+    }
     const safeBranch = assertSafeBranchName(branch);
     if (!this.askPassPath) throw new GitCommandError("GIT_ASKPASS_REQUIRED", "Controlled ASKPASS path is required for push");
     const environment = createGitProcessEnvironment({

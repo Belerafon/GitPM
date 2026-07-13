@@ -1,0 +1,7 @@
+schema: gitpm/person@1
+id: PER-01K0000000000000000000000C
+name: Мария Соколова
+weekly_capacity_hours: 36
+calendar: CAL-01K00000000000000000000002
+lifecycle: active
+email: maria.sokolova@example.test

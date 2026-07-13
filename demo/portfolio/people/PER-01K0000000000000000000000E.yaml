@@ -1,0 +1,7 @@
+schema: gitpm/person@1
+id: PER-01K0000000000000000000000E
+name: Елена Морозова
+weekly_capacity_hours: 32
+calendar: CAL-01K00000000000000000000002
+lifecycle: active
+email: elena.morozova@example.test

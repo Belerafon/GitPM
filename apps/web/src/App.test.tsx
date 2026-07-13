@@ -108,6 +108,21 @@ describe("localization runtime", () => {
 });
 
 describe("frontend draft lifecycle", () => {
+  it("labels a repository session and does not offer a meaningless sign-out action", async () => {
+    const api = new FakeApi();
+    api.currentSession = {
+      ...session,
+      user: { id: "local-user", username: "local" },
+      mode: "repository",
+      repository: { name: "portfolio", path: "D:\\portfolio", has_remote: false },
+      gitlab: { configured: false },
+    };
+    render(<App api={api} browserLanguages={["en"]} />);
+    expect(await screen.findByText("D:\\portfolio · Local mode · Role: Maintainer")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Sign out" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Sign in with GitLab" })).toBeNull();
+  });
+
   it("persists locale and changes lang/dir without changing API payloads", async () => {
     const api = new FakeApi();
     localStorage.setItem(LOCALE_STORAGE_KEY, "ru");

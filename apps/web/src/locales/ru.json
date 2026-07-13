@@ -6,7 +6,9 @@
   "auth.description": "Для продолжения используйте доступ к проекту GitLab.",
   "auth.login": "Войти через GitLab",
   "auth.logout": "Выйти",
+  "auth.logoutGitLab": "Выйти из GitLab",
   "auth.role": "Роль: {role}",
+  "auth.localMode": "Локальный режим",
   "locale.label": "Язык",
   "locale.en": "English",
   "locale.ru": "Русский",
@@ -130,6 +132,9 @@
   ,"changes.commitMessage": "Сообщение коммита"
   ,"changes.cancel": "Отмена"
   ,"changes.commitAll": "Закоммитить всё"
+  ,"changes.localOnly": "Коммит сохранён локально. У репозитория нет HTTPS remote для push."
+  ,"changes.gitlabNotConfigured": "Коммит сохранён локально. Для push настройте GitLab OAuth в .gitpm/config.json."
+  ,"changes.loginForPush": "Войти в GitLab для push"
   ,"changes.committed": "Коммит создан"
   ,"changes.push": "Отправить ветку"
   ,"changes.mrTitle": "Заголовок Merge Request"

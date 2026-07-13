@@ -14,6 +14,7 @@ import type { Authenticate } from "./draft-api.js";
 import { registerAuthAndPublishingApi } from "./auth-api.js";
 
 const MAX_CORRELATION_ID_LENGTH = 128;
+const REQUEST_BODY_LIMIT = 1_048_576;
 const SAFE_CORRELATION_ID = /^[A-Za-z0-9._:-]+$/u;
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 const CONTENT_SECURITY_POLICY = [
@@ -81,7 +82,7 @@ function isCrossSiteMutation(request: { method: string; headers: IncomingMessage
 
 export function buildApp(options: AppOptions = {}) {
   const app = Fastify({
-    bodyLimit: 1_048_576,
+    bodyLimit: REQUEST_BODY_LIMIT,
     genReqId: requestId,
     logController: new LogController({ disableRequestLogging: true }),
     loggerInstance: options.logger ?? createLogger(),
@@ -95,6 +96,20 @@ export function buildApp(options: AppOptions = {}) {
     reply.header("referrer-policy", "no-referrer");
     reply.header("x-content-type-options", "nosniff");
     reply.header("x-frame-options", "DENY");
+    const contentLength = Number(request.headers["content-length"]);
+    if (Number.isFinite(contentLength) && contentLength > REQUEST_BODY_LIMIT) {
+      // Keep draining the socket so clients receive a stable 413 instead of ECONNRESET
+      // while they are still transmitting the rejected body.
+      request.raw.resume();
+      await reply.code(413).send({
+        error: {
+          code: "REQUEST_TOO_LARGE",
+          message: "Request body exceeds the static limit",
+          correlation_id: request.id,
+        },
+      });
+      return;
+    }
     if (isCrossSiteMutation(request)) {
       await reply.code(403).send({
         error: {

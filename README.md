@@ -4,7 +4,34 @@ Git-first система управления проектами и задача
 
 ## Current status
 
-Статус: `v0.1_release_accepted`. P00-P14 закрыты; Alpha, Beta, release candidate и release gates пройдены. Русский web UI, локальная эксплуатация, performance smoke и полный набор из 107 тестов приняты. CLI остаётся нейтральным по локали и проверен на UTF-8 кириллицу.
+Статус: `v0.1_release_accepted`. P00-P14 закрыты; Alpha, Beta, release candidate и release gates пройдены. Русский web UI, локальная эксплуатация, performance smoke и полный набор автоматических тестов приняты. CLI остаётся нейтральным по локали и проверен на UTF-8 кириллицу.
+
+## Обычный запуск на Windows
+
+Запустите `run-gitpm.bat`. По умолчанию GitPM создаст рабочую копию русскоязычного демонстрационного портфеля из `demo/portfolio` в `.gitpm/demo-repository` и откроет её. В демо находятся 3 проекта, 30 задач, 10 сотрудников, общие команды, вехи, зависимости и сроки.
+
+Чтобы открыть свой существующий репозиторий, измените поле `repository` в `.gitpm/config.json`:
+
+```json
+{
+  "repository": "D:\\projects\\portfolio-data"
+}
+```
+
+Локальная работа и локальные коммиты не требуют входа. Если у выбранного репозитория есть credential-free HTTPS `origin` GitLab, launcher определит адрес инстанса и путь проекта. Для входа через GitLab добавьте Application ID зарегистрированного OAuth-приложения в `.gitpm/config.json`:
+
+```json
+{
+  "repository": "D:\\projects\\portfolio-data",
+  "gitlab": {
+    "baseUrl": "https://gitlab.com",
+    "project": "group/portfolio-data",
+    "clientId": "GITLAB_OAUTH_APPLICATION_ID"
+  }
+}
+```
+
+Redirect URI приложения: `http://127.0.0.1:3000/api/auth/callback`; scopes: `api` и `write_repository`. Вход предлагается только перед push/Merge Request. Регистрация OAuth Application описана в [документации GitLab](https://docs.gitlab.com/api/oauth2/).
 
 ## Development
 
@@ -13,6 +40,7 @@ Git-first система управления проектами и задача
 ```bash
 corepack pnpm install --frozen-lockfile
 corepack pnpm verify
+set GITPM_REPOSITORY_PATH=D:\path\to\repository
 corepack pnpm dev:server
 ```
 

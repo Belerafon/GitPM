@@ -54,17 +54,23 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
   const active = snapshot?.draft;
   const external = active?.writer_mode === "external";
   const maintainer = drafts.session.role === "Maintainer";
+  const repository = drafts.session.repository;
+  const gitlab = drafts.session.gitlab;
+  const loginToGitLab = () => { void api.login().then(navigate); };
   return (
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand"><span className="brand-mark">G</span><strong>{t("app.title")}</strong></div>
         <nav>{navigation.map((key) => <button className={view === key ? "active" : ""} key={key} onClick={() => setView(key)}>{t(key)}</button>)}</nav>
-        <div className="repository-card"><span>{t("app.singleRepository")}</span><strong>{t("app.repository")}</strong></div>
+        <div className="repository-card"><span>{t("app.singleRepository")}</span><strong>{repository?.name ?? t("app.repository")}</strong></div>
       </aside>
       <main className="workspace">
         <header className="topbar">
-          <div><h1>{t("app.repository")}</h1><p>{drafts.session.user.username} · {t("auth.role", { role: drafts.session.role })}</p></div>
-          <div className="top-actions"><LocalePicker locale={locale} setLocale={setLocale} t={t} /><button onClick={() => { void drafts.logout(); }}>{t("auth.logout")}</button></div>
+          <div><h1>{repository?.name ?? t("app.repository")}</h1><p>{repository?.path ?? drafts.session.user.username} · {t("auth.localMode")} · {t("auth.role", { role: drafts.session.role })}</p></div>
+          <div className="top-actions"><LocalePicker locale={locale} setLocale={setLocale} t={t} />
+            {gitlab?.configured === true && gitlab.user === undefined && <button onClick={loginToGitLab}>{t("auth.login")}</button>}
+            {gitlab?.user !== undefined && <><span>{gitlab.user.username}</span><button onClick={() => { void drafts.logout(); }}>{t("auth.logoutGitLab")}</button></>}
+          </div>
         </header>
         {drafts.error !== null && <div className="alert error">{t("status.error", { message: drafts.error })}<button onClick={() => { void drafts.refresh(); }}>{t("status.retry")}</button></div>}
         {view === "nav.drafts" && <section className="draft-layout">
@@ -107,7 +113,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
         {["nav.people", "nav.calendar", "nav.settings"].includes(view) && (active === undefined
           ? <div className="card empty-workspace">{t("core.selectProject")}</div>
           : <AdminWorkspace api={api} draft={active} role={drafts.session.role} locale={locale} surface={view === "nav.people" ? "people" : view === "nav.calendar" ? "calendar" : "settings"} onChanged={drafts.refresh} />)}
-        {view === "nav.changes" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <ChangesWorkspace api={api} draft={active} role={drafts.session.role} locale={locale} onChanged={drafts.refresh} confirmAction={confirmAction} />)}
+        {view === "nav.changes" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <ChangesWorkspace api={api} draft={active} role={drafts.session.role} locale={locale} onChanged={drafts.refresh} confirmAction={confirmAction} remoteAvailable={repository?.has_remote === true} gitlabConfigured={gitlab?.configured === true} gitlabSignedIn={gitlab?.user !== undefined} onGitLabLogin={loginToGitLab} />)}
         {view === "nav.history" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <HistoryWorkspace api={api} draft={active} locale={locale} canRevert={drafts.session.role !== "Reporter"} onDraftCreated={drafts.select} />)}
         {view === "nav.board" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <BoardWorkspace api={api} draft={active} locale={locale} onChanged={drafts.refresh} />)}
         {view === "nav.gantt" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <GanttWorkspace api={api} draft={active} locale={locale} />)}

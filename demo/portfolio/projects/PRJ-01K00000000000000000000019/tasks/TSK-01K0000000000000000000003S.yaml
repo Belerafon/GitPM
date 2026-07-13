@@ -1,0 +1,21 @@
+schema: gitpm/task@1
+id: TSK-01K0000000000000000000003S
+project: PRJ-01K00000000000000000000019
+title: Инвентаризировать источники и потребителей данных
+type: research
+status: done
+lifecycle: active
+acceptance_criteria_markdown:
+  - Результат проверен ответственным сотрудником.
+  - Связанные материалы сохранены в проекте.
+parent: TSK-01K0000000000000000000003R
+milestone: MLS-01K0000000000000000000001M
+assignees:
+  - PER-01K0000000000000000000000G
+  - PER-01K0000000000000000000000H
+estimate_hours: 56
+start: 2026-08-10
+due: 2026-08-28
+labels:
+  - аудит
+  - данные

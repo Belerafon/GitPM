@@ -1,0 +1,7 @@
+schema: gitpm/milestone@1
+id: MLS-01K0000000000000000000001N
+project: PRJ-01K00000000000000000000019
+name: Отключение старого хранилища
+lifecycle: active
+description_markdown: Пользователи и регламентные процессы переведены полностью.
+due: 2027-01-29

@@ -6,7 +6,9 @@
   "auth.description": "Use your GitLab project membership to continue.",
   "auth.login": "Sign in with GitLab",
   "auth.logout": "Sign out",
+  "auth.logoutGitLab": "Sign out of GitLab",
   "auth.role": "Role: {role}",
+  "auth.localMode": "Local mode",
   "locale.label": "Language",
   "locale.en": "English",
   "locale.ru": "Русский",
@@ -130,6 +132,9 @@
   ,"changes.commitMessage": "Commit message"
   ,"changes.cancel": "Cancel"
   ,"changes.commitAll": "Commit all"
+  ,"changes.localOnly": "The commit is local. This repository has no HTTPS remote for push."
+  ,"changes.gitlabNotConfigured": "The commit is local. Configure GitLab OAuth in .gitpm/config.json to push."
+  ,"changes.loginForPush": "Sign in to GitLab to push"
   ,"changes.committed": "Committed"
   ,"changes.push": "Push branch"
   ,"changes.mrTitle": "Merge request title"

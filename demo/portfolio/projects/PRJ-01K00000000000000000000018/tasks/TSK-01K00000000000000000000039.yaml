@@ -1,0 +1,25 @@
+schema: gitpm/task@1
+id: TSK-01K00000000000000000000039
+project: PRJ-01K00000000000000000000018
+title: Собрать единую витрину продуктов
+type: feature
+status: planned
+lifecycle: active
+acceptance_criteria_markdown:
+  - Результат проверен ответственным сотрудником.
+  - Связанные материалы сохранены в проекте.
+parent: TSK-01K00000000000000000000034
+milestone: MLS-01K0000000000000000000001K
+assignees:
+  - PER-01K0000000000000000000000B
+  - PER-01K0000000000000000000000C
+  - PER-01K0000000000000000000000G
+estimate_hours: 80
+start: 2026-09-07
+due: 2026-10-02
+depends_on:
+  - TSK-01K00000000000000000000036
+  - TSK-01K00000000000000000000037
+labels:
+  - frontend
+  - продукты

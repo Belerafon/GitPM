@@ -8,7 +8,7 @@ import { parse } from "yaml";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SCHEMA_DIR = path.join(ROOT, "schemas", "v1");
 const FIXTURE_DIR = path.join(ROOT, "fixtures", "schema-v1");
-const DEMO_DIR = path.join(FIXTURE_DIR, "demo");
+const FIXTURE_DEMO_DIR = path.join(FIXTURE_DIR, "demo");
 
 class FixtureError extends Error {
   constructor(code, message) {
@@ -205,9 +205,13 @@ function setField(document, field, value) {
 
 async function main() {
   const ajv = await loadSchemas();
-  const baseline = await loadDocuments(DEMO_DIR);
-  await validatePortfolio(ajv, DEMO_DIR, baseline);
+  const requestedRepository = process.argv[2];
+  const demoDirectory = requestedRepository === undefined ? FIXTURE_DEMO_DIR : path.resolve(requestedRepository);
+  const baseline = await loadDocuments(demoDirectory);
+  await validatePortfolio(ajv, demoDirectory, baseline);
   console.log(`VALID demo portfolio: ${baseline.size} YAML documents`);
+
+  if (requestedRepository !== undefined) return;
 
   const cases = parse(await readFile(path.join(FIXTURE_DIR, "invalid-cases.yaml"), "utf8"), { uniqueKeys: true });
   for (const fixture of cases.cases) {
@@ -216,7 +220,7 @@ async function main() {
     if (!document) fail("FIXTURE_INVALID", `${fixture.name}: missing mutation target ${fixture.file}`);
     setField(document, fixture.field, fixture.value);
     try {
-      await validatePortfolio(ajv, DEMO_DIR, documents);
+      await validatePortfolio(ajv, FIXTURE_DEMO_DIR, documents);
       fail("FIXTURE_NOT_REJECTED", `${fixture.name}: invalid fixture passed`);
     } catch (error) {
       if (!(error instanceof FixtureError) || error.code !== fixture.expected_code) {

@@ -58,7 +58,13 @@ export function DraftProvider({ api, children }: { readonly api: GitPmApi; reado
 
   const refresh = useCallback(async () => {
     await run(async () => {
-      const currentSession = await api.session();
+      let currentSession: PublicSession | null;
+      try {
+        currentSession = await api.session();
+      } catch (caught) {
+        setSession((current) => current === undefined ? null : current);
+        throw caught;
+      }
       setSession(currentSession);
       if (currentSession === null) { setDrafts([]); setActiveId(null); setSnapshot(null); return; }
       const next = await refreshList();
@@ -106,7 +112,12 @@ export function DraftProvider({ api, children }: { readonly api: GitPmApi; reado
   }, [activeId, api, refreshList, run]);
 
   const logout = useCallback(async () => {
-    await run(async () => { await api.logout(); setSession(null); setDrafts([]); setActiveId(null); setSnapshot(null); });
+    await run(async () => {
+      await api.logout();
+      const currentSession = await api.session();
+      setSession(currentSession);
+      if (currentSession === null) { setDrafts([]); setActiveId(null); setSnapshot(null); }
+    });
   }, [api, run]);
 
   const value = useMemo<DraftContextValue>(() => ({

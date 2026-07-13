@@ -18,7 +18,10 @@
     "build": "corepack pnpm -r --if-present build",
     "clean": "corepack pnpm -r --if-present clean",
     "dev:server": "corepack pnpm --filter @gitpm/server dev",
-    "lint": "eslint apps packages scripts --max-warnings 0",
+    "demo:verify": "node scripts/verify-schema-v1.mjs demo/portfolio",
+    "e2e": "playwright test",
+    "e2e:install": "playwright install chromium",
+    "lint": "eslint apps packages scripts e2e playwright.config.ts --max-warnings 0",
     "planning:check": "python scripts/validate_planning.py",
     "planning:test": "python scripts/test_planning_validator.py && python scripts/test_release_gate.py",
     "planning:verify": "corepack pnpm planning:check && corepack pnpm planning:test",
@@ -29,10 +32,11 @@
     "security:verify": "corepack pnpm --filter @gitpm/security build && vitest run packages/security/src/security-boundary.test.ts && node scripts/security-spike-report.mjs",
     "smoke": "node scripts/smoke-health.mjs",
     "test": "vitest run",
-    "typecheck": "corepack pnpm -r --if-present typecheck",
-    "verify": "corepack pnpm clean && corepack pnpm build && corepack pnpm lint && corepack pnpm typecheck && corepack pnpm test && corepack pnpm smoke && corepack pnpm schema:verify && node scripts/security-spike-report.mjs && corepack pnpm planning:verify"
+    "typecheck": "corepack pnpm -r --if-present typecheck && tsc -p e2e/tsconfig.json --noEmit",
+    "verify": "corepack pnpm clean && corepack pnpm build && corepack pnpm lint && corepack pnpm typecheck && corepack pnpm test && corepack pnpm e2e && corepack pnpm smoke && corepack pnpm schema:verify && node scripts/security-spike-report.mjs && corepack pnpm planning:verify"
   },
   "devDependencies": {
+    "@playwright/test": "1.54.0",
     "@types/node": "20.19.43",
     "@typescript-eslint/eslint-plugin": "8.63.0",
     "@typescript-eslint/parser": "8.63.0",

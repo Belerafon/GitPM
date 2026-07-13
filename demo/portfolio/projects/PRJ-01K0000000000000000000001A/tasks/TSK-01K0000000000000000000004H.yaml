@@ -1,0 +1,24 @@
+schema: gitpm/task@1
+id: TSK-01K0000000000000000000004H
+project: PRJ-01K0000000000000000000001A
+title: Реализовать форму обращения с вложениями
+type: feature
+status: in-progress
+lifecycle: active
+acceptance_criteria_markdown:
+  - Результат проверен ответственным сотрудником.
+  - Связанные материалы сохранены в проекте.
+parent: TSK-01K0000000000000000000004C
+milestone: MLS-01K0000000000000000000001P
+assignees:
+  - PER-01K0000000000000000000000B
+  - PER-01K0000000000000000000000C
+  - PER-01K0000000000000000000000J
+estimate_hours: 64
+start: 2026-08-17
+due: 2026-09-11
+depends_on:
+  - TSK-01K0000000000000000000004E
+labels:
+  - frontend
+  - обращения

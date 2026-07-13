@@ -1,0 +1,23 @@
+schema: gitpm/task@1
+id: TSK-01K00000000000000000000036
+project: PRJ-01K00000000000000000000018
+title: Подготовить дизайн-систему мобильного приложения
+type: feature
+status: review
+lifecycle: active
+acceptance_criteria_markdown:
+  - Результат проверен ответственным сотрудником.
+  - Связанные материалы сохранены в проекте.
+parent: TSK-01K00000000000000000000034
+milestone: MLS-01K0000000000000000000001J
+assignees:
+  - PER-01K0000000000000000000000C
+  - PER-01K0000000000000000000000E
+estimate_hours: 72
+start: 2026-08-03
+due: 2026-08-28
+depends_on:
+  - TSK-01K00000000000000000000035
+labels:
+  - frontend
+  - дизайн

@@ -1,8 +1,8 @@
-import { buildApp } from "./app.js";
+import { buildRepositoryApp } from "./repository-runtime.js";
 
 const host = process.env.HOST ?? "127.0.0.1";
 const port = Number.parseInt(process.env.PORT ?? "3000", 10);
-const app = buildApp();
+const app = await buildRepositoryApp();
 
 async function shutdown(signal: NodeJS.Signals): Promise<void> {
   app.log.info({ signal }, "server stopping");

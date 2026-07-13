@@ -48,6 +48,13 @@ export interface GitLabMergeRequestProtocol {
   getMergeRequest(accessToken: string, iid: number): Promise<MergeRequestState>;
 }
 
+export interface GitLabHttpProtocolOptions {
+  readonly baseUrl: string;
+  readonly clientId: string;
+  readonly project: string;
+  readonly fetch?: typeof globalThis.fetch;
+}
+
 export interface SanitizedCapture {
   readonly operation: string;
   readonly payload?: unknown;
@@ -182,6 +189,81 @@ export class AuthService {
       role: session.role,
       expires_at: new Date(session.expiresAt).toISOString(),
     };
+  }
+}
+
+export class GitLabHttpProtocol implements GitLabProtocol, GitLabMergeRequestProtocol {
+  private readonly baseUrl: string;
+  private readonly fetchImplementation: typeof globalThis.fetch;
+
+  constructor(private readonly options: GitLabHttpProtocolOptions) {
+    const baseUrl = new URL(options.baseUrl);
+    if (baseUrl.protocol !== "https:" && !["127.0.0.1", "localhost"].includes(baseUrl.hostname)) {
+      throw new AuthError("GITLAB_URL_INVALID", "GitLab must use HTTPS");
+    }
+    this.baseUrl = baseUrl.toString().replace(/\/$/u, "");
+    this.fetchImplementation = options.fetch ?? globalThis.fetch;
+  }
+
+  async exchangeAuthorizationCode(input: { code: string; codeVerifier: string; redirectUri: string }): Promise<OAuthTokenResponse> {
+    const body = new URLSearchParams({
+      client_id: this.options.clientId,
+      code: input.code,
+      code_verifier: input.codeVerifier,
+      grant_type: "authorization_code",
+      redirect_uri: input.redirectUri,
+    });
+    return await this.request<OAuthTokenResponse>("/oauth/token", { method: "POST", body });
+  }
+
+  async currentUser(accessToken: string): Promise<GitLabUser> {
+    const user = await this.request<{ id: number | string; username: string }>("/api/v4/user", {}, accessToken);
+    return { id: String(user.id), username: user.username };
+  }
+
+  async projectAccessLevel(accessToken: string): Promise<number | null> {
+    const user = await this.currentUser(accessToken);
+    try {
+      const membership = await this.request<{ access_level: number }>(
+        `/api/v4/projects/${encodeURIComponent(this.options.project)}/members/all/${encodeURIComponent(user.id)}`,
+        {},
+        accessToken,
+      );
+      return membership.access_level;
+    } catch (error) {
+      if (error instanceof AuthError && error.code === "GITLAB_HTTP_404") return null;
+      throw error;
+    }
+  }
+
+  async createMergeRequest(accessToken: string, payload: MergeRequestPayload): Promise<MergeRequestState> {
+    return await this.request<MergeRequestState>(
+      `/api/v4/projects/${encodeURIComponent(this.options.project)}/merge_requests`,
+      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) },
+      accessToken,
+    );
+  }
+
+  async getMergeRequest(accessToken: string, iid: number): Promise<MergeRequestState> {
+    if (!Number.isSafeInteger(iid) || iid <= 0) throw new AuthError("MR_ID_INVALID", "Merge Request ID is invalid");
+    return await this.request<MergeRequestState>(
+      `/api/v4/projects/${encodeURIComponent(this.options.project)}/merge_requests/${iid}`,
+      {},
+      accessToken,
+    );
+  }
+
+  private async request<T>(pathname: string, init: RequestInit = {}, accessToken?: string): Promise<T> {
+    const headers = new Headers(init.headers);
+    if (accessToken !== undefined) headers.set("authorization", `Bearer ${accessToken}`);
+    let response: Response;
+    try {
+      response = await this.fetchImplementation(`${this.baseUrl}${pathname}`, { ...init, headers });
+    } catch (error) {
+      throw new AuthError("GITLAB_UNAVAILABLE", error instanceof Error ? error.message : "GitLab is unavailable");
+    }
+    if (!response.ok) throw new AuthError(`GITLAB_HTTP_${response.status}`, `GitLab request failed (${response.status})`);
+    return await response.json() as T;
   }
 }
 

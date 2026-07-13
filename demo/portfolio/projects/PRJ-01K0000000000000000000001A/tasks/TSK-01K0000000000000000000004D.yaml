@@ -1,0 +1,22 @@
+schema: gitpm/task@1
+id: TSK-01K0000000000000000000004D
+project: PRJ-01K0000000000000000000001A
+title: Провести интервью с операторами поддержки
+type: research
+status: done
+lifecycle: active
+acceptance_criteria_markdown:
+  - Результат проверен ответственным сотрудником.
+  - Связанные материалы сохранены в проекте.
+parent: TSK-01K0000000000000000000004C
+milestone: MLS-01K0000000000000000000001P
+assignees:
+  - PER-01K0000000000000000000000E
+  - PER-01K0000000000000000000000G
+  - PER-01K0000000000000000000000J
+estimate_hours: 32
+start: 2026-07-13
+due: 2026-07-24
+labels:
+  - исследование
+  - процессы
