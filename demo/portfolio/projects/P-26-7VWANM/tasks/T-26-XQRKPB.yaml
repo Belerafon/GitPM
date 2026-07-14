@@ -1,0 +1,21 @@
+schema: gitpm/task@1
+id: T-26-XQRKPB
+project: P-26-7VWANM
+title: Инвентаризировать источники и потребителей данных
+type: research
+status: done
+lifecycle: active
+acceptance_criteria_markdown:
+  - Результат проверен ответственным сотрудником.
+  - Связанные материалы сохранены в проекте.
+parent: T-26-SQ5YK5
+milestone: M-26-T4JTV6
+assignees:
+  - U-26-ETKSWS
+  - U-26-1MV0QD
+estimate_hours: 56
+start: 2026-08-10
+due: 2026-08-28
+labels:
+  - аудит
+  - данные

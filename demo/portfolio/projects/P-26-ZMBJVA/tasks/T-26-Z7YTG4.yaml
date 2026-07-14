@@ -1,0 +1,28 @@
+schema: gitpm/task@1
+id: T-26-Z7YTG4
+project: P-26-ZMBJVA
+title: Провести регрессионное тестирование
+type: task
+status: backlog
+lifecycle: active
+acceptance_criteria_markdown:
+  - Результат проверен ответственным сотрудником.
+  - Связанные материалы сохранены в проекте.
+parent: T-26-AVEPT4
+milestone: M-26-QP6SH8
+assignees:
+  - U-26-FSB3GM
+  - U-26-J4FH55
+  - U-26-AD9KDK
+estimate_hours: 48
+start: 2026-10-05
+due: 2026-10-16
+depends_on:
+  - T-26-PHR2RZ
+  - T-26-CMQ19E
+  - T-26-F6QFVC
+  - T-26-4T9WV1
+  - T-26-YQV7RD
+labels:
+  - qa
+  - регресс

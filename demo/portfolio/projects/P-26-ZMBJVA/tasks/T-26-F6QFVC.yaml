@@ -1,0 +1,24 @@
+schema: gitpm/task@1
+id: T-26-F6QFVC
+project: P-26-ZMBJVA
+title: Реализовать форму обращения с вложениями
+type: feature
+status: in-progress
+lifecycle: active
+acceptance_criteria_markdown:
+  - Результат проверен ответственным сотрудником.
+  - Связанные материалы сохранены в проекте.
+parent: T-26-AVEPT4
+milestone: M-26-X7TYSQ
+assignees:
+  - U-26-RKTV2A
+  - U-26-NEDN00
+  - U-26-0225HT
+estimate_hours: 64
+start: 2026-08-17
+due: 2026-09-11
+depends_on:
+  - T-26-FZHVK3
+labels:
+  - frontend
+  - обращения

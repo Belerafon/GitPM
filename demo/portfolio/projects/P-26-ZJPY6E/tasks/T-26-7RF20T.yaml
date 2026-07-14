@@ -1,0 +1,27 @@
+schema: gitpm/task@1
+id: T-26-7RF20T
+project: P-26-ZJPY6E
+title: Организовать пилот для сотрудников банка
+type: task
+status: backlog
+lifecycle: active
+acceptance_criteria_markdown:
+  - Результат проверен ответственным сотрудником.
+  - Связанные материалы сохранены в проекте.
+parent: T-26-HB2NX5
+milestone: M-26-SY14EX
+assignees:
+  - U-26-J4FH55
+  - U-26-0225HT
+  - U-26-2SRX95
+estimate_hours: 48
+start: 2026-10-19
+due: 2026-11-06
+depends_on:
+  - T-26-P5STZT
+  - T-26-T7STGV
+  - T-26-59E33K
+  - T-26-MMEAX4
+labels:
+  - пилот
+  - обратная-связь

@@ -67,7 +67,7 @@ try {
   };
   const firstRuntime = runtime();
   const draft = await firstRuntime.createDraft("DRF-OPERATIONS", "42");
-  const projectPath = path.join(draft.worktree_path, "projects", "PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP", "project.yaml");
+  const projectPath = path.join(draft.worktree_path, "projects", "P-26-MGP84K", "project.yaml");
   const original = await readFile(projectPath, "utf8");
   await writeFile(projectPath, original.replace("GitPM launch", "GitPM durable write"), "utf8");
 

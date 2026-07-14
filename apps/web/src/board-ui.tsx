@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type DragEvent, type FormEvent } from "react";
+import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
 import type { GitPmApi } from "./api.js";
-import { newEntityId } from "./core-ui.js";
 import { message, type Locale, type MessageKey } from "./i18n.js";
 import type { DraftStatus, EntityResult, GitPmDocument } from "./types.js";
 
@@ -76,7 +76,7 @@ export function BoardWorkspace({ api, draft, locale, onChanged }: {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
     const document = {
-      schema: "gitpm/saved-view@1", id: newEntityId("VIW"), project: projectId, name: String(data.get("name")), kind: "board",
+      schema: "gitpm/saved-view@1", id: newUniqueEntityId(ENTITY_ID_PREFIX.view, new Set(views.map((item) => item.document.id))), project: projectId, name: String(data.get("name")), kind: "board",
       filters: { statuses: statusFilter === "" ? [] : [statusFilter], types: typeFilter === "" ? [] : [typeFilter] }, group_by: "status", lifecycle: "active",
     } as GitPmDocument;
     void mutate(async () => await api.createEntity(draft.draft_id, "views", fingerprint, document));

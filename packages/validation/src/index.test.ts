@@ -6,10 +6,10 @@ import { validateDelete, validateRepository } from "./index.js";
 
 const roots: string[] = [];
 const demo = path.join(process.cwd(), "fixtures", "schema-v1", "demo");
-const project = "PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP";
-const taskOne = "TSK-01J2BZ7G4VJ57PX9K2Q0C6C5XP";
-const taskTwo = "TSK-01J2BZ7G4VJ57PX9K2Q0C6C5XQ";
-const otherTask = "TSK-01J2BZ7G4VJ57PX9K2Q0C6C5XR";
+const project = "P-26-MGP84K";
+const taskOne = "T-26-P9G3P8";
+const taskTwo = "T-26-RHBNH8";
+const otherTask = "T-26-G2TG9R";
 
 async function fixture(): Promise<string> {
   const root = await mkdtemp(path.join(os.tmpdir(), "gitpm-validation-"));
@@ -42,7 +42,7 @@ describe("repository validation", () => {
   it("rejects schema violations and missing references", async () => {
     const root = await fixture();
     await replace(root, `projects/${project}/tasks/${taskTwo}.yaml`, "estimate_hours: 24.25", "estimate_hours: 1.1");
-    await replace(root, `projects/${project}/tasks/${taskOne}.yaml`, "PER-01J2C01M9QHPMQ2ZK5F7N8S4VA", "PER-01J2C01M9QHPMQ2ZK5F7N8S4VC");
+    await replace(root, `projects/${project}/tasks/${taskOne}.yaml`, "U-26-5EBAE3", "U-26-KB9RXB");
     const report = await validateRepository(root);
     expect(report.errors).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: "SCHEMA_INVALID" }),
@@ -67,7 +67,7 @@ describe("repository validation", () => {
 
   it("rejects impossible calendar dates", async () => {
     const root = await fixture();
-    await replace(root, "calendars/CAL-01J2C01M9QHPMQ2ZK5F7N8S4VA.yaml", "2026-01-01", "2026-02-30");
+    await replace(root, "calendars/C-26-QD7FJ4.yaml", "2026-01-01", "2026-02-30");
     const report = await validateRepository(root);
     expect(report.errors).toEqual(expect.arrayContaining([expect.objectContaining({ code: "DATE_INVALID" })]));
   });
@@ -81,14 +81,14 @@ describe("repository validation", () => {
 
   it("warns for archived references without making the repository invalid", async () => {
     const root = await fixture();
-    await replace(root, "people/PER-01J2C01M9QHPMQ2ZK5F7N8S4VA.yaml", "lifecycle: active", "lifecycle: archived");
+    await replace(root, "people/U-26-5EBAE3.yaml", "lifecycle: active", "lifecycle: archived");
     const report = await validateRepository(root);
     expect(report.valid).toBe(true);
     expect(report.warnings).toEqual(expect.arrayContaining([expect.objectContaining({ code: "REF_ARCHIVED" })]));
   });
 
   it("enforces delete restrict for direct references", async () => {
-    const issues = await validateDelete(demo, "PER-01J2C01M9QHPMQ2ZK5F7N8S4VA");
+    const issues = await validateDelete(demo, "U-26-5EBAE3");
     expect(issues).toEqual(expect.arrayContaining([expect.objectContaining({ code: "DELETE_RESTRICTED" })]));
   });
 });

@@ -1,7 +1,0 @@
-schema: gitpm/person@1
-id: PER-01K0000000000000000000000F
-name: Сергей Лебедев
-weekly_capacity_hours: 40
-calendar: CAL-01K00000000000000000000001
-lifecycle: active
-email: sergey.lebedev@example.test

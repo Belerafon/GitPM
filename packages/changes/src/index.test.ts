@@ -12,8 +12,8 @@ import { ChangesService, parseUnifiedDiff } from "./index.js";
 const execFileAsync = promisify(execFile);
 const roots: string[] = [];
 const demo = path.join(process.cwd(), "fixtures", "schema-v1", "demo");
-const projectFile = "projects/PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP/project.yaml";
-const deletedTask = "projects/PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP/tasks/TSK-01J2BZ7G4VJ57PX9K2Q0C6C5XQ.yaml";
+const projectFile = "projects/P-26-MGP84K/project.yaml";
+const deletedTask = "projects/P-26-MGP84K/tasks/T-26-RHBNH8.yaml";
 
 async function git(cwd: string, ...args: string[]): Promise<void> {
   await execFileAsync("git", args, { cwd, windowsHide: true });
@@ -98,22 +98,22 @@ describe("changes and restore service", () => {
     const { draft, service } = await runtime();
     const projectAbsolute = path.join(draft.worktree_path, ...projectFile.split("/"));
     const deletedAbsolute = path.join(draft.worktree_path, ...deletedTask.split("/"));
-    const archivedTask = "projects/PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP/tasks/TSK-01J2BZ7G4VJ57PX9K2Q0C6C5XP.yaml";
+    const archivedTask = "projects/P-26-MGP84K/tasks/T-26-P9G3P8.yaml";
     const archivedAbsolute = path.join(draft.worktree_path, ...archivedTask.split("/"));
-    const createdTask = "projects/PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP/tasks/TSK-01J2BZ7G4VJ57PX9K2Q0C6C5XZ.yaml";
+    const createdTask = "projects/P-26-MGP84K/tasks/T-26-9NJTEF.yaml";
     await writeFile(projectAbsolute, (await readFile(projectAbsolute, "utf8")).replace("GitPM launch", "GitPM alpha"), "utf8");
     await writeFile(archivedAbsolute, (await readFile(archivedAbsolute, "utf8")).replace("lifecycle: active", "lifecycle: archived"), "utf8");
     await rm(deletedAbsolute);
     await writeFile(path.join(draft.worktree_path, ...createdTask.split("/")), [
-      "schema: gitpm/task@1", "id: TSK-01J2BZ7G4VJ57PX9K2Q0C6C5XZ", "project: PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP",
+      "schema: gitpm/task@1", "id: T-26-9NJTEF", "project: P-26-MGP84K",
       "title: New task", "type: task", "status: todo", "lifecycle: active", "description_markdown: New", "acceptance_criteria_markdown: Done", "assignees: []", "depends_on: []", "labels: []", "",
     ].join("\n"), "utf8");
 
     const semantic = await service.semantic("DRF-CHANGES");
     expect(semantic.counts).toEqual({ created: 1, updated: 1, archived: 1, deleted: 1 });
-    expect(semantic.updated[0]).toMatchObject({ id: "PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP", fields: expect.arrayContaining([expect.objectContaining({ field: "name", before: "GitPM launch", after: "GitPM alpha" })]) });
+    expect(semantic.updated[0]).toMatchObject({ id: "P-26-MGP84K", fields: expect.arrayContaining([expect.objectContaining({ field: "name", before: "GitPM launch", after: "GitPM alpha" })]) });
     expect(semantic.archived[0]).toMatchObject({ fields: expect.arrayContaining([expect.objectContaining({ field: "lifecycle", before: "active", after: "archived" })]) });
-    expect(semantic.affected_projects).toEqual(["PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP"]);
+    expect(semantic.affected_projects).toEqual(["P-26-MGP84K"]);
     expect((await service.list("DRF-CHANGES")).files.find((file) => file.kind === "Added")?.diff).toContain("--- /dev/null");
   });
 });

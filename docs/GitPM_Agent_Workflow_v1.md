@@ -34,9 +34,9 @@ gitpm draft set-writer ui --draft DRF-AGENT-001 --owner 42
 Edit YAML directly under the reported `worktree_path`, then run:
 
 ```bash
-gitpm format --draft DRF-AGENT-001 --project PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP
-gitpm validate --changed --draft DRF-AGENT-001 --project PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP
-gitpm diff --semantic --draft DRF-AGENT-001 --project PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP
+gitpm format --draft DRF-AGENT-001 --project P-26-MGP84K
+gitpm validate --changed --draft DRF-AGENT-001 --project P-26-MGP84K
+gitpm diff --semantic --draft DRF-AGENT-001 --project P-26-MGP84K
 ```
 
 When `--project` is present, every changed path must belong to that Project. Repository-global configuration, People, Teams, Calendars and other Projects are rejected with `AGENT_SCOPE_VIOLATION`.
@@ -46,7 +46,7 @@ Deletion is rejected unless the same verification/commit command includes `--all
 ## Publish
 
 ```bash
-gitpm commit --all -m "Update delivery plan" --draft DRF-AGENT-001 --project PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP
+gitpm commit --all -m "Update delivery plan" --draft DRF-AGENT-001 --project P-26-MGP84K
 gitpm push --draft DRF-AGENT-001
 gitpm mr create --draft DRF-AGENT-001 --owner 42 --title "Update delivery plan"
 ```

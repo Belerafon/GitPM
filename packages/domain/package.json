@@ -20,6 +20,7 @@
     "@gitpm/drafts": "workspace:*",
     "@gitpm/repository-format": "workspace:*",
     "@gitpm/security": "workspace:*",
+    "@gitpm/shared": "workspace:*",
     "@gitpm/validation": "workspace:*"
   },
   "devDependencies": {

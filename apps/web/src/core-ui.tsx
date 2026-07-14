@@ -1,19 +1,15 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
 import type { GitPmApi } from "./api.js";
 import { message, type Locale, type MessageKey } from "./i18n.js";
 import type { DraftStatus, EntityResult, GitPmDocument } from "./types.js";
 import { changedEntityFields, useExternalHighlights, useReducedMotion } from "./external-updates.js";
 
-const ID_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 const value = (document: GitPmDocument, key: string) => typeof document[key] === "string" ? document[key] as string : "";
 interface ConfigValue { readonly slug: string; readonly title: string; readonly active: boolean }
 const configValues = (document: GitPmDocument, key: "statuses" | "issue_types"): ConfigValue[] => Array.isArray(document[key]) ? (document[key] as unknown[]).filter((item): item is ConfigValue => typeof item === "object" && item !== null && typeof (item as ConfigValue).slug === "string" && typeof (item as ConfigValue).title === "string" && (item as ConfigValue).active === true) : [];
 
-export function newEntityId(prefix: "PRJ" | "MLS" | "TSK" | "CAL" | "PER" | "TEM" | "VIW", random: () => number = Math.random): string {
-  let body = "";
-  for (let index = 0; index < 26; index += 1) body += ID_ALPHABET[Math.floor(random() * ID_ALPHABET.length)] ?? "0";
-  return `${prefix}-${body}`;
-}
+export { newEntityId } from "@gitpm/shared";
 
 function inlineMarkdown(text: string): ReactNode[] {
   return text.split(/(\*\*[^*]+\*\*)/gu).map((part, index) => part.startsWith("**") && part.endsWith("**")
@@ -90,18 +86,18 @@ export function CoreWorkspace({ api, draft, locale, onChanged }: {
   const task = tasks.find((item) => item.document.id === selectedTask);
 
   const createProject = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault(); const data = new FormData(event.currentTarget); const id = newEntityId("PRJ");
+    event.preventDefault(); const data = new FormData(event.currentTarget); const id = newUniqueEntityId(ENTITY_ID_PREFIX.project, new Set(projects.map((item) => item.document.id)));
     const document = { schema: "gitpm/project@1", id, name: String(data.get("name")), status: statusOptions[0]?.slug ?? "backlog", lifecycle: "active", description_markdown: String(data.get("description")) } as GitPmDocument;
     void mutate(async () => await api.createEntity(draft.draft_id, "projects", fingerprint, document), id); event.currentTarget.reset();
   };
   const createMilestone = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); const data = new FormData(event.currentTarget);
-    const document = { schema: "gitpm/milestone@1", id: newEntityId("MLS"), project: projectId, name: String(data.get("name")), lifecycle: "active", description_markdown: String(data.get("description")), ...(data.get("due") ? { due: String(data.get("due")) } : {}) } as GitPmDocument;
+    const document = { schema: "gitpm/milestone@1", id: newUniqueEntityId(ENTITY_ID_PREFIX.milestone, new Set(milestones.map((item) => item.document.id))), project: projectId, name: String(data.get("name")), lifecycle: "active", description_markdown: String(data.get("description")), ...(data.get("due") ? { due: String(data.get("due")) } : {}) } as GitPmDocument;
     void mutate(async () => await api.createEntity(draft.draft_id, "milestones", fingerprint, document)); event.currentTarget.reset();
   };
   const createTask = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); const data = new FormData(event.currentTarget); const milestone = String(data.get("milestone"));
-    const document = { schema: "gitpm/task@1", id: newEntityId("TSK"), project: projectId, title: String(data.get("title")), type: typeOptions[0]?.slug ?? "task", status: String(data.get("status")), lifecycle: "active", description_markdown: String(data.get("description")), ...(milestone ? { milestone } : {}) } as GitPmDocument;
+    const document = { schema: "gitpm/task@1", id: newUniqueEntityId(ENTITY_ID_PREFIX.task, new Set(tasks.map((item) => item.document.id))), project: projectId, title: String(data.get("title")), type: typeOptions[0]?.slug ?? "task", status: String(data.get("status")), lifecycle: "active", description_markdown: String(data.get("description")), ...(milestone ? { milestone } : {}) } as GitPmDocument;
     void mutate(async () => await api.createEntity(draft.draft_id, "tasks", fingerprint, document)); event.currentTarget.reset();
   };
 

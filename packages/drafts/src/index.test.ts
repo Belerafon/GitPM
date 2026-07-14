@@ -11,7 +11,7 @@ import { DraftManager, DraftRuntimeError } from "./index.js";
 const execFileAsync = promisify(execFile);
 const roots: string[] = [];
 const demo = path.join(process.cwd(), "fixtures", "schema-v1", "demo");
-const projectFile = "projects/PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP/project.yaml";
+const projectFile = "projects/P-26-MGP84K/project.yaml";
 
 async function git(cwd: string, ...args: string[]): Promise<string> {
   const result = await execFileAsync("git", args, { cwd, encoding: "utf8", windowsHide: true });

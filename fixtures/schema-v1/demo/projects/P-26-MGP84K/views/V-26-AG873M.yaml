@@ -1,0 +1,14 @@
+schema: gitpm/saved-view@1
+id: V-26-AG873M
+project: P-26-MGP84K
+name: Active work
+kind: board
+filters:
+  statuses:
+    - backlog
+    - in-progress
+  assignees:
+    - U-26-5EBAE3
+    - U-26-15QJP8
+group_by: status
+lifecycle: active

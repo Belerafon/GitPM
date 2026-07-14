@@ -1,7 +1,0 @@
-schema: gitpm/milestone@1
-id: MLS-01K0000000000000000000001Q
-project: PRJ-01K0000000000000000000001A
-name: Открытие портала клиентам
-lifecycle: active
-description_markdown: Портал доступен всем клиентам и включён в процессы поддержки.
-due: 2026-10-30

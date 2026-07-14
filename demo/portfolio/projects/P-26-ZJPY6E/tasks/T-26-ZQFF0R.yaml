@@ -1,0 +1,23 @@
+schema: gitpm/task@1
+id: T-26-ZQFF0R
+project: P-26-ZJPY6E
+title: Подготовить дизайн-систему мобильного приложения
+type: feature
+status: review
+lifecycle: active
+acceptance_criteria_markdown:
+  - Результат проверен ответственным сотрудником.
+  - Связанные материалы сохранены в проекте.
+parent: T-26-HB2NX5
+milestone: M-26-2HMFX5
+assignees:
+  - U-26-NEDN00
+  - U-26-9C1ZR4
+estimate_hours: 72
+start: 2026-08-03
+due: 2026-08-28
+depends_on:
+  - T-26-8D0SHE
+labels:
+  - frontend
+  - дизайн

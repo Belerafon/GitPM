@@ -33,7 +33,7 @@ export interface AgentScopeReport {
   readonly changed_files: readonly { readonly path: string; readonly kind: "Added" | "Modified" | "Deleted" }[];
 }
 
-const projectPath = (value: string): string | undefined => /^projects\/(PRJ-[^/]+)\//u.exec(value)?.[1];
+const projectPath = (value: string): string | undefined => /^projects\/(P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6})\//u.exec(value)?.[1];
 
 export class AgentWorkflow {
   constructor(

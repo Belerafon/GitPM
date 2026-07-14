@@ -1,7 +1,0 @@
-schema: gitpm/person@1
-id: PER-01K0000000000000000000000G
-name: Ольга Новикова
-weekly_capacity_hours: 36
-calendar: CAL-01K00000000000000000000002
-lifecycle: active
-email: olga.novikova@example.test

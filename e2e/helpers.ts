@@ -12,8 +12,8 @@ export interface EntityResult {
   readonly document: Record<string, unknown>;
 }
 
-export const FIXTURE_PROJECT_ID = "PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP";
-export const E2E_TASK_ID = "TSK-01J2BZ7G4VJ57PX9K2Q0C6C5XZ";
+export const FIXTURE_PROJECT_ID = "P-26-MGP84K";
+export const E2E_TASK_ID = "T-26-9NJTEF";
 
 export function taskDocument(id = E2E_TASK_ID) {
   return {

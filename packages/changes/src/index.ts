@@ -200,7 +200,7 @@ export class ChangesService {
     });
     const affected = new Set<string>();
     for (const file of files) {
-      const match = /^projects\/(PRJ-[^/]+)/u.exec(file.path);
+      const match = /^projects\/(P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6})/u.exec(file.path);
       if (match?.[1]) affected.add(match[1]);
     }
     return { files, changed_files_count: files.length, affected_projects: [...affected].sort() };

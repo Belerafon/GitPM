@@ -1,0 +1,26 @@
+schema: gitpm/task@1
+id: T-26-TSD15E
+project: P-26-7VWANM
+title: Провести параллельный расчёт отчётности
+type: task
+status: backlog
+lifecycle: active
+acceptance_criteria_markdown:
+  - Результат проверен ответственным сотрудником.
+  - Связанные материалы сохранены в проекте.
+parent: T-26-SQ5YK5
+milestone: M-26-9HGQWY
+assignees:
+  - U-26-J4FH55
+  - U-26-ETKSWS
+  - U-26-0225HT
+estimate_hours: 80
+start: 2026-11-30
+due: 2027-01-08
+depends_on:
+  - T-26-C9N14V
+  - T-26-VMXXK9
+  - T-26-R1JFHC
+labels:
+  - приёмка
+  - отчётность

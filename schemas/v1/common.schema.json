@@ -20,31 +20,31 @@
     },
     "projectId": {
       "type": "string",
-      "pattern": "^PRJ-[0-9A-HJKMNP-TV-Z]{26}$"
+      "pattern": "^P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}$"
     },
     "taskId": {
       "type": "string",
-      "pattern": "^TSK-[0-9A-HJKMNP-TV-Z]{26}$"
+      "pattern": "^T-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}$"
     },
     "milestoneId": {
       "type": "string",
-      "pattern": "^MLS-[0-9A-HJKMNP-TV-Z]{26}$"
+      "pattern": "^M-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}$"
     },
     "personId": {
       "type": "string",
-      "pattern": "^PER-[0-9A-HJKMNP-TV-Z]{26}$"
+      "pattern": "^U-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}$"
     },
     "teamId": {
       "type": "string",
-      "pattern": "^TEM-[0-9A-HJKMNP-TV-Z]{26}$"
+      "pattern": "^G-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}$"
     },
     "calendarId": {
       "type": "string",
-      "pattern": "^CAL-[0-9A-HJKMNP-TV-Z]{26}$"
+      "pattern": "^C-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}$"
     },
     "viewId": {
       "type": "string",
-      "pattern": "^VIW-[0-9A-HJKMNP-TV-Z]{26}$"
+      "pattern": "^V-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}$"
     },
     "labels": {
       "type": "array",

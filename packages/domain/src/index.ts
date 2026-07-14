@@ -4,6 +4,7 @@ import type { DraftManager, DraftMetadata } from "@gitpm/drafts";
 import { formatYamlDocument, parseYamlDocument } from "@gitpm/repository-format";
 import type { GitPmDocument } from "@gitpm/repository-format";
 import { atomicWriteDomainFile, resolveDomainPath } from "@gitpm/security";
+import { ENTITY_ID_PREFIX, isEntityId } from "@gitpm/shared";
 import { validateDelete, validateRepository } from "@gitpm/validation";
 
 export class DomainOperationError extends Error {
@@ -34,6 +35,16 @@ const typeSchemas: Record<string, string> = {
   views: "gitpm/saved-view@1",
 };
 
+const schemaIdPrefixes = {
+  "gitpm/project@1": ENTITY_ID_PREFIX.project,
+  "gitpm/task@1": ENTITY_ID_PREFIX.task,
+  "gitpm/milestone@1": ENTITY_ID_PREFIX.milestone,
+  "gitpm/person@1": ENTITY_ID_PREFIX.person,
+  "gitpm/team@1": ENTITY_ID_PREFIX.team,
+  "gitpm/calendar@1": ENTITY_ID_PREFIX.calendar,
+  "gitpm/saved-view@1": ENTITY_ID_PREFIX.view,
+} as const;
+
 export function assertEntityType(entityType: string, document: GitPmDocument): void {
   const schema = typeSchemas[entityType];
   if (!schema || schema !== document.schema) {
@@ -44,11 +55,12 @@ export function assertEntityType(entityType: string, document: GitPmDocument): v
 export function entityPathForDocument(document: GitPmDocument): string {
   const id = String(document.id ?? "");
   const project = String(document.project ?? "");
-  if (!/^[A-Z]{3}-[0-9A-HJKMNP-TV-Z]{26}$/u.test(id)) {
+  const expectedPrefix = schemaIdPrefixes[document.schema as keyof typeof schemaIdPrefixes];
+  if (expectedPrefix === undefined || !isEntityId(id, expectedPrefix)) {
     throw new DomainOperationError("ENTITY_ID_INVALID", "Entity ID is invalid");
   }
   const projectBound = ["gitpm/task@1", "gitpm/milestone@1", "gitpm/saved-view@1"].includes(document.schema);
-  if (projectBound && !/^PRJ-[0-9A-HJKMNP-TV-Z]{26}$/u.test(project)) {
+  if (projectBound && !isEntityId(project, ENTITY_ID_PREFIX.project)) {
     throw new DomainOperationError("ENTITY_PROJECT_INVALID", "Owning Project ID is invalid");
   }
   switch (document.schema) {

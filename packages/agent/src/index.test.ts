@@ -14,10 +14,10 @@ import { AgentWorkflow, AgentWorkflowError } from "./index.js";
 const execFileAsync = promisify(execFile);
 const roots: string[] = [];
 const demo = path.join(process.cwd(), "fixtures", "schema-v1", "demo");
-const projectId = "PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP";
+const projectId = "P-26-MGP84K";
 const projectFile = `projects/${projectId}/project.yaml`;
-const personFile = "people/PER-01J2C01M9QHPMQ2ZK5F7N8S4VA.yaml";
-const taskFile = `projects/${projectId}/tasks/TSK-01J2BZ7G4VJ57PX9K2Q0C6C5XQ.yaml`;
+const personFile = "people/U-26-5EBAE3.yaml";
+const taskFile = `projects/${projectId}/tasks/T-26-RHBNH8.yaml`;
 
 async function git(cwd: string, ...args: string[]): Promise<string> {
   return (await execFileAsync("git", args, { cwd, windowsHide: true, encoding: "utf8" })).stdout.trim();

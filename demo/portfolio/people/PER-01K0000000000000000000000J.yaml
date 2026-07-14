@@ -1,7 +1,0 @@
-schema: gitpm/person@1
-id: PER-01K0000000000000000000000J
-name: Наталья Павлова
-weekly_capacity_hours: 32
-calendar: CAL-01K00000000000000000000002
-lifecycle: active
-email: natalia.pavlova@example.test

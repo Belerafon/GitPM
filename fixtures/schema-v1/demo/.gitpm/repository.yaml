@@ -1,6 +1,6 @@
 schema: gitpm/repository@1
 default_branch: main
-default_calendar: CAL-01J2C01M9QHPMQ2ZK5F7N8S4VA
+default_calendar: C-26-QD7FJ4
 allowed_top_level_files:
   - README.md
 ui_poll_interval_seconds: 5

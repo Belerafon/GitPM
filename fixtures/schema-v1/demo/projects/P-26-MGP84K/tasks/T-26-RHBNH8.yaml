@@ -1,0 +1,13 @@
+schema: gitpm/task@1
+id: T-26-RHBNH8
+project: P-26-MGP84K
+title: Implement parser
+type: task
+status: backlog
+lifecycle: active
+milestone: M-26-461GDJ
+assignees:
+  - U-26-15QJP8
+estimate_hours: 24.25
+depends_on:
+  - T-26-P9G3P8

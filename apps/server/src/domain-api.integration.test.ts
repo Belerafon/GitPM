@@ -63,13 +63,13 @@ describe("domain API integration", () => {
     const draft = await manager.createDraft("DRF-HTTP", "42");
     let fingerprint = draft.fingerprint;
     const entities: Array<{ type: string; document: GitPmDocument }> = [
-      { type: "calendars", document: { schema: "gitpm/calendar@1", id: "CAL-01J2C01M9QHPMQ2ZK5F7N8S4VB", name: "HTTP calendar", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" } },
-      { type: "people", document: { schema: "gitpm/person@1", id: "PER-01J2C01M9QHPMQ2ZK5F7N8S4VC", name: "HTTP person", weekly_capacity_hours: 40, calendar: "CAL-01J2C01M9QHPMQ2ZK5F7N8S4VB", lifecycle: "active" } },
-      { type: "teams", document: { schema: "gitpm/team@1", id: "TEM-01J2C01M9QHPMQ2ZK5F7N8S4VB", name: "HTTP team", members: ["PER-01J2C01M9QHPMQ2ZK5F7N8S4VC"], lifecycle: "active" } },
-      { type: "projects", document: { schema: "gitpm/project@1", id: "PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYR", name: "HTTP project", status: "backlog", lifecycle: "active" } },
-      { type: "milestones", document: { schema: "gitpm/milestone@1", id: "MLS-01J2C01M9QHPMQ2ZK5F7N8S4VB", project: "PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYR", name: "HTTP milestone", lifecycle: "active" } },
-      { type: "tasks", document: { schema: "gitpm/task@1", id: "TSK-01J2BZ7G4VJ57PX9K2Q0C6C5XS", project: "PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYR", title: "HTTP task", type: "task", status: "backlog", lifecycle: "active" } },
-      { type: "views", document: { schema: "gitpm/saved-view@1", id: "VIW-01J2C01M9QHPMQ2ZK5F7N8S4VB", project: "PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYR", name: "HTTP view", kind: "list", filters: {}, lifecycle: "active" } },
+      { type: "calendars", document: { schema: "gitpm/calendar@1", id: "C-26-7GQW87", name: "HTTP calendar", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" } },
+      { type: "people", document: { schema: "gitpm/person@1", id: "U-26-KB9RXB", name: "HTTP person", weekly_capacity_hours: 40, calendar: "C-26-7GQW87", lifecycle: "active" } },
+      { type: "teams", document: { schema: "gitpm/team@1", id: "G-26-22K88P", name: "HTTP team", members: ["U-26-KB9RXB"], lifecycle: "active" } },
+      { type: "projects", document: { schema: "gitpm/project@1", id: "P-26-Y9S1D8", name: "HTTP project", status: "backlog", lifecycle: "active" } },
+      { type: "milestones", document: { schema: "gitpm/milestone@1", id: "M-26-KK4VXH", project: "P-26-Y9S1D8", name: "HTTP milestone", lifecycle: "active" } },
+      { type: "tasks", document: { schema: "gitpm/task@1", id: "T-26-FM5Q4W", project: "P-26-Y9S1D8", title: "HTTP task", type: "task", status: "backlog", lifecycle: "active" } },
+      { type: "views", document: { schema: "gitpm/saved-view@1", id: "V-26-B0C5A1", project: "P-26-Y9S1D8", name: "HTTP view", kind: "list", filters: {}, lifecycle: "active" } },
     ];
     const current = new Map<string, ApiEntityResult>();
     for (const entity of entities) {
@@ -129,14 +129,14 @@ describe("domain API integration", () => {
 
     const changed = await client.statusPorcelain(draft.worktree_path);
     const expectedPaths = [
-      "calendars/CAL-01J2C01M9QHPMQ2ZK5F7N8S4VB.yaml",
-      "people/PER-01J2C01M9QHPMQ2ZK5F7N8S4VC.yaml",
-      "teams/TEM-01J2C01M9QHPMQ2ZK5F7N8S4VB.yaml",
-      "projects/PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYR/project.yaml",
-      "projects/PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYR/milestones/MLS-01J2C01M9QHPMQ2ZK5F7N8S4VB.yaml",
-      "projects/PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYR/views/VIW-01J2C01M9QHPMQ2ZK5F7N8S4VB.yaml",
+      "calendars/C-26-7GQW87.yaml",
+      "people/U-26-KB9RXB.yaml",
+      "teams/G-26-22K88P.yaml",
+      "projects/P-26-Y9S1D8/project.yaml",
+      "projects/P-26-Y9S1D8/milestones/M-26-KK4VXH.yaml",
+      "projects/P-26-Y9S1D8/views/V-26-B0C5A1.yaml",
     ];
     for (const expected of expectedPaths) expect(changed).toContain(expected);
-    expect(changed).not.toContain("TSK-01J2BZ7G4VJ57PX9K2Q0C6C5XS.yaml");
+    expect(changed).not.toContain("T-26-FM5Q4W.yaml");
   }, 60_000);
 });

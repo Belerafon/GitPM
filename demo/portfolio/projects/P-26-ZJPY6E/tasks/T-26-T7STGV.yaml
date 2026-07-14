@@ -1,0 +1,25 @@
+schema: gitpm/task@1
+id: T-26-T7STGV
+project: P-26-ZJPY6E
+title: Собрать единую витрину продуктов
+type: feature
+status: planned
+lifecycle: active
+acceptance_criteria_markdown:
+  - Результат проверен ответственным сотрудником.
+  - Связанные материалы сохранены в проекте.
+parent: T-26-HB2NX5
+milestone: M-26-SY14EX
+assignees:
+  - U-26-RKTV2A
+  - U-26-NEDN00
+  - U-26-ETKSWS
+estimate_hours: 80
+start: 2026-09-07
+due: 2026-10-02
+depends_on:
+  - T-26-ZQFF0R
+  - T-26-7XAJ1Q
+labels:
+  - frontend
+  - продукты

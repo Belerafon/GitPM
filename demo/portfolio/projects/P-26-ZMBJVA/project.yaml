@@ -1,0 +1,12 @@
+schema: gitpm/project@1
+id: P-26-ZMBJVA
+name: Портал поддержки клиентов
+status: in-progress
+lifecycle: active
+description_markdown: Единый портал самообслуживания с базой знаний, заявками, контролем SLA и интеграцией с внутренними системами поддержки.
+owner: U-26-0225HT
+start: 2026-07-13
+due: 2026-10-30
+labels:
+  - поддержка
+  - самообслуживание

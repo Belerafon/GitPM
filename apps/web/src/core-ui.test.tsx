@@ -24,7 +24,7 @@ afterEach(cleanup);
 
 describe("core UI", () => {
   it("creates valid immutable IDs and renders Markdown without creating raw HTML", () => {
-    expect(newEntityId("TSK", () => 0)).toBe(`TSK-${"0".repeat(26)}`);
+    expect(newEntityId("T", () => 0, new Date("2026-01-01T00:00:00Z"))).toBe("T-26-000000");
     const { container } = render(<SafeMarkdown source={'# **Safe**\n<img src=x onerror="alert(1)">'} />);
     expect(container.querySelector("strong")?.textContent).toBe("Safe");
     expect(container.querySelector("img")).toBeNull();
@@ -66,8 +66,8 @@ describe("core UI", () => {
 
   it("reloads external changes, marks only changed fields, and keeps the focused read control", async () => {
     const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
-    const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: `PRJ-${"1".repeat(26)}`, name: "External project", status: "backlog", lifecycle: "active" });
-    const task = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@1", id: `TSK-${"2".repeat(26)}`, project: project.document.id, title: "Before agent", type: "task", status: "backlog", lifecycle: "active" });
+    const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-111111", name: "External project", status: "backlog", lifecycle: "active" });
+    const task = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@1", id: "T-26-222222", project: project.document.id, title: "Before agent", type: "task", status: "backlog", lifecycle: "active" });
     const external = { ...draft, writer_mode: "external" as const, changed_externally: false, external_fingerprint: "1".repeat(64) };
     const rendered = render(<CoreWorkspace api={api} draft={external} locale="en" onChanged={vi.fn(async () => undefined)} />);
     const readButton = await screen.findByRole("button", { name: /Before agent/u }); readButton.focus(); expect(document.activeElement).toBe(readButton);

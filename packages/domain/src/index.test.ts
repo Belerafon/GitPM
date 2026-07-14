@@ -44,13 +44,13 @@ describe("domain entity store", () => {
     const draft = await manager.createDraft("DRF-DOMAIN", "42");
     let fingerprint = draft.fingerprint;
     const documents: GitPmDocument[] = [
-      { schema: "gitpm/calendar@1", id: "CAL-01J2C01M9QHPMQ2ZK5F7N8S4VB", name: "Second calendar", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" },
-      { schema: "gitpm/person@1", id: "PER-01J2C01M9QHPMQ2ZK5F7N8S4VC", name: "New person", weekly_capacity_hours: 40, calendar: "CAL-01J2C01M9QHPMQ2ZK5F7N8S4VB", lifecycle: "active" },
-      { schema: "gitpm/team@1", id: "TEM-01J2C01M9QHPMQ2ZK5F7N8S4VB", name: "New team", members: ["PER-01J2C01M9QHPMQ2ZK5F7N8S4VC"], lifecycle: "active" },
-      { schema: "gitpm/project@1", id: "PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYR", name: "New project", status: "backlog", lifecycle: "active" },
-      { schema: "gitpm/milestone@1", id: "MLS-01J2C01M9QHPMQ2ZK5F7N8S4VB", project: "PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYR", name: "New milestone", lifecycle: "active" },
-      { schema: "gitpm/task@1", id: "TSK-01J2BZ7G4VJ57PX9K2Q0C6C5XS", project: "PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYR", title: "New task", type: "task", status: "backlog", lifecycle: "active" },
-      { schema: "gitpm/saved-view@1", id: "VIW-01J2C01M9QHPMQ2ZK5F7N8S4VB", project: "PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYR", name: "New view", kind: "list", filters: {}, lifecycle: "active" },
+      { schema: "gitpm/calendar@1", id: "C-26-7GQW87", name: "Second calendar", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" },
+      { schema: "gitpm/person@1", id: "U-26-KB9RXB", name: "New person", weekly_capacity_hours: 40, calendar: "C-26-7GQW87", lifecycle: "active" },
+      { schema: "gitpm/team@1", id: "G-26-22K88P", name: "New team", members: ["U-26-KB9RXB"], lifecycle: "active" },
+      { schema: "gitpm/project@1", id: "P-26-Y9S1D8", name: "New project", status: "backlog", lifecycle: "active" },
+      { schema: "gitpm/milestone@1", id: "M-26-KK4VXH", project: "P-26-Y9S1D8", name: "New milestone", lifecycle: "active" },
+      { schema: "gitpm/task@1", id: "T-26-FM5Q4W", project: "P-26-Y9S1D8", title: "New task", type: "task", status: "backlog", lifecycle: "active" },
+      { schema: "gitpm/saved-view@1", id: "V-26-B0C5A1", project: "P-26-Y9S1D8", name: "New view", kind: "list", filters: {}, lifecycle: "active" },
     ];
     const paths: string[] = [];
     for (const document of documents) {
@@ -60,7 +60,7 @@ describe("domain entity store", () => {
     }
     expect(paths).toHaveLength(7);
 
-    const project = await store.get("DRF-DOMAIN", "projects", "PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYR");
+    const project = await store.get("DRF-DOMAIN", "projects", "P-26-Y9S1D8");
     const updated = await store.update("DRF-DOMAIN", "42", "projects", String(project.document.id), fingerprint, project.blob_id, { ...project.document, name: "Updated project" });
     fingerprint = updated.draft_fingerprint;
     expect(updated.document.name).toBe("Updated project");
@@ -68,7 +68,7 @@ describe("domain entity store", () => {
       .rejects.toMatchObject({ code: "FILE_VERSION_MISMATCH" });
     fingerprint = (await manager.getDraft("DRF-DOMAIN")).fingerprint;
 
-    const task = await store.get("DRF-DOMAIN", "tasks", "TSK-01J2BZ7G4VJ57PX9K2Q0C6C5XS");
+    const task = await store.get("DRF-DOMAIN", "tasks", "T-26-FM5Q4W");
     const archived = await store.archive("DRF-DOMAIN", "42", "tasks", String(task.document.id), fingerprint, task.blob_id);
     fingerprint = archived.draft_fingerprint;
     expect(archived.document.lifecycle).toBe("archived");
@@ -76,7 +76,7 @@ describe("domain entity store", () => {
     fingerprint = deleted.draft_fingerprint;
     expect(deleted.deleted).toBe(true);
 
-    const person = await store.get("DRF-DOMAIN", "people", "PER-01J2C01M9QHPMQ2ZK5F7N8S4VC");
+    const person = await store.get("DRF-DOMAIN", "people", "U-26-KB9RXB");
     await expect(store.delete("DRF-DOMAIN", "42", "people", String(person.document.id), fingerprint, person.blob_id))
       .rejects.toBeInstanceOf(DomainOperationError);
     await expect(store.delete("DRF-DOMAIN", "42", "people", String(person.document.id), fingerprint, person.blob_id))

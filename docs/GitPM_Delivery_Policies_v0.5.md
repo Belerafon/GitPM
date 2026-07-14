@@ -20,7 +20,7 @@ v0.1 обслуживает один выделенный GitPM repository. Repo
 
 ## 4. Identity
 
-- один immutable prefixed ULID;
+- один immutable короткий ID вида `P-26-7K4M9Q`;
 - Project ID равен имени Project directory, остальные entity filenames равны ID;
 - internal references and mutation routes use ID;
 - current-state uniqueness is validated;

@@ -41,7 +41,7 @@ describe("CLI P02 commands", () => {
     expect(JSON.parse(valid.output)).toMatchObject({ ok: true, code: "OK", documentCount: 14 });
 
     const root = await fixture();
-    const calendar = path.join(root, "calendars", "CAL-01J2C01M9QHPMQ2ZK5F7N8S4VA.yaml");
+    const calendar = path.join(root, "calendars", "C-26-QD7FJ4.yaml");
     await writeFile(calendar, (await readFile(calendar, "utf8")).replace("2026-01-01", "2026-02-30"), "utf8");
     const invalid = await run(["validate", "--json", "--root", root]);
     expect(invalid.exitCode).toBe(1);
@@ -50,7 +50,7 @@ describe("CLI P02 commands", () => {
 
   it("preserves UTF-8 Cyrillic content independently of the Windows code page", async () => {
     const root = await fixture();
-    const file = path.join(root, "projects", "PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYQ", "project.yaml");
+    const file = path.join(root, "projects", "P-26-8S9HQQ", "project.yaml");
     await writeFile(file, (await readFile(file, "utf8")).replace("name: Operations", "name: Локальный проект"), "utf8");
 
     expect((await run(["format", "--root", root])).exitCode).toBe(0);
@@ -73,7 +73,7 @@ describe("CLI P12 agent commands", () => {
       createDraft: async () => metadata, openDraft: async () => metadata, status: async () => metadata, setWriterMode: async () => metadata,
       createEntity: async (_draftId: string, document: GitPmDocument) => ({ path: `people/${String(document.id)}.yaml`, draft_fingerprint: "f".repeat(64), document }),
       assertScope: async () => ({ affected_projects: [metadata.draft_id], changed_files: [] }),
-      semanticDiff: async () => ({ created: [], updated: [{ id: "PRJ-1", schema: "gitpm/project@1", path: "project.yaml", fields: [{ field: "name", before: "Old", after: "New" }] }], archived: [], deleted: [], counts: { created: 0, updated: 1, archived: 0, deleted: 0 }, affected_projects: ["PRJ-1"], unclassified_files: [] }),
+      semanticDiff: async () => ({ created: [], updated: [{ id: "P-26-111111", schema: "gitpm/project@1", path: "project.yaml", fields: [{ field: "name", before: "Old", after: "New" }] }], archived: [], deleted: [], counts: { created: 0, updated: 1, archived: 0, deleted: 0 }, affected_projects: ["P-26-111111"], unclassified_files: [] }),
       commitAll: async () => ({ commit: "c".repeat(40), branch: metadata.branch, draft_fingerprint: "d".repeat(64) }),
       push: async () => ({ branch: metadata.branch, commit: "c".repeat(40) }),
       createMergeRequest: async () => ({ iid: 7, state: "opened" as const, source_branch: metadata.branch, target_branch: "main", web_url: "https://gitlab.example.test/mr/7" }),
@@ -83,10 +83,10 @@ describe("CLI P12 agent commands", () => {
     const entityFile = path.join(inputRoot, "person.yaml");
     await writeFile(entityFile, [
       "schema: gitpm/person@1",
-      "id: PER-01J2C01M9QHPMQ2ZK5F7N8S4VC",
+      "id: U-26-KB9RXB",
       "name: Елена Соколова",
       "weekly_capacity_hours: 40",
-      "calendar: CAL-01J2C01M9QHPMQ2ZK5F7N8S4VA",
+      "calendar: C-26-QD7FJ4",
       "lifecycle: active",
       "email: elena.sokolova@example.test",
       "",
@@ -94,11 +94,11 @@ describe("CLI P12 agent commands", () => {
     expect(JSON.parse((await run(["draft", "open", "--draft", "DRF-AGENT", "--owner", "42", "--json"], process.cwd(), { agent })).output)).toMatchObject({ ok: true, draft: { writer_mode: "external" } });
     expect(JSON.parse((await run(["entity", "create", "--draft", "DRF-AGENT", "--file", entityFile, "--json"], process.cwd(), { agent })).output)).toMatchObject({
       ok: true,
-      path: "people/PER-01J2C01M9QHPMQ2ZK5F7N8S4VC.yaml",
+      path: "people/U-26-KB9RXB.yaml",
       document: { schema: "gitpm/person@1", name: "Елена Соколова" },
     });
-    expect(JSON.parse((await run(["diff", "--semantic", "--draft", "DRF-AGENT", "--project", "PRJ-1", "--json"], process.cwd(), { agent })).output)).toMatchObject({ ok: true, counts: { updated: 1 } });
-    expect(JSON.parse((await run(["commit", "--all", "-m", "Agent update", "--draft", "DRF-AGENT", "--project", "PRJ-1", "--json"], process.cwd(), { agent })).output)).toMatchObject({ ok: true, commit: "c".repeat(40) });
+    expect(JSON.parse((await run(["diff", "--semantic", "--draft", "DRF-AGENT", "--project", "P-26-111111", "--json"], process.cwd(), { agent })).output)).toMatchObject({ ok: true, counts: { updated: 1 } });
+    expect(JSON.parse((await run(["commit", "--all", "-m", "Agent update", "--draft", "DRF-AGENT", "--project", "P-26-111111", "--json"], process.cwd(), { agent })).output)).toMatchObject({ ok: true, commit: "c".repeat(40) });
     expect(JSON.parse((await run(["push", "--draft", "DRF-AGENT", "--json"], process.cwd(), { agent })).output)).toMatchObject({ ok: true, branch: metadata.branch });
     expect(JSON.parse((await run(["mr", "create", "--draft", "DRF-AGENT", "--owner", "42", "--title", "Agent update", "--json"], process.cwd(), { agent })).output)).toMatchObject({ ok: true, merge_request: { iid: 7 } });
   });

@@ -6,8 +6,8 @@ import { BoardWorkspace } from "./board-ui.js";
 import type { DraftStatus, EntityResult, GitPmDocument } from "./types.js";
 
 const draft: DraftStatus = { draft_id: "DRF-BOARD", owner_gitlab_user_id: "42", branch: "gitpm/42/DRF-BOARD", base_commit: "a".repeat(40), writer_mode: "ui", state: "open", fingerprint: "b".repeat(64), created_at: "2026-07-11T00:00:00.000Z", updated_at: "2026-07-11T00:00:00.000Z" };
-const projectId = `PRJ-${"1".repeat(26)}`;
-const taskId = `TSK-${"2".repeat(26)}`;
+const projectId = "P-26-111111";
+const taskId = "T-26-222222";
 
 class BoardApi {
   revision = 0;

@@ -112,7 +112,7 @@ describe("entity API contract", () => {
     apps.push(app);
     const response = await app.inject({
       method: "POST", url: "/api/drafts/DRF-API/entities/people",
-      payload: { expected_fingerprint: metadata.fingerprint, document: { schema: "gitpm/person@1", id: "PER-01J2C01M9QHPMQ2ZK5F7N8S4VA", name: "Denied", weekly_capacity_hours: 40, calendar: "CAL-01J2C01M9QHPMQ2ZK5F7N8S4VA", lifecycle: "active" } },
+      payload: { expected_fingerprint: metadata.fingerprint, document: { schema: "gitpm/person@1", id: "U-26-5EBAE3", name: "Denied", weekly_capacity_hours: 40, calendar: "C-26-QD7FJ4", lifecycle: "active" } },
     });
     expect(response.statusCode).toBe(403);
     expect(response.json()).toMatchObject({ error: { code: "DRAFT_FORBIDDEN", message: "Administrative mutation requires Maintainer" } });
@@ -121,7 +121,7 @@ describe("entity API contract", () => {
 
   it("lists entities through an owner-checked read model", async () => {
     const entityStore = {
-      list: vi.fn(async () => [{ document: { schema: "gitpm/project@1", id: "PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP" }, path: "projects/PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP/project.yaml", blob_id: "a".repeat(40), draft_fingerprint: metadata.fingerprint }]),
+      list: vi.fn(async () => [{ document: { schema: "gitpm/project@1", id: "P-26-MGP84K" }, path: "projects/P-26-MGP84K/project.yaml", blob_id: "a".repeat(40), draft_fingerprint: metadata.fingerprint }]),
     } as unknown as EntityStore;
     const app = buildApp({ authenticate: () => ({ userId: "42", role: "Developer" }), draftManager: manager(), entityStore });
     apps.push(app);
@@ -134,8 +134,8 @@ describe("entity API contract", () => {
   it("creates an entity through the domain store", async () => {
     const entityStore = {
       create: vi.fn(async () => ({
-        document: { schema: "gitpm/project@1", id: "PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP" },
-        path: "projects/PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP/project.yaml",
+        document: { schema: "gitpm/project@1", id: "P-26-MGP84K" },
+        path: "projects/P-26-MGP84K/project.yaml",
         blob_id: "a".repeat(40),
         draft_fingerprint: "b".repeat(64),
       })),
@@ -151,11 +151,11 @@ describe("entity API contract", () => {
       url: "/api/drafts/DRF-API/entities/projects",
       payload: {
         expected_fingerprint: metadata.fingerprint,
-        document: { schema: "gitpm/project@1", id: "PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP" },
+        document: { schema: "gitpm/project@1", id: "P-26-MGP84K" },
       },
     });
     expect(response.statusCode).toBe(201);
-    expect(response.json()).toMatchObject({ path: "projects/PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP/project.yaml" });
+    expect(response.json()).toMatchObject({ path: "projects/P-26-MGP84K/project.yaml" });
   });
 
   it("maps delete restrict to a stable conflict response", async () => {
@@ -170,7 +170,7 @@ describe("entity API contract", () => {
     apps.push(app);
     const response = await app.inject({
       method: "DELETE",
-      url: "/api/drafts/DRF-API/entities/people/PER-01J2C01M9QHPMQ2ZK5F7N8S4VA",
+      url: "/api/drafts/DRF-API/entities/people/U-26-5EBAE3",
       payload: { expected_fingerprint: metadata.fingerprint, expected_blob_id: "a".repeat(40) },
     });
     expect(response.statusCode).toBe(409);

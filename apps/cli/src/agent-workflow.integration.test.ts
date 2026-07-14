@@ -13,7 +13,7 @@ import { atomicWriteDomainFile } from "@gitpm/security";
 import { run } from "./command.js";
 
 const execFileAsync = promisify(execFile); const roots: string[] = []; const demo = path.join(process.cwd(), "fixtures", "schema-v1", "demo");
-const project = "PRJ-01J2BZA35YJGY8Z4T1P8JZ2TYP"; const projectFile = `projects/${project}/project.yaml`; const personFile = "people/PER-01J2C01M9QHPMQ2ZK5F7N8S4VA.yaml"; const taskFile = `projects/${project}/tasks/TSK-01J2BZ7G4VJ57PX9K2Q0C6C5XQ.yaml`; const viewFile = `projects/${project}/views/VIW-01J2C01M9QHPMQ2ZK5F7N8S4VA.yaml`;
+const project = "P-26-MGP84K"; const projectFile = `projects/${project}/project.yaml`; const personFile = "people/U-26-5EBAE3.yaml"; const taskFile = `projects/${project}/tasks/T-26-RHBNH8.yaml`; const viewFile = `projects/${project}/views/V-26-AG873M.yaml`;
 async function git(cwd: string, ...args: string[]) { return (await execFileAsync("git", args, { cwd, windowsHide: true, encoding: "utf8" })).stdout.trim(); }
 afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))));
 
@@ -26,13 +26,13 @@ describe("scripted agent CLI", () => {
     const created = await invoke(["draft", "create", "--draft", "DRF-CLI", "--owner", "42"]); expect(created).toMatchObject({ ok: true, draft: { writer_mode: "external" } }); const draft = await agent.status("DRF-CLI");
     const entityFile = path.join(root, "new-task.yaml");
     await writeFile(entityFile, (await readFile(path.join(draft.worktree_path, ...taskFile.split("/")), "utf8"))
-      .replace("TSK-01J2BZ7G4VJ57PX9K2Q0C6C5XQ", "TSK-01J2BZ7G4VJ57PX9K2Q0C6C5ZZ")
+      .replace("T-26-RHBNH8", "T-26-VP4MHE")
       .replace("Implement parser", "Проверить создание задачи через CLI"), "utf8");
     const createdEntity = await invoke(["entity", "create", "--draft", "DRF-CLI", "--file", entityFile, "--project", project]);
     if (createdEntity.ok !== true) throw new Error(`entity create failed: ${JSON.stringify(createdEntity)}`);
     expect(createdEntity).toMatchObject({
       ok: true,
-      path: `projects/${project}/tasks/TSK-01J2BZ7G4VJ57PX9K2Q0C6C5ZZ.yaml`,
+      path: `projects/${project}/tasks/T-26-VP4MHE.yaml`,
       document: { schema: "gitpm/task@1", title: "Проверить создание задачи через CLI" },
     });
     await atomicWriteDomainFile(draft.worktree_path, projectFile, (await readFile(path.join(draft.worktree_path, ...projectFile.split("/")), "utf8")).replace("GitPM launch", "Agent CLI delivery"));

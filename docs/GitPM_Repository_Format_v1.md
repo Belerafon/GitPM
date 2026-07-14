@@ -30,8 +30,17 @@ Person, Team и Calendar хранятся соответственно в `peopl
 
 ## Identity and references
 
-ID имеет типовой префикс и ULID из 26 символов Crockford Base32. Все ID уникальны
-в текущем состоянии repository. Ссылки используют только ID.
+ID имеет форму `<type>-<YY>-<random>`, где type — один из `P`, `T`, `M`, `U`,
+`G`, `C`, `V`, `YY` — две последние цифры UTC-года создания, а random — шесть
+символов Crockford Base32. Примеры: `P-26-7K4M9Q`, `T-26-X8D2FW`,
+`M-26-3RC7NA`. Все ID уникальны в текущем состоянии repository. Ссылки
+используют только ID.
+
+Шесть случайных символов дают 32^6 = 1 073 741 824 вариантов для каждого типа
+и года. Генерация использует cryptographically secure randomness. Совпадение с
+существующим путём отклоняется как `ENTITY_EXISTS`, duplicate ID отклоняется как
+`IDENTITY_DUPLICATE`. Межветочная offline-коллизия остаётся теоретически
+возможной и обнаруживается при validation/merge.
 
 - Project owner, Task assignees, Team members и Saved View assignees ссылаются на Person.
 - Person и repository default calendar ссылаются на Calendar.

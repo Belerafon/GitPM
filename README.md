@@ -44,6 +44,12 @@ set GITPM_REPOSITORY_PATH=D:\path\to\repository
 corepack pnpm dev:server
 ```
 
+## Идентификаторы
+
+Все сущности используют единый короткий ID вида `P-26-7K4M9Q`:
+односимвольный тип, две цифры UTC-года и шесть криптографически случайных
+символов Crockford Base32. Старый формат prefixed ULID не поддерживается.
+
 Server предоставляет `GET /health/live` и `GET /health/ready` на
 `http://127.0.0.1:3000`. Каждый ответ возвращает `x-correlation-id`, а
 структурный request log содержит тот же идентификатор.

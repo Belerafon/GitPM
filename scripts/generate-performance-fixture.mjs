@@ -15,13 +15,13 @@ function suffix(input) {
     result = `${ALPHABET[Number(value % 32n)]}${result}`;
     value /= 32n;
   }
-  return result.padStart(26, "0");
+  return result.padStart(6, "0");
 }
 
-export const calendarId = () => `CAL-${suffix(1)}`;
-export const personId = (index) => `PER-${suffix(1000 + index)}`;
-export const projectId = (index) => `PRJ-${suffix(2000 + index)}`;
-export const taskId = (index) => `TSK-${suffix(10_000 + index)}`;
+export const calendarId = () => `C-26-${suffix(1)}`;
+export const personId = (index) => `U-26-${suffix(1000 + index)}`;
+export const projectId = (index) => `P-26-${suffix(2000 + index)}`;
+export const taskId = (index) => `T-26-${suffix(10_000 + index)}`;
 export const taskRelativePath = (index) => {
   const projectIndex = Math.floor((index - 1) / TASKS_PER_PROJECT) + 1;
   return `projects/${projectId(projectIndex)}/tasks/${taskId(index)}.yaml`;

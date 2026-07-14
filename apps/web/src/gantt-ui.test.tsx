@@ -5,19 +5,19 @@ import type { GitPmApi } from "./api.js";
 import { buildGanttModel, GanttWorkspace } from "./gantt-ui.js";
 import type { DraftStatus, EntityResult, GitPmDocument } from "./types.js";
 
-const projectId = `PRJ-${"1".repeat(26)}`;
+const projectId = "P-26-111111";
 const draft: DraftStatus = { draft_id: "DRF-GANTT", owner_gitlab_user_id: "42", branch: "gitpm/42/DRF-GANTT", base_commit: "a".repeat(40), writer_mode: "ui", state: "open", fingerprint: "b".repeat(64), created_at: "2026-07-11T00:00:00.000Z", updated_at: "2026-07-11T00:00:00.000Z" };
 const result = (document: GitPmDocument): EntityResult => ({ document, path: `${document.id}.yaml`, blob_id: "c".repeat(40), draft_fingerprint: "d".repeat(64) });
-const task = (suffix: string, title: string, start?: string, due?: string, extra: Record<string, unknown> = {}) => result({ schema: "gitpm/task@1", id: `TSK-${suffix.repeat(26)}`, project: projectId, title, type: "task", status: "backlog", lifecycle: "active", ...(start === undefined ? {} : { start }), ...(due === undefined ? {} : { due }), ...extra });
+const task = (suffix: string, title: string, start?: string, due?: string, extra: Record<string, unknown> = {}) => result({ schema: "gitpm/task@1", id: `T-26-${suffix.repeat(6)}`, project: projectId, title, type: "task", status: "backlog", lifecycle: "active", ...(start === undefined ? {} : { start }), ...(due === undefined ? {} : { due }), ...extra });
 
 const parent = task("2", "Plan release", "2026-07-01", "2026-07-05");
-const child = task("3", "Build API", "2026-07-02", "2026-07-03", { parent: parent.document.id, milestone: `MLS-${"8".repeat(26)}` });
+const child = task("3", "Build API", "2026-07-02", "2026-07-03", { parent: parent.document.id, milestone: "M-26-888888" });
 const dependent = task("4", "Ship UI", "2026-07-04", "2026-07-06", { depends_on: [child.document.id] });
 const review = task("5", "Review", "2026-07-06", "2026-07-07", { depends_on: [dependent.document.id] });
 const launch = task("6", "Launch", "2026-07-08", "2026-07-08", { depends_on: [review.document.id] });
 const undated = task("7", "Undated");
 const archived = task("9", "Archived", "2026-07-01", "2026-07-02", { lifecycle: "archived" });
-const milestone = result({ schema: "gitpm/milestone@1", id: `MLS-${"8".repeat(26)}`, project: projectId, name: "Beta", due: "2026-07-08", lifecycle: "active" });
+const milestone = result({ schema: "gitpm/milestone@1", id: "M-26-888888", project: projectId, name: "Beta", due: "2026-07-08", lifecycle: "active" });
 
 afterEach(cleanup);
 describe("read-only Gantt", () => {

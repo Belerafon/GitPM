@@ -1,0 +1,23 @@
+schema: gitpm/task@1
+id: T-26-CMQ19E
+project: P-26-ZMBJVA
+title: Подключить единый вход клиента
+type: feature
+status: blocked
+lifecycle: active
+acceptance_criteria_markdown:
+  - Результат проверен ответственным сотрудником.
+  - Связанные материалы сохранены в проекте.
+parent: T-26-AVEPT4
+milestone: M-26-X7TYSQ
+assignees:
+  - U-26-RKTV2A
+  - U-26-AD9KDK
+estimate_hours: 56
+start: 2026-08-10
+due: 2026-09-04
+depends_on:
+  - T-26-FZHVK3
+labels:
+  - sso
+  - безопасность

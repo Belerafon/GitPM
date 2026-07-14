@@ -1,0 +1,23 @@
+schema: gitpm/task@1
+id: T-26-5K0WZ2
+project: P-26-7VWANM
+title: Развернуть контуры разработки и эксплуатации
+type: task
+status: in-progress
+lifecycle: active
+acceptance_criteria_markdown:
+  - Результат проверен ответственным сотрудником.
+  - Связанные материалы сохранены в проекте.
+parent: T-26-SQ5YK5
+milestone: M-26-T4JTV6
+assignees:
+  - U-26-FSB3GM
+  - U-26-1MV0QD
+estimate_hours: 72
+start: 2026-09-07
+due: 2026-09-30
+depends_on:
+  - T-26-ZDA1WV
+labels:
+  - devops
+  - инфраструктура

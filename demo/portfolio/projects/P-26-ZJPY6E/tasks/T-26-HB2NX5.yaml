@@ -1,0 +1,23 @@
+schema: gitpm/task@1
+id: T-26-HB2NX5
+project: P-26-ZJPY6E
+title: Запустить программу обновления мобильного банка
+type: epic
+status: in-progress
+lifecycle: active
+description_markdown: Координация продуктового, технического и операционного потоков.
+acceptance_criteria_markdown:
+  - Результат проверен ответственным сотрудником.
+  - Связанные материалы сохранены в проекте.
+milestone: M-26-SY14EX
+assignees:
+  - U-26-2SRX95
+  - U-26-RKTV2A
+  - U-26-NEDN00
+  - U-26-9C1ZR4
+estimate_hours: 80
+start: 2026-07-20
+due: 2026-11-27
+labels:
+  - управление
+  - релиз

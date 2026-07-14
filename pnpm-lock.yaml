@@ -201,6 +201,9 @@ importers:
       '@gitpm/security':
         specifier: workspace:*
         version: link:../security
+      '@gitpm/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@gitpm/validation':
         specifier: workspace:*
         version: link:../validation

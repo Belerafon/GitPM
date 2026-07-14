@@ -1,0 +1,24 @@
+schema: gitpm/task@1
+id: T-26-C9N14V
+project: P-26-7VWANM
+title: Настроить проверки качества данных
+type: feature
+status: planned
+lifecycle: active
+acceptance_criteria_markdown:
+  - Результат проверен ответственным сотрудником.
+  - Связанные материалы сохранены в проекте.
+parent: T-26-SQ5YK5
+milestone: M-26-T4JTV6
+assignees:
+  - U-26-J4FH55
+  - U-26-ETKSWS
+  - U-26-1MV0QD
+estimate_hours: 64
+start: 2026-10-05
+due: 2026-10-30
+depends_on:
+  - T-26-5ZH6NH
+labels:
+  - качество
+  - мониторинг

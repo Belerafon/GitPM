@@ -1,0 +1,23 @@
+schema: gitpm/task@1
+id: T-26-7XAJ1Q
+project: P-26-ZJPY6E
+title: Реализовать API-агрегатор продуктов
+type: feature
+status: in-progress
+lifecycle: active
+acceptance_criteria_markdown:
+  - Результат проверен ответственным сотрудником.
+  - Связанные материалы сохранены в проекте.
+parent: T-26-HB2NX5
+milestone: M-26-2HMFX5
+assignees:
+  - U-26-RKTV2A
+  - U-26-AD9KDK
+estimate_hours: 96
+start: 2026-08-03
+due: 2026-09-04
+depends_on:
+  - T-26-8D0SHE
+labels:
+  - backend
+  - api

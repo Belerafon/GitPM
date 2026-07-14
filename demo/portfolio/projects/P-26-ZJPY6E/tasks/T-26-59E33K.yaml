@@ -1,0 +1,24 @@
+schema: gitpm/task@1
+id: T-26-59E33K
+project: P-26-ZJPY6E
+title: Подключить push-уведомления и предпочтения
+type: feature
+status: backlog
+lifecycle: active
+acceptance_criteria_markdown:
+  - Результат проверен ответственным сотрудником.
+  - Связанные материалы сохранены в проекте.
+parent: T-26-HB2NX5
+milestone: M-26-SY14EX
+assignees:
+  - U-26-RKTV2A
+  - U-26-FSB3GM
+  - U-26-0225HT
+estimate_hours: 64
+start: 2026-09-21
+due: 2026-10-16
+depends_on:
+  - T-26-7XAJ1Q
+labels:
+  - интеграция
+  - уведомления

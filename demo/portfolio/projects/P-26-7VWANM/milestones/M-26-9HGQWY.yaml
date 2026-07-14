@@ -1,0 +1,7 @@
+schema: gitpm/milestone@1
+id: M-26-9HGQWY
+project: P-26-7VWANM
+name: Отключение старого хранилища
+lifecycle: active
+description_markdown: Пользователи и регламентные процессы переведены полностью.
+due: 2027-01-29

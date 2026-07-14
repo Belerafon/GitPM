@@ -20,7 +20,7 @@ const item: CommitHistoryItem = {
 const detail: CommitHistoryDetail = {
   ...item,
   body: payload,
-  files: [{ path: `projects/PRJ-HOSTILE/${payload}.yaml`, additions: 1, deletions: 1 }],
+  files: [{ path: `projects/P-26-H0ST1E/${payload}.yaml`, additions: 1, deletions: 1 }],
   diff: `+${payload}\n`,
 };
 const draft: DraftStatus = {

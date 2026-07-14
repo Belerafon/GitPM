@@ -1,7 +1,0 @@
-schema: gitpm/milestone@1
-id: MLS-01K0000000000000000000001M
-project: PRJ-01K00000000000000000000019
-name: Первые витрины в новой платформе
-lifecycle: active
-description_markdown: Критичные продуктовые витрины работают параллельно со старой системой.
-due: 2026-10-30

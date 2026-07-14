@@ -1,0 +1,7 @@
+schema: gitpm/milestone@1
+id: M-26-2HMFX5
+project: P-26-ZJPY6E
+name: Закрытое бета-тестирование
+lifecycle: active
+description_markdown: Основные сценарии доступны сотрудникам банка.
+due: 2026-09-25

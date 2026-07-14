@@ -5,13 +5,13 @@ import type { GitPmApi } from "./api.js";
 import type { DraftStatus, EntityResult, GitPmDocument } from "./types.js";
 import { WorkloadWorkspace } from "./workload-ui.js";
 
-const projectId = `PRJ-${"1".repeat(26)}`;
-const adaId = `PER-${"2".repeat(26)}`;
-const linusId = `PER-${"3".repeat(26)}`;
-const calendarId = `CAL-${"4".repeat(26)}`;
+const projectId = "P-26-111111";
+const adaId = "U-26-222222";
+const linusId = "U-26-333333";
+const calendarId = "C-26-444444";
 const draft: DraftStatus = { draft_id: "DRF-WORKLOAD", owner_gitlab_user_id: "42", branch: "gitpm/42/DRF-WORKLOAD", base_commit: "a".repeat(40), writer_mode: "ui", state: "open", fingerprint: "b".repeat(64), created_at: "2026-07-11T00:00:00.000Z", updated_at: "2026-07-11T00:00:00.000Z" };
 const result = (document: GitPmDocument): EntityResult => ({ document, path: `${document.id}.yaml`, blob_id: "c".repeat(40), draft_fingerprint: "d".repeat(64) });
-const task = (suffix: string, title: string, extra: Record<string, unknown>) => result({ schema: "gitpm/task@1", id: `TSK-${suffix.repeat(26)}`, project: projectId, title, type: "task", status: "backlog", lifecycle: "active", ...extra });
+const task = (suffix: string, title: string, extra: Record<string, unknown>) => result({ schema: "gitpm/task@1", id: `T-26-${suffix.repeat(6)}`, project: projectId, title, type: "task", status: "backlog", lifecycle: "active", ...extra });
 
 const calendar = result({ schema: "gitpm/calendar@1", id: calendarId, name: "Engineering", working_weekdays: [1, 2, 3, 4, 5], holidays: ["2026-07-08"], lifecycle: "active" });
 const ada = result({ schema: "gitpm/person@1", id: adaId, name: "Ada", weekly_capacity_hours: 40, calendar: calendarId, lifecycle: "active" });

@@ -10,16 +10,16 @@ const draft: DraftStatus = { draft_id: "DRF-CHANGES", owner_gitlab_user_id: "42"
 class ChangesApi {
   committed = false;
   restored: string[] = [];
-  changes: ChangesList = { changed_files_count: 3, affected_projects: ["PRJ-1"], files: [
-    { path: "projects/PRJ-1/project.yaml", kind: "Modified", diff_token: "one", diff: "@@ -1,1 +1,1 @@\n-old\n+new\n", hunks: [{ old_start: 1, old_count: 1, new_start: 1, new_count: 1, lines: ["-old", "+new"] }] },
-    { path: "projects/PRJ-1/tasks/TSK-1.yaml", kind: "Added", diff_token: "two", diff: "@@ -0,0 +1,1 @@\n+new\n", hunks: [{ old_start: 0, old_count: 0, new_start: 1, new_count: 1, lines: ["+new"] }] },
-    { path: "projects/PRJ-1/tasks/TSK-2.yaml", kind: "Deleted", diff_token: "three", diff: "@@ -1,1 +0,0 @@\n-old\n", hunks: [{ old_start: 1, old_count: 1, new_start: 0, new_count: 0, lines: ["-old"] }] },
+  changes: ChangesList = { changed_files_count: 3, affected_projects: ["P-26-111111"], files: [
+    { path: "projects/P-26-111111/project.yaml", kind: "Modified", diff_token: "one", diff: "@@ -1,1 +1,1 @@\n-old\n+new\n", hunks: [{ old_start: 1, old_count: 1, new_start: 1, new_count: 1, lines: ["-old", "+new"] }] },
+    { path: "projects/P-26-111111/tasks/T-26-111111.yaml", kind: "Added", diff_token: "two", diff: "@@ -0,0 +1,1 @@\n+new\n", hunks: [{ old_start: 0, old_count: 0, new_start: 1, new_count: 1, lines: ["+new"] }] },
+    { path: "projects/P-26-111111/tasks/T-26-222222.yaml", kind: "Deleted", diff_token: "three", diff: "@@ -1,1 +0,0 @@\n-old\n", hunks: [{ old_start: 1, old_count: 1, new_start: 0, new_count: 0, lines: ["-old"] }] },
   ] };
   semantic: SemanticDiff = {
-    created: [{ id: "TSK-1", path: "projects/PRJ-1/tasks/TSK-1.yaml", schema: "gitpm/task@1", project: "PRJ-1", fields: [{ field: "title", after: "New" }] }],
-    updated: [{ id: "PRJ-1", path: "projects/PRJ-1/project.yaml", schema: "gitpm/project@1", project: "PRJ-1", fields: [{ field: "name", before: "Old", after: "New" }] }],
-    archived: [], deleted: [{ id: "TSK-2", path: "projects/PRJ-1/tasks/TSK-2.yaml", schema: "gitpm/task@1", project: "PRJ-1", fields: [{ field: "title", before: "Old" }] }],
-    counts: { created: 1, updated: 1, archived: 0, deleted: 1 }, affected_projects: ["PRJ-1"], unclassified_files: [],
+    created: [{ id: "T-26-111111", path: "projects/P-26-111111/tasks/T-26-111111.yaml", schema: "gitpm/task@1", project: "P-26-111111", fields: [{ field: "title", after: "New" }] }],
+    updated: [{ id: "P-26-111111", path: "projects/P-26-111111/project.yaml", schema: "gitpm/project@1", project: "P-26-111111", fields: [{ field: "name", before: "Old", after: "New" }] }],
+    archived: [], deleted: [{ id: "T-26-222222", path: "projects/P-26-111111/tasks/T-26-222222.yaml", schema: "gitpm/task@1", project: "P-26-111111", fields: [{ field: "title", before: "Old" }] }],
+    counts: { created: 1, updated: 1, archived: 0, deleted: 1 }, affected_projects: ["P-26-111111"], unclassified_files: [],
   };
   listChanges = vi.fn(async () => this.committed ? { changed_files_count: 0, affected_projects: [], files: [] } : this.changes);
   semanticChanges = vi.fn(async () => this.committed ? { created: [], updated: [], archived: [], deleted: [], counts: { created: 0, updated: 0, archived: 0, deleted: 0 }, affected_projects: [], unclassified_files: [] } : this.semantic);
@@ -44,18 +44,18 @@ describe("Changes workspace", () => {
   it("shows only Git change categories, an exact diff, restore controls and semantic before/after values", async () => {
     const fixture = new ChangesApi();
     render(<ChangesWorkspace api={fixture as unknown as GitPmApi} draft={draft} role="Developer" locale="en" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} />);
-    expect((await screen.findAllByText("projects/PRJ-1/project.yaml")).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText("projects/P-26-111111/project.yaml")).length).toBeGreaterThan(0);
     expect(screen.getByText("Added")).toBeTruthy(); expect(screen.getAllByText("Modified").length).toBeGreaterThan(0); expect(screen.getAllByText("Deleted").length).toBeGreaterThan(0);
     expect(screen.getByText("-old")).toBeTruthy(); expect(screen.getByText("+new")).toBeTruthy();
     expect(screen.getAllByText("Old").length).toBeGreaterThan(0); expect(screen.getAllByText("New").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Restore hunk" }));
-    await waitFor(() => expect(fixture.restoreHunk).toHaveBeenCalledWith("DRF-CHANGES", draft.fingerprint, "projects/PRJ-1/project.yaml", "one", 0));
+    await waitFor(() => expect(fixture.restoreHunk).toHaveBeenCalledWith("DRF-CHANGES", draft.fingerprint, "projects/P-26-111111/project.yaml", "one", 0));
   });
 
   it("commits every file without staging selection, then pushes and creates a merge request", async () => {
     const fixture = new ChangesApi();
     render(<ChangesWorkspace api={fixture as unknown as GitPmApi} draft={draft} role="Developer" locale="en" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} />);
-    await screen.findAllByText("projects/PRJ-1/project.yaml");
+    await screen.findAllByText("projects/P-26-111111/project.yaml");
     fireEvent.click(screen.getByRole("button", { name: "Prepare commit" }));
     expect(screen.getByText("All 3 changed files will be committed.")).toBeTruthy();
     expect(screen.queryByRole("checkbox")).toBeNull();
