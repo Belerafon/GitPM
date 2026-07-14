@@ -12,10 +12,10 @@
 | Этап | Состояние | Примечание |
 | --- | --- | --- |
 | UX00 | Завершён | Work packages, automated verification, manual acceptance, exit gate и handoff закрыты 2026-07-14; пакет зафиксирован commit `4a4c816`. |
-| UX01 | В работе | Введены route adapter и History API, адресуемые разделы/Project/Task/commit/Task status, deep links, reload и back/forward; App Shell вынесен, меню сгруппировано; breadcrumbs и упрощение topbar ещё открыты. |
+| UX01 | В работе | Route adapter, History API, deep links/reload/back-forward, App Shell, grouped navigation, breadcrumbs и упрощённый topbar готовы; открыта полная синхронизация Board/saved-view filters с query state. |
 | UX02–UX07 | Не начаты | Ожидают завершения exit gate UX00 и зависимостей по плану. |
 
-Текущий следующий шаг: зафиксировать App Shell и grouped navigation package UX01, затем добавить breadcrumbs и упростить topbar без регрессии responsive/keyboard navigation.
+Текущий следующий шаг: зафиксировать breadcrumbs/topbar package UX01, затем синхронизировать Board/saved-view filters с query state и провести итоговый UX01 acceptance.
 
 ## 1. Цель
 
@@ -205,8 +205,8 @@ Evidence 2026-07-14: `pnpm test` — 38 files / 129 tests; `pnpm typecheck`, `pn
   - Планирование: Портфель, Проекты, Задачи, Доска, Гант, Загрузка;
   - Команда: Люди, Календари;
   - Репозиторий: Рабочие копии, Изменения, История, Настройки.
-- [ ] Добавить breadcrumbs для проекта, задачи и commit detail.
-- [ ] Упростить topbar и перенести абсолютный путь репозитория в подробности.
+- [x] Добавить breadcrumbs для проекта, задачи и commit detail.
+- [x] Упростить topbar и перенести абсолютный путь репозитория в подробности.
 - [x] Сохранить workspace switcher как глобальный контекст.
 
 ### Automated verification

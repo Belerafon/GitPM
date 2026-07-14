@@ -6,14 +6,16 @@ export interface NavigationGroup {
   readonly items: readonly MessageKey[];
 }
 
-export function AppShell({ activeView, banner, children, headerMeta, headerTitle, navigationGroups, onNavigate, repositoryMode, repositoryName, t, topActions }: {
+export function AppShell({ activeView, banner, breadcrumbs, children, headerMeta, headerTitle, navigationGroups, onNavigate, repositoryDetails, repositoryMode, repositoryName, t, topActions }: {
   readonly activeView: MessageKey;
   readonly banner?: ReactNode;
+  readonly breadcrumbs?: ReactNode;
   readonly children: ReactNode;
   readonly headerMeta: ReactNode;
   readonly headerTitle: string;
   readonly navigationGroups: readonly NavigationGroup[];
   readonly onNavigate: (key: MessageKey) => void;
+  readonly repositoryDetails?: ReactNode;
   readonly repositoryMode: boolean;
   readonly repositoryName: string;
   readonly t: (key: MessageKey) => string;
@@ -55,7 +57,9 @@ export function AppShell({ activeView, banner, children, headerMeta, headerTitle
         <span className="navigation-group-label">{t(group.label)}</span>
         {group.items.map((key) => <button aria-current={activeView === key ? "page" : undefined} className={activeView === key ? "active" : ""} key={key} onClick={() => navigate(key)}>{t(key)}</button>)}
       </div>)}</nav>
-      <div className="repository-card"><span>{t("app.singleRepository")}</span><strong>{repositoryName}</strong></div>
+      <div className="repository-card"><span>{t("app.singleRepository")}</span>{repositoryDetails === undefined
+        ? <strong>{repositoryName}</strong>
+        : <details><summary>{repositoryName}</summary><div>{repositoryDetails}</div></details>}</div>
     </aside>
     <main className="workspace" ref={workspaceRef}>
       <header className="topbar">
@@ -63,6 +67,7 @@ export function AppShell({ activeView, banner, children, headerMeta, headerTitle
         <div><h1>{headerTitle}</h1><p>{headerMeta}</p></div>
         <div className="top-actions">{topActions}</div>
       </header>
+      {breadcrumbs !== undefined && <nav aria-label={t("nav.breadcrumbs")} className="breadcrumbs">{breadcrumbs}</nav>}
       {banner}
       {children}
     </main>

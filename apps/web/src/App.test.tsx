@@ -216,10 +216,15 @@ describe("frontend draft lifecycle", () => {
     fireEvent.click(screen.getByRole("button", { name: /Alpha/u }));
     expect(await screen.findByRole("heading", { name: "Projects" })).toBeTruthy();
     expect(`${window.location.pathname}${window.location.search}`).toBe("/projects/P-26-7K4M9Q");
+    let breadcrumbs = screen.getByRole("navigation", { name: "Breadcrumbs" });
+    expect(within(breadcrumbs).getByRole("button", { name: "Projects" })).toBeTruthy();
+    expect(within(breadcrumbs).getByText("P-26-7K4M9Q").getAttribute("aria-current")).toBe("page");
     expect((await screen.findByDisplayValue("Alpha")).closest(".entity-card")?.className).toContain("selected");
     fireEvent.click(await screen.findByRole("button", { name: "Open tasks" }));
     expect(await screen.findByRole("heading", { name: "Tasks" })).toBeTruthy();
     expect(`${window.location.pathname}${window.location.search}`).toBe("/projects/P-26-7K4M9Q/tasks");
+    breadcrumbs = screen.getByRole("navigation", { name: "Breadcrumbs" });
+    expect(within(breadcrumbs).getByText("Tasks").getAttribute("aria-current")).toBe("page");
     expect(await screen.findByLabelText("Project")).toBeTruthy();
     expect(await screen.findByRole("button", { name: "Create task" })).toBeTruthy();
     expect(await screen.findByText("First task")).toBeTruthy();
@@ -230,6 +235,8 @@ describe("frontend draft lifecycle", () => {
     fireEvent.click(await screen.findByRole("button", { name: /First task/u }));
     expect(`${window.location.pathname}${window.location.search}`).toBe("/projects/P-26-7K4M9Q/tasks/T-26-X8D2FW?status=backlog");
     expect(await screen.findByRole("heading", { name: "Task details" })).toBeTruthy();
+    breadcrumbs = screen.getByRole("navigation", { name: "Breadcrumbs" });
+    expect(within(breadcrumbs).getByText("T-26-X8D2FW").getAttribute("aria-current")).toBe("page");
   });
 
   it("labels a repository session and does not offer a meaningless sign-out action", async () => {
@@ -243,7 +250,9 @@ describe("frontend draft lifecycle", () => {
     };
     api.drafts = [draft({ draft_id: "DRF-LOCAL", owner_gitlab_user_id: "local-user" })];
     render(<App api={api} browserLanguages={["en"]} />);
-    expect(await screen.findByText("D:\\portfolio · Local mode · Role: Maintainer")).toBeTruthy();
+    expect(await screen.findByText("Local mode · Role: Maintainer")).toBeTruthy();
+    expect(screen.getByText("Repository details")).toBeTruthy();
+    expect(screen.getByText("D:\\portfolio")).toBeTruthy();
     expect(await screen.findByRole("heading", { name: "Projects" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Working copies" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Current working copy: Main local copy · Open" })).toBeTruthy();

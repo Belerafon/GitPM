@@ -55,6 +55,26 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
     const destination = navigationDestinations[key];
     if (destination !== undefined) navigateToRoute(routeForDestination(destination));
   };
+  const breadcrumbs = (() => {
+    if (activeRoute?.name === "projects" && activeRoute.projectId !== undefined) return <>
+      <button onClick={() => navigateToRoute(routeForDestination("projects"))}>{t("nav.projects")}</button><span aria-hidden="true">›</span><code aria-current="page">{activeRoute.projectId}</code>
+    </>;
+    if (activeRoute?.name === "tasks" && activeRoute.projectId !== undefined) return <>
+      <button onClick={() => navigateToRoute(routeForDestination("projects"))}>{t("nav.projects")}</button><span aria-hidden="true">›</span>
+      <button onClick={() => navigateToRoute(routeForDestination("projects", { projectId: activeRoute.projectId }))}>{activeRoute.projectId}</button><span aria-hidden="true">›</span>
+      {activeRoute.taskId === undefined
+        ? <span aria-current="page">{t("nav.tasks")}</span>
+        : <><button onClick={() => navigateToRoute(routeForDestination("tasks", { projectId: activeRoute.projectId, query: activeRoute.query }))}>{t("nav.tasks")}</button><span aria-hidden="true">›</span><code aria-current="page">{activeRoute.taskId}</code></>}
+    </>;
+    if (activeRoute?.name === "history" && activeRoute.commit !== undefined) return <>
+      <button onClick={() => navigateToRoute(routeForDestination("history"))}>{t("nav.history")}</button><span aria-hidden="true">›</span><code aria-current="page">{activeRoute.commit.slice(0, 12)}</code>
+    </>;
+    if ((activeRoute?.name === "board" || activeRoute?.name === "gantt") && activeRoute.projectId !== undefined) {
+      const destination = activeRoute.name === "board" ? "board" : "gantt";
+      return <><button onClick={() => navigateToRoute(routeForDestination(destination))}>{t(destination === "board" ? "nav.board" : "nav.gantt")}</button><span aria-hidden="true">›</span><code aria-current="page">{activeRoute.projectId}</code></>;
+    }
+    return undefined;
+  })();
 
   useEffect(() => {
     const restoreRoute = () => setActiveRoute(parseAppRoute(window.location.href));
@@ -87,10 +107,12 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
   return (
     <AppShell activeView={view}
       banner={drafts.error !== null && <div className="alert error">{t("status.error", { message: drafts.error })}<button onClick={() => { void drafts.refresh(); }}>{t("status.retry")}</button></div>}
-      headerMeta={<>{repository?.path ?? drafts.session.user.username} · {t("auth.localMode")} · {t("auth.role", { role: drafts.session.role })}</>}
+      breadcrumbs={breadcrumbs}
+      headerMeta={<>{t("auth.localMode")} · {t("auth.role", { role: drafts.session.role })}</>}
       headerTitle={repository?.name ?? t("app.repository")}
       navigationGroups={navigationGroups}
       onNavigate={selectNavigationView}
+      repositoryDetails={<><strong>{t("app.repositoryDetails")}</strong><code>{repository?.path ?? drafts.session.user.username}</code></>}
       repositoryMode={repositoryMode}
       repositoryName={repository?.name ?? t("app.repository")}
       t={t}
