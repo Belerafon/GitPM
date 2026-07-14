@@ -139,6 +139,19 @@ export function buildApp(options: AppOptions = {}) {
     );
   });
 
+  app.addHook("onError", async (request, reply, error) => {
+    request.log.error(
+      {
+        correlation_id: request.id,
+        err: error,
+        method: request.method,
+        path: requestPath(request.url),
+        status_code: reply.statusCode,
+      },
+      "request failed",
+    );
+  });
+
   app.get("/health/live", async (request): Promise<HealthPayload> => ({
     correlation_id: request.id,
     status: "ok",

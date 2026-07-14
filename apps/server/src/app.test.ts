@@ -47,6 +47,31 @@ describe("health endpoints", () => {
     expect(response.json()).toMatchObject({ status: "not_ready" });
   });
 
+  it("suppresses routine request logs at error level but keeps handler errors", async () => {
+    let output = "";
+    const destination = new Writable({
+      write(chunk, _encoding, callback) {
+        output += chunk.toString();
+        callback();
+      },
+    });
+    const app = buildApp({
+      isReady: () => { throw new Error("readiness failed"); },
+      logger: createLogger({ level: "error" }, destination),
+    });
+    apps.push(app);
+
+    const successful = await app.inject({ method: "GET", url: "/health/live" });
+    expect(successful.statusCode).toBe(200);
+    expect(output).toBe("");
+
+    const failed = await app.inject({ method: "GET", url: "/health/ready" });
+    expect(failed.statusCode).toBe(500);
+    expect(output).toContain("readiness failed");
+    expect(output).not.toContain("request started");
+    expect(output).not.toContain("request completed");
+  });
+
   it("replaces an unsafe incoming correlation ID", async () => {
     const app = buildApp();
     apps.push(app);

@@ -34,7 +34,8 @@ describe("core UI", () => {
   it("creates Project, Milestone and Task, inline-edits status and archives the Task", async () => {
     const entityApi = new EntityApi();
     const api = entityApi as unknown as GitPmApi;
-    render(<CoreWorkspace api={api} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} />);
+    const onChanged = vi.fn(async () => undefined);
+    const rendered = render(<CoreWorkspace api={api} draft={draft} locale="en" surface="projects" onChanged={onChanged} />);
 
     const projectButton = screen.getByRole("button", { name: "Create project" });
     const projectForm = projectButton.closest("form")!;
@@ -47,8 +48,9 @@ describe("core UI", () => {
     const milestoneForm = milestoneButton.closest("form")!;
     fireEvent.change(within(milestoneForm).getByLabelText("Name"), { target: { value: "M1" } });
     fireEvent.submit(milestoneForm);
-    expect((await screen.findAllByText("M1")).length).toBeGreaterThan(0);
+    expect(await screen.findByDisplayValue("M1")).toBeTruthy();
 
+    rendered.rerender(<CoreWorkspace api={api} draft={draft} locale="en" surface="tasks" onChanged={onChanged} />);
     const taskButton = screen.getByRole("button", { name: "Create task" });
     const taskForm = taskButton.closest("form")!;
     fireEvent.change(within(taskForm).getByLabelText("Title"), { target: { value: "First task" } });
@@ -69,10 +71,10 @@ describe("core UI", () => {
     const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-111111", name: "External project", status: "backlog", lifecycle: "active" });
     const task = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@1", id: "T-26-222222", project: project.document.id, title: "Before agent", type: "task", status: "backlog", lifecycle: "active" });
     const external = { ...draft, writer_mode: "external" as const, changed_externally: false, external_fingerprint: "1".repeat(64) };
-    const rendered = render(<CoreWorkspace api={api} draft={external} locale="en" onChanged={vi.fn(async () => undefined)} />);
+    const rendered = render(<CoreWorkspace api={api} draft={external} locale="en" surface="tasks" onChanged={vi.fn(async () => undefined)} />);
     const readButton = await screen.findByRole("button", { name: /Before agent/u }); readButton.focus(); expect(document.activeElement).toBe(readButton);
     await entityApi.updateEntity("DRF-CORE", "tasks", task, "", { ...task.document, title: "After agent", status: "done" });
-    rendered.rerender(<CoreWorkspace api={api} draft={{ ...external, external_fingerprint: "2".repeat(64), changed_externally: true }} locale="en" onChanged={vi.fn(async () => undefined)} />);
+    rendered.rerender(<CoreWorkspace api={api} draft={{ ...external, external_fingerprint: "2".repeat(64), changed_externally: true }} locale="en" surface="tasks" onChanged={vi.fn(async () => undefined)} />);
     const updated = await screen.findByText("After agent"); const row = updated.closest<HTMLElement>(".task-row")!;
     await waitFor(() => expect(row.classList.contains("external-update")).toBe(true));
     expect(row.dataset.externalFields).toBe("status,title");

@@ -118,7 +118,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
         </section>}
         {["nav.portfolio", "nav.projects", "nav.tasks"].includes(view) && (active === undefined
           ? <div className="card empty-workspace">{t("core.selectProject")}</div>
-          : <CoreWorkspace api={api} draft={active} locale={locale} onChanged={drafts.refresh} />)}
+          : <CoreWorkspace api={api} draft={active} key={view} locale={locale} surface={view === "nav.portfolio" ? "portfolio" : view === "nav.tasks" ? "tasks" : "projects"} onChanged={drafts.refresh} />)}
         {["nav.people", "nav.calendar", "nav.settings"].includes(view) && (active === undefined
           ? <div className="card empty-workspace">{t("core.selectProject")}</div>
           : <AdminWorkspace api={api} draft={active} role={drafts.session.role} locale={locale} surface={view === "nav.people" ? "people" : view === "nav.calendar" ? "calendar" : "settings"} onChanged={drafts.refresh} />)}

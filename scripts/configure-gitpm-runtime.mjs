@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
-import { cp, mkdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { cp, mkdir, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 
@@ -7,6 +8,8 @@ const execFileAsync = promisify(execFile);
 const CONFIG_PATH = path.resolve(".gitpm", "config.json");
 const BUNDLED_DEMO_TEMPLATE = path.resolve("demo", "portfolio");
 const BUNDLED_DEMO_REPOSITORY = path.resolve(".gitpm", "demo-repository");
+const BUNDLED_DEMO_VERSION_PATH = path.resolve(".gitpm", "demo-repository.version");
+const BUNDLED_DEMO_DATA_DIRECTORY = path.resolve(".gitpm", "demo-runtime");
 
 async function git(repository, ...args) {
   const result = await execFileAsync("git", ["-C", repository, ...args], { windowsHide: true });
@@ -41,8 +44,44 @@ async function saveConfiguration(configuration) {
   await writeFile(CONFIG_PATH, `${JSON.stringify(configuration, null, 2)}\n`, "utf8");
 }
 
-async function initializeBundledDemoRepository() {
+export async function directoryFingerprint(directory) {
+  const hash = createHash("sha256");
+
+  async function visit(current, relative) {
+    const entries = await readdir(current, { withFileTypes: true });
+    entries.sort((left, right) => left.name === right.name ? 0 : left.name < right.name ? -1 : 1);
+    for (const entry of entries) {
+      const entryRelative = path.join(relative, entry.name);
+      const normalized = entryRelative.split(path.sep).join("/");
+      if (entry.isDirectory()) {
+        hash.update(`directory:${normalized}\0`);
+        await visit(path.join(current, entry.name), entryRelative);
+      } else if (entry.isFile()) {
+        hash.update(`file:${normalized}\0`);
+        hash.update(await readFile(path.join(current, entry.name)));
+        hash.update("\0");
+      } else {
+        throw new Error(`Неподдерживаемый элемент в шаблоне демо: ${entryRelative}`);
+      }
+    }
+  }
+
+  await visit(directory, "");
+  return hash.digest("hex");
+}
+
+async function readBundledDemoVersion() {
+  try {
+    return (await readFile(BUNDLED_DEMO_VERSION_PATH, "utf8")).trim();
+  } catch (error) {
+    if (error.code === "ENOENT") return undefined;
+    throw error;
+  }
+}
+
+async function initializeBundledDemoRepository(templateVersion) {
   await rm(BUNDLED_DEMO_REPOSITORY, { recursive: true, force: true });
+  await rm(BUNDLED_DEMO_DATA_DIRECTORY, { recursive: true, force: true });
   await mkdir(path.dirname(BUNDLED_DEMO_REPOSITORY), { recursive: true });
   await cp(BUNDLED_DEMO_TEMPLATE, BUNDLED_DEMO_REPOSITORY, { recursive: true });
   const commands = [
@@ -51,6 +90,7 @@ async function initializeBundledDemoRepository() {
     ["-c", "user.name=GitPM Демо", "-c", "user.email=demo@localhost", "commit", "-m", "Создать русскоязычный демонстрационный портфель"],
   ];
   for (const args of commands) await execFileAsync("git", args, { cwd: BUNDLED_DEMO_REPOSITORY, windowsHide: true });
+  await writeFile(BUNDLED_DEMO_VERSION_PATH, `${templateVersion}\n`, "utf8");
   console.log(`[GitPM] Создан рабочий демо-репозиторий: ${BUNDLED_DEMO_REPOSITORY}`);
 }
 
@@ -78,15 +118,28 @@ export function credentialFreeHttpsRemote(remoteUrl) {
   }
 }
 
+export function localServerLogLevel(environment = process.env) {
+  const configured = environment.LOG_LEVEL?.trim();
+  return configured || "error";
+}
+
 export async function prepareGitPmRuntime() {
   const configuration = await readConfiguration();
   const requestedPath = process.env.GITPM_REPOSITORY_PATH ?? configuration.repository;
   const configuredPath = typeof requestedPath === "string" && requestedPath.trim() !== ""
     ? requestedPath
     : BUNDLED_DEMO_REPOSITORY;
+  const usesBundledDemo = path.resolve(configuredPath) === BUNDLED_DEMO_REPOSITORY;
   let repository = await validRepository(configuredPath);
-  if (repository === undefined && path.resolve(configuredPath) === BUNDLED_DEMO_REPOSITORY) {
-    await initializeBundledDemoRepository();
+  if (usesBundledDemo) {
+    const templateVersion = await directoryFingerprint(BUNDLED_DEMO_TEMPLATE);
+    const installedVersion = await readBundledDemoVersion();
+    if (repository === undefined || installedVersion !== templateVersion) {
+      console.log(installedVersion === undefined
+        ? "[GitPM] Подготавливаю актуальную версию встроенного демо..."
+        : "[GitPM] Шаблон встроенного демо изменился — обновляю рабочую копию...");
+      await initializeBundledDemoRepository(templateVersion);
+    }
     repository = await validRepository(BUNDLED_DEMO_REPOSITORY);
   }
   if (repository === undefined) {
@@ -106,6 +159,8 @@ export async function prepareGitPmRuntime() {
   const gitlab = nextConfiguration.gitlab;
   const environment = {
     GITPM_REPOSITORY_PATH: repository,
+    ...(usesBundledDemo ? { GITPM_DATA_DIR: BUNDLED_DEMO_DATA_DIRECTORY } : {}),
+    LOG_LEVEL: localServerLogLevel(),
     ...(remoteUrl === undefined ? {} : { GITPM_PUSH_REMOTE_URL: remoteUrl }),
     ...(gitlab?.baseUrl ? { GITPM_GITLAB_URL: String(gitlab.baseUrl) } : {}),
     ...(gitlab?.project ? { GITPM_GITLAB_PROJECT: String(gitlab.project) } : {}),

@@ -8,7 +8,7 @@ export default defineConfig({
     coverage: {
       enabled: false,
     },
-    include: ["apps/**/*.test.{ts,tsx}", "packages/**/*.test.ts"],
+    include: ["apps/**/*.test.{ts,tsx}", "packages/**/*.test.ts", "scripts/**/*.test.ts"],
     passWithNoTests: false,
   },
 });

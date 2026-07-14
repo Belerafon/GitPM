@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App.js";
 import type { GitPmApi } from "./api.js";
 import { POLL_INTERVAL_MS } from "./draft-context.js";
 import { assertLocalePacks, formatDateOnly, formatDurationHours, formatNumber, localeRegistry, LOCALE_STORAGE_KEY, message, pluralCategory, registerLocale, selectLocale } from "./i18n.js";
-import type { ChangesList, CommitHistoryDetail, CommitResult, DraftSnapshot, DraftStatus, EntityResult, MergeRequestStatus, PublicSession, PushResult, RevertDraftResult, SemanticDiff, WriterMode } from "./types.js";
+import type { ChangesList, CommitHistoryDetail, CommitResult, DraftSnapshot, DraftStatus, EntityResult, GitPmDocument, MergeRequestStatus, PublicSession, PushResult, RevertDraftResult, SemanticDiff, WriterMode } from "./types.js";
 
 const session: PublicSession = {
   user: { id: "42", username: "developer" },
@@ -31,6 +31,7 @@ function draft(overrides: Partial<DraftStatus> = {}): DraftStatus {
 class FakeApi implements GitPmApi {
   currentSession: PublicSession | null = session;
   drafts: DraftStatus[] = [];
+  entities: EntityResult[] = [];
   snapshotCalls = 0;
   payloads: unknown[] = [];
   async session() { return this.currentSession; }
@@ -47,12 +48,20 @@ class FakeApi implements GitPmApi {
   async closeDraft(draftId: string) { return this.replace(draftId, { state: "closed" }); }
   async reopenDraft(draftId: string) { return this.replace(draftId, { state: "open" }); }
   async cleanupDraft(draftId: string) { this.drafts = this.drafts.filter((item) => item.draft_id !== draftId); }
-  async listEntities() { return []; }
+  async listEntities(_draftId: string, type: string, project?: string) {
+    const schemas: Record<string, string> = { projects: "gitpm/project@1", milestones: "gitpm/milestone@1", tasks: "gitpm/task@1" };
+    return this.entities.filter((item) => item.document.schema === schemas[type] && (project === undefined || item.document.project === project));
+  }
   async createEntity(): Promise<EntityResult> { throw new Error("not used"); }
   async updateEntity(): Promise<EntityResult> { throw new Error("not used"); }
   async archiveEntity(): Promise<EntityResult> { throw new Error("not used"); }
   async deleteEntity() { /* not used */ }
-  async getConfiguration(): Promise<EntityResult> { throw new Error("not used"); }
+  async getConfiguration(_draftId: string, kind: "statuses" | "issue-types"): Promise<EntityResult> {
+    const document = (kind === "statuses"
+      ? { schema: "gitpm/statuses@1", id: "CONFIG-STATUSES", lifecycle: "active", statuses: [{ slug: "backlog", title: "Backlog", active: true }] }
+      : { schema: "gitpm/issue-types@1", id: "CONFIG-TYPES", lifecycle: "active", issue_types: [{ slug: "task", title: "Task", active: true }] }) as GitPmDocument;
+    return { document, path: kind, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) };
+  }
   async updateConfiguration(): Promise<EntityResult> { throw new Error("not used"); }
   async listChanges(): Promise<ChangesList> { throw new Error("not used"); }
   async semanticChanges(): Promise<SemanticDiff> { throw new Error("not used"); }
@@ -108,6 +117,52 @@ describe("localization runtime", () => {
 });
 
 describe("frontend draft lifecycle", () => {
+  it("renders Portfolio, Projects and Tasks as distinct navigation destinations", async () => {
+    const api = new FakeApi();
+    api.currentSession = {
+      ...session,
+      user: { id: "local-user", username: "local" },
+      mode: "repository",
+      repository: { name: "portfolio", path: "D:\\portfolio", has_remote: false },
+      gitlab: { configured: false },
+    };
+    api.drafts = [draft({ draft_id: "DRF-LOCAL", owner_gitlab_user_id: "local-user" })];
+    api.entities = [
+      {
+        document: { schema: "gitpm/project@1", id: "P-26-7K4M9Q", name: "Alpha", status: "backlog", lifecycle: "active" },
+        path: "projects/P-26-7K4M9Q/project.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64),
+      },
+      {
+        document: { schema: "gitpm/milestone@1", id: "M-26-3RC7NA", project: "P-26-7K4M9Q", name: "Launch", lifecycle: "active" },
+        path: "projects/P-26-7K4M9Q/milestones/M-26-3RC7NA.yaml", blob_id: "c".repeat(40), draft_fingerprint: "b".repeat(64),
+      },
+      {
+        document: { schema: "gitpm/task@1", id: "T-26-X8D2FW", project: "P-26-7K4M9Q", title: "First task", type: "task", status: "backlog", lifecycle: "active" },
+        path: "projects/P-26-7K4M9Q/tasks/T-26-X8D2FW.yaml", blob_id: "d".repeat(40), draft_fingerprint: "b".repeat(64),
+      },
+    ];
+    render(<App api={api} browserLanguages={["en"]} />);
+
+    expect(await screen.findByRole("heading", { name: "Projects" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Create project" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Create task" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Portfolio" }));
+    expect(await screen.findByRole("heading", { name: "Portfolio overview" })).toBeTruthy();
+    const projectsStat = await screen.findByText("Active projects");
+    expect(within(projectsStat.closest<HTMLElement>(".card")!).getByText("1")).toBeTruthy();
+    expect(await screen.findByText("Alpha")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Create project" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Create task" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Tasks" }));
+    expect(await screen.findByRole("heading", { name: "Tasks" })).toBeTruthy();
+    expect(screen.getByLabelText("Project")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Create task" })).toBeTruthy();
+    expect(await screen.findByText("First task")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Create project" })).toBeNull();
+  });
+
   it("labels a repository session and does not offer a meaningless sign-out action", async () => {
     const api = new FakeApi();
     api.currentSession = {
@@ -120,7 +175,7 @@ describe("frontend draft lifecycle", () => {
     api.drafts = [draft({ draft_id: "DRF-LOCAL", owner_gitlab_user_id: "local-user" })];
     render(<App api={api} browserLanguages={["en"]} />);
     expect(await screen.findByText("D:\\portfolio · Local mode · Role: Maintainer")).toBeTruthy();
-    expect(await screen.findByRole("heading", { name: "Portfolio work" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Projects" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Working copies" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Current working copy: Main local copy · Open" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Projects" }).className).toContain("active");

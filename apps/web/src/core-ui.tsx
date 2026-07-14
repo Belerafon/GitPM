@@ -25,10 +25,13 @@ export function SafeMarkdown({ source }: { readonly source: string }) {
   })}</div>;
 }
 
-export function CoreWorkspace({ api, draft, locale, onChanged }: {
+export type CoreSurface = "portfolio" | "projects" | "tasks";
+
+export function CoreWorkspace({ api, draft, locale, surface = "projects", onChanged }: {
   readonly api: GitPmApi;
   readonly draft: DraftStatus;
   readonly locale: Locale;
+  readonly surface?: CoreSurface;
   readonly onChanged: () => Promise<void>;
 }) {
   const t = (key: MessageKey) => message(locale, key);
@@ -51,18 +54,20 @@ export function CoreWorkspace({ api, draft, locale, onChanged }: {
   const load = useCallback(async (preferredProject = projectId, externalUpdate = false) => {
     const [nextProjects, statusConfig, typeConfig] = await Promise.all([api.listEntities(draft.draft_id, "projects"), api.getConfiguration(draft.draft_id, "statuses"), api.getConfiguration(draft.draft_id, "issue-types")]);
     const nextProject = nextProjects.some((item) => item.document.id === preferredProject && item.document.lifecycle === "active") ? preferredProject : nextProjects.find((item) => item.document.lifecycle === "active")?.document.id || "";
-    const [nextMilestones, nextTasks] = nextProject === "" ? [[], []] : await Promise.all([
-      api.listEntities(draft.draft_id, "milestones", nextProject), api.listEntities(draft.draft_id, "tasks", nextProject),
-    ]);
+    const [nextMilestones, nextTasks] = surface === "portfolio"
+      ? await Promise.all([api.listEntities(draft.draft_id, "milestones"), api.listEntities(draft.draft_id, "tasks")])
+      : nextProject === "" ? [[], []]
+        : surface === "projects" ? [await api.listEntities(draft.draft_id, "milestones", nextProject), []]
+          : await Promise.all([api.listEntities(draft.draft_id, "milestones", nextProject), api.listEntities(draft.draft_id, "tasks", nextProject)]);
     const nextEntities = [...nextProjects, ...nextMilestones, ...nextTasks, statusConfig, typeConfig];
     if (externalUpdate) mark(changedEntityFields(previousEntities.current, nextEntities));
     previousEntities.current = nextEntities;
     setProjects(nextProjects); setProjectId(nextProject); setMilestones(nextMilestones); setTasks(nextTasks);
     setStatusOptions(configValues(statusConfig.document, "statuses")); setTypeOptions(configValues(typeConfig.document, "issue_types"));
     setFingerprint(nextProjects[0]?.draft_fingerprint ?? nextMilestones[0]?.draft_fingerprint ?? nextTasks[0]?.draft_fingerprint ?? draft.fingerprint);
-  }, [api, draft.draft_id, draft.fingerprint, mark, projectId]);
+  }, [api, draft.draft_id, draft.fingerprint, mark, projectId, surface]);
 
-  useEffect(() => { void load().catch((caught) => setError(caught instanceof Error ? caught.message : String(caught))); }, [draft.draft_id]);
+  useEffect(() => { setSelectedTask(""); void load().catch((caught) => setError(caught instanceof Error ? caught.message : String(caught))); }, [draft.draft_id, surface]);
   useEffect(() => {
     if (draft.writer_mode !== "external" || draft.external_fingerprint === undefined || draft.external_fingerprint === lastExternalFingerprint.current) return;
     lastExternalFingerprint.current = draft.external_fingerprint;
@@ -84,6 +89,9 @@ export function CoreWorkspace({ api, draft, locale, onChanged }: {
   const statuses = useMemo(() => [...new Set([...statusOptions.map((item) => item.slug), ...activeTasks.map((item) => value(item.document, "status"))])], [activeTasks, statusOptions]);
   const filteredTasks = activeTasks.filter((item) => filter === "" || value(item.document, "status") === filter);
   const task = tasks.find((item) => item.document.id === selectedTask);
+  const completedTasks = activeTasks.filter((item) => value(item.document, "status") === "done").length;
+  const headingKey: MessageKey = surface === "portfolio" ? "core.portfolioHeading" : surface === "tasks" ? "core.tasksHeading" : "core.projectsHeading";
+  const descriptionKey: MessageKey = surface === "portfolio" ? "core.portfolioDescription" : surface === "tasks" ? "core.tasksDescription" : "core.projectsDescription";
 
   const createProject = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); const data = new FormData(event.currentTarget); const id = newUniqueEntityId(ENTITY_ID_PREFIX.project, new Set(projects.map((item) => item.document.id)));
@@ -101,11 +109,26 @@ export function CoreWorkspace({ api, draft, locale, onChanged }: {
     void mutate(async () => await api.createEntity(draft.draft_id, "tasks", fingerprint, document)); event.currentTarget.reset();
   };
 
-  return <section className={`core-workspace${reducedMotion ? " reduced-motion" : ""}`} data-reduced-motion={reducedMotion}>
-    <div className="section-heading"><div><span className="eyebrow draft-context-id">{draft.draft_id}</span><h2>{t("core.heading")}</h2></div></div>
+  return <section className={`core-workspace core-${surface}-workspace${reducedMotion ? " reduced-motion" : ""}`} data-reduced-motion={reducedMotion} data-surface={surface}>
+    <div className="section-heading"><div><span className="eyebrow draft-context-id">{draft.draft_id}</span><h2>{t(headingKey)}</h2><p>{t(descriptionKey)}</p></div></div>
     {readOnly && <div className="alert warning">{t("core.readOnly")}</div>}{error !== null && <div className="alert error">{error}</div>}
-    <div className="core-columns">
-      <section className="card entity-column"><h3>{t("core.projects")}</h3>
+    {surface === "portfolio" && <>
+      <div className="portfolio-stats">
+        <div className="card"><span>{t("core.projectsTotal")}</span><strong>{activeProjects.length}</strong></div>
+        <div className="card"><span>{t("core.tasksTotal")}</span><strong>{activeTasks.length}</strong></div>
+        <div className="card"><span>{t("core.milestonesTotal")}</span><strong>{activeMilestones.length}</strong></div>
+        <div className="card"><span>{t("core.completedTasks")}</span><strong>{completedTasks}</strong></div>
+      </div>
+      <section className="card portfolio-projects"><h3>{t("core.projects")}</h3>
+        {activeProjects.length === 0 ? <p>{t("core.empty")}</p> : <div className="portfolio-project-grid">{activeProjects.map((project) => {
+          const projectTasks = activeTasks.filter((item) => item.document.project === project.document.id).length;
+          const projectMilestones = activeMilestones.filter((item) => item.document.project === project.document.id).length;
+          return <article className="portfolio-project-card" key={project.document.id}><div><strong>{value(project.document, "name")}</strong><code>{project.document.id}</code></div><span className="state open">{value(project.document, "status")}</span><dl><div><dt>{t("core.tasks")}</dt><dd>{projectTasks}</dd></div><div><dt>{t("core.milestones")}</dt><dd>{projectMilestones}</dd></div></dl></article>;
+        })}</div>}
+      </section>
+    </>}
+    {surface === "projects" && <div className="core-columns">
+      <section className="card entity-column"><h3>{t("core.projectList")}</h3>
         <form onSubmit={createProject}><input disabled={readOnly} name="name" aria-label={t("core.name")} placeholder={t("core.name")} required /><textarea disabled={readOnly} name="description" aria-label={t("core.description")} placeholder={t("core.description")} /><button className="primary" disabled={readOnly}>{t("core.createProject")}</button></form>
         <div className="entity-list">{activeProjects.length === 0 ? <p>{t("core.empty")}</p> : activeProjects.map((project) => <EntityEditor api={api} key={`${project.document.id}:${project.blob_id}`} entity={project} entityType="projects" draft={draft} fingerprint={fingerprint} readOnly={readOnly} externalFields={highlights[project.document.id]} t={t} selected={projectId === project.document.id} select={() => { setProjectId(project.document.id); void load(project.document.id); }} save={mutate} remove={remove} />)}</div>
       </section>
@@ -113,13 +136,13 @@ export function CoreWorkspace({ api, draft, locale, onChanged }: {
         <form onSubmit={createMilestone}><input disabled={readOnly} name="name" aria-label={t("core.name")} placeholder={t("core.name")} required /><input disabled={readOnly} name="due" type="date" aria-label={t("core.due")} /><textarea disabled={readOnly} name="description" aria-label={t("core.description")} placeholder={t("core.description")} /><button className="primary" disabled={readOnly}>{t("core.createMilestone")}</button></form>
         <div className="entity-list">{activeMilestones.map((milestone) => <EntityEditor api={api} key={`${milestone.document.id}:${milestone.blob_id}`} entity={milestone} entityType="milestones" draft={draft} fingerprint={fingerprint} readOnly={readOnly} externalFields={highlights[milestone.document.id]} t={t} save={mutate} remove={remove} />)}</div>
       </>}</section>
-    </div>
-    {projectId !== "" && <section className="card task-area"><div className="task-toolbar"><h3>{t("core.tasks")}</h3><label>{t("core.filter")}<select value={filter} onChange={(event) => setFilter(event.target.value)}><option value="">{t("core.allStatuses")}</option>{statuses.map((status) => <option key={status} value={status}>{status}</option>)}</select></label></div>
+    </div>}
+    {surface === "tasks" && (projectId === "" ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <section className="card task-area"><div className="task-toolbar"><h3>{t("core.taskList")}</h3><div className="task-toolbar-controls"><label>{t("core.project")}<select aria-label={t("core.project")} value={projectId} onChange={(event) => { setSelectedTask(""); setFilter(""); setProjectId(event.target.value); void load(event.target.value); }}>{activeProjects.map((project) => <option key={project.document.id} value={project.document.id}>{value(project.document, "name")}</option>)}</select></label><label>{t("core.filter")}<select value={filter} onChange={(event) => setFilter(event.target.value)}><option value="">{t("core.allStatuses")}</option>{statuses.map((status) => <option key={status} value={status}>{status}</option>)}</select></label></div></div>
       <form className="task-create" onSubmit={createTask}><input disabled={readOnly} name="title" aria-label={t("core.title")} placeholder={t("core.title")} required /><select disabled={readOnly} name="status" aria-label={t("core.status")}>{statusOptions.map((status) => <option key={status.slug} value={status.slug}>{status.title}</option>)}</select><select disabled={readOnly} name="milestone" aria-label={t("core.milestone")}><option value="">{t("core.noMilestone")}</option>{activeMilestones.map((milestone) => <option key={milestone.document.id} value={milestone.document.id}>{value(milestone.document, "name")}</option>)}</select><textarea disabled={readOnly} name="description" aria-label={t("core.description")} placeholder={t("core.description")} /><button className="primary" disabled={readOnly}>{t("core.createTask")}</button></form>
       <div className="task-layout"><div className="task-table">{filteredTasks.length === 0 ? <p>{t("core.empty")}</p> : filteredTasks.map((item) => <div className={`task-row${highlights[item.document.id] ? " external-update" : ""}`} data-external-fields={highlights[item.document.id]?.join(",")} key={item.document.id}><button onClick={() => setSelectedTask(item.document.id)}><strong>{value(item.document, "title")}</strong><code>{item.document.id}</code></button><select aria-label={`${t("core.status")} ${value(item.document, "title")}`} disabled={readOnly} value={value(item.document, "status")} onChange={(event) => { void mutate(async () => await api.updateEntity(draft.draft_id, "tasks", item, fingerprint, { ...item.document, status: event.target.value })); }}>{statuses.map((status) => <option key={status}>{status}</option>)}</select><button disabled={readOnly} onClick={() => { void mutate(async () => await api.archiveEntity(draft.draft_id, "tasks", item, fingerprint)); if (selectedTask === item.document.id) setSelectedTask(""); }}>{t("core.archive")}</button></div>)}</div>
         {task !== undefined && <TaskPanel api={api} draft={draft} entity={task} fingerprint={fingerprint} milestones={activeMilestones} readOnly={readOnly} externalFields={highlights[task.document.id]} locale={locale} save={mutate} remove={remove} />}
       </div>
-    </section>}
+    </section>)}
   </section>;
 }
 
