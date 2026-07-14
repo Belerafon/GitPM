@@ -11,11 +11,11 @@
 
 | Этап | Состояние | Примечание |
 | --- | --- | --- |
-| UX00 | Реализация и acceptance завершены; handoff открыт | Work packages, automated verification, manual acceptance и exit gate закрыты 2026-07-14; общий DoD по commit series и clean working tree ещё не закрыт. |
-| UX01 | Частично начат | Добавлены контекстные переходы Project/Task между текущими представлениями; URL-маршрутизация ещё не начата. |
+| UX00 | Завершён | Work packages, automated verification, manual acceptance, exit gate и handoff закрыты 2026-07-14; пакет зафиксирован commit `4a4c816`. |
+| UX01 | В работе | Введены route adapter и History API, адресуемые разделы/Project/Task/commit/Task status, deep links, reload и back/forward; App Shell, группировка меню и breadcrumbs ещё открыты. |
 | UX02–UX07 | Не начаты | Ожидают завершения exit gate UX00 и зависимостей по плану. |
 
-Текущий следующий шаг: отделить и зафиксировать UX00/начатую UX01 groundwork в проверяемой commit series, добиться clean working tree, затем начать route adapter и тесты parsing/serialization.
+Текущий следующий шаг: зафиксировать первый route package UX01, затем вынести App Shell, сгруппировать меню и добавить breadcrumbs без регрессии responsive/keyboard navigation.
 
 ## 1. Цель
 
@@ -177,8 +177,8 @@ Evidence 2026-07-14: `pnpm test` — 38 files / 129 tests; `pnpm typecheck`, `pn
 
 ### Work packages
 
-- Вынести App Shell из текущего `App.tsx`.
-- Ввести маршруты:
+- [ ] Вынести App Shell из текущего `App.tsx`.
+- [x] Ввести маршруты:
 
 ```text
 /workspaces
@@ -198,30 +198,31 @@ Evidence 2026-07-14: `pnpm test` — 38 files / 129 tests; `pnpm typecheck`, `pn
 /history/:commit
 ```
 
-- Перенести выбранный проект, задачу, commit и фильтры в route/query state.
-- Реализовать back, forward, deep links и reload restoration.
-- Сгруппировать меню:
+- [x] Перенести выбранный проект, задачу, commit и Task status filter в route/query state.
+- [ ] Перенести Board filters/saved view и остальные контекстные фильтры в query state по мере реализации соответствующих экранов.
+- [x] Реализовать back, forward, deep links и reload restoration.
+- [ ] Сгруппировать меню:
   - Планирование: Портфель, Проекты, Задачи, Доска, Гант, Загрузка;
   - Команда: Люди, Календари;
   - Репозиторий: Рабочие копии, Изменения, История, Настройки.
-- Добавить breadcrumbs для проекта, задачи и commit detail.
-- Упростить topbar и перенести абсолютный путь репозитория в подробности.
-- Сохранить workspace switcher как глобальный контекст.
+- [ ] Добавить breadcrumbs для проекта, задачи и commit detail.
+- [ ] Упростить topbar и перенести абсолютный путь репозитория в подробности.
+- [x] Сохранить workspace switcher как глобальный контекст.
 
 ### Automated verification
 
-- route parsing and serialization tests;
-- deep-link tests;
-- browser back/forward tests;
-- query-filter restoration tests;
-- responsive navigation tests;
-- keyboard focus tests.
+- [x] route parsing and serialization tests;
+- [x] deep-link tests;
+- [x] browser back/forward tests;
+- [x] query-filter restoration tests для Task status;
+- [x] responsive navigation tests;
+- [x] keyboard focus tests.
 
 ### Exit gate
 
-- URL однозначно описывает пользовательский контекст.
-- Перезагрузка страницы не теряет выбранную сущность и фильтры.
-- Browser back/forward работает без рассинхронизации UI.
+- [ ] URL однозначно описывает весь пользовательский контекст.
+- [ ] Перезагрузка страницы не теряет выбранную сущность и все фильтры.
+- [x] Browser back/forward работает без рассинхронизации UI.
 
 ## UX02. UI Kit, design tokens и UX-контракты
 

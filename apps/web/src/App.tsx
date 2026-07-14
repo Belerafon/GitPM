@@ -10,6 +10,7 @@ import { BoardWorkspace } from "./board-ui.js";
 import { GanttWorkspace } from "./gantt-ui.js";
 import { WorkloadWorkspace } from "./workload-ui.js";
 import type { WorkspaceDestination, WorkspaceSelection } from "./workspace-navigation.js";
+import { parseAppRoute, routeForDestination, serializeAppRoute, type AppRoute, type AppRouteName } from "./app/router.js";
 
 interface AppProps {
   readonly api: GitPmApi;
@@ -24,10 +25,16 @@ const navigation: readonly MessageKey[] = [
   "nav.calendar", "nav.settings", "nav.workload", "nav.gantt", "nav.changes", "nav.history",
 ];
 
-const destinationViews: Readonly<Record<WorkspaceDestination, MessageKey>> = {
-  portfolio: "nav.portfolio", projects: "nav.projects", tasks: "nav.tasks", board: "nav.board",
-  people: "nav.people", calendar: "nav.calendar", settings: "nav.settings", workload: "nav.workload",
-  gantt: "nav.gantt", changes: "nav.changes", history: "nav.history",
+const routeViews: Readonly<Record<AppRouteName, MessageKey>> = {
+  workspaces: "nav.drafts", portfolio: "nav.portfolio", projects: "nav.projects", tasks: "nav.tasks", board: "nav.board",
+  people: "nav.people", calendars: "nav.calendar", settings: "nav.settings", workload: "nav.workload", gantt: "nav.gantt",
+  changes: "nav.changes", history: "nav.history",
+};
+
+const navigationDestinations: Readonly<Partial<Record<MessageKey, WorkspaceDestination | "workspaces">>> = {
+  "nav.drafts": "workspaces", "nav.portfolio": "portfolio", "nav.projects": "projects", "nav.tasks": "tasks", "nav.board": "board",
+  "nav.people": "people", "nav.calendar": "calendar", "nav.settings": "settings", "nav.workload": "workload", "nav.gantt": "gantt",
+  "nav.changes": "changes", "nav.history": "history",
 };
 
 function Shell({ locale, setLocale, api, navigate, confirmAction }: {
@@ -39,14 +46,14 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
 }) {
   const drafts = useDrafts();
   const [draftId, setDraftId] = useState("");
-  const [selectedView, setSelectedView] = useState<MessageKey | null>(null);
-  const [workspaceSelection, setWorkspaceSelection] = useState<WorkspaceSelection>({});
+  const [activeRoute, setActiveRoute] = useState<AppRoute | null>(() => parseAppRoute(window.location.href));
   const [navigationOpen, setNavigationOpen] = useState(false);
   const navigationButtonRef = useRef<HTMLButtonElement>(null);
   const sidebarRef = useRef<HTMLElement>(null);
   const workspaceRef = useRef<HTMLElement>(null);
   const repositoryMode = drafts.session?.mode === "repository";
-  const view = selectedView ?? (repositoryMode ? "nav.projects" : "nav.drafts");
+  const view = activeRoute === null ? (repositoryMode ? "nav.projects" : "nav.drafts") : routeViews[activeRoute.name];
+  const workspaceSelection: WorkspaceSelection = { projectId: activeRoute?.projectId, taskId: activeRoute?.taskId, commit: activeRoute?.commit, query: activeRoute?.query };
   const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
   const workspaceName = (id: string) => repositoryMode && id === "DRF-LOCAL" ? t("drafts.localName") : id;
   const workspaceState = (state: string) => t(({ open: "drafts.stateOpen", closed: "drafts.stateClosed", published: "drafts.statePublished", abandoned: "drafts.stateAbandoned" } as const)[state as "open" | "closed" | "published" | "abandoned"] ?? "drafts.state");
@@ -55,12 +62,31 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
     const value = draftId.trim();
     if (value !== "") { void drafts.create(value); setDraftId(""); }
   };
+  const navigateToRoute = (nextRoute: AppRoute, replace = false) => {
+    const nextUrl = serializeAppRoute(nextRoute);
+    if (`${window.location.pathname}${window.location.search}` !== nextUrl) window.history[replace ? "replaceState" : "pushState"]({}, "", nextUrl);
+    setActiveRoute(nextRoute);
+  };
   const openWorkspace = (destination: WorkspaceDestination, selection: WorkspaceSelection = {}) => {
-    setWorkspaceSelection(selection);
-    setSelectedView(destinationViews[destination]);
+    navigateToRoute(routeForDestination(destination, selection));
     setNavigationOpen(false);
   };
-  const selectNavigationView = (key: MessageKey) => { setWorkspaceSelection({}); setSelectedView(key); setNavigationOpen(false); };
+  const selectNavigationView = (key: MessageKey) => {
+    const destination = navigationDestinations[key];
+    if (destination !== undefined) navigateToRoute(routeForDestination(destination));
+    setNavigationOpen(false);
+  };
+
+  useEffect(() => {
+    const restoreRoute = () => setActiveRoute(parseAppRoute(window.location.href));
+    window.addEventListener("popstate", restoreRoute);
+    return () => window.removeEventListener("popstate", restoreRoute);
+  }, []);
+
+  useEffect(() => {
+    if (drafts.session === undefined || activeRoute !== null || window.location.pathname !== "/") return;
+    navigateToRoute(routeForDestination(repositoryMode ? "projects" : "workspaces"), true);
+  }, [activeRoute, drafts.session, repositoryMode]);
 
   useEffect(() => {
     document.documentElement.scrollTop = 0;
@@ -112,7 +138,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
           <button aria-controls="primary-navigation" aria-expanded={navigationOpen} aria-label={t("nav.openMenu")} className="navigation-toggle" onClick={() => setNavigationOpen((open) => !open)} ref={navigationButtonRef}><span aria-hidden="true">☰</span></button>
           <div><h1>{repository?.name ?? t("app.repository")}</h1><p>{repository?.path ?? drafts.session.user.username} · {t("auth.localMode")} · {t("auth.role", { role: drafts.session.role })}</p></div>
           <div className="top-actions">
-            {active !== undefined && <button aria-label={`${t("drafts.current")}: ${workspaceName(active.draft_id)} · ${workspaceState(active.state)}`} className="workspace-switcher" onClick={() => setSelectedView("nav.drafts")}>
+            {active !== undefined && <button aria-label={`${t("drafts.current")}: ${workspaceName(active.draft_id)} · ${workspaceState(active.state)}`} className="workspace-switcher" onClick={() => selectNavigationView("nav.drafts")}>
               <span>{t("drafts.current")}</span><strong>{workspaceName(active.draft_id)}</strong>
               <span className={`state ${active.state}`}>{workspaceState(active.state)}</span>
             </button>}
@@ -158,12 +184,12 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
         </section>}
         {["nav.portfolio", "nav.projects", "nav.tasks"].includes(view) && (active === undefined
           ? <div className="card empty-workspace">{t("core.selectProject")}</div>
-          : <CoreWorkspace api={api} confirmAction={confirmAction} draft={active} key={`${view}:${workspaceSelection.projectId ?? ""}:${workspaceSelection.taskId ?? ""}`} locale={locale} surface={view === "nav.portfolio" ? "portfolio" : view === "nav.tasks" ? "tasks" : "projects"} initialProjectId={workspaceSelection.projectId} initialTaskId={workspaceSelection.taskId} onNavigate={openWorkspace} onChanged={drafts.refresh} />)}
+          : <CoreWorkspace api={api} confirmAction={confirmAction} draft={active} key={`${view}:${workspaceSelection.projectId ?? ""}:${workspaceSelection.taskId ?? ""}:${workspaceSelection.query?.status?.[0] ?? ""}`} locale={locale} surface={view === "nav.portfolio" ? "portfolio" : view === "nav.tasks" ? "tasks" : "projects"} initialProjectId={workspaceSelection.projectId} initialTaskId={workspaceSelection.taskId} initialStatusFilter={workspaceSelection.query?.status?.[0]} onNavigate={openWorkspace} onChanged={drafts.refresh} />)}
         {["nav.people", "nav.calendar", "nav.settings"].includes(view) && (active === undefined
           ? <div className="card empty-workspace">{t("core.selectProject")}</div>
           : <AdminWorkspace api={api} confirmAction={confirmAction} draft={active} role={drafts.session.role} locale={locale} surface={view === "nav.people" ? "people" : view === "nav.calendar" ? "calendar" : "settings"} onChanged={drafts.refresh} />)}
         {view === "nav.changes" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <ChangesWorkspace api={api} draft={active} role={drafts.session.role} locale={locale} onChanged={drafts.refresh} confirmAction={confirmAction} remoteAvailable={repository?.has_remote === true} gitlabConfigured={gitlab?.configured === true} gitlabSignedIn={gitlab?.user !== undefined} onGitLabLogin={loginToGitLab} />)}
-        {view === "nav.history" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <HistoryWorkspace api={api} draft={active} locale={locale} canRevert={drafts.session.role !== "Reporter"} onDraftCreated={drafts.select} />)}
+        {view === "nav.history" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <HistoryWorkspace api={api} draft={active} key={`nav.history:${workspaceSelection.commit ?? ""}`} locale={locale} canRevert={drafts.session.role !== "Reporter"} initialCommit={workspaceSelection.commit} onNavigate={openWorkspace} onDraftCreated={drafts.select} />)}
         {view === "nav.board" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <BoardWorkspace api={api} draft={active} key={`nav.board:${workspaceSelection.projectId ?? ""}`} locale={locale} initialProjectId={workspaceSelection.projectId} onNavigate={openWorkspace} onChanged={drafts.refresh} />)}
         {view === "nav.gantt" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <GanttWorkspace api={api} draft={active} key={`nav.gantt:${workspaceSelection.projectId ?? ""}`} locale={locale} initialProjectId={workspaceSelection.projectId} onNavigate={openWorkspace} />)}
         {view === "nav.workload" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <WorkloadWorkspace api={api} draft={active} locale={locale} onNavigate={openWorkspace} />)}

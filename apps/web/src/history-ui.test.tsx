@@ -12,6 +12,22 @@ const draft: DraftStatus = { draft_id: "DRF-HISTORY", owner_gitlab_user_id: "42"
 
 afterEach(cleanup);
 describe("History workspace", () => {
+  it("restores a commit deep link and publishes later selections to navigation", async () => {
+    const olderCommit = "c".repeat(40);
+    const olderItem = { ...item, commit: olderCommit, subject: "Older change" };
+    const onNavigate = vi.fn();
+    const api = {
+      history: async () => [item, olderItem],
+      commitDetail: async (_draftId: string, selectedCommit: string) => ({ ...detail, ...(selectedCommit === olderCommit ? olderItem : item) }),
+    } as unknown as GitPmApi;
+
+    render(<HistoryWorkspace api={api} draft={draft} locale="en" canRevert={false} initialCommit={olderCommit} onNavigate={onNavigate} onDraftCreated={vi.fn(async () => undefined)} />);
+    expect(await screen.findByRole("heading", { name: "Older change" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /Merged task update/u }));
+    await waitFor(() => expect(onNavigate).toHaveBeenCalledWith("history", { commit }));
+  });
+
   it("shows commit and file history and creates a separate revert draft without a rebase action", async () => {
     const createRevertDraft = vi.fn(async () => ({ draft: { ...draft, draft_id: "REVERT-AAAAAAAA", branch: "gitpm/42/REVERT-AAAAAAAA" }, reverted_commit: commit, conflicted: false, conflicted_files: [] }));
     const select = vi.fn(async () => undefined);

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App.js";
 import type { GitPmApi } from "./api.js";
 import { POLL_INTERVAL_MS } from "./draft-context.js";
@@ -79,6 +79,7 @@ class FakeApi implements GitPmApi {
   private replace(draftId: string, values: Partial<DraftStatus>) { const next = { ...(this.drafts.find((item) => item.draft_id === draftId) ?? draft({ draft_id: draftId })), ...values }; this.drafts = [next]; return next; }
 }
 
+beforeEach(() => { window.history.replaceState({}, "", "/"); });
 afterEach(() => { cleanup(); vi.useRealTimers(); localStorage.clear(); });
 
 describe("localization runtime", () => {
@@ -196,11 +197,13 @@ describe("frontend draft lifecycle", () => {
     render(<App api={api} browserLanguages={["en"]} />);
 
     expect(await screen.findByRole("heading", { name: "Projects" })).toBeTruthy();
+    expect(`${window.location.pathname}${window.location.search}`).toBe("/projects");
     expect(await screen.findByRole("button", { name: "Create project" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Create task" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Portfolio" }));
     expect(await screen.findByRole("heading", { name: "Portfolio overview" })).toBeTruthy();
+    expect(`${window.location.pathname}${window.location.search}`).toBe("/portfolio");
     const projectsStat = await screen.findByText("Active projects");
     expect(within(projectsStat.closest<HTMLElement>(".card")!).getByText("1")).toBeTruthy();
     expect(await screen.findByText("Alpha")).toBeTruthy();
@@ -209,13 +212,21 @@ describe("frontend draft lifecycle", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Alpha/u }));
     expect(await screen.findByRole("heading", { name: "Projects" })).toBeTruthy();
-    expect(screen.getByDisplayValue("Alpha").closest(".entity-card")?.className).toContain("selected");
-    fireEvent.click(screen.getByRole("button", { name: "Open tasks" }));
+    expect(`${window.location.pathname}${window.location.search}`).toBe("/projects/P-26-7K4M9Q");
+    expect((await screen.findByDisplayValue("Alpha")).closest(".entity-card")?.className).toContain("selected");
+    fireEvent.click(await screen.findByRole("button", { name: "Open tasks" }));
     expect(await screen.findByRole("heading", { name: "Tasks" })).toBeTruthy();
-    expect(screen.getByLabelText("Project")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Create task" })).toBeTruthy();
+    expect(`${window.location.pathname}${window.location.search}`).toBe("/projects/P-26-7K4M9Q/tasks");
+    expect(await screen.findByLabelText("Project")).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Create task" })).toBeTruthy();
     expect(await screen.findByText("First task")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Create project" })).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("Filter tasks"), { target: { value: "backlog" } });
+    expect(`${window.location.pathname}${window.location.search}`).toBe("/projects/P-26-7K4M9Q/tasks?status=backlog");
+    fireEvent.click(await screen.findByRole("button", { name: /First task/u }));
+    expect(`${window.location.pathname}${window.location.search}`).toBe("/projects/P-26-7K4M9Q/tasks/T-26-X8D2FW?status=backlog");
+    expect(await screen.findByRole("heading", { name: "Task details" })).toBeTruthy();
   });
 
   it("labels a repository session and does not offer a meaningless sign-out action", async () => {

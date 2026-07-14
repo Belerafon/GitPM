@@ -3,12 +3,15 @@ import type { GitPmApi } from "./api.js";
 import { formatDateTime, message, type Locale } from "./i18n.js";
 import type { CommitHistoryDetail, CommitHistoryItem, DraftStatus } from "./types.js";
 import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
+import type { WorkspaceNavigate } from "./workspace-navigation.js";
 
-export function HistoryWorkspace({ api, draft, locale, canRevert, onDraftCreated }: {
+export function HistoryWorkspace({ api, draft, locale, canRevert, initialCommit = "", onNavigate = () => undefined, onDraftCreated }: {
   readonly api: GitPmApi;
   readonly draft: DraftStatus;
   readonly locale: Locale;
   readonly canRevert: boolean;
+  readonly initialCommit?: string;
+  readonly onNavigate?: WorkspaceNavigate;
   readonly onDraftCreated: (draftId: string) => Promise<void>;
 }) {
   const t = (key: Parameters<typeof message>[1], values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
@@ -24,7 +27,8 @@ export function HistoryWorkspace({ api, draft, locale, canRevert, onDraftCreated
 
   const load = () => loadRequest.run(async () => {
     const history = await api.history(draft.draft_id);
-    const firstDetail = history[0] === undefined ? null : await api.commitDetail(draft.draft_id, history[0].commit);
+    const selectedCommit = history.some((item) => item.commit === initialCommit) ? initialCommit : history[0]?.commit;
+    const firstDetail = selectedCommit === undefined ? null : await api.commitDetail(draft.draft_id, selectedCommit);
     return { history, firstDetail };
   }, ({ history, firstDetail }) => {
     setItems(history); setDetail(firstDetail);
@@ -38,7 +42,7 @@ export function HistoryWorkspace({ api, draft, locale, canRevert, onDraftCreated
   const report = (caught: unknown) => setError(caught instanceof Error ? caught.message : String(caught));
   const select = async (item: CommitHistoryItem) => {
     setError(null); setFileItems([]); setFilePath(null);
-    try { const next = await api.commitDetail(draft.draft_id, item.commit); setDetail(next); setNewDraftId(`REVERT-${item.commit.slice(0, 8).toUpperCase()}`); }
+    try { const next = await api.commitDetail(draft.draft_id, item.commit); setDetail(next); setNewDraftId(`REVERT-${item.commit.slice(0, 8).toUpperCase()}`); onNavigate("history", { commit: item.commit }); }
     catch (caught) { report(caught); }
   };
   const showFileHistory = async (path: string) => {

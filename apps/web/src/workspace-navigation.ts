@@ -3,6 +3,8 @@ export type WorkspaceDestination = "portfolio" | "projects" | "tasks" | "board" 
 export interface WorkspaceSelection {
   readonly projectId?: string;
   readonly taskId?: string;
+  readonly commit?: string;
+  readonly query?: Readonly<Record<string, readonly string[]>>;
 }
 
 export type WorkspaceNavigate = (destination: WorkspaceDestination, selection?: WorkspaceSelection) => void;

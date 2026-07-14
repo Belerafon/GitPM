@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { cleanupDrafts, createDraft } from "./helpers.js";
+import { FIXTURE_PROJECT_ID, cleanupDrafts, createDraft } from "./helpers.js";
 
 test.describe("GitPM browser UI", () => {
   test.beforeEach(async ({ request }) => {
@@ -22,7 +22,7 @@ test.describe("GitPM browser UI", () => {
     await expect(page.getByText(/· Локальный режим · Роль: Maintainer$/u)).toBeVisible();
     await expect(page.getByRole("button", { name: "Рабочие копии", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Текущая рабочая копия: DRF-UI-WORKSPACE · Открыта", exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Работа портфеля", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Проекты", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Выйти", exact: true })).toHaveCount(0);
     await expect(page.locator("main.center-card")).toHaveCount(0);
     expect(errors).toEqual([]);
@@ -45,15 +45,16 @@ test.describe("GitPM browser UI", () => {
     await page.reload();
 
     await expect(page.getByLabel("Language", { exact: true })).toHaveValue("en");
-    await expect(page.getByRole("heading", { name: "Portfolio work", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Projects", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Working copies", exact: true })).toBeVisible();
   });
 
   test("loads fixture projects and tasks through the real API", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByRole("heading", { name: "Работа портфеля", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Проекты", exact: true })).toBeVisible();
     await expect(page.getByRole("textbox", { name: "Название GitPM launch", exact: true })).toHaveValue("GitPM launch");
     await expect(page.getByRole("textbox", { name: "Название Operations", exact: true })).toHaveValue("Operations");
+    await page.goto(`/projects/${FIXTURE_PROJECT_ID}/tasks`);
     await expect(page.getByRole("button", { name: /Approve schema v1/u })).toBeVisible();
   });
 
@@ -88,6 +89,37 @@ test.describe("GitPM browser UI", () => {
     }
   });
 
+  test("restores routed sections, selected entities and browser history", async ({ page }) => {
+    await page.goto("/");
+    await page.locator(".locale-picker select").selectOption("en");
+    await expect(page).toHaveURL(/\/projects$/u);
+
+    await page.getByRole("button", { name: "Portfolio", exact: true }).click();
+    await expect(page).toHaveURL(/\/portfolio$/u);
+    await expect(page.getByRole("heading", { name: "Portfolio overview", exact: true })).toBeVisible();
+
+    await page.getByRole("button", { name: "People", exact: true }).click();
+    await expect(page).toHaveURL(/\/people$/u);
+    await expect(page.getByRole("heading", { name: "Administration", exact: true })).toBeVisible();
+
+    await page.goBack();
+    await expect(page).toHaveURL(/\/portfolio$/u);
+    await expect(page.getByRole("heading", { name: "Portfolio overview", exact: true })).toBeVisible();
+    await page.goForward();
+    await expect(page).toHaveURL(/\/people$/u);
+
+    await page.goto(`/projects/${FIXTURE_PROJECT_ID}/tasks`);
+    await expect(page.getByRole("heading", { name: "Tasks", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: /Approve schema v1/u }).click();
+    await expect(page).toHaveURL(new RegExp(`/projects/${FIXTURE_PROJECT_ID}/tasks/[^/?]+$`, "u"));
+    const taskUrl = page.url();
+    await expect(page.getByRole("heading", { name: "Task details", exact: true })).toBeVisible();
+
+    await page.reload();
+    expect(page.url()).toBe(taskUrl);
+    await expect(page.getByRole("heading", { name: "Task details", exact: true })).toBeVisible();
+  });
+
   test("creates, switches and remembers a working copy", async ({ page }) => {
     await page.goto("/");
     await page.getByRole("button", { name: "Рабочие копии", exact: true }).click();
@@ -99,7 +131,7 @@ test.describe("GitPM browser UI", () => {
 
     await page.reload();
     await expect(page.getByRole("button", { name: "Текущая рабочая копия: DRF-UI-SECOND · Открыта", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Проекты", exact: true })).toHaveClass(/active/u);
+    await expect(page.getByRole("button", { name: "Рабочие копии", exact: true })).toHaveClass(/active/u);
 
     await page.getByRole("button", { name: "Рабочие копии", exact: true }).click();
     await page.getByRole("button", { name: /DRF-UI-WORKSPACE.*gitpm\/local-user\/DRF-UI-WORKSPACE/u }).click();

@@ -212,9 +212,9 @@ Implementation code: P00-P14 complete; Alpha, Beta, release candidate and releas
 ## UX/UI global refactoring
 
 - `GitPM_UX_UI_Global_Refactoring_Plan_v0.1.md` is active as of 2026-07-14.
-- UX00 implementation and acceptance are complete: responsive navigation drawer, scroll/focus restoration, 1280 px People layout stabilization, destructive entity confirmations, distinct archive/delete styling and configured status titles are implemented and accepted. Stage handoff remains open until the commit-series and clean-tree DoD are satisfied.
-- Context-preserving Project and Task transitions between Portfolio, Projects, Tasks, Board, Gantt and Workload provide partial UX01 groundwork; URL routing remains pending.
-- Focused web verification passes 6 test files and 22 tests; the full suite passes 38 files and 129 tests, repository typecheck and lint pass, and the web production build succeeds.
+- UX00 implementation, acceptance and handoff are complete in commit `4a4c816`: responsive navigation drawer, scroll/focus restoration, 1280 px People layout stabilization, destructive entity confirmations, distinct archive/delete styling and configured status titles are implemented and accepted.
+- UX01 route groundwork is implemented: canonical parsing/serialization, History API navigation, direct section/Project/Task/commit links, Task status query restoration and route-aware Project selection in Board/Gantt.
+- The full unit/integration suite passes 39 files and 149 tests; repository lint, web typecheck, production build and planning validation pass. The browser UI suite passes 8/8, including Back/Forward, direct Task deep link, selected Task reload and the UX00 viewport matrix.
 - The UX00 Playwright flow reaches all 12 sections at 320, 390, 800, 1280 and 1920 px, checks restored focus and rejects page-level horizontal overflow against the actual document client width.
 - Browser acceptance confirms the 320 px navigation drawer, the one-column 1280 px People layout and cancellation of permanent deletion; screenshots are stored under `evidence/ux00/`.
 
@@ -224,7 +224,7 @@ None. P00-P14 and the v0.1 release gate are accepted.
 
 ## Next action
 
-Separate and commit UX00 plus the already-started UX01 groundwork, restore a clean working tree, then start the route adapter and route parsing/serialization tests.
+Commit the first UX01 route package, then extract the App Shell, group navigation and add entity breadcrumbs while retaining route, responsive and keyboard coverage.
 
 ## Evidence policy
 
