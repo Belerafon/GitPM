@@ -214,6 +214,7 @@ Implementation code: P00-P14 complete; Alpha, Beta, release candidate and releas
 - `GitPM_UX_UI_Global_Refactoring_Plan_v0.1.md` is active as of 2026-07-14.
 - UX00 implementation, acceptance and handoff are complete in commit `4a4c816`: responsive navigation drawer, scroll/focus restoration, 1280 px People layout stabilization, destructive entity confirmations, distinct archive/delete styling and configured status titles are implemented and accepted.
 - UX01 route groundwork is implemented: canonical parsing/serialization, History API navigation, direct section/Project/Task/commit links, Task status query restoration and route-aware Project selection in Board/Gantt.
+- The responsive App Shell and navigation configuration are extracted from `App.tsx`; all 12 destinations are grouped into Planning, Team and Repository with complete English/Russian labels and active-item focus on drawer open.
 - The full unit/integration suite passes 39 files and 149 tests; repository lint, web typecheck, production build and planning validation pass. The browser UI suite passes 8/8, including Back/Forward, direct Task deep link, selected Task reload and the UX00 viewport matrix.
 - The UX00 Playwright flow reaches all 12 sections at 320, 390, 800, 1280 and 1920 px, checks restored focus and rejects page-level horizontal overflow against the actual document client width.
 - Browser acceptance confirms the 320 px navigation drawer, the one-column 1280 px People layout and cancellation of permanent deletion; screenshots are stored under `evidence/ux00/`.
@@ -224,7 +225,7 @@ None. P00-P14 and the v0.1 release gate are accepted.
 
 ## Next action
 
-Commit the first UX01 route package, then extract the App Shell, group navigation and add entity breadcrumbs while retaining route, responsive and keyboard coverage.
+Commit the UX01 App Shell/grouped-navigation package, then add entity breadcrumbs and simplify the top bar while retaining route, responsive and keyboard coverage.
 
 ## Evidence policy
 

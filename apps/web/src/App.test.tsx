@@ -122,6 +122,9 @@ describe("frontend draft lifecycle", () => {
     const api = new FakeApi();
     render(<App api={api} browserLanguages={["en"]} />);
     await screen.findByRole("heading", { name: "Working copies" });
+    expect(screen.getByText("Planning")).toBeTruthy();
+    expect(screen.getByText("Team")).toBeTruthy();
+    expect(screen.getByText("Repository")).toBeTruthy();
     const menuButton = screen.getByRole("button", { name: "Open navigation" });
 
     fireEvent.click(menuButton);

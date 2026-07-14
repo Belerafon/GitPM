@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { GitPmApi } from "./api.js";
 import { DraftProvider, useDrafts } from "./draft-context.js";
 import { formatDateTime, localeRegistry, LOCALE_STORAGE_KEY, message, selectLocale, type Locale, type MessageKey } from "./i18n.js";
@@ -10,7 +10,9 @@ import { BoardWorkspace } from "./board-ui.js";
 import { GanttWorkspace } from "./gantt-ui.js";
 import { WorkloadWorkspace } from "./workload-ui.js";
 import type { WorkspaceDestination, WorkspaceSelection } from "./workspace-navigation.js";
-import { parseAppRoute, routeForDestination, serializeAppRoute, type AppRoute, type AppRouteName } from "./app/router.js";
+import { parseAppRoute, routeForDestination, serializeAppRoute, type AppRoute } from "./app/router.js";
+import { AppShell } from "./app/AppShell.js";
+import { navigationDestinations, navigationGroups, routeViews } from "./app/navigation.js";
 
 interface AppProps {
   readonly api: GitPmApi;
@@ -19,23 +21,6 @@ interface AppProps {
   readonly navigate?: (url: string) => void;
   readonly confirmAction?: (message: string) => boolean;
 }
-
-const navigation: readonly MessageKey[] = [
-  "nav.drafts", "nav.portfolio", "nav.projects", "nav.tasks", "nav.board", "nav.people",
-  "nav.calendar", "nav.settings", "nav.workload", "nav.gantt", "nav.changes", "nav.history",
-];
-
-const routeViews: Readonly<Record<AppRouteName, MessageKey>> = {
-  workspaces: "nav.drafts", portfolio: "nav.portfolio", projects: "nav.projects", tasks: "nav.tasks", board: "nav.board",
-  people: "nav.people", calendars: "nav.calendar", settings: "nav.settings", workload: "nav.workload", gantt: "nav.gantt",
-  changes: "nav.changes", history: "nav.history",
-};
-
-const navigationDestinations: Readonly<Partial<Record<MessageKey, WorkspaceDestination | "workspaces">>> = {
-  "nav.drafts": "workspaces", "nav.portfolio": "portfolio", "nav.projects": "projects", "nav.tasks": "tasks", "nav.board": "board",
-  "nav.people": "people", "nav.calendar": "calendar", "nav.settings": "settings", "nav.workload": "workload", "nav.gantt": "gantt",
-  "nav.changes": "changes", "nav.history": "history",
-};
 
 function Shell({ locale, setLocale, api, navigate, confirmAction }: {
   readonly locale: Locale;
@@ -47,10 +32,6 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
   const drafts = useDrafts();
   const [draftId, setDraftId] = useState("");
   const [activeRoute, setActiveRoute] = useState<AppRoute | null>(() => parseAppRoute(window.location.href));
-  const [navigationOpen, setNavigationOpen] = useState(false);
-  const navigationButtonRef = useRef<HTMLButtonElement>(null);
-  const sidebarRef = useRef<HTMLElement>(null);
-  const workspaceRef = useRef<HTMLElement>(null);
   const repositoryMode = drafts.session?.mode === "repository";
   const view = activeRoute === null ? (repositoryMode ? "nav.projects" : "nav.drafts") : routeViews[activeRoute.name];
   const workspaceSelection: WorkspaceSelection = { projectId: activeRoute?.projectId, taskId: activeRoute?.taskId, commit: activeRoute?.commit, query: activeRoute?.query };
@@ -69,12 +50,10 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
   };
   const openWorkspace = (destination: WorkspaceDestination, selection: WorkspaceSelection = {}) => {
     navigateToRoute(routeForDestination(destination, selection));
-    setNavigationOpen(false);
   };
   const selectNavigationView = (key: MessageKey) => {
     const destination = navigationDestinations[key];
     if (destination !== undefined) navigateToRoute(routeForDestination(destination));
-    setNavigationOpen(false);
   };
 
   useEffect(() => {
@@ -87,26 +66,6 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
     if (drafts.session === undefined || activeRoute !== null || window.location.pathname !== "/") return;
     navigateToRoute(routeForDestination(repositoryMode ? "projects" : "workspaces"), true);
   }, [activeRoute, drafts.session, repositoryMode]);
-
-  useEffect(() => {
-    document.documentElement.scrollTop = 0;
-    document.body.scrollTop = 0;
-    if (workspaceRef.current !== null) workspaceRef.current.scrollTop = 0;
-    const heading = workspaceRef.current?.querySelector<HTMLElement>(".section-heading h2, .draft-list h2, .empty-workspace");
-    if (heading !== null && heading !== undefined) { heading.tabIndex = -1; heading.focus(); }
-  }, [view]);
-
-  useEffect(() => {
-    if (!navigationOpen) return;
-    sidebarRef.current?.querySelector<HTMLButtonElement>("nav button")?.focus();
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      setNavigationOpen(false);
-      navigationButtonRef.current?.focus();
-    };
-    document.addEventListener("keydown", closeOnEscape);
-    return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [navigationOpen]);
 
   if (drafts.session === undefined) return <main className="center-card"><p>{t("status.loading")}</p></main>;
   if (drafts.session === null) return (
@@ -126,18 +85,16 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
   const gitlab = drafts.session.gitlab;
   const loginToGitLab = () => { void api.login().then(navigate); };
   return (
-    <div className={`app-shell${repositoryMode ? " repository-mode" : ""}`}>
-      <button aria-label={t("nav.closeMenu")} className={`navigation-backdrop${navigationOpen ? " open" : ""}`} onClick={() => { setNavigationOpen(false); navigationButtonRef.current?.focus(); }} tabIndex={navigationOpen ? 0 : -1} />
-      <aside aria-label={t("nav.label")} className={`sidebar${navigationOpen ? " open" : ""}`} id="primary-navigation" ref={sidebarRef}>
-        <div className="brand"><span className="brand-mark">G</span><strong>{t("app.title")}</strong></div>
-        <nav>{navigation.map((key) => <button aria-current={view === key ? "page" : undefined} className={view === key ? "active" : ""} key={key} onClick={() => selectNavigationView(key)}>{t(key)}</button>)}</nav>
-        <div className="repository-card"><span>{t("app.singleRepository")}</span><strong>{repository?.name ?? t("app.repository")}</strong></div>
-      </aside>
-      <main className="workspace" ref={workspaceRef}>
-        <header className="topbar">
-          <button aria-controls="primary-navigation" aria-expanded={navigationOpen} aria-label={t("nav.openMenu")} className="navigation-toggle" onClick={() => setNavigationOpen((open) => !open)} ref={navigationButtonRef}><span aria-hidden="true">☰</span></button>
-          <div><h1>{repository?.name ?? t("app.repository")}</h1><p>{repository?.path ?? drafts.session.user.username} · {t("auth.localMode")} · {t("auth.role", { role: drafts.session.role })}</p></div>
-          <div className="top-actions">
+    <AppShell activeView={view}
+      banner={drafts.error !== null && <div className="alert error">{t("status.error", { message: drafts.error })}<button onClick={() => { void drafts.refresh(); }}>{t("status.retry")}</button></div>}
+      headerMeta={<>{repository?.path ?? drafts.session.user.username} · {t("auth.localMode")} · {t("auth.role", { role: drafts.session.role })}</>}
+      headerTitle={repository?.name ?? t("app.repository")}
+      navigationGroups={navigationGroups}
+      onNavigate={selectNavigationView}
+      repositoryMode={repositoryMode}
+      repositoryName={repository?.name ?? t("app.repository")}
+      t={t}
+      topActions={<>
             {active !== undefined && <button aria-label={`${t("drafts.current")}: ${workspaceName(active.draft_id)} · ${workspaceState(active.state)}`} className="workspace-switcher" onClick={() => selectNavigationView("nav.drafts")}>
               <span>{t("drafts.current")}</span><strong>{workspaceName(active.draft_id)}</strong>
               <span className={`state ${active.state}`}>{workspaceState(active.state)}</span>
@@ -145,9 +102,8 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
             <LocalePicker locale={locale} setLocale={setLocale} t={t} />
             {gitlab?.configured === true && gitlab.user === undefined && <button onClick={loginToGitLab}>{t("auth.login")}</button>}
             {gitlab?.user !== undefined && <><span>{gitlab.user.username}</span><button onClick={() => { void drafts.logout(); }}>{t("auth.logoutGitLab")}</button></>}
-          </div>
-        </header>
-        {drafts.error !== null && <div className="alert error">{t("status.error", { message: drafts.error })}<button onClick={() => { void drafts.refresh(); }}>{t("status.retry")}</button></div>}
+          </>}
+    >
         {view === "nav.drafts" && <section className="draft-layout">
           <div className="draft-list card">
             <h2>{t("drafts.heading")}</h2><p className="workspace-description">{t("drafts.description")}</p>
@@ -194,8 +150,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
         {view === "nav.gantt" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <GanttWorkspace api={api} draft={active} key={`nav.gantt:${workspaceSelection.projectId ?? ""}`} locale={locale} initialProjectId={workspaceSelection.projectId} onNavigate={openWorkspace} />)}
         {view === "nav.workload" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <WorkloadWorkspace api={api} draft={active} locale={locale} onNavigate={openWorkspace} />)}
         {!["nav.drafts", "nav.portfolio", "nav.projects", "nav.tasks", "nav.people", "nav.calendar", "nav.settings", "nav.changes", "nav.history", "nav.board", "nav.gantt", "nav.workload"].includes(view) && <div className="card empty-workspace">{t("common.notAvailable")}</div>}
-      </main>
-    </div>
+    </AppShell>
   );
 }
 
