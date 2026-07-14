@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import type { GitPmApi } from "./api.js";
 import { formatDateTime, message, type Locale } from "./i18n.js";
 import type { CommitHistoryDetail, CommitHistoryItem, DraftStatus } from "./types.js";
+import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
 
 export function HistoryWorkspace({ api, draft, locale, canRevert, onDraftCreated }: {
   readonly api: GitPmApi;
@@ -19,10 +20,19 @@ export function HistoryWorkspace({ api, draft, locale, canRevert, onDraftCreated
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conflicts, setConflicts] = useState<readonly string[]>([]);
+  const loadRequest = useAsyncLoad();
 
+  const load = () => loadRequest.run(async () => {
+    const history = await api.history(draft.draft_id);
+    const firstDetail = history[0] === undefined ? null : await api.commitDetail(draft.draft_id, history[0].commit);
+    return { history, firstDetail };
+  }, ({ history, firstDetail }) => {
+    setItems(history); setDetail(firstDetail);
+    setNewDraftId(firstDetail === null ? "" : `REVERT-${firstDetail.commit.slice(0, 8).toUpperCase()}`);
+  });
   useEffect(() => {
     setDetail(null); setFileItems([]); setFilePath(null); setConflicts([]);
-    void api.history(draft.draft_id).then((history) => { setItems(history); if (history[0]) void select(history[0]); }).catch(report);
+    void load();
   }, [api, draft.draft_id]);
 
   const report = (caught: unknown) => setError(caught instanceof Error ? caught.message : String(caught));
@@ -52,6 +62,7 @@ export function HistoryWorkspace({ api, draft, locale, canRevert, onDraftCreated
     <div className="section-heading"><span className="eyebrow">Git</span><h2>{t("history.heading")}</h2><p>{t("history.description")}</p></div>
     {error !== null && <div className="alert error">{error}</div>}
     {conflicts.length > 0 && <div className="alert warning">{t("history.conflict", { count: conflicts.length })}</div>}
+    <AsyncBoundary state={loadRequest.state} loading={t("status.loading")} retry={() => { void load(); }} error={(loadError, retry) => <div className="alert error">{loadError}<button onClick={retry}>{t("status.retry")}</button></div>}>
     <div className="history-layout">
       <div className="card history-list">
         {items.map((item) => <button key={item.commit} className={detail?.commit === item.commit ? "history-item selected" : "history-item"} onClick={() => { void select(item); }}>
@@ -70,5 +81,6 @@ export function HistoryWorkspace({ api, draft, locale, canRevert, onDraftCreated
         </>}
       </div>
     </div>
+    </AsyncBoundary>
   </section>;
 }

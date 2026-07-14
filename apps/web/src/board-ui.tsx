@@ -3,6 +3,7 @@ import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
 import type { GitPmApi } from "./api.js";
 import { message, type Locale, type MessageKey } from "./i18n.js";
 import type { DraftStatus, EntityResult, GitPmDocument } from "./types.js";
+import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
 
 interface ConfigValue { readonly slug: string; readonly title: string; readonly active: boolean }
 const text = (document: GitPmDocument, key: string) => typeof document[key] === "string" ? document[key] as string : "";
@@ -30,23 +31,28 @@ export function BoardWorkspace({ api, draft, locale, onChanged }: {
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [activeViewId, setActiveViewId] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const loadRequest = useAsyncLoad();
   const readOnly = draft.writer_mode !== "ui" || draft.state !== "open" || draft.changed_externally === true;
 
   const load = useCallback(async (preferredProject = projectId) => {
-    const [nextProjects, statusConfig, typeConfig] = await Promise.all([
-      api.listEntities(draft.draft_id, "projects"), api.getConfiguration(draft.draft_id, "statuses"), api.getConfiguration(draft.draft_id, "issue-types"),
-    ]);
-    const activeProjects = nextProjects.filter((item) => item.document.lifecycle === "active");
-    const nextProject = activeProjects.some((item) => item.document.id === preferredProject) ? preferredProject : activeProjects[0]?.document.id ?? "";
-    const [nextTasks, nextViews] = nextProject === "" ? [[], []] : await Promise.all([
-      api.listEntities(draft.draft_id, "tasks", nextProject), api.listEntities(draft.draft_id, "views", nextProject),
-    ]);
-    setProjects(activeProjects); setProjectId(nextProject); setTasks(nextTasks); setViews(nextViews);
-    setStatuses(configValues(statusConfig.document, "statuses")); setTypes(configValues(typeConfig.document, "issue_types"));
-    setFingerprint(nextTasks[0]?.draft_fingerprint ?? nextViews[0]?.draft_fingerprint ?? nextProjects[0]?.draft_fingerprint ?? draft.fingerprint);
-  }, [api, draft.draft_id, draft.fingerprint, projectId]);
+    await loadRequest.run(async () => {
+      const [nextProjects, statusConfig, typeConfig] = await Promise.all([
+        api.listEntities(draft.draft_id, "projects"), api.getConfiguration(draft.draft_id, "statuses"), api.getConfiguration(draft.draft_id, "issue-types"),
+      ]);
+      const activeProjects = nextProjects.filter((item) => item.document.lifecycle === "active");
+      const nextProject = activeProjects.some((item) => item.document.id === preferredProject) ? preferredProject : activeProjects[0]?.document.id ?? "";
+      const [nextTasks, nextViews] = nextProject === "" ? [[], []] : await Promise.all([
+        api.listEntities(draft.draft_id, "tasks", nextProject), api.listEntities(draft.draft_id, "views", nextProject),
+      ]);
+      return { activeProjects, nextProject, nextTasks, nextViews, statusConfig, typeConfig, nextProjects };
+    }, ({ activeProjects, nextProject, nextTasks, nextViews, statusConfig, typeConfig, nextProjects }) => {
+      setProjects(activeProjects); setProjectId(nextProject); setTasks(nextTasks); setViews(nextViews);
+      setStatuses(configValues(statusConfig.document, "statuses")); setTypes(configValues(typeConfig.document, "issue_types"));
+      setFingerprint(nextTasks[0]?.draft_fingerprint ?? nextViews[0]?.draft_fingerprint ?? nextProjects[0]?.draft_fingerprint ?? draft.fingerprint);
+    });
+  }, [api, draft.draft_id, draft.fingerprint, loadRequest.run, projectId]);
 
-  useEffect(() => { void load().catch(report); }, [draft.draft_id, draft.external_fingerprint]);
+  useEffect(() => { void load(); }, [draft.draft_id, draft.external_fingerprint]);
   const report = (caught: unknown) => setError(caught instanceof Error ? caught.message : String(caught));
   const mutate = async (operation: () => Promise<EntityResult>) => {
     setError(null);
@@ -90,6 +96,8 @@ export function BoardWorkspace({ api, draft, locale, onChanged }: {
   return <section className="board-workspace">
     <div className="section-heading"><span className="eyebrow draft-context-id">{draft.draft_id}</span><h2>{t("board.heading")}</h2><p>{t("board.description")}</p></div>
     {readOnly && <div className="alert warning">{t("board.readOnly")}</div>}{error !== null && <div className="alert error">{error}</div>}
+    <AsyncBoundary state={loadRequest.state} loading={t("status.loading")} retry={() => { void load(); }} error={(loadError, retry) => <div className="alert error">{loadError}<button onClick={retry}>{t("status.retry")}</button></div>}>
+    <>
     <section className="card board-toolbar">
       <label>{t("board.project")}<select value={projectId} onChange={(event) => { setActiveViewId(""); void load(event.target.value); }}>{projects.map((project) => <option key={project.document.id} value={project.document.id}>{text(project.document, "name")}</option>)}</select></label>
       <label>{t("board.statusFilter")}<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setActiveViewId(""); }}><option value="">{t("board.all")}</option>{boardStatuses.map((status) => <option key={status} value={status}>{titleForStatus(status)}</option>)}</select></label>
@@ -109,5 +117,7 @@ export function BoardWorkspace({ api, draft, locale, onChanged }: {
       <form onSubmit={saveView}><input name="name" aria-label={t("board.viewName")} placeholder={t("board.viewName")} required /><button className="primary" disabled={readOnly || projectId === ""}>{t("board.saveView")}</button></form>
       <div className="saved-view-list">{views.filter((view) => view.document.lifecycle === "active" && view.document.kind === "board").map((view) => <button className={activeViewId === view.document.id ? "selected" : ""} key={view.document.id} onClick={() => openView(view)}><strong>{text(view.document, "name")}</strong><code>{view.document.id}</code></button>)}</div>
     </section>
+    </>
+    </AsyncBoundary>
   </section>;
 }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { GitPmApi } from "./api.js";
 import { message, type Locale } from "./i18n.js";
 import type { ChangesList, CommitResult, DraftStatus, FileChange, GitPmRole, MergeRequestStatus, SemanticChange, SemanticDiff } from "./types.js";
+import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
 
 const emptyChanges: ChangesList = { files: [], changed_files_count: 0, affected_projects: [] };
 const emptySemantic: SemanticDiff = {
@@ -80,15 +81,20 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
   const [mrTitle, setMrTitle] = useState("");
   const [mrDescription, setMrDescription] = useState("");
   const [mergeRequest, setMergeRequest] = useState<MergeRequestStatus>();
+  const loadRequest = useAsyncLoad();
   const canMutate = role !== "Reporter" && draft.state === "open" && draft.writer_mode === "ui";
   const selected = useMemo(() => changes.files.find((file) => file.path === selectedPath) ?? changes.files[0], [changes, selectedPath]);
 
-  const load = async () => {
-    const [nextChanges, nextSemantic] = await Promise.all([api.listChanges(draft.draft_id), api.semanticChanges(draft.draft_id)]);
-    setChanges(nextChanges); setSemantic(nextSemantic);
-    setSelectedPath((current) => nextChanges.files.some((file) => file.path === current) ? current : nextChanges.files[0]?.path);
+  const load = async (keepData = false) => {
+    await loadRequest.run(async () => {
+      const [nextChanges, nextSemantic] = await Promise.all([api.listChanges(draft.draft_id), api.semanticChanges(draft.draft_id)]);
+      return { nextChanges, nextSemantic };
+    }, ({ nextChanges, nextSemantic }) => {
+      setChanges(nextChanges); setSemantic(nextSemantic);
+      setSelectedPath((current) => nextChanges.files.some((file) => file.path === current) ? current : nextChanges.files[0]?.path);
+    }, { keepData });
   };
-  useEffect(() => { setError(null); void load().catch((caught) => setError(caught instanceof Error ? caught.message : String(caught))); }, [draft.draft_id, draft.fingerprint, draft.external_fingerprint]);
+  useEffect(() => { setError(null); void load(); }, [draft.draft_id, draft.fingerprint, draft.external_fingerprint]);
   useEffect(() => {
     if (mergeRequest === undefined) return;
     const timer = window.setInterval(() => { void api.pollMergeRequest(draft.draft_id).then(setMergeRequest).catch(() => undefined); }, 3000);
@@ -97,7 +103,7 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
 
   const run = async (operation: () => Promise<void>) => {
     setBusy(true); setError(null);
-    try { await operation(); await onChanged(); await load(); }
+    try { await operation(); await onChanged(); await load(true); }
     catch (caught) { setError(caught instanceof Error ? caught.message : String(caught)); }
     finally { setBusy(false); }
   };
@@ -105,7 +111,7 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
     setBusy(true); setError(null);
     try {
       const result = await api.commitAll(draft.draft_id, commitMessage.trim());
-      setCommit(result); setCommitOpen(false); setMrTitle(commitMessage.trim()); await onChanged(); await load();
+      setCommit(result); setCommitOpen(false); setMrTitle(commitMessage.trim()); await onChanged(); await load(true);
     } catch (caught) { setError(caught instanceof Error ? caught.message : String(caught)); }
     finally { setBusy(false); }
   };
@@ -125,7 +131,9 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
   return <section className="changes-workspace">
     <div className="section-heading"><span className="eyebrow draft-context-id">{draft.draft_id}</span><h2>{t("changes.heading")}</h2><p>{t("changes.description")}</p></div>
     {!canMutate && <div className="alert warning">{t("changes.readOnly")}</div>}
-    {error !== null && <div className="alert error">{t("status.error", { message: error })}<button onClick={() => void load()}>{t("status.retry")}</button></div>}
+    {error !== null && <div className="alert error">{t("status.error", { message: error })}<button onClick={() => void load(true)}>{t("status.retry")}</button></div>}
+    <AsyncBoundary state={loadRequest.state} loading={t("status.loading")} retry={() => { void load(); }} error={(loadError, retry) => <div className="alert error">{t("status.error", { message: loadError })}<button onClick={retry}>{t("status.retry")}</button></div>}>
+    <>
     <div className="changes-summary">
       <div><strong>{changes.changed_files_count}</strong><span>{t("changes.files")}</span></div>
       <div><strong>{semantic.counts.created}</strong><span>{t("changes.created")}</span></div>
@@ -153,5 +161,7 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
     </div>
     <p className="alpha-limitations">{t("changes.alphaLimitations")}</p>
     {commitOpen && <div className="modal-backdrop" role="presentation"><section className="commit-dialog" role="dialog" aria-modal="true" aria-labelledby="commit-heading"><h3 id="commit-heading">{t("changes.commitHeading")}</h3><p>{t("changes.commitScope", { count: changes.changed_files_count })}</p><label>{t("changes.commitMessage")}<input autoFocus maxLength={500} value={commitMessage} onChange={(event) => setCommitMessage(event.target.value)} /></label><div className="actions"><button onClick={() => setCommitOpen(false)}>{t("changes.cancel")}</button><button className="primary" disabled={busy || !commitMessage.trim()} onClick={() => void commitEverything()}>{t("changes.commitAll")}</button></div></section></div>}
+    </>
+    </AsyncBoundary>
   </section>;
 }

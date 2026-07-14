@@ -4,6 +4,7 @@ import type { GitPmApi } from "./api.js";
 import { message, type Locale, type MessageKey } from "./i18n.js";
 import type { DraftStatus, EntityResult, GitPmDocument } from "./types.js";
 import { changedEntityFields, useExternalHighlights, useReducedMotion } from "./external-updates.js";
+import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
 
 const value = (document: GitPmDocument, key: string) => typeof document[key] === "string" ? document[key] as string : "";
 interface ConfigValue { readonly slug: string; readonly title: string; readonly active: boolean }
@@ -47,31 +48,36 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", onChan
   const [typeOptions, setTypeOptions] = useState<readonly ConfigValue[]>([]);
   const previousEntities = useRef<readonly EntityResult[]>([]);
   const lastExternalFingerprint = useRef(draft.external_fingerprint);
+  const loadRequest = useAsyncLoad();
   const { highlights, mark } = useExternalHighlights();
   const reducedMotion = useReducedMotion();
   const readOnly = draft.writer_mode !== "ui" || draft.state !== "open" || draft.changed_externally === true;
 
   const load = useCallback(async (preferredProject = projectId, externalUpdate = false) => {
-    const [nextProjects, statusConfig, typeConfig] = await Promise.all([api.listEntities(draft.draft_id, "projects"), api.getConfiguration(draft.draft_id, "statuses"), api.getConfiguration(draft.draft_id, "issue-types")]);
-    const nextProject = nextProjects.some((item) => item.document.id === preferredProject && item.document.lifecycle === "active") ? preferredProject : nextProjects.find((item) => item.document.lifecycle === "active")?.document.id || "";
-    const [nextMilestones, nextTasks] = surface === "portfolio"
-      ? await Promise.all([api.listEntities(draft.draft_id, "milestones"), api.listEntities(draft.draft_id, "tasks")])
-      : nextProject === "" ? [[], []]
-        : surface === "projects" ? [await api.listEntities(draft.draft_id, "milestones", nextProject), []]
-          : await Promise.all([api.listEntities(draft.draft_id, "milestones", nextProject), api.listEntities(draft.draft_id, "tasks", nextProject)]);
-    const nextEntities = [...nextProjects, ...nextMilestones, ...nextTasks, statusConfig, typeConfig];
-    if (externalUpdate) mark(changedEntityFields(previousEntities.current, nextEntities));
-    previousEntities.current = nextEntities;
-    setProjects(nextProjects); setProjectId(nextProject); setMilestones(nextMilestones); setTasks(nextTasks);
-    setStatusOptions(configValues(statusConfig.document, "statuses")); setTypeOptions(configValues(typeConfig.document, "issue_types"));
-    setFingerprint(nextProjects[0]?.draft_fingerprint ?? nextMilestones[0]?.draft_fingerprint ?? nextTasks[0]?.draft_fingerprint ?? draft.fingerprint);
-  }, [api, draft.draft_id, draft.fingerprint, mark, projectId, surface]);
+    await loadRequest.run(async () => {
+      const [nextProjects, statusConfig, typeConfig] = await Promise.all([api.listEntities(draft.draft_id, "projects"), api.getConfiguration(draft.draft_id, "statuses"), api.getConfiguration(draft.draft_id, "issue-types")]);
+      const nextProject = nextProjects.some((item) => item.document.id === preferredProject && item.document.lifecycle === "active") ? preferredProject : nextProjects.find((item) => item.document.lifecycle === "active")?.document.id || "";
+      const [nextMilestones, nextTasks] = surface === "portfolio"
+        ? await Promise.all([api.listEntities(draft.draft_id, "milestones"), api.listEntities(draft.draft_id, "tasks")])
+        : nextProject === "" ? [[], []]
+          : surface === "projects" ? [await api.listEntities(draft.draft_id, "milestones", nextProject), []]
+            : await Promise.all([api.listEntities(draft.draft_id, "milestones", nextProject), api.listEntities(draft.draft_id, "tasks", nextProject)]);
+      return { nextProjects, nextProject, nextMilestones, nextTasks, statusConfig, typeConfig };
+    }, ({ nextProjects, nextProject, nextMilestones, nextTasks, statusConfig, typeConfig }) => {
+      const nextEntities = [...nextProjects, ...nextMilestones, ...nextTasks, statusConfig, typeConfig];
+      if (externalUpdate) mark(changedEntityFields(previousEntities.current, nextEntities));
+      previousEntities.current = nextEntities;
+      setProjects(nextProjects); setProjectId(nextProject); setMilestones(nextMilestones); setTasks(nextTasks);
+      setStatusOptions(configValues(statusConfig.document, "statuses")); setTypeOptions(configValues(typeConfig.document, "issue_types"));
+      setFingerprint(nextProjects[0]?.draft_fingerprint ?? nextMilestones[0]?.draft_fingerprint ?? nextTasks[0]?.draft_fingerprint ?? draft.fingerprint);
+    }, { keepData: externalUpdate });
+  }, [api, draft.draft_id, draft.fingerprint, loadRequest.run, mark, projectId, surface]);
 
-  useEffect(() => { setSelectedTask(""); void load().catch((caught) => setError(caught instanceof Error ? caught.message : String(caught))); }, [draft.draft_id, surface]);
+  useEffect(() => { setSelectedTask(""); void load(); }, [draft.draft_id, surface]);
   useEffect(() => {
     if (draft.writer_mode !== "external" || draft.external_fingerprint === undefined || draft.external_fingerprint === lastExternalFingerprint.current) return;
     lastExternalFingerprint.current = draft.external_fingerprint;
-    void load(projectId, true).catch((caught) => setError(caught instanceof Error ? caught.message : String(caught)));
+    void load(projectId, true);
   }, [draft.external_fingerprint]);
 
   const mutate = async (operation: () => Promise<EntityResult>, preferredProject = projectId) => {
@@ -112,6 +118,8 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", onChan
   return <section className={`core-workspace core-${surface}-workspace${reducedMotion ? " reduced-motion" : ""}`} data-reduced-motion={reducedMotion} data-surface={surface}>
     <div className="section-heading"><div><span className="eyebrow draft-context-id">{draft.draft_id}</span><h2>{t(headingKey)}</h2><p>{t(descriptionKey)}</p></div></div>
     {readOnly && <div className="alert warning">{t("core.readOnly")}</div>}{error !== null && <div className="alert error">{error}</div>}
+    <AsyncBoundary state={loadRequest.state} loading={t("status.loading")} retry={() => { void load(); }} error={(loadError, retry) => <div className="alert error">{loadError}<button onClick={retry}>{t("status.retry")}</button></div>}>
+    <>
     {surface === "portfolio" && <>
       <div className="portfolio-stats">
         <div className="card"><span>{t("core.projectsTotal")}</span><strong>{activeProjects.length}</strong></div>
@@ -143,6 +151,8 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", onChan
         {task !== undefined && <TaskPanel api={api} draft={draft} entity={task} fingerprint={fingerprint} milestones={activeMilestones} readOnly={readOnly} externalFields={highlights[task.document.id]} locale={locale} save={mutate} remove={remove} />}
       </div>
     </section>)}
+    </>
+    </AsyncBoundary>
   </section>;
 }
 

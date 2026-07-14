@@ -3,6 +3,7 @@ import { calculateWorkload, type WorkloadCalendar, type WorkloadPerson, type Wor
 import type { GitPmApi } from "./api.js";
 import { formatDateOnly, formatNumber, message, type Locale, type MessageKey } from "./i18n.js";
 import type { DraftStatus, EntityResult, GitPmDocument } from "./types.js";
+import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
 
 const text = (document: GitPmDocument, key: string) => typeof document[key] === "string" ? document[key] as string : undefined;
 const number = (document: GitPmDocument, key: string) => typeof document[key] === "number" ? document[key] as number : undefined;
@@ -27,13 +28,18 @@ export function WorkloadWorkspace({ api, draft, locale }: { readonly api: GitPmA
   const [people, setPeople] = useState<readonly EntityResult[]>([]);
   const [calendars, setCalendars] = useState<readonly EntityResult[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const loadRequest = useAsyncLoad();
   const load = useCallback(async () => {
-    const [nextTasks, nextPeople, nextCalendars] = await Promise.all([
-      api.listEntities(draft.draft_id, "tasks"), api.listEntities(draft.draft_id, "people"), api.listEntities(draft.draft_id, "calendars"),
-    ]);
-    setTasks(nextTasks); setPeople(nextPeople); setCalendars(nextCalendars); setError(null);
-  }, [api, draft.draft_id, draft.external_fingerprint]);
-  useEffect(() => { void load().catch((caught) => setError(caught instanceof Error ? caught.message : String(caught))); }, [load]);
+    await loadRequest.run(async () => {
+      const [nextTasks, nextPeople, nextCalendars] = await Promise.all([
+        api.listEntities(draft.draft_id, "tasks"), api.listEntities(draft.draft_id, "people"), api.listEntities(draft.draft_id, "calendars"),
+      ]);
+      return { nextTasks, nextPeople, nextCalendars };
+    }, ({ nextTasks, nextPeople, nextCalendars }) => {
+      setTasks(nextTasks); setPeople(nextPeople); setCalendars(nextCalendars); setError(null);
+    });
+  }, [api, draft.draft_id, draft.external_fingerprint, loadRequest.run]);
+  useEffect(() => { void load(); }, [load]);
   const report = useMemo(() => calculateWorkload(tasks.map(task), people.map(person), calendars.map(calendar)), [tasks, people, calendars]);
   const activePeople = [...new Map(report.rows.map((row) => [row.person_id, row.person_name])).entries()];
   const rows = new Map(report.rows.map((row) => [`${row.person_id}:${row.week}`, row]));
@@ -42,6 +48,8 @@ export function WorkloadWorkspace({ api, draft, locale }: { readonly api: GitPmA
   return <section className="workload-workspace">
     <div className="section-heading"><span className="eyebrow draft-context-id">{draft.draft_id}</span><h2>{t("workload.heading")}</h2><p>{t("workload.description")}</p></div>
     {error !== null && <div className="alert error">{error}</div>}
+    <AsyncBoundary state={loadRequest.state} loading={t("status.loading")} retry={() => { void load(); }} error={(loadError, retry) => <div className="alert error">{loadError}<button onClick={retry}>{t("status.retry")}</button></div>}>
+    <>
     <section className="card workload-summary">
       <div><span>{t("workload.included")}</span><strong>{report.included_tasks}</strong></div>
       <div><span>{t("workload.excluded")}</span><strong>{excluded}</strong></div>
@@ -58,5 +66,7 @@ export function WorkloadWorkspace({ api, draft, locale }: { readonly api: GitPmA
     <section className="card workload-exclusions"><h3>{t("workload.exclusionHeading")}</h3><dl>
       <div><dt>{t("workload.archived")}</dt><dd>{report.exclusions.archived}</dd></div><div><dt>{t("workload.undated")}</dt><dd>{report.exclusions.undated}</dd></div><div><dt>{t("workload.unestimated")}</dt><dd>{report.exclusions.unestimated}</dd></div><div><dt>{t("workload.unassigned")}</dt><dd>{report.exclusions.unassigned}</dd></div><div><dt>{t("workload.unavailable")}</dt><dd>{report.exclusions.unavailable_assignees}</dd></div>
     </dl></section>
+    </>
+    </AsyncBoundary>
   </section>;
 }

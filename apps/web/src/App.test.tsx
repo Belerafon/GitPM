@@ -117,6 +117,36 @@ describe("localization runtime", () => {
 });
 
 describe("frontend draft lifecycle", () => {
+  it("starts loading on navigation and never renders unknown totals as zero", async () => {
+    let releaseProjects!: () => void;
+    const projectsGate = new Promise<void>((resolve) => { releaseProjects = resolve; });
+    class DelayedApi extends FakeApi {
+      projectRequests = 0;
+      override async listEntities(draftId: string, type: string, project?: string) {
+        if (type === "projects") { this.projectRequests += 1; await projectsGate; }
+        return await super.listEntities(draftId, type, project);
+      }
+    }
+    const api = new DelayedApi();
+    api.drafts = [draft()];
+    api.entities = [{
+      document: { schema: "gitpm/project@1", id: "P-26-7K4M9Q", name: "Alpha", status: "backlog", lifecycle: "active" },
+      path: "projects/P-26-7K4M9Q/project.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64),
+    }];
+    render(<App api={api} browserLanguages={["en"]} />);
+
+    await screen.findByRole("heading", { name: "Working copies" });
+    fireEvent.click(screen.getByRole("button", { name: "Portfolio" }));
+
+    expect(api.projectRequests).toBe(1);
+    expect(screen.getByRole("status").textContent).toContain("Loading");
+    expect(screen.queryByText("Active projects")).toBeNull();
+
+    releaseProjects();
+    const projectsStat = await screen.findByText("Active projects");
+    expect(within(projectsStat.closest<HTMLElement>(".card")!).getByText("1")).toBeTruthy();
+  });
+
   it("renders Portfolio, Projects and Tasks as distinct navigation destinations", async () => {
     const api = new FakeApi();
     api.currentSession = {
@@ -144,7 +174,7 @@ describe("frontend draft lifecycle", () => {
     render(<App api={api} browserLanguages={["en"]} />);
 
     expect(await screen.findByRole("heading", { name: "Projects" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Create project" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Create project" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Create task" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Portfolio" }));

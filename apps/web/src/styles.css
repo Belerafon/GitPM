@@ -54,6 +54,10 @@ input { min-width: 0; width: 100%; border: 1px solid #c9cbc5; border-radius: 8px
 .status-grid div { border-bottom: 1px solid #ecece8; padding-bottom: .8rem; }
 .status-grid dt { color: #747974; font-size: .78rem; }
 .status-grid dd { margin: .35rem 0 0; overflow-wrap: anywhere; }
+.workspace-loading { align-items: center; color: #59615d; display: flex; gap: .75rem; min-height: 5rem; }
+.loading-indicator { animation: loading-spin .8s linear infinite; border: 2px solid #d9dedb; border-radius: 50%; border-top-color: #356b52; height: 1rem; width: 1rem; }
+@keyframes loading-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .loading-indicator { animation: none; border-color: #356b52; } }
 .valid { color: #28633c; }
 .invalid { color: #9a332d; }
 .actions { display: flex; flex-wrap: wrap; gap: .5rem; }

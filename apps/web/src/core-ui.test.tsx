@@ -37,7 +37,7 @@ describe("core UI", () => {
     const onChanged = vi.fn(async () => undefined);
     const rendered = render(<CoreWorkspace api={api} draft={draft} locale="en" surface="projects" onChanged={onChanged} />);
 
-    const projectButton = screen.getByRole("button", { name: "Create project" });
+    const projectButton = await screen.findByRole("button", { name: "Create project" });
     const projectForm = projectButton.closest("form")!;
     fireEvent.change(within(projectForm).getByLabelText("Name"), { target: { value: "Alpha" } });
     fireEvent.change(within(projectForm).getByLabelText("Description (Markdown)"), { target: { value: "# Alpha" } });
@@ -51,7 +51,7 @@ describe("core UI", () => {
     expect(await screen.findByDisplayValue("M1")).toBeTruthy();
 
     rendered.rerender(<CoreWorkspace api={api} draft={draft} locale="en" surface="tasks" onChanged={onChanged} />);
-    const taskButton = screen.getByRole("button", { name: "Create task" });
+    const taskButton = await screen.findByRole("button", { name: "Create task" });
     const taskForm = taskButton.closest("form")!;
     fireEvent.change(within(taskForm).getByLabelText("Title"), { target: { value: "First task" } });
     fireEvent.change(within(taskForm).getByLabelText("Description (Markdown)"), { target: { value: "**important**" } });

@@ -79,13 +79,13 @@ export function DraftProvider({ api, children }: { readonly api: GitPmApi; reado
         setSession((current) => current === undefined ? null : current);
         throw caught;
       }
-      setSession(currentSession);
-      if (currentSession === null) { setDrafts([]); setActiveId(null); rememberActiveId(null); setSnapshot(null); return; }
+      if (currentSession === null) { setSession(null); setDrafts([]); setActiveId(null); rememberActiveId(null); setSnapshot(null); return; }
       const next = await refreshList();
       const selected = activeId !== null && next.some((draft) => draft.draft_id === activeId) ? activeId : next[0]?.draft_id ?? null;
       setActiveId(selected);
       rememberActiveId(selected);
       if (selected !== null) await poll(selected);
+      setSession(currentSession);
     });
   }, [activeId, api, poll, refreshList, run]);
 

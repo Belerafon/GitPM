@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { GitPmApi } from "./api.js";
 import { formatDateOnly, message, type Locale, type MessageKey } from "./i18n.js";
 import type { DraftStatus, EntityResult, GitPmDocument } from "./types.js";
+import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
 
 const DAY_MS = 86_400_000;
 const text = (document: GitPmDocument, key: string) => typeof document[key] === "string" ? document[key] as string : "";
@@ -71,13 +72,18 @@ export function GanttWorkspace({ api, draft, locale }: { readonly api: GitPmApi;
   const [milestones, setMilestones] = useState<readonly EntityResult[]>([]);
   const [projectId, setProjectId] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const loadRequest = useAsyncLoad();
   const load = useCallback(async (preferredProject = projectId) => {
-    const nextProjects = (await api.listEntities(draft.draft_id, "projects")).filter((item) => item.document.lifecycle === "active");
-    const nextProject = nextProjects.some((item) => item.document.id === preferredProject) ? preferredProject : nextProjects[0]?.document.id ?? "";
-    const [nextTasks, nextMilestones] = nextProject === "" ? [[], []] : await Promise.all([api.listEntities(draft.draft_id, "tasks", nextProject), api.listEntities(draft.draft_id, "milestones", nextProject)]);
-    setProjects(nextProjects); setProjectId(nextProject); setTasks(nextTasks); setMilestones(nextMilestones);
-  }, [api, draft.draft_id, projectId]);
-  useEffect(() => { void load().catch((caught) => setError(caught instanceof Error ? caught.message : String(caught))); }, [draft.draft_id, draft.external_fingerprint]);
+    await loadRequest.run(async () => {
+      const nextProjects = (await api.listEntities(draft.draft_id, "projects")).filter((item) => item.document.lifecycle === "active");
+      const nextProject = nextProjects.some((item) => item.document.id === preferredProject) ? preferredProject : nextProjects[0]?.document.id ?? "";
+      const [nextTasks, nextMilestones] = nextProject === "" ? [[], []] : await Promise.all([api.listEntities(draft.draft_id, "tasks", nextProject), api.listEntities(draft.draft_id, "milestones", nextProject)]);
+      return { nextProjects, nextProject, nextTasks, nextMilestones };
+    }, ({ nextProjects, nextProject, nextTasks, nextMilestones }) => {
+      setProjects(nextProjects); setProjectId(nextProject); setTasks(nextTasks); setMilestones(nextMilestones); setError(null);
+    });
+  }, [api, draft.draft_id, loadRequest.run, projectId]);
+  useEffect(() => { void load(); }, [draft.draft_id, draft.external_fingerprint]);
   const model = useMemo(() => buildGanttModel(tasks, milestones), [tasks, milestones]);
   const rowIndex = new Map(model?.rows.map((row, index) => [row.id, index]) ?? []);
   const milestoneNames = new Map(milestones.map((item) => [item.document.id, text(item.document, "name")]));
@@ -85,6 +91,8 @@ export function GanttWorkspace({ api, draft, locale }: { readonly api: GitPmApi;
   return <section className="gantt-workspace">
     <div className="section-heading"><span className="eyebrow draft-context-id">{draft.draft_id}</span><h2>{t("gantt.heading")}</h2><p>{t("gantt.description")}</p></div>
     {error !== null && <div className="alert error">{error}</div>}
+    <AsyncBoundary state={loadRequest.state} loading={t("status.loading")} retry={() => { void load(); }} error={(loadError, retry) => <div className="alert error">{loadError}<button onClick={retry}>{t("status.retry")}</button></div>}>
+    <>
     <section className="card gantt-toolbar"><label>{t("gantt.project")}<select value={projectId} onChange={(event) => { void load(event.target.value); }}>{projects.map((project) => <option key={project.document.id} value={project.document.id}>{text(project.document, "name")}</option>)}</select></label><span>{t("gantt.visible", { count: model?.rows.length ?? 0 })}</span><span className="state open">{t("gantt.readOnly")}</span></section>
     {model === null ? <section className="card empty-workspace">{t("gantt.empty")}</section> : <section className="card gantt-scroll" aria-label={t("gantt.chart")} data-start={model.start} data-due={model.due}>
       <div className="gantt-labels"><div className="gantt-label-head">{t("gantt.tasks")}</div>{model.rows.map((row) => <div className="gantt-label" key={row.id} style={{ paddingInlineStart: `${.75 + row.depth * 1.1}rem` }}><strong>{row.title}</strong><span>{formatDateOnly(locale, row.start)} — {formatDateOnly(locale, row.due)}</span>{row.milestone !== undefined && <small>{milestoneNames.get(row.milestone)}</small>}</div>)}</div>
@@ -100,5 +108,7 @@ export function GanttWorkspace({ api, draft, locale }: { readonly api: GitPmApi;
         })}<defs><marker id="gantt-arrow" markerHeight="6" markerWidth="6" orient="auto" refX="5" refY="3"><path d="M0,0 L0,6 L6,3 z" /></marker></defs></svg>
       </div>
     </section>}
+    </>
+    </AsyncBoundary>
   </section>;
 }

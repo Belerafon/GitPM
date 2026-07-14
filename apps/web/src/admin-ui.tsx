@@ -3,6 +3,7 @@ import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
 import type { GitPmApi } from "./api.js";
 import { message, type Locale, type MessageKey } from "./i18n.js";
 import type { DraftStatus, EntityResult, GitPmDocument, GitPmRole } from "./types.js";
+import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
 
 type AdminSurface = "people" | "calendar" | "settings";
 const text = (document: GitPmDocument, key: string) => typeof document[key] === "string" ? document[key] as string : "";
@@ -20,16 +21,21 @@ export function AdminWorkspace({ api, draft, role, locale, surface, onChanged }:
   const [issueTypes, setIssueTypes] = useState<EntityResult | null>(null);
   const [fingerprint, setFingerprint] = useState(draft.fingerprint);
   const [error, setError] = useState<string | null>(null);
+  const loadRequest = useAsyncLoad();
   const readOnly = role !== "Maintainer" || draft.writer_mode !== "ui" || draft.state !== "open" || draft.changed_externally === true;
 
   const load = useCallback(async () => {
-    const [nextCalendars, nextPeople, nextTeams, nextStatuses, nextIssueTypes] = await Promise.all([
-      api.listEntities(draft.draft_id, "calendars"), api.listEntities(draft.draft_id, "people"), api.listEntities(draft.draft_id, "teams"), api.getConfiguration(draft.draft_id, "statuses"), api.getConfiguration(draft.draft_id, "issue-types"),
-    ]);
-    setCalendars(nextCalendars); setPeople(nextPeople); setTeams(nextTeams); setStatuses(nextStatuses); setIssueTypes(nextIssueTypes);
-    setFingerprint(nextCalendars[0]?.draft_fingerprint ?? nextPeople[0]?.draft_fingerprint ?? nextTeams[0]?.draft_fingerprint ?? nextStatuses.draft_fingerprint);
-  }, [api, draft.draft_id, draft.external_fingerprint]);
-  useEffect(() => { void load().catch((caught) => setError(caught instanceof Error ? caught.message : String(caught))); }, [load]);
+    await loadRequest.run(async () => {
+      const [nextCalendars, nextPeople, nextTeams, nextStatuses, nextIssueTypes] = await Promise.all([
+        api.listEntities(draft.draft_id, "calendars"), api.listEntities(draft.draft_id, "people"), api.listEntities(draft.draft_id, "teams"), api.getConfiguration(draft.draft_id, "statuses"), api.getConfiguration(draft.draft_id, "issue-types"),
+      ]);
+      return { nextCalendars, nextPeople, nextTeams, nextStatuses, nextIssueTypes };
+    }, ({ nextCalendars, nextPeople, nextTeams, nextStatuses, nextIssueTypes }) => {
+      setCalendars(nextCalendars); setPeople(nextPeople); setTeams(nextTeams); setStatuses(nextStatuses); setIssueTypes(nextIssueTypes);
+      setFingerprint(nextCalendars[0]?.draft_fingerprint ?? nextPeople[0]?.draft_fingerprint ?? nextTeams[0]?.draft_fingerprint ?? nextStatuses.draft_fingerprint);
+    });
+  }, [api, draft.draft_id, draft.external_fingerprint, loadRequest.run]);
+  useEffect(() => { void load(); }, [load]);
 
   const mutate = async (operation: () => Promise<EntityResult>) => { setError(null); try { const result = await operation(); setFingerprint(result.draft_fingerprint); await load(); await onChanged(); } catch (caught) { setError(caught instanceof Error ? caught.message : String(caught)); } };
   const remove = async (operation: () => Promise<void>) => { setError(null); try { await operation(); await load(); await onChanged(); } catch (caught) { setError(caught instanceof Error ? caught.message : String(caught)); } };
@@ -43,10 +49,14 @@ export function AdminWorkspace({ api, draft, role, locale, surface, onChanged }:
 
   return <section className="admin-workspace"><div className="section-heading"><span className="eyebrow draft-context-id">{draft.draft_id}</span><h2>{t("admin.heading")}</h2></div>
     {role !== "Maintainer" && <div className="alert warning">{t("admin.maintainerOnly")}</div>}{error !== null && <div className="alert error">{error}</div>}
+    <AsyncBoundary state={loadRequest.state} loading={t("status.loading")} retry={() => { void load(); }} error={(loadError, retry) => <div className="alert error">{loadError}<button onClick={retry}>{t("status.retry")}</button></div>}>
+    <>
     {surface === "calendar" && <section className="card"><h3>{t("admin.calendars")}</h3><form className="admin-create" onSubmit={createCalendar}><input name="name" aria-label={t("core.name")} placeholder={t("core.name")} required /><input name="weekdays" aria-label={t("admin.weekdays")} defaultValue="1,2,3,4,5" required /><input name="holidays" aria-label={t("admin.holidays")} placeholder="2026-01-01" /><button className="primary" disabled={readOnly}>{t("admin.createCalendar")}</button></form><div className="admin-grid">{activeCalendars.map((entity) => <CalendarEditor key={entity.document.id} {...{ api, draft, entity, fingerprint, readOnly, t, mutate, remove }} />)}</div></section>}
     {surface === "people" && <div className="admin-columns"><section className="card"><h3>{t("admin.people")}</h3><form className="admin-create" onSubmit={createPerson}><input name="name" aria-label={t("core.name")} placeholder={t("core.name")} required /><input name="email" type="email" aria-label={t("admin.email")} placeholder={t("admin.email")} /><input name="capacity" type="number" min="0" step="0.25" defaultValue="40" aria-label={t("admin.capacity")} required /><select name="calendar" aria-label={t("admin.calendar")} required>{activeCalendars.map((item) => <option value={item.document.id} key={item.document.id}>{text(item.document, "name")}</option>)}</select><button className="primary" disabled={readOnly || activeCalendars.length === 0}>{t("admin.createPerson")}</button></form><div className="admin-grid">{activePeople.map((entity) => <PersonEditor key={entity.document.id} {...{ api, draft, entity, fingerprint, readOnly, t, calendars: activeCalendars, mutate, remove }} />)}</div></section>
       <section className="card"><h3>{t("admin.teams")}</h3><form className="admin-create" onSubmit={createTeam}><input name="name" aria-label={t("core.name")} placeholder={t("core.name")} required /><MemberChecks people={activePeople} selected={[]} t={t} /><button className="primary" disabled={readOnly}>{t("admin.createTeam")}</button></form><div className="admin-grid">{activeTeams.map((entity) => <TeamEditor key={entity.document.id} {...{ api, draft, entity, fingerprint, readOnly, t, people: activePeople, mutate, remove }} />)}</div></section></div>}
     {surface === "settings" && <section className="card"><h3>{t("admin.settings")}</h3><div className="alert info">{t("admin.noServerConfig")}</div><div className="admin-columns">{statuses !== null && <ConfigEditor api={api} draft={draft} entity={statuses} kind="statuses" listKey="statuses" title={t("admin.statuses")} readOnly={readOnly} t={t} mutate={mutate} />}{issueTypes !== null && <ConfigEditor api={api} draft={draft} entity={issueTypes} kind="issue-types" listKey="issue_types" title={t("admin.issueTypes")} readOnly={readOnly} t={t} mutate={mutate} />}</div></section>}
+    </>
+    </AsyncBoundary>
   </section>;
 }
 
