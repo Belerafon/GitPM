@@ -216,7 +216,8 @@ Implementation code: P00-P14 complete; Alpha, Beta, release candidate and releas
 - UX01 route groundwork is implemented: canonical parsing/serialization, History API navigation, direct section/Project/Task/commit links, Task status query restoration and route-aware Project selection in Board/Gantt.
 - The responsive App Shell and navigation configuration are extracted from `App.tsx`; all 12 destinations are grouped into Planning, Team and Repository with complete English/Russian labels and active-item focus on drawer open.
 - Route-aware breadcrumbs cover Project, Task, Board/Gantt Project and commit detail; the top bar now keeps only concise mode/role context and exposes the absolute repository path in expandable sidebar details.
-- The full unit/integration suite passes 39 files and 149 tests; repository lint, web typecheck, production build and planning validation pass. The browser UI suite passes 8/8, including Back/Forward, direct Task deep link, selected Task reload and the UX00 viewport matrix.
+- Board status/type/saved-view filters now serialize into query state and restore after reload; UX01 work packages, automated checks and exit gate are complete.
+- The full unit/integration suite passes 39 files and 150 tests; repository lint, web typecheck, production build and planning validation pass. The browser UI suite covers all 8 scenarios, including Back/Forward, direct Task deep link, selected Task and Board-filter reload, and the UX00 viewport matrix.
 - The UX00 Playwright flow reaches all 12 sections at 320, 390, 800, 1280 and 1920 px, checks restored focus and rejects page-level horizontal overflow against the actual document client width.
 - Browser acceptance confirms the 320 px navigation drawer, the one-column 1280 px People layout and cancellation of permanent deletion; screenshots are stored under `evidence/ux00/`.
 
@@ -226,7 +227,7 @@ None. P00-P14 and the v0.1 release gate are accepted.
 
 ## Next action
 
-Commit the UX01 breadcrumbs/topbar package, then synchronize Board/saved-view filters with query state and run final UX01 acceptance.
+Commit the final UX01 route/query package and handoff, then begin UX02 with the repeated-component inventory and semantic design-token foundation.
 
 ## Evidence policy
 

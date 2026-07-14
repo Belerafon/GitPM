@@ -120,6 +120,14 @@ test.describe("GitPM browser UI", () => {
     await page.reload();
     expect(page.url()).toBe(taskUrl);
     await expect(page.getByRole("heading", { name: "Task details", exact: true })).toBeVisible();
+
+    await page.goto(`/board?project=${FIXTURE_PROJECT_ID}&status=backlog&type=task`);
+    await expect(page.getByLabel("Status filter", { exact: true })).toHaveValue("backlog");
+    await expect(page.getByLabel("Type filter", { exact: true })).toHaveValue("task");
+    await page.reload();
+    await expect(page).toHaveURL(new RegExp(`/board\\?project=${FIXTURE_PROJECT_ID}&status=backlog&type=task$`, "u"));
+    await expect(page.getByLabel("Status filter", { exact: true })).toHaveValue("backlog");
+    await expect(page.getByLabel("Type filter", { exact: true })).toHaveValue("task");
   });
 
   test("creates, switches and remembers a working copy", async ({ page }) => {

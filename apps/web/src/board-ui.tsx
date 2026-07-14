@@ -13,11 +13,14 @@ const configValues = (document: GitPmDocument, key: "statuses" | "issue_types"):
   ? (document[key] as unknown[]).filter((item): item is ConfigValue => typeof item === "object" && item !== null && typeof (item as ConfigValue).slug === "string" && typeof (item as ConfigValue).title === "string" && (item as ConfigValue).active === true)
   : [];
 
-export function BoardWorkspace({ api, draft, locale, initialProjectId = "", onNavigate = () => undefined, onChanged }: {
+export function BoardWorkspace({ api, draft, locale, initialProjectId = "", initialStatusFilter = "", initialTypeFilter = "", initialViewId = "", onNavigate = () => undefined, onChanged }: {
   readonly api: GitPmApi;
   readonly draft: DraftStatus;
   readonly locale: Locale;
   readonly initialProjectId?: string;
+  readonly initialStatusFilter?: string;
+  readonly initialTypeFilter?: string;
+  readonly initialViewId?: string;
   readonly onNavigate?: WorkspaceNavigate;
   readonly onChanged: () => Promise<void>;
 }) {
@@ -28,11 +31,11 @@ export function BoardWorkspace({ api, draft, locale, initialProjectId = "", onNa
   const [statuses, setStatuses] = useState<readonly ConfigValue[]>([]);
   const [types, setTypes] = useState<readonly ConfigValue[]>([]);
   const [projectId, setProjectId] = useState(initialProjectId);
-  const [statusFilter, setStatusFilter] = useState("");
-  const [typeFilter, setTypeFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState(initialStatusFilter);
+  const [typeFilter, setTypeFilter] = useState(initialTypeFilter);
   const [fingerprint, setFingerprint] = useState(draft.fingerprint);
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
-  const [activeViewId, setActiveViewId] = useState("");
+  const [activeViewId, setActiveViewId] = useState(initialViewId);
   const [error, setError] = useState<string | null>(null);
   const loadRequest = useAsyncLoad();
   const readOnly = draft.writer_mode !== "ui" || draft.state !== "open" || draft.changed_externally === true;
@@ -91,9 +94,14 @@ export function BoardWorkspace({ api, draft, locale, initialProjectId = "", onNa
     void mutate(async () => await api.createEntity(draft.draft_id, "views", fingerprint, document));
     event.currentTarget.reset();
   };
+  const applyFilters = (status: string, type: string, view = "") => {
+    setStatusFilter(status); setTypeFilter(type); setActiveViewId(view);
+    const query = { ...(status === "" ? {} : { status: [status] }), ...(type === "" ? {} : { type: [type] }), ...(view === "" ? {} : { view: [view] }) };
+    onNavigate("board", { projectId, query });
+  };
   const openView = (view: EntityResult) => {
     const filters = typeof view.document.filters === "object" && view.document.filters !== null ? view.document.filters as Readonly<Record<string, unknown>> : {};
-    setStatusFilter(strings(filters.statuses)[0] ?? ""); setTypeFilter(strings(filters.types)[0] ?? ""); setActiveViewId(view.document.id);
+    applyFilters(strings(filters.statuses)[0] ?? "", strings(filters.types)[0] ?? "", view.document.id);
   };
 
   return <section className="board-workspace">
@@ -102,9 +110,9 @@ export function BoardWorkspace({ api, draft, locale, initialProjectId = "", onNa
     <AsyncBoundary state={loadRequest.state} loading={t("status.loading")} retry={() => { void load(); }} error={(loadError, retry) => <div className="alert error">{loadError}<button onClick={retry}>{t("status.retry")}</button></div>}>
     <>
     <section className="card board-toolbar">
-      <label>{t("board.project")}<select value={projectId} onChange={(event) => onNavigate("board", { projectId: event.target.value })}>{projects.map((project) => <option key={project.document.id} value={project.document.id}>{text(project.document, "name")}</option>)}</select></label>
-      <label>{t("board.statusFilter")}<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setActiveViewId(""); }}><option value="">{t("board.all")}</option>{boardStatuses.map((status) => <option key={status} value={status}>{titleForStatus(status)}</option>)}</select></label>
-      <label>{t("board.typeFilter")}<select value={typeFilter} onChange={(event) => { setTypeFilter(event.target.value); setActiveViewId(""); }}><option value="">{t("board.all")}</option>{types.map((type) => <option key={type.slug} value={type.slug}>{type.title}</option>)}</select></label>
+      <label>{t("board.project")}<select aria-label={t("board.project")} value={projectId} onChange={(event) => onNavigate("board", { projectId: event.target.value })}>{projects.map((project) => <option key={project.document.id} value={project.document.id}>{text(project.document, "name")}</option>)}</select></label>
+      <label>{t("board.statusFilter")}<select aria-label={t("board.statusFilter")} value={statusFilter} onChange={(event) => applyFilters(event.target.value, typeFilter)}><option value="">{t("board.all")}</option>{boardStatuses.map((status) => <option key={status} value={status}>{titleForStatus(status)}</option>)}</select></label>
+      <label>{t("board.typeFilter")}<select aria-label={t("board.typeFilter")} value={typeFilter} onChange={(event) => applyFilters(statusFilter, event.target.value)}><option value="">{t("board.all")}</option>{types.map((type) => <option key={type.slug} value={type.slug}>{type.title}</option>)}</select></label>
       <span className="board-count">{t("board.visible", { count: visibleTasks.length })}</span>
     </section>
     <div className="board-columns">{boardStatuses.map((status) => {

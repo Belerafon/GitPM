@@ -12,10 +12,10 @@
 | Этап | Состояние | Примечание |
 | --- | --- | --- |
 | UX00 | Завершён | Work packages, automated verification, manual acceptance, exit gate и handoff закрыты 2026-07-14; пакет зафиксирован commit `4a4c816`. |
-| UX01 | В работе | Route adapter, History API, deep links/reload/back-forward, App Shell, grouped navigation, breadcrumbs и упрощённый topbar готовы; открыта полная синхронизация Board/saved-view filters с query state. |
+| UX01 | Завершён | Route adapter, History API, deep links/reload/back-forward, App Shell, grouped navigation, breadcrumbs, упрощённый topbar и route/query restoration закрыты 2026-07-14. |
 | UX02–UX07 | Не начаты | Ожидают завершения exit gate UX00 и зависимостей по плану. |
 
-Текущий следующий шаг: зафиксировать breadcrumbs/topbar package UX01, затем синхронизировать Board/saved-view filters с query state и провести итоговый UX01 acceptance.
+Текущий следующий шаг: зафиксировать финальный route/query package и handoff UX01, затем начать UX02 с инвентаризации повторяющихся UI-контрактов и design tokens.
 
 ## 1. Цель
 
@@ -199,7 +199,7 @@ Evidence 2026-07-14: `pnpm test` — 38 files / 129 tests; `pnpm typecheck`, `pn
 ```
 
 - [x] Перенести выбранный проект, задачу, commit и Task status filter в route/query state.
-- [ ] Перенести Board filters/saved view и остальные контекстные фильтры в query state по мере реализации соответствующих экранов.
+- [x] Перенести Board filters/saved view и остальные реализованные контекстные фильтры в query state.
 - [x] Реализовать back, forward, deep links и reload restoration.
 - [x] Сгруппировать меню:
   - Планирование: Портфель, Проекты, Задачи, Доска, Гант, Загрузка;
@@ -220,8 +220,8 @@ Evidence 2026-07-14: `pnpm test` — 38 files / 129 tests; `pnpm typecheck`, `pn
 
 ### Exit gate
 
-- [ ] URL однозначно описывает весь пользовательский контекст.
-- [ ] Перезагрузка страницы не теряет выбранную сущность и все фильтры.
+- [x] URL однозначно описывает весь реализованный пользовательский контекст.
+- [x] Перезагрузка страницы не теряет выбранную сущность и реализованные фильтры.
 - [x] Browser back/forward работает без рассинхронизации UI.
 
 ## UX02. UI Kit, design tokens и UX-контракты

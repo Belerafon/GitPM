@@ -40,6 +40,7 @@ describe("Board and Saved Views", () => {
 
     fireEvent.change(screen.getByLabelText("Status filter"), { target: { value: "done" } });
     fireEvent.change(screen.getByLabelText("Type filter"), { target: { value: "task" } });
+    expect(onNavigate).toHaveBeenCalledWith("board", { projectId, query: { status: ["done"], type: ["task"] } });
     fireEvent.change(screen.getByLabelText("View name"), { target: { value: "Done tasks" } });
     fireEvent.click(screen.getByRole("button", { name: "Save view" }));
     expect(await screen.findByRole("button", { name: /Done tasks/u })).toBeTruthy();
@@ -51,5 +52,13 @@ describe("Board and Saved Views", () => {
     fireEvent.click(screen.getByRole("button", { name: /Done tasks/u }));
     expect((screen.getByLabelText("Status filter") as HTMLSelectElement).value).toBe("done");
     expect((screen.getByLabelText("Type filter") as HTMLSelectElement).value).toBe("task");
+    expect(onNavigate).toHaveBeenCalledWith("board", { projectId, query: { status: ["done"], type: ["task"], view: [saved.document.id] } });
+  });
+
+  it("restores project, status, type and saved view route state", async () => {
+    const api = new BoardApi() as unknown as GitPmApi;
+    render(<BoardWorkspace api={api} draft={draft} locale="en" initialProjectId={projectId} initialStatusFilter="done" initialTypeFilter="task" initialViewId="V-26-ROUTED" onChanged={vi.fn(async () => undefined)} />);
+    expect(await screen.findByLabelText("Status filter")).toHaveProperty("value", "done");
+    expect(screen.getByLabelText("Type filter")).toHaveProperty("value", "task");
   });
 });
