@@ -24,6 +24,9 @@
   "nav.gantt": "Диаграмма Ганта",
   "nav.changes": "Изменения",
   "nav.history": "История",
+  "nav.label": "Основная навигация",
+  "nav.openMenu": "Открыть навигацию",
+  "nav.closeMenu": "Закрыть навигацию",
   "drafts.heading": "Рабочие копии",
   "drafts.description": "Каждая рабочая копия — отдельная Git-ветка и каталог изменений. Переключайтесь между ними, не смешивая независимую работу.",
   "drafts.current": "Текущая рабочая копия",
@@ -92,6 +95,7 @@
   ,"core.save": "Сохранить"
   ,"core.archive": "Архивировать"
   ,"core.delete": "Удалить"
+  ,"core.deleteConfirm": "Удалить «{name}» без возможности восстановления?"
   ,"core.details": "Детали задачи"
   ,"core.filter": "Фильтр задач"
   ,"core.allStatuses": "Все статусы"
@@ -99,6 +103,9 @@
   ,"core.selectProject": "Выберите проект для управления работой."
   ,"core.safePreview": "Безопасный просмотр Markdown"
   ,"core.readOnly": "Редактирование недоступно для этой рабочей копии."
+  ,"core.openTasks": "Открыть задачи"
+  ,"core.openBoard": "Открыть доску"
+  ,"core.openGantt": "Открыть Гант"
   ,"admin.heading": "Администрирование"
   ,"admin.people": "Люди"
   ,"admin.teams": "Команды"

@@ -209,14 +209,23 @@ Implementation code: P00-P14 complete; Alpha, Beta, release candidate and releas
 - Final clean verification passes 33 test files/107 tests plus smoke, schema, security and planning checks.
 - The release gate passes all 20 stages and 32 verification checks.
 
+## UX/UI global refactoring
+
+- `GitPM_UX_UI_Global_Refactoring_Plan_v0.1.md` is active as of 2026-07-14.
+- UX00 implementation and acceptance are complete: responsive navigation drawer, scroll/focus restoration, 1280 px People layout stabilization, destructive entity confirmations, distinct archive/delete styling and configured status titles are implemented and accepted. Stage handoff remains open until the commit-series and clean-tree DoD are satisfied.
+- Context-preserving Project and Task transitions between Portfolio, Projects, Tasks, Board, Gantt and Workload provide partial UX01 groundwork; URL routing remains pending.
+- Focused web verification passes 6 test files and 22 tests; the full suite passes 38 files and 129 tests, repository typecheck and lint pass, and the web production build succeeds.
+- The UX00 Playwright flow reaches all 12 sections at 320, 390, 800, 1280 and 1920 px, checks restored focus and rejects page-level horizontal overflow against the actual document client width.
+- Browser acceptance confirms the 320 px navigation drawer, the one-column 1280 px People layout and cancellation of permanent deletion; screenshots are stored under `evidence/ux00/`.
+
 ## Current blockers
 
 None. P00-P14 and the v0.1 release gate are accepted.
 
 ## Next action
 
-Create the local `v0.1` release tag on the accepted commit.
+Separate and commit UX00 plus the already-started UX01 groundwork, restore a clean working tree, then start the route adapter and route parsing/serialization tests.
 
 ## Evidence policy
 
-Detailed stage and check status is maintained only in `GitPM_Execution_Status_v0.1.yaml`. This file records decisions and next action, not duplicate checklists.
+Detailed P00–P14 release status is maintained in `GitPM_Execution_Status_v0.1.yaml`; UX/UI refactoring status is maintained in `GitPM_UX_UI_Global_Refactoring_Plan_v0.1.md`. This file records evidence, decisions and the next action without duplicating either checklist.

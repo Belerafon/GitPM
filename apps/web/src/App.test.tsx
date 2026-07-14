@@ -117,6 +117,28 @@ describe("localization runtime", () => {
 });
 
 describe("frontend draft lifecycle", () => {
+  it("opens the responsive navigation by keyboard, closes it with Escape, and restores scroll and focus after navigation", async () => {
+    const api = new FakeApi();
+    render(<App api={api} browserLanguages={["en"]} />);
+    await screen.findByRole("heading", { name: "Working copies" });
+    const menuButton = screen.getByRole("button", { name: "Open navigation" });
+
+    fireEvent.click(menuButton);
+    expect(menuButton.getAttribute("aria-expanded")).toBe("true");
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Working copies" }));
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(menuButton.getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).toBe(menuButton);
+
+    document.documentElement.scrollTop = 500;
+    fireEvent.click(menuButton);
+    fireEvent.click(screen.getByRole("button", { name: "Portfolio" }));
+    const emptyState = await screen.findByText("Select a project to manage its work.");
+    expect(document.documentElement.scrollTop).toBe(0);
+    expect(document.activeElement).toBe(emptyState);
+    expect(menuButton.getAttribute("aria-expanded")).toBe("false");
+  });
+
   it("starts loading on navigation and never renders unknown totals as zero", async () => {
     let releaseProjects!: () => void;
     const projectsGate = new Promise<void>((resolve) => { releaseProjects = resolve; });
@@ -185,7 +207,10 @@ describe("frontend draft lifecycle", () => {
     expect(screen.queryByRole("button", { name: "Create project" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Create task" })).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Tasks" }));
+    fireEvent.click(screen.getByRole("button", { name: /Alpha/u }));
+    expect(await screen.findByRole("heading", { name: "Projects" })).toBeTruthy();
+    expect(screen.getByDisplayValue("Alpha").closest(".entity-card")?.className).toContain("selected");
+    fireEvent.click(screen.getByRole("button", { name: "Open tasks" }));
     expect(await screen.findByRole("heading", { name: "Tasks" })).toBeTruthy();
     expect(screen.getByLabelText("Project")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Create task" })).toBeTruthy();

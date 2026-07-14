@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GitPmApi } from "./api.js";
 import type { DraftStatus, EntityResult, GitPmDocument } from "./types.js";
@@ -25,8 +25,9 @@ afterEach(cleanup);
 describe("Workload UI", () => {
   it("renders deterministic Person-week values and excludes archived and undated Tasks", async () => {
     const entities = [shared, span, undated, archived, ada, linus, calendar];
+    const onNavigate = vi.fn();
     const api = { listEntities: vi.fn(async (_draftId: string, type: string) => entities.filter((item) => ({ tasks: "gitpm/task@1", people: "gitpm/person@1", calendars: "gitpm/calendar@1" })[type] === item.document.schema)) } as unknown as GitPmApi;
-    const { container } = render(<WorkloadWorkspace api={api} draft={draft} locale="en" />);
+    const { container } = render(<WorkloadWorkspace api={api} draft={draft} locale="en" onNavigate={onNavigate} />);
     await waitFor(() => expect(container.querySelectorAll(".workload-table tbody tr")).toHaveLength(2));
     expect(screen.getByText("Included Tasks").nextElementSibling?.textContent).toBe("2");
     expect(screen.getByText("Excluded Tasks").nextElementSibling?.textContent).toBe("2");
@@ -35,5 +36,7 @@ describe("Workload UI", () => {
     expect(container.querySelector(`[data-person-id="${linusId}"][data-week="2026-07-06"]`)?.textContent).toContain("20h / 25.6h");
     expect(screen.getByText("Missing or invalid date range").nextElementSibling?.textContent).toBe("1");
     expect(screen.getByText("Archived").nextElementSibling?.textContent).toBe("1");
+    fireEvent.click(screen.getByRole("button", { name: "Ada" }));
+    expect(onNavigate).toHaveBeenCalledWith("people");
   });
 });

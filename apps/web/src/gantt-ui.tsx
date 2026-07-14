@@ -3,6 +3,7 @@ import type { GitPmApi } from "./api.js";
 import { formatDateOnly, message, type Locale, type MessageKey } from "./i18n.js";
 import type { DraftStatus, EntityResult, GitPmDocument } from "./types.js";
 import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
+import type { WorkspaceNavigate } from "./workspace-navigation.js";
 
 const DAY_MS = 86_400_000;
 const text = (document: GitPmDocument, key: string) => typeof document[key] === "string" ? document[key] as string : "";
@@ -65,12 +66,12 @@ export function buildGanttModel(tasks: readonly EntityResult[], milestones: read
   };
 }
 
-export function GanttWorkspace({ api, draft, locale }: { readonly api: GitPmApi; readonly draft: DraftStatus; readonly locale: Locale }) {
+export function GanttWorkspace({ api, draft, locale, initialProjectId = "", onNavigate = () => undefined }: { readonly api: GitPmApi; readonly draft: DraftStatus; readonly locale: Locale; readonly initialProjectId?: string; readonly onNavigate?: WorkspaceNavigate }) {
   const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
   const [projects, setProjects] = useState<readonly EntityResult[]>([]);
   const [tasks, setTasks] = useState<readonly EntityResult[]>([]);
   const [milestones, setMilestones] = useState<readonly EntityResult[]>([]);
-  const [projectId, setProjectId] = useState("");
+  const [projectId, setProjectId] = useState(initialProjectId);
   const [error, setError] = useState<string | null>(null);
   const loadRequest = useAsyncLoad();
   const load = useCallback(async (preferredProject = projectId) => {
@@ -83,7 +84,7 @@ export function GanttWorkspace({ api, draft, locale }: { readonly api: GitPmApi;
       setProjects(nextProjects); setProjectId(nextProject); setTasks(nextTasks); setMilestones(nextMilestones); setError(null);
     });
   }, [api, draft.draft_id, loadRequest.run, projectId]);
-  useEffect(() => { void load(); }, [draft.draft_id, draft.external_fingerprint]);
+  useEffect(() => { void load(initialProjectId); }, [draft.draft_id, draft.external_fingerprint]);
   const model = useMemo(() => buildGanttModel(tasks, milestones), [tasks, milestones]);
   const rowIndex = new Map(model?.rows.map((row, index) => [row.id, index]) ?? []);
   const milestoneNames = new Map(milestones.map((item) => [item.document.id, text(item.document, "name")]));
@@ -95,11 +96,11 @@ export function GanttWorkspace({ api, draft, locale }: { readonly api: GitPmApi;
     <>
     <section className="card gantt-toolbar"><label>{t("gantt.project")}<select value={projectId} onChange={(event) => { void load(event.target.value); }}>{projects.map((project) => <option key={project.document.id} value={project.document.id}>{text(project.document, "name")}</option>)}</select></label><span>{t("gantt.visible", { count: model?.rows.length ?? 0 })}</span><span className="state open">{t("gantt.readOnly")}</span></section>
     {model === null ? <section className="card empty-workspace">{t("gantt.empty")}</section> : <section className="card gantt-scroll" aria-label={t("gantt.chart")} data-start={model.start} data-due={model.due}>
-      <div className="gantt-labels"><div className="gantt-label-head">{t("gantt.tasks")}</div>{model.rows.map((row) => <div className="gantt-label" key={row.id} style={{ paddingInlineStart: `${.75 + row.depth * 1.1}rem` }}><strong>{row.title}</strong><span>{formatDateOnly(locale, row.start)} — {formatDateOnly(locale, row.due)}</span>{row.milestone !== undefined && <small>{milestoneNames.get(row.milestone)}</small>}</div>)}</div>
+      <div className="gantt-labels"><div className="gantt-label-head">{t("gantt.tasks")}</div>{model.rows.map((row) => <div className="gantt-label" key={row.id} style={{ paddingInlineStart: `${.75 + row.depth * 1.1}rem` }}><button className="gantt-task-link" onClick={() => onNavigate("tasks", { projectId, taskId: row.id })}><strong>{row.title}</strong><span>{formatDateOnly(locale, row.start)} — {formatDateOnly(locale, row.due)}</span>{row.milestone !== undefined && <small>{milestoneNames.get(row.milestone)}</small>}</button></div>)}</div>
       <div className="gantt-timeline" style={{ width: `${Math.max(720, model.days.length * 36)}px` }}>
         <div className="gantt-days" style={{ gridTemplateColumns: `repeat(${model.days.length}, 36px)` }}>{model.days.map((day) => <time key={day} dateTime={day}><span>{day.slice(8)}</span><small>{day.slice(5, 7)}</small></time>)}</div>
         <div className="gantt-grid" style={{ backgroundSize: "36px 100%" }} />
-        {model.rows.map((row, index) => <div className="gantt-bar" data-task-id={row.id} data-start={row.start} data-due={row.due} key={row.id} title={`${row.title}: ${row.start} — ${row.due}`} style={{ left: `${row.startOffset * 36 + 4}px`, top: `${index * 58 + 51}px`, width: `${Math.max(28, row.duration * 36 - 8)}px` }}><span>{row.title}</span></div>)}
+        {model.rows.map((row, index) => <button className="gantt-bar" data-task-id={row.id} data-start={row.start} data-due={row.due} key={row.id} title={`${row.title}: ${row.start} — ${row.due}`} style={{ left: `${row.startOffset * 36 + 4}px`, top: `${index * 58 + 51}px`, width: `${Math.max(28, row.duration * 36 - 8)}px` }} onClick={() => onNavigate("tasks", { projectId, taskId: row.id })}><span>{row.title}</span></button>)}
         {model.milestones.map((milestone) => <div className="gantt-milestone" data-milestone-id={milestone.id} key={milestone.id} title={`${milestone.name}: ${milestone.due}`} style={{ left: `${milestone.offset * 36 + 13}px` }}><span>{milestone.name}</span></div>)}
         <svg className="gantt-dependencies" aria-label={t("gantt.dependencies")} height={model.rows.length * 58 + 48} width={Math.max(720, model.days.length * 36)}>{model.dependencies.map((dependency) => {
           const from = model.rows.find((row) => row.id === dependency.from)!; const to = model.rows.find((row) => row.id === dependency.to)!;

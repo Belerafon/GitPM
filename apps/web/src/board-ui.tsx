@@ -4,6 +4,7 @@ import type { GitPmApi } from "./api.js";
 import { message, type Locale, type MessageKey } from "./i18n.js";
 import type { DraftStatus, EntityResult, GitPmDocument } from "./types.js";
 import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
+import type { WorkspaceNavigate } from "./workspace-navigation.js";
 
 interface ConfigValue { readonly slug: string; readonly title: string; readonly active: boolean }
 const text = (document: GitPmDocument, key: string) => typeof document[key] === "string" ? document[key] as string : "";
@@ -12,10 +13,12 @@ const configValues = (document: GitPmDocument, key: "statuses" | "issue_types"):
   ? (document[key] as unknown[]).filter((item): item is ConfigValue => typeof item === "object" && item !== null && typeof (item as ConfigValue).slug === "string" && typeof (item as ConfigValue).title === "string" && (item as ConfigValue).active === true)
   : [];
 
-export function BoardWorkspace({ api, draft, locale, onChanged }: {
+export function BoardWorkspace({ api, draft, locale, initialProjectId = "", onNavigate = () => undefined, onChanged }: {
   readonly api: GitPmApi;
   readonly draft: DraftStatus;
   readonly locale: Locale;
+  readonly initialProjectId?: string;
+  readonly onNavigate?: WorkspaceNavigate;
   readonly onChanged: () => Promise<void>;
 }) {
   const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
@@ -24,7 +27,7 @@ export function BoardWorkspace({ api, draft, locale, onChanged }: {
   const [views, setViews] = useState<readonly EntityResult[]>([]);
   const [statuses, setStatuses] = useState<readonly ConfigValue[]>([]);
   const [types, setTypes] = useState<readonly ConfigValue[]>([]);
-  const [projectId, setProjectId] = useState("");
+  const [projectId, setProjectId] = useState(initialProjectId);
   const [statusFilter, setStatusFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [fingerprint, setFingerprint] = useState(draft.fingerprint);
@@ -52,7 +55,7 @@ export function BoardWorkspace({ api, draft, locale, onChanged }: {
     });
   }, [api, draft.draft_id, draft.fingerprint, loadRequest.run, projectId]);
 
-  useEffect(() => { void load(); }, [draft.draft_id, draft.external_fingerprint]);
+  useEffect(() => { void load(initialProjectId); }, [draft.draft_id, draft.external_fingerprint]);
   const report = (caught: unknown) => setError(caught instanceof Error ? caught.message : String(caught));
   const mutate = async (operation: () => Promise<EntityResult>) => {
     setError(null);
@@ -109,7 +112,7 @@ export function BoardWorkspace({ api, draft, locale, onChanged }: {
       return <section className="board-column" data-status={status} key={status} onDragOver={(event) => event.preventDefault()} onDrop={(event) => drop(event, status)} onPointerUp={() => { if (draggedTaskId !== null) moveTask(status, draggedTaskId); }}>
         <header><h3>{titleForStatus(status)}</h3><span>{columnTasks.length}</span></header>
         <div className="board-cards">{columnTasks.map((task) => <article className="board-card" draggable={!readOnly} data-task-id={task.document.id} key={task.document.id} onPointerDown={() => { if (!readOnly) setDraggedTaskId(task.document.id); }} onDragStart={(event) => { setDraggedTaskId(task.document.id); event.dataTransfer.setData("text/plain", task.document.id); }} onDragEnd={() => setDraggedTaskId(null)}>
-          <strong>{text(task.document, "title")}</strong><code>{task.document.id}</code><span>{types.find((type) => type.slug === text(task.document, "type"))?.title ?? text(task.document, "type")}</span>
+          <button className="board-task-link" onPointerDown={(event) => event.stopPropagation()} onClick={() => onNavigate("tasks", { projectId, taskId: task.document.id })}><strong>{text(task.document, "title")}</strong><code>{task.document.id}</code></button><span>{types.find((type) => type.slug === text(task.document, "type"))?.title ?? text(task.document, "type")}</span>
         </article>)}</div>
       </section>;
     })}</div>

@@ -24,6 +24,9 @@
   "nav.gantt": "Gantt",
   "nav.changes": "Changes",
   "nav.history": "History",
+  "nav.label": "Main navigation",
+  "nav.openMenu": "Open navigation",
+  "nav.closeMenu": "Close navigation",
   "drafts.heading": "Working copies",
   "drafts.description": "Each working copy has its own Git branch and worktree, so independent changes stay separate.",
   "drafts.current": "Current working copy",
@@ -92,6 +95,7 @@
   ,"core.save": "Save"
   ,"core.archive": "Archive"
   ,"core.delete": "Delete"
+  ,"core.deleteConfirm": "Delete {name} permanently? This action cannot be undone."
   ,"core.details": "Task details"
   ,"core.filter": "Filter tasks"
   ,"core.allStatuses": "All statuses"
@@ -99,6 +103,9 @@
   ,"core.selectProject": "Select a project to manage its work."
   ,"core.safePreview": "Safe Markdown preview"
   ,"core.readOnly": "Core editing is read-only for this working copy."
+  ,"core.openTasks": "Open tasks"
+  ,"core.openBoard": "Open board"
+  ,"core.openGantt": "Open Gantt"
   ,"admin.heading": "Administration"
   ,"admin.people": "People"
   ,"admin.teams": "Teams"

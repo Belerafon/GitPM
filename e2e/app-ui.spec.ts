@@ -67,6 +67,27 @@ test.describe("GitPM browser UI", () => {
     await expect(page.getByRole("button", { name: "Рабочие копии", exact: true })).toBeVisible();
   });
 
+  test("keeps every section reachable and restores focus without page overflow at UX00 viewports", async ({ page }) => {
+    const destinations = ["Working copies", "Portfolio", "Projects", "Tasks", "Board", "People", "Calendar", "Repository settings", "Workload", "Gantt", "Changes", "History"] as const;
+    for (const width of [320, 390, 800, 1280, 1920]) {
+      await page.setViewportSize({ width, height: 844 });
+      await page.goto("/");
+      await page.locator(".locale-picker select").selectOption("en");
+
+      for (const destination of destinations) {
+        if (width <= 880) {
+          await page.getByRole("button", { name: "Open navigation", exact: true }).click();
+          await expect(page.locator("aside.sidebar.open")).toBeVisible();
+        }
+        const navigationItem = page.getByRole("button", { name: destination, exact: true });
+        await navigationItem.click();
+        await expect(navigationItem).toHaveAttribute("aria-current", "page");
+        await expect.poll(async () => await page.evaluate(() => document.activeElement?.getAttribute("tabindex"))).toBe("-1");
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+      }
+    }
+  });
+
   test("creates, switches and remembers a working copy", async ({ page }) => {
     await page.goto("/");
     await page.getByRole("button", { name: "Рабочие копии", exact: true }).click();

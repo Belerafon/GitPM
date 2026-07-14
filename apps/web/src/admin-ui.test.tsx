@@ -56,4 +56,23 @@ describe("administration UI", () => {
     expect((screen.getByRole("button", { name: "Create calendar" }) as HTMLButtonElement).disabled).toBe(true);
     expect(admin.mutations).toBe(0);
   });
+
+  it("keeps archive reversible and confirms permanent administration deletion", async () => {
+    const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
+    await admin.createEntity("DRF-ADMIN", "calendars", "", { schema: "gitpm/calendar@1", id: "CAL-26-111111", name: "Default", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
+    const confirmAction = vi.fn(() => false);
+    render(<AdminWorkspace api={api} confirmAction={confirmAction} draft={draft} role="Maintainer" locale="en" surface="calendar" onChanged={vi.fn(async () => undefined)} />);
+    await screen.findByDisplayValue("Default");
+
+    const deleteButton = screen.getByRole("button", { name: "Delete" });
+    expect(deleteButton.className).toContain("danger");
+    expect(screen.getByRole("button", { name: "Archive" }).className).not.toContain("danger");
+    fireEvent.click(deleteButton);
+    expect(confirmAction).toHaveBeenCalledWith("Delete Default permanently? This action cannot be undone.");
+    expect(screen.getByDisplayValue("Default")).toBeTruthy();
+
+    confirmAction.mockReturnValue(true);
+    fireEvent.click(deleteButton);
+    await waitFor(() => expect(screen.queryByDisplayValue("Default")).toBeNull());
+  });
 });

@@ -26,8 +26,11 @@ afterEach(cleanup);
 describe("Board and Saved Views", () => {
   it("drags a Task between status columns and reopens persisted filters", async () => {
     const entityApi = new BoardApi(); const api = entityApi as unknown as GitPmApi;
-    const { container } = render(<BoardWorkspace api={api} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} />);
+    const onNavigate = vi.fn();
+    const { container } = render(<BoardWorkspace api={api} draft={draft} locale="en" onNavigate={onNavigate} onChanged={vi.fn(async () => undefined)} />);
     const card = await screen.findByText("Drag me");
+    fireEvent.click(card);
+    expect(onNavigate).toHaveBeenCalledWith("tasks", { projectId, taskId });
     const data = new Map<string, string>(); const dataTransfer = { setData: (kind: string, value: string) => data.set(kind, value), getData: (kind: string) => data.get(kind) ?? "" };
     fireEvent.dragStart(card.closest("article")!, { dataTransfer });
     const doneColumn = container.querySelector<HTMLElement>('[data-status="done"]')!;

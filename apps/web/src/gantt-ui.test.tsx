@@ -33,17 +33,20 @@ describe("read-only Gantt", () => {
 
   it("renders five bars and cannot mutate repository data", async () => {
     const updateEntity = vi.fn(); const createEntity = vi.fn(); const deleteEntity = vi.fn();
+    const onNavigate = vi.fn();
     const entities = [result({ schema: "gitpm/project@1", id: projectId, name: "Beta portfolio", status: "backlog", lifecycle: "active" }), parent, child, dependent, review, launch, undated, archived, milestone];
     const api = { listEntities: vi.fn(async (_draftId: string, type: string, project?: string) => entities.filter((item) => {
       const schemas: Record<string, string> = { projects: "gitpm/project@1", tasks: "gitpm/task@1", milestones: "gitpm/milestone@1" };
       return item.document.schema === schemas[type] && (project === undefined || item.document.project === project);
     })), updateEntity, createEntity, deleteEntity } as unknown as GitPmApi;
-    const { container } = render(<GanttWorkspace api={api} draft={draft} locale="en" />);
+    const { container } = render(<GanttWorkspace api={api} draft={draft} locale="en" onNavigate={onNavigate} />);
     await waitFor(() => expect(container.querySelectorAll(".gantt-bar")).toHaveLength(5));
     expect(screen.queryByText("Undated")).toBeNull(); expect(screen.queryByText("Archived")).toBeNull();
     expect(container.querySelectorAll(".gantt-dependencies path[data-from]")).toHaveLength(3);
     expect(container.querySelector('[data-milestone-id]')?.getAttribute("title")).toBe("Beta: 2026-07-08");
     const bar = container.querySelector<HTMLElement>(`[data-task-id="${child.document.id}"]`)!;
+    fireEvent.click(bar);
+    expect(onNavigate).toHaveBeenCalledWith("tasks", { projectId, taskId: child.document.id });
     fireEvent.pointerDown(bar); fireEvent.pointerMove(bar, { clientX: 400 }); fireEvent.pointerUp(bar);
     expect(updateEntity).not.toHaveBeenCalled(); expect(createEntity).not.toHaveBeenCalled(); expect(deleteEntity).not.toHaveBeenCalled();
   });

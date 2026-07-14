@@ -66,6 +66,25 @@ describe("core UI", () => {
     expect(entityApi.entities.find((item) => item.document.schema === "gitpm/task@1")?.document.lifecycle).toBe("archived");
   });
 
+  it("uses configured status titles and requires confirmation before permanent deletion", async () => {
+    const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
+    const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
+    await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@1", id: "T-26-222222", project: project.document.id, title: "Localized task", type: "task", status: "backlog", lifecycle: "active" });
+    const confirmAction = vi.fn(() => false);
+    const rendered = render(<CoreWorkspace api={api} confirmAction={confirmAction} draft={draft} locale="en" surface="portfolio" onChanged={vi.fn(async () => undefined)} />);
+
+    expect(await screen.findByText("Backlog")).toBeTruthy();
+    rendered.rerender(<CoreWorkspace api={api} confirmAction={confirmAction} draft={draft} locale="en" surface="projects" onChanged={vi.fn(async () => undefined)} />);
+    await screen.findByDisplayValue("Alpha");
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    expect(confirmAction).toHaveBeenCalledWith("Delete Alpha permanently? This action cannot be undone.");
+    expect(entityApi.entities).toContain(project);
+
+    confirmAction.mockReturnValue(true);
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(screen.queryByDisplayValue("Alpha")).toBeNull());
+  });
+
   it("reloads external changes, marks only changed fields, and keeps the focused read control", async () => {
     const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
     const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-111111", name: "External project", status: "backlog", lifecycle: "active" });
