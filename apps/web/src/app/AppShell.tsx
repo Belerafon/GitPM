@@ -30,20 +30,35 @@ export function AppShell({ activeView, banner, breadcrumbs, children, headerMeta
     document.documentElement.scrollTop = 0;
     document.body.scrollTop = 0;
     if (workspaceRef.current !== null) workspaceRef.current.scrollTop = 0;
-    const heading = workspaceRef.current?.querySelector<HTMLElement>(".section-heading h2, .draft-list h2, .empty-workspace");
+    const heading = workspaceRef.current?.querySelector<HTMLElement>(".topbar h1, .section-heading h2, .draft-list h2, .empty-workspace");
     if (heading !== null && heading !== undefined) { heading.tabIndex = -1; heading.focus(); }
-  }, [activeView]);
+  }, [activeView, headerTitle]);
 
   useEffect(() => {
     if (!navigationOpen) return;
     (sidebarRef.current?.querySelector<HTMLButtonElement>('nav button[aria-current="page"]') ?? sidebarRef.current?.querySelector<HTMLButtonElement>("nav button"))?.focus();
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      setNavigationOpen(false);
-      navigationButtonRef.current?.focus();
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const handleNavigationKeys = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setNavigationOpen(false);
+        navigationButtonRef.current?.focus();
+        return;
+      }
+      if (event.key !== "Tab" || sidebarRef.current === null) return;
+      const focusable = Array.from(sidebarRef.current.querySelectorAll<HTMLElement>('button:not([disabled]), summary, [href], input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+        .filter((item) => item.offsetParent !== null);
+      if (focusable.length === 0) return;
+      const first = focusable[0]!;
+      const last = focusable[focusable.length - 1]!;
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
     };
-    document.addEventListener("keydown", closeOnEscape);
-    return () => document.removeEventListener("keydown", closeOnEscape);
+    document.addEventListener("keydown", handleNavigationKeys);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleNavigationKeys);
+    };
   }, [navigationOpen]);
 
   const closeNavigation = () => { setNavigationOpen(false); navigationButtonRef.current?.focus(); };
@@ -52,10 +67,10 @@ export function AppShell({ activeView, banner, breadcrumbs, children, headerMeta
   return <div className={`app-shell${repositoryMode ? " repository-mode" : ""}`}>
     <button aria-label={t("nav.closeMenu")} className={`navigation-backdrop${navigationOpen ? " open" : ""}`} onClick={closeNavigation} tabIndex={navigationOpen ? 0 : -1} />
     <aside aria-label={t("nav.label")} className={`sidebar${navigationOpen ? " open" : ""}`} id="primary-navigation" ref={sidebarRef}>
-      <div className="brand"><span className="brand-mark">G</span><strong>{t("app.title")}</strong></div>
+      <div className="sidebar-heading"><div className="brand"><span className="brand-mark">G</span><strong>{t("app.title")}</strong></div><button aria-label={t("nav.closeMenu")} className="navigation-close" onClick={closeNavigation} type="button">×</button></div>
       <nav className="navigation-groups">{navigationGroups.map((group) => <div className="navigation-group" key={group.label}>
         <span className="navigation-group-label">{t(group.label)}</span>
-        {group.items.map((key) => <button aria-current={activeView === key ? "page" : undefined} className={activeView === key ? "active" : ""} key={key} onClick={() => navigate(key)}>{t(key)}</button>)}
+        <div className="navigation-group-items">{group.items.map((key) => <button aria-current={activeView === key ? "page" : undefined} className={activeView === key ? "active" : ""} key={key} onClick={() => navigate(key)}>{t(key)}</button>)}</div>
       </div>)}</nav>
       <div className="repository-card"><span>{t("app.singleRepository")}</span>{repositoryDetails === undefined
         ? <strong>{repositoryName}</strong>
@@ -64,7 +79,7 @@ export function AppShell({ activeView, banner, breadcrumbs, children, headerMeta
     <main className="workspace" ref={workspaceRef}>
       <header className="topbar">
         <button aria-controls="primary-navigation" aria-expanded={navigationOpen} aria-label={t("nav.openMenu")} className="navigation-toggle" onClick={() => setNavigationOpen((open) => !open)} ref={navigationButtonRef}><span aria-hidden="true">☰</span></button>
-        <div><h1>{headerTitle}</h1><p>{headerMeta}</p></div>
+        <div className="page-context"><h1>{headerTitle}</h1><p>{headerMeta}</p></div>
         <div className="top-actions">{topActions}</div>
       </header>
       {breadcrumbs !== undefined && <nav aria-label={t("nav.breadcrumbs")} className="breadcrumbs">{breadcrumbs}</nav>}

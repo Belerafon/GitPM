@@ -41,4 +41,16 @@ describe("History workspace", () => {
     await waitFor(() => expect(createRevertDraft).toHaveBeenCalledWith("DRF-HISTORY", commit, "REVERT-AAAAAAAA"));
     expect(select).toHaveBeenCalledWith("REVERT-AAAAAAAA");
   });
+
+  it("collapses long file lists and filters them on demand", async () => {
+    const files = Array.from({ length: 11 }, (_, index) => ({ path: `projects/P-26-111111/tasks/T-${String(index).padStart(2, "0")}.yaml`, additions: 1, deletions: 0 }));
+    const api = { history: async () => [item], commitDetail: async () => ({ ...detail, files }) } as unknown as GitPmApi;
+    render(<HistoryWorkspace api={api} draft={draft} locale="en" canRevert={false} onDraftCreated={vi.fn(async () => undefined)} />);
+    const summary = await screen.findByText("Changed files: 11");
+    expect((summary.closest("details") as HTMLDetailsElement).open).toBe(false);
+    fireEvent.click(summary);
+    fireEvent.change(screen.getByLabelText("Search changed files"), { target: { value: "T-07" } });
+    expect(screen.getByRole("button", { name: /T-07\.yaml/u })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /T-06\.yaml/u })).toBeNull();
+  });
 });

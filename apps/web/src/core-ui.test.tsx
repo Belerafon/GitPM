@@ -38,11 +38,13 @@ describe("core UI", () => {
     const rendered = render(<CoreWorkspace api={api} draft={draft} locale="en" surface="projects" onChanged={onChanged} />);
 
     const projectButton = await screen.findByRole("button", { name: "Create project" });
+    expect((screen.getByText("New project").closest("details") as HTMLDetailsElement).open).toBe(false);
     const projectForm = projectButton.closest("form")!;
     fireEvent.change(within(projectForm).getByLabelText("Name"), { target: { value: "Alpha" } });
     fireEvent.change(within(projectForm).getByLabelText("Description (Markdown)"), { target: { value: "# Alpha" } });
     fireEvent.submit(projectForm);
-    expect(await screen.findByDisplayValue("Alpha")).toBeTruthy();
+    const projectName = await screen.findByDisplayValue("Alpha");
+    expect((projectName.closest("details") as HTMLDetailsElement).open).toBe(false);
 
     const milestoneButton = screen.getByRole("button", { name: "Create milestone" });
     const milestoneForm = milestoneButton.closest("form")!;
@@ -50,7 +52,7 @@ describe("core UI", () => {
     fireEvent.submit(milestoneForm);
     expect(await screen.findByDisplayValue("M1")).toBeTruthy();
 
-    rendered.rerender(<CoreWorkspace api={api} draft={draft} locale="en" surface="tasks" onChanged={onChanged} />);
+    rendered.rerender(<CoreWorkspace api={api} draft={draft} initialProjectId={entityApi.entities.find((item) => item.document.schema === "gitpm/project@1")?.document.id} locale="en" surface="tasks" onChanged={onChanged} />);
     const taskButton = await screen.findByRole("button", { name: "Create task" });
     const taskForm = taskButton.closest("form")!;
     fireEvent.change(within(taskForm).getByLabelText("Title"), { target: { value: "First task" } });
@@ -74,8 +76,9 @@ describe("core UI", () => {
     const rendered = render(<CoreWorkspace api={api} confirmAction={confirmAction} draft={draft} locale="en" surface="portfolio" onChanged={vi.fn(async () => undefined)} />);
 
     expect(await screen.findByText("Backlog")).toBeTruthy();
-    rendered.rerender(<CoreWorkspace api={api} confirmAction={confirmAction} draft={draft} locale="en" surface="projects" onChanged={vi.fn(async () => undefined)} />);
+    rendered.rerender(<CoreWorkspace api={api} confirmAction={confirmAction} draft={draft} initialProjectId={project.document.id} locale="en" surface="projects" onChanged={vi.fn(async () => undefined)} />);
     await screen.findByDisplayValue("Alpha");
+    fireEvent.click(screen.getByText("Edit"));
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     expect(confirmAction).toHaveBeenCalledWith("Delete Alpha permanently? This action cannot be undone.");
     expect(entityApi.entities).toContain(project);

@@ -72,6 +72,7 @@ export function GanttWorkspace({ api, draft, locale, initialProjectId = "", onNa
   const [tasks, setTasks] = useState<readonly EntityResult[]>([]);
   const [milestones, setMilestones] = useState<readonly EntityResult[]>([]);
   const [projectId, setProjectId] = useState(initialProjectId);
+  const [dayWidth, setDayWidth] = useState(36);
   const [error, setError] = useState<string | null>(null);
   const loadRequest = useAsyncLoad();
   const load = useCallback(async (preferredProject = projectId) => {
@@ -88,23 +89,24 @@ export function GanttWorkspace({ api, draft, locale, initialProjectId = "", onNa
   const model = useMemo(() => buildGanttModel(tasks, milestones), [tasks, milestones]);
   const rowIndex = new Map(model?.rows.map((row, index) => [row.id, index]) ?? []);
   const milestoneNames = new Map(milestones.map((item) => [item.document.id, text(item.document, "name")]));
+  const timelineWidth = Math.max(720, (model?.days.length ?? 0) * dayWidth);
 
   return <section className="gantt-workspace">
     <div className="section-heading"><span className="eyebrow draft-context-id">{draft.draft_id}</span><h2>{t("gantt.heading")}</h2><p>{t("gantt.description")}</p></div>
     {error !== null && <div className="alert error">{error}</div>}
     <AsyncBoundary state={loadRequest.state} loading={t("status.loading")} retry={() => { void load(); }} error={(loadError, retry) => <div className="alert error">{loadError}<button onClick={retry}>{t("status.retry")}</button></div>}>
     <>
-    <section className="card gantt-toolbar"><label>{t("gantt.project")}<select value={projectId} onChange={(event) => onNavigate("gantt", { projectId: event.target.value })}>{projects.map((project) => <option key={project.document.id} value={project.document.id}>{text(project.document, "name")}</option>)}</select></label><span>{t("gantt.visible", { count: model?.rows.length ?? 0 })}</span><span className="state open">{t("gantt.readOnly")}</span></section>
+    <section className="card gantt-toolbar"><label>{t("gantt.project")}<select value={projectId} onChange={(event) => onNavigate("gantt", { projectId: event.target.value })}>{projects.map((project) => <option key={project.document.id} value={project.document.id}>{text(project.document, "name")}</option>)}</select></label><span>{t("gantt.visible", { count: model?.rows.length ?? 0 })}</span>{model !== null && <time className="gantt-range">{t("gantt.range", { start: formatDateOnly(locale, model.start), due: formatDateOnly(locale, model.due) })}</time>}<div className="gantt-zoom"><button aria-label={t("gantt.zoomOut")} disabled={dayWidth <= 24} onClick={() => setDayWidth((width) => Math.max(24, width - 12))} type="button">−</button><span>{dayWidth}px</span><button aria-label={t("gantt.zoomIn")} disabled={dayWidth >= 60} onClick={() => setDayWidth((width) => Math.min(60, width + 12))} type="button">+</button></div><span className="state open">{t("gantt.readOnly")}</span></section>
     {model === null ? <section className="card empty-workspace">{t("gantt.empty")}</section> : <section className="card gantt-scroll" aria-label={t("gantt.chart")} data-start={model.start} data-due={model.due}>
       <div className="gantt-labels"><div className="gantt-label-head">{t("gantt.tasks")}</div>{model.rows.map((row) => <div className="gantt-label" key={row.id} style={{ paddingInlineStart: `${.75 + row.depth * 1.1}rem` }}><button className="gantt-task-link" onClick={() => onNavigate("tasks", { projectId, taskId: row.id })}><strong>{row.title}</strong><span>{formatDateOnly(locale, row.start)} — {formatDateOnly(locale, row.due)}</span>{row.milestone !== undefined && <small>{milestoneNames.get(row.milestone)}</small>}</button></div>)}</div>
-      <div className="gantt-timeline" style={{ width: `${Math.max(720, model.days.length * 36)}px` }}>
-        <div className="gantt-days" style={{ gridTemplateColumns: `repeat(${model.days.length}, 36px)` }}>{model.days.map((day) => <time key={day} dateTime={day}><span>{day.slice(8)}</span><small>{day.slice(5, 7)}</small></time>)}</div>
-        <div className="gantt-grid" style={{ backgroundSize: "36px 100%" }} />
-        {model.rows.map((row, index) => <button className="gantt-bar" data-task-id={row.id} data-start={row.start} data-due={row.due} key={row.id} title={`${row.title}: ${row.start} — ${row.due}`} style={{ left: `${row.startOffset * 36 + 4}px`, top: `${index * 58 + 51}px`, width: `${Math.max(28, row.duration * 36 - 8)}px` }} onClick={() => onNavigate("tasks", { projectId, taskId: row.id })}><span>{row.title}</span></button>)}
-        {model.milestones.map((milestone) => <div className="gantt-milestone" data-milestone-id={milestone.id} key={milestone.id} title={`${milestone.name}: ${milestone.due}`} style={{ left: `${milestone.offset * 36 + 13}px` }}><span>{milestone.name}</span></div>)}
-        <svg className="gantt-dependencies" aria-label={t("gantt.dependencies")} height={model.rows.length * 58 + 48} width={Math.max(720, model.days.length * 36)}>{model.dependencies.map((dependency) => {
+      <div className="gantt-timeline" style={{ width: `${timelineWidth}px` }}>
+        <div className="gantt-days" style={{ gridTemplateColumns: `repeat(${model.days.length}, ${dayWidth}px)` }}>{model.days.map((day) => <time key={day} dateTime={day}><span>{day.slice(8)}</span><small>{day.slice(5, 7)}</small></time>)}</div>
+        <div className="gantt-grid" style={{ backgroundSize: `${dayWidth}px 100%` }} />
+        {model.rows.map((row, index) => <button className="gantt-bar" data-task-id={row.id} data-start={row.start} data-due={row.due} key={row.id} title={`${row.title}: ${row.start} — ${row.due}`} style={{ left: `${row.startOffset * dayWidth + 4}px`, top: `${index * 58 + 51}px`, width: `${Math.max(28, row.duration * dayWidth - 8)}px` }} onClick={() => onNavigate("tasks", { projectId, taskId: row.id })}><span>{row.title}</span></button>)}
+        {model.milestones.map((milestone) => <div className="gantt-milestone" data-milestone-id={milestone.id} key={milestone.id} title={`${milestone.name}: ${milestone.due}`} style={{ left: `${milestone.offset * dayWidth + 13}px` }}><span>{milestone.name}</span></div>)}
+        <svg className="gantt-dependencies" aria-label={t("gantt.dependencies")} height={model.rows.length * 58 + 48} width={timelineWidth}>{model.dependencies.map((dependency) => {
           const from = model.rows.find((row) => row.id === dependency.from)!; const to = model.rows.find((row) => row.id === dependency.to)!;
-          const x1 = (from.startOffset + from.duration) * 36 - 4; const x2 = to.startOffset * 36 + 4; const y1 = (rowIndex.get(from.id) ?? 0) * 58 + 69; const y2 = (rowIndex.get(to.id) ?? 0) * 58 + 69;
+          const x1 = (from.startOffset + from.duration) * dayWidth - 4; const x2 = to.startOffset * dayWidth + 4; const y1 = (rowIndex.get(from.id) ?? 0) * 58 + 69; const y2 = (rowIndex.get(to.id) ?? 0) * 58 + 69;
           return <path data-from={from.id} data-to={to.id} key={`${from.id}-${to.id}`} d={`M ${x1} ${y1} C ${x1 + 18} ${y1}, ${x2 - 18} ${y2}, ${x2} ${y2}`} markerEnd="url(#gantt-arrow)" />;
         })}<defs><marker id="gantt-arrow" markerHeight="6" markerWidth="6" orient="auto" refX="5" refY="3"><path d="M0,0 L0,6 L6,3 z" /></marker></defs></svg>
       </div>

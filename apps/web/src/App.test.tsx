@@ -122,24 +122,27 @@ describe("frontend draft lifecycle", () => {
     const api = new FakeApi();
     render(<App api={api} browserLanguages={["en"]} />);
     await screen.findByRole("heading", { name: "Working copies" });
-    expect(screen.getByText("Planning")).toBeTruthy();
-    expect(screen.getByText("Team")).toBeTruthy();
-    expect(screen.getByText("Repository")).toBeTruthy();
+    for (const group of ["Work", "Views", "Organization", "Git", "Settings"]) {
+      expect(screen.getByText(group)).toBeTruthy();
+    }
     const menuButton = screen.getByRole("button", { name: "Open navigation" });
 
     fireEvent.click(menuButton);
     expect(menuButton.getAttribute("aria-expanded")).toBe("true");
+    expect(document.body.style.overflow).toBe("hidden");
+    expect(screen.getAllByRole("button", { name: "Close navigation" }).some((button) => button.classList.contains("navigation-close"))).toBe(true);
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Working copies" }));
     fireEvent.keyDown(document, { key: "Escape" });
     expect(menuButton.getAttribute("aria-expanded")).toBe("false");
+    expect(document.body.style.overflow).toBe("");
     expect(document.activeElement).toBe(menuButton);
 
     document.documentElement.scrollTop = 500;
     fireEvent.click(menuButton);
     fireEvent.click(screen.getByRole("button", { name: "Portfolio" }));
-    const emptyState = await screen.findByText("Select a project to manage its work.");
+    await screen.findByText("Select a project to manage its work.");
     expect(document.documentElement.scrollTop).toBe(0);
-    expect(document.activeElement).toBe(emptyState);
+    expect(document.activeElement).toBe(screen.getByRole("heading", { level: 1, name: "Portfolio repository" }));
     expect(menuButton.getAttribute("aria-expanded")).toBe("false");
   });
 
@@ -219,7 +222,9 @@ describe("frontend draft lifecycle", () => {
     let breadcrumbs = screen.getByRole("navigation", { name: "Breadcrumbs" });
     expect(within(breadcrumbs).getByRole("button", { name: "Projects" })).toBeTruthy();
     expect(within(breadcrumbs).getByText("P-26-7K4M9Q").getAttribute("aria-current")).toBe("page");
-    expect((await screen.findByDisplayValue("Alpha")).closest(".entity-card")?.className).toContain("selected");
+    const projectEditor = (await screen.findByDisplayValue("Alpha")).closest<HTMLElement>(".entity-card")!;
+    expect(projectEditor.className).toContain("entity-detail-card");
+    expect((within(projectEditor).getByText("Edit").closest("details") as HTMLDetailsElement).open).toBe(false);
     fireEvent.click(await screen.findByRole("button", { name: "Open tasks" }));
     expect(await screen.findByRole("heading", { name: "Tasks" })).toBeTruthy();
     expect(`${window.location.pathname}${window.location.search}`).toBe("/projects/P-26-7K4M9Q/tasks");

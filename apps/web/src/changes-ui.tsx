@@ -141,7 +141,7 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
       <div><strong>{semantic.counts.archived}</strong><span>{t("changes.archived")}</span></div>
       <div><strong>{semantic.counts.deleted}</strong><span>{t("changes.deleted")}</span></div>
     </div>
-    <div className="changes-layout">
+    <div className={`changes-layout${changes.files.length === 0 ? " clean" : ""}`}>
       <aside className="card change-files"><div className="change-files-heading"><h3>{t("changes.fileChanges")}</h3>{changes.files.length > 0 && canMutate && <button className="danger subtle" disabled={busy} onClick={() => { if (confirmAction(t("changes.discardConfirm"))) void run(() => api.discardAll(draft.draft_id, draft.fingerprint)); }}>{t("changes.discardAll")}</button>}</div>
         {changes.files.length === 0 ? <p>{t("changes.clean")}</p> : changes.files.map((file) => <button className={selected?.path === file.path ? "change-file selected" : "change-file"} key={file.path} onClick={() => setSelectedPath(file.path)}><span className={`change-dot kind-${file.kind.toLowerCase()}`} /><span><strong>{t(`changes.kind${file.kind}`)}</strong><code>{file.path}</code></span></button>)}
       </aside>
@@ -159,7 +159,7 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
           : <a className="mr-result" href={safeExternalUrl(mergeRequest.web_url)} target="_blank" rel="noreferrer">{t("changes.mrReady", { iid: mergeRequest.iid, state: mergeRequest.state })}</a>}
       </div>}
     </div>
-    <p className="alpha-limitations">{t("changes.alphaLimitations")}</p>
+    <details className="repository-rules"><summary>{t("changes.repositoryRules")}</summary><p>{t("changes.alphaLimitations")}</p></details>
     {commitOpen && <div className="modal-backdrop" role="presentation"><section className="commit-dialog" role="dialog" aria-modal="true" aria-labelledby="commit-heading"><h3 id="commit-heading">{t("changes.commitHeading")}</h3><p>{t("changes.commitScope", { count: changes.changed_files_count })}</p><label>{t("changes.commitMessage")}<input autoFocus maxLength={500} value={commitMessage} onChange={(event) => setCommitMessage(event.target.value)} /></label><div className="actions"><button onClick={() => setCommitOpen(false)}>{t("changes.cancel")}</button><button className="primary" disabled={busy || !commitMessage.trim()} onClick={() => void commitEverything()}>{t("changes.commitAll")}</button></div></section></div>}
     </>
     </AsyncBoundary>

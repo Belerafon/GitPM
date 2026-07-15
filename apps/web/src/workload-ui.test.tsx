@@ -34,6 +34,8 @@ describe("Workload UI", () => {
     expect(container.querySelector(`[data-person-id="${adaId}"][data-week="2026-07-06"]`)?.textContent).toContain("32h / 32h");
     expect(container.querySelector(`[data-person-id="${adaId}"][data-week="2026-07-13"]`)?.textContent).toContain("18h / 40h");
     expect(container.querySelector(`[data-person-id="${linusId}"][data-week="2026-07-06"]`)?.textContent).toContain("20h / 25.6h");
+    expect(container.querySelector(`[data-person-id="${adaId}"][data-week="2026-07-06"]`)?.className).toContain("near");
+    expect(screen.getByText("Near capacity")).toBeTruthy();
     expect(screen.getByText("Missing or invalid date range").nextElementSibling?.textContent).toBe("1");
     expect(screen.getByText("Archived").nextElementSibling?.textContent).toBe("1");
     fireEvent.click(screen.getByRole("button", { name: "Ada" }));

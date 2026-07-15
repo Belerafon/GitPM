@@ -37,6 +37,8 @@ describe("Board and Saved Views", () => {
     fireEvent.dragOver(doneColumn, { dataTransfer }); fireEvent.drop(doneColumn, { dataTransfer });
     await waitFor(() => expect(entityApi.entities.find((item) => item.document.id === taskId)?.document.status).toBe("done"));
     await waitFor(() => expect(doneColumn.textContent).toContain("Drag me"));
+    fireEvent.change(screen.getByLabelText("Status"), { target: { value: "backlog" } });
+    await waitFor(() => expect(entityApi.entities.find((item) => item.document.id === taskId)?.document.status).toBe("backlog"));
 
     fireEvent.change(screen.getByLabelText("Status filter"), { target: { value: "done" } });
     fireEvent.change(screen.getByLabelText("Type filter"), { target: { value: "task" } });

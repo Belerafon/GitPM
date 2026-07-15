@@ -18,9 +18,9 @@
   "nav.projects": "Projects",
   "nav.tasks": "Tasks",
   "nav.board": "Board",
-  "nav.people": "People",
-  "nav.calendar": "Calendar",
-  "nav.settings": "Repository settings",
+  "nav.people": "People and teams",
+  "nav.calendar": "Working calendars",
+  "nav.settings": "Statuses and task types",
   "nav.workload": "Workload",
   "nav.gantt": "Gantt",
   "nav.changes": "Changes",
@@ -28,9 +28,11 @@
   "nav.label": "Main navigation",
   "nav.openMenu": "Open navigation",
   "nav.closeMenu": "Close navigation",
-  "nav.groupPlanning": "Planning",
-  "nav.groupTeam": "Team",
-  "nav.groupRepository": "Repository",
+  "nav.groupWork": "Work",
+  "nav.groupViews": "Views",
+  "nav.groupOrganization": "Organization",
+  "nav.groupGit": "Git",
+  "nav.groupSettings": "Settings",
   "nav.breadcrumbs": "Breadcrumbs",
   "drafts.heading": "Working copies",
   "drafts.description": "Each working copy has its own Git branch and worktree, so independent changes stay separate.",
@@ -111,6 +113,12 @@
   ,"core.openTasks": "Open tasks"
   ,"core.openBoard": "Open board"
   ,"core.openGantt": "Open Gantt"
+  ,"core.edit": "Edit"
+  ,"core.moreActions": "More actions"
+  ,"core.milestonesFor": "Milestones · {project}"
+  ,"core.createProjectAction": "New project"
+  ,"core.createMilestoneAction": "New milestone"
+  ,"core.createTaskAction": "New task"
   ,"admin.heading": "Administration"
   ,"admin.people": "People"
   ,"admin.teams": "Teams"
@@ -132,6 +140,19 @@
   ,"admin.statuses": "Statuses"
   ,"admin.issueTypes": "Issue types"
   ,"admin.noServerConfig": "Server and OAuth configuration is intentionally not exposed here."
+  ,"admin.editPerson": "Edit person"
+  ,"admin.editTeam": "Edit team"
+  ,"admin.editCalendar": "Edit calendar"
+  ,"admin.peopleSearch": "Search people"
+  ,"admin.memberCount": "{count} members"
+  ,"admin.capacitySummary": "{count} h/week · {calendar}"
+  ,"admin.day1": "Mon"
+  ,"admin.day2": "Tue"
+  ,"admin.day3": "Wed"
+  ,"admin.day4": "Thu"
+  ,"admin.day5": "Fri"
+  ,"admin.day6": "Sat"
+  ,"admin.day7": "Sun"
   ,"changes.heading": "Changes"
   ,"changes.description": "Review the exact Git diff, understand domain changes, and publish the whole working copy."
   ,"changes.readOnly": "Changes are read-only for this working copy or role."
@@ -157,7 +178,7 @@
   ,"changes.unclassified": "Files without a domain classification: {count}"
   ,"changes.publishEyebrow": "Publication"
   ,"changes.publishHeading": "Commit, push, and create a merge request"
-  ,"changes.commitAllHint": "Alpha commits all changed files together; selective staging is not available."
+  ,"changes.commitAllHint": "The commit will include all changed files in this working copy."
   ,"changes.openCommit": "Prepare commit"
   ,"changes.commitHeading": "Commit all changes"
   ,"changes.commitScope": "All {count} changed files will be committed."
@@ -173,7 +194,8 @@
   ,"changes.mrDescription": "Description"
   ,"changes.createMr": "Create merge request"
   ,"changes.mrReady": "Merge request !{iid}: {state}"
-  ,"changes.alphaLimitations": "Alpha limitation: one repository and one working-copy owner; commit always includes every changed file; merge-request options are limited to title and description."
+  ,"changes.alphaLimitations": "One repository and one working-copy owner are configured. A commit includes every changed file; merge-request options include a title and description."
+  ,"changes.repositoryRules": "Repository publication rules"
   ,"history.heading": "History"
   ,"history.description": "Inspect the commit graph, files, domain impact, and create a separate working copy for a revert."
   ,"history.empty": "Select a commit to inspect it."
@@ -184,6 +206,8 @@
   ,"history.projects": "Affected projects"
   ,"history.fileHistory": "File history"
   ,"history.diff": "Exact Git diff"
+  ,"history.searchFiles": "Search changed files"
+  ,"history.changedFiles": "Changed files: {count}"
   ,"history.revertDraft": "Revert working copy ID"
   ,"history.createRevert": "Create revert working copy"
   ,"history.conflict": "The revert working copy has conflicts in {count} files and was opened in external mode."
@@ -199,6 +223,9 @@
   ,"board.savedDescription": "Save the current Project, status, and type filters as a Board view."
   ,"board.viewName": "View name"
   ,"board.saveView": "Save view"
+  ,"board.scrollHint": "More status columns may be available horizontally."
+  ,"board.previousColumns": "Show previous columns"
+  ,"board.nextColumns": "Show next columns"
   ,"gantt.heading": "Gantt"
   ,"gantt.description": "Read Task dates, hierarchy, milestones, and dependencies without changing repository data."
   ,"gantt.project": "Project"
@@ -208,6 +235,9 @@
   ,"gantt.chart": "Read-only Gantt chart"
   ,"gantt.tasks": "Tasks"
   ,"gantt.dependencies": "Task dependencies"
+  ,"gantt.zoomOut": "Zoom out"
+  ,"gantt.zoomIn": "Zoom in"
+  ,"gantt.range": "{start} — {due}"
   ,"workload.heading": "Workload"
   ,"workload.description": "Compare approximate weekly allocation with calendar-adjusted capacity."
   ,"workload.included": "Included Tasks"
@@ -227,4 +257,29 @@
   ,"workload.unestimated": "Missing estimate"
   ,"workload.unassigned": "No assignees"
   ,"workload.unavailable": "No active assignee with an active calendar"
+  ,"workload.legendLow": "Available"
+  ,"workload.legendBalanced": "Balanced"
+  ,"workload.legendNear": "Near capacity"
+  ,"workload.legendOver": "Over capacity"
+  ,"feedback.saving": "Saving..."
+  ,"feedback.saved": "Saved"
+  ,"feedback.undone": "Change undone"
+  ,"feedback.undo": "Undo"
+  ,"core.taskDetailDescription": "Review the task, then edit it only when a change is needed."
+  ,"core.projectDetailDescription": "Project overview, milestones and shortcuts to its working views."
+  ,"core.allTasksDescription": "All active tasks across the repository. Choose a project to narrow the list or create a task."
+  ,"core.projectListDescription": "Open a project to see its overview and milestones."
+  ,"core.noDescription": "No description yet."
+  ,"core.openProject": "Open project"
+  ,"core.projectNotFound": "This project was not found or is archived."
+  ,"core.noMilestones": "No active milestones in this project."
+  ,"core.backToTasks": "Back to tasks"
+  ,"core.taskNotFound": "This task was not found or is archived."
+  ,"core.allTasks": "All tasks"
+  ,"core.tasksFor": "Tasks - {project}"
+  ,"core.allTasksHint": "The list includes tasks from every active project."
+  ,"core.projectTasksHint": "Only tasks from the selected project are shown."
+  ,"core.allProjects": "All projects"
+  ,"core.selectProjectToCreate": "Choose a project in the filter to create a new task."
+  ,"core.type": "Type"
 }

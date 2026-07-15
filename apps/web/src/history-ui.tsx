@@ -19,6 +19,7 @@ export function HistoryWorkspace({ api, draft, locale, canRevert, initialCommit 
   const [detail, setDetail] = useState<CommitHistoryDetail | null>(null);
   const [fileItems, setFileItems] = useState<readonly CommitHistoryItem[]>([]);
   const [filePath, setFilePath] = useState<string | null>(null);
+  const [fileQuery, setFileQuery] = useState("");
   const [newDraftId, setNewDraftId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,13 +36,13 @@ export function HistoryWorkspace({ api, draft, locale, canRevert, initialCommit 
     setNewDraftId(firstDetail === null ? "" : `REVERT-${firstDetail.commit.slice(0, 8).toUpperCase()}`);
   });
   useEffect(() => {
-    setDetail(null); setFileItems([]); setFilePath(null); setConflicts([]);
+    setDetail(null); setFileItems([]); setFilePath(null); setFileQuery(""); setConflicts([]);
     void load();
   }, [api, draft.draft_id]);
 
   const report = (caught: unknown) => setError(caught instanceof Error ? caught.message : String(caught));
   const select = async (item: CommitHistoryItem) => {
-    setError(null); setFileItems([]); setFilePath(null);
+    setError(null); setFileItems([]); setFilePath(null); setFileQuery("");
     try { const next = await api.commitDetail(draft.draft_id, item.commit); setDetail(next); setNewDraftId(`REVERT-${item.commit.slice(0, 8).toUpperCase()}`); onNavigate("history", { commit: item.commit }); }
     catch (caught) { report(caught); }
   };
@@ -61,6 +62,7 @@ export function HistoryWorkspace({ api, draft, locale, canRevert, initialCommit 
     } catch (caught) { report(caught); }
     finally { setBusy(false); }
   };
+  const visibleFiles = detail?.files.filter((file) => file.path.toLocaleLowerCase(locale).includes(fileQuery.trim().toLocaleLowerCase(locale))) ?? [];
 
   return <section className="history-workspace">
     <div className="section-heading"><span className="eyebrow">Git</span><h2>{t("history.heading")}</h2><p>{t("history.description")}</p></div>
@@ -78,7 +80,7 @@ export function HistoryWorkspace({ api, draft, locale, canRevert, initialCommit 
           <div className="detail-heading"><div><span className="eyebrow">{t("history.commit")}</span><h2>{detail.subject}</h2></div><code>{detail.commit.slice(0, 12)}</code></div>
           {detail.body !== "" && <p>{detail.body}</p>}
           <dl className="status-grid"><div><dt>{t("history.author")}</dt><dd>{detail.author_name} &lt;{detail.author_email}&gt;</dd></div><div><dt>{t("history.date")}</dt><dd>{formatDateTime(locale, detail.authored_at)}</dd></div><div><dt>{t("history.files")}</dt><dd>{detail.files.length}</dd></div><div><dt>{t("history.projects")}</dt><dd>{detail.semantic_summary.affected_projects.join(", ") || "—"}</dd></div></dl>
-          <div className="history-files">{detail.files.map((file) => <button key={file.path} onClick={() => { void showFileHistory(file.path); }}><code>{file.path}</code><span>+{file.additions ?? "—"} −{file.deletions ?? "—"}</span></button>)}</div>
+          <details className="history-file-section" open={detail.files.length <= 10 ? true : undefined}><summary>{t("history.changedFiles", { count: detail.files.length })}</summary><label>{t("history.searchFiles")}<input type="search" value={fileQuery} onChange={(event) => setFileQuery(event.target.value)} /></label><div className="history-files">{visibleFiles.map((file) => <button key={file.path} onClick={() => { void showFileHistory(file.path); }}><code>{file.path}</code><span>+{file.additions ?? "—"} −{file.deletions ?? "—"}</span></button>)}</div></details>
           {filePath !== null && <div className="file-history"><h3>{t("history.fileHistory")}</h3><code>{filePath}</code>{fileItems.map((item) => <button key={item.commit} onClick={() => { void select(item); }}>{item.subject} · {item.commit.slice(0, 8)}</button>)}</div>}
           <details className="history-diff"><summary>{t("history.diff")}</summary><pre>{detail.diff}</pre></details>
           {canRevert && <form className="revert-form" onSubmit={submitRevert}><label>{t("history.revertDraft")}<input value={newDraftId} onChange={(event) => setNewDraftId(event.target.value)} pattern="[A-Za-z0-9][A-Za-z0-9-]{0,127}" required /></label><button className="primary" disabled={busy}>{t("history.createRevert")}</button></form>}

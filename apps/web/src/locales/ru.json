@@ -18,9 +18,9 @@
   "nav.projects": "Проекты",
   "nav.tasks": "Задачи",
   "nav.board": "Доска",
-  "nav.people": "Люди",
-  "nav.calendar": "Календарь",
-  "nav.settings": "Настройки репозитория",
+  "nav.people": "Люди и команды",
+  "nav.calendar": "Рабочие календари",
+  "nav.settings": "Статусы и типы задач",
   "nav.workload": "Загрузка",
   "nav.gantt": "Диаграмма Ганта",
   "nav.changes": "Изменения",
@@ -28,9 +28,11 @@
   "nav.label": "Основная навигация",
   "nav.openMenu": "Открыть навигацию",
   "nav.closeMenu": "Закрыть навигацию",
-  "nav.groupPlanning": "Планирование",
-  "nav.groupTeam": "Команда",
-  "nav.groupRepository": "Репозиторий",
+  "nav.groupWork": "Работа",
+  "nav.groupViews": "Представления",
+  "nav.groupOrganization": "Организация",
+  "nav.groupGit": "Git",
+  "nav.groupSettings": "Настройка",
   "nav.breadcrumbs": "Хлебные крошки",
   "drafts.heading": "Рабочие копии",
   "drafts.description": "Каждая рабочая копия — отдельная Git-ветка и каталог изменений. Переключайтесь между ними, не смешивая независимую работу.",
@@ -111,6 +113,12 @@
   ,"core.openTasks": "Открыть задачи"
   ,"core.openBoard": "Открыть доску"
   ,"core.openGantt": "Открыть Гант"
+  ,"core.edit": "Редактировать"
+  ,"core.moreActions": "Дополнительные действия"
+  ,"core.milestonesFor": "Вехи · {project}"
+  ,"core.createProjectAction": "Новый проект"
+  ,"core.createMilestoneAction": "Новая веха"
+  ,"core.createTaskAction": "Новая задача"
   ,"admin.heading": "Администрирование"
   ,"admin.people": "Люди"
   ,"admin.teams": "Команды"
@@ -132,6 +140,19 @@
   ,"admin.statuses": "Статусы"
   ,"admin.issueTypes": "Типы задач"
   ,"admin.noServerConfig": "Настройки сервера и OAuth намеренно не представлены в этом интерфейсе."
+  ,"admin.editPerson": "Редактировать сотрудника"
+  ,"admin.editTeam": "Редактировать команду"
+  ,"admin.editCalendar": "Редактировать календарь"
+  ,"admin.peopleSearch": "Поиск сотрудников"
+  ,"admin.memberCount": "Участников: {count}"
+  ,"admin.capacitySummary": "{count} ч/нед. · {calendar}"
+  ,"admin.day1": "Пн"
+  ,"admin.day2": "Вт"
+  ,"admin.day3": "Ср"
+  ,"admin.day4": "Чт"
+  ,"admin.day5": "Пт"
+  ,"admin.day6": "Сб"
+  ,"admin.day7": "Вс"
   ,"changes.heading": "Изменения"
   ,"changes.description": "Проверьте точный Git diff, оцените изменения сущностей и опубликуйте рабочую копию целиком."
   ,"changes.readOnly": "Для этой рабочей копии или роли изменения доступны только для чтения."
@@ -157,7 +178,7 @@
   ,"changes.unclassified": "Файлов без классификации сущности: {count}"
   ,"changes.publishEyebrow": "Публикация"
   ,"changes.publishHeading": "Коммит, push и Merge Request"
-  ,"changes.commitAllHint": "В Alpha все изменённые файлы коммитятся вместе; выборочная индексация недоступна."
+  ,"changes.commitAllHint": "В коммит войдут все изменённые файлы этой рабочей копии."
   ,"changes.openCommit": "Подготовить коммит"
   ,"changes.commitHeading": "Закоммитить все изменения"
   ,"changes.commitScope": "В коммит войдут все изменённые файлы: {count}."
@@ -173,7 +194,8 @@
   ,"changes.mrDescription": "Описание"
   ,"changes.createMr": "Создать Merge Request"
   ,"changes.mrReady": "Merge Request !{iid}: {state}"
-  ,"changes.alphaLimitations": "Ограничения Alpha: один репозиторий и один владелец рабочей копии; коммит всегда включает все изменённые файлы; для Merge Request доступны только заголовок и описание."
+  ,"changes.alphaLimitations": "Настроены один репозиторий и один владелец рабочей копии. Коммит включает все изменённые файлы; для Merge Request доступны заголовок и описание."
+  ,"changes.repositoryRules": "Правила публикации репозитория"
   ,"history.heading": "История"
   ,"history.description": "Просмотрите граф коммитов, файлы и влияние на предметную область или создайте отдельную рабочую копию для отката."
   ,"history.empty": "Выберите коммит для просмотра."
@@ -184,6 +206,8 @@
   ,"history.projects": "Затронутые проекты"
   ,"history.fileHistory": "История файла"
   ,"history.diff": "Точный Git diff"
+  ,"history.searchFiles": "Поиск изменённых файлов"
+  ,"history.changedFiles": "Изменённые файлы: {count}"
   ,"history.revertDraft": "ID рабочей копии для отката"
   ,"history.createRevert": "Создать рабочую копию для отката"
   ,"history.conflict": "В рабочей копии отката есть конфликты в файлах: {count}. Она открыта во внешнем режиме."
@@ -199,6 +223,9 @@
   ,"board.savedDescription": "Сохраните текущий проект и фильтры статуса и типа как представление доски."
   ,"board.viewName": "Название представления"
   ,"board.saveView": "Сохранить представление"
+  ,"board.scrollHint": "Дополнительные колонки статусов доступны по горизонтали."
+  ,"board.previousColumns": "Показать предыдущие колонки"
+  ,"board.nextColumns": "Показать следующие колонки"
   ,"gantt.heading": "Диаграмма Ганта"
   ,"gantt.description": "Просматривайте даты, иерархию, вехи и зависимости задач без изменения данных репозитория."
   ,"gantt.project": "Проект"
@@ -208,6 +235,9 @@
   ,"gantt.chart": "Диаграмма Ганта только для чтения"
   ,"gantt.tasks": "Задачи"
   ,"gantt.dependencies": "Зависимости задач"
+  ,"gantt.zoomOut": "Уменьшить масштаб"
+  ,"gantt.zoomIn": "Увеличить масштаб"
+  ,"gantt.range": "{start} — {due}"
   ,"workload.heading": "Загрузка"
   ,"workload.description": "Сравните приблизительную недельную загрузку с доступностью по календарю."
   ,"workload.included": "Учтено задач"
@@ -227,4 +257,29 @@
   ,"workload.unestimated": "Нет оценки"
   ,"workload.unassigned": "Нет исполнителей"
   ,"workload.unavailable": "Нет активного исполнителя с активным календарём"
+  ,"workload.legendLow": "Есть запас"
+  ,"workload.legendBalanced": "Нормальная загрузка"
+  ,"workload.legendNear": "Близко к лимиту"
+  ,"workload.legendOver": "Перегрузка"
+  ,"feedback.saving": "Сохранение..."
+  ,"feedback.saved": "Сохранено"
+  ,"feedback.undone": "Изменение отменено"
+  ,"feedback.undo": "Отменить"
+  ,"core.taskDetailDescription": "Просмотрите задачу и переходите к редактированию только при необходимости."
+  ,"core.projectDetailDescription": "Обзор проекта, его вехи и переходы к рабочим представлениям."
+  ,"core.allTasksDescription": "Все активные задачи репозитория. Выберите проект, чтобы сузить список или создать задачу."
+  ,"core.projectListDescription": "Откройте проект, чтобы увидеть его обзор и вехи."
+  ,"core.noDescription": "Описание пока не добавлено."
+  ,"core.openProject": "Открыть проект"
+  ,"core.projectNotFound": "Проект не найден или перенесён в архив."
+  ,"core.noMilestones": "В этом проекте нет активных вех."
+  ,"core.backToTasks": "Назад к задачам"
+  ,"core.taskNotFound": "Задача не найдена или перенесена в архив."
+  ,"core.allTasks": "Все задачи"
+  ,"core.tasksFor": "Задачи - {project}"
+  ,"core.allTasksHint": "В списке задачи всех активных проектов."
+  ,"core.projectTasksHint": "Показаны только задачи выбранного проекта."
+  ,"core.allProjects": "Все проекты"
+  ,"core.selectProjectToCreate": "Выберите проект в фильтре, чтобы создать новую задачу."
+  ,"core.type": "Тип"
 }

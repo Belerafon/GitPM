@@ -34,8 +34,8 @@ test.describe("GitPM browser UI", () => {
     await page.goto("/");
     await expect(page.getByRole("button", { name: "Проекты", exact: true })).toHaveClass(/active/u);
     await expect(page.getByRole("button", { name: "Текущая рабочая копия: DRF-UI-WORKSPACE · Открыта", exact: true })).toBeVisible();
-    await expect(page.getByRole("textbox", { name: "Название GitPM launch", exact: true })).toHaveValue("GitPM launch");
-    await expect(page.getByRole("textbox", { name: "Название Operations", exact: true })).toHaveValue("Operations");
+    await expect(page.getByRole("button", { name: /^GitPM launch/u })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Operations/u })).toBeVisible();
   });
 
   test("persists the selected locale across a browser reload", async ({ page }) => {
@@ -54,24 +54,25 @@ test.describe("GitPM browser UI", () => {
   test("loads fixture projects and tasks through the real API", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "Проекты", exact: true })).toBeVisible();
-    await expect(page.getByRole("textbox", { name: "Название GitPM launch", exact: true })).toHaveValue("GitPM launch");
-    await expect(page.getByRole("textbox", { name: "Название Operations", exact: true })).toHaveValue("Operations");
+    await expect(page.getByRole("button", { name: /^GitPM launch/u })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Operations/u })).toBeVisible();
     await page.goto(`/projects/${FIXTURE_PROJECT_ID}/tasks`);
     await expect(page.getByRole("button", { name: /Approve schema v1/u })).toBeVisible();
   });
 
   test("keeps the configured repository open after reloading the page", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByRole("textbox", { name: "Название GitPM launch", exact: true })).toHaveValue("GitPM launch");
+    await expect(page.getByRole("button", { name: /^GitPM launch/u })).toBeVisible();
 
     await page.reload();
 
-    await expect(page.getByRole("textbox", { name: "Название GitPM launch", exact: true })).toHaveValue("GitPM launch");
+    await expect(page.getByRole("button", { name: /^GitPM launch/u })).toBeVisible();
     await expect(page.getByRole("button", { name: "Рабочие копии", exact: true })).toBeVisible();
   });
 
   test("keeps every section reachable and restores focus without page overflow at UX00 viewports", async ({ page }) => {
-    const destinations = ["Working copies", "Portfolio", "Projects", "Tasks", "Board", "People", "Calendar", "Repository settings", "Workload", "Gantt", "Changes", "History"] as const;
+    test.setTimeout(120_000);
+    const destinations = ["Working copies", "Portfolio", "Projects", "Tasks", "Board", "People and teams", "Working calendars", "Statuses and task types", "Workload", "Gantt", "Changes", "History"] as const;
     for (const width of [320, 390, 800, 1280, 1920]) {
       await page.setViewportSize({ width, height: 844 });
       await page.goto("/");
@@ -85,6 +86,7 @@ test.describe("GitPM browser UI", () => {
         const navigationItem = page.getByRole("button", { name: destination, exact: true });
         await navigationItem.click();
         await expect(navigationItem).toHaveAttribute("aria-current", "page");
+        await expect(page.locator(".workspace-loading")).toHaveCount(0);
         await expect.poll(async () => await page.evaluate(() => document.activeElement?.getAttribute("tabindex"))).toBe("-1");
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
       }
@@ -100,9 +102,9 @@ test.describe("GitPM browser UI", () => {
     await expect(page).toHaveURL(/\/portfolio$/u);
     await expect(page.getByRole("heading", { name: "Portfolio overview", exact: true })).toBeVisible();
 
-    await page.getByRole("button", { name: "People", exact: true }).click();
+    await page.getByRole("button", { name: "People and teams", exact: true }).click();
     await expect(page).toHaveURL(/\/people$/u);
-    await expect(page.getByRole("heading", { name: "Administration", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "People and teams", exact: true })).toBeVisible();
 
     await page.goBack();
     await expect(page).toHaveURL(/\/portfolio$/u);

@@ -45,6 +45,9 @@ describe("read-only Gantt", () => {
     expect(container.querySelectorAll(".gantt-dependencies path[data-from]")).toHaveLength(3);
     expect(container.querySelector('[data-milestone-id]')?.getAttribute("title")).toBe("Beta: 2026-07-08");
     const bar = container.querySelector<HTMLElement>(`[data-task-id="${child.document.id}"]`)!;
+    const widthBefore = bar.style.width;
+    fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
+    expect(bar.style.width).not.toBe(widthBefore);
     fireEvent.click(bar);
     expect(onNavigate).toHaveBeenCalledWith("tasks", { projectId, taskId: child.document.id });
     fireEvent.pointerDown(bar); fireEvent.pointerMove(bar, { clientX: 400 }); fireEvent.pointerUp(bar);

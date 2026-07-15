@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type DragEvent, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent } from "react";
 import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
 import type { GitPmApi } from "./api.js";
 import { message, type Locale, type MessageKey } from "./i18n.js";
@@ -37,6 +37,7 @@ export function BoardWorkspace({ api, draft, locale, initialProjectId = "", init
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [activeViewId, setActiveViewId] = useState(initialViewId);
   const [error, setError] = useState<string | null>(null);
+  const columnsRef = useRef<HTMLDivElement>(null);
   const loadRequest = useAsyncLoad();
   const readOnly = draft.writer_mode !== "ui" || draft.state !== "open" || draft.changed_externally === true;
 
@@ -103,6 +104,7 @@ export function BoardWorkspace({ api, draft, locale, initialProjectId = "", init
     const filters = typeof view.document.filters === "object" && view.document.filters !== null ? view.document.filters as Readonly<Record<string, unknown>> : {};
     applyFilters(strings(filters.statuses)[0] ?? "", strings(filters.types)[0] ?? "", view.document.id);
   };
+  const scrollColumns = (direction: -1 | 1) => columnsRef.current?.scrollBy({ left: direction * Math.max(280, columnsRef.current.clientWidth * .75), behavior: "smooth" });
 
   return <section className="board-workspace">
     <div className="section-heading"><span className="eyebrow draft-context-id">{draft.draft_id}</span><h2>{t("board.heading")}</h2><p>{t("board.description")}</p></div>
@@ -115,12 +117,13 @@ export function BoardWorkspace({ api, draft, locale, initialProjectId = "", init
       <label>{t("board.typeFilter")}<select aria-label={t("board.typeFilter")} value={typeFilter} onChange={(event) => applyFilters(statusFilter, event.target.value)}><option value="">{t("board.all")}</option>{types.map((type) => <option key={type.slug} value={type.slug}>{type.title}</option>)}</select></label>
       <span className="board-count">{t("board.visible", { count: visibleTasks.length })}</span>
     </section>
-    <div className="board-columns">{boardStatuses.map((status) => {
+    <div className="board-scroll-tools"><span>{t("board.scrollHint")}</span><div><button aria-label={t("board.previousColumns")} onClick={() => scrollColumns(-1)} type="button">←</button><button aria-label={t("board.nextColumns")} onClick={() => scrollColumns(1)} type="button">→</button></div></div>
+    <div className="board-columns" ref={columnsRef}>{boardStatuses.map((status) => {
       const columnTasks = visibleTasks.filter((item) => text(item.document, "status") === status);
       return <section className="board-column" data-status={status} key={status} onDragOver={(event) => event.preventDefault()} onDrop={(event) => drop(event, status)} onPointerUp={() => { if (draggedTaskId !== null) moveTask(status, draggedTaskId); }}>
         <header><h3>{titleForStatus(status)}</h3><span>{columnTasks.length}</span></header>
         <div className="board-cards">{columnTasks.map((task) => <article className="board-card" draggable={!readOnly} data-task-id={task.document.id} key={task.document.id} onPointerDown={() => { if (!readOnly) setDraggedTaskId(task.document.id); }} onDragStart={(event) => { setDraggedTaskId(task.document.id); event.dataTransfer.setData("text/plain", task.document.id); }} onDragEnd={() => setDraggedTaskId(null)}>
-          <button className="board-task-link" onPointerDown={(event) => event.stopPropagation()} onClick={() => onNavigate("tasks", { projectId, taskId: task.document.id })}><strong>{text(task.document, "title")}</strong><code>{task.document.id}</code></button><span>{types.find((type) => type.slug === text(task.document, "type"))?.title ?? text(task.document, "type")}</span>
+          <button className="board-task-link" onPointerDown={(event) => event.stopPropagation()} onClick={() => onNavigate("tasks", { projectId, taskId: task.document.id })}><strong>{text(task.document, "title")}</strong><code>{task.document.id}</code></button><span>{types.find((type) => type.slug === text(task.document, "type"))?.title ?? text(task.document, "type")}</span><label className="board-status-control" onPointerDown={(event) => event.stopPropagation()}>{t("core.status")}<select disabled={readOnly} value={text(task.document, "status")} onChange={(event) => moveTask(event.target.value, task.document.id)}>{boardStatuses.map((nextStatus) => <option key={nextStatus} value={nextStatus}>{titleForStatus(nextStatus)}</option>)}</select></label>
         </article>)}</div>
       </section>;
     })}</div>
