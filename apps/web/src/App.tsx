@@ -14,6 +14,7 @@ import { parseAppRoute, routeForDestination, serializeAppRoute, type AppRoute } 
 import { AppShell } from "./app/AppShell.js";
 import { navigationDestinations, navigationGroups, routeViews } from "./app/navigation.js";
 import { ProjectTabs } from "./features/projects/project-tabs.js";
+import { ProjectPlanWorkspace } from "./features/projects/project-plan-workspace.js";
 import { StageWorkspace } from "./features/stages/stage-workspace.js";
 import { EntityCatalog } from "./entity-catalog.js";
 
@@ -83,9 +84,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
     if (activeRoute?.name === "stages" && activeRoute.projectId !== undefined) return <>
       <button onClick={() => navigateToRoute(routeForDestination("projects"))}>{t("nav.projects")}</button><span aria-hidden="true">›</span>
       <button onClick={() => navigateToRoute(routeForDestination("projects", { projectId: activeRoute.projectId }))}>{catalog.project(activeRoute.projectId).name}</button><span aria-hidden="true">›</span>
-      {activeRoute.stageId === undefined
-        ? <span aria-current="page">{t("core.milestones")}</span>
-        : <><button onClick={() => navigateToRoute(routeForDestination("stages", { projectId: activeRoute.projectId }))}>{t("core.milestones")}</button><span aria-hidden="true">›</span><span aria-current="page">{catalog.milestone(activeRoute.stageId)?.name}</span></>}
+      <span aria-current="page">{catalog.milestone(activeRoute.stageId ?? "")?.name}</span>
     </>;
     if (activeRoute?.name === "tasks" && activeRoute.projectId !== undefined) return <>
       <button onClick={() => navigateToRoute(routeForDestination("projects"))}>{t("nav.projects")}</button><span aria-hidden="true">›</span>
@@ -138,7 +137,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
   const repository = drafts.session.repository;
   const gitlab = drafts.session.gitlab;
   const loginToGitLab = () => { void api.login().then(navigate); };
-  const pageTitle = activeRoute?.name === "projects" && activeRoute.projectId !== undefined ? t("core.project") : activeRoute?.name === "stages" && activeRoute.stageId !== undefined ? t("core.milestone") : activeRoute?.name === "tasks" && activeRoute.taskId !== undefined ? t("core.details") : t(view);
+  const pageTitle = activeRoute?.name === "projects" && activeRoute.projectId !== undefined ? t("projectTabs.overview") : activeRoute?.name === "stages" && activeRoute.stageId !== undefined ? t("core.milestone") : activeRoute?.name === "tasks" && activeRoute.taskId !== undefined ? t("core.details") : t(view);
   return (
     <AppShell activeView={shellActiveView}
       banner={drafts.error !== null && <div className="alert error">{t("status.error", { message: drafts.error })}<button onClick={() => { void drafts.refresh(); }}>{t("status.retry")}</button></div>}
@@ -199,15 +198,18 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
           </div>
         </section>}
         {activeRoute?.projectId !== undefined && ["projects", "stages", "tasks", "board", "gantt"].includes(activeRoute.name) && <ProjectTabs
-          active={(activeRoute.name === "gantt" ? "gantt" : activeRoute.name) as WorkspaceDestination}
+          active={(activeRoute.name === "stages" ? "projects" : activeRoute.name === "gantt" ? "gantt" : activeRoute.name) as WorkspaceDestination}
           onNavigate={openWorkspace}
           projectId={activeRoute.projectId}
           t={t}
         />}
-        {["nav.portfolio", "nav.projects", "nav.tasks"].includes(view) && (active === undefined
+        {activeRoute?.name === "projects" && activeRoute.projectId !== undefined && (active === undefined
+          ? <div className="card empty-workspace">{t("core.selectProject")}</div>
+          : <ProjectPlanWorkspace api={api} confirmAction={confirmAction} draft={active} locale={locale} onChanged={drafts.refresh} onNavigate={openWorkspace} projectId={activeRoute.projectId} />)}
+        {["nav.portfolio", "nav.projects", "nav.tasks"].includes(view) && !(activeRoute?.name === "projects" && activeRoute.projectId !== undefined) && (active === undefined
           ? <div className="card empty-workspace">{t("core.selectProject")}</div>
           : <CoreWorkspace api={api} confirmAction={confirmAction} draft={active} key={`${view}:${workspaceSelection.projectId ?? ""}:${workspaceSelection.taskId ?? ""}:${workspaceSelection.query?.status?.[0] ?? ""}:${workspaceSelection.query?.milestone?.[0] ?? ""}`} locale={locale} surface={view === "nav.portfolio" ? "portfolio" : view === "nav.tasks" ? "tasks" : "projects"} initialProjectId={workspaceSelection.projectId} initialTaskId={workspaceSelection.taskId} initialStatusFilter={workspaceSelection.query?.status?.[0]} initialMilestoneFilter={workspaceSelection.query?.milestone?.[0]} onNavigate={openWorkspace} onChanged={drafts.refresh} />)}
-        {activeRoute?.name === "stages" && (active === undefined || activeRoute.projectId === undefined
+        {activeRoute?.name === "stages" && (active === undefined || activeRoute.projectId === undefined || activeRoute.stageId === undefined
           ? <div className="card empty-workspace">{t("core.selectProject")}</div>
           : <StageWorkspace api={api} confirmAction={confirmAction} draft={active} locale={locale} onChanged={drafts.refresh} onNavigate={openWorkspace} projectId={activeRoute.projectId} stageId={activeRoute.stageId} />)}
         {["nav.people", "nav.calendar", "nav.settings"].includes(view) && (active === undefined

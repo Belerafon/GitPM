@@ -72,7 +72,7 @@ test.describe("GitPM browser UI", () => {
 
   test("keeps every section reachable and restores focus without page overflow at UX00 viewports", async ({ page }) => {
     test.setTimeout(120_000);
-    const destinations = ["Working copies", "Portfolio", "Projects", "Tasks", "People and teams", "Working calendars", "Statuses and task types", "Workload", "Changes", "History"] as const;
+    const destinations = ["Working copies", "Portfolio", "Projects", "People and teams", "Team workload", "Working calendars", "Statuses and task types", "Changes", "History"] as const;
     for (const width of [320, 390, 800, 1280, 1920]) {
       await page.setViewportSize({ width, height: 844 });
       await page.goto("/");
@@ -97,6 +97,10 @@ test.describe("GitPM browser UI", () => {
     await page.goto("/");
     await page.locator(".locale-picker select").selectOption("en");
     await expect(page).toHaveURL(/\/projects$/u);
+
+    await page.goto("/tasks");
+    await expect(page).toHaveURL(/\/projects$/u);
+    await expect(page.getByRole("button", { name: "Tasks", exact: true })).toHaveCount(0);
 
     await page.getByRole("button", { name: "Portfolio", exact: true }).click();
     await expect(page).toHaveURL(/\/portfolio$/u);
@@ -123,8 +127,10 @@ test.describe("GitPM browser UI", () => {
     expect(page.url()).toBe(taskUrl);
     await expect(page.getByRole("heading", { name: "Task details", exact: true })).toBeVisible();
 
-    await page.getByRole("button", { name: "Milestones", exact: true }).click();
-    await expect(page).toHaveURL(new RegExp(`/projects/${FIXTURE_PROJECT_ID}/stages$`, "u"));
+    await page.getByRole("button", { name: "Project overview", exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/projects/${FIXTURE_PROJECT_ID}$`, "u"));
+    await expect(page.getByRole("heading", { name: "Milestones and tasks", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Approve schema v1/u })).toBeVisible();
     await page.getByRole("button", { name: /Alpha/u }).click();
     await expect(page).toHaveURL(new RegExp(`/projects/${FIXTURE_PROJECT_ID}/stages/[^/?]+$`, "u"));
     await expect(page.getByRole("heading", { name: "Alpha", exact: true })).toBeVisible();

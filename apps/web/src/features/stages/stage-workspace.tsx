@@ -13,12 +13,12 @@ const configValues = (document: GitPmDocument, key: "statuses" | "issue_types"):
   ? (document[key] as unknown[]).filter((item): item is ConfigValue => typeof item === "object" && item !== null && typeof (item as ConfigValue).slug === "string" && typeof (item as ConfigValue).title === "string" && (item as ConfigValue).active === true)
   : [];
 
-export function StageWorkspace({ api, draft, locale, projectId, stageId = "", onNavigate, onChanged, confirmAction = () => true }: {
+export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavigate, onChanged, confirmAction = () => true }: {
   readonly api: GitPmApi;
   readonly draft: DraftStatus;
   readonly locale: Locale;
   readonly projectId: string;
-  readonly stageId?: string;
+  readonly stageId: string;
   readonly onNavigate: WorkspaceNavigate;
   readonly onChanged: () => Promise<void>;
   readonly confirmAction?: (message: string) => boolean;
@@ -63,10 +63,6 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId = "", on
     }
   };
 
-  const activeStages = useMemo(() => [...(workspace?.milestones.filter((item) => item.document.lifecycle === "active") ?? [])].sort((left, right) => {
-    const byDue = (text(left.document, "due") || "9999-12-31").localeCompare(text(right.document, "due") || "9999-12-31");
-    return byDue !== 0 ? byDue : text(left.document, "name").localeCompare(text(right.document, "name"));
-  }), [workspace]);
   const activeTasks = useMemo(() => workspace?.tasks.filter((item) => item.document.lifecycle === "active") ?? [], [workspace]);
   const selectedStage = workspace?.milestones.find((item) => item.document.id === stageId);
   const stageTasks = stageId === "" ? [] : activeTasks.filter((item) => item.document.milestone === stageId).sort((left, right) => {
@@ -75,15 +71,6 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId = "", on
     return byCompletion !== 0 ? byCompletion : byDue !== 0 ? byDue : text(left.document, "title").localeCompare(text(right.document, "title"));
   });
   const statusTitle = (slug: string) => statuses.find((item) => item.slug === slug)?.title ?? slug;
-
-  const createStage = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (workspace === null) return;
-    const data = new FormData(event.currentTarget);
-    const id = newUniqueEntityId(ENTITY_ID_PREFIX.milestone, new Set(workspace.milestones.map((item) => item.document.id)));
-    const document = { schema: "gitpm/milestone@1", id, project: projectId, name: String(data.get("name")).trim(), lifecycle: "active", description_markdown: String(data.get("description")), ...(data.get("due") ? { due: String(data.get("due")) } : {}) } as GitPmDocument;
-    void mutate(async () => await api.createEntity(draft.draft_id, "milestones", workspace.draft_fingerprint, document)).then((success) => { if (success) onNavigate("stages", { projectId, stageId: id }); });
-  };
 
   const updateStage = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -105,22 +92,13 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId = "", on
 
   const archiveStage = () => {
     if (workspace === null || selectedStage === undefined || !confirmAction(t("core.archiveMilestoneConfirm", { name: text(selectedStage.document, "name"), count: stageTasks.length }))) return;
-    void mutate(async () => await api.archiveEntity(draft.draft_id, "milestones", selectedStage, workspace.draft_fingerprint)).then((success) => { if (success) onNavigate("stages", { projectId }); });
+    void mutate(async () => await api.archiveEntity(draft.draft_id, "milestones", selectedStage, workspace.draft_fingerprint)).then((success) => { if (success) onNavigate("projects", { projectId }); });
   };
 
   return <section className="stage-workspace">
     {error !== null && <div className="alert error">{error}</div>}
     <AsyncBoundary state={loader.state} loading={t("status.loading")} retry={() => { void load(); }} error={(loadError, retry) => <div className="alert error">{loadError}<button onClick={retry}>{t("status.retry")}</button></div>}>
-      {workspace !== null && (stageId === "" ? <StageDirectory
-        activeStages={activeStages}
-        activeTasks={activeTasks}
-        onCreate={() => setEditor("stage")}
-        onNavigate={onNavigate}
-        projectId={projectId}
-        projectName={text(workspace.project.document, "name")}
-        readOnly={readOnly}
-        t={t}
-      /> : selectedStage === undefined ? <div className="card empty-workspace">{t("stages.notFound")}</div> : <StageDetails
+      {workspace !== null && (selectedStage === undefined ? <div className="card empty-workspace">{t("stages.notFound")}</div> : <StageDetails
         locale={locale}
         onArchive={archiveStage}
         onEdit={() => setEditor("stage")}
@@ -135,8 +113,8 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId = "", on
       />)}
     </AsyncBoundary>
 
-    <EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setEditor(null)} open={editor === "stage"} title={selectedStage === undefined ? t("stages.new") : t("stages.edit")}>
-      <form className="editor-drawer-form" onSubmit={selectedStage === undefined ? createStage : updateStage}>
+    <EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setEditor(null)} open={editor === "stage"} title={t("stages.edit")}>
+      <form className="editor-drawer-form" onSubmit={updateStage}>
         <label>{t("core.name")}<input defaultValue={selectedStage === undefined ? "" : text(selectedStage.document, "name")} disabled={readOnly} name="name" required /></label>
         <label>{t("core.due")}<input defaultValue={selectedStage === undefined ? "" : text(selectedStage.document, "due")} disabled={readOnly} name="due" type="date" /></label>
         <label>{t("core.description")}<textarea defaultValue={selectedStage === undefined ? "" : text(selectedStage.document, "description_markdown")} disabled={readOnly} name="description" /></label>
@@ -154,35 +132,6 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId = "", on
       </form>
     </EditorDrawer>
   </section>;
-}
-
-function StageDirectory({ activeStages, activeTasks, projectId, projectName, readOnly, onCreate, onNavigate, t }: {
-  readonly activeStages: readonly EntityResult[];
-  readonly activeTasks: readonly EntityResult[];
-  readonly projectId: string;
-  readonly projectName: string;
-  readonly readOnly: boolean;
-  readonly onCreate: () => void;
-  readonly onNavigate: WorkspaceNavigate;
-  readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string;
-}) {
-  const withoutStage = activeTasks.filter((task) => text(task.document, "milestone") === "").length;
-  return <>
-    <div className="section-heading stage-heading"><div><h2>{t("stages.heading", { project: projectName })}</h2><p>{t("stages.description")}</p></div><button className="primary" disabled={readOnly} onClick={onCreate}>+ {t("stages.new")}</button></div>
-    <div className="stage-directory-grid">
-      {activeStages.map((stage) => {
-        const tasks = activeTasks.filter((task) => task.document.milestone === stage.document.id);
-        const completed = tasks.filter((task) => text(task.document, "status") === "done").length;
-        return <button className="stage-directory-card" key={stage.document.id} onClick={() => onNavigate("stages", { projectId, stageId: stage.document.id })}>
-          <span><strong>{text(stage.document, "name")}</strong><span>{t("stages.progress", { completed, count: tasks.length })}</span></span>
-          <p>{text(stage.document, "description_markdown") || t("core.noDescription")}</p>
-          <span className="entity-meta"><time>{text(stage.document, "due") || "—"}</time><span>{t("stages.open")} →</span></span>
-        </button>;
-      })}
-    </div>
-    {activeStages.length === 0 && <div className="card empty-workspace">{t("core.noMilestones")}</div>}
-    <button className="card unassigned-stage-card" onClick={() => onNavigate("tasks", { projectId, query: { milestone: ["none"] } })}><strong>{t("stages.withoutStage")}</strong><span>{t("stages.taskCount", { count: withoutStage })}</span></button>
-  </>;
 }
 
 function StageDetails({ stage, tasks, projectId, locale, readOnly, statusTitle, onArchive, onEdit, onNewTask, onNavigate, t }: {

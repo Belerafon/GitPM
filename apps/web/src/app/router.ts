@@ -38,8 +38,9 @@ export function parseAppRoute(input: string | URL): AppRoute | null {
   }
   const query = readQuery(url.searchParams);
   if (segments.length === 1) {
+    if (segments[0] === "tasks") return route("projects");
     const staticRoutes: Readonly<Record<string, AppRouteName>> = {
-      workspaces: "workspaces", portfolio: "portfolio", projects: "projects", tasks: "tasks", board: "board", people: "people",
+      workspaces: "workspaces", portfolio: "portfolio", projects: "projects", board: "board", people: "people",
       calendars: "calendars", settings: "settings", workload: "workload", gantt: "gantt", changes: "changes", history: "history",
     };
     const name = staticRoutes[segments[0]!];
@@ -51,7 +52,7 @@ export function parseAppRoute(input: string | URL): AppRoute | null {
     return route(name, {}, query);
   }
   if (segments[0] === "projects" && segments.length === 2) return route("projects", { projectId: segments[1] }, query);
-  if (segments[0] === "projects" && segments[2] === "stages" && segments.length === 3) return route("stages", { projectId: segments[1] }, query);
+  if (segments[0] === "projects" && segments[2] === "stages" && segments.length === 3) return route("projects", { projectId: segments[1] }, query);
   if (segments[0] === "projects" && segments[2] === "stages" && segments.length === 4) return route("stages", { projectId: segments[1], stageId: segments[3] }, query);
   if (segments[0] === "projects" && segments[2] === "tasks" && segments.length === 3) return route("tasks", { projectId: segments[1] }, query);
   if (segments[0] === "projects" && segments[2] === "tasks" && segments.length === 4) return route("tasks", { projectId: segments[1], taskId: segments[3] }, query);
@@ -68,8 +69,8 @@ export function serializeAppRoute(value: AppRoute): string {
     case "workspaces": pathname = "/workspaces"; break;
     case "portfolio": pathname = "/portfolio"; break;
     case "projects": pathname = value.projectId === undefined ? "/projects" : `/projects/${segment(value.projectId)}`; break;
-    case "stages": pathname = value.projectId === undefined ? "/projects" : value.stageId === undefined ? `/projects/${segment(value.projectId)}/stages` : `/projects/${segment(value.projectId)}/stages/${segment(value.stageId)}`; break;
-    case "tasks": pathname = value.projectId === undefined ? "/tasks" : value.taskId === undefined ? `/projects/${segment(value.projectId)}/tasks` : `/projects/${segment(value.projectId)}/tasks/${segment(value.taskId)}`; break;
+    case "stages": pathname = value.projectId === undefined ? "/projects" : value.stageId === undefined ? `/projects/${segment(value.projectId)}` : `/projects/${segment(value.projectId)}/stages/${segment(value.stageId)}`; break;
+    case "tasks": pathname = value.projectId === undefined ? "/projects" : value.taskId === undefined ? `/projects/${segment(value.projectId)}/tasks` : `/projects/${segment(value.projectId)}/tasks/${segment(value.taskId)}`; break;
     case "board": pathname = value.projectId === undefined ? "/board" : `/projects/${segment(value.projectId)}/board`; break;
     case "people": pathname = "/people"; break;
     case "calendars": pathname = "/calendars"; break;
@@ -90,8 +91,12 @@ export function routeForDestination(destination: WorkspaceDestination | "workspa
   if (destination === "workspaces") return route("workspaces", {}, routeQuery);
   if (destination === "calendar") return route("calendars", {}, routeQuery);
   if (destination === "projects") return route("projects", { projectId: selection.projectId }, routeQuery);
-  if (destination === "stages") return route("stages", { projectId: selection.projectId, stageId: selection.stageId }, routeQuery);
-  if (destination === "tasks") return route("tasks", { projectId: selection.projectId, taskId: selection.taskId }, routeQuery);
+  if (destination === "stages") return selection.stageId === undefined
+    ? route("projects", { projectId: selection.projectId }, routeQuery)
+    : route("stages", { projectId: selection.projectId, stageId: selection.stageId }, routeQuery);
+  if (destination === "tasks") return selection.projectId === undefined
+    ? route("projects", {}, routeQuery)
+    : route("tasks", { projectId: selection.projectId, taskId: selection.taskId }, routeQuery);
   if (destination === "board" || destination === "gantt") return route(destination, { projectId: selection.projectId }, routeQuery);
   if (destination === "history") return route("history", { commit: selection.commit }, routeQuery);
   return route(destination, {}, routeQuery);

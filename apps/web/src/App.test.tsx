@@ -149,9 +149,10 @@ describe("frontend draft lifecycle", () => {
     const api = new FakeApi();
     render(<App api={api} browserLanguages={["en"]} />);
     await screen.findByRole("heading", { name: "Working copies" });
-    for (const group of ["Work", "Views", "Organization", "Git", "Settings"]) {
+    for (const group of ["Work", "Team", "Git", "Settings"]) {
       expect(screen.getByText(group)).toBeTruthy();
     }
+    expect(screen.getByRole("button", { name: "Team workload" })).toBeTruthy();
     const menuButton = screen.getByRole("button", { name: "Open navigation" });
 
     fireEvent.click(menuButton);
@@ -203,7 +204,7 @@ describe("frontend draft lifecycle", () => {
     expect(within(projectsStat.closest<HTMLElement>(".card")!).getByText("1")).toBeTruthy();
   });
 
-  it("renders Portfolio, Projects and Tasks as distinct navigation destinations", async () => {
+  it("keeps Tasks inside the selected project workspace", async () => {
     const api = new FakeApi();
     api.currentSession = {
       ...session,
@@ -244,15 +245,15 @@ describe("frontend draft lifecycle", () => {
     expect(screen.queryByRole("button", { name: "Create task" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /Alpha/u }));
-    expect(await screen.findByRole("heading", { name: "Project" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Project overview" })).toBeTruthy();
     expect(`${window.location.pathname}${window.location.search}`).toBe("/projects/P-26-7K4M9Q");
     let breadcrumbs = screen.getByRole("navigation", { name: "Breadcrumbs" });
     expect(within(breadcrumbs).getByRole("button", { name: "Projects" })).toBeTruthy();
     expect(within(breadcrumbs).getByText("Alpha").getAttribute("aria-current")).toBe("page");
-    const projectEditor = document.querySelector<HTMLElement>(".entity-detail-card")!;
-    expect(projectEditor.className).toContain("entity-detail-card");
+    expect(document.querySelector(".project-plan-header")).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Milestones and tasks" })).toBeTruthy();
     expect(screen.queryByRole("dialog")).toBeNull();
-    fireEvent.click(await screen.findByRole("button", { name: "Open tasks" }));
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Project navigation" })).getByRole("button", { name: "Tasks" }));
     expect(await screen.findByRole("heading", { name: "Tasks" })).toBeTruthy();
     expect(`${window.location.pathname}${window.location.search}`).toBe("/projects/P-26-7K4M9Q/tasks");
     breadcrumbs = screen.getByRole("navigation", { name: "Breadcrumbs" });

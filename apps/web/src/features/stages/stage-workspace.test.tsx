@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GitPmApi } from "../../api.js";
 import type { DraftStatus, EntityResult, GitPmDocument } from "../../types.js";
+import { ProjectPlanWorkspace } from "../projects/project-plan-workspace.js";
 import { StageWorkspace } from "./stage-workspace.js";
 
 const fingerprint = "b".repeat(64);
@@ -21,20 +22,31 @@ function api() {
     getConfiguration: vi.fn(async (_draftId: string, kind: "statuses" | "issue-types") => result(kind === "statuses"
       ? { schema: "gitpm/statuses@1", id: "CONFIG-STATUSES", lifecycle: "active", statuses: [{ slug: "backlog", title: "Backlog", active: true }, { slug: "done", title: "Done", active: true }] }
       : { schema: "gitpm/issue-types@1", id: "CONFIG-TYPES", lifecycle: "active", issue_types: [{ slug: "task", title: "Task", active: true }] })),
+    listEntities: vi.fn(async () => []),
     createEntity,
   } as unknown as GitPmApi & { createEntity: typeof createEntity };
 }
 
 afterEach(cleanup);
 
-describe("stage workspace", () => {
-  it("opens an entire stage card as a first-class route", async () => {
+describe("project plan and stage workspace", () => {
+  it("shows every task inside the project plan and opens a stage as a first-class route", async () => {
     const client = api(); const onNavigate = vi.fn();
-    render(<StageWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={onNavigate} projectId={project.document.id} />);
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={onNavigate} projectId={project.document.id} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /Launch/u }));
+    const stageHeading = await screen.findByRole("heading", { name: "Launch" });
+    const stageCard = stageHeading.closest<HTMLElement>("article")!;
+    expect(screen.getByText("Linked task")).toBeTruthy();
+    expect(screen.getByText("Without stage")).toBeTruthy();
+    fireEvent.click(within(stageCard).getByRole("button", { name: /Launch/u }));
     expect(onNavigate).toHaveBeenCalledWith("stages", { projectId: project.document.id, stageId: stage.document.id });
-    expect(screen.getByRole("button", { name: /Tasks without a milestone/u }).textContent).toContain("Tasks: 1");
+
+    fireEvent.click(within(stageCard).getByRole("button", { name: /New task/u }));
+    const dialog = screen.getByRole("dialog", { name: "New task" });
+    fireEvent.change(within(dialog).getByLabelText("Title"), { target: { value: "Created from plan" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create task" }));
+    await waitFor(() => expect(client.createEntity).toHaveBeenCalled());
+    expect(client.createEntity.mock.calls[0]?.[3]).toMatchObject({ project: project.document.id, milestone: stage.document.id, title: "Created from plan" });
   });
 
   it("shows only stage tasks and creates a task inside the stage context", async () => {

@@ -3,7 +3,6 @@ import type { WorkspaceDestination, WorkspaceNavigate } from "../../workspace-na
 
 const tabs: readonly { readonly destination: WorkspaceDestination; readonly label: MessageKey }[] = [
   { destination: "projects", label: "projectTabs.overview" },
-  { destination: "stages", label: "projectTabs.stages" },
   { destination: "tasks", label: "projectTabs.tasks" },
   { destination: "board", label: "projectTabs.board" },
   { destination: "gantt", label: "projectTabs.timeline" },

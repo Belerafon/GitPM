@@ -21,7 +21,7 @@
   "nav.people": "People and teams",
   "nav.calendar": "Working calendars",
   "nav.settings": "Statuses and task types",
-  "nav.workload": "Workload",
+  "nav.workload": "Team workload",
   "nav.gantt": "Gantt",
   "nav.changes": "Changes",
   "nav.history": "History",
@@ -29,8 +29,7 @@
   "nav.openMenu": "Open navigation",
   "nav.closeMenu": "Close navigation",
   "nav.groupWork": "Work",
-  "nav.groupViews": "Views",
-  "nav.groupOrganization": "Organization",
+  "nav.groupTeam": "Team",
   "nav.groupGit": "Git",
   "nav.groupSettings": "Settings",
   "nav.breadcrumbs": "Breadcrumbs",
@@ -290,7 +289,7 @@
   ,"gantt.legendToday": "Today"
   ,"gantt.undatedHint": "{count} active tasks are hidden because start or due date is missing."
   ,"gantt.range": "{start} — {due}"
-  ,"workload.heading": "Workload"
+  ,"workload.heading": "Team workload"
   ,"workload.description": "Compare approximate weekly allocation with calendar-adjusted capacity."
   ,"workload.included": "Included Tasks"
   ,"workload.excluded": "Excluded Tasks"
@@ -346,20 +345,29 @@
   ,"core.type": "Type"
   ,"core.chooseProjectOption": "Select project"
   ,"projectTabs.navigation": "Project navigation"
-  ,"projectTabs.overview": "Overview"
-  ,"projectTabs.stages": "Milestones"
+  ,"projectTabs.overview": "Project overview"
   ,"projectTabs.tasks": "Tasks"
   ,"projectTabs.board": "Board"
   ,"projectTabs.timeline": "Timeline"
-  ,"stages.heading": "Milestones · {project}"
-  ,"stages.description": "Open a milestone to review its scope and work without losing project context."
+  ,"projectPlan.start": "Start date"
+  ,"projectPlan.progress": "Overall progress"
+  ,"projectPlan.stages": "Active milestones"
+  ,"projectPlan.overdue": "Overdue tasks"
+  ,"projectPlan.withoutStage": "Outside active milestones"
+  ,"projectPlan.workHeading": "Milestones and tasks"
+  ,"projectPlan.workDescription": "The complete project scope grouped by milestone. Open a milestone for details or a task to edit it."
+  ,"projectPlan.openTaskList": "Open task list"
+  ,"projectPlan.emptyStages": "No active milestones yet. Create the first milestone to structure the project plan."
+  ,"projectPlan.unassignedHeading": "Outside active milestones"
+  ,"projectPlan.unassignedDescription": "Active tasks without a milestone or linked to an archived milestone."
+  ,"projectPlan.estimate": "Estimate (hours)"
+  ,"projectPlan.archiveConfirm": "Archive project {name}? Its milestones and tasks will remain in the repository."
   ,"stages.new": "New milestone"
   ,"stages.edit": "Edit milestone"
   ,"stages.open": "Open milestone"
   ,"stages.notFound": "This milestone was not found or is archived."
   ,"stages.progress": "{completed} of {count} completed"
   ,"stages.progressLabel": "Progress"
-  ,"stages.taskCount": "Tasks: {count}"
   ,"stages.withoutStage": "Tasks without a milestone"
   ,"stages.newTask": "New task in milestone"
   ,"stages.tasks": "Milestone tasks"

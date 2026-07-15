@@ -21,7 +21,7 @@
   "nav.people": "Люди и команды",
   "nav.calendar": "Рабочие календари",
   "nav.settings": "Статусы и типы задач",
-  "nav.workload": "Загрузка",
+  "nav.workload": "Загрузка команды",
   "nav.gantt": "Диаграмма Ганта",
   "nav.changes": "Изменения",
   "nav.history": "История",
@@ -29,8 +29,7 @@
   "nav.openMenu": "Открыть навигацию",
   "nav.closeMenu": "Закрыть навигацию",
   "nav.groupWork": "Работа",
-  "nav.groupViews": "Представления",
-  "nav.groupOrganization": "Организация",
+  "nav.groupTeam": "Команда",
   "nav.groupGit": "Git",
   "nav.groupSettings": "Настройка",
   "nav.breadcrumbs": "Хлебные крошки",
@@ -290,7 +289,7 @@
   ,"gantt.legendToday": "Сегодня"
   ,"gantt.undatedHint": "Активных задач без даты начала или завершения: {count}. Они скрыты."
   ,"gantt.range": "{start} — {due}"
-  ,"workload.heading": "Загрузка"
+  ,"workload.heading": "Загрузка команды"
   ,"workload.description": "Сравните приблизительную недельную загрузку с доступностью по календарю."
   ,"workload.included": "Учтено задач"
   ,"workload.excluded": "Исключено задач"
@@ -346,20 +345,29 @@
   ,"core.type": "Тип"
   ,"core.chooseProjectOption": "Выберите проект"
   ,"projectTabs.navigation": "Навигация по проекту"
-  ,"projectTabs.overview": "Обзор"
-  ,"projectTabs.stages": "Этапы"
+  ,"projectTabs.overview": "Обзор проекта"
   ,"projectTabs.tasks": "Задачи"
   ,"projectTabs.board": "Доска"
-  ,"projectTabs.timeline": "План"
-  ,"stages.heading": "Этапы · {project}"
-  ,"stages.description": "Откройте этап, чтобы увидеть его объём работ, не теряя контекст проекта."
+  ,"projectTabs.timeline": "Таймлайн"
+  ,"projectPlan.start": "Дата начала"
+  ,"projectPlan.progress": "Общий прогресс"
+  ,"projectPlan.stages": "Активные этапы"
+  ,"projectPlan.overdue": "Просроченные задачи"
+  ,"projectPlan.withoutStage": "Вне активных этапов"
+  ,"projectPlan.workHeading": "Этапы и задачи"
+  ,"projectPlan.workDescription": "Полный объём проекта, сгруппированный по этапам. Откройте этап для подробностей или задачу для редактирования."
+  ,"projectPlan.openTaskList": "Открыть список задач"
+  ,"projectPlan.emptyStages": "Активных этапов пока нет. Создайте первый этап, чтобы структурировать план проекта."
+  ,"projectPlan.unassignedHeading": "Вне активных этапов"
+  ,"projectPlan.unassignedDescription": "Активные задачи без этапа или со ссылкой на архивный этап."
+  ,"projectPlan.estimate": "Оценка (часы)"
+  ,"projectPlan.archiveConfirm": "Архивировать проект {name}? Его этапы и задачи останутся в репозитории."
   ,"stages.new": "Новый этап"
   ,"stages.edit": "Редактировать этап"
   ,"stages.open": "Открыть этап"
   ,"stages.notFound": "Этап не найден или перенесён в архив."
   ,"stages.progress": "Завершено {completed} из {count}"
   ,"stages.progressLabel": "Прогресс"
-  ,"stages.taskCount": "Задач: {count}"
   ,"stages.withoutStage": "Задачи без этапа"
   ,"stages.newTask": "Новая задача в этапе"
   ,"stages.tasks": "Задачи этапа"
