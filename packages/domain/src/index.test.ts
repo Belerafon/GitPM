@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { cp, mkdtemp, mkdir, rm } from "node:fs/promises";
+import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -39,6 +39,29 @@ async function runtime(): Promise<{ manager: DraftManager; store: EntityStore }>
 afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))));
 
 describe("domain entity store", () => {
+  it("returns a project-scoped workspace snapshot", async () => {
+    const { manager, store } = await runtime();
+    await manager.createDraft("DRF-WORKSPACE", "42");
+    const workspace = await store.projectWorkspace("DRF-WORKSPACE", "P-26-MGP84K");
+
+    expect(workspace.project.document).toMatchObject({ id: "P-26-MGP84K", schema: "gitpm/project@1" });
+    expect(workspace.milestones.every((item) => item.document.project === "P-26-MGP84K")).toBe(true);
+    expect(workspace.tasks.every((item) => item.document.project === "P-26-MGP84K")).toBe(true);
+    expect(workspace.draft_fingerprint).toBe(workspace.project.draft_fingerprint);
+  });
+
+  it("invalidates the repository index when an external writer changes content", async () => {
+    const { manager, store } = await runtime();
+    const draft = await manager.createDraft("DRF-INDEX", "42");
+    const before = await store.projectWorkspace("DRF-INDEX", "P-26-MGP84K");
+    const task = before.tasks.find((item) => item.document.id === "T-26-P9G3P8")!;
+    const absolute = path.join(draft.worktree_path, ...task.path.split("/"));
+    await writeFile(absolute, (await readFile(absolute, "utf8")).replace("title: Approve schema v1", "title: Externally changed"), "utf8");
+
+    const after = await store.projectWorkspace("DRF-INDEX", "P-26-MGP84K");
+    expect(after.tasks.find((item) => item.document.id === task.document.id)?.document.title).toBe("Externally changed");
+  });
+
   it("moves a task between projects and rejects moves that break project-local references", async () => {
     const { manager, store } = await runtime();
     const draft = await manager.createDraft("DRF-MOVE", "42");

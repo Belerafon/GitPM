@@ -7,15 +7,17 @@
 
 ## Прогресс выполнения
 
-Последнее обновление: 2026-07-14
+Последнее обновление: 2026-07-15
 
 | Этап | Состояние | Примечание |
 | --- | --- | --- |
 | UX00 | Завершён | Work packages, automated verification, manual acceptance, exit gate и handoff закрыты 2026-07-14; пакет зафиксирован commit `4a4c816`. |
 | UX01 | Завершён | Route adapter, History API, deep links/reload/back-forward, App Shell, grouped navigation, breadcrumbs, упрощённый topbar и route/query restoration закрыты 2026-07-14. |
-| UX02–UX07 | Не начаты | Ожидают завершения exit gate UX00 и зависимостей по плану. |
+| UX02 | Не начат | Следующий общий фундамент: UI Kit и design tokens. |
+| UX03 | В работе | Поставлен project-centric vertical slice: project tabs, отдельные маршруты и экран этапа, scoped task entry point, project read model. |
+| UX04–UX07 | Не начаты | Ожидают зависимостей по плану. |
 
-Текущий следующий шаг: зафиксировать финальный route/query package и handoff UX01, затем начать UX02 с инвентаризации повторяющихся UI-контрактов и design tokens.
+Текущий следующий шаг: выполнить UX02, затем продолжить UX03 полным редактором задачи и декомпозицией оставшегося `CoreWorkspace`.
 
 ## 1. Цель
 
@@ -269,6 +271,8 @@ Evidence 2026-07-14: `pnpm test` — 38 files / 129 tests; `pnpm typecheck`, `pn
 ### Objective
 
 Дать пользователю возможность полностью управлять данными, от которых зависят Доска, Гант и Загрузка.
+
+Implementation note 2026-07-15: принят ADR 0002 и завершён первый вертикальный срез. Этап стал адресуемой сущностью с собственным списком задач; Доска и План получили канонические project-scoped routes; глобальный вход в задачи больше не загружает все проекты; сервер предоставляет индексируемый project workspace read model. Полный task editor и окончательная декомпозиция `CoreWorkspace` остаются в объёме UX03.
 
 ### Work packages
 

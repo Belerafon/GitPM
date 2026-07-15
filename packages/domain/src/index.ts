@@ -25,6 +25,25 @@ export interface EntityResult {
   readonly draft_fingerprint: string;
 }
 
+export interface ProjectWorkspaceResult {
+  readonly project: EntityResult;
+  readonly milestones: readonly EntityResult[];
+  readonly tasks: readonly EntityResult[];
+  readonly draft_fingerprint: string;
+}
+
+interface IndexedEntity {
+  readonly absolute: string;
+  readonly relative: string;
+  readonly document: GitPmDocument;
+}
+
+interface RepositoryIndex {
+  readonly fingerprint: string;
+  readonly entities: readonly IndexedEntity[];
+  readonly bySchemaAndId: ReadonlyMap<string, IndexedEntity>;
+}
+
 const typeSchemas: Record<string, string> = {
   projects: "gitpm/project@1",
   tasks: "gitpm/task@1",
@@ -94,47 +113,97 @@ async function exists(file: string): Promise<boolean> {
 }
 
 export class EntityStore {
+  private readonly indexes = new Map<string, RepositoryIndex>();
+  private readonly pendingIndexes = new Map<string, { readonly fingerprint: string; readonly promise: Promise<RepositoryIndex> }>();
+  private readonly pendingFingerprints = new Map<string, { readonly baseline: string; readonly promise: Promise<string> }>();
+
   constructor(private readonly drafts: DraftManager) {}
+
+  private async contentFingerprint(draftId: string, metadata: DraftMetadata): Promise<string> {
+    const pending = this.pendingFingerprints.get(draftId);
+    if (pending?.baseline === metadata.fingerprint) return await pending.promise;
+    const promise = this.drafts.poll(draftId).then((result) => result.currentFingerprint);
+    this.pendingFingerprints.set(draftId, { baseline: metadata.fingerprint, promise });
+    try { return await promise; }
+    finally {
+      if (this.pendingFingerprints.get(draftId)?.promise === promise) this.pendingFingerprints.delete(draftId);
+    }
+  }
+
+  private async index(draftId: string, metadata: DraftMetadata): Promise<RepositoryIndex> {
+    const fingerprint = await this.contentFingerprint(draftId, metadata);
+    const cached = this.indexes.get(draftId);
+    if (cached?.fingerprint === fingerprint) return cached;
+    const pending = this.pendingIndexes.get(draftId);
+    if (pending?.fingerprint === fingerprint) return await pending.promise;
+    const promise = (async () => {
+      const entities = await Promise.all((await yamlFiles(metadata.worktree_path)).map(async (absolute): Promise<IndexedEntity> => {
+        const relative = path.relative(metadata.worktree_path, absolute).split(path.sep).join("/");
+        return { absolute, relative, document: parseYamlDocument(await readFile(absolute, "utf8"), relative) };
+      }));
+      const next: RepositoryIndex = {
+        fingerprint,
+        entities,
+        bySchemaAndId: new Map(entities
+          .filter((entity) => typeof entity.document.id === "string")
+          .map((entity) => [`${entity.document.schema}:${String(entity.document.id)}`, entity])),
+      };
+      this.indexes.set(draftId, next);
+      return next;
+    })();
+    this.pendingIndexes.set(draftId, { fingerprint, promise });
+    try { return await promise; }
+    finally {
+      if (this.pendingIndexes.get(draftId)?.promise === promise) this.pendingIndexes.delete(draftId);
+    }
+  }
+
+  private async result(draftId: string, metadata: DraftMetadata, entity: IndexedEntity): Promise<EntityResult> {
+    return {
+      document: entity.document,
+      path: entity.relative,
+      blob_id: await this.drafts.fileBlobId(draftId, entity.relative),
+      draft_fingerprint: metadata.fingerprint,
+    };
+  }
 
   async list(draftId: string, entityType: string, project?: string): Promise<readonly EntityResult[]> {
     const metadata = await this.drafts.getDraft(draftId);
     const schema = typeSchemas[entityType];
     if (!schema) throw new DomainOperationError("ENTITY_TYPE_INVALID", `Unknown entity type ${entityType}`);
-    const result: EntityResult[] = [];
-    for (const absolute of await yamlFiles(metadata.worktree_path)) {
-      const relative = path.relative(metadata.worktree_path, absolute).split(path.sep).join("/");
-      const document = parseYamlDocument(await readFile(absolute, "utf8"), relative);
-      if (document.schema !== schema || (project !== undefined && document.project !== project)) continue;
-      result.push({
-        document,
-        path: relative,
-        blob_id: await this.drafts.fileBlobId(draftId, relative),
-        draft_fingerprint: metadata.fingerprint,
-      });
-    }
+    const matching = (await this.index(draftId, metadata)).entities
+      .filter((entity) => entity.document.schema === schema && (project === undefined || entity.document.project === project));
+    const result = await Promise.all(matching.map(async (entity) => await this.result(draftId, metadata, entity)));
     return result.sort((left, right) => String(left.document.id).localeCompare(String(right.document.id)));
   }
 
-  private async find(metadata: DraftMetadata, entityType: string, id: string): Promise<{ document: GitPmDocument; relative: string; absolute: string }> {
+  private async find(draftId: string, metadata: DraftMetadata, entityType: string, id: string): Promise<IndexedEntity> {
     const schema = typeSchemas[entityType];
     if (!schema) throw new DomainOperationError("ENTITY_TYPE_INVALID", `Unknown entity type ${entityType}`);
-    for (const absolute of await yamlFiles(metadata.worktree_path)) {
-      const relative = path.relative(metadata.worktree_path, absolute).split(path.sep).join("/");
-      const document = parseYamlDocument(await readFile(absolute, "utf8"), relative);
-      if (document.schema === schema && document.id === id) return { document, relative, absolute };
-    }
+    const found = (await this.index(draftId, metadata)).bySchemaAndId.get(`${schema}:${id}`);
+    if (found !== undefined) return found;
     throw new DomainOperationError("ENTITY_NOT_FOUND", `${entityType}/${id} not found`);
   }
 
   async get(draftId: string, entityType: string, id: string): Promise<EntityResult> {
     const metadata = await this.drafts.getDraft(draftId);
-    const found = await this.find(metadata, entityType, id);
-    return {
-      document: found.document,
-      path: found.relative,
-      blob_id: await this.drafts.fileBlobId(draftId, found.relative),
-      draft_fingerprint: metadata.fingerprint,
-    };
+    const found = await this.find(draftId, metadata, entityType, id);
+    return await this.result(draftId, metadata, found);
+  }
+
+  async projectWorkspace(draftId: string, projectId: string): Promise<ProjectWorkspaceResult> {
+    const metadata = await this.drafts.getDraft(draftId);
+    const repository = await this.index(draftId, metadata);
+    const indexedProject = repository.bySchemaAndId.get(`gitpm/project@1:${projectId}`);
+    if (indexedProject === undefined) throw new DomainOperationError("ENTITY_NOT_FOUND", `projects/${projectId} not found`);
+    const indexedMilestones = repository.entities.filter((entity) => entity.document.schema === "gitpm/milestone@1" && entity.document.project === projectId);
+    const indexedTasks = repository.entities.filter((entity) => entity.document.schema === "gitpm/task@1" && entity.document.project === projectId);
+    const [project, milestones, tasks] = await Promise.all([
+      this.result(draftId, metadata, indexedProject),
+      Promise.all(indexedMilestones.map(async (entity) => await this.result(draftId, metadata, entity))),
+      Promise.all(indexedTasks.map(async (entity) => await this.result(draftId, metadata, entity))),
+    ]);
+    return { project, milestones, tasks, draft_fingerprint: project.draft_fingerprint };
   }
 
   async getConfiguration(draftId: string, kind: "statuses" | "issue-types"): Promise<EntityResult> {
@@ -206,7 +275,7 @@ export class EntityStore {
     document: GitPmDocument,
   ): Promise<EntityResult> {
     const mutation = await this.drafts.withUiMutation(draftId, owner, expectedFingerprint, async (metadata) => {
-      const found = await this.find(metadata, entityType, id);
+      const found = await this.find(draftId, metadata, entityType, id);
       if (document.id !== id || document.schema !== found.document.schema || entityPathForDocument(document) !== found.relative) {
         throw new DomainOperationError("ENTITY_IDENTITY_IMMUTABLE", "Entity ID, schema and owning project are immutable");
       }
@@ -252,7 +321,7 @@ export class EntityStore {
     if (targetMilestone !== undefined && !isEntityId(targetMilestone, ENTITY_ID_PREFIX.milestone)) throw new DomainOperationError("ENTITY_ID_INVALID", "Target Milestone ID is invalid");
     let movedDocument: GitPmDocument | undefined;
     const mutation = await this.drafts.withUiMutation(draftId, owner, expectedFingerprint, async (metadata) => {
-      const found = await this.find(metadata, "tasks", id);
+      const found = await this.find(draftId, metadata, "tasks", id);
       await this.drafts.assertFileBlobId(draftId, found.relative, expectedBlobId);
       if (found.document.project === targetProject) throw new DomainOperationError("TASK_ALREADY_IN_PROJECT", `${id} already belongs to ${targetProject}`);
       movedDocument = { ...found.document, project: targetProject, milestone: targetMilestone };
@@ -286,7 +355,7 @@ export class EntityStore {
     expectedBlobId: string,
   ): Promise<{ deleted: true; path: string; draft_fingerprint: string }> {
     const mutation = await this.drafts.withUiMutation(draftId, owner, expectedFingerprint, async (metadata) => {
-      const found = await this.find(metadata, entityType, id);
+      const found = await this.find(draftId, metadata, entityType, id);
       await this.drafts.assertFileBlobId(draftId, found.relative, expectedBlobId);
       const restrictions = await validateDelete(metadata.worktree_path, id);
       if (restrictions.length > 0) throw new DomainOperationError("DELETE_RESTRICTED", `${id} is referenced`, restrictions);

@@ -52,6 +52,11 @@ class FakeApi implements GitPmApi {
     const schemas: Record<string, string> = { projects: "gitpm/project@1", milestones: "gitpm/milestone@1", tasks: "gitpm/task@1" };
     return this.entities.filter((item) => item.document.schema === schemas[type] && (project === undefined || item.document.project === project));
   }
+  async projectWorkspace(draftId: string, projectId: string) {
+    const project = (await this.listEntities(draftId, "projects")).find((item) => item.document.id === projectId);
+    if (project === undefined) throw new Error("project not found");
+    return { project, milestones: await this.listEntities(draftId, "milestones", projectId), tasks: await this.listEntities(draftId, "tasks", projectId), draft_fingerprint: project.draft_fingerprint };
+  }
   async createEntity(): Promise<EntityResult> { throw new Error("not used"); }
   async updateEntity(): Promise<EntityResult> { throw new Error("not used"); }
   async moveTask(): Promise<EntityResult> { throw new Error("not used"); }
@@ -119,6 +124,27 @@ describe("localization runtime", () => {
 });
 
 describe("frontend draft lifecycle", () => {
+  it("restores a project milestone deep link with project tabs and task navigation", async () => {
+    const api = new FakeApi();
+    api.currentSession = { ...session, mode: "repository", repository: { name: "portfolio", path: "D:\\portfolio", has_remote: false }, gitlab: { configured: false } };
+    api.drafts = [draft({ draft_id: "DRF-LOCAL" })];
+    api.entities = [
+      { document: { schema: "gitpm/project@1", id: "P-26-7K4M9Q", name: "Alpha", status: "backlog", lifecycle: "active" }, path: "project.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) },
+      { document: { schema: "gitpm/milestone@1", id: "M-26-3RC7NA", project: "P-26-7K4M9Q", name: "Launch", lifecycle: "active", due: "2026-08-01" }, path: "milestone.yaml", blob_id: "c".repeat(40), draft_fingerprint: "b".repeat(64) },
+      { document: { schema: "gitpm/task@1", id: "T-26-X8D2FW", project: "P-26-7K4M9Q", milestone: "M-26-3RC7NA", title: "First task", type: "task", status: "backlog", lifecycle: "active" }, path: "task.yaml", blob_id: "d".repeat(40), draft_fingerprint: "b".repeat(64) },
+    ];
+    window.history.replaceState({}, "", "/projects/P-26-7K4M9Q/stages/M-26-3RC7NA");
+    render(<App api={api} browserLanguages={["en"]} />);
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Milestone" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { level: 2, name: "Launch" })).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "Project navigation" })).toBeTruthy();
+    const breadcrumbs = screen.getByRole("navigation", { name: "Breadcrumbs" });
+    expect(within(breadcrumbs).getByText("Launch").getAttribute("aria-current")).toBe("page");
+    fireEvent.click(screen.getByRole("button", { name: /First task/u }));
+    expect(`${window.location.pathname}${window.location.search}`).toBe("/projects/P-26-7K4M9Q/tasks/T-26-X8D2FW?milestone=M-26-3RC7NA");
+  });
+
   it("opens the responsive navigation by keyboard, closes it with Escape, and restores scroll and focus after navigation", async () => {
     const api = new FakeApi();
     render(<App api={api} browserLanguages={["en"]} />);

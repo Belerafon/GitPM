@@ -5,14 +5,14 @@ import type { NavigationGroup } from "./AppShell.js";
 
 export const navigationGroups: readonly NavigationGroup[] = [
   { label: "nav.groupWork", items: ["nav.portfolio", "nav.projects", "nav.tasks"] },
-  { label: "nav.groupViews", items: ["nav.board", "nav.gantt", "nav.workload"] },
+  { label: "nav.groupViews", items: ["nav.workload"] },
   { label: "nav.groupOrganization", items: ["nav.people", "nav.calendar"] },
   { label: "nav.groupGit", items: ["nav.drafts", "nav.changes", "nav.history"] },
   { label: "nav.groupSettings", items: ["nav.settings"] },
 ];
 
 export const routeViews: Readonly<Record<AppRouteName, MessageKey>> = {
-  workspaces: "nav.drafts", portfolio: "nav.portfolio", projects: "nav.projects", tasks: "nav.tasks", board: "nav.board",
+  workspaces: "nav.drafts", portfolio: "nav.portfolio", projects: "nav.projects", stages: "core.milestones", tasks: "nav.tasks", board: "nav.board",
   people: "nav.people", calendars: "nav.calendar", settings: "nav.settings", workload: "nav.workload", gantt: "nav.gantt",
   changes: "nav.changes", history: "nav.history",
 };

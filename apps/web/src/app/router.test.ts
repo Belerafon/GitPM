@@ -6,7 +6,7 @@ const roundTrip = (path: string) => serializeAppRoute(parseAppRoute(path)!);
 describe("app route model", () => {
   it.each([
     "/workspaces", "/portfolio", "/projects", "/tasks", "/board", "/people", "/calendars", "/settings", "/workload", "/gantt", "/changes", "/history",
-    "/projects/P-26-ALPHA", "/projects/P-26-ALPHA/tasks", "/projects/P-26-ALPHA/tasks/T-26-FIRST", "/history/abcdef123456",
+    "/projects/P-26-ALPHA", "/projects/P-26-ALPHA/stages", "/projects/P-26-ALPHA/stages/M-26-FIRST", "/projects/P-26-ALPHA/tasks", "/projects/P-26-ALPHA/tasks/T-26-FIRST", "/projects/P-26-ALPHA/board", "/projects/P-26-ALPHA/timeline", "/history/abcdef123456",
   ])("round-trips %s", (path) => expect(roundTrip(path)).toBe(path));
 
   it("encodes entity identifiers and restores repeated query filters deterministically", () => {
@@ -18,11 +18,18 @@ describe("app route model", () => {
 
   it("maps contextual workspace destinations to canonical routes", () => {
     expect(serializeAppRoute(routeForDestination("projects", { projectId: "P-1" }))).toBe("/projects/P-1");
+    expect(serializeAppRoute(routeForDestination("stages", { projectId: "P-1", stageId: "M-1" }))).toBe("/projects/P-1/stages/M-1");
     expect(serializeAppRoute(routeForDestination("tasks", { projectId: "P-1", taskId: "T-1" }))).toBe("/projects/P-1/tasks/T-1");
     expect(serializeAppRoute(routeForDestination("tasks", { projectId: "P-1", query: { status: ["in-progress"] } }))).toBe("/projects/P-1/tasks?status=in-progress");
-    expect(serializeAppRoute(routeForDestination("board", { projectId: "P-1" }))).toBe("/board?project=P-1");
+    expect(serializeAppRoute(routeForDestination("board", { projectId: "P-1" }))).toBe("/projects/P-1/board");
+    expect(serializeAppRoute(routeForDestination("gantt", { projectId: "P-1" }))).toBe("/projects/P-1/timeline");
     expect(serializeAppRoute(routeForDestination("history", { commit: "abcdef" }))).toBe("/history/abcdef");
     expect(serializeAppRoute(routeForDestination("calendar"))).toBe("/calendars");
+  });
+
+  it("canonicalizes legacy project query routes into the project workspace", () => {
+    expect(roundTrip("/board?project=P-1&status=backlog")).toBe("/projects/P-1/board?status=backlog");
+    expect(roundTrip("/gantt?project=P-1")).toBe("/projects/P-1/timeline");
   });
 
   it("rejects unknown, incomplete and malformed routes", () => {

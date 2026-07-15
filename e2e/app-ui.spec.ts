@@ -72,7 +72,7 @@ test.describe("GitPM browser UI", () => {
 
   test("keeps every section reachable and restores focus without page overflow at UX00 viewports", async ({ page }) => {
     test.setTimeout(120_000);
-    const destinations = ["Working copies", "Portfolio", "Projects", "Tasks", "Board", "People and teams", "Working calendars", "Statuses and task types", "Workload", "Gantt", "Changes", "History"] as const;
+    const destinations = ["Working copies", "Portfolio", "Projects", "Tasks", "People and teams", "Working calendars", "Statuses and task types", "Workload", "Changes", "History"] as const;
     for (const width of [320, 390, 800, 1280, 1920]) {
       await page.setViewportSize({ width, height: 844 });
       await page.goto("/");
@@ -123,11 +123,17 @@ test.describe("GitPM browser UI", () => {
     expect(page.url()).toBe(taskUrl);
     await expect(page.getByRole("heading", { name: "Task details", exact: true })).toBeVisible();
 
+    await page.getByRole("button", { name: "Milestones", exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/projects/${FIXTURE_PROJECT_ID}/stages$`, "u"));
+    await page.getByRole("button", { name: /Alpha/u }).click();
+    await expect(page).toHaveURL(new RegExp(`/projects/${FIXTURE_PROJECT_ID}/stages/[^/?]+$`, "u"));
+    await expect(page.getByRole("heading", { name: "Alpha", exact: true })).toBeVisible();
+
     await page.goto(`/board?project=${FIXTURE_PROJECT_ID}&status=backlog&type=task`);
     await expect(page.getByLabel("Status filter", { exact: true })).toHaveValue("backlog");
     await expect(page.getByLabel("Type filter", { exact: true })).toHaveValue("task");
     await page.reload();
-    await expect(page).toHaveURL(new RegExp(`/board\\?project=${FIXTURE_PROJECT_ID}&status=backlog&type=task$`, "u"));
+    await expect(page).toHaveURL(new RegExp(`/projects/${FIXTURE_PROJECT_ID}/board\\?status=backlog&type=task$`, "u"));
     await expect(page.getByLabel("Status filter", { exact: true })).toHaveValue("backlog");
     await expect(page.getByLabel("Type filter", { exact: true })).toHaveValue("task");
   });

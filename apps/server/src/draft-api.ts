@@ -274,6 +274,15 @@ export function registerEntityApi(
   store: EntityStore,
   authenticate: Authenticate,
 ): void {
+  app.get<{ Params: { draftId: string; projectId: string } }>(
+    "/api/drafts/:draftId/projects/:projectId/workspace",
+    async (request) => {
+      const actor = await authenticate(request);
+      await requireDraftRead(manager, actor, request.params.draftId);
+      return await store.projectWorkspace(request.params.draftId, request.params.projectId);
+    },
+  );
+
   app.get<{ Params: { draftId: string; entityType: string }; Querystring: { project?: string } }>(
     "/api/drafts/:draftId/entities/:entityType",
     async (request) => {

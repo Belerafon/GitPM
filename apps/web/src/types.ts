@@ -142,3 +142,10 @@ export interface EntityResult {
   readonly blob_id: string;
   readonly draft_fingerprint: string;
 }
+
+export interface ProjectWorkspaceResult {
+  readonly project: EntityResult;
+  readonly milestones: readonly EntityResult[];
+  readonly tasks: readonly EntityResult[];
+  readonly draft_fingerprint: string;
+}

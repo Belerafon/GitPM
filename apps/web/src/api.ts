@@ -1,4 +1,4 @@
-import type { ChangesList, CommitHistoryDetail, CommitHistoryItem, CommitResult, DraftSnapshot, DraftStatus, EntityResult, GitPmDocument, MergeRequestStatus, PublicSession, PushResult, RevertDraftResult, SemanticDiff, ValidationSummary, WriterMode, ChangesSummary } from "./types.js";
+import type { ChangesList, CommitHistoryDetail, CommitHistoryItem, CommitResult, DraftSnapshot, DraftStatus, EntityResult, GitPmDocument, MergeRequestStatus, ProjectWorkspaceResult, PublicSession, PushResult, RevertDraftResult, SemanticDiff, ValidationSummary, WriterMode, ChangesSummary } from "./types.js";
 
 export class ApiError extends Error {
   constructor(public readonly code: string, message: string) {
@@ -19,6 +19,7 @@ export interface GitPmApi {
   reopenDraft(draftId: string): Promise<DraftStatus>;
   cleanupDraft(draftId: string): Promise<void>;
   listEntities(draftId: string, entityType: string, project?: string): Promise<readonly EntityResult[]>;
+  projectWorkspace(draftId: string, projectId: string): Promise<ProjectWorkspaceResult>;
   createEntity(draftId: string, entityType: string, fingerprint: string, document: GitPmDocument): Promise<EntityResult>;
   updateEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string, document: GitPmDocument): Promise<EntityResult>;
   moveTask(draftId: string, entity: EntityResult, fingerprint: string, targetProject: string, targetMilestone?: string): Promise<EntityResult>;
@@ -107,6 +108,9 @@ export class HttpGitPmApi implements GitPmApi {
   async listEntities(draftId: string, entityType: string, project?: string): Promise<readonly EntityResult[]> {
     const query = project === undefined ? "" : `?project=${encodeURIComponent(project)}`;
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/entities/${encodeURIComponent(entityType)}${query}`);
+  }
+  async projectWorkspace(draftId: string, projectId: string): Promise<ProjectWorkspaceResult> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/projects/${encodeURIComponent(projectId)}/workspace`);
   }
   async createEntity(draftId: string, entityType: string, expected_fingerprint: string, document: GitPmDocument): Promise<EntityResult> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/entities/${encodeURIComponent(entityType)}`, { method: "POST", body: JSON.stringify({ expected_fingerprint, document }) });

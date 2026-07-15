@@ -13,6 +13,8 @@ import type { WorkspaceDestination, WorkspaceSelection } from "./workspace-navig
 import { parseAppRoute, routeForDestination, serializeAppRoute, type AppRoute } from "./app/router.js";
 import { AppShell } from "./app/AppShell.js";
 import { navigationDestinations, navigationGroups, routeViews } from "./app/navigation.js";
+import { ProjectTabs } from "./features/projects/project-tabs.js";
+import { StageWorkspace } from "./features/stages/stage-workspace.js";
 import { EntityCatalog } from "./entity-catalog.js";
 
 interface AppProps {
@@ -38,7 +40,8 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
   const [catalog, setCatalog] = useState(() => new EntityCatalog({}));
   const repositoryMode = drafts.session?.mode === "repository";
   const view = activeRoute === null ? (repositoryMode ? "nav.projects" : "nav.drafts") : routeViews[activeRoute.name];
-  const workspaceSelection: WorkspaceSelection = { projectId: activeRoute?.projectId, taskId: activeRoute?.taskId, commit: activeRoute?.commit, query: activeRoute?.query };
+  const shellActiveView = activeRoute?.projectId !== undefined && ["projects", "stages", "tasks", "board", "gantt"].includes(activeRoute.name) ? "nav.projects" : view;
+  const workspaceSelection: WorkspaceSelection = { projectId: activeRoute?.projectId, stageId: activeRoute?.stageId, taskId: activeRoute?.taskId, commit: activeRoute?.commit, query: activeRoute?.query };
   const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
   const workspaceName = (id: string) => repositoryMode && id === "DRF-LOCAL" ? t("drafts.localName") : id;
   const workspaceState = (state: string) => t(({ open: "drafts.stateOpen", closed: "drafts.stateClosed", published: "drafts.statePublished", abandoned: "drafts.stateAbandoned" } as const)[state as "open" | "closed" | "published" | "abandoned"] ?? "drafts.state");
@@ -63,17 +66,26 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
   useEffect(() => {
     const needsProject = activeRoute?.projectId !== undefined;
     const needsTask = activeRoute?.taskId !== undefined;
-    if (activeDraft === undefined || (!needsProject && !needsTask)) { setCatalog(new EntityCatalog({})); return; }
+    const needsStage = activeRoute?.stageId !== undefined;
+    if (activeDraft === undefined || (!needsProject && !needsTask && !needsStage)) { setCatalog(new EntityCatalog({})); return; }
     let current = true;
     void Promise.all([
       api.listEntities(activeDraft.draft_id, "projects"),
+      needsStage ? api.listEntities(activeDraft.draft_id, "milestones", activeRoute?.projectId) : Promise.resolve([]),
       needsTask ? api.listEntities(activeDraft.draft_id, "tasks", activeRoute?.projectId) : Promise.resolve([]),
-    ]).then(([projects, tasks]) => { if (current) setCatalog(new EntityCatalog({ projects, tasks })); }).catch(() => { if (current) setCatalog(new EntityCatalog({})); });
+    ]).then(([projects, milestones, tasks]) => { if (current) setCatalog(new EntityCatalog({ projects, milestones, tasks })); }).catch(() => { if (current) setCatalog(new EntityCatalog({})); });
     return () => { current = false; };
-  }, [activeDraft?.draft_id, activeDraft?.fingerprint, activeDraft?.external_fingerprint, activeRoute?.projectId, activeRoute?.taskId, api]);
+  }, [activeDraft?.draft_id, activeDraft?.fingerprint, activeDraft?.external_fingerprint, activeRoute?.projectId, activeRoute?.stageId, activeRoute?.taskId, api]);
   const breadcrumbs = (() => {
     if (activeRoute?.name === "projects" && activeRoute.projectId !== undefined) return <>
       <button onClick={() => navigateToRoute(routeForDestination("projects"))}>{t("nav.projects")}</button><span aria-hidden="true">›</span><span aria-current="page">{catalog.project(activeRoute.projectId).name}</span>
+    </>;
+    if (activeRoute?.name === "stages" && activeRoute.projectId !== undefined) return <>
+      <button onClick={() => navigateToRoute(routeForDestination("projects"))}>{t("nav.projects")}</button><span aria-hidden="true">›</span>
+      <button onClick={() => navigateToRoute(routeForDestination("projects", { projectId: activeRoute.projectId }))}>{catalog.project(activeRoute.projectId).name}</button><span aria-hidden="true">›</span>
+      {activeRoute.stageId === undefined
+        ? <span aria-current="page">{t("core.milestones")}</span>
+        : <><button onClick={() => navigateToRoute(routeForDestination("stages", { projectId: activeRoute.projectId }))}>{t("core.milestones")}</button><span aria-hidden="true">›</span><span aria-current="page">{catalog.milestone(activeRoute.stageId)?.name}</span></>}
     </>;
     if (activeRoute?.name === "tasks" && activeRoute.projectId !== undefined) return <>
       <button onClick={() => navigateToRoute(routeForDestination("projects"))}>{t("nav.projects")}</button><span aria-hidden="true">›</span>
@@ -87,7 +99,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
     </>;
     if ((activeRoute?.name === "board" || activeRoute?.name === "gantt") && activeRoute.projectId !== undefined) {
       const destination = activeRoute.name === "board" ? "board" : "gantt";
-      return <><button onClick={() => navigateToRoute(routeForDestination(destination))}>{t(destination === "board" ? "nav.board" : "nav.gantt")}</button><span aria-hidden="true">›</span><span aria-current="page">{catalog.project(activeRoute.projectId).name}</span></>;
+      return <><button onClick={() => navigateToRoute(routeForDestination("projects"))}>{t("nav.projects")}</button><span aria-hidden="true">›</span><button onClick={() => navigateToRoute(routeForDestination("projects", { projectId: activeRoute.projectId }))}>{catalog.project(activeRoute.projectId).name}</button><span aria-hidden="true">›</span><span aria-current="page">{t(destination === "board" ? "nav.board" : "nav.gantt")}</span></>;
     }
     return undefined;
   })();
@@ -97,6 +109,12 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
     window.addEventListener("popstate", restoreRoute);
     return () => window.removeEventListener("popstate", restoreRoute);
   }, []);
+
+  useEffect(() => {
+    if (activeRoute === null) return;
+    const canonical = serializeAppRoute(activeRoute);
+    if (`${window.location.pathname}${window.location.search}` !== canonical) window.history.replaceState({}, "", canonical);
+  }, [activeRoute]);
 
   useEffect(() => {
     if (drafts.session === undefined || activeRoute !== null || window.location.pathname !== "/") return;
@@ -120,9 +138,9 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
   const repository = drafts.session.repository;
   const gitlab = drafts.session.gitlab;
   const loginToGitLab = () => { void api.login().then(navigate); };
-  const pageTitle = activeRoute?.name === "projects" && activeRoute.projectId !== undefined ? t("core.project") : activeRoute?.name === "tasks" && activeRoute.taskId !== undefined ? t("core.details") : t(view);
+  const pageTitle = activeRoute?.name === "projects" && activeRoute.projectId !== undefined ? t("core.project") : activeRoute?.name === "stages" && activeRoute.stageId !== undefined ? t("core.milestone") : activeRoute?.name === "tasks" && activeRoute.taskId !== undefined ? t("core.details") : t(view);
   return (
-    <AppShell activeView={view}
+    <AppShell activeView={shellActiveView}
       banner={drafts.error !== null && <div className="alert error">{t("status.error", { message: drafts.error })}<button onClick={() => { void drafts.refresh(); }}>{t("status.retry")}</button></div>}
       breadcrumbs={breadcrumbs}
         headerMeta={<><strong>{repository?.name ?? t("app.repository")}</strong><span className="runtime-context">{t("auth.localMode")} · {t("auth.role", { role: drafts.session.role })}</span></>}
@@ -180,9 +198,18 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
             </>}
           </div>
         </section>}
+        {activeRoute?.projectId !== undefined && ["projects", "stages", "tasks", "board", "gantt"].includes(activeRoute.name) && <ProjectTabs
+          active={(activeRoute.name === "gantt" ? "gantt" : activeRoute.name) as WorkspaceDestination}
+          onNavigate={openWorkspace}
+          projectId={activeRoute.projectId}
+          t={t}
+        />}
         {["nav.portfolio", "nav.projects", "nav.tasks"].includes(view) && (active === undefined
           ? <div className="card empty-workspace">{t("core.selectProject")}</div>
           : <CoreWorkspace api={api} confirmAction={confirmAction} draft={active} key={`${view}:${workspaceSelection.projectId ?? ""}:${workspaceSelection.taskId ?? ""}:${workspaceSelection.query?.status?.[0] ?? ""}:${workspaceSelection.query?.milestone?.[0] ?? ""}`} locale={locale} surface={view === "nav.portfolio" ? "portfolio" : view === "nav.tasks" ? "tasks" : "projects"} initialProjectId={workspaceSelection.projectId} initialTaskId={workspaceSelection.taskId} initialStatusFilter={workspaceSelection.query?.status?.[0]} initialMilestoneFilter={workspaceSelection.query?.milestone?.[0]} onNavigate={openWorkspace} onChanged={drafts.refresh} />)}
+        {activeRoute?.name === "stages" && (active === undefined || activeRoute.projectId === undefined
+          ? <div className="card empty-workspace">{t("core.selectProject")}</div>
+          : <StageWorkspace api={api} confirmAction={confirmAction} draft={active} locale={locale} onChanged={drafts.refresh} onNavigate={openWorkspace} projectId={activeRoute.projectId} stageId={activeRoute.stageId} />)}
         {["nav.people", "nav.calendar", "nav.settings"].includes(view) && (active === undefined
           ? <div className="card empty-workspace">{t("core.selectProject")}</div>
           : <AdminWorkspace api={api} confirmAction={confirmAction} draft={active} role={drafts.session.role} locale={locale} surface={view === "nav.people" ? "people" : view === "nav.calendar" ? "calendar" : "settings"} onChanged={drafts.refresh} />)}

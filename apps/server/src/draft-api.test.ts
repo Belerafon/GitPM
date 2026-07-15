@@ -131,6 +131,20 @@ describe("entity API contract", () => {
     expect(entityStore.list).toHaveBeenCalledWith("DRF-API", "projects", undefined);
   });
 
+  it("returns one project workspace through the scoped read model", async () => {
+    const project = { document: { schema: "gitpm/project@1", id: "P-26-MGP84K" }, path: "projects/P-26-MGP84K/project.yaml", blob_id: "a".repeat(40), draft_fingerprint: metadata.fingerprint };
+    const entityStore = {
+      projectWorkspace: vi.fn(async () => ({ project, milestones: [], tasks: [], draft_fingerprint: metadata.fingerprint })),
+    } as unknown as EntityStore;
+    const app = buildApp({ authenticate: () => ({ userId: "42", role: "Developer" }), draftManager: manager(), entityStore });
+    apps.push(app);
+
+    const response = await app.inject({ method: "GET", url: "/api/drafts/DRF-API/projects/P-26-MGP84K/workspace" });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ project: { document: { id: "P-26-MGP84K" } }, milestones: [], tasks: [] });
+    expect(entityStore.projectWorkspace).toHaveBeenCalledWith("DRF-API", "P-26-MGP84K");
+  });
+
   it("creates an entity through the domain store", async () => {
     const entityStore = {
       create: vi.fn(async () => ({

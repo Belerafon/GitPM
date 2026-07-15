@@ -24,6 +24,17 @@ class EntityApi {
 afterEach(cleanup);
 
 describe("core UI", () => {
+  it("does not turn the global task entry point into an all-project task stream", async () => {
+    const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
+    const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
+    await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@1", id: "T-26-222222", project: project.document.id, title: "Must stay scoped", type: "task", status: "backlog", lifecycle: "active" });
+
+    render(<CoreWorkspace api={api} draft={draft} locale="en" surface="tasks" onChanged={vi.fn(async () => undefined)} />);
+    expect(await screen.findByRole("heading", { name: "Choose a project" })).toBeTruthy();
+    expect(screen.queryByText("Must stay scoped")).toBeNull();
+    expect((screen.getByLabelText("Project") as HTMLSelectElement).value).toBe("");
+  });
+
   it("creates valid immutable IDs and renders Markdown without creating raw HTML", () => {
     expect(newEntityId("T", () => 0, new Date("2026-01-01T00:00:00Z"))).toBe("T-26-000000");
     const { container } = render(<SafeMarkdown source={'# **Safe**\n<img src=x onerror="alert(1)">'} />);
@@ -108,13 +119,16 @@ describe("core UI", () => {
     const milestone = await entityApi.createEntity("DRF-CORE", "milestones", "", { schema: "gitpm/milestone@1", id: "M-26-222222", project: project.document.id, name: "Archived stage", lifecycle: "archived" });
     const task = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@1", id: "T-26-333333", project: project.document.id, milestone: milestone.document.id, title: "Linked task", type: "task", status: "backlog", lifecycle: "active" });
 
-    const { container } = render(<CoreWorkspace api={api} draft={draft} initialProjectId={project.document.id} initialTaskId={task.document.id} locale="en" surface="tasks" onChanged={vi.fn(async () => undefined)} />);
+    const onNavigate = vi.fn();
+    const { container } = render(<CoreWorkspace api={api} draft={draft} initialProjectId={project.document.id} initialTaskId={task.document.id} locale="en" surface="tasks" onNavigate={onNavigate} onChanged={vi.fn(async () => undefined)} />);
     await screen.findByRole("heading", { name: "Linked task" });
     const metadata = container.querySelector<HTMLElement>(".task-detail-meta")!;
     expect(within(metadata).getByRole("button", { name: "Alpha" })).toBeTruthy();
     expect(within(metadata).getByText(/Archived stage/u)).toBeTruthy();
     expect(metadata.querySelector(".archived-reference")?.textContent).toContain("Archived");
     expect(within(metadata).queryByText("P-26-111111")).toBeNull();
+    fireEvent.click(within(metadata).getByRole("button", { name: /Archived stage/u }));
+    expect(onNavigate).toHaveBeenCalledWith("stages", { projectId: project.document.id, stageId: milestone.document.id });
   });
 
   it("filters tasks by milestone and links project milestone progress to that filter", async () => {
@@ -128,7 +142,7 @@ describe("core UI", () => {
     const rendered = render(<CoreWorkspace api={api} draft={draft} initialProjectId={project.document.id} locale="en" surface="projects" onNavigate={onNavigate} onChanged={vi.fn(async () => undefined)} />);
     const progress = await screen.findByRole("button", { name: "1 of 1 tasks completed" });
     fireEvent.click(progress);
-    expect(onNavigate).toHaveBeenCalledWith("tasks", { projectId: project.document.id, query: { milestone: [milestone.document.id] } });
+    expect(onNavigate).toHaveBeenCalledWith("stages", { projectId: project.document.id, stageId: milestone.document.id });
 
     rendered.unmount();
     const filtered = render(<CoreWorkspace api={api} draft={draft} initialProjectId={project.document.id} initialMilestoneFilter={milestone.document.id} locale="en" surface="tasks" onNavigate={onNavigate} onChanged={vi.fn(async () => undefined)} />);
@@ -162,10 +176,10 @@ describe("core UI", () => {
     const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-111111", name: "External project", status: "backlog", lifecycle: "active" });
     const task = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@1", id: "T-26-222222", project: project.document.id, title: "Before agent", type: "task", status: "backlog", lifecycle: "active" });
     const external = { ...draft, writer_mode: "external" as const, changed_externally: false, external_fingerprint: "1".repeat(64) };
-    const rendered = render(<CoreWorkspace api={api} draft={external} locale="en" surface="tasks" onChanged={vi.fn(async () => undefined)} />);
+    const rendered = render(<CoreWorkspace api={api} draft={external} initialProjectId={project.document.id} locale="en" surface="tasks" onChanged={vi.fn(async () => undefined)} />);
     const readButton = await screen.findByRole("button", { name: /Before agent/u }); readButton.focus(); expect(document.activeElement).toBe(readButton);
     await entityApi.updateEntity("DRF-CORE", "tasks", task, "", { ...task.document, title: "After agent", status: "done" });
-    rendered.rerender(<CoreWorkspace api={api} draft={{ ...external, external_fingerprint: "2".repeat(64), changed_externally: true }} locale="en" surface="tasks" onChanged={vi.fn(async () => undefined)} />);
+    rendered.rerender(<CoreWorkspace api={api} draft={{ ...external, external_fingerprint: "2".repeat(64), changed_externally: true }} initialProjectId={project.document.id} locale="en" surface="tasks" onChanged={vi.fn(async () => undefined)} />);
     const updated = await screen.findByText("After agent"); const row = updated.closest<HTMLElement>(".task-row")!;
     await waitFor(() => expect(row.classList.contains("external-update")).toBe(true));
     expect(row.dataset.externalFields).toBe("status,title");
