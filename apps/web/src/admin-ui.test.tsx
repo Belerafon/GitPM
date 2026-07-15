@@ -29,19 +29,22 @@ describe("administration UI", () => {
   it("lets Maintainer create Calendar, Person and Team and edit repository configuration", async () => {
     const admin = new AdminApi(); const api = admin as unknown as GitPmApi; const changed = vi.fn(async () => undefined);
     const rendered = render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="calendar" onChanged={changed} />);
-    const calendarButton = await screen.findByRole("button", { name: "Create calendar" }); const calendarForm = calendarButton.closest("form")!;
+    fireEvent.click(await screen.findByRole("button", { name: /Create calendar/u }));
+    const calendarForm = within(screen.getByRole("dialog", { name: "Create calendar" })).getByRole("button", { name: "Create calendar" }).closest("form")!;
     fireEvent.change(within(calendarForm).getByLabelText("Name"), { target: { value: "Default" } });
     fireEvent.change(within(calendarForm).getByLabelText("Holidays (YYYY-MM-DD, comma-separated)"), { target: { value: "2026-01-01" } }); fireEvent.submit(calendarForm);
-    expect(await screen.findByDisplayValue("Default")).toBeTruthy();
+    expect(await screen.findByText("Default")).toBeTruthy();
     expect(screen.getByLabelText("Working week preview").querySelectorAll(".working")).toHaveLength(5);
 
     rendered.rerender(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="people" onChanged={changed} />);
-    const personButton = await screen.findByRole("button", { name: "Create person" }); const personForm = personButton.closest("form")!;
+    fireEvent.click(await screen.findByRole("button", { name: /Create person/u }));
+    const personForm = within(screen.getByRole("dialog", { name: "Create person" })).getByRole("button", { name: "Create person" }).closest("form")!;
     fireEvent.change(within(personForm).getByLabelText("Name"), { target: { value: "Alice" } }); fireEvent.change(within(personForm).getByLabelText("Weekly capacity (hours)"), { target: { value: "32" } }); fireEvent.submit(personForm);
-    expect(await screen.findByDisplayValue("Alice")).toBeTruthy();
-    const teamButton = screen.getByRole("button", { name: "Create team" }); const teamForm = teamButton.closest("form")!;
+    expect(await screen.findByText("Alice")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Create team/u }));
+    const teamForm = within(screen.getByRole("dialog", { name: "Create team" })).getByRole("button", { name: "Create team" }).closest("form")!;
     fireEvent.change(within(teamForm).getByLabelText("Name"), { target: { value: "Core" } }); fireEvent.click(within(teamForm).getByLabelText("Alice")); fireEvent.submit(teamForm);
-    expect(await screen.findByDisplayValue("Core")).toBeTruthy();
+    expect(await screen.findByText("Core")).toBeTruthy();
     expect(admin.entities.find((item) => item.document.schema === "gitpm/team@1")?.document.members).toHaveLength(1);
     fireEvent.change(screen.getByLabelText("Search teams or members"), { target: { value: "Alice" } });
     expect(screen.getByText("Core")).toBeTruthy();
@@ -49,8 +52,11 @@ describe("administration UI", () => {
     expect(screen.queryByText("Core")).toBeNull();
 
     rendered.rerender(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="settings" onChanged={changed} />);
+    const statusesCard = (await screen.findByRole("heading", { name: "Statuses" })).closest<HTMLElement>(".config-editor")!;
+    fireEvent.click(within(statusesCard).getByRole("button", { name: "Edit" }));
     const statusTitle = await screen.findByLabelText("Statuses backlog"); fireEvent.change(statusTitle, { target: { value: "Queue" } }); fireEvent.submit(statusTitle.closest("form")!);
     await waitFor(() => expect((admin.configurations.get("statuses")!.document.statuses as Array<{ title: string }>)[0]?.title).toBe("Queue"));
+    fireEvent.click(within(statusesCard).getByRole("button", { name: "Edit" }));
     fireEvent.click(screen.getByRole("button", { name: "Move Queue down" }));
     await waitFor(() => expect((admin.configurations.get("statuses")!.document.statuses as Array<{ slug: string }>)[0]?.slug).toBe("done"));
     expect(changed).toHaveBeenCalled();
@@ -60,7 +66,7 @@ describe("administration UI", () => {
     const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
     render(<AdminWorkspace api={api} draft={draft} role="Developer" locale="en" surface="calendar" onChanged={vi.fn(async () => undefined)} />);
     expect(await screen.findByText("Administrative changes require Maintainer.")).toBeTruthy();
-    expect((screen.getByRole("button", { name: "Create calendar" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: /Create calendar/u }) as HTMLButtonElement).disabled).toBe(true);
     expect(admin.mutations).toBe(0);
   });
 
@@ -69,17 +75,18 @@ describe("administration UI", () => {
     await admin.createEntity("DRF-ADMIN", "calendars", "", { schema: "gitpm/calendar@1", id: "CAL-26-111111", name: "Default", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
     const confirmAction = vi.fn(() => false);
     render(<AdminWorkspace api={api} confirmAction={confirmAction} draft={draft} role="Maintainer" locale="en" surface="calendar" onChanged={vi.fn(async () => undefined)} />);
-    await screen.findByDisplayValue("Default");
+    await screen.findByText("Default");
+    fireEvent.click(screen.getByRole("button", { name: "Edit calendar" }));
 
     const deleteButton = screen.getByRole("button", { name: "Delete" });
     expect(deleteButton.className).toContain("danger");
     expect(screen.getByRole("button", { name: "Archive" }).className).not.toContain("danger");
     fireEvent.click(deleteButton);
     expect(confirmAction).toHaveBeenCalledWith("Delete Default permanently? This action cannot be undone.");
-    expect(screen.getByDisplayValue("Default")).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: "Edit calendar: Default" })).toBeTruthy();
 
     confirmAction.mockReturnValue(true);
     fireEvent.click(deleteButton);
-    await waitFor(() => expect(screen.queryByDisplayValue("Default")).toBeNull());
+    await waitFor(() => expect(screen.queryByText("Default")).toBeNull());
   });
 });

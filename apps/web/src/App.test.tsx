@@ -205,7 +205,7 @@ describe("frontend draft lifecycle", () => {
 
     expect(await screen.findByRole("heading", { name: "Projects" })).toBeTruthy();
     expect(`${window.location.pathname}${window.location.search}`).toBe("/projects");
-    expect(await screen.findByRole("button", { name: "Create project" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: /New project/u })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Create task" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Portfolio" }));
@@ -214,7 +214,7 @@ describe("frontend draft lifecycle", () => {
     const projectsStat = await screen.findByText("Active projects");
     expect(within(projectsStat.closest<HTMLElement>(".card")!).getByText("1")).toBeTruthy();
     expect(await screen.findByText("Alpha")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Create project" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /New project/u })).toBeNull();
     expect(screen.queryByRole("button", { name: "Create task" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /Alpha/u }));
@@ -223,18 +223,18 @@ describe("frontend draft lifecycle", () => {
     let breadcrumbs = screen.getByRole("navigation", { name: "Breadcrumbs" });
     expect(within(breadcrumbs).getByRole("button", { name: "Projects" })).toBeTruthy();
     expect(within(breadcrumbs).getByText("Alpha").getAttribute("aria-current")).toBe("page");
-    const projectEditor = (await screen.findByDisplayValue("Alpha")).closest<HTMLElement>(".entity-card")!;
+    const projectEditor = document.querySelector<HTMLElement>(".entity-detail-card")!;
     expect(projectEditor.className).toContain("entity-detail-card");
-    expect((within(projectEditor).getByText("Edit").closest("details") as HTMLDetailsElement).open).toBe(false);
+    expect(screen.queryByRole("dialog")).toBeNull();
     fireEvent.click(await screen.findByRole("button", { name: "Open tasks" }));
     expect(await screen.findByRole("heading", { name: "Tasks" })).toBeTruthy();
     expect(`${window.location.pathname}${window.location.search}`).toBe("/projects/P-26-7K4M9Q/tasks");
     breadcrumbs = screen.getByRole("navigation", { name: "Breadcrumbs" });
     expect(within(breadcrumbs).getByText("Tasks").getAttribute("aria-current")).toBe("page");
     expect(await screen.findByLabelText("Project")).toBeTruthy();
-    expect(await screen.findByRole("button", { name: "Create task" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: /New task/u })).toBeTruthy();
     expect(await screen.findByText("First task")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Create project" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /New project/u })).toBeNull();
 
     fireEvent.change(screen.getByLabelText("Filter tasks"), { target: { value: "backlog" } });
     expect(`${window.location.pathname}${window.location.search}`).toBe("/projects/P-26-7K4M9Q/tasks?status=backlog");

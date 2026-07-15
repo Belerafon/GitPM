@@ -114,6 +114,8 @@
   ,"core.createMilestone": "Создать этап"
   ,"core.createTask": "Создать задачу"
   ,"core.save": "Сохранить"
+  ,"core.cancel": "Отмена"
+  ,"core.closeEditor": "Закрыть редактор"
   ,"core.archive": "Архивировать"
   ,"core.archived": "В архиве"
   ,"core.archiveMilestoneConfirm": "Архивировать этап «{name}»? Связь сохранится у {count} задач, а этап будет отмечен как архивный."

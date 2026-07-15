@@ -114,6 +114,8 @@
   ,"core.createMilestone": "Create milestone"
   ,"core.createTask": "Create task"
   ,"core.save": "Save"
+  ,"core.cancel": "Cancel"
+  ,"core.closeEditor": "Close editor"
   ,"core.archive": "Archive"
   ,"core.archived": "Archived"
   ,"core.archiveMilestoneConfirm": "Archive {name}? {count} linked tasks will keep this milestone and display it as archived."

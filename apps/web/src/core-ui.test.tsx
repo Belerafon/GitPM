@@ -32,30 +32,30 @@ describe("core UI", () => {
     expect(container.textContent).toContain("<img src=x");
   });
 
-  it("creates Project, Milestone and Task, inline-edits status and archives the Task", async () => {
+  it("creates Project, Milestone and Task, then edits and archives the Task in the drawer", async () => {
     const entityApi = new EntityApi();
     const api = entityApi as unknown as GitPmApi;
     const onChanged = vi.fn(async () => undefined);
     const rendered = render(<CoreWorkspace api={api} draft={draft} locale="en" surface="projects" onChanged={onChanged} />);
 
-    const projectButton = await screen.findByRole("button", { name: "Create project" });
-    expect((screen.getByText("New project").closest("details") as HTMLDetailsElement).open).toBe(false);
-    const projectForm = projectButton.closest("form")!;
+    fireEvent.click(await screen.findByRole("button", { name: /New project/u }));
+    const projectDialog = screen.getByRole("dialog", { name: "New project" });
+    const projectForm = within(projectDialog).getByRole("button", { name: "Create project" }).closest("form")!;
     fireEvent.change(within(projectForm).getByLabelText("Name"), { target: { value: "Alpha" } });
     fireEvent.change(within(projectForm).getByLabelText("Description (Markdown)"), { target: { value: "# Alpha" } });
     fireEvent.submit(projectForm);
-    const projectName = await screen.findByDisplayValue("Alpha");
-    expect((projectName.closest("details") as HTMLDetailsElement).open).toBe(false);
+    expect(await screen.findAllByText("Alpha")).not.toHaveLength(0);
+    expect(screen.queryByRole("dialog")).toBeNull();
 
-    const milestoneButton = screen.getByRole("button", { name: "Create milestone" });
-    const milestoneForm = milestoneButton.closest("form")!;
+    fireEvent.click(screen.getByRole("button", { name: /New milestone/u }));
+    const milestoneForm = within(screen.getByRole("dialog", { name: "New milestone" })).getByRole("button", { name: "Create milestone" }).closest("form")!;
     fireEvent.change(within(milestoneForm).getByLabelText("Name"), { target: { value: "M1" } });
     fireEvent.submit(milestoneForm);
-    expect(await screen.findByDisplayValue("M1")).toBeTruthy();
+    expect(await screen.findByText("M1")).toBeTruthy();
 
     rendered.rerender(<CoreWorkspace api={api} draft={draft} initialProjectId={entityApi.entities.find((item) => item.document.schema === "gitpm/project@1")?.document.id} locale="en" surface="tasks" onChanged={onChanged} />);
-    const taskButton = await screen.findByRole("button", { name: "Create task" });
-    const taskForm = taskButton.closest("form")!;
+    fireEvent.click(await screen.findByRole("button", { name: /New task/u }));
+    const taskForm = within(screen.getByRole("dialog", { name: "New task" })).getByRole("button", { name: "Create task" }).closest("form")!;
     fireEvent.change(within(taskForm).getByLabelText("Title"), { target: { value: "First task" } });
     fireEvent.change(within(taskForm).getByLabelText("Milestone"), { target: { value: entityApi.entities.find((item) => item.document.schema === "gitpm/milestone@1")?.document.id } });
     fireEvent.change(within(taskForm).getByLabelText("Description (Markdown)"), { target: { value: "**important**" } });
@@ -64,12 +64,21 @@ describe("core UI", () => {
     await waitFor(() => expect(rendered.container.querySelector(".task-milestone")?.textContent).toBe("M1"));
     expect(entityApi.entities.find((item) => item.document.schema === "gitpm/task@1")?.document.milestone).toBe(entityApi.entities.find((item) => item.document.schema === "gitpm/milestone@1")?.document.id);
 
-    fireEvent.change(screen.getByLabelText("Status First task"), { target: { value: "done" } });
+    const createdTask = entityApi.entities.find((item) => item.document.schema === "gitpm/task@1")!;
+    const createdProject = entityApi.entities.find((item) => item.document.schema === "gitpm/project@1")!;
+    rendered.unmount();
+    render(<CoreWorkspace api={api} draft={draft} initialProjectId={createdProject.document.id} initialTaskId={createdTask.document.id} locale="en" surface="tasks" onChanged={onChanged} />);
+    await screen.findByRole("heading", { name: "First task" });
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    const editDialog = screen.getByRole("dialog", { name: "Edit: First task" });
+    fireEvent.change(within(editDialog).getByLabelText("Status"), { target: { value: "done" } });
+    fireEvent.click(within(editDialog).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(entityApi.entities.find((item) => item.document.schema === "gitpm/task@1")?.document.status).toBe("done"));
-    const taskRow = screen.getByText("First task").closest<HTMLElement>(".task-row")!;
-    fireEvent.click(within(taskRow).getByRole("button", { name: "Archive" }));
-    await waitFor(() => expect(screen.queryByText("First task")).toBeNull());
-    expect(entityApi.entities.find((item) => item.document.schema === "gitpm/task@1")?.document.lifecycle).toBe("archived");
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    const archiveDialog = screen.getByRole("dialog", { name: "Edit: First task" });
+    fireEvent.click(within(archiveDialog).getByText("More actions"));
+    fireEvent.click(within(archiveDialog).getByRole("button", { name: "Archive" }));
+    await waitFor(() => expect(entityApi.entities.find((item) => item.document.schema === "gitpm/task@1")?.document.lifecycle).toBe("archived"));
   });
 
   it("uses configured status titles and requires confirmation before permanent deletion", async () => {
@@ -81,15 +90,16 @@ describe("core UI", () => {
 
     expect(await screen.findByText("Backlog")).toBeTruthy();
     rendered.rerender(<CoreWorkspace api={api} confirmAction={confirmAction} draft={draft} initialProjectId={project.document.id} locale="en" surface="projects" onChanged={vi.fn(async () => undefined)} />);
-    await screen.findByDisplayValue("Alpha");
-    fireEvent.click(screen.getByText("Edit"));
+    await screen.findAllByText("Alpha");
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    expect(screen.getByRole("dialog", { name: "Edit: Alpha" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     expect(confirmAction).toHaveBeenCalledWith("Delete Alpha permanently? This action cannot be undone.");
     expect(entityApi.entities).toContain(project);
 
     confirmAction.mockReturnValue(true);
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
-    await waitFor(() => expect(screen.queryByDisplayValue("Alpha")).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Edit: Alpha" })).toBeNull());
   });
 
   it("shows resolved project and archived milestone names in task details", async () => {
@@ -135,10 +145,10 @@ describe("core UI", () => {
     const milestone = await entityApi.createEntity("DRF-CORE", "milestones", "", { schema: "gitpm/milestone@1", id: "M-26-333333", project: target.document.id, name: "Target stage", lifecycle: "active" });
     const task = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@1", id: "T-26-444444", project: source.document.id, title: "Move me", type: "task", status: "backlog", lifecycle: "active" });
     const onNavigate = vi.fn();
-    const { container } = render(<CoreWorkspace api={api} draft={draft} initialProjectId={source.document.id} initialTaskId={task.document.id} locale="en" surface="tasks" onNavigate={onNavigate} onChanged={vi.fn(async () => undefined)} />);
+    render(<CoreWorkspace api={api} draft={draft} initialProjectId={source.document.id} initialTaskId={task.document.id} locale="en" surface="tasks" onNavigate={onNavigate} onChanged={vi.fn(async () => undefined)} />);
     await screen.findByRole("heading", { name: "Move me" });
     fireEvent.click(screen.getByText("Move to another project"));
-    const moveForm = container.querySelector<HTMLElement>(".move-task-disclosure")!;
+    const moveForm = screen.getByRole("dialog", { name: "Move to another project" });
     fireEvent.change(within(moveForm).getByLabelText("Target project"), { target: { value: target.document.id } });
     fireEvent.change(within(moveForm).getByLabelText("Milestone"), { target: { value: milestone.document.id } });
     fireEvent.click(within(moveForm).getByRole("button", { name: "Move task" }));
@@ -160,6 +170,7 @@ describe("core UI", () => {
     await waitFor(() => expect(row.classList.contains("external-update")).toBe(true));
     expect(row.dataset.externalFields).toBe("status,title");
     expect(document.activeElement).toBe(readButton);
-    expect((screen.getByLabelText("Status After agent") as HTMLSelectElement).disabled).toBe(true);
+    expect(within(row).queryByRole("combobox")).toBeNull();
+    expect(within(row).getByText("Done")).toBeTruthy();
   });
 });
