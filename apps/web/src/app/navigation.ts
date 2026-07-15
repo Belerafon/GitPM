@@ -4,9 +4,9 @@ import type { AppRouteName } from "./router.js";
 import type { NavigationGroup } from "./AppShell.js";
 
 export const navigationGroups: readonly NavigationGroup[] = [
-  { label: "nav.groupWork", items: ["nav.portfolio", "nav.projects"] },
-  { label: "nav.groupTeam", items: ["nav.people", "nav.workload", "nav.calendar"] },
-  { label: "nav.groupGit", items: ["nav.drafts", "nav.changes", "nav.history"] },
+  { label: "nav.groupWork", items: ["nav.projects"] },
+  { label: "nav.groupTeam", items: ["nav.team"] },
+  { label: "nav.groupGit", items: ["nav.repository"] },
   { label: "nav.groupSettings", items: ["nav.settings"] },
 ];
 
@@ -17,7 +17,5 @@ export const routeViews: Readonly<Record<AppRouteName, MessageKey>> = {
 };
 
 export const navigationDestinations: Readonly<Partial<Record<MessageKey, WorkspaceDestination | "workspaces">>> = {
-  "nav.drafts": "workspaces", "nav.portfolio": "portfolio", "nav.projects": "projects", "nav.board": "board",
-  "nav.people": "people", "nav.calendar": "calendar", "nav.settings": "settings", "nav.workload": "workload", "nav.gantt": "gantt",
-  "nav.changes": "changes", "nav.history": "history",
+  "nav.team": "workload", "nav.repository": "workspaces", "nav.projects": "projects", "nav.settings": "settings",
 };

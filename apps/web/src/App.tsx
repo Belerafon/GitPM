@@ -13,9 +13,9 @@ import type { WorkspaceDestination, WorkspaceSelection } from "./workspace-navig
 import { parseAppRoute, routeForDestination, serializeAppRoute, type AppRoute } from "./app/router.js";
 import { AppShell } from "./app/AppShell.js";
 import { navigationDestinations, navigationGroups, routeViews } from "./app/navigation.js";
+import { SectionTabs, type SectionTab } from "./app/SectionTabs.js";
 import { ProjectTabs } from "./features/projects/project-tabs.js";
 import { ProjectPlanWorkspace } from "./features/projects/project-plan-workspace.js";
-import { StageWorkspace } from "./features/stages/stage-workspace.js";
 import { EntityCatalog } from "./entity-catalog.js";
 
 interface AppProps {
@@ -25,6 +25,17 @@ interface AppProps {
   readonly navigate?: (url: string) => void;
   readonly confirmAction?: (message: string) => boolean;
 }
+
+const teamTabs: readonly SectionTab[] = [
+  { destination: "workload", label: "nav.workload" },
+  { destination: "people", label: "nav.people" },
+  { destination: "calendar", label: "nav.calendar" },
+];
+const repositoryTabs: readonly SectionTab[] = [
+  { destination: "workspaces", label: "nav.drafts" },
+  { destination: "changes", label: "nav.changes" },
+  { destination: "history", label: "nav.history" },
+];
 
 const suggestedDraftId = () => `DRF-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${Math.random().toString(36).slice(2, 6).toUpperCase().padEnd(4, "0")}`;
 
@@ -41,7 +52,13 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
   const [catalog, setCatalog] = useState(() => new EntityCatalog({}));
   const repositoryMode = drafts.session?.mode === "repository";
   const view = activeRoute === null ? (repositoryMode ? "nav.projects" : "nav.drafts") : routeViews[activeRoute.name];
-  const shellActiveView = activeRoute?.projectId !== undefined && ["projects", "stages", "tasks", "board", "gantt"].includes(activeRoute.name) ? "nav.projects" : view;
+  const shellActiveView = activeRoute?.projectId !== undefined && ["projects", "stages", "tasks", "board", "gantt"].includes(activeRoute.name)
+    ? "nav.projects"
+    : ["nav.people", "nav.workload", "nav.calendar"].includes(view)
+      ? "nav.team"
+      : ["nav.drafts", "nav.changes", "nav.history"].includes(view)
+        ? "nav.repository"
+        : view;
   const workspaceSelection: WorkspaceSelection = { projectId: activeRoute?.projectId, stageId: activeRoute?.stageId, taskId: activeRoute?.taskId, commit: activeRoute?.commit, query: activeRoute?.query };
   const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
   const workspaceName = (id: string) => repositoryMode && id === "DRF-LOCAL" ? t("drafts.localName") : id;
@@ -56,6 +73,9 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
     if (`${window.location.pathname}${window.location.search}` !== nextUrl) window.history[replace ? "replaceState" : "pushState"]({}, "", nextUrl);
     setActiveRoute(nextRoute);
   };
+  useEffect(() => {
+    if (repositoryMode && activeRoute === null) navigateToRoute(routeForDestination("projects"), true);
+  }, [repositoryMode, activeRoute]);
   const openWorkspace = (destination: WorkspaceDestination, selection: WorkspaceSelection = {}) => {
     navigateToRoute(routeForDestination(destination, selection));
   };
@@ -137,6 +157,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
   const repository = drafts.session.repository;
   const gitlab = drafts.session.gitlab;
   const loginToGitLab = () => { void api.login().then(navigate); };
+  const projectWorkspaceRoute = activeRoute?.projectId !== undefined && ["projects", "stages", "tasks"].includes(activeRoute.name);
   const pageTitle = activeRoute?.name === "projects" && activeRoute.projectId !== undefined ? t("projectTabs.overview") : activeRoute?.name === "stages" && activeRoute.stageId !== undefined ? t("core.milestone") : activeRoute?.name === "tasks" && activeRoute.taskId !== undefined ? t("core.details") : t(view);
   return (
     <AppShell activeView={shellActiveView}
@@ -162,6 +183,8 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
             {gitlab?.user !== undefined && <><span>{gitlab.user.username}</span><button onClick={() => { void drafts.logout(); }}>{t("auth.logoutGitLab")}</button></>}
           </>}
     >
+        {["nav.people", "nav.workload", "nav.calendar"].includes(view) && <SectionTabs active={view} ariaLabel={t("nav.team")} items={teamTabs} onNavigate={(destination) => navigateToRoute(routeForDestination(destination))} t={t} />}
+        {["nav.drafts", "nav.changes", "nav.history"].includes(view) && <SectionTabs active={view} ariaLabel={t("nav.repository")} items={repositoryTabs} onNavigate={(destination) => navigateToRoute(routeForDestination(destination))} t={t} />}
         {view === "nav.drafts" && <section className="draft-layout">
           <div className="draft-list card">
             <h2 aria-hidden="true">{t("drafts.heading")}</h2><p className="workspace-description">{t("drafts.description")}</p>
@@ -198,20 +221,18 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
           </div>
         </section>}
         {activeRoute?.projectId !== undefined && ["projects", "stages", "tasks", "board", "gantt"].includes(activeRoute.name) && <ProjectTabs
-          active={(activeRoute.name === "stages" ? "projects" : activeRoute.name === "gantt" ? "gantt" : activeRoute.name) as WorkspaceDestination}
+          active={(["stages", "tasks"].includes(activeRoute.name) ? "projects" : activeRoute.name === "gantt" ? "gantt" : activeRoute.name) as WorkspaceDestination}
           onNavigate={openWorkspace}
           projectId={activeRoute.projectId}
+          query={activeRoute.query}
           t={t}
         />}
-        {activeRoute?.name === "projects" && activeRoute.projectId !== undefined && (active === undefined
+        {projectWorkspaceRoute && activeRoute?.projectId !== undefined && (active === undefined
           ? <div className="card empty-workspace">{t("core.selectProject")}</div>
-          : <ProjectPlanWorkspace api={api} confirmAction={confirmAction} draft={active} locale={locale} onChanged={drafts.refresh} onNavigate={openWorkspace} projectId={activeRoute.projectId} />)}
-        {["nav.portfolio", "nav.projects", "nav.tasks"].includes(view) && !(activeRoute?.name === "projects" && activeRoute.projectId !== undefined) && (active === undefined
+          : <ProjectPlanWorkspace api={api} confirmAction={confirmAction} draft={active} initialMilestoneFilter={workspaceSelection.query?.milestone?.[0]} initialStatusFilter={workspaceSelection.query?.status?.[0]} key={`project-plan:${activeRoute.projectId}:${activeRoute.stageId ?? ""}:${activeRoute.taskId ?? ""}:${workspaceSelection.query?.status?.[0] ?? ""}:${workspaceSelection.query?.milestone?.[0] ?? ""}`} locale={locale} onChanged={drafts.refresh} onNavigate={openWorkspace} projectId={activeRoute.projectId} selectedStageId={activeRoute.stageId} selectedTaskId={activeRoute.taskId} />)}
+        {["nav.portfolio", "nav.projects", "nav.tasks"].includes(view) && !projectWorkspaceRoute && (active === undefined
           ? <div className="card empty-workspace">{t("core.selectProject")}</div>
           : <CoreWorkspace api={api} confirmAction={confirmAction} draft={active} key={`${view}:${workspaceSelection.projectId ?? ""}:${workspaceSelection.taskId ?? ""}:${workspaceSelection.query?.status?.[0] ?? ""}:${workspaceSelection.query?.milestone?.[0] ?? ""}`} locale={locale} surface={view === "nav.portfolio" ? "portfolio" : view === "nav.tasks" ? "tasks" : "projects"} initialProjectId={workspaceSelection.projectId} initialTaskId={workspaceSelection.taskId} initialStatusFilter={workspaceSelection.query?.status?.[0]} initialMilestoneFilter={workspaceSelection.query?.milestone?.[0]} onNavigate={openWorkspace} onChanged={drafts.refresh} />)}
-        {activeRoute?.name === "stages" && (active === undefined || activeRoute.projectId === undefined || activeRoute.stageId === undefined
-          ? <div className="card empty-workspace">{t("core.selectProject")}</div>
-          : <StageWorkspace api={api} confirmAction={confirmAction} draft={active} locale={locale} onChanged={drafts.refresh} onNavigate={openWorkspace} projectId={activeRoute.projectId} stageId={activeRoute.stageId} />)}
         {["nav.people", "nav.calendar", "nav.settings"].includes(view) && (active === undefined
           ? <div className="card empty-workspace">{t("core.selectProject")}</div>
           : <AdminWorkspace api={api} confirmAction={confirmAction} draft={active} role={drafts.session.role} locale={locale} surface={view === "nav.people" ? "people" : view === "nav.calendar" ? "calendar" : "settings"} onChanged={drafts.refresh} />)}
@@ -220,7 +241,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
         {view === "nav.board" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <BoardWorkspace api={api} draft={active} key={`nav.board:${workspaceSelection.projectId ?? ""}:${workspaceSelection.query?.status?.[0] ?? ""}:${workspaceSelection.query?.type?.[0] ?? ""}:${workspaceSelection.query?.milestone?.[0] ?? ""}:${workspaceSelection.query?.view?.[0] ?? ""}`} locale={locale} initialProjectId={workspaceSelection.projectId} initialStatusFilter={workspaceSelection.query?.status?.[0]} initialTypeFilter={workspaceSelection.query?.type?.[0]} initialMilestoneFilter={workspaceSelection.query?.milestone?.[0]} initialViewId={workspaceSelection.query?.view?.[0]} onNavigate={openWorkspace} onChanged={drafts.refresh} />)}
         {view === "nav.gantt" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <GanttWorkspace api={api} draft={active} key={`nav.gantt:${workspaceSelection.projectId ?? ""}`} locale={locale} initialProjectId={workspaceSelection.projectId} onNavigate={openWorkspace} />)}
         {view === "nav.workload" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <WorkloadWorkspace api={api} draft={active} locale={locale} onNavigate={openWorkspace} />)}
-        {!["nav.drafts", "nav.portfolio", "nav.projects", "nav.tasks", "nav.people", "nav.calendar", "nav.settings", "nav.changes", "nav.history", "nav.board", "nav.gantt", "nav.workload"].includes(view) && <div className="card empty-workspace">{t("common.notAvailable")}</div>}
+        {!projectWorkspaceRoute && !["nav.drafts", "nav.portfolio", "nav.projects", "nav.tasks", "nav.people", "nav.calendar", "nav.settings", "nav.changes", "nav.history", "nav.board", "nav.gantt", "nav.workload"].includes(view) && <div className="card empty-workspace">{t("common.notAvailable")}</div>}
     </AppShell>
   );
 }

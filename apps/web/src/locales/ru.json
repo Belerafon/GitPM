@@ -25,6 +25,8 @@
   "nav.gantt": "Диаграмма Ганта",
   "nav.changes": "Изменения",
   "nav.history": "История",
+  "nav.team": "Команда",
+  "nav.repository": "Репозиторий",
   "nav.label": "Основная навигация",
   "nav.openMenu": "Открыть навигацию",
   "nav.closeMenu": "Закрыть навигацию",
@@ -105,6 +107,7 @@
   ,"core.riskNear": "Срок близко"
   ,"core.riskOverdue": "Просрочен"
   ,"core.riskUnknown": "Без срока"
+  ,"core.risk": "Риск"
   ,"core.milestone": "Этап"
   ,"core.noMilestone": "Без этапа"
   ,"core.allMilestones": "Все этапы"
@@ -345,7 +348,7 @@
   ,"core.type": "Тип"
   ,"core.chooseProjectOption": "Выберите проект"
   ,"projectTabs.navigation": "Навигация по проекту"
-  ,"projectTabs.overview": "Обзор проекта"
+  ,"projectTabs.overview": "План"
   ,"projectTabs.tasks": "Задачи"
   ,"projectTabs.board": "Доска"
   ,"projectTabs.timeline": "Таймлайн"
@@ -354,8 +357,8 @@
   ,"projectPlan.stages": "Активные этапы"
   ,"projectPlan.overdue": "Просроченные задачи"
   ,"projectPlan.withoutStage": "Вне активных этапов"
-  ,"projectPlan.workHeading": "Этапы и задачи"
-  ,"projectPlan.workDescription": "Полный объём проекта, сгруппированный по этапам. Откройте этап для подробностей или задачу для редактирования."
+  ,"projectPlan.workHeading": "План работ"
+  ,"projectPlan.workDescription": "Задачи сгруппированы по этапам; фильтры сохраняются при навигации."
   ,"projectPlan.openTaskList": "Открыть список задач"
   ,"projectPlan.emptyStages": "Активных этапов пока нет. Создайте первый этап, чтобы структурировать план проекта."
   ,"projectPlan.unassignedHeading": "Вне активных этапов"

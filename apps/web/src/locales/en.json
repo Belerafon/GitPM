@@ -25,6 +25,8 @@
   "nav.gantt": "Gantt",
   "nav.changes": "Changes",
   "nav.history": "History",
+  "nav.team": "Team",
+  "nav.repository": "Repository",
   "nav.label": "Main navigation",
   "nav.openMenu": "Open navigation",
   "nav.closeMenu": "Close navigation",
@@ -105,6 +107,7 @@
   ,"core.riskNear": "Due soon"
   ,"core.riskOverdue": "Overdue"
   ,"core.riskUnknown": "No due date"
+  ,"core.risk": "Risk"
   ,"core.milestone": "Milestone"
   ,"core.noMilestone": "No milestone"
   ,"core.allMilestones": "All milestones"
@@ -345,7 +348,7 @@
   ,"core.type": "Type"
   ,"core.chooseProjectOption": "Select project"
   ,"projectTabs.navigation": "Project navigation"
-  ,"projectTabs.overview": "Project overview"
+  ,"projectTabs.overview": "Plan"
   ,"projectTabs.tasks": "Tasks"
   ,"projectTabs.board": "Board"
   ,"projectTabs.timeline": "Timeline"
@@ -354,8 +357,8 @@
   ,"projectPlan.stages": "Active milestones"
   ,"projectPlan.overdue": "Overdue tasks"
   ,"projectPlan.withoutStage": "Outside active milestones"
-  ,"projectPlan.workHeading": "Milestones and tasks"
-  ,"projectPlan.workDescription": "The complete project scope grouped by milestone. Open a milestone for details or a task to edit it."
+  ,"projectPlan.workHeading": "Work plan"
+  ,"projectPlan.workDescription": "Tasks are grouped by milestone; filters persist while you navigate."
   ,"projectPlan.openTaskList": "Open task list"
   ,"projectPlan.emptyStages": "No active milestones yet. Create the first milestone to structure the project plan."
   ,"projectPlan.unassignedHeading": "Outside active milestones"

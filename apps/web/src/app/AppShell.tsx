@@ -69,7 +69,7 @@ export function AppShell({ activeView, banner, breadcrumbs, children, headerMeta
     <aside aria-label={t("nav.label")} className={`sidebar${navigationOpen ? " open" : ""}`} id="primary-navigation" ref={sidebarRef}>
       <div className="sidebar-heading"><div className="brand"><span className="brand-mark">G</span><strong>{t("app.title")}</strong></div><button aria-label={t("nav.closeMenu")} className="navigation-close" onClick={closeNavigation} type="button">×</button></div>
       <nav className="navigation-groups">{navigationGroups.map((group) => <div className="navigation-group" key={group.label}>
-        <span className="navigation-group-label">{t(group.label)}</span>
+        {group.items.length > 1 && <span className="navigation-group-label">{t(group.label)}</span>}
         <div className="navigation-group-items">{group.items.map((key) => <button aria-current={activeView === key ? "page" : undefined} className={activeView === key ? "active" : ""} key={key} onClick={() => navigate(key)}>{t(key)}</button>)}</div>
       </div>)}</nav>
       <div className="repository-card"><span>{t("app.singleRepository")}</span>{repositoryDetails === undefined

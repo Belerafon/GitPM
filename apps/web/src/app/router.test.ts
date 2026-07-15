@@ -5,8 +5,8 @@ const roundTrip = (path: string) => serializeAppRoute(parseAppRoute(path)!);
 
 describe("app route model", () => {
   it.each([
-    "/workspaces", "/portfolio", "/projects", "/board", "/people", "/calendars", "/settings", "/workload", "/gantt", "/changes", "/history",
-    "/projects/P-26-ALPHA", "/projects/P-26-ALPHA/stages/M-26-FIRST", "/projects/P-26-ALPHA/tasks", "/projects/P-26-ALPHA/tasks/T-26-FIRST", "/projects/P-26-ALPHA/board", "/projects/P-26-ALPHA/timeline", "/history/abcdef123456",
+    "/workspaces", "/projects", "/board", "/people", "/calendars", "/settings", "/workload", "/gantt", "/changes", "/history",
+    "/projects/P-26-ALPHA", "/projects/P-26-ALPHA/stages/M-26-FIRST", "/projects/P-26-ALPHA/tasks/T-26-FIRST", "/projects/P-26-ALPHA/board", "/projects/P-26-ALPHA/timeline", "/history/abcdef123456",
   ])("round-trips %s", (path) => expect(roundTrip(path)).toBe(path));
 
   it("encodes entity identifiers and restores repeated query filters deterministically", () => {
@@ -20,7 +20,7 @@ describe("app route model", () => {
     expect(serializeAppRoute(routeForDestination("projects", { projectId: "P-1" }))).toBe("/projects/P-1");
     expect(serializeAppRoute(routeForDestination("stages", { projectId: "P-1", stageId: "M-1" }))).toBe("/projects/P-1/stages/M-1");
     expect(serializeAppRoute(routeForDestination("tasks", { projectId: "P-1", taskId: "T-1" }))).toBe("/projects/P-1/tasks/T-1");
-    expect(serializeAppRoute(routeForDestination("tasks", { projectId: "P-1", query: { status: ["in-progress"] } }))).toBe("/projects/P-1/tasks?status=in-progress");
+    expect(serializeAppRoute(routeForDestination("tasks", { projectId: "P-1", query: { status: ["in-progress"] } }))).toBe("/projects/P-1?status=in-progress");
     expect(serializeAppRoute(routeForDestination("board", { projectId: "P-1" }))).toBe("/projects/P-1/board");
     expect(serializeAppRoute(routeForDestination("gantt", { projectId: "P-1" }))).toBe("/projects/P-1/timeline");
     expect(serializeAppRoute(routeForDestination("history", { commit: "abcdef" }))).toBe("/history/abcdef");
@@ -31,6 +31,8 @@ describe("app route model", () => {
     expect(roundTrip("/board?project=P-1&status=backlog")).toBe("/projects/P-1/board?status=backlog");
     expect(roundTrip("/gantt?project=P-1")).toBe("/projects/P-1/timeline");
     expect(roundTrip("/projects/P-1/stages")).toBe("/projects/P-1");
+    expect(roundTrip("/projects/P-1/tasks?status=backlog")).toBe("/projects/P-1?status=backlog");
+    expect(roundTrip("/portfolio")).toBe("/projects");
   });
 
   it("redirects the removed global task route to the project directory", () => {

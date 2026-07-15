@@ -22,7 +22,7 @@ test.describe("GitPM browser UI", () => {
     await expect(page.getByText("Локальный режим · Роль: Maintainer", { exact: true })).toBeVisible();
     await page.locator(".repository-card summary").click();
     await expect(page.locator(".repository-card code")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Рабочие копии", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Репозиторий", exact: true })).toBeVisible();
     await expect(page.getByRole("combobox", { name: "Текущая рабочая копия", exact: true })).toHaveValue("DRF-UI-WORKSPACE");
     await expect(page.getByRole("heading", { name: "Проекты", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Выйти", exact: true })).toHaveCount(0);
@@ -48,7 +48,7 @@ test.describe("GitPM browser UI", () => {
 
     await expect(page.getByLabel("Language", { exact: true })).toHaveValue("en");
     await expect(page.getByRole("heading", { name: "Projects", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Working copies", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Repository", exact: true })).toBeVisible();
   });
 
   test("loads fixture projects and tasks through the real API", async ({ page }) => {
@@ -67,12 +67,12 @@ test.describe("GitPM browser UI", () => {
     await page.reload();
 
     await expect(page.getByRole("button", { name: /^GitPM launch/u })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Рабочие копии", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Репозиторий", exact: true })).toBeVisible();
   });
 
   test("keeps every section reachable and restores focus without page overflow at UX00 viewports", async ({ page }) => {
     test.setTimeout(120_000);
-    const destinations = ["Working copies", "Portfolio", "Projects", "People and teams", "Team workload", "Working calendars", "Statuses and task types", "Changes", "History"] as const;
+    const destinations = ["Repository", "Team", "Projects", "Statuses and task types"] as const;
     for (const width of [320, 390, 800, 1280, 1920]) {
       await page.setViewportSize({ width, height: 844 });
       await page.goto("/");
@@ -90,6 +90,20 @@ test.describe("GitPM browser UI", () => {
         await expect.poll(async () => await page.evaluate(() => document.activeElement?.getAttribute("tabindex"))).toBe("-1");
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
       }
+      if (width === 1280) {
+        for (const [section, tabs] of [
+          ["Team", ["Team workload", "People and teams", "Working calendars"]],
+          ["Repository", ["Working copies", "Changes", "History"]],
+        ] as const) {
+          await page.getByRole("button", { name: section, exact: true }).click();
+          for (const tab of tabs) {
+            await page.getByRole("button", { name: tab, exact: true }).click();
+            await expect(page.getByRole("button", { name: tab, exact: true })).toHaveAttribute("aria-current", "page");
+            await expect(page.locator(".workspace-loading")).toHaveCount(0);
+            expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+          }
+        }
+      }
     }
   });
 
@@ -102,24 +116,23 @@ test.describe("GitPM browser UI", () => {
     await expect(page).toHaveURL(/\/projects$/u);
     await expect(page.getByRole("button", { name: "Tasks", exact: true })).toHaveCount(0);
 
-    await page.getByRole("button", { name: "Portfolio", exact: true }).click();
-    await expect(page).toHaveURL(/\/portfolio$/u);
-    await expect(page.getByRole("heading", { name: "Portfolio", exact: true })).toBeVisible();
-
+    await page.getByRole("button", { name: "Team", exact: true }).click();
+    await expect(page).toHaveURL(/\/workload$/u);
     await page.getByRole("button", { name: "People and teams", exact: true }).click();
     await expect(page).toHaveURL(/\/people$/u);
     await expect(page.getByRole("heading", { name: "People and teams", exact: true })).toBeVisible();
 
     await page.goBack();
-    await expect(page).toHaveURL(/\/portfolio$/u);
-    await expect(page.getByRole("heading", { name: "Portfolio", exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/\/workload$/u);
+    await expect(page.getByRole("heading", { name: "Team workload", exact: true })).toBeVisible();
     await page.goForward();
     await expect(page).toHaveURL(/\/people$/u);
 
     await page.goto(`/projects/${FIXTURE_PROJECT_ID}/tasks`);
-    await expect(page.getByRole("heading", { name: "Tasks", exact: true })).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`/projects/${FIXTURE_PROJECT_ID}(?:\\?.*)?$`, "u"));
+    await expect(page.getByRole("heading", { name: "Plan", exact: true })).toBeVisible();
     await page.getByRole("button", { name: /Approve schema v1/u }).click();
-    await expect(page).toHaveURL(new RegExp(`/projects/${FIXTURE_PROJECT_ID}/tasks/[^/?]+$`, "u"));
+    await expect(page).toHaveURL(new RegExp(`/projects/${FIXTURE_PROJECT_ID}/tasks/[^/?]+(?:\\?.*)?$`, "u"));
     const taskUrl = page.url();
     await expect(page.getByRole("heading", { name: "Task details", exact: true })).toBeVisible();
 
@@ -127,13 +140,13 @@ test.describe("GitPM browser UI", () => {
     expect(page.url()).toBe(taskUrl);
     await expect(page.getByRole("heading", { name: "Task details", exact: true })).toBeVisible();
 
-    await page.getByRole("button", { name: "Project overview", exact: true }).click();
-    await expect(page).toHaveURL(new RegExp(`/projects/${FIXTURE_PROJECT_ID}$`, "u"));
-    await expect(page.getByRole("heading", { name: "Milestones and tasks", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Plan", exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/projects/${FIXTURE_PROJECT_ID}(?:\\?.*)?$`, "u"));
+    await expect(page.getByRole("heading", { name: "Work plan", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: /Approve schema v1/u })).toBeVisible();
     await page.getByRole("button", { name: /Alpha/u }).click();
     await expect(page).toHaveURL(new RegExp(`/projects/${FIXTURE_PROJECT_ID}/stages/[^/?]+$`, "u"));
-    await expect(page.getByRole("heading", { name: "Alpha", exact: true })).toBeVisible();
+    await expect(page.getByLabel("Milestone", { exact: true }).getByRole("heading", { name: "Alpha", exact: true })).toBeVisible();
 
     await page.goto(`/board?project=${FIXTURE_PROJECT_ID}&status=backlog&type=task`);
     await expect(page.getByLabel("Status filter", { exact: true })).toHaveValue("backlog");
@@ -146,7 +159,7 @@ test.describe("GitPM browser UI", () => {
 
   test("creates, switches and remembers a working copy", async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("button", { name: "Рабочие копии", exact: true }).click();
+    await page.getByRole("button", { name: "Репозиторий", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Рабочие копии", exact: true })).toBeVisible();
 
     await page.getByRole("textbox", { name: "ID рабочей копии", exact: true }).fill("DRF-UI-SECOND");
@@ -155,9 +168,9 @@ test.describe("GitPM browser UI", () => {
 
     await page.reload();
     await expect(page.getByRole("combobox", { name: "Текущая рабочая копия", exact: true })).toHaveValue("DRF-UI-SECOND");
-    await expect(page.getByRole("button", { name: "Рабочие копии", exact: true })).toHaveClass(/active/u);
+    await expect(page.getByRole("button", { name: "Репозиторий", exact: true })).toHaveClass(/active/u);
 
-    await page.getByRole("button", { name: "Рабочие копии", exact: true }).click();
+    await page.getByRole("button", { name: "Репозиторий", exact: true }).click();
     await page.getByRole("button", { name: /DRF-UI-WORKSPACE.*gitpm\/local-user\/DRF-UI-WORKSPACE/u }).click();
     await expect(page.getByRole("combobox", { name: "Текущая рабочая копия", exact: true })).toHaveValue("DRF-UI-WORKSPACE");
   });
