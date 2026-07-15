@@ -108,7 +108,7 @@ describe("localization runtime", () => {
     try {
       localStorage.setItem(LOCALE_STORAGE_KEY, "tt");
       render(<App api={new FakeApi()} />);
-      expect(await screen.findByRole("heading", { name: "T Portfolio repository" })).toBeTruthy();
+      expect(await screen.findByRole("heading", { name: "T Working copies" })).toBeTruthy();
       expect(document.documentElement.lang).toBe("tt");
     } finally {
       cleanup();
@@ -142,7 +142,7 @@ describe("frontend draft lifecycle", () => {
     fireEvent.click(screen.getByRole("button", { name: "Portfolio" }));
     await screen.findByText("Select a project to manage its work.");
     expect(document.documentElement.scrollTop).toBe(0);
-    expect(document.activeElement).toBe(screen.getByRole("heading", { level: 1, name: "Portfolio repository" }));
+    expect(document.activeElement).toBe(screen.getByRole("heading", { level: 1, name: "Portfolio" }));
     expect(menuButton.getAttribute("aria-expanded")).toBe("false");
   });
 
@@ -208,7 +208,7 @@ describe("frontend draft lifecycle", () => {
     expect(screen.queryByRole("button", { name: "Create task" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Portfolio" }));
-    expect(await screen.findByRole("heading", { name: "Portfolio overview" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Portfolio" })).toBeTruthy();
     expect(`${window.location.pathname}${window.location.search}`).toBe("/portfolio");
     const projectsStat = await screen.findByText("Active projects");
     expect(within(projectsStat.closest<HTMLElement>(".card")!).getByText("1")).toBeTruthy();
@@ -217,7 +217,7 @@ describe("frontend draft lifecycle", () => {
     expect(screen.queryByRole("button", { name: "Create task" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /Alpha/u }));
-    expect(await screen.findByRole("heading", { name: "Projects" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Project" })).toBeTruthy();
     expect(`${window.location.pathname}${window.location.search}`).toBe("/projects/P-26-7K4M9Q");
     let breadcrumbs = screen.getByRole("navigation", { name: "Breadcrumbs" });
     expect(within(breadcrumbs).getByRole("button", { name: "Projects" })).toBeTruthy();
@@ -275,10 +275,10 @@ describe("frontend draft lifecycle", () => {
     const api = new FakeApi();
     localStorage.setItem(LOCALE_STORAGE_KEY, "ru");
     render(<App api={api} />);
-    expect(await screen.findByRole("heading", { name: "Репозиторий портфеля" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Рабочие копии" })).toBeTruthy();
     expect(document.documentElement.lang).toBe("ru");
     fireEvent.change(screen.getByLabelText("Язык"), { target: { value: "en" } });
-    expect(await screen.findByRole("heading", { name: "Portfolio repository" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Working copies" })).toBeTruthy();
     expect(localStorage.getItem(LOCALE_STORAGE_KEY)).toBe("en");
     expect(document.documentElement).toMatchObject({ lang: "en", dir: "ltr" });
     expect(api.payloads).toEqual([]);

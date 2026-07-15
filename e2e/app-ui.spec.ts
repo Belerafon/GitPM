@@ -18,7 +18,7 @@ test.describe("GitPM browser UI", () => {
 
     await page.goto("/");
 
-    await expect(page.getByRole("heading", { name: "source", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Проекты", exact: true })).toBeVisible();
     await expect(page.getByText("Локальный режим · Роль: Maintainer", { exact: true })).toBeVisible();
     await page.locator(".repository-card summary").click();
     await expect(page.locator(".repository-card code")).toBeVisible();
@@ -42,7 +42,7 @@ test.describe("GitPM browser UI", () => {
     await page.goto("/");
     const locale = page.getByLabel("Язык", { exact: true });
     await locale.selectOption("en");
-    await expect(page.getByRole("heading", { name: "source", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Projects", exact: true })).toBeVisible();
 
     await page.reload();
 
@@ -100,7 +100,7 @@ test.describe("GitPM browser UI", () => {
 
     await page.getByRole("button", { name: "Portfolio", exact: true }).click();
     await expect(page).toHaveURL(/\/portfolio$/u);
-    await expect(page.getByRole("heading", { name: "Portfolio overview", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Portfolio", exact: true })).toBeVisible();
 
     await page.getByRole("button", { name: "People and teams", exact: true }).click();
     await expect(page).toHaveURL(/\/people$/u);
@@ -108,7 +108,7 @@ test.describe("GitPM browser UI", () => {
 
     await page.goBack();
     await expect(page).toHaveURL(/\/portfolio$/u);
-    await expect(page.getByRole("heading", { name: "Portfolio overview", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Portfolio", exact: true })).toBeVisible();
     await page.goForward();
     await expect(page).toHaveURL(/\/people$/u);
 

@@ -129,7 +129,7 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
   };
 
   return <section className="changes-workspace">
-    <div className="section-heading"><span className="eyebrow draft-context-id">{draft.draft_id}</span><h2>{t("changes.heading")}</h2><p>{t("changes.description")}</p></div>
+    <div className="section-heading"><span className="eyebrow draft-context-id">{draft.draft_id}</span><h2 aria-hidden="true">{t("changes.heading")}</h2><p>{t("changes.description")}</p></div>
     {!canMutate && <div className="alert warning">{t("changes.readOnly")}</div>}
     {error !== null && <div className="alert error">{t("status.error", { message: error })}<button onClick={() => void load(true)}>{t("status.retry")}</button></div>}
     <AsyncBoundary state={loadRequest.state} loading={t("status.loading")} retry={() => { void load(); }} error={(loadError, retry) => <div className="alert error">{t("status.error", { message: loadError })}<button onClick={retry}>{t("status.retry")}</button></div>}>
@@ -152,7 +152,7 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
       {semantic.unclassified_files.length > 0 && <p className="unclassified">{t("changes.unclassified", { count: semantic.unclassified_files.length })}</p>}
     </div>
     <div className="card publish-panel"><div><span className="eyebrow">{t("changes.publishEyebrow")}</span><h3>{t("changes.publishHeading")}</h3><p>{t("changes.commitAllHint")}</p></div>
-      {commit === undefined ? <button className="primary" disabled={!canMutate || busy || changes.changed_files_count === 0} onClick={() => setCommitOpen(true)}>{t("changes.openCommit")}</button> : <div className="publish-flow">
+      {commit === undefined ? <div className="publish-action"><button className="primary" disabled={!canMutate || busy || changes.changed_files_count === 0} onClick={() => setCommitOpen(true)}>{t("changes.openCommit")}</button>{changes.changed_files_count === 0 && <span>{t("changes.cleanHint")}</span>}</div> : <div className="publish-flow">
         <div className="publish-step complete"><span>1</span><div><strong>{t("changes.committed")}</strong><code>{commit.commit.slice(0, 12)}</code></div></div>
         {!remoteAvailable ? <span>{t("changes.localOnly")}</span> : !gitlabConfigured ? <span>{t("changes.gitlabNotConfigured")}</span> : !gitlabSignedIn ? <button className="primary" onClick={onGitLabLogin}>{t("changes.loginForPush")}</button> : !pushed ? <button className="primary" disabled={busy} onClick={() => void push()}>{t("changes.push")}</button> : mergeRequest === undefined ? <div className="mr-form"><label>{t("changes.mrTitle")}<input value={mrTitle} onChange={(event) => setMrTitle(event.target.value)} /></label><label>{t("changes.mrDescription")}<textarea value={mrDescription} onChange={(event) => setMrDescription(event.target.value)} /></label><button className="primary" disabled={busy || !mrTitle.trim()} onClick={() => void createMr()}>{t("changes.createMr")}</button></div> : safeExternalUrl(mergeRequest.web_url) === undefined
           ? <span className="mr-result">{t("changes.mrReady", { iid: mergeRequest.iid, state: mergeRequest.state })}</span>

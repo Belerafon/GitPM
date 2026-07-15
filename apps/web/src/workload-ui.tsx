@@ -47,15 +47,18 @@ export function WorkloadWorkspace({ api, draft, locale, onNavigate = () => undef
   const excluded = Object.values(report.exclusions).reduce((sum, value) => sum + value, 0);
 
   return <section className="workload-workspace">
-    <div className="section-heading"><span className="eyebrow draft-context-id">{draft.draft_id}</span><h2>{t("workload.heading")}</h2><p>{t("workload.description")}</p></div>
+    <div className="section-heading"><span className="eyebrow draft-context-id">{draft.draft_id}</span><h2 aria-hidden="true">{t("workload.heading")}</h2><p>{t("workload.description")}</p></div>
     {error !== null && <div className="alert error">{error}</div>}
     <AsyncBoundary state={loadRequest.state} loading={t("status.loading")} retry={() => { void load(); }} error={(loadError, retry) => <div className="alert error">{loadError}<button onClick={retry}>{t("status.retry")}</button></div>}>
     <>
     <section className="card workload-summary">
       <div><span>{t("workload.included")}</span><strong>{report.included_tasks}</strong></div>
       <div><span>{t("workload.excluded")}</span><strong>{excluded}</strong></div>
-      <p>{t("workload.formula")}</p>
-      <p>{t("workload.capacityFormula")}</p>
+      <details className="workload-calculation">
+        <summary>{t("workload.calculationDetails")}</summary>
+        <p>{t("workload.formula")}</p>
+        <p>{t("workload.capacityFormula")}</p>
+      </details>
     </section>
     <div className="workload-legend" aria-label={t("workload.heading")}><span className="available">{t("workload.legendLow")}</span><span className="balanced">{t("workload.legendBalanced")}</span><span className="near">{t("workload.legendNear")}</span><span className="overloaded">{t("workload.legendOver")}</span></div>
     {report.weeks.length === 0 || activePeople.length === 0 ? <section className="card empty-workspace">{t("workload.empty")}</section> : <section className="card workload-table-wrap">

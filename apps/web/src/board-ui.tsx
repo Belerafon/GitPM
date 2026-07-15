@@ -107,7 +107,7 @@ export function BoardWorkspace({ api, draft, locale, initialProjectId = "", init
   const scrollColumns = (direction: -1 | 1) => columnsRef.current?.scrollBy({ left: direction * Math.max(280, columnsRef.current.clientWidth * .75), behavior: "smooth" });
 
   return <section className="board-workspace">
-    <div className="section-heading"><span className="eyebrow draft-context-id">{draft.draft_id}</span><h2>{t("board.heading")}</h2><p>{t("board.description")}</p></div>
+    <div className="section-heading"><span className="eyebrow draft-context-id">{draft.draft_id}</span><h2 aria-hidden="true">{t("board.heading")}</h2><p>{t("board.description")}</p></div>
     {readOnly && <div className="alert warning">{t("board.readOnly")}</div>}{error !== null && <div className="alert error">{error}</div>}
     <AsyncBoundary state={loadRequest.state} loading={t("status.loading")} retry={() => { void load(); }} error={(loadError, retry) => <div className="alert error">{loadError}<button onClick={retry}>{t("status.retry")}</button></div>}>
     <>
@@ -123,7 +123,7 @@ export function BoardWorkspace({ api, draft, locale, initialProjectId = "", init
       return <section className="board-column" data-status={status} key={status} onDragOver={(event) => event.preventDefault()} onDrop={(event) => drop(event, status)} onPointerUp={() => { if (draggedTaskId !== null) moveTask(status, draggedTaskId); }}>
         <header><h3>{titleForStatus(status)}</h3><span>{columnTasks.length}</span></header>
         <div className="board-cards">{columnTasks.map((task) => <article className="board-card" draggable={!readOnly} data-task-id={task.document.id} key={task.document.id} onPointerDown={() => { if (!readOnly) setDraggedTaskId(task.document.id); }} onDragStart={(event) => { setDraggedTaskId(task.document.id); event.dataTransfer.setData("text/plain", task.document.id); }} onDragEnd={() => setDraggedTaskId(null)}>
-          <button className="board-task-link" onPointerDown={(event) => event.stopPropagation()} onClick={() => onNavigate("tasks", { projectId, taskId: task.document.id })}><strong>{text(task.document, "title")}</strong><code>{task.document.id}</code></button><span>{types.find((type) => type.slug === text(task.document, "type"))?.title ?? text(task.document, "type")}</span><label className="board-status-control" onPointerDown={(event) => event.stopPropagation()}>{t("core.status")}<select disabled={readOnly} value={text(task.document, "status")} onChange={(event) => moveTask(event.target.value, task.document.id)}>{boardStatuses.map((nextStatus) => <option key={nextStatus} value={nextStatus}>{titleForStatus(nextStatus)}</option>)}</select></label>
+          {!readOnly && <span aria-hidden="true" className="board-drag-handle">⋮⋮</span>}<button className="board-task-link" onPointerDown={(event) => event.stopPropagation()} onClick={() => onNavigate("tasks", { projectId, taskId: task.document.id })}><strong>{text(task.document, "title")}</strong><code>{task.document.id}</code></button><span>{types.find((type) => type.slug === text(task.document, "type"))?.title ?? text(task.document, "type")}</span><label className="board-status-control" onPointerDown={(event) => event.stopPropagation()}>{t("core.status")}<select disabled={readOnly} value={text(task.document, "status")} onChange={(event) => moveTask(event.target.value, task.document.id)}>{boardStatuses.map((nextStatus) => <option key={nextStatus} value={nextStatus}>{titleForStatus(nextStatus)}</option>)}</select></label>
         </article>)}</div>
       </section>;
     })}</div>

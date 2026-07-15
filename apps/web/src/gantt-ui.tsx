@@ -92,7 +92,7 @@ export function GanttWorkspace({ api, draft, locale, initialProjectId = "", onNa
   const timelineWidth = Math.max(720, (model?.days.length ?? 0) * dayWidth);
 
   return <section className="gantt-workspace">
-    <div className="section-heading"><span className="eyebrow draft-context-id">{draft.draft_id}</span><h2>{t("gantt.heading")}</h2><p>{t("gantt.description")}</p></div>
+    <div className="section-heading"><span className="eyebrow draft-context-id">{draft.draft_id}</span><h2 aria-hidden="true">{t("gantt.heading")}</h2><p>{t("gantt.description")}</p></div>
     {error !== null && <div className="alert error">{error}</div>}
     <AsyncBoundary state={loadRequest.state} loading={t("status.loading")} retry={() => { void load(); }} error={(loadError, retry) => <div className="alert error">{loadError}<button onClick={retry}>{t("status.retry")}</button></div>}>
     <>

@@ -16,6 +16,7 @@ export function HistoryWorkspace({ api, draft, locale, canRevert, initialCommit 
 }) {
   const t = (key: Parameters<typeof message>[1], values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
   const [items, setItems] = useState<readonly CommitHistoryItem[]>([]);
+  const [historyQuery, setHistoryQuery] = useState("");
   const [detail, setDetail] = useState<CommitHistoryDetail | null>(null);
   const [fileItems, setFileItems] = useState<readonly CommitHistoryItem[]>([]);
   const [filePath, setFilePath] = useState<string | null>(null);
@@ -36,7 +37,7 @@ export function HistoryWorkspace({ api, draft, locale, canRevert, initialCommit 
     setNewDraftId(firstDetail === null ? "" : `REVERT-${firstDetail.commit.slice(0, 8).toUpperCase()}`);
   });
   useEffect(() => {
-    setDetail(null); setFileItems([]); setFilePath(null); setFileQuery(""); setConflicts([]);
+    setDetail(null); setHistoryQuery(""); setFileItems([]); setFilePath(null); setFileQuery(""); setConflicts([]);
     void load();
   }, [api, draft.draft_id]);
 
@@ -63,17 +64,21 @@ export function HistoryWorkspace({ api, draft, locale, canRevert, initialCommit 
     finally { setBusy(false); }
   };
   const visibleFiles = detail?.files.filter((file) => file.path.toLocaleLowerCase(locale).includes(fileQuery.trim().toLocaleLowerCase(locale))) ?? [];
+  const normalizedHistoryQuery = historyQuery.trim().toLocaleLowerCase(locale);
+  const visibleItems = items.filter((item) => normalizedHistoryQuery === "" || `${item.subject} ${item.author_name} ${item.commit}`.toLocaleLowerCase(locale).includes(normalizedHistoryQuery));
 
   return <section className="history-workspace">
-    <div className="section-heading"><span className="eyebrow">Git</span><h2>{t("history.heading")}</h2><p>{t("history.description")}</p></div>
+    <div className="section-heading"><span className="eyebrow">Git</span><h2 aria-hidden="true">{t("history.heading")}</h2><p>{t("history.description")}</p></div>
     {error !== null && <div className="alert error">{error}</div>}
     {conflicts.length > 0 && <div className="alert warning">{t("history.conflict", { count: conflicts.length })}</div>}
     <AsyncBoundary state={loadRequest.state} loading={t("status.loading")} retry={() => { void load(); }} error={(loadError, retry) => <div className="alert error">{loadError}<button onClick={retry}>{t("status.retry")}</button></div>}>
     <div className="history-layout">
       <div className="card history-list">
-        {items.map((item) => <button key={item.commit} className={detail?.commit === item.commit ? "history-item selected" : "history-item"} onClick={() => { void select(item); }}>
+        <label className="history-list-filter">{t("history.searchCommits")}<input type="search" value={historyQuery} onChange={(event) => setHistoryQuery(event.target.value)} /></label>
+        {visibleItems.map((item) => <button key={item.commit} className={detail?.commit === item.commit ? "history-item selected" : "history-item"} onClick={() => { void select(item); }}>
           <strong>{item.subject}</strong><code>{item.commit.slice(0, 10)}</code><span>{item.author_name} · {formatDateTime(locale, item.authored_at)}</span>
         </button>)}
+        {items.length > 0 && visibleItems.length === 0 && <p className="filter-empty">{t("history.noMatches")}</p>}
       </div>
       <div className="card history-detail">
         {detail === null ? <p>{t("history.empty")}</p> : <>

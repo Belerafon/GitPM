@@ -104,12 +104,13 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
   const repository = drafts.session.repository;
   const gitlab = drafts.session.gitlab;
   const loginToGitLab = () => { void api.login().then(navigate); };
+  const pageTitle = activeRoute?.name === "projects" && activeRoute.projectId !== undefined ? t("core.project") : activeRoute?.name === "tasks" && activeRoute.taskId !== undefined ? t("core.details") : t(view);
   return (
     <AppShell activeView={view}
       banner={drafts.error !== null && <div className="alert error">{t("status.error", { message: drafts.error })}<button onClick={() => { void drafts.refresh(); }}>{t("status.retry")}</button></div>}
       breadcrumbs={breadcrumbs}
-      headerMeta={<>{t("auth.localMode")} · {t("auth.role", { role: drafts.session.role })}</>}
-      headerTitle={repository?.name ?? t("app.repository")}
+        headerMeta={<><strong>{repository?.name ?? t("app.repository")}</strong><span className="runtime-context">{t("auth.localMode")} · {t("auth.role", { role: drafts.session.role })}</span></>}
+      headerTitle={pageTitle}
       navigationGroups={navigationGroups}
       onNavigate={selectNavigationView}
       repositoryDetails={<><strong>{t("app.repositoryDetails")}</strong><code>{repository?.path ?? drafts.session.user.username}</code></>}
@@ -128,7 +129,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
     >
         {view === "nav.drafts" && <section className="draft-layout">
           <div className="draft-list card">
-            <h2>{t("drafts.heading")}</h2><p className="workspace-description">{t("drafts.description")}</p>
+            <h2 aria-hidden="true">{t("drafts.heading")}</h2><p className="workspace-description">{t("drafts.description")}</p>
             <form onSubmit={submit}><label htmlFor="draft-id">{t("drafts.id")}</label><div className="inline"><input id="draft-id" value={draftId} onChange={(event) => setDraftId(event.target.value)} pattern="[A-Za-z0-9][A-Za-z0-9-]{0,127}" required /><button className="primary" disabled={drafts.busy || drafts.session.role === "Reporter"}>{t("drafts.create")}</button></div></form>
             <div className="draft-items">{drafts.drafts.length === 0 ? <p>{t("drafts.empty")}</p> : drafts.drafts.map((draft) => (
               <button aria-label={`${workspaceName(draft.draft_id)} · ${draft.draft_id} · ${draft.branch} · ${workspaceState(draft.state)}`} className={active?.draft_id === draft.draft_id ? "draft-item selected" : "draft-item"} key={draft.draft_id} onClick={() => { void drafts.select(draft.draft_id); }}>
