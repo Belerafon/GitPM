@@ -221,7 +221,7 @@ describe("frontend draft lifecycle", () => {
     expect(`${window.location.pathname}${window.location.search}`).toBe("/projects/P-26-7K4M9Q");
     let breadcrumbs = screen.getByRole("navigation", { name: "Breadcrumbs" });
     expect(within(breadcrumbs).getByRole("button", { name: "Projects" })).toBeTruthy();
-    expect(within(breadcrumbs).getByText("P-26-7K4M9Q").getAttribute("aria-current")).toBe("page");
+    expect(within(breadcrumbs).getByText("Alpha").getAttribute("aria-current")).toBe("page");
     const projectEditor = (await screen.findByDisplayValue("Alpha")).closest<HTMLElement>(".entity-card")!;
     expect(projectEditor.className).toContain("entity-detail-card");
     expect((within(projectEditor).getByText("Edit").closest("details") as HTMLDetailsElement).open).toBe(false);
@@ -241,7 +241,7 @@ describe("frontend draft lifecycle", () => {
     expect(`${window.location.pathname}${window.location.search}`).toBe("/projects/P-26-7K4M9Q/tasks/T-26-X8D2FW?status=backlog");
     expect(await screen.findByRole("heading", { name: "Task details" })).toBeTruthy();
     breadcrumbs = screen.getByRole("navigation", { name: "Breadcrumbs" });
-    expect(within(breadcrumbs).getByText("T-26-X8D2FW").getAttribute("aria-current")).toBe("page");
+    expect(within(breadcrumbs).getByText("First task").getAttribute("aria-current")).toBe("page");
   });
 
   it("labels a repository session and does not offer a meaningless sign-out action", async () => {

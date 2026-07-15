@@ -88,6 +88,21 @@ describe("core UI", () => {
     await waitFor(() => expect(screen.queryByDisplayValue("Alpha")).toBeNull());
   });
 
+  it("shows resolved project and archived milestone names in task details", async () => {
+    const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
+    const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
+    const milestone = await entityApi.createEntity("DRF-CORE", "milestones", "", { schema: "gitpm/milestone@1", id: "M-26-222222", project: project.document.id, name: "Archived stage", lifecycle: "archived" });
+    const task = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@1", id: "T-26-333333", project: project.document.id, milestone: milestone.document.id, title: "Linked task", type: "task", status: "backlog", lifecycle: "active" });
+
+    const { container } = render(<CoreWorkspace api={api} draft={draft} initialProjectId={project.document.id} initialTaskId={task.document.id} locale="en" surface="tasks" onChanged={vi.fn(async () => undefined)} />);
+    await screen.findByRole("heading", { name: "Linked task" });
+    const metadata = container.querySelector<HTMLElement>(".task-detail-meta")!;
+    expect(within(metadata).getByRole("button", { name: "Alpha" })).toBeTruthy();
+    expect(within(metadata).getByText(/Archived stage/u)).toBeTruthy();
+    expect(metadata.querySelector(".archived-reference")?.textContent).toContain("Archived");
+    expect(within(metadata).queryByText("P-26-111111")).toBeNull();
+  });
+
   it("reloads external changes, marks only changed fields, and keeps the focused read control", async () => {
     const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
     const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-111111", name: "External project", status: "backlog", lifecycle: "active" });

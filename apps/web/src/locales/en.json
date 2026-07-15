@@ -113,6 +113,7 @@
   ,"core.createTask": "Create task"
   ,"core.save": "Save"
   ,"core.archive": "Archive"
+  ,"core.archived": "Archived"
   ,"core.delete": "Delete"
   ,"core.deleteConfirm": "Delete {name} permanently? This action cannot be undone."
   ,"core.details": "Task details"

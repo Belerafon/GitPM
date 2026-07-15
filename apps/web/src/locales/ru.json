@@ -113,6 +113,7 @@
   ,"core.createTask": "Создать задачу"
   ,"core.save": "Сохранить"
   ,"core.archive": "Архивировать"
+  ,"core.archived": "В архиве"
   ,"core.delete": "Удалить"
   ,"core.deleteConfirm": "Удалить «{name}» без возможности восстановления?"
   ,"core.details": "Детали задачи"

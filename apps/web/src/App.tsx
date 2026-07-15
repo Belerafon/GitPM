@@ -13,6 +13,7 @@ import type { WorkspaceDestination, WorkspaceSelection } from "./workspace-navig
 import { parseAppRoute, routeForDestination, serializeAppRoute, type AppRoute } from "./app/router.js";
 import { AppShell } from "./app/AppShell.js";
 import { navigationDestinations, navigationGroups, routeViews } from "./app/navigation.js";
+import { EntityCatalog } from "./entity-catalog.js";
 
 interface AppProps {
   readonly api: GitPmApi;
@@ -34,6 +35,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
   const drafts = useDrafts();
   const [draftId, setDraftId] = useState("");
   const [activeRoute, setActiveRoute] = useState<AppRoute | null>(() => parseAppRoute(window.location.href));
+  const [catalog, setCatalog] = useState(() => new EntityCatalog({}));
   const repositoryMode = drafts.session?.mode === "repository";
   const view = activeRoute === null ? (repositoryMode ? "nav.projects" : "nav.drafts") : routeViews[activeRoute.name];
   const workspaceSelection: WorkspaceSelection = { projectId: activeRoute?.projectId, taskId: activeRoute?.taskId, commit: activeRoute?.commit, query: activeRoute?.query };
@@ -57,23 +59,35 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
     const destination = navigationDestinations[key];
     if (destination !== undefined) navigateToRoute(routeForDestination(destination));
   };
+  const activeDraft = drafts.snapshot?.draft;
+  useEffect(() => {
+    const needsProject = activeRoute?.projectId !== undefined;
+    const needsTask = activeRoute?.taskId !== undefined;
+    if (activeDraft === undefined || (!needsProject && !needsTask)) { setCatalog(new EntityCatalog({})); return; }
+    let current = true;
+    void Promise.all([
+      api.listEntities(activeDraft.draft_id, "projects"),
+      needsTask ? api.listEntities(activeDraft.draft_id, "tasks", activeRoute?.projectId) : Promise.resolve([]),
+    ]).then(([projects, tasks]) => { if (current) setCatalog(new EntityCatalog({ projects, tasks })); }).catch(() => { if (current) setCatalog(new EntityCatalog({})); });
+    return () => { current = false; };
+  }, [activeDraft?.draft_id, activeDraft?.fingerprint, activeDraft?.external_fingerprint, activeRoute?.projectId, activeRoute?.taskId, api]);
   const breadcrumbs = (() => {
     if (activeRoute?.name === "projects" && activeRoute.projectId !== undefined) return <>
-      <button onClick={() => navigateToRoute(routeForDestination("projects"))}>{t("nav.projects")}</button><span aria-hidden="true">›</span><code aria-current="page">{activeRoute.projectId}</code>
+      <button onClick={() => navigateToRoute(routeForDestination("projects"))}>{t("nav.projects")}</button><span aria-hidden="true">›</span><span aria-current="page">{catalog.project(activeRoute.projectId).name}</span>
     </>;
     if (activeRoute?.name === "tasks" && activeRoute.projectId !== undefined) return <>
       <button onClick={() => navigateToRoute(routeForDestination("projects"))}>{t("nav.projects")}</button><span aria-hidden="true">›</span>
-      <button onClick={() => navigateToRoute(routeForDestination("projects", { projectId: activeRoute.projectId }))}>{activeRoute.projectId}</button><span aria-hidden="true">›</span>
+      <button onClick={() => navigateToRoute(routeForDestination("projects", { projectId: activeRoute.projectId }))}>{catalog.project(activeRoute.projectId).name}</button><span aria-hidden="true">›</span>
       {activeRoute.taskId === undefined
         ? <span aria-current="page">{t("nav.tasks")}</span>
-        : <><button onClick={() => navigateToRoute(routeForDestination("tasks", { projectId: activeRoute.projectId, query: activeRoute.query }))}>{t("nav.tasks")}</button><span aria-hidden="true">›</span><code aria-current="page">{activeRoute.taskId}</code></>}
+        : <><button onClick={() => navigateToRoute(routeForDestination("tasks", { projectId: activeRoute.projectId, query: activeRoute.query }))}>{t("nav.tasks")}</button><span aria-hidden="true">›</span><span aria-current="page">{catalog.task(activeRoute.taskId).name}</span></>}
     </>;
     if (activeRoute?.name === "history" && activeRoute.commit !== undefined) return <>
       <button onClick={() => navigateToRoute(routeForDestination("history"))}>{t("nav.history")}</button><span aria-hidden="true">›</span><code aria-current="page">{activeRoute.commit.slice(0, 12)}</code>
     </>;
     if ((activeRoute?.name === "board" || activeRoute?.name === "gantt") && activeRoute.projectId !== undefined) {
       const destination = activeRoute.name === "board" ? "board" : "gantt";
-      return <><button onClick={() => navigateToRoute(routeForDestination(destination))}>{t(destination === "board" ? "nav.board" : "nav.gantt")}</button><span aria-hidden="true">›</span><code aria-current="page">{activeRoute.projectId}</code></>;
+      return <><button onClick={() => navigateToRoute(routeForDestination(destination))}>{t(destination === "board" ? "nav.board" : "nav.gantt")}</button><span aria-hidden="true">›</span><span aria-current="page">{catalog.project(activeRoute.projectId).name}</span></>;
     }
     return undefined;
   })();
@@ -100,7 +114,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
   );
 
   const snapshot = drafts.snapshot;
-  const active = snapshot?.draft;
+  const active = activeDraft;
   const external = active?.writer_mode === "external";
   const maintainer = drafts.session.role === "Maintainer";
   const repository = drafts.session.repository;
