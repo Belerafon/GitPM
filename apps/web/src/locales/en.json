@@ -40,6 +40,9 @@
   "drafts.localName": "Main local copy",
   "drafts.create": "Create working copy",
   "drafts.id": "Working copy ID",
+  "drafts.idHint": "Use a memorable ID for the branch, or generate a safe one.",
+  "drafts.idExample": "For example DRF-20260715-DEMO",
+  "drafts.generateId": "Generate",
   "drafts.empty": "No working copies yet.",
   "drafts.open": "Open",
   "drafts.close": "Close for editing",
@@ -57,6 +60,9 @@
   "drafts.writerExternal": "External",
   "drafts.switchToUi": "Switch to UI writer",
   "drafts.switchToExternal": "Switch to external writer",
+  "drafts.writerHintUi": "External writer lets another tool edit files; GitPM forms become read-only until you switch back.",
+  "drafts.writerHintExternal": "Switching back to UI writer re-enables GitPM forms after external changes are synchronized.",
+  "drafts.closeHint": "Closing prevents further edits but keeps this working copy available to reopen.",
   "drafts.dirty": "Changed files",
   "drafts.validation": "Validation",
   "drafts.validationValid": "Valid",
@@ -94,6 +100,12 @@
   ,"core.description": "Description (Markdown)"
   ,"core.status": "Status"
   ,"core.due": "Due date"
+  ,"core.owner": "Owner"
+  ,"core.unassigned": "Unassigned"
+  ,"core.riskOnTrack": "On track"
+  ,"core.riskNear": "Due soon"
+  ,"core.riskOverdue": "Overdue"
+  ,"core.riskUnknown": "No due date"
   ,"core.milestone": "Milestone"
   ,"core.noMilestone": "No milestone"
   ,"core.createProject": "Create project"
@@ -122,6 +134,8 @@
   ,"admin.heading": "Administration"
   ,"admin.people": "People"
   ,"admin.teams": "Teams"
+  ,"admin.teamSearch": "Search teams or members"
+  ,"admin.noMembers": "No members yet"
   ,"admin.calendars": "Calendars"
   ,"admin.settings": "Statuses and issue types"
   ,"admin.email": "Email"
@@ -130,12 +144,19 @@
   ,"admin.members": "Members"
   ,"admin.weekdays": "Working weekdays (1–7)"
   ,"admin.holidays": "Holidays (YYYY-MM-DD, comma-separated)"
+  ,"admin.weekPreview": "Working week preview"
+  ,"admin.nextHolidays": "Calendar exceptions"
+  ,"admin.noHolidays": "No exceptions configured"
   ,"admin.createPerson": "Create person"
   ,"admin.createTeam": "Create team"
   ,"admin.createCalendar": "Create calendar"
   ,"admin.maintainerOnly": "Administrative changes require Maintainer."
   ,"admin.slug": "Slug"
   ,"admin.color": "Color"
+  ,"admin.colorPicker": "Color picker"
+  ,"admin.slugHint": "Technical slugs stay fixed; titles, colors, visibility, and order are safe to change."
+  ,"admin.moveUp": "Move {name} up"
+  ,"admin.moveDown": "Move {name} down"
   ,"admin.active": "Active"
   ,"admin.statuses": "Statuses"
   ,"admin.issueTypes": "Issue types"
@@ -209,6 +230,11 @@
   ,"history.searchFiles": "Search changed files"
   ,"history.searchCommits": "Search commits"
   ,"history.noMatches": "No commits match this search."
+  ,"history.authorFilter": "Author"
+  ,"history.allAuthors": "All authors"
+  ,"history.projectFilter": "Affected project"
+  ,"history.allProjects": "All projects"
+  ,"history.dateFilter": "Date"
   ,"history.changedFiles": "Changed files: {count}"
   ,"history.revertDraft": "Revert working copy ID"
   ,"history.createRevert": "Create revert working copy"
@@ -222,6 +248,9 @@
   ,"board.all": "All"
   ,"board.visible": "Visible Tasks: {count}"
   ,"board.savedViews": "Saved Views"
+  ,"board.savedView": "Saved view"
+  ,"board.customView": "Current filters"
+  ,"board.manageViews": "Create and manage saved views"
   ,"board.savedDescription": "Save the current Project, status, and type filters as a Board view."
   ,"board.viewName": "View name"
   ,"board.saveView": "Save view"
@@ -239,6 +268,16 @@
   ,"gantt.dependencies": "Task dependencies"
   ,"gantt.zoomOut": "Zoom out"
   ,"gantt.zoomIn": "Zoom in"
+  ,"gantt.scale": "Scale"
+  ,"gantt.scaleMonth": "Month overview"
+  ,"gantt.scaleWeek": "Week overview"
+  ,"gantt.scaleDay": "Day detail"
+  ,"gantt.legend": "Gantt legend"
+  ,"gantt.legendTask": "Task"
+  ,"gantt.legendMilestone": "Milestone"
+  ,"gantt.legendDependency": "Dependency"
+  ,"gantt.legendToday": "Today"
+  ,"gantt.undatedHint": "{count} active tasks are hidden because start or due date is missing."
   ,"gantt.range": "{start} — {due}"
   ,"workload.heading": "Workload"
   ,"workload.description": "Compare approximate weekly allocation with calendar-adjusted capacity."
@@ -247,6 +286,15 @@
   ,"workload.formula": "Formula: estimate is split equally between active assignees, then equally across each person's working dates."
   ,"workload.capacityFormula": "Capacity: weekly capacity is reduced in proportion to holidays in the person's calendar."
   ,"workload.calculationDetails": "How workload is calculated"
+  ,"workload.projectFilter": "Project"
+  ,"workload.allProjects": "All projects"
+  ,"workload.teamFilter": "Team"
+  ,"workload.allTeams": "All teams"
+  ,"workload.period": "Period"
+  ,"workload.weeks4": "Next 4 weeks"
+  ,"workload.weeks8": "Next 8 weeks"
+  ,"workload.weeks12": "Next 12 weeks"
+  ,"workload.allWeeks": "All available weeks"
   ,"workload.empty": "No active, dated, estimated, and assigned Tasks are available for calculation."
   ,"workload.person": "Person"
   ,"workload.week": "Week of {date}"

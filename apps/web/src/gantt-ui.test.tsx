@@ -44,9 +44,10 @@ describe("read-only Gantt", () => {
     expect(screen.queryByText("Undated")).toBeNull(); expect(screen.queryByText("Archived")).toBeNull();
     expect(container.querySelectorAll(".gantt-dependencies path[data-from]")).toHaveLength(3);
     expect(container.querySelector('[data-milestone-id]')?.getAttribute("title")).toBe("Beta: 2026-07-08");
+    expect(screen.getByLabelText("Gantt legend")).toBeTruthy();
     const bar = container.querySelector<HTMLElement>(`[data-task-id="${child.document.id}"]`)!;
     const widthBefore = bar.style.width;
-    fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Scale" }), { target: { value: "60" } });
     expect(bar.style.width).not.toBe(widthBefore);
     fireEvent.click(bar);
     expect(onNavigate).toHaveBeenCalledWith("tasks", { projectId, taskId: child.document.id });

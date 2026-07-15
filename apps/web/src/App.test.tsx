@@ -260,7 +260,7 @@ describe("frontend draft lifecycle", () => {
     expect(screen.getByText("D:\\portfolio")).toBeTruthy();
     expect(await screen.findByRole("heading", { name: "Projects" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Working copies" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Current working copy: Main local copy · Open" })).toBeTruthy();
+    expect((screen.getByRole("combobox", { name: "Current working copy" }) as HTMLSelectElement).value).toBe("DRF-LOCAL");
     expect(screen.getByRole("button", { name: "Projects" }).className).toContain("active");
     expect(screen.queryByRole("button", { name: "Sign out" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Sign in with GitLab" })).toBeNull();
@@ -288,6 +288,8 @@ describe("frontend draft lifecycle", () => {
     const api = new FakeApi();
     render(<App api={api} browserLanguages={["en"]} confirmAction={() => true} />);
     await screen.findAllByText("No working copies yet.");
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+    expect((screen.getByLabelText("Working copy ID") as HTMLInputElement).value).toMatch(/^DRF-\d{8}-[A-Z0-9]{4}$/u);
     fireEvent.change(screen.getByLabelText("Working copy ID"), { target: { value: "DRF-WEB" } });
     fireEvent.click(screen.getByRole("button", { name: "Create working copy" }));
     expect((await screen.findAllByText("gitpm/42/DRF-WEB")).length).toBeGreaterThan(0);

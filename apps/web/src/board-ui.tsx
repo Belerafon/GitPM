@@ -104,6 +104,7 @@ export function BoardWorkspace({ api, draft, locale, initialProjectId = "", init
     const filters = typeof view.document.filters === "object" && view.document.filters !== null ? view.document.filters as Readonly<Record<string, unknown>> : {};
     applyFilters(strings(filters.statuses)[0] ?? "", strings(filters.types)[0] ?? "", view.document.id);
   };
+  const savedViews = views.filter((view) => view.document.lifecycle === "active" && view.document.kind === "board");
   const scrollColumns = (direction: -1 | 1) => columnsRef.current?.scrollBy({ left: direction * Math.max(280, columnsRef.current.clientWidth * .75), behavior: "smooth" });
 
   return <section className="board-workspace">
@@ -115,6 +116,7 @@ export function BoardWorkspace({ api, draft, locale, initialProjectId = "", init
       <label>{t("board.project")}<select aria-label={t("board.project")} value={projectId} onChange={(event) => onNavigate("board", { projectId: event.target.value })}>{projects.map((project) => <option key={project.document.id} value={project.document.id}>{text(project.document, "name")}</option>)}</select></label>
       <label>{t("board.statusFilter")}<select aria-label={t("board.statusFilter")} value={statusFilter} onChange={(event) => applyFilters(event.target.value, typeFilter)}><option value="">{t("board.all")}</option>{boardStatuses.map((status) => <option key={status} value={status}>{titleForStatus(status)}</option>)}</select></label>
       <label>{t("board.typeFilter")}<select aria-label={t("board.typeFilter")} value={typeFilter} onChange={(event) => applyFilters(statusFilter, event.target.value)}><option value="">{t("board.all")}</option>{types.map((type) => <option key={type.slug} value={type.slug}>{type.title}</option>)}</select></label>
+      <label>{t("board.savedView")}<select aria-label={t("board.savedView")} value={activeViewId} onChange={(event) => { const selected = savedViews.find((view) => view.document.id === event.target.value); if (selected === undefined) applyFilters(statusFilter, typeFilter); else openView(selected); }}><option value="">{t("board.customView")}</option>{savedViews.map((view) => <option key={view.document.id} value={view.document.id}>{text(view.document, "name")}</option>)}</select></label>
       <span className="board-count">{t("board.visible", { count: visibleTasks.length })}</span>
     </section>
     <div className="board-scroll-tools"><span>{t("board.scrollHint")}</span><div><button aria-label={t("board.previousColumns")} onClick={() => scrollColumns(-1)} type="button">←</button><button aria-label={t("board.nextColumns")} onClick={() => scrollColumns(1)} type="button">→</button></div></div>
@@ -127,10 +129,10 @@ export function BoardWorkspace({ api, draft, locale, initialProjectId = "", init
         </article>)}</div>
       </section>;
     })}</div>
-    <section className="card saved-views"><div><h3>{t("board.savedViews")}</h3><p>{t("board.savedDescription")}</p></div>
+    <details className="card saved-view-manager"><summary>{t("board.manageViews")}</summary><section className="saved-views"><div><h3>{t("board.savedViews")}</h3><p>{t("board.savedDescription")}</p></div>
       <form onSubmit={saveView}><input name="name" aria-label={t("board.viewName")} placeholder={t("board.viewName")} required /><button className="primary" disabled={readOnly || projectId === ""}>{t("board.saveView")}</button></form>
-      <div className="saved-view-list">{views.filter((view) => view.document.lifecycle === "active" && view.document.kind === "board").map((view) => <button className={activeViewId === view.document.id ? "selected" : ""} key={view.document.id} onClick={() => openView(view)}><strong>{text(view.document, "name")}</strong><code>{view.document.id}</code></button>)}</div>
-    </section>
+      <div className="saved-view-list">{savedViews.map((view) => <button className={activeViewId === view.document.id ? "selected" : ""} key={view.document.id} onClick={() => openView(view)}><strong>{text(view.document, "name")}</strong><code>{view.document.id}</code></button>)}</div>
+    </section></details>
     </>
     </AsyncBoundary>
   </section>;

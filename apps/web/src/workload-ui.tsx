@@ -28,20 +28,28 @@ export function WorkloadWorkspace({ api, draft, locale, onNavigate = () => undef
   const [tasks, setTasks] = useState<readonly EntityResult[]>([]);
   const [people, setPeople] = useState<readonly EntityResult[]>([]);
   const [calendars, setCalendars] = useState<readonly EntityResult[]>([]);
+  const [projects, setProjects] = useState<readonly EntityResult[]>([]);
+  const [teams, setTeams] = useState<readonly EntityResult[]>([]);
+  const [projectFilter, setProjectFilter] = useState("");
+  const [teamFilter, setTeamFilter] = useState("");
+  const [period, setPeriod] = useState("8");
   const [error, setError] = useState<string | null>(null);
   const loadRequest = useAsyncLoad();
   const load = useCallback(async () => {
     await loadRequest.run(async () => {
-      const [nextTasks, nextPeople, nextCalendars] = await Promise.all([
-        api.listEntities(draft.draft_id, "tasks"), api.listEntities(draft.draft_id, "people"), api.listEntities(draft.draft_id, "calendars"),
+      const [nextTasks, nextPeople, nextCalendars, nextProjects, nextTeams] = await Promise.all([
+        api.listEntities(draft.draft_id, "tasks"), api.listEntities(draft.draft_id, "people"), api.listEntities(draft.draft_id, "calendars"), api.listEntities(draft.draft_id, "projects"), api.listEntities(draft.draft_id, "teams"),
       ]);
-      return { nextTasks, nextPeople, nextCalendars };
-    }, ({ nextTasks, nextPeople, nextCalendars }) => {
-      setTasks(nextTasks); setPeople(nextPeople); setCalendars(nextCalendars); setError(null);
+      return { nextTasks, nextPeople, nextCalendars, nextProjects, nextTeams };
+    }, ({ nextTasks, nextPeople, nextCalendars, nextProjects, nextTeams }) => {
+      setTasks(nextTasks); setPeople(nextPeople); setCalendars(nextCalendars); setProjects(nextProjects.filter((item) => item.document.lifecycle === "active")); setTeams(nextTeams.filter((item) => item.document.lifecycle === "active")); setError(null);
     });
   }, [api, draft.draft_id, draft.external_fingerprint, loadRequest.run]);
   useEffect(() => { void load(); }, [load]);
-  const report = useMemo(() => calculateWorkload(tasks.map(task), people.map(person), calendars.map(calendar)), [tasks, people, calendars]);
+  const selectedTeamMembers = new Set(strings(teams.find((item) => item.document.id === teamFilter)?.document ?? { schema: "", id: "", lifecycle: "active" }, "members"));
+  const filteredTasks = tasks.filter((item) => (projectFilter === "" || text(item.document, "project") === projectFilter) && (teamFilter === "" || strings(item.document, "assignees").some((id) => selectedTeamMembers.has(id))));
+  const report = useMemo(() => calculateWorkload(filteredTasks.map(task), people.map(person), calendars.map(calendar)), [filteredTasks, people, calendars]);
+  const visibleWeeks = period === "all" ? report.weeks : report.weeks.slice(0, Number(period));
   const activePeople = [...new Map(report.rows.map((row) => [row.person_id, row.person_name])).entries()];
   const rows = new Map(report.rows.map((row) => [`${row.person_id}:${row.week}`, row]));
   const excluded = Object.values(report.exclusions).reduce((sum, value) => sum + value, 0);
@@ -51,6 +59,7 @@ export function WorkloadWorkspace({ api, draft, locale, onNavigate = () => undef
     {error !== null && <div className="alert error">{error}</div>}
     <AsyncBoundary state={loadRequest.state} loading={t("status.loading")} retry={() => { void load(); }} error={(loadError, retry) => <div className="alert error">{loadError}<button onClick={retry}>{t("status.retry")}</button></div>}>
     <>
+    <section className="card workload-toolbar"><label>{t("workload.projectFilter")}<select value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}><option value="">{t("workload.allProjects")}</option>{projects.map((item) => <option key={item.document.id} value={item.document.id}>{text(item.document, "name")}</option>)}</select></label><label>{t("workload.teamFilter")}<select value={teamFilter} onChange={(event) => setTeamFilter(event.target.value)}><option value="">{t("workload.allTeams")}</option>{teams.map((item) => <option key={item.document.id} value={item.document.id}>{text(item.document, "name")}</option>)}</select></label><label>{t("workload.period")}<select value={period} onChange={(event) => setPeriod(event.target.value)}><option value="4">{t("workload.weeks4")}</option><option value="8">{t("workload.weeks8")}</option><option value="12">{t("workload.weeks12")}</option><option value="all">{t("workload.allWeeks")}</option></select></label></section>
     <section className="card workload-summary">
       <div><span>{t("workload.included")}</span><strong>{report.included_tasks}</strong></div>
       <div><span>{t("workload.excluded")}</span><strong>{excluded}</strong></div>
@@ -61,9 +70,9 @@ export function WorkloadWorkspace({ api, draft, locale, onNavigate = () => undef
       </details>
     </section>
     <div className="workload-legend" aria-label={t("workload.heading")}><span className="available">{t("workload.legendLow")}</span><span className="balanced">{t("workload.legendBalanced")}</span><span className="near">{t("workload.legendNear")}</span><span className="overloaded">{t("workload.legendOver")}</span></div>
-    {report.weeks.length === 0 || activePeople.length === 0 ? <section className="card empty-workspace">{t("workload.empty")}</section> : <section className="card workload-table-wrap">
-      <table className="workload-table"><thead><tr><th>{t("workload.person")}</th>{report.weeks.map((week) => <th key={week}><time dateTime={week}>{t("workload.week", { date: formatDateOnly(locale, week) })}</time></th>)}</tr></thead>
-        <tbody>{activePeople.map(([personId, personName]) => <tr key={personId}><th><button className="text-link" onClick={() => onNavigate("people")}>{personName}</button></th>{report.weeks.map((week) => {
+    {visibleWeeks.length === 0 || activePeople.length === 0 ? <section className="card empty-workspace">{t("workload.empty")}</section> : <section className="card workload-table-wrap">
+      <table className="workload-table"><thead><tr><th>{t("workload.person")}</th>{visibleWeeks.map((week) => <th key={week}><time dateTime={week}>{t("workload.week", { date: formatDateOnly(locale, week) })}</time></th>)}</tr></thead>
+        <tbody>{activePeople.map(([personId, personName]) => <tr key={personId}><th><button className="text-link" onClick={() => onNavigate("people")}>{personName}</button></th>{visibleWeeks.map((week) => {
           const value = rows.get(`${personId}:${week}`)!; const overloaded = value.capacity_hours === 0 ? value.allocated_hours > 0 : value.allocated_hours > value.capacity_hours; const tone = overloaded ? "overloaded" : value.utilization_percent === null ? "unavailable" : value.utilization_percent >= 80 ? "near" : value.utilization_percent >= 40 ? "balanced" : "available";
           return <td className={tone} data-person-id={personId} data-week={week} key={week} title={t("workload.tasks", { count: value.task_ids.length })}><strong>{t("workload.hours", { allocated: formatNumber(locale, value.allocated_hours), capacity: formatNumber(locale, value.capacity_hours) })}</strong><span>{value.utilization_percent === null ? t("workload.noCapacity") : t("workload.utilization", { percent: formatNumber(locale, value.utilization_percent) })}</span></td>;
         })}</tr>)}</tbody></table>

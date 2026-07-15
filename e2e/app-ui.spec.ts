@@ -23,7 +23,7 @@ test.describe("GitPM browser UI", () => {
     await page.locator(".repository-card summary").click();
     await expect(page.locator(".repository-card code")).toBeVisible();
     await expect(page.getByRole("button", { name: "Рабочие копии", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Текущая рабочая копия: DRF-UI-WORKSPACE · Открыта", exact: true })).toBeVisible();
+    await expect(page.getByRole("combobox", { name: "Текущая рабочая копия", exact: true })).toHaveValue("DRF-UI-WORKSPACE");
     await expect(page.getByRole("heading", { name: "Проекты", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Выйти", exact: true })).toHaveCount(0);
     await expect(page.locator("main.center-card")).toHaveCount(0);
@@ -33,7 +33,7 @@ test.describe("GitPM browser UI", () => {
   test("opens the configured repository directly on its projects", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("button", { name: "Проекты", exact: true })).toHaveClass(/active/u);
-    await expect(page.getByRole("button", { name: "Текущая рабочая копия: DRF-UI-WORKSPACE · Открыта", exact: true })).toBeVisible();
+    await expect(page.getByRole("combobox", { name: "Текущая рабочая копия", exact: true })).toHaveValue("DRF-UI-WORKSPACE");
     await expect(page.getByRole("button", { name: /^GitPM launch/u })).toBeVisible();
     await expect(page.getByRole("button", { name: /^Operations/u })).toBeVisible();
   });
@@ -139,14 +139,14 @@ test.describe("GitPM browser UI", () => {
 
     await page.getByRole("textbox", { name: "ID рабочей копии", exact: true }).fill("DRF-UI-SECOND");
     await page.getByRole("button", { name: "Создать рабочую копию", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Текущая рабочая копия: DRF-UI-SECOND · Открыта", exact: true })).toBeVisible();
+    await expect(page.getByRole("combobox", { name: "Текущая рабочая копия", exact: true })).toHaveValue("DRF-UI-SECOND");
 
     await page.reload();
-    await expect(page.getByRole("button", { name: "Текущая рабочая копия: DRF-UI-SECOND · Открыта", exact: true })).toBeVisible();
+    await expect(page.getByRole("combobox", { name: "Текущая рабочая копия", exact: true })).toHaveValue("DRF-UI-SECOND");
     await expect(page.getByRole("button", { name: "Рабочие копии", exact: true })).toHaveClass(/active/u);
 
     await page.getByRole("button", { name: "Рабочие копии", exact: true }).click();
     await page.getByRole("button", { name: /DRF-UI-WORKSPACE.*gitpm\/local-user\/DRF-UI-WORKSPACE/u }).click();
-    await expect(page.getByRole("button", { name: "Текущая рабочая копия: DRF-UI-WORKSPACE · Открыта", exact: true })).toBeVisible();
+    await expect(page.getByRole("combobox", { name: "Текущая рабочая копия", exact: true })).toHaveValue("DRF-UI-WORKSPACE");
   });
 });

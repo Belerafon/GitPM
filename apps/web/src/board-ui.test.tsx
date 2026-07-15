@@ -43,6 +43,7 @@ describe("Board and Saved Views", () => {
     fireEvent.change(screen.getByLabelText("Status filter"), { target: { value: "done" } });
     fireEvent.change(screen.getByLabelText("Type filter"), { target: { value: "task" } });
     expect(onNavigate).toHaveBeenCalledWith("board", { projectId, query: { status: ["done"], type: ["task"] } });
+    fireEvent.click(screen.getByText("Create and manage saved views"));
     fireEvent.change(screen.getByLabelText("View name"), { target: { value: "Done tasks" } });
     fireEvent.click(screen.getByRole("button", { name: "Save view" }));
     expect(await screen.findByRole("button", { name: /Done tasks/u })).toBeTruthy();
@@ -51,7 +52,7 @@ describe("Board and Saved Views", () => {
 
     fireEvent.change(screen.getByLabelText("Status filter"), { target: { value: "" } });
     fireEvent.change(screen.getByLabelText("Type filter"), { target: { value: "" } });
-    fireEvent.click(screen.getByRole("button", { name: /Done tasks/u }));
+    fireEvent.change(screen.getByLabelText("Saved view"), { target: { value: saved.document.id } });
     expect((screen.getByLabelText("Status filter") as HTMLSelectElement).value).toBe("done");
     expect((screen.getByLabelText("Type filter") as HTMLSelectElement).value).toBe("task");
     expect(onNavigate).toHaveBeenCalledWith("board", { projectId, query: { status: ["done"], type: ["task"], view: [saved.document.id] } });

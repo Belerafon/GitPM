@@ -6,7 +6,7 @@ import { AdminWorkspace } from "./admin-ui.js";
 import type { DraftStatus, EntityResult, GitPmDocument } from "./types.js";
 
 const draft: DraftStatus = { draft_id: "DRF-ADMIN", owner_gitlab_user_id: "42", branch: "gitpm/42/DRF-ADMIN", base_commit: "a".repeat(40), writer_mode: "ui", state: "open", fingerprint: "b".repeat(64), created_at: "2026-07-10T00:00:00.000Z", updated_at: "2026-07-10T00:00:00.000Z" };
-const configDocument = (kind: "statuses" | "issue-types") => (kind === "statuses" ? { schema: "gitpm/statuses@1", id: "CONFIG-STATUSES", lifecycle: "active", statuses: [{ slug: "backlog", title: "Backlog", color: "gray", active: true }] } : { schema: "gitpm/issue-types@1", id: "CONFIG-TYPES", lifecycle: "active", issue_types: [{ slug: "task", title: "Task", color: "blue", active: true }] }) as GitPmDocument;
+const configDocument = (kind: "statuses" | "issue-types") => (kind === "statuses" ? { schema: "gitpm/statuses@1", id: "CONFIG-STATUSES", lifecycle: "active", statuses: [{ slug: "backlog", title: "Backlog", color: "#808080", active: true }, { slug: "done", title: "Done", color: "#228b22", active: true }] } : { schema: "gitpm/issue-types@1", id: "CONFIG-TYPES", lifecycle: "active", issue_types: [{ slug: "task", title: "Task", color: "#0000ff", active: true }] }) as GitPmDocument;
 
 class AdminApi {
   entities: EntityResult[] = [];
@@ -33,6 +33,7 @@ describe("administration UI", () => {
     fireEvent.change(within(calendarForm).getByLabelText("Name"), { target: { value: "Default" } });
     fireEvent.change(within(calendarForm).getByLabelText("Holidays (YYYY-MM-DD, comma-separated)"), { target: { value: "2026-01-01" } }); fireEvent.submit(calendarForm);
     expect(await screen.findByDisplayValue("Default")).toBeTruthy();
+    expect(screen.getByLabelText("Working week preview").querySelectorAll(".working")).toHaveLength(5);
 
     rendered.rerender(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="people" onChanged={changed} />);
     const personButton = await screen.findByRole("button", { name: "Create person" }); const personForm = personButton.closest("form")!;
@@ -42,10 +43,16 @@ describe("administration UI", () => {
     fireEvent.change(within(teamForm).getByLabelText("Name"), { target: { value: "Core" } }); fireEvent.click(within(teamForm).getByLabelText("Alice")); fireEvent.submit(teamForm);
     expect(await screen.findByDisplayValue("Core")).toBeTruthy();
     expect(admin.entities.find((item) => item.document.schema === "gitpm/team@1")?.document.members).toHaveLength(1);
+    fireEvent.change(screen.getByLabelText("Search teams or members"), { target: { value: "Alice" } });
+    expect(screen.getByText("Core")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Search teams or members"), { target: { value: "Nobody" } });
+    expect(screen.queryByText("Core")).toBeNull();
 
     rendered.rerender(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="settings" onChanged={changed} />);
     const statusTitle = await screen.findByLabelText("Statuses backlog"); fireEvent.change(statusTitle, { target: { value: "Queue" } }); fireEvent.submit(statusTitle.closest("form")!);
     await waitFor(() => expect((admin.configurations.get("statuses")!.document.statuses as Array<{ title: string }>)[0]?.title).toBe("Queue"));
+    fireEvent.click(screen.getByRole("button", { name: "Move Queue down" }));
+    await waitFor(() => expect((admin.configurations.get("statuses")!.document.statuses as Array<{ slug: string }>)[0]?.slug).toBe("done"));
     expect(changed).toHaveBeenCalled();
   });
 

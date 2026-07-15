@@ -17,6 +17,9 @@ export function HistoryWorkspace({ api, draft, locale, canRevert, initialCommit 
   const t = (key: Parameters<typeof message>[1], values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
   const [items, setItems] = useState<readonly CommitHistoryItem[]>([]);
   const [historyQuery, setHistoryQuery] = useState("");
+  const [authorFilter, setAuthorFilter] = useState("");
+  const [projectFilter, setProjectFilter] = useState("");
+  const [dateFilter, setDateFilter] = useState("");
   const [detail, setDetail] = useState<CommitHistoryDetail | null>(null);
   const [fileItems, setFileItems] = useState<readonly CommitHistoryItem[]>([]);
   const [filePath, setFilePath] = useState<string | null>(null);
@@ -37,7 +40,7 @@ export function HistoryWorkspace({ api, draft, locale, canRevert, initialCommit 
     setNewDraftId(firstDetail === null ? "" : `REVERT-${firstDetail.commit.slice(0, 8).toUpperCase()}`);
   });
   useEffect(() => {
-    setDetail(null); setHistoryQuery(""); setFileItems([]); setFilePath(null); setFileQuery(""); setConflicts([]);
+    setDetail(null); setHistoryQuery(""); setAuthorFilter(""); setProjectFilter(""); setDateFilter(""); setFileItems([]); setFilePath(null); setFileQuery(""); setConflicts([]);
     void load();
   }, [api, draft.draft_id]);
 
@@ -65,7 +68,9 @@ export function HistoryWorkspace({ api, draft, locale, canRevert, initialCommit 
   };
   const visibleFiles = detail?.files.filter((file) => file.path.toLocaleLowerCase(locale).includes(fileQuery.trim().toLocaleLowerCase(locale))) ?? [];
   const normalizedHistoryQuery = historyQuery.trim().toLocaleLowerCase(locale);
-  const visibleItems = items.filter((item) => normalizedHistoryQuery === "" || `${item.subject} ${item.author_name} ${item.commit}`.toLocaleLowerCase(locale).includes(normalizedHistoryQuery));
+  const authors = [...new Set(items.map((item) => item.author_name))].sort((left, right) => left.localeCompare(right, locale));
+  const projects = [...new Set(items.flatMap((item) => item.semantic_summary.affected_projects))].sort((left, right) => left.localeCompare(right, locale));
+  const visibleItems = items.filter((item) => (normalizedHistoryQuery === "" || `${item.subject} ${item.author_name} ${item.commit}`.toLocaleLowerCase(locale).includes(normalizedHistoryQuery)) && (authorFilter === "" || item.author_name === authorFilter) && (projectFilter === "" || item.semantic_summary.affected_projects.includes(projectFilter)) && (dateFilter === "" || item.authored_at.slice(0, 10) === dateFilter));
 
   return <section className="history-workspace">
     <div className="section-heading"><span className="eyebrow">Git</span><h2 aria-hidden="true">{t("history.heading")}</h2><p>{t("history.description")}</p></div>
@@ -74,7 +79,7 @@ export function HistoryWorkspace({ api, draft, locale, canRevert, initialCommit 
     <AsyncBoundary state={loadRequest.state} loading={t("status.loading")} retry={() => { void load(); }} error={(loadError, retry) => <div className="alert error">{loadError}<button onClick={retry}>{t("status.retry")}</button></div>}>
     <div className="history-layout">
       <div className="card history-list">
-        <label className="history-list-filter">{t("history.searchCommits")}<input type="search" value={historyQuery} onChange={(event) => setHistoryQuery(event.target.value)} /></label>
+        <div className="history-list-filters"><label>{t("history.searchCommits")}<input type="search" value={historyQuery} onChange={(event) => setHistoryQuery(event.target.value)} /></label><label>{t("history.authorFilter")}<select value={authorFilter} onChange={(event) => setAuthorFilter(event.target.value)}><option value="">{t("history.allAuthors")}</option>{authors.map((author) => <option key={author}>{author}</option>)}</select></label><label>{t("history.projectFilter")}<select value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}><option value="">{t("history.allProjects")}</option>{projects.map((project) => <option key={project}>{project}</option>)}</select></label><label>{t("history.dateFilter")}<input type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} /></label></div>
         {visibleItems.map((item) => <button key={item.commit} className={detail?.commit === item.commit ? "history-item selected" : "history-item"} onClick={() => { void select(item); }}>
           <strong>{item.subject}</strong><code>{item.commit.slice(0, 10)}</code><span>{item.author_name} · {formatDateTime(locale, item.authored_at)}</span>
         </button>)}

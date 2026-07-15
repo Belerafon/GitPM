@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
 import type { GitPmApi } from "./api.js";
-import { message, type Locale, type MessageKey } from "./i18n.js";
+import { formatDateOnly, message, type Locale, type MessageKey } from "./i18n.js";
 import type { DraftStatus, EntityResult, GitPmDocument } from "./types.js";
 import { changedEntityFields, useExternalHighlights, useReducedMotion } from "./external-updates.js";
 import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
@@ -47,6 +47,7 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
   const [projects, setProjects] = useState<readonly EntityResult[]>([]);
   const [milestones, setMilestones] = useState<readonly EntityResult[]>([]);
   const [tasks, setTasks] = useState<readonly EntityResult[]>([]);
+  const [people, setPeople] = useState<readonly EntityResult[]>([]);
   const [projectId, setProjectId] = useState<string>(initialProjectId);
   const [selectedTask, setSelectedTask] = useState<string>(initialTaskId);
   const [filter, setFilter] = useState(initialStatusFilter);
@@ -66,19 +67,19 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
 
   const load = useCallback(async (preferredProject = projectId, externalUpdate = false) => {
     await loadRequest.run(async () => {
-      const [nextProjects, statusConfig, typeConfig] = await Promise.all([api.listEntities(draft.draft_id, "projects"), api.getConfiguration(draft.draft_id, "statuses"), api.getConfiguration(draft.draft_id, "issue-types")]);
+      const [nextProjects, nextPeople, statusConfig, typeConfig] = await Promise.all([api.listEntities(draft.draft_id, "projects"), api.listEntities(draft.draft_id, "people"), api.getConfiguration(draft.draft_id, "statuses"), api.getConfiguration(draft.draft_id, "issue-types")]);
       const nextProject = nextProjects.some((item) => item.document.id === preferredProject && item.document.lifecycle === "active") ? preferredProject : "";
       const [nextMilestones, nextTasks] = surface === "portfolio" || (surface === "tasks" && nextProject === "")
         ? await Promise.all([api.listEntities(draft.draft_id, "milestones"), api.listEntities(draft.draft_id, "tasks")])
         : nextProject === "" ? [[], []]
           : surface === "projects" ? [await api.listEntities(draft.draft_id, "milestones", nextProject), []]
             : await Promise.all([api.listEntities(draft.draft_id, "milestones", nextProject), api.listEntities(draft.draft_id, "tasks", nextProject)]);
-      return { nextProjects, nextProject, nextMilestones, nextTasks, statusConfig, typeConfig };
-    }, ({ nextProjects, nextProject, nextMilestones, nextTasks, statusConfig, typeConfig }) => {
-      const nextEntities = [...nextProjects, ...nextMilestones, ...nextTasks, statusConfig, typeConfig];
+      return { nextProjects, nextPeople, nextProject, nextMilestones, nextTasks, statusConfig, typeConfig };
+    }, ({ nextProjects, nextPeople, nextProject, nextMilestones, nextTasks, statusConfig, typeConfig }) => {
+      const nextEntities = [...nextProjects, ...nextPeople, ...nextMilestones, ...nextTasks, statusConfig, typeConfig];
       if (externalUpdate) mark(changedEntityFields(previousEntities.current, nextEntities));
       previousEntities.current = nextEntities;
-      setProjects(nextProjects); setProjectId(nextProject); setMilestones(nextMilestones); setTasks(nextTasks);
+      setProjects(nextProjects); setPeople(nextPeople); setProjectId(nextProject); setMilestones(nextMilestones); setTasks(nextTasks);
       setStatusOptions(configValues(statusConfig.document, "statuses")); setTypeOptions(configValues(typeConfig.document, "issue_types"));
       setFingerprint(nextProjects[0]?.draft_fingerprint ?? nextMilestones[0]?.draft_fingerprint ?? nextTasks[0]?.draft_fingerprint ?? draft.fingerprint);
     }, { keepData: externalUpdate });
@@ -130,6 +131,8 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
   const selectedProjectName = selectedProject === undefined ? "" : value(selectedProject.document, "name");
   const projectName = (id: unknown) => { const project = projects.find((item) => item.document.id === id); return project === undefined ? undefined : value(project.document, "name"); };
   const completedTasks = activeTasks.filter((item) => value(item.document, "status") === "done").length;
+  const personName = (id: string) => value(people.find((item) => item.document.id === id)?.document ?? { schema: "", id: "", lifecycle: "active" }, "name") || id || t("core.unassigned");
+  const projectRisk = (project: EntityResult) => { const due = value(project.document, "due"); if (!/^\d{4}-\d{2}-\d{2}$/u.test(due)) return "unknown" as const; const days = Math.ceil((Date.parse(`${due}T00:00:00Z`) - Date.now()) / 86_400_000); return days < 0 ? "overdue" as const : days <= 14 ? "near" as const : "onTrack" as const; };
   const headingKey: MessageKey = surface === "portfolio" ? "core.portfolioHeading" : surface === "tasks" ? "core.tasksHeading" : "core.projectsHeading";
   const descriptionKey: MessageKey = surface === "portfolio" ? "core.portfolioDescription" : surface === "tasks" ? "core.tasksDescription" : "core.projectsDescription";
   const pageHeading = task !== undefined ? value(task.document, "title") : surface === "projects" && selectedProject !== undefined ? selectedProjectName : t(headingKey);
@@ -168,7 +171,8 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
         {activeProjects.length === 0 ? <p>{t("core.empty")}</p> : <div className="portfolio-project-grid">{activeProjects.map((project) => {
           const projectTasks = activeTasks.filter((item) => item.document.project === project.document.id).length;
           const projectMilestones = activeMilestones.filter((item) => item.document.project === project.document.id).length;
-          return <article className="portfolio-project-card" key={project.document.id}><button className="portfolio-project-link" onClick={() => onNavigate("projects", { projectId: project.document.id })}><span><strong>{value(project.document, "name")}</strong><code>{project.document.id}</code></span><span className="state open">{statusTitle(value(project.document, "status"))}</span><dl><div><dt>{t("core.tasks")}</dt><dd>{projectTasks}</dd></div><div><dt>{t("core.milestones")}</dt><dd>{projectMilestones}</dd></div></dl></button></article>;
+          const due = value(project.document, "due"); const risk = projectRisk(project);
+          return <article className="portfolio-project-card" key={project.document.id}><button className="portfolio-project-link" onClick={() => onNavigate("projects", { projectId: project.document.id })}><span><strong>{value(project.document, "name")}</strong><code>{project.document.id}</code></span><span className="state open">{statusTitle(value(project.document, "status"))}</span><dl><div><dt>{t("core.tasks")}</dt><dd>{projectTasks}</dd></div><div><dt>{t("core.milestones")}</dt><dd>{projectMilestones}</dd></div><div><dt>{t("core.owner")}</dt><dd>{personName(value(project.document, "owner"))}</dd></div><div><dt>{t("core.due")}</dt><dd>{due === "" ? "—" : formatDateOnly(locale, due)}</dd></div></dl><span className={`project-risk ${risk}`}>{t(`core.risk${risk === "onTrack" ? "OnTrack" : risk === "near" ? "Near" : risk === "overdue" ? "Overdue" : "Unknown"}` as MessageKey)}</span><span className="open-affordance">{t("core.openProject")} →</span></button></article>;
         })}</div>}
       </section>
     </>}

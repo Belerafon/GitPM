@@ -20,13 +20,15 @@ const shared = task("5", "Shared", { estimate_hours: 40, start: "2026-07-06", du
 const span = task("6", "Span", { estimate_hours: 30, start: "2026-07-09", due: "2026-07-15", assignees: [adaId] });
 const undated = task("7", "Undated", { estimate_hours: 10, assignees: [adaId] });
 const archived = result({ ...task("8", "Archived", { estimate_hours: 10, start: "2026-07-06", due: "2026-07-10", assignees: [adaId] }).document, lifecycle: "archived" });
+const project = result({ schema: "gitpm/project@1", id: projectId, name: "Platform", status: "backlog", lifecycle: "active" });
+const reviewers = result({ schema: "gitpm/team@1", id: "G-26-555555", name: "Reviewers", members: [linusId], lifecycle: "active" });
 
 afterEach(cleanup);
 describe("Workload UI", () => {
   it("renders deterministic Person-week values and excludes archived and undated Tasks", async () => {
-    const entities = [shared, span, undated, archived, ada, linus, calendar];
+    const entities = [shared, span, undated, archived, ada, linus, calendar, project, reviewers];
     const onNavigate = vi.fn();
-    const api = { listEntities: vi.fn(async (_draftId: string, type: string) => entities.filter((item) => ({ tasks: "gitpm/task@1", people: "gitpm/person@1", calendars: "gitpm/calendar@1" })[type] === item.document.schema)) } as unknown as GitPmApi;
+    const api = { listEntities: vi.fn(async (_draftId: string, type: string) => entities.filter((item) => ({ tasks: "gitpm/task@1", people: "gitpm/person@1", calendars: "gitpm/calendar@1", projects: "gitpm/project@1", teams: "gitpm/team@1" })[type] === item.document.schema)) } as unknown as GitPmApi;
     const { container } = render(<WorkloadWorkspace api={api} draft={draft} locale="en" onNavigate={onNavigate} />);
     await waitFor(() => expect(container.querySelectorAll(".workload-table tbody tr")).toHaveLength(2));
     expect(screen.getByText("Included Tasks").nextElementSibling?.textContent).toBe("2");
@@ -38,6 +40,8 @@ describe("Workload UI", () => {
     expect(screen.getByText("Near capacity")).toBeTruthy();
     expect(screen.getByText("Missing or invalid date range").nextElementSibling?.textContent).toBe("1");
     expect(screen.getByText("Archived").nextElementSibling?.textContent).toBe("1");
+    fireEvent.change(screen.getByLabelText("Team"), { target: { value: reviewers.document.id } });
+    await waitFor(() => expect(screen.getByText("Included Tasks").nextElementSibling?.textContent).toBe("1"));
     fireEvent.click(screen.getByRole("button", { name: "Ada" }));
     expect(onNavigate).toHaveBeenCalledWith("people");
   });

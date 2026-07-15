@@ -22,6 +22,8 @@ interface AppProps {
   readonly confirmAction?: (message: string) => boolean;
 }
 
+const suggestedDraftId = () => `DRF-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${Math.random().toString(36).slice(2, 6).toUpperCase().padEnd(4, "0")}`;
+
 function Shell({ locale, setLocale, api, navigate, confirmAction }: {
   readonly locale: Locale;
   readonly setLocale: (locale: Locale) => void;
@@ -118,10 +120,12 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
       repositoryName={repository?.name ?? t("app.repository")}
       t={t}
       topActions={<>
-            {active !== undefined && <button aria-label={`${t("drafts.current")}: ${workspaceName(active.draft_id)} · ${workspaceState(active.state)}`} className="workspace-switcher" onClick={() => selectNavigationView("nav.drafts")}>
-              <span>{t("drafts.current")}</span><strong>{workspaceName(active.draft_id)}</strong>
+            {active !== undefined && <label className="workspace-switcher">
+              <span>{t("drafts.current")}</span><select aria-label={t("drafts.current")} value={active.draft_id} onChange={(event) => { void drafts.select(event.target.value); }}>
+                {drafts.drafts.map((draft) => <option key={draft.draft_id} value={draft.draft_id}>{workspaceName(draft.draft_id)}</option>)}
+              </select>
               <span className={`state ${active.state}`}>{workspaceState(active.state)}</span>
-            </button>}
+            </label>}
             <LocalePicker locale={locale} setLocale={setLocale} t={t} />
             {gitlab?.configured === true && gitlab.user === undefined && <button onClick={loginToGitLab}>{t("auth.login")}</button>}
             {gitlab?.user !== undefined && <><span>{gitlab.user.username}</span><button onClick={() => { void drafts.logout(); }}>{t("auth.logoutGitLab")}</button></>}
@@ -130,7 +134,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
         {view === "nav.drafts" && <section className="draft-layout">
           <div className="draft-list card">
             <h2 aria-hidden="true">{t("drafts.heading")}</h2><p className="workspace-description">{t("drafts.description")}</p>
-            <form onSubmit={submit}><label htmlFor="draft-id">{t("drafts.id")}</label><div className="inline"><input id="draft-id" value={draftId} onChange={(event) => setDraftId(event.target.value)} pattern="[A-Za-z0-9][A-Za-z0-9-]{0,127}" required /><button className="primary" disabled={drafts.busy || drafts.session.role === "Reporter"}>{t("drafts.create")}</button></div></form>
+            <form onSubmit={submit}><label htmlFor="draft-id">{t("drafts.id")}</label><p className="field-hint" id="draft-id-hint">{t("drafts.idHint")}</p><div className="inline draft-create-row"><input aria-describedby="draft-id-hint" id="draft-id" placeholder={t("drafts.idExample")} value={draftId} onChange={(event) => setDraftId(event.target.value)} pattern="[A-Za-z0-9][A-Za-z0-9-]{0,127}" required /><button type="button" onClick={() => setDraftId(suggestedDraftId())}>{t("drafts.generateId")}</button><button className="primary" disabled={drafts.busy || drafts.session.role === "Reporter"}>{t("drafts.create")}</button></div></form>
             <div className="draft-items">{drafts.drafts.length === 0 ? <p>{t("drafts.empty")}</p> : drafts.drafts.map((draft) => (
               <button aria-label={`${workspaceName(draft.draft_id)} · ${draft.draft_id} · ${draft.branch} · ${workspaceState(draft.state)}`} className={active?.draft_id === draft.draft_id ? "draft-item selected" : "draft-item"} key={draft.draft_id} onClick={() => { void drafts.select(draft.draft_id); }}>
                 <strong>{workspaceName(draft.draft_id)}</strong><code>{draft.draft_id}</code><span>{draft.branch}</span><span className={`state ${draft.state}`}>{workspaceState(draft.state)}</span>
@@ -157,6 +161,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
                 {active.state === "closed" && <button disabled={drafts.busy} onClick={() => { void drafts.reopen(); }}>{t("drafts.reopen")}</button>}
                 {maintainer && active.state !== "open" && <button className="danger" disabled={drafts.busy} onClick={() => { if (confirmAction(t("drafts.cleanupConfirm", { id: active.draft_id }))) void drafts.cleanup(); }}>{t("drafts.cleanup")}</button>}
               </div>
+              {active.state === "open" && <p className="draft-action-hint">{t(external ? "drafts.writerHintExternal" : "drafts.writerHintUi")} {t("drafts.closeHint")}</p>}
               <p className="polling">{t("drafts.polling")} {t("drafts.updated", { time: formatDateTime(locale, active.updated_at) })}</p>
             </>}
           </div>

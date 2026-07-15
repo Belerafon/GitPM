@@ -14,7 +14,7 @@ afterEach(cleanup);
 describe("History workspace", () => {
   it("restores a commit deep link and publishes later selections to navigation", async () => {
     const olderCommit = "c".repeat(40);
-    const olderItem = { ...item, commit: olderCommit, subject: "Older change" };
+    const olderItem = { ...item, commit: olderCommit, subject: "Older change", author_name: "Dev", authored_at: "2026-07-09T12:00:00.000Z", semantic_summary: { ...item.semantic_summary, affected_projects: ["P-26-222222"] } };
     const onNavigate = vi.fn();
     const api = {
       history: async () => [item, olderItem],
@@ -23,6 +23,14 @@ describe("History workspace", () => {
 
     render(<HistoryWorkspace api={api} draft={draft} locale="en" canRevert={false} initialCommit={olderCommit} onNavigate={onNavigate} onDraftCreated={vi.fn(async () => undefined)} />);
     expect(await screen.findByRole("heading", { name: "Older change" })).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Author"), { target: { value: "Dev" } });
+    expect(screen.queryByRole("button", { name: /Merged task update/u })).toBeNull();
+    fireEvent.change(screen.getByLabelText("Author"), { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText("Affected project"), { target: { value: "P-26-111111" } });
+    expect(screen.queryByRole("button", { name: /Older change/u })).toBeNull();
+    fireEvent.change(screen.getByLabelText("Affected project"), { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText("Date"), { target: { value: "2026-07-10" } });
 
     fireEvent.click(screen.getByRole("button", { name: /Merged task update/u }));
     await waitFor(() => expect(onNavigate).toHaveBeenCalledWith("history", { commit }));
