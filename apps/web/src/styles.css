@@ -390,6 +390,7 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
 .board-drag-handle { position: absolute; top: .55rem; right: .65rem; color: #879089; font-size: .72rem; letter-spacing: -.2rem; }
 .board-card code { overflow: hidden; color: #747974; font-size: .66rem; text-overflow: ellipsis; }
 .board-card span { color: #56655b; font-size: .72rem; }
+.board-card .board-milestone { color: #315f50; font-weight: 650; }
 .board-task-link { display: grid; gap: .35rem; cursor: pointer; }
 .board-status-control { display: grid; gap: .2rem; margin-top: .25rem; color: #666d68; font-size: .68rem; }
 .board-status-control select { min-width: 0; width: 100%; border: 1px solid #d5d9d4; border-radius: 7px; background: #fff; padding: .38rem; }

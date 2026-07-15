@@ -5,6 +5,7 @@ import { formatDateOnly, formatNumber, message, type Locale, type MessageKey } f
 import type { DraftStatus, EntityResult, GitPmDocument } from "./types.js";
 import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
 import type { WorkspaceNavigate } from "./workspace-navigation.js";
+import { EntityCatalog } from "./entity-catalog.js";
 
 const text = (document: GitPmDocument, key: string) => typeof document[key] === "string" ? document[key] as string : undefined;
 const number = (document: GitPmDocument, key: string) => typeof document[key] === "number" ? document[key] as number : undefined;
@@ -30,24 +31,28 @@ export function WorkloadWorkspace({ api, draft, locale, onNavigate = () => undef
   const [calendars, setCalendars] = useState<readonly EntityResult[]>([]);
   const [projects, setProjects] = useState<readonly EntityResult[]>([]);
   const [teams, setTeams] = useState<readonly EntityResult[]>([]);
+  const [milestones, setMilestones] = useState<readonly EntityResult[]>([]);
   const [projectFilter, setProjectFilter] = useState("");
+  const [milestoneFilter, setMilestoneFilter] = useState("");
   const [teamFilter, setTeamFilter] = useState("");
   const [period, setPeriod] = useState("8");
   const [error, setError] = useState<string | null>(null);
   const loadRequest = useAsyncLoad();
   const load = useCallback(async () => {
     await loadRequest.run(async () => {
-      const [nextTasks, nextPeople, nextCalendars, nextProjects, nextTeams] = await Promise.all([
-        api.listEntities(draft.draft_id, "tasks"), api.listEntities(draft.draft_id, "people"), api.listEntities(draft.draft_id, "calendars"), api.listEntities(draft.draft_id, "projects"), api.listEntities(draft.draft_id, "teams"),
+      const [nextTasks, nextPeople, nextCalendars, nextProjects, nextTeams, nextMilestones] = await Promise.all([
+        api.listEntities(draft.draft_id, "tasks"), api.listEntities(draft.draft_id, "people"), api.listEntities(draft.draft_id, "calendars"), api.listEntities(draft.draft_id, "projects"), api.listEntities(draft.draft_id, "teams"), api.listEntities(draft.draft_id, "milestones"),
       ]);
-      return { nextTasks, nextPeople, nextCalendars, nextProjects, nextTeams };
-    }, ({ nextTasks, nextPeople, nextCalendars, nextProjects, nextTeams }) => {
-      setTasks(nextTasks); setPeople(nextPeople); setCalendars(nextCalendars); setProjects(nextProjects.filter((item) => item.document.lifecycle === "active")); setTeams(nextTeams.filter((item) => item.document.lifecycle === "active")); setError(null);
+      return { nextTasks, nextPeople, nextCalendars, nextProjects, nextTeams, nextMilestones };
+    }, ({ nextTasks, nextPeople, nextCalendars, nextProjects, nextTeams, nextMilestones }) => {
+      setTasks(nextTasks); setPeople(nextPeople); setCalendars(nextCalendars); setProjects(nextProjects.filter((item) => item.document.lifecycle === "active")); setTeams(nextTeams.filter((item) => item.document.lifecycle === "active")); setMilestones(nextMilestones.filter((item) => item.document.lifecycle === "active")); setError(null);
     });
   }, [api, draft.draft_id, draft.external_fingerprint, loadRequest.run]);
   useEffect(() => { void load(); }, [load]);
   const selectedTeamMembers = new Set(strings(teams.find((item) => item.document.id === teamFilter)?.document ?? { schema: "", id: "", lifecycle: "active" }, "members"));
-  const filteredTasks = tasks.filter((item) => (projectFilter === "" || text(item.document, "project") === projectFilter) && (teamFilter === "" || strings(item.document, "assignees").some((id) => selectedTeamMembers.has(id))));
+  const filteredTasks = tasks.filter((item) => (projectFilter === "" || text(item.document, "project") === projectFilter) && (milestoneFilter === "" || text(item.document, "milestone") === milestoneFilter) && (teamFilter === "" || strings(item.document, "assignees").some((id) => selectedTeamMembers.has(id))));
+  const catalog = useMemo(() => new EntityCatalog({ projects, milestones }), [projects, milestones]);
+  const filterMilestones = milestones.filter((item) => projectFilter === "" || item.document.project === projectFilter);
   const report = useMemo(() => calculateWorkload(filteredTasks.map(task), people.map(person), calendars.map(calendar)), [filteredTasks, people, calendars]);
   const visibleWeeks = period === "all" ? report.weeks : report.weeks.slice(0, Number(period));
   const activePeople = [...new Map(report.rows.map((row) => [row.person_id, row.person_name])).entries()];
@@ -59,7 +64,7 @@ export function WorkloadWorkspace({ api, draft, locale, onNavigate = () => undef
     {error !== null && <div className="alert error">{error}</div>}
     <AsyncBoundary state={loadRequest.state} loading={t("status.loading")} retry={() => { void load(); }} error={(loadError, retry) => <div className="alert error">{loadError}<button onClick={retry}>{t("status.retry")}</button></div>}>
     <>
-    <section className="card workload-toolbar"><label>{t("workload.projectFilter")}<select value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}><option value="">{t("workload.allProjects")}</option>{projects.map((item) => <option key={item.document.id} value={item.document.id}>{text(item.document, "name")}</option>)}</select></label><label>{t("workload.teamFilter")}<select value={teamFilter} onChange={(event) => setTeamFilter(event.target.value)}><option value="">{t("workload.allTeams")}</option>{teams.map((item) => <option key={item.document.id} value={item.document.id}>{text(item.document, "name")}</option>)}</select></label><label>{t("workload.period")}<select value={period} onChange={(event) => setPeriod(event.target.value)}><option value="4">{t("workload.weeks4")}</option><option value="8">{t("workload.weeks8")}</option><option value="12">{t("workload.weeks12")}</option><option value="all">{t("workload.allWeeks")}</option></select></label></section>
+    <section className="card workload-toolbar"><label>{t("workload.projectFilter")}<select value={projectFilter} onChange={(event) => { setProjectFilter(event.target.value); setMilestoneFilter(""); }}><option value="">{t("workload.allProjects")}</option>{projects.map((item) => <option key={item.document.id} value={item.document.id}>{text(item.document, "name")}</option>)}</select></label><label>{t("core.milestone")}<select aria-label={t("core.milestone")} value={milestoneFilter} onChange={(event) => setMilestoneFilter(event.target.value)}><option value="">{t("core.allMilestones")}</option>{filterMilestones.map((item) => <option key={item.document.id} value={item.document.id}>{projectFilter === "" ? `${catalog.project(item.document.project).name} · ` : ""}{text(item.document, "name")}</option>)}</select></label><label>{t("workload.teamFilter")}<select value={teamFilter} onChange={(event) => setTeamFilter(event.target.value)}><option value="">{t("workload.allTeams")}</option>{teams.map((item) => <option key={item.document.id} value={item.document.id}>{text(item.document, "name")}</option>)}</select></label><label>{t("workload.period")}<select value={period} onChange={(event) => setPeriod(event.target.value)}><option value="4">{t("workload.weeks4")}</option><option value="8">{t("workload.weeks8")}</option><option value="12">{t("workload.weeks12")}</option><option value="all">{t("workload.allWeeks")}</option></select></label></section>
     <section className="card workload-summary">
       <div><span>{t("workload.included")}</span><strong>{report.included_tasks}</strong></div>
       <div><span>{t("workload.excluded")}</span><strong>{excluded}</strong></div>
