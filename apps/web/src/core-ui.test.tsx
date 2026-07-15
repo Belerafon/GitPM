@@ -56,9 +56,12 @@ describe("core UI", () => {
     const taskButton = await screen.findByRole("button", { name: "Create task" });
     const taskForm = taskButton.closest("form")!;
     fireEvent.change(within(taskForm).getByLabelText("Title"), { target: { value: "First task" } });
+    fireEvent.change(within(taskForm).getByLabelText("Milestone"), { target: { value: entityApi.entities.find((item) => item.document.schema === "gitpm/milestone@1")?.document.id } });
     fireEvent.change(within(taskForm).getByLabelText("Description (Markdown)"), { target: { value: "**important**" } });
     fireEvent.submit(taskForm);
     expect(await screen.findByText("First task")).toBeTruthy();
+    await waitFor(() => expect(rendered.container.querySelector(".task-milestone")?.textContent).toBe("M1"));
+    expect(entityApi.entities.find((item) => item.document.schema === "gitpm/task@1")?.document.milestone).toBe(entityApi.entities.find((item) => item.document.schema === "gitpm/milestone@1")?.document.id);
 
     fireEvent.change(screen.getByLabelText("Status First task"), { target: { value: "done" } });
     await waitFor(() => expect(entityApi.entities.find((item) => item.document.schema === "gitpm/task@1")?.document.status).toBe("done"));
@@ -101,6 +104,27 @@ describe("core UI", () => {
     expect(within(metadata).getByText(/Archived stage/u)).toBeTruthy();
     expect(metadata.querySelector(".archived-reference")?.textContent).toContain("Archived");
     expect(within(metadata).queryByText("P-26-111111")).toBeNull();
+  });
+
+  it("filters tasks by milestone and links project milestone progress to that filter", async () => {
+    const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
+    const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
+    const milestone = await entityApi.createEntity("DRF-CORE", "milestones", "", { schema: "gitpm/milestone@1", id: "M-26-222222", project: project.document.id, name: "Beta", lifecycle: "active" });
+    await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@1", id: "T-26-333333", project: project.document.id, milestone: milestone.document.id, title: "Linked", type: "task", status: "done", lifecycle: "active" });
+    await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@1", id: "T-26-444444", project: project.document.id, title: "Unlinked", type: "task", status: "backlog", lifecycle: "active" });
+    const onNavigate = vi.fn();
+
+    const rendered = render(<CoreWorkspace api={api} draft={draft} initialProjectId={project.document.id} locale="en" surface="projects" onNavigate={onNavigate} onChanged={vi.fn(async () => undefined)} />);
+    const progress = await screen.findByRole("button", { name: "1 of 1 tasks completed" });
+    fireEvent.click(progress);
+    expect(onNavigate).toHaveBeenCalledWith("tasks", { projectId: project.document.id, query: { milestone: [milestone.document.id] } });
+
+    rendered.unmount();
+    const filtered = render(<CoreWorkspace api={api} draft={draft} initialProjectId={project.document.id} initialMilestoneFilter={milestone.document.id} locale="en" surface="tasks" onNavigate={onNavigate} onChanged={vi.fn(async () => undefined)} />);
+    expect(await screen.findByText("Linked")).toBeTruthy();
+    expect(screen.queryByText("Unlinked")).toBeNull();
+    const toolbar = filtered.container.querySelector<HTMLElement>(".task-toolbar-controls")!;
+    expect((within(toolbar).getByRole("combobox", { name: "Milestone" }) as HTMLSelectElement).value).toBe(milestone.document.id);
   });
 
   it("reloads external changes, marks only changed fields, and keeps the focused read control", async () => {

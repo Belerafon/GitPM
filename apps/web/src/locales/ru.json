@@ -108,6 +108,8 @@
   ,"core.riskUnknown": "Без срока"
   ,"core.milestone": "Этап"
   ,"core.noMilestone": "Без этапа"
+  ,"core.allMilestones": "Все этапы"
+  ,"core.milestoneTaskProgress": "Завершено задач: {completed} из {count}"
   ,"core.createProject": "Создать проект"
   ,"core.createMilestone": "Создать этап"
   ,"core.createTask": "Создать задачу"

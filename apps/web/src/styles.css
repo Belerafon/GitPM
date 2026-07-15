@@ -173,6 +173,9 @@ textarea { min-height: 76px; resize: vertical; border: 1px solid #c9cbc5; border
 .task-row { display: grid; grid-template-columns: 1fr 150px auto; gap: .45rem; }
 .task-row > button:first-child { display: grid; text-align: left; }
 .task-row > button:first-child span { margin-top: .2rem; color: #68706b; font-size: .72rem; }
+.task-row > button:first-child .task-milestone { color: #315f50; font-weight: 650; }
+.milestone-task-summary { align-self: start; margin-top: .35rem; }
+.archived-reference { color: #6f6657; font-weight: 650; }
 .task-panel { border-left: 1px solid #dedfd9; padding-left: 1rem; }
 .task-panel label { display: grid; gap: .3rem; color: #5d625f; font-size: .8rem; }
 .task-panel .safe-markdown { margin-block: .35rem; }

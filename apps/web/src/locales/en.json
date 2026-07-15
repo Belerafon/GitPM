@@ -108,6 +108,8 @@
   ,"core.riskUnknown": "No due date"
   ,"core.milestone": "Milestone"
   ,"core.noMilestone": "No milestone"
+  ,"core.allMilestones": "All milestones"
+  ,"core.milestoneTaskProgress": "{completed} of {count} tasks completed"
   ,"core.createProject": "Create project"
   ,"core.createMilestone": "Create milestone"
   ,"core.createTask": "Create task"
