@@ -39,6 +39,20 @@ async function runtime(): Promise<{ manager: DraftManager; store: EntityStore }>
 afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))));
 
 describe("domain entity store", () => {
+  it("moves a task between projects and rejects moves that break project-local references", async () => {
+    const { manager, store } = await runtime();
+    const draft = await manager.createDraft("DRF-MOVE", "42");
+    const task = await store.get("DRF-MOVE", "tasks", "T-26-G2TG9R");
+    const moved = await store.moveTask("DRF-MOVE", "42", String(task.document.id), draft.fingerprint, task.blob_id, "P-26-MGP84K", "M-26-461GDJ");
+
+    expect(moved.document).toMatchObject({ project: "P-26-MGP84K", milestone: "M-26-461GDJ" });
+    expect(moved.path).toBe("projects/P-26-MGP84K/tasks/T-26-G2TG9R.yaml");
+    const dependent = await store.get("DRF-MOVE", "tasks", "T-26-P9G3P8");
+    await expect(store.moveTask("DRF-MOVE", "42", String(dependent.document.id), moved.draft_fingerprint, dependent.blob_id, "P-26-8S9HQQ"))
+      .rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+    expect((await store.get("DRF-MOVE", "tasks", String(dependent.document.id))).path).toBe(dependent.path);
+  });
+
   it("creates all editable entity types, updates, archives and deletes with restrict", async () => {
     const { manager, store } = await runtime();
     const draft = await manager.createDraft("DRF-DOMAIN", "42");

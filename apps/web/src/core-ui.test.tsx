@@ -14,6 +14,7 @@ class EntityApi {
   async listEntities(_draftId: string, type: string, project?: string) { return this.entities.filter((item) => item.document.schema === `gitpm/${type.slice(0, -1)}@1` && (project === undefined || item.document.project === project)); }
   async createEntity(_draftId: string, _type: string, _fingerprint: string, document: GitPmDocument) { const next = this.result(document); this.entities.push(next); return next; }
   async updateEntity(_draftId: string, _type: string, entity: EntityResult, _fingerprint: string, document: GitPmDocument) { const next = this.result(document); this.entities = this.entities.map((item) => item === entity ? next : item); return next; }
+  async moveTask(_draftId: string, entity: EntityResult, _fingerprint: string, targetProject: string, targetMilestone?: string) { return await this.updateEntity(_draftId, "tasks", entity, _fingerprint, { ...entity.document, project: targetProject, milestone: targetMilestone }); }
   async archiveEntity(_draftId: string, type: string, entity: EntityResult, fingerprint: string) { return await this.updateEntity(_draftId, type, entity, fingerprint, { ...entity.document, lifecycle: "archived" }); }
   async deleteEntity(_draftId: string, _type: string, entity: EntityResult) { this.entities = this.entities.filter((item) => item !== entity); }
   async getConfiguration(_draftId: string, kind: "statuses" | "issue-types"): Promise<EntityResult> { const document = (kind === "statuses" ? { schema: "gitpm/statuses@1", id: "CONFIG-STATUSES", lifecycle: "active", statuses: [{ slug: "backlog", title: "Backlog", active: true }, { slug: "done", title: "Done", active: true }] } : { schema: "gitpm/issue-types@1", id: "CONFIG-TYPES", lifecycle: "active", issue_types: [{ slug: "task", title: "Task", active: true }] }) as GitPmDocument; return { document, path: kind, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) }; }
@@ -125,6 +126,25 @@ describe("core UI", () => {
     expect(screen.queryByText("Unlinked")).toBeNull();
     const toolbar = filtered.container.querySelector<HTMLElement>(".task-toolbar-controls")!;
     expect((within(toolbar).getByRole("combobox", { name: "Milestone" }) as HTMLSelectElement).value).toBe(milestone.document.id);
+  });
+
+  it("moves a task through the explicit project transfer workflow", async () => {
+    const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
+    const source = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-111111", name: "Source", status: "backlog", lifecycle: "active" });
+    const target = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-222222", name: "Target", status: "backlog", lifecycle: "active" });
+    const milestone = await entityApi.createEntity("DRF-CORE", "milestones", "", { schema: "gitpm/milestone@1", id: "M-26-333333", project: target.document.id, name: "Target stage", lifecycle: "active" });
+    const task = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@1", id: "T-26-444444", project: source.document.id, title: "Move me", type: "task", status: "backlog", lifecycle: "active" });
+    const onNavigate = vi.fn();
+    const { container } = render(<CoreWorkspace api={api} draft={draft} initialProjectId={source.document.id} initialTaskId={task.document.id} locale="en" surface="tasks" onNavigate={onNavigate} onChanged={vi.fn(async () => undefined)} />);
+    await screen.findByRole("heading", { name: "Move me" });
+    fireEvent.click(screen.getByText("Move to another project"));
+    const moveForm = container.querySelector<HTMLElement>(".move-task-disclosure")!;
+    fireEvent.change(within(moveForm).getByLabelText("Target project"), { target: { value: target.document.id } });
+    fireEvent.change(within(moveForm).getByLabelText("Milestone"), { target: { value: milestone.document.id } });
+    fireEvent.click(within(moveForm).getByRole("button", { name: "Move task" }));
+
+    await waitFor(() => expect(entityApi.entities.find((item) => item.document.id === task.document.id)?.document).toMatchObject({ project: target.document.id, milestone: milestone.document.id }));
+    expect(onNavigate).toHaveBeenCalledWith("tasks", { projectId: target.document.id, taskId: task.document.id });
   });
 
   it("reloads external changes, marks only changed fields, and keeps the focused read control", async () => {

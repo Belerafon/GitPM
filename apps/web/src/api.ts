@@ -21,6 +21,7 @@ export interface GitPmApi {
   listEntities(draftId: string, entityType: string, project?: string): Promise<readonly EntityResult[]>;
   createEntity(draftId: string, entityType: string, fingerprint: string, document: GitPmDocument): Promise<EntityResult>;
   updateEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string, document: GitPmDocument): Promise<EntityResult>;
+  moveTask(draftId: string, entity: EntityResult, fingerprint: string, targetProject: string, targetMilestone?: string): Promise<EntityResult>;
   archiveEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string): Promise<EntityResult>;
   deleteEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string): Promise<void>;
   getConfiguration(draftId: string, kind: "statuses" | "issue-types"): Promise<EntityResult>;
@@ -112,6 +113,9 @@ export class HttpGitPmApi implements GitPmApi {
   }
   async updateEntity(draftId: string, entityType: string, entity: EntityResult, expected_fingerprint: string, document: GitPmDocument): Promise<EntityResult> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entity.document.id)}`, { method: "PUT", body: JSON.stringify({ expected_fingerprint, expected_blob_id: entity.blob_id, document }) });
+  }
+  async moveTask(draftId: string, entity: EntityResult, expected_fingerprint: string, target_project: string, target_milestone?: string): Promise<EntityResult> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/entities/tasks/${encodeURIComponent(entity.document.id)}/move`, { method: "POST", body: JSON.stringify({ expected_fingerprint, expected_blob_id: entity.blob_id, target_project, target_milestone }) });
   }
   async archiveEntity(draftId: string, entityType: string, entity: EntityResult, expected_fingerprint: string): Promise<EntityResult> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entity.document.id)}/archive`, { method: "POST", body: JSON.stringify({ expected_fingerprint, expected_blob_id: entity.blob_id }) });

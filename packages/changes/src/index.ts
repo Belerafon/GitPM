@@ -116,6 +116,17 @@ function fieldChanges(before: GitPmDocument | undefined, after: GitPmDocument | 
   return changes;
 }
 
+function relocationFields(deleted: SemanticChange, created: SemanticChange): SemanticFieldChange[] {
+  const before = new Map(deleted.fields.map((field) => [field.field, field.before]));
+  const after = new Map(created.fields.map((field) => [field.field, field.after]));
+  const fields = new Set([...before.keys(), ...after.keys()]);
+  return [...fields].sort().flatMap((field) => {
+    const beforeValue = before.get(field);
+    const afterValue = after.get(field);
+    return JSON.stringify(beforeValue) === JSON.stringify(afterValue) ? [] : [{ field, ...(beforeValue === undefined ? {} : { before: beforeValue }), ...(afterValue === undefined ? {} : { after: afterValue }) }];
+  });
+}
+
 export function parseUnifiedDiff(diff: string): DiffHunk[] {
   const lines = diff.replaceAll("\r\n", "\n").split("\n");
   const hunks: DiffHunk[] = [];
@@ -237,6 +248,15 @@ export class ChangesService {
         if (classifiedChange.project !== undefined) affectedProjects.add(classifiedChange.project);
         result[classifiedChange.group].push(classifiedChange.item);
       }
+    }
+    for (let createdIndex = result.created.length - 1; createdIndex >= 0; createdIndex -= 1) {
+      const created = result.created[createdIndex]!;
+      const deletedIndex = result.deleted.findIndex((deleted) => deleted.id === created.id && deleted.schema === created.schema);
+      if (deletedIndex === -1) continue;
+      const deleted = result.deleted[deletedIndex]!;
+      result.created.splice(createdIndex, 1);
+      result.deleted.splice(deletedIndex, 1);
+      result.updated.push({ ...created, fields: relocationFields(deleted, created) });
     }
     return {
       ...result,

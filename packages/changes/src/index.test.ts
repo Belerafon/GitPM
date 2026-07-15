@@ -116,4 +116,20 @@ describe("changes and restore service", () => {
     expect(semantic.affected_projects).toEqual(["P-26-MGP84K"]);
     expect((await service.list("DRF-CHANGES")).files.find((file) => file.kind === "Added")?.diff).toContain("--- /dev/null");
   });
+
+  it("describes a task relocation as one semantic update", async () => {
+    const { draft, service } = await runtime();
+    const source = "projects/P-26-8S9HQQ/tasks/T-26-G2TG9R.yaml";
+    const target = "projects/P-26-MGP84K/tasks/T-26-G2TG9R.yaml";
+    const sourceAbsolute = path.join(draft.worktree_path, ...source.split("/"));
+    const targetAbsolute = path.join(draft.worktree_path, ...target.split("/"));
+    const moved = (await readFile(sourceAbsolute, "utf8")).replace("project: P-26-8S9HQQ", "project: P-26-MGP84K");
+    await writeFile(targetAbsolute, moved, "utf8");
+    await rm(sourceAbsolute);
+
+    const semantic = await service.semantic("DRF-CHANGES");
+    expect(semantic.counts).toEqual({ created: 0, updated: 1, archived: 0, deleted: 0 });
+    expect(semantic.updated[0]).toMatchObject({ id: "T-26-G2TG9R", path: target, fields: [expect.objectContaining({ field: "project", before: "P-26-8S9HQQ", after: "P-26-MGP84K" })] });
+    expect(semantic.affected_projects).toEqual(["P-26-8S9HQQ", "P-26-MGP84K"]);
+  });
 });

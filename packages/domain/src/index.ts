@@ -239,6 +239,44 @@ export class EntityStore {
     });
   }
 
+  async moveTask(
+    draftId: string,
+    owner: string,
+    id: string,
+    expectedFingerprint: string,
+    expectedBlobId: string,
+    targetProject: string,
+    targetMilestone?: string,
+  ): Promise<EntityResult> {
+    if (!isEntityId(targetProject, ENTITY_ID_PREFIX.project)) throw new DomainOperationError("ENTITY_PROJECT_INVALID", "Target Project ID is invalid");
+    if (targetMilestone !== undefined && !isEntityId(targetMilestone, ENTITY_ID_PREFIX.milestone)) throw new DomainOperationError("ENTITY_ID_INVALID", "Target Milestone ID is invalid");
+    let movedDocument: GitPmDocument | undefined;
+    const mutation = await this.drafts.withUiMutation(draftId, owner, expectedFingerprint, async (metadata) => {
+      const found = await this.find(metadata, "tasks", id);
+      await this.drafts.assertFileBlobId(draftId, found.relative, expectedBlobId);
+      if (found.document.project === targetProject) throw new DomainOperationError("TASK_ALREADY_IN_PROJECT", `${id} already belongs to ${targetProject}`);
+      movedDocument = { ...found.document, project: targetProject, milestone: targetMilestone };
+      const targetRelative = entityPathForDocument(movedDocument);
+      const targetAbsolute = path.join(metadata.worktree_path, ...targetRelative.split("/"));
+      if (await exists(targetAbsolute)) throw new DomainOperationError("ENTITY_EXISTS", `${targetRelative} already exists`);
+      const original = await readFile(found.absolute, "utf8");
+      await mkdir(path.dirname(targetAbsolute), { recursive: true, mode: 0o700 });
+      await resolveDomainPath(metadata.worktree_path, targetRelative);
+      await atomicWriteDomainFile(metadata.worktree_path, targetRelative, formatYamlDocument(movedDocument));
+      await rm(found.absolute);
+      try {
+        await this.assertRepositoryValid(metadata.worktree_path);
+      } catch (error) {
+        await atomicWriteDomainFile(metadata.worktree_path, found.relative, original);
+        await rm(targetAbsolute, { force: true });
+        throw error;
+      }
+      return targetRelative;
+    });
+    if (movedDocument === undefined) throw new DomainOperationError("ENTITY_NOT_FOUND", `tasks/${id} not found`);
+    return await this.getWithFingerprint(draftId, movedDocument, mutation.result, mutation.metadata.fingerprint);
+  }
+
   async delete(
     draftId: string,
     owner: string,

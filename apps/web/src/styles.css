@@ -439,7 +439,7 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
 .gantt-grid { position: absolute; inset: 42px 0 0; background-image: linear-gradient(to right, #eceee9 1px, transparent 1px); }
 .gantt-today { position: absolute; z-index: 1; top: 42px; bottom: 0; width: 2px; background: #d94d43; pointer-events: none; }
 .gantt-bar { position: absolute; z-index: 2; display: flex; align-items: center; overflow: hidden; height: 36px; border: 1px solid #3f7967; border-radius: 7px; background: #68a18e; box-shadow: 0 3px 9px rgba(35,83,67,.16); color: #fff; padding: 0 .55rem; font-size: .7rem; white-space: nowrap; user-select: none; }
-.gantt-milestone { position: absolute; z-index: 3; top: 30px; width: 18px; height: 18px; transform: rotate(45deg); border: 2px solid #8a5b22; background: #f1b966; }
+.gantt-milestone { position: absolute; z-index: 3; top: 30px; width: 18px; height: 18px; transform: rotate(45deg); border: 2px solid #8a5b22; background: #f1b966; padding: 0; cursor: pointer; }
 .gantt-milestone span { position: absolute; top: -18px; left: 12px; width: max-content; transform: rotate(-45deg); color: #79542b; font-size: .62rem; }
 .gantt-dependencies { position: absolute; z-index: 3; top: 42px; left: 0; overflow: visible; pointer-events: none; }
 .gantt-dependencies path { fill: none; stroke: #6c5c91; stroke-width: 2; }

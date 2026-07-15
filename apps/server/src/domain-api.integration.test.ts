@@ -99,7 +99,16 @@ describe("domain API integration", () => {
       fingerprint = result.draft_fingerprint;
     }
 
-    const task = current.get("tasks")!;
+    let task = current.get("tasks")!;
+    const moveResponse = await app.inject({
+      method: "POST",
+      url: `/api/drafts/DRF-HTTP/entities/tasks/${String(task.document.id)}/move`,
+      payload: { expected_fingerprint: fingerprint, expected_blob_id: task.blob_id, target_project: "P-26-8S9HQQ" },
+    });
+    expect(moveResponse.statusCode).toBe(200);
+    task = moveResponse.json<ApiEntityResult>();
+    expect(task).toMatchObject({ path: "projects/P-26-8S9HQQ/tasks/T-26-FM5Q4W.yaml", document: { project: "P-26-8S9HQQ" } });
+    fingerprint = task.draft_fingerprint;
     const archivedResponse = await app.inject({
       method: "POST",
       url: `/api/drafts/DRF-HTTP/entities/tasks/${String(task.document.id)}/archive`,
