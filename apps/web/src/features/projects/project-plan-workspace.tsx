@@ -345,12 +345,10 @@ function StageSection({ stage, tasks, allTasks, projectId, query, locale, readOn
   readonly onNavigate: WorkspaceNavigate;
   readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string;
 }) {
-  const [collapsed, setCollapsed] = useState(false);
   const completed = allTasks.filter((task) => text(task.document, "status") === "done").length;
   const progress = allTasks.length === 0 ? 0 : Math.round(completed / allTasks.length * 100);
   return <article className={`project-plan-stage${selected ? " selected" : ""}`}>
     <header>
-      <button aria-expanded={!collapsed} aria-label={`${t(collapsed ? "stages.expand" : "stages.collapse")}: ${text(stage.document, "name")}`} className="project-plan-stage-toggle" onClick={() => setCollapsed((value) => !value)} type="button"><span aria-hidden="true">{collapsed ? "›" : "⌄"}</span></button>
       <button aria-current={selected ? "true" : undefined} aria-label={`${t("core.milestone")}: ${text(stage.document, "name")} · ${stage.document.id}`} className="project-plan-stage-selector" onClick={() => onNavigate("stages", { projectId, stageId: stage.document.id, ...(Object.keys(query).length > 0 ? { query } : {}) })} type="button">
         <span className="project-plan-stage-kind">{t("core.milestone")} <code>{stage.document.id}</code></span>
         <span aria-level={3} className="project-plan-stage-title" role="heading">{text(stage.document, "name")}</span>
@@ -359,7 +357,7 @@ function StageSection({ stage, tasks, allTasks, projectId, query, locale, readOn
       <div className="project-plan-stage-actions"><time dateTime={text(stage.document, "due")}>{text(stage.document, "due") ? formatDateOnly(locale, text(stage.document, "due")) : "—"}</time><button disabled={readOnly} onClick={onNewTask}>+ {t("core.createTaskAction")}</button></div>
     </header>
     <div className="project-plan-stage-progress"><progress aria-label={t("stages.progressLabel")} max="100" value={progress}>{progress}%</progress><span>{t("stages.progress", { completed, count: allTasks.length })}</span></div>
-    {!collapsed && <TaskRows locale={locale} onNavigate={onNavigate} projectId={projectId} query={query} selectedTaskId={selectedTaskId} statusTitle={statusTitle} tasks={tasks} t={t} />}
+    <TaskRows locale={locale} onNavigate={onNavigate} projectId={projectId} query={query} selectedTaskId={selectedTaskId} statusTitle={statusTitle} tasks={tasks} t={t} />
   </article>;
 }
 

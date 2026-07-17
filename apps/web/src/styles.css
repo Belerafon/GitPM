@@ -229,9 +229,8 @@ textarea { min-height: 76px; resize: vertical; border: 1px solid #c9cbc5; border
 .project-plan-toolbar select { min-width: 0; padding: .45rem; }
 .project-plan-stage { display: grid; gap: .65rem; overflow: hidden; border: 1px solid #d9ddd6; border-radius: 10px; background: #fff; box-shadow: 0 1px 2px rgba(24, 53, 42, .04); }
 .project-plan-stage.selected { border-color: #6b9b87; box-shadow: 0 0 0 2px rgba(63, 121, 103, .13); }
-.project-plan-stage > header { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: .7rem; align-items: center; background: #f3f6f2; padding: .75rem .8rem; }
+.project-plan-stage > header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .7rem; align-items: center; background: #f3f6f2; padding: .75rem .8rem; }
 .project-plan-stage.selected > header { background: #e8f1eb; }
-.project-plan-stage-toggle { display: grid; place-items: center; width: 32px; height: 32px; border-color: transparent; background: transparent; padding: 0; color: #315f50; font-size: 1.35rem; line-height: 1; }
 .project-plan-stage-selector { display: grid; gap: .16rem; min-width: 0; border: 0; background: transparent; padding: .1rem .2rem; text-align: left; }
 .project-plan-stage-selector:hover:not(:disabled) { border-color: transparent; color: #315f50; }
 .project-plan-stage-kind { color: #617069; font-size: .64rem; font-weight: 750; letter-spacing: .075em; text-transform: uppercase; }
@@ -240,8 +239,8 @@ textarea { min-height: 76px; resize: vertical; border: 1px solid #c9cbc5; border
 .project-plan-stage-description { overflow: hidden; color: #68706b; font-size: .74rem; text-overflow: ellipsis; white-space: nowrap; }
 .project-plan-stage-actions { display: flex; gap: .5rem; align-items: center; flex: 0 0 auto; }
 .project-plan-stage-actions time { color: #626b65; font-size: .78rem; font-weight: 650; }
-.project-plan-stage-progress { display: grid; grid-template-columns: minmax(140px, 1fr) auto; gap: .75rem; align-items: center; margin: 0 .8rem 0 3.55rem; color: #68706b; font-size: .75rem; }
-.project-plan-task-list { display: grid; margin: 0 .8rem .7rem 3.55rem; border-left: 2px solid #d6e3dc; padding-left: .75rem; }
+.project-plan-stage-progress { display: grid; grid-template-columns: minmax(140px, 1fr) auto; gap: .75rem; align-items: center; margin: 0 .8rem; color: #68706b; font-size: .75rem; }
+.project-plan-task-list { display: grid; margin: 0 .8rem .7rem 1.4rem; border-left: 2px solid #d6e3dc; padding-left: .75rem; }
 .project-plan-task-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .75rem; align-items: center; width: 100%; border: 0; border-top: 1px solid #e5e7e1; border-left: 3px solid transparent; border-radius: 0; background: transparent; padding: .48rem .4rem .48rem .6rem; text-align: left; }
 .project-plan-task-row:hover { background: #f4f8f5; }
 .project-plan-task-row.selected { border-left-color: #3f7967; background: #eaf3ed; }
@@ -249,7 +248,7 @@ textarea { min-height: 76px; resize: vertical; border: 1px solid #c9cbc5; border
 .project-plan-task-row strong { font-size: .82rem; }
 .project-plan-task-row code { color: #777e79; font-size: .66rem; }
 .project-plan-task-meta { display: flex; gap: .65rem; align-items: center; color: #69716c; font-size: .72rem; }
-.project-plan-empty-tasks { margin: 0 .8rem .75rem 3.55rem; color: #747a76; font-size: .82rem; }
+.project-plan-empty-tasks { margin: 0 .8rem .75rem 1.4rem; color: #747a76; font-size: .82rem; }
 .project-plan-unassigned { border-style: dashed; background: #fffdf8; box-shadow: none; }
 .project-plan-unassigned > header { grid-template-columns: minmax(0, 1fr) auto; background: #fbf7ed; }
 .project-plan-unassigned > header h3 { margin: .15rem 0 0; font-size: 1rem; }
@@ -309,11 +308,11 @@ textarea { min-height: 76px; resize: vertical; border: 1px solid #c9cbc5; border
 @media (max-width: 1000px) { .portfolio-stats, .stage-stats, .project-plan-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .portfolio-project-grid, .project-directory-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .project-detail-layout { grid-template-columns: 1fr; } .task-create { grid-template-columns: 1fr 1fr; } .task-layout { grid-template-columns: 1fr; } .task-panel { border-left: 0; border-top: 1px solid #dedfd9; padding: 1rem 0 0; } }
 @media (max-width: 700px) { .portfolio-stats, .portfolio-project-grid, .project-directory-grid, .stage-stats, .project-plan-stats, .core-columns, .task-detail-meta { grid-template-columns: 1fr; } .project-directory .card-heading, .task-toolbar, .task-toolbar-controls, .stage-detail-header, .project-plan-work-heading, .project-plan-stage > header { align-items: stretch; flex-direction: column; } .project-plan-header, .project-plan-toolbar { grid-template-columns: 1fr; } .project-plan-actions, .project-plan-stage-actions { flex-direction: column; align-items: stretch; } .project-plan-meta { grid-column: 1; } .project-plan-summary, .project-register-summary { gap: .6rem 1rem; } .project-register { overflow-x: auto; } .project-register-head, .project-register-row { min-width: 780px; } .project-plan-stage-progress, .project-plan-task-row { grid-template-columns: 1fr; } .project-plan-task-meta { flex-wrap: wrap; } .stage-detail-actions { flex-direction: column; } .task-create, .task-row { grid-template-columns: 1fr; } }
 @media (max-width: 700px) {
-  .project-plan-stage > header { grid-template-columns: 34px minmax(0, 1fr); }
-  .project-plan-stage-actions { grid-column: 2; flex-direction: row; justify-content: space-between; align-items: center; }
+  .project-plan-stage > header { grid-template-columns: 1fr; }
+  .project-plan-stage-actions { grid-column: 1; flex-direction: row; justify-content: space-between; align-items: center; }
   .project-plan-stage-description { white-space: normal; }
   .project-plan-stage-progress { margin-left: .8rem; }
-  .project-plan-task-list { margin-left: 2.9rem; }
+  .project-plan-task-list { margin-left: .8rem; }
   .project-plan-unassigned > header { grid-template-columns: 1fr; }
   .project-plan-unassigned .project-plan-stage-actions { grid-column: 1; }
   .project-plan-inspector { position: fixed; z-index: 50; inset: 0; max-height: none; border: 0; border-radius: 0; background: #fff; padding: 1rem; }

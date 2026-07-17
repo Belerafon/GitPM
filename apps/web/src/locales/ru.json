@@ -368,8 +368,6 @@
   ,"stages.new": "Новый этап"
   ,"stages.edit": "Редактировать этап"
   ,"stages.open": "Открыть этап"
-  ,"stages.expand": "Развернуть этап"
-  ,"stages.collapse": "Свернуть этап"
   ,"stages.notFound": "Этап не найден или перенесён в архив."
   ,"stages.progress": "Завершено {completed} из {count}"
   ,"stages.progressLabel": "Прогресс"

@@ -368,8 +368,6 @@
   ,"stages.new": "New milestone"
   ,"stages.edit": "Edit milestone"
   ,"stages.open": "Open milestone"
-  ,"stages.expand": "Expand milestone"
-  ,"stages.collapse": "Collapse milestone"
   ,"stages.notFound": "This milestone was not found or is archived."
   ,"stages.progress": "{completed} of {count} completed"
   ,"stages.progressLabel": "Progress"
