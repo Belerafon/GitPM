@@ -123,6 +123,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   const visibleStages = milestoneFilter === "" ? activeStages : activeStages.filter((stage) => stage.document.id === milestoneFilter);
   const outsideStages = activeTasks.filter((task) => !activeStageIds.has(text(task.document, "milestone")));
   const visibleOutsideStages = visibleTasks.filter((task) => !activeStageIds.has(text(task.document, "milestone")));
+  const navigationQuery = { ...(statusFilter ? { status: [statusFilter] } : {}), ...(milestoneFilter ? { milestone: [milestoneFilter] } : {}) };
   const progress = activeTasks.length === 0 ? 0 : Math.round(completed / activeTasks.length * 100);
   const statusTitle = (slug: string) => statuses.find((item) => item.slug === slug)?.title ?? slug;
   const personName = (id: string) => text(people.find((item) => item.document.id === id)?.document ?? { schema: "", id: "", lifecycle: "active" }, "name") || t("core.unassigned");
@@ -252,31 +253,32 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
               onNavigate={onNavigate}
               onNewTask={() => setEditor({ kind: "task", stageId: stage.document.id })}
               projectId={projectId}
-              query={{ ...(statusFilter ? { status: [statusFilter] } : {}) }}
+              query={navigationQuery}
               readOnly={readOnly}
+              selected={selectedStageId === stage.document.id}
+              selectedTaskId={selectedTaskId}
               stage={stage}
               statusTitle={statusTitle}
               tasks={visibleTasks.filter((task) => task.document.milestone === stage.document.id)}
               t={t}
             />)}
             {(milestoneFilter === "" || milestoneFilter === "none") && <section className={`project-plan-stage project-plan-unassigned${visibleOutsideStages.length > 0 ? " has-work" : ""}`}>
-              <header><div><h3>{t("projectPlan.unassignedHeading")}</h3><p>{t("projectPlan.unassignedDescription")}</p></div><div className="project-plan-stage-actions"><button disabled={readOnly} onClick={() => setEditor({ kind: "task" })}>+ {t("core.createTaskAction")}</button></div></header>
-              <TaskRows locale={locale} onNavigate={onNavigate} projectId={projectId} query={{ ...(statusFilter ? { status: [statusFilter] } : {}) }} statusTitle={statusTitle} tasks={visibleOutsideStages} t={t} />
+              <header><div><span className="project-plan-stage-kind">{t("projectPlan.systemGroup")}</span><h3>{t("projectPlan.unassignedHeading")}</h3><p>{t("projectPlan.unassignedDescription")}</p></div><div className="project-plan-stage-actions"><button disabled={readOnly} onClick={() => setEditor({ kind: "task" })}>+ {t("core.createTaskAction")}</button></div></header>
+              <TaskRows locale={locale} onNavigate={onNavigate} projectId={projectId} query={navigationQuery} selectedTaskId={selectedTaskId} statusTitle={statusTitle} tasks={visibleOutsideStages} t={t} />
             </section>}
           </section>
         </div>
 
         {selectedStage !== undefined && <aside className="project-plan-inspector" aria-label={t("core.milestone")}>
           <button aria-label={t("core.closeEditor")} className="inspector-close" onClick={closeInspector} type="button">×</button>
-          <span className="eyebrow">{t("core.milestone")}</span><h2>{text(selectedStage.document, "name")}</h2><p>{text(selectedStage.document, "description_markdown") || t("core.noDescription")}</p>
+          <span className="eyebrow">{t("core.milestone")}</span><h2>{text(selectedStage.document, "name")}</h2><code className="project-plan-inspector-id">{selectedStage.document.id}</code><p>{text(selectedStage.document, "description_markdown") || t("core.noDescription")}</p>
           <dl className="project-plan-inspector-stats"><div><dt>{t("stages.progressLabel")}</dt><dd>{activeTasks.filter((task) => task.document.milestone === selectedStage.document.id && text(task.document, "status") === "done").length}/{activeTasks.filter((task) => task.document.milestone === selectedStage.document.id).length}</dd></div><div><dt>{t("stages.estimate")}</dt><dd>{formatDurationHours(locale, activeTasks.filter((task) => task.document.milestone === selectedStage.document.id).reduce((sum, task) => sum + (number(task.document, "estimate_hours") ?? 0), 0))}</dd></div><div><dt>{t("core.due")}</dt><dd>{dateLabel(text(selectedStage.document, "due"))}</dd></div></dl>
           <div className="inspector-actions"><button disabled={readOnly} onClick={() => setEditor({ kind: "edit-stage", stageId: selectedStage.document.id })}>{t("core.edit")}</button><button disabled={readOnly} onClick={() => archiveStage(selectedStage)}>{t("core.archive")}</button><button className="primary" disabled={readOnly} onClick={() => setEditor({ kind: "task", stageId: selectedStage.document.id })}>+ {t("core.createTaskAction")}</button></div>
-          <p className="inspector-hint">{t("stages.tasksDescription")}</p>
         </aside>}
 
         {selectedTask !== undefined && <aside className="project-plan-inspector task-inspector" aria-label={t("core.details")}>
           <button aria-label={t("core.closeEditor")} className="inspector-close" onClick={closeInspector} type="button">×</button>
-          <TaskPanel api={api} catalog={catalog} confirmDelete={(name) => confirmAction(t("core.deleteConfirm", { name }))} draft={draft} entity={selectedTask} fingerprint={workspace.draft_fingerprint} locale={locale} milestones={workspace.milestones} onDeleted={closeInspector} onNavigate={onNavigate} projects={projects} readOnly={readOnly} remove={removeEntity} save={saveEntity} statusOptions={statuses} typeOptions={types} />
+          <TaskPanel api={api} catalog={catalog} confirmDelete={(name) => confirmAction(t("core.deleteConfirm", { name }))} draft={draft} entity={selectedTask} fingerprint={workspace.draft_fingerprint} key={selectedTask.document.id} locale={locale} milestones={workspace.milestones} onDeleted={closeInspector} onNavigate={onNavigate} projects={projects} readOnly={readOnly} remove={removeEntity} save={saveEntity} statusOptions={statuses} typeOptions={types} />
         </aside>}
       </div>}
     </AsyncBoundary>
@@ -328,7 +330,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   </section>;
 }
 
-function StageSection({ stage, tasks, allTasks, projectId, query, locale, readOnly, statusTitle, onNewTask, onNavigate, t }: {
+function StageSection({ stage, tasks, allTasks, projectId, query, locale, readOnly, selected, selectedTaskId, statusTitle, onNewTask, onNavigate, t }: {
   readonly stage: EntityResult;
   readonly tasks: readonly EntityResult[];
   readonly allTasks: readonly EntityResult[];
@@ -336,33 +338,45 @@ function StageSection({ stage, tasks, allTasks, projectId, query, locale, readOn
   readonly query: Readonly<Record<string, readonly string[]>>;
   readonly locale: Locale;
   readonly readOnly: boolean;
+  readonly selected: boolean;
+  readonly selectedTaskId: string;
   readonly statusTitle: (slug: string) => string;
   readonly onNewTask: () => void;
   readonly onNavigate: WorkspaceNavigate;
   readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string;
 }) {
+  const [collapsed, setCollapsed] = useState(false);
   const completed = allTasks.filter((task) => text(task.document, "status") === "done").length;
   const progress = allTasks.length === 0 ? 0 : Math.round(completed / allTasks.length * 100);
-  return <article className="project-plan-stage">
-    <header><div><div className="project-plan-stage-title"><h3>{text(stage.document, "name")}</h3><button aria-label={`${t("stages.open")}: ${text(stage.document, "name")}`} className="project-plan-stage-link" onClick={() => onNavigate("stages", { projectId, stageId: stage.document.id })}>{t("stages.open")} →</button></div><p>{text(stage.document, "description_markdown") || t("core.noDescription")}</p></div><div className="project-plan-stage-actions"><time dateTime={text(stage.document, "due")}>{text(stage.document, "due") ? formatDateOnly(locale, text(stage.document, "due")) : "—"}</time><button disabled={readOnly} onClick={onNewTask}>+ {t("core.createTaskAction")}</button></div></header>
+  return <article className={`project-plan-stage${selected ? " selected" : ""}`}>
+    <header>
+      <button aria-expanded={!collapsed} aria-label={`${t(collapsed ? "stages.expand" : "stages.collapse")}: ${text(stage.document, "name")}`} className="project-plan-stage-toggle" onClick={() => setCollapsed((value) => !value)} type="button"><span aria-hidden="true">{collapsed ? "›" : "⌄"}</span></button>
+      <button aria-current={selected ? "true" : undefined} aria-label={`${t("core.milestone")}: ${text(stage.document, "name")} · ${stage.document.id}`} className="project-plan-stage-selector" onClick={() => onNavigate("stages", { projectId, stageId: stage.document.id, ...(Object.keys(query).length > 0 ? { query } : {}) })} type="button">
+        <span className="project-plan-stage-kind">{t("core.milestone")} <code>{stage.document.id}</code></span>
+        <span aria-level={3} className="project-plan-stage-title" role="heading">{text(stage.document, "name")}</span>
+        <span className="project-plan-stage-description">{text(stage.document, "description_markdown") || t("core.noDescription")}</span>
+      </button>
+      <div className="project-plan-stage-actions"><time dateTime={text(stage.document, "due")}>{text(stage.document, "due") ? formatDateOnly(locale, text(stage.document, "due")) : "—"}</time><button disabled={readOnly} onClick={onNewTask}>+ {t("core.createTaskAction")}</button></div>
+    </header>
     <div className="project-plan-stage-progress"><progress aria-label={t("stages.progressLabel")} max="100" value={progress}>{progress}%</progress><span>{t("stages.progress", { completed, count: allTasks.length })}</span></div>
-    <TaskRows locale={locale} onNavigate={onNavigate} projectId={projectId} query={query} statusTitle={statusTitle} tasks={tasks} t={t} />
+    {!collapsed && <TaskRows locale={locale} onNavigate={onNavigate} projectId={projectId} query={query} selectedTaskId={selectedTaskId} statusTitle={statusTitle} tasks={tasks} t={t} />}
   </article>;
 }
 
-function TaskRows({ tasks, projectId, query = {}, locale, statusTitle, onNavigate, t }: {
+function TaskRows({ tasks, projectId, query = {}, locale, selectedTaskId, statusTitle, onNavigate, t }: {
   readonly tasks: readonly EntityResult[];
   readonly projectId: string;
   readonly query?: Readonly<Record<string, readonly string[]>>;
   readonly locale: Locale;
+  readonly selectedTaskId: string;
   readonly statusTitle: (slug: string) => string;
   readonly onNavigate: WorkspaceNavigate;
   readonly t: (key: MessageKey) => string;
 }) {
   if (tasks.length === 0) return <p className="project-plan-empty-tasks">{t("stages.emptyTasks")}</p>;
   return <div className="project-plan-task-list">{tasks.map((task) => {
-    const milestone = text(task.document, "milestone");
-    return <button className="project-plan-task-row" key={task.document.id} onClick={() => onNavigate("tasks", { projectId, taskId: task.document.id, query: { ...query, milestone: [milestone || "none"] } })}>
+    const selected = selectedTaskId === task.document.id;
+    return <button aria-current={selected ? "true" : undefined} className={`project-plan-task-row${selected ? " selected" : ""}`} key={task.document.id} onClick={() => onNavigate("tasks", { projectId, taskId: task.document.id, ...(Object.keys(query).length > 0 ? { query } : {}) })}>
     <span><strong>{text(task.document, "title")}</strong><code>{task.document.id}</code></span>
     <span className="project-plan-task-meta">{text(task.document, "due") && <time dateTime={text(task.document, "due")}>{formatDateOnly(locale, text(task.document, "due"))}</time>}{number(task.document, "estimate_hours") !== undefined && <span>{number(task.document, "estimate_hours")}h</span>}<span className="state open">{statusTitle(text(task.document, "status"))}</span></span>
     </button>;

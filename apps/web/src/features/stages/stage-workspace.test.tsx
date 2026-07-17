@@ -38,8 +38,11 @@ describe("project plan and stage workspace", () => {
     const stageCard = stageHeading.closest<HTMLElement>("article")!;
     expect(screen.getByText("Linked task")).toBeTruthy();
     expect(screen.getByText("Without stage")).toBeTruthy();
-    fireEvent.click(within(stageCard).getByRole("button", { name: /Launch/u }));
+    fireEvent.click(within(stageCard).getByRole("button", { name: /Milestone: Launch/u }));
     expect(onNavigate).toHaveBeenCalledWith("stages", { projectId: project.document.id, stageId: stage.document.id });
+
+    fireEvent.click(within(stageCard).getByRole("button", { name: /Linked task/u }));
+    expect(onNavigate).toHaveBeenLastCalledWith("tasks", { projectId: project.document.id, taskId: linked.document.id });
 
     fireEvent.click(within(stageCard).getByRole("button", { name: /New task/u }));
     const dialog = screen.getByRole("dialog", { name: "New task" });
@@ -57,7 +60,7 @@ describe("project plan and stage workspace", () => {
     expect(screen.getByText("Linked task")).toBeTruthy();
     expect(screen.queryByText("Without stage")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /Linked task/u }));
-    expect(onNavigate).toHaveBeenCalledWith("tasks", { projectId: project.document.id, taskId: linked.document.id, query: { milestone: [stage.document.id] } });
+    expect(onNavigate).toHaveBeenCalledWith("tasks", { projectId: project.document.id, taskId: linked.document.id });
 
     fireEvent.click(screen.getByRole("button", { name: /New task in milestone/u }));
     const dialog = screen.getByRole("dialog", { name: "New task in milestone" });

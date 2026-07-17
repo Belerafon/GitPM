@@ -136,13 +136,14 @@ describe("frontend draft lifecycle", () => {
     window.history.replaceState({}, "", "/projects/P-26-7K4M9Q/stages/M-26-3RC7NA");
     render(<App api={api} browserLanguages={["en"]} />);
 
-    expect(await screen.findByRole("heading", { level: 1, name: "Milestone" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { level: 1, name: "Plan" })).toBeTruthy();
     expect(await screen.findByRole("heading", { level: 2, name: "Launch" })).toBeTruthy();
     expect(screen.getByRole("navigation", { name: "Project navigation" })).toBeTruthy();
     const breadcrumbs = screen.getByRole("navigation", { name: "Breadcrumbs" });
-    expect(within(breadcrumbs).getByText("Launch").getAttribute("aria-current")).toBe("page");
+    expect(within(breadcrumbs).getByText("Alpha").getAttribute("aria-current")).toBe("page");
     fireEvent.click(screen.getByRole("button", { name: /First task/u }));
-    expect(`${window.location.pathname}${window.location.search}`).toBe("/projects/P-26-7K4M9Q/tasks/T-26-X8D2FW?milestone=M-26-3RC7NA");
+    expect(`${window.location.pathname}${window.location.search}`).toBe("/projects/P-26-7K4M9Q/tasks/T-26-X8D2FW");
+    expect((await screen.findByRole("button", { name: /First task/u })).getAttribute("aria-current")).toBe("true");
   });
 
   it("opens the responsive navigation by keyboard, closes it with Escape, and restores scroll and focus after navigation", async () => {
@@ -238,6 +239,7 @@ describe("frontend draft lifecycle", () => {
     const projectsStat = await screen.findByText("Active projects");
     expect(within(projectsStat.parentElement!).getByText("1")).toBeTruthy();
     expect(await screen.findByText("Alpha")).toBeTruthy();
+    expect(screen.getByText("P-26-7K4M9Q")).toBeTruthy();
     expect(screen.getByRole("button", { name: /New project/u })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Create task" })).toBeNull();
 
@@ -257,10 +259,13 @@ describe("frontend draft lifecycle", () => {
     fireEvent.change(screen.getByLabelText("Filter tasks"), { target: { value: "backlog" } });
     expect(`${window.location.pathname}${window.location.search}`).toBe("/projects/P-26-7K4M9Q?status=backlog");
     fireEvent.click(await screen.findByRole("button", { name: /First task/u }));
-    expect(`${window.location.pathname}${window.location.search}`).toBe("/projects/P-26-7K4M9Q/tasks/T-26-X8D2FW?milestone=none&status=backlog");
-    expect(await screen.findByRole("heading", { name: "Task details" })).toBeTruthy();
+    expect(`${window.location.pathname}${window.location.search}`).toBe("/projects/P-26-7K4M9Q/tasks/T-26-X8D2FW?status=backlog");
+    expect(await screen.findByRole("heading", { level: 1, name: "Plan" })).toBeTruthy();
+    expect(screen.getByRole("complementary", { name: "Task details" })).toBeTruthy();
+    expect(screen.getByLabelText("Milestone")).toHaveProperty("value", "");
+    expect(screen.getByRole("button", { name: /First task/u }).getAttribute("aria-current")).toBe("true");
     breadcrumbs = screen.getByRole("navigation", { name: "Breadcrumbs" });
-    expect(within(breadcrumbs).getByText("First task").getAttribute("aria-current")).toBe("page");
+    expect(within(breadcrumbs).getByText("Alpha").getAttribute("aria-current")).toBe("page");
   });
 
   it("labels a repository session and does not offer a meaningless sign-out action", async () => {

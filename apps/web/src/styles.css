@@ -105,7 +105,6 @@ input { min-width: 0; width: 100%; border: 1px solid #c9cbc5; border-radius: 8px
 .project-risk.near { background: #fff2cc; color: #6c5311; }
 .project-risk.overdue { background: #f9e2df; color: #7f3029; }
 .project-risk.unknown { background: #e8eae6; color: #575c58; }
-.portfolio-project-link .open-affordance { justify-self: end; color: #315f50; font-size: .76rem; font-weight: 700; }
 .portfolio-project-card code { color: #767b77; font-size: .7rem; }
 .portfolio-project-card dl { display: grid; grid-column: 1 / -1; grid-template-columns: repeat(2, 1fr); gap: .5rem; margin: 0; }
 .portfolio-project-card dl div { display: flex; justify-content: space-between; border-top: 1px solid #e2e3de; padding-top: .5rem; }
@@ -126,6 +125,7 @@ input { min-width: 0; width: 100%; border: 1px solid #c9cbc5; border-radius: 8px
 .project-register-row { width: 100%; border: 0; border-top: 1px solid #e3e5df; border-radius: 0; background: #fff; padding: .6rem .75rem; text-align: left; }
 .project-register-row:hover { background: #f4f8f5; }
 .project-register-row > span:first-child { display: grid; gap: .15rem; min-width: 0; }
+.project-register-row code { color: #767b77; font-size: .66rem; }
 .project-register-row small { overflow: hidden; color: #68706b; font-size: .7rem; text-overflow: ellipsis; white-space: nowrap; }
 .project-register-row .project-risk { justify-self: start; }
 .project-directory .create-disclosure.compact { min-width: min(320px, 100%); margin: 0; }
@@ -227,34 +227,49 @@ textarea { min-height: 76px; resize: vertical; border: 1px solid #c9cbc5; border
 .project-plan-toolbar > div span { color: #68706b; font-size: .7rem; }
 .project-plan-toolbar label { display: grid; gap: .2rem; color: #68706b; font-size: .7rem; }
 .project-plan-toolbar select { min-width: 0; padding: .45rem; }
-.project-plan-stage { display: grid; gap: .55rem; border-bottom: 1px solid #d9ddd6; padding: .25rem 0 .75rem; }
-.project-plan-stage > header { display: flex; justify-content: space-between; gap: 1rem; align-items: start; }
-.project-plan-stage > header p { margin: .2rem 0 0; color: #68706b; font-size: .76rem; }
-.project-plan-stage-title { display: flex; gap: .7rem; align-items: baseline; }
-.project-plan-stage-title h3 { margin: 0; color: #244c3b; font-size: .98rem; }
-.project-plan-stage-link { padding: 0; border: 0; background: transparent; color: #49715d; font-size: .72rem; font-weight: 700; }
+.project-plan-stage { display: grid; gap: .65rem; overflow: hidden; border: 1px solid #d9ddd6; border-radius: 10px; background: #fff; box-shadow: 0 1px 2px rgba(24, 53, 42, .04); }
+.project-plan-stage.selected { border-color: #6b9b87; box-shadow: 0 0 0 2px rgba(63, 121, 103, .13); }
+.project-plan-stage > header { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: .7rem; align-items: center; background: #f3f6f2; padding: .75rem .8rem; }
+.project-plan-stage.selected > header { background: #e8f1eb; }
+.project-plan-stage-toggle { display: grid; place-items: center; width: 32px; height: 32px; border-color: transparent; background: transparent; padding: 0; color: #315f50; font-size: 1.35rem; line-height: 1; }
+.project-plan-stage-selector { display: grid; gap: .16rem; min-width: 0; border: 0; background: transparent; padding: .1rem .2rem; text-align: left; }
+.project-plan-stage-selector:hover:not(:disabled) { border-color: transparent; color: #315f50; }
+.project-plan-stage-kind { color: #617069; font-size: .64rem; font-weight: 750; letter-spacing: .075em; text-transform: uppercase; }
+.project-plan-stage-kind code { color: #617069; font-size: inherit; letter-spacing: .025em; }
+.project-plan-stage-title { color: #173f31; font-size: 1rem; }
+.project-plan-stage-description { overflow: hidden; color: #68706b; font-size: .74rem; text-overflow: ellipsis; white-space: nowrap; }
 .project-plan-stage-actions { display: flex; gap: .5rem; align-items: center; flex: 0 0 auto; }
 .project-plan-stage-actions time { color: #626b65; font-size: .78rem; font-weight: 650; }
-.project-plan-stage-progress { display: grid; grid-template-columns: minmax(140px, 1fr) auto; gap: .75rem; align-items: center; color: #68706b; font-size: .75rem; }
-.project-plan-task-list { display: grid; }
-.project-plan-task-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .75rem; align-items: center; width: 100%; border: 0; border-top: 1px solid #e5e7e1; border-radius: 0; background: transparent; padding: .42rem .25rem; text-align: left; }
+.project-plan-stage-progress { display: grid; grid-template-columns: minmax(140px, 1fr) auto; gap: .75rem; align-items: center; margin: 0 .8rem 0 3.55rem; color: #68706b; font-size: .75rem; }
+.project-plan-task-list { display: grid; margin: 0 .8rem .7rem 3.55rem; border-left: 2px solid #d6e3dc; padding-left: .75rem; }
+.project-plan-task-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .75rem; align-items: center; width: 100%; border: 0; border-top: 1px solid #e5e7e1; border-left: 3px solid transparent; border-radius: 0; background: transparent; padding: .48rem .4rem .48rem .6rem; text-align: left; }
 .project-plan-task-row:hover { background: #f4f8f5; }
+.project-plan-task-row.selected { border-left-color: #3f7967; background: #eaf3ed; }
 .project-plan-task-row > span:first-child { display: grid; gap: .12rem; min-width: 0; }
 .project-plan-task-row strong { font-size: .82rem; }
 .project-plan-task-row code { color: #777e79; font-size: .66rem; }
 .project-plan-task-meta { display: flex; gap: .65rem; align-items: center; color: #69716c; font-size: .72rem; }
-.project-plan-empty-tasks { margin: 0; color: #747a76; font-size: .82rem; }
-.project-plan-unassigned { background: #fffdf8; }
+.project-plan-empty-tasks { margin: 0 .8rem .75rem 3.55rem; color: #747a76; font-size: .82rem; }
+.project-plan-unassigned { border-style: dashed; background: #fffdf8; box-shadow: none; }
+.project-plan-unassigned > header { grid-template-columns: minmax(0, 1fr) auto; background: #fbf7ed; }
+.project-plan-unassigned > header h3 { margin: .15rem 0 0; font-size: 1rem; }
+.project-plan-unassigned > header p { margin: .2rem 0 0; color: #68706b; font-size: .76rem; }
 .project-plan-unassigned.has-work { border-left: 4px solid #d09b45; }
-.project-plan-inspector { position: sticky; top: .75rem; display: grid; max-height: calc(100vh - 1.5rem); gap: .75rem; overflow-y: auto; border-left: 1px solid #d9ddd6; background: #fff; padding: .5rem 0 .5rem 1rem; }
+.project-plan-unassigned .project-plan-task-list { margin-left: .8rem; }
+.project-plan-unassigned .project-plan-empty-tasks { margin-left: .8rem; }
+.project-plan-inspector { position: sticky; top: .75rem; display: grid; align-content: start; max-height: calc(100vh - 1.5rem); gap: .75rem; overflow-y: auto; border-left: 1px solid #d9ddd6; background: #fff; padding: .5rem 0 .5rem 1rem; }
 .project-plan-inspector h2, .project-plan-inspector h3, .project-plan-inspector p { margin: 0; }
 .project-plan-inspector > p { color: #68706b; font-size: .82rem; line-height: 1.45; }
+.project-plan-inspector-id { color: #69716c; font-size: .72rem; }
 .inspector-close { justify-self: end; width: 34px; height: 34px; padding: 0; font-size: 1.25rem; }
 .project-plan-inspector-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; margin: 0; border-block: 1px solid #e1e3dd; padding: .6rem 0; }
 .project-plan-inspector-stats dt { color: #68706b; font-size: .7rem; }
 .project-plan-inspector-stats dd { margin: .2rem 0 0; font-weight: 700; }
 .inspector-actions { display: flex; flex-wrap: wrap; gap: .4rem; }
 .task-inspector .task-detail-card { border: 0; box-shadow: none; padding: 0; }
+.task-inspector .task-detail-meta { grid-template-columns: 1fr; gap: 0; border-block: 1px solid #e1e3dd; padding: .25rem 0; }
+.task-inspector .task-detail-meta div { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: .65rem; align-items: baseline; border-radius: 0; background: transparent; padding: .45rem 0; }
+.task-inspector .task-detail-meta dt, .task-inspector .task-detail-meta dd { margin: 0; }
 .stage-workspace { display: grid; gap: 1rem; margin-top: 1rem; }
 .stage-detail-header { display: flex; justify-content: space-between; gap: 1rem; align-items: start; }
 .stage-detail-header h2 { margin: .2rem 0 .5rem; }
@@ -290,8 +305,19 @@ textarea { min-height: 76px; resize: vertical; border: 1px solid #c9cbc5; border
 .task-detail-meta dd { margin: .3rem 0 0; overflow-wrap: anywhere; }
 .task-description h3 { margin-bottom: .55rem; }
 .empty-copy { color: #707671; }
-@media (max-width: 1000px) { .portfolio-stats, .stage-stats, .project-plan-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .portfolio-project-grid, .project-directory-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .project-detail-layout, .project-plan-layout.with-inspector { grid-template-columns: 1fr; } .project-plan-inspector { position: relative; top: auto; max-height: none; border: 1px solid #d9ddd6; border-radius: 10px; padding: 1rem; } .task-create { grid-template-columns: 1fr 1fr; } .task-layout { grid-template-columns: 1fr; } .task-panel { border-left: 0; border-top: 1px solid #dedfd9; padding: 1rem 0 0; } }
+@media (max-width: 1350px) { .project-plan-layout.with-inspector { grid-template-columns: 1fr; } .project-plan-inspector { position: fixed; z-index: 50; inset: 0 0 0 auto; width: min(440px, 100vw); max-height: none; border: 0; border-left: 1px solid #d9ddd6; border-radius: 0; background: #fff; box-shadow: -12px 0 32px rgba(24, 53, 42, .16); padding: 1rem; } }
+@media (max-width: 1000px) { .portfolio-stats, .stage-stats, .project-plan-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .portfolio-project-grid, .project-directory-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .project-detail-layout { grid-template-columns: 1fr; } .task-create { grid-template-columns: 1fr 1fr; } .task-layout { grid-template-columns: 1fr; } .task-panel { border-left: 0; border-top: 1px solid #dedfd9; padding: 1rem 0 0; } }
 @media (max-width: 700px) { .portfolio-stats, .portfolio-project-grid, .project-directory-grid, .stage-stats, .project-plan-stats, .core-columns, .task-detail-meta { grid-template-columns: 1fr; } .project-directory .card-heading, .task-toolbar, .task-toolbar-controls, .stage-detail-header, .project-plan-work-heading, .project-plan-stage > header { align-items: stretch; flex-direction: column; } .project-plan-header, .project-plan-toolbar { grid-template-columns: 1fr; } .project-plan-actions, .project-plan-stage-actions { flex-direction: column; align-items: stretch; } .project-plan-meta { grid-column: 1; } .project-plan-summary, .project-register-summary { gap: .6rem 1rem; } .project-register { overflow-x: auto; } .project-register-head, .project-register-row { min-width: 780px; } .project-plan-stage-progress, .project-plan-task-row { grid-template-columns: 1fr; } .project-plan-task-meta { flex-wrap: wrap; } .stage-detail-actions { flex-direction: column; } .task-create, .task-row { grid-template-columns: 1fr; } }
+@media (max-width: 700px) {
+  .project-plan-stage > header { grid-template-columns: 34px minmax(0, 1fr); }
+  .project-plan-stage-actions { grid-column: 2; flex-direction: row; justify-content: space-between; align-items: center; }
+  .project-plan-stage-description { white-space: normal; }
+  .project-plan-stage-progress { margin-left: .8rem; }
+  .project-plan-task-list { margin-left: 2.9rem; }
+  .project-plan-unassigned > header { grid-template-columns: 1fr; }
+  .project-plan-unassigned .project-plan-stage-actions { grid-column: 1; }
+  .project-plan-inspector { position: fixed; z-index: 50; inset: 0; max-height: none; border: 0; border-radius: 0; background: #fff; padding: 1rem; }
+}
 .admin-workspace { margin-top: 1.5rem; }
 .admin-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; }
 .admin-create { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .55rem; align-items: start; }
@@ -491,7 +517,7 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
 .board-drag-handle { position: absolute; top: .55rem; right: .65rem; color: #879089; font-size: .72rem; letter-spacing: -.2rem; }
 .board-card code { overflow: hidden; color: #747974; font-size: .66rem; text-overflow: ellipsis; }
 .board-card span { color: #56655b; font-size: .72rem; }
-.board-card .board-milestone { color: #315f50; font-weight: 650; }
+.board-card .board-milestone { justify-self: start; border: 0; border-radius: 4px; background: transparent; color: #315f50; padding: 0; font-size: .72rem; font-weight: 650; text-align: left; text-decoration: underline; text-underline-offset: 2px; }
 .board-task-link { display: grid; gap: .35rem; cursor: pointer; }
 .board-status-control { display: grid; gap: .2rem; margin-top: .25rem; color: #666d68; font-size: .68rem; }
 .board-status-control select { min-width: 0; width: 100%; border: 1px solid #d5d9d4; border-radius: 7px; background: #fff; padding: .38rem; }

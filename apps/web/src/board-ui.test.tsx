@@ -32,6 +32,8 @@ describe("Board and Saved Views", () => {
     const { container } = render(<BoardWorkspace api={api} draft={draft} locale="en" onNavigate={onNavigate} onChanged={vi.fn(async () => undefined)} />);
     const card = await screen.findByText("Drag me");
     expect(container.querySelector(".board-milestone")?.textContent).toBe("Beta");
+    fireEvent.click(screen.getByRole("button", { name: "Beta" }));
+    expect(onNavigate).toHaveBeenCalledWith("stages", { projectId, stageId: milestoneId });
     fireEvent.click(card);
     expect(onNavigate).toHaveBeenCalledWith("tasks", { projectId, taskId });
     const data = new Map<string, string>(); const dataTransfer = { setData: (kind: string, value: string) => data.set(kind, value), getData: (kind: string) => data.get(kind) ?? "" };

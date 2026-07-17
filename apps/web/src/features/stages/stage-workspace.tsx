@@ -162,7 +162,7 @@ function StageDetails({ stage, tasks, projectId, locale, readOnly, statusTitle, 
       <div className="card"><span>{t("core.due")}</span><strong>{text(stage.document, "due") ? formatDateOnly(locale, text(stage.document, "due")) : "—"}</strong></div>
     </div>
     <section className="card stage-task-list"><div className="card-heading"><div><h3>{t("stages.tasks")}</h3><p>{t("stages.tasksDescription")}</p></div><button onClick={() => onNavigate("board", { projectId, query: { milestone: [stage.document.id] } })}>{t("stages.openBoard")}</button></div>
-      {tasks.length === 0 ? <p>{t("stages.emptyTasks")}</p> : tasks.map((task) => <button className="stage-task-row" key={task.document.id} onClick={() => onNavigate("tasks", { projectId, taskId: task.document.id, query: { milestone: [stage.document.id] } })}>
+      {tasks.length === 0 ? <p>{t("stages.emptyTasks")}</p> : tasks.map((task) => <button className="stage-task-row" key={task.document.id} onClick={() => onNavigate("tasks", { projectId, taskId: task.document.id })}>
         <span><strong>{text(task.document, "title")}</strong><code>{task.document.id}</code></span><span className="state open">{statusTitle(text(task.document, "status"))}</span>
       </button>)}
     </section>

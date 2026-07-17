@@ -98,20 +98,8 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
     return () => { current = false; };
   }, [activeDraft?.draft_id, activeDraft?.fingerprint, activeDraft?.external_fingerprint, activeRoute?.projectId, activeRoute?.stageId, activeRoute?.taskId, api]);
   const breadcrumbs = (() => {
-    if (activeRoute?.name === "projects" && activeRoute.projectId !== undefined) return <>
+    if (activeRoute?.projectId !== undefined && ["projects", "stages", "tasks"].includes(activeRoute.name)) return <>
       <button onClick={() => navigateToRoute(routeForDestination("projects"))}>{t("nav.projects")}</button><span aria-hidden="true">›</span><span aria-current="page">{catalog.project(activeRoute.projectId).name}</span>
-    </>;
-    if (activeRoute?.name === "stages" && activeRoute.projectId !== undefined) return <>
-      <button onClick={() => navigateToRoute(routeForDestination("projects"))}>{t("nav.projects")}</button><span aria-hidden="true">›</span>
-      <button onClick={() => navigateToRoute(routeForDestination("projects", { projectId: activeRoute.projectId }))}>{catalog.project(activeRoute.projectId).name}</button><span aria-hidden="true">›</span>
-      <span aria-current="page">{catalog.milestone(activeRoute.stageId ?? "")?.name}</span>
-    </>;
-    if (activeRoute?.name === "tasks" && activeRoute.projectId !== undefined) return <>
-      <button onClick={() => navigateToRoute(routeForDestination("projects"))}>{t("nav.projects")}</button><span aria-hidden="true">›</span>
-      <button onClick={() => navigateToRoute(routeForDestination("projects", { projectId: activeRoute.projectId }))}>{catalog.project(activeRoute.projectId).name}</button><span aria-hidden="true">›</span>
-      {activeRoute.taskId === undefined
-        ? <span aria-current="page">{t("nav.tasks")}</span>
-        : <><button onClick={() => navigateToRoute(routeForDestination("tasks", { projectId: activeRoute.projectId, query: activeRoute.query }))}>{t("nav.tasks")}</button><span aria-hidden="true">›</span><span aria-current="page">{catalog.task(activeRoute.taskId).name}</span></>}
     </>;
     if (activeRoute?.name === "history" && activeRoute.commit !== undefined) return <>
       <button onClick={() => navigateToRoute(routeForDestination("history"))}>{t("nav.history")}</button><span aria-hidden="true">›</span><code aria-current="page">{activeRoute.commit.slice(0, 12)}</code>
@@ -158,7 +146,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
   const gitlab = drafts.session.gitlab;
   const loginToGitLab = () => { void api.login().then(navigate); };
   const projectWorkspaceRoute = activeRoute?.projectId !== undefined && ["projects", "stages", "tasks"].includes(activeRoute.name);
-  const pageTitle = activeRoute?.name === "projects" && activeRoute.projectId !== undefined ? t("projectTabs.overview") : activeRoute?.name === "stages" && activeRoute.stageId !== undefined ? t("core.milestone") : activeRoute?.name === "tasks" && activeRoute.taskId !== undefined ? t("core.details") : t(view);
+  const pageTitle = activeRoute?.projectId !== undefined && ["projects", "stages", "tasks"].includes(activeRoute.name) ? t("projectTabs.overview") : t(view);
   return (
     <AppShell activeView={shellActiveView}
       banner={drafts.error !== null && <div className="alert error">{t("status.error", { message: drafts.error })}<button onClick={() => { void drafts.refresh(); }}>{t("status.retry")}</button></div>}
@@ -229,7 +217,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
         />}
         {projectWorkspaceRoute && activeRoute?.projectId !== undefined && (active === undefined
           ? <div className="card empty-workspace">{t("core.selectProject")}</div>
-          : <ProjectPlanWorkspace api={api} confirmAction={confirmAction} draft={active} initialMilestoneFilter={workspaceSelection.query?.milestone?.[0]} initialStatusFilter={workspaceSelection.query?.status?.[0]} key={`project-plan:${activeRoute.projectId}:${activeRoute.stageId ?? ""}:${activeRoute.taskId ?? ""}:${workspaceSelection.query?.status?.[0] ?? ""}:${workspaceSelection.query?.milestone?.[0] ?? ""}`} locale={locale} onChanged={drafts.refresh} onNavigate={openWorkspace} projectId={activeRoute.projectId} selectedStageId={activeRoute.stageId} selectedTaskId={activeRoute.taskId} />)}
+          : <ProjectPlanWorkspace api={api} confirmAction={confirmAction} draft={active} initialMilestoneFilter={workspaceSelection.query?.milestone?.[0]} initialStatusFilter={workspaceSelection.query?.status?.[0]} key={`project-plan:${activeRoute.projectId}:${workspaceSelection.query?.status?.[0] ?? ""}:${workspaceSelection.query?.milestone?.[0] ?? ""}`} locale={locale} onChanged={drafts.refresh} onNavigate={openWorkspace} projectId={activeRoute.projectId} selectedStageId={activeRoute.stageId} selectedTaskId={activeRoute.taskId} />)}
         {["nav.portfolio", "nav.projects", "nav.tasks"].includes(view) && !projectWorkspaceRoute && (active === undefined
           ? <div className="card empty-workspace">{t("core.selectProject")}</div>
           : <CoreWorkspace api={api} confirmAction={confirmAction} draft={active} key={`${view}:${workspaceSelection.projectId ?? ""}:${workspaceSelection.taskId ?? ""}:${workspaceSelection.query?.status?.[0] ?? ""}:${workspaceSelection.query?.milestone?.[0] ?? ""}`} locale={locale} surface={view === "nav.portfolio" ? "portfolio" : view === "nav.tasks" ? "tasks" : "projects"} initialProjectId={workspaceSelection.projectId} initialTaskId={workspaceSelection.taskId} initialStatusFilter={workspaceSelection.query?.status?.[0]} initialMilestoneFilter={workspaceSelection.query?.milestone?.[0]} onNavigate={openWorkspace} onChanged={drafts.refresh} />)}
