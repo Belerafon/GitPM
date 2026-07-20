@@ -124,15 +124,15 @@ describe("localization runtime", () => {
 });
 
 describe("frontend draft lifecycle", () => {
-  it("shows the same compact repository status in the menu and beside the working copy", async () => {
+  it("keeps the compact change count with Repository instead of duplicating it in the header", async () => {
     const api = new FakeApi();
     api.currentSession = { ...session, mode: "repository", repository: { name: "portfolio", path: "D:\\portfolio", has_remote: true }, gitlab: { configured: false } };
     api.drafts = [draft({ draft_id: "DRF-LOCAL" })];
     render(<App api={api} browserLanguages={["en"]} />);
 
     const statuses = await screen.findAllByRole("button", { name: "Changed files: 2" });
-    expect(statuses).toHaveLength(2);
-    expect(statuses.map((status) => status.textContent)).toEqual(["2", "2"]);
+    expect(statuses).toHaveLength(1);
+    expect(statuses[0]!.textContent).toBe("2");
     fireEvent.click(statuses[0]!);
     expect(window.location.pathname).toBe("/changes");
     expect(statuses[0]!.closest(".navigation-item")?.classList.contains("active")).toBe(true);
@@ -332,6 +332,7 @@ describe("frontend draft lifecycle", () => {
     render(<App api={api} />);
     expect(await screen.findByRole("heading", { name: "Рабочие копии" })).toBeTruthy();
     expect(document.documentElement.lang).toBe("ru");
+    fireEvent.click(screen.getByLabelText("Настройки интерфейса"));
     fireEvent.change(screen.getByLabelText("Язык"), { target: { value: "en" } });
     expect(await screen.findByRole("heading", { name: "Working copies" })).toBeTruthy();
     expect(localStorage.getItem(LOCALE_STORAGE_KEY)).toBe("en");

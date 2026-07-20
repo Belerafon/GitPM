@@ -44,15 +44,23 @@ nav button.active, nav button:hover { background: #2b4c3e; color: #fff; }
 .breadcrumbs [aria-current="page"] { color: #343936; font-weight: 650; }
 .top-actions { display: flex; align-items: end; gap: .7rem; }
 .repository-status { white-space: nowrap; }
-.top-repository-status { display: inline-grid; place-items: center; width: 1.75rem; min-width: 1.75rem; height: 1.75rem; border-color: #d1b975; border-radius: 999px; background: #fff2bc; color: #684d0c; padding: 0; font-size: .76rem; font-weight: 800; }
 .workspace-switcher { display: grid; min-width: 230px; gap: .2rem; text-align: left; }
 .workspace-switcher > label { margin: 0; color: #6b706c; font-size: .7rem; }
 .workspace-selection-row { display: flex; align-items: center; min-height: 36px; gap: .55rem; }
+.workspace-selection-row .state { align-self: center; }
 .workspace-switcher select { min-width: 0; border: 0; background: transparent; color: #202224; padding: 0; font-weight: 700; }
 .field-hint { margin: -.1rem 0 .45rem; color: #6c726d; font-size: .78rem; }
 .draft-create-row input { flex: 1 1 200px; }
 .locale-picker { display: grid; gap: .25rem; color: #666b67; font-size: .75rem; }
 .locale-picker select { min-width: 112px; border: 1px solid #c9cbc5; border-radius: 7px; background: #fff; padding: .45rem; }
+.interface-settings { position: relative; align-self: end; }
+.interface-settings > summary { display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid #c9cbc5; border-radius: 8px; background: #fff; color: #455048; cursor: pointer; list-style: none; }
+.interface-settings > summary::-webkit-details-marker { display: none; }
+.interface-settings > summary:hover, .interface-settings[open] > summary { border-color: #49715d; background: #edf3ee; color: #244f3a; }
+.interface-settings > summary svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.6; }
+.interface-settings-panel { position: absolute; z-index: 30; top: calc(100% + .45rem); right: 0; display: grid; width: 220px; gap: .85rem; border: 1px solid #d9ddd6; border-radius: 10px; background: #fff; box-shadow: 0 10px 28px rgba(24, 53, 42, .16); padding: .9rem; }
+.interface-settings-panel > strong { font-size: .84rem; }
+.interface-settings-panel .locale-picker select { width: 100%; }
 .draft-layout { display: grid; grid-template-columns: minmax(280px, .8fr) minmax(420px, 1.55fr); gap: 1.25rem; margin-top: 1.5rem; }
 .workspace-description { margin: -.45rem 0 1rem; color: #686e69; font-size: .84rem; line-height: 1.45; }
 .card { border: 1px solid #dedfd9; border-radius: 12px; background: #fff; box-shadow: 0 4px 18px rgba(31, 45, 37, .04); padding: 1.25rem; }
@@ -529,8 +537,7 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
   .workspace-switcher > label { display: none; }
   .workspace-selection-row { justify-content: space-between; min-height: 0; gap: .5rem; }
   .workspace-switcher strong { font-size: .82rem; }
-  .locale-picker { display: block; font-size: 0; }
-  .locale-picker select { min-width: 88px; padding: .48rem; font-size: .78rem; }
+  .interface-settings-panel { width: min(220px, calc(100vw - 2rem)); }
   .breadcrumbs { overflow-x: auto; flex-wrap: nowrap; white-space: nowrap; }
 }
 

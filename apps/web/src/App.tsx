@@ -175,10 +175,9 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
                   {drafts.drafts.map((draft) => <option key={draft.draft_id} value={draft.draft_id}>{workspaceName(draft.draft_id)}</option>)}
                 </select>
                 <span className={`state ${active.state}`}>{workspaceState(active.state)}</span>
-                {repositoryStatus !== undefined && <button aria-label={repositoryStatus.description} className="repository-status top-repository-status" onClick={openRepositoryStatus} title={repositoryStatus.description}>{repositoryStatus.label}</button>}
               </div>
             </div>}
-            <LocalePicker locale={locale} setLocale={setLocale} t={t} />
+            <InterfaceSettings locale={locale} setLocale={setLocale} t={t} />
             {gitlab?.configured === true && gitlab.user === undefined && <button onClick={loginToGitLab}>{t("auth.login")}</button>}
             {gitlab?.user !== undefined && <><span>{gitlab.user.username}</span><button onClick={() => { void drafts.logout(); }}>{t("auth.logoutGitLab")}</button></>}
           </>}
@@ -250,6 +249,13 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
 
 function LocalePicker({ locale, setLocale, t }: { readonly locale: Locale; readonly setLocale: (locale: Locale) => void; readonly t: (key: MessageKey) => string }) {
   return <label className="locale-picker">{t("locale.label")}<select aria-label={t("locale.label")} value={locale} onChange={(event) => setLocale(event.target.value as Locale)}>{Object.entries(localeRegistry).map(([key, definition]) => <option value={key} key={key}>{t(definition.labelKey)}</option>)}</select></label>;
+}
+
+function InterfaceSettings({ locale, setLocale, t }: { readonly locale: Locale; readonly setLocale: (locale: Locale) => void; readonly t: (key: MessageKey) => string }) {
+  return <details className="interface-settings">
+    <summary aria-label={t("settings.interface")} title={t("settings.interface")}><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Zm8.1 4.7a8.6 8.6 0 0 0 0-2.4l2-1.5-2-3.5-2.5 1a9.6 9.6 0 0 0-2.1-1.2L15.2 3h-4l-.4 2.6a9.6 9.6 0 0 0-2.1 1.2l-2.4-1-2 3.5 2 1.5a8.6 8.6 0 0 0 0 2.4l-2 1.5 2 3.5 2.4-1a9.6 9.6 0 0 0 2.1 1.2l.4 2.6h4l.4-2.6a9.6 9.6 0 0 0 2.1-1.2l2.5 1 2-3.5-2.1-1.5Z" /></svg></summary>
+    <div className="interface-settings-panel"><strong>{t("settings.interface")}</strong><LocalePicker locale={locale} setLocale={setLocale} t={t} /></div>
+  </details>;
 }
 
 export function App({ api, storage = window.localStorage, browserLanguages = navigator.languages, navigate = (url) => window.location.assign(url), confirmAction = (value) => window.confirm(value) }: AppProps) {
