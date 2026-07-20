@@ -1,6 +1,6 @@
 schema: gitpm/milestone@1
-id: M-26-9HGQWY
-project: P-26-7VWANM
+id: M-26-9HGQWY # milestone: Отключение старого хранилища
+project: P-26-7VWANM # project: Переезд аналитической платформы
 name: Отключение старого хранилища
 lifecycle: active
 description_markdown: Пользователи и регламентные процессы переведены полностью.

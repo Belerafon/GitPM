@@ -1,7 +1,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { GITPM_VERSION } from "@gitpm/shared";
-import { formatYamlText, parseYamlDocument, RepositoryFormatError } from "@gitpm/repository-format";
+import { formatYamlText, parseYamlDocument, referenceLabelsForDocuments, RepositoryFormatError } from "@gitpm/repository-format";
 import { validateRepository } from "@gitpm/validation";
 import { atomicWriteDomainFile } from "@gitpm/security";
 import type { AgentScope, AgentScopeReport, AgentWorkflow } from "@gitpm/agent";
@@ -70,11 +70,16 @@ async function runFormat(args: readonly string[], cwd: string, scoped?: AgentSco
   const check = parsed.rest.includes("--check");
   const changed: string[] = [];
   const allowed = scoped === undefined ? undefined : new Set(scoped.changed_files.filter((file) => file.kind !== "Deleted").map((file) => file.path));
+  const sources = [];
   for (const absolute of await yamlFiles(parsed.root)) {
     const relative = path.relative(parsed.root, absolute).split(path.sep).join("/");
-    if (allowed !== undefined && !allowed.has(relative)) continue;
     const original = await readFile(absolute, "utf8");
-    const formatted = formatYamlText(original, relative);
+    sources.push({ relative, original, document: parseYamlDocument(original, relative) });
+  }
+  const referenceLabels = referenceLabelsForDocuments(sources.map((source) => source.document));
+  for (const { relative, original } of sources) {
+    if (allowed !== undefined && !allowed.has(relative)) continue;
+    const formatted = formatYamlText(original, relative, referenceLabels);
     if (formatted !== original) {
       changed.push(relative);
       if (!check) await atomicWriteDomainFile(parsed.root, relative, formatted);

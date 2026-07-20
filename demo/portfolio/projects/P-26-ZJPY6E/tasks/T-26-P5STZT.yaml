@@ -1,6 +1,6 @@
 schema: gitpm/task@1
-id: T-26-P5STZT
-project: P-26-ZJPY6E
+id: T-26-P5STZT # task: Добавить биометрический вход
+project: P-26-ZJPY6E # project: Мобильный банк 2.0
 title: Добавить биометрический вход
 type: feature
 status: review
@@ -8,18 +8,18 @@ lifecycle: active
 acceptance_criteria_markdown:
   - Результат проверен ответственным сотрудником.
   - Связанные материалы сохранены в проекте.
-parent: T-26-HB2NX5
-milestone: M-26-2HMFX5
+parent: T-26-HB2NX5 # task: Запустить программу обновления мобильного банка
+milestone: M-26-2HMFX5 # milestone: Закрытое бета-тестирование
 assignees:
-  - U-26-RKTV2A
-  - U-26-NEDN00
-  - U-26-AD9KDK
+  - U-26-RKTV2A # person: Дмитрий Орлов
+  - U-26-NEDN00 # person: Мария Соколова
+  - U-26-AD9KDK # person: Алексей Виноградов
 estimate_hours: 56
 start: 2026-08-24
 due: 2026-09-18
 depends_on:
-  - T-26-ZQFF0R
-  - T-26-7XAJ1Q
+  - T-26-ZQFF0R # task: Подготовить дизайн-систему мобильного приложения
+  - T-26-7XAJ1Q # task: Реализовать API-агрегатор продуктов
 labels:
   - безопасность
   - авторизация

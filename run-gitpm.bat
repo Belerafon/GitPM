@@ -9,7 +9,7 @@ echo            Запуск GitPM
 echo ========================================
 echo.
 
-echo [1/3] Проверяю системные зависимости...
+echo [1/4] Проверяю системные зависимости...
 where node >nul 2>&1
 if errorlevel 1 (
   echo ОШИБКА: Node.js не найден.
@@ -21,7 +21,7 @@ if errorlevel 1 (
   goto :failed
 )
 
-echo [2/3] Проверяю зависимости проекта...
+echo [2/4] Проверяю зависимости проекта...
 call corepack pnpm install --frozen-lockfile
 if errorlevel 1 (
   echo.
@@ -31,7 +31,16 @@ if errorlevel 1 (
 )
 
 echo.
-echo [3/3] Читаю конфигурацию и запускаю GitPM...
+echo [3/4] Проверяю сборку workspace-пакетов...
+node scripts\build-gitpm-runtime.mjs
+if errorlevel 1 (
+  echo.
+  echo ОШИБКА: не удалось собрать изменённые workspace-пакеты.
+  goto :failed
+)
+
+echo.
+echo [4/4] Читаю конфигурацию и запускаю GitPM...
 echo       Сервер:   http://127.0.0.1:3000
 echo       Интерфейс: http://127.0.0.1:5173
 echo.

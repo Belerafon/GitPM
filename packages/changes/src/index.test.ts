@@ -76,7 +76,7 @@ describe("changes and restore service", () => {
     const projectAbsolute = path.join(draft.worktree_path, ...projectFile.split("/"));
     const deletedOriginal = await readFile(deletedAbsolute, "utf8");
     await rm(deletedAbsolute);
-    await writeFile(projectAbsolute, (await readFile(projectAbsolute, "utf8")).replace("GitPM launch", "Other change"), "utf8");
+    await writeFile(projectAbsolute, (await readFile(projectAbsolute, "utf8")).replace("name: GitPM launch", "name: Other change"), "utf8");
     const accepted = await manager.setWriterMode("DRF-CHANGES", "42", "ui");
     const listed = await service.list("DRF-CHANGES");
     expect(listed.files).toEqual(expect.arrayContaining([
@@ -101,7 +101,7 @@ describe("changes and restore service", () => {
     const archivedTask = "projects/P-26-MGP84K/tasks/T-26-P9G3P8.yaml";
     const archivedAbsolute = path.join(draft.worktree_path, ...archivedTask.split("/"));
     const createdTask = "projects/P-26-MGP84K/tasks/T-26-9NJTEF.yaml";
-    await writeFile(projectAbsolute, (await readFile(projectAbsolute, "utf8")).replace("GitPM launch", "GitPM alpha"), "utf8");
+    await writeFile(projectAbsolute, (await readFile(projectAbsolute, "utf8")).replace("name: GitPM launch", "name: GitPM alpha"), "utf8");
     await writeFile(archivedAbsolute, (await readFile(archivedAbsolute, "utf8")).replace("lifecycle: active", "lifecycle: archived"), "utf8");
     await rm(deletedAbsolute);
     await writeFile(path.join(draft.worktree_path, ...createdTask.split("/")), [

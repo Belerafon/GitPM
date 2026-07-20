@@ -1,6 +1,6 @@
 schema: gitpm/saved-view@1
-id: V-26-AG873M
-project: P-26-MGP84K
+id: V-26-AG873M # view: Active work
+project: P-26-MGP84K # project: GitPM launch
 name: Active work
 kind: board
 filters:
@@ -8,7 +8,7 @@ filters:
     - backlog
     - in-progress
   assignees:
-    - U-26-5EBAE3
-    - U-26-15QJP8
+    - U-26-5EBAE3 # person: Anna Petrova
+    - U-26-15QJP8 # person: Boris Sokolov
 group_by: status
 lifecycle: active

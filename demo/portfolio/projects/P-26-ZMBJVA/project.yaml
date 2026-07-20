@@ -1,10 +1,10 @@
 schema: gitpm/project@1
-id: P-26-ZMBJVA
+id: P-26-ZMBJVA # project: Портал поддержки клиентов
 name: Портал поддержки клиентов
 status: in-progress
 lifecycle: active
 description_markdown: Единый портал самообслуживания с базой знаний, заявками, контролем SLA и интеграцией с внутренними системами поддержки.
-owner: U-26-0225HT
+owner: U-26-0225HT # person: Наталья Павлова
 start: 2026-07-13
 due: 2026-10-30
 labels:

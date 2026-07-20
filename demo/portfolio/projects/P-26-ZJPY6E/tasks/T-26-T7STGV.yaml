@@ -1,6 +1,6 @@
 schema: gitpm/task@1
-id: T-26-T7STGV
-project: P-26-ZJPY6E
+id: T-26-T7STGV # task: Собрать единую витрину продуктов
+project: P-26-ZJPY6E # project: Мобильный банк 2.0
 title: Собрать единую витрину продуктов
 type: feature
 status: planned
@@ -8,18 +8,18 @@ lifecycle: active
 acceptance_criteria_markdown:
   - Результат проверен ответственным сотрудником.
   - Связанные материалы сохранены в проекте.
-parent: T-26-HB2NX5
-milestone: M-26-SY14EX
+parent: T-26-HB2NX5 # task: Запустить программу обновления мобильного банка
+milestone: M-26-SY14EX # milestone: Публикация в магазинах
 assignees:
-  - U-26-RKTV2A
-  - U-26-NEDN00
-  - U-26-ETKSWS
+  - U-26-RKTV2A # person: Дмитрий Орлов
+  - U-26-NEDN00 # person: Мария Соколова
+  - U-26-ETKSWS # person: Ольга Новикова
 estimate_hours: 80
 start: 2026-09-07
 due: 2026-10-02
 depends_on:
-  - T-26-ZQFF0R
-  - T-26-7XAJ1Q
+  - T-26-ZQFF0R # task: Подготовить дизайн-систему мобильного приложения
+  - T-26-7XAJ1Q # task: Реализовать API-агрегатор продуктов
 labels:
   - frontend
   - продукты

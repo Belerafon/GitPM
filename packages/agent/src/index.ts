@@ -1,11 +1,11 @@
-import { lstat, mkdir, rm } from "node:fs/promises";
+import { lstat, mkdir, readFile, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import type { ChangesService, SemanticDiff } from "@gitpm/changes";
 import type { DraftManager, DraftMetadata, WriterMode } from "@gitpm/drafts";
 import { entityPathForDocument } from "@gitpm/domain";
 import type { GitClient } from "@gitpm/git-client";
 import type { GitLabMergeRequestProtocol, MergeRequestPayload, MergeRequestState } from "@gitpm/gitlab";
-import { formatYamlDocument, type GitPmDocument } from "@gitpm/repository-format";
+import { formatYamlDocument, parseYamlDocument, referenceLabelsForDocuments, type GitPmDocument } from "@gitpm/repository-format";
 import { atomicWriteDomainFile } from "@gitpm/security";
 import { validateRepository } from "@gitpm/validation";
 
@@ -34,6 +34,20 @@ export interface AgentScopeReport {
 }
 
 const projectPath = (value: string): string | undefined => /^projects\/(P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6})\//u.exec(value)?.[1];
+
+async function repositoryDocuments(root: string): Promise<GitPmDocument[]> {
+  const result: GitPmDocument[] = [];
+  const walk = async (directory: string): Promise<void> => {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      if (entry.name === ".git") continue;
+      const absolute = path.join(directory, entry.name);
+      if (entry.isDirectory()) await walk(absolute);
+      else if (entry.name.endsWith(".yaml")) result.push(parseYamlDocument(await readFile(absolute, "utf8"), path.relative(root, absolute)));
+    }
+  };
+  await walk(root);
+  return result;
+}
 
 export class AgentWorkflow {
   constructor(
@@ -80,6 +94,7 @@ export class AgentWorkflow {
 
   async createEntity(draftId: string, document: GitPmDocument, scope: AgentScope = {}) {
     const draft = await this.externalDraft(draftId);
+    const referenceLabels = referenceLabelsForDocuments([...await repositoryDocuments(draft.worktree_path), document]);
     const relative = entityPathForDocument(document);
     const absolute = path.join(draft.worktree_path, ...relative.split("/"));
     try {
@@ -90,7 +105,7 @@ export class AgentWorkflow {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     }
     await mkdir(path.dirname(absolute), { recursive: true, mode: 0o700 });
-    await atomicWriteDomainFile(draft.worktree_path, relative, formatYamlDocument(document));
+    await atomicWriteDomainFile(draft.worktree_path, relative, formatYamlDocument(document, referenceLabels));
     try {
       await this.assertScope(draftId, scope);
       const validation = await validateRepository(draft.worktree_path);

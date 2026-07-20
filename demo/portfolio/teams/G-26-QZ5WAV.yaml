@@ -1,9 +1,9 @@
 schema: gitpm/team@1
-id: G-26-QZ5WAV
+id: G-26-QZ5WAV # team: Платформа и интеграции
 name: Платформа и интеграции
 members:
-  - U-26-RKTV2A
-  - U-26-FSB3GM
-  - U-26-1MV0QD
-  - U-26-AD9KDK
+  - U-26-RKTV2A # person: Дмитрий Орлов
+  - U-26-FSB3GM # person: Илья Кузнецов
+  - U-26-1MV0QD # person: Максим Фёдоров
+  - U-26-AD9KDK # person: Алексей Виноградов
 lifecycle: active

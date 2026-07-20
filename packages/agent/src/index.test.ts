@@ -36,11 +36,11 @@ describe("agent file and CLI workflow core", () => {
     const drafts = new DraftManager(client, data); const changes = new ChangesService(drafts, client); const gitlab = new GitLabProtocolTestDouble();
     const workflow = new AgentWorkflow(drafts, client, changes, { accessToken: "agent-memory-token", authorName: "agent-42", authorEmail: "42@users.noreply.gitlab.example.test", defaultBranch: "main", mergeRequests: gitlab });
     const draft = await workflow.createDraft("DRF-AGENT", "42"); expect(draft.writer_mode).toBe("external");
-    await atomicWriteDomainFile(draft.worktree_path, projectFile, (await readFile(path.join(draft.worktree_path, ...projectFile.split("/")), "utf8")).replace("GitPM launch", "Agent delivery"));
+    await atomicWriteDomainFile(draft.worktree_path, projectFile, (await readFile(path.join(draft.worktree_path, ...projectFile.split("/")), "utf8")).replace("name: GitPM launch", "name: Agent delivery"));
     expect(await workflow.semanticDiff("DRF-AGENT", { allowedProject: projectId })).toMatchObject({ counts: { updated: 1 }, affected_projects: [projectId] });
 
     const personOriginal = await readFile(path.join(draft.worktree_path, ...personFile.split("/")), "utf8");
-    await atomicWriteDomainFile(draft.worktree_path, personFile, personOriginal.replace("Anna Petrova", "Out of scope"));
+    await atomicWriteDomainFile(draft.worktree_path, personFile, personOriginal.replace("name: Anna Petrova", "name: Out of scope"));
     await expect(workflow.assertScope("DRF-AGENT", { allowedProject: projectId })).rejects.toMatchObject({ code: "AGENT_SCOPE_VIOLATION" });
     await atomicWriteDomainFile(draft.worktree_path, personFile, personOriginal);
 

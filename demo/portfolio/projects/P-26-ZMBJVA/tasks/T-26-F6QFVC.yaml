@@ -1,6 +1,6 @@
 schema: gitpm/task@1
-id: T-26-F6QFVC
-project: P-26-ZMBJVA
+id: T-26-F6QFVC # task: Реализовать форму обращения с вложениями
+project: P-26-ZMBJVA # project: Портал поддержки клиентов
 title: Реализовать форму обращения с вложениями
 type: feature
 status: in-progress
@@ -8,17 +8,17 @@ lifecycle: active
 acceptance_criteria_markdown:
   - Результат проверен ответственным сотрудником.
   - Связанные материалы сохранены в проекте.
-parent: T-26-AVEPT4
-milestone: M-26-X7TYSQ
+parent: T-26-AVEPT4 # task: Запустить портал клиентской поддержки
+milestone: M-26-X7TYSQ # milestone: Внутренняя приёмка портала
 assignees:
-  - U-26-RKTV2A
-  - U-26-NEDN00
-  - U-26-0225HT
+  - U-26-RKTV2A # person: Дмитрий Орлов
+  - U-26-NEDN00 # person: Мария Соколова
+  - U-26-0225HT # person: Наталья Павлова
 estimate_hours: 64
 start: 2026-08-17
 due: 2026-09-11
 depends_on:
-  - T-26-FZHVK3
+  - T-26-FZHVK3 # task: Подготовить интерактивный прототип
 labels:
   - frontend
   - обращения

@@ -1,10 +1,10 @@
 schema: gitpm/project@1
-id: P-26-ZJPY6E
+id: P-26-ZJPY6E # project: Мобильный банк 2.0
 name: Мобильный банк 2.0
 status: in-progress
 lifecycle: active
 description_markdown: "Обновление мобильного банка: единая витрина продуктов, биометрический вход и новая система уведомлений."
-owner: U-26-2SRX95
+owner: U-26-2SRX95 # person: Анна Волкова
 start: 2026-07-20
 due: 2026-11-27
 labels:

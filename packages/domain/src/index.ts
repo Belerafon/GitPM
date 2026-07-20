@@ -1,7 +1,7 @@
 import { lstat, mkdir, readFile, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import type { DraftManager, DraftMetadata } from "@gitpm/drafts";
-import { formatYamlDocument, parseYamlDocument } from "@gitpm/repository-format";
+import { formatYamlDocument, parseYamlDocument, referenceLabelForDocument, referenceLabelsForDocuments } from "@gitpm/repository-format";
 import type { GitPmDocument } from "@gitpm/repository-format";
 import { atomicWriteDomainFile, resolveDomainPath } from "@gitpm/security";
 import { ENTITY_ID_PREFIX, isEntityId } from "@gitpm/shared";
@@ -112,6 +112,13 @@ async function exists(file: string): Promise<boolean> {
   }
 }
 
+function containsReference(value: unknown, id: string): boolean {
+  if (value === id) return true;
+  if (Array.isArray(value)) return value.some((item) => containsReference(item, id));
+  if (value !== null && typeof value === "object") return Object.values(value).some((item) => containsReference(item, id));
+  return false;
+}
+
 export class EntityStore {
   private readonly indexes = new Map<string, RepositoryIndex>();
   private readonly pendingIndexes = new Map<string, { readonly fingerprint: string; readonly promise: Promise<RepositoryIndex> }>();
@@ -165,6 +172,15 @@ export class EntityStore {
       blob_id: await this.drafts.fileBlobId(draftId, entity.relative),
       draft_fingerprint: metadata.fingerprint,
     };
+  }
+
+  private labels(repository: RepositoryIndex, replacement?: GitPmDocument) {
+    return referenceLabelsForDocuments([
+      ...repository.entities
+        .filter((entity) => replacement === undefined || entity.document.id !== replacement.id)
+        .map((entity) => entity.document),
+      ...(replacement === undefined ? [] : [replacement]),
+    ]);
   }
 
   async list(draftId: string, entityType: string, project?: string): Promise<readonly EntityResult[]> {
@@ -231,10 +247,11 @@ export class EntityStore {
     const expectedSchema = kind === "statuses" ? "gitpm/statuses@1" : "gitpm/issue-types@1";
     if (document.schema !== expectedSchema) throw new DomainOperationError("ENTITY_IDENTITY_IMMUTABLE", "Configuration schema is immutable");
     const mutation = await this.drafts.withUiMutation(draftId, owner, expectedFingerprint, async (metadata) => {
+      const referenceLabels = this.labels(await this.index(draftId, metadata));
       await this.drafts.assertFileBlobId(draftId, relative, expectedBlobId);
       const absolute = await resolveDomainPath(metadata.worktree_path, relative);
       const original = await readFile(absolute, "utf8");
-      await atomicWriteDomainFile(metadata.worktree_path, relative, formatYamlDocument(document));
+      await atomicWriteDomainFile(metadata.worktree_path, relative, formatYamlDocument(document, referenceLabels));
       try {
         await this.assertRepositoryValid(metadata.worktree_path);
       } catch (error) {
@@ -249,11 +266,12 @@ export class EntityStore {
   async create(draftId: string, owner: string, expectedFingerprint: string, document: GitPmDocument): Promise<EntityResult> {
     const relative = entityPathForDocument(document);
     const mutation = await this.drafts.withUiMutation(draftId, owner, expectedFingerprint, async (metadata) => {
+      const referenceLabels = this.labels(await this.index(draftId, metadata), document);
       const absolute = path.join(metadata.worktree_path, ...relative.split("/"));
       if (await exists(absolute)) throw new DomainOperationError("ENTITY_EXISTS", `${relative} already exists`);
       await mkdir(path.dirname(absolute), { recursive: true, mode: 0o700 });
       await resolveDomainPath(metadata.worktree_path, relative);
-      await atomicWriteDomainFile(metadata.worktree_path, relative, formatYamlDocument(document));
+      await atomicWriteDomainFile(metadata.worktree_path, relative, formatYamlDocument(document, referenceLabels));
       try {
         await this.assertRepositoryValid(metadata.worktree_path);
       } catch (error) {
@@ -280,12 +298,26 @@ export class EntityStore {
         throw new DomainOperationError("ENTITY_IDENTITY_IMMUTABLE", "Entity ID, schema and owning project are immutable");
       }
       await this.drafts.assertFileBlobId(draftId, found.relative, expectedBlobId);
-      const original = await readFile(found.absolute, "utf8");
-      await atomicWriteDomainFile(metadata.worktree_path, found.relative, formatYamlDocument(document));
+      const repository = await this.index(draftId, metadata);
+      const referenceLabels = this.labels(repository, document);
+      const originals = new Map<string, string>();
       try {
+        const original = await readFile(found.absolute, "utf8");
+        originals.set(found.relative, original);
+        await atomicWriteDomainFile(metadata.worktree_path, found.relative, formatYamlDocument(document, referenceLabels));
+        if (referenceLabelForDocument(found.document) !== referenceLabelForDocument(document)) {
+          for (const entity of repository.entities) {
+            if (entity.relative === found.relative || !containsReference(entity.document, id)) continue;
+            const relatedOriginal = await readFile(entity.absolute, "utf8");
+            const relatedFormatted = formatYamlDocument(entity.document, referenceLabels);
+            if (relatedFormatted === relatedOriginal) continue;
+            originals.set(entity.relative, relatedOriginal);
+            await atomicWriteDomainFile(metadata.worktree_path, entity.relative, relatedFormatted);
+          }
+        }
         await this.assertRepositoryValid(metadata.worktree_path);
       } catch (error) {
-        await atomicWriteDomainFile(metadata.worktree_path, found.relative, original);
+        for (const [relative, original] of originals) await atomicWriteDomainFile(metadata.worktree_path, relative, original);
         throw error;
       }
       return found.relative;
@@ -329,9 +361,10 @@ export class EntityStore {
       const targetAbsolute = path.join(metadata.worktree_path, ...targetRelative.split("/"));
       if (await exists(targetAbsolute)) throw new DomainOperationError("ENTITY_EXISTS", `${targetRelative} already exists`);
       const original = await readFile(found.absolute, "utf8");
+      const referenceLabels = this.labels(await this.index(draftId, metadata), movedDocument);
       await mkdir(path.dirname(targetAbsolute), { recursive: true, mode: 0o700 });
       await resolveDomainPath(metadata.worktree_path, targetRelative);
-      await atomicWriteDomainFile(metadata.worktree_path, targetRelative, formatYamlDocument(movedDocument));
+      await atomicWriteDomainFile(metadata.worktree_path, targetRelative, formatYamlDocument(movedDocument, referenceLabels));
       await rm(found.absolute);
       try {
         await this.assertRepositoryValid(metadata.worktree_path);

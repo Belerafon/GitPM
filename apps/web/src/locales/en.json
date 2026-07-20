@@ -248,6 +248,7 @@
   ,"changes.description": "Review the exact Git diff, understand domain changes, and publish the whole working copy."
   ,"changes.readOnly": "Changes are read-only for this working copy or role."
   ,"changes.files": "files"
+  ,"changes.statusDescription": "Changed files: {files}"
   ,"changes.created": "Created"
   ,"changes.updated": "Updated"
   ,"changes.archived": "Archived"

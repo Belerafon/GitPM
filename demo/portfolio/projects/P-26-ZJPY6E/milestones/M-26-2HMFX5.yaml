@@ -1,6 +1,6 @@
 schema: gitpm/milestone@1
-id: M-26-2HMFX5
-project: P-26-ZJPY6E
+id: M-26-2HMFX5 # milestone: Закрытое бета-тестирование
+project: P-26-ZJPY6E # project: Мобильный банк 2.0
 name: Закрытое бета-тестирование
 lifecycle: active
 description_markdown: Основные сценарии доступны сотрудникам банка.

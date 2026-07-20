@@ -1,10 +1,10 @@
 schema: gitpm/project@1
-id: P-26-7VWANM
+id: P-26-7VWANM # project: Переезд аналитической платформы
 name: Переезд аналитической платформы
 status: planned
 lifecycle: active
 description_markdown: Перенос корпоративной аналитики в новую платформу без остановки отчётности и с усилением контроля качества данных.
-owner: U-26-1MV0QD
+owner: U-26-1MV0QD # person: Максим Фёдоров
 start: 2026-08-10
 due: 2027-01-29
 labels:

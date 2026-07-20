@@ -148,6 +148,11 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
   const loginToGitLab = () => { void api.login().then(navigate); };
   const projectWorkspaceRoute = activeRoute?.projectId !== undefined && ["projects", "stages", "tasks"].includes(activeRoute.name);
   const pageTitle = activeRoute?.projectId !== undefined && ["projects", "stages", "tasks"].includes(activeRoute.name) ? t("projectTabs.overview") : t(view);
+  const repositoryStatus = snapshot === null || snapshot.changes.changed_files_count === 0 ? undefined : {
+    label: String(snapshot.changes.changed_files_count),
+    description: t("changes.statusDescription", { files: snapshot.changes.changed_files_count }),
+  };
+  const openRepositoryStatus = () => navigateToRoute(routeForDestination("changes"));
   return (
     <AppShell activeView={shellActiveView}
       banner={drafts.error !== null && <div className="alert error">{t("status.error", { message: drafts.error })}<button onClick={() => { void drafts.refresh(); }}>{t("status.retry")}</button></div>}
@@ -156,17 +161,23 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
       headerTitle={pageTitle}
       navigationGroups={navigationGroups}
       onNavigate={selectNavigationView}
+      onOpenRepositoryStatus={openRepositoryStatus}
       repositoryDetails={<><strong>{t("app.repositoryDetails")}</strong><code>{repository?.path ?? drafts.session.user.username}</code></>}
       repositoryMode={repositoryMode}
       repositoryName={repository?.name ?? t("app.repository")}
+      repositoryStatus={repositoryStatus}
       t={t}
       topActions={<>
-            {active !== undefined && <label className="workspace-switcher">
-              <span>{t("drafts.current")}</span><select aria-label={t("drafts.current")} value={active.draft_id} onChange={(event) => { void drafts.select(event.target.value); }}>
-                {drafts.drafts.map((draft) => <option key={draft.draft_id} value={draft.draft_id}>{workspaceName(draft.draft_id)}</option>)}
-              </select>
-              <span className={`state ${active.state}`}>{workspaceState(active.state)}</span>
-            </label>}
+            {active !== undefined && <div className="workspace-switcher">
+              <label htmlFor="current-workspace">{t("drafts.current")}</label>
+              <div className="workspace-selection-row">
+                <select id="current-workspace" value={active.draft_id} onChange={(event) => { void drafts.select(event.target.value); }}>
+                  {drafts.drafts.map((draft) => <option key={draft.draft_id} value={draft.draft_id}>{workspaceName(draft.draft_id)}</option>)}
+                </select>
+                <span className={`state ${active.state}`}>{workspaceState(active.state)}</span>
+                {repositoryStatus !== undefined && <button aria-label={repositoryStatus.description} className="repository-status top-repository-status" onClick={openRepositoryStatus} title={repositoryStatus.description}>{repositoryStatus.label}</button>}
+              </div>
+            </div>}
             <LocalePicker locale={locale} setLocale={setLocale} t={t} />
             {gitlab?.configured === true && gitlab.user === undefined && <button onClick={loginToGitLab}>{t("auth.login")}</button>}
             {gitlab?.user !== undefined && <><span>{gitlab.user.username}</span><button onClick={() => { void drafts.logout(); }}>{t("auth.logoutGitLab")}</button></>}

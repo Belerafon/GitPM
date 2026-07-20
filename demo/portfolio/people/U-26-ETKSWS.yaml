@@ -1,7 +1,7 @@
 schema: gitpm/person@1
-id: U-26-ETKSWS
+id: U-26-ETKSWS # person: Ольга Новикова
 name: Ольга Новикова
 weekly_capacity_hours: 36
-calendar: C-26-NX2TM1
+calendar: C-26-NX2TM1 # calendar: Гибкий график продуктовой команды
 lifecycle: active
 email: olga.novikova@example.test

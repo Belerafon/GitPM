@@ -1,6 +1,6 @@
 schema: gitpm/task@1
-id: T-26-VWWHC6
-project: P-26-ZMBJVA
+id: T-26-VWWHC6 # task: Провести интервью с операторами поддержки
+project: P-26-ZMBJVA # project: Портал поддержки клиентов
 title: Провести интервью с операторами поддержки
 type: research
 status: done
@@ -8,12 +8,12 @@ lifecycle: active
 acceptance_criteria_markdown:
   - Результат проверен ответственным сотрудником.
   - Связанные материалы сохранены в проекте.
-parent: T-26-AVEPT4
-milestone: M-26-X7TYSQ
+parent: T-26-AVEPT4 # task: Запустить портал клиентской поддержки
+milestone: M-26-X7TYSQ # milestone: Внутренняя приёмка портала
 assignees:
-  - U-26-9C1ZR4
-  - U-26-ETKSWS
-  - U-26-0225HT
+  - U-26-9C1ZR4 # person: Елена Морозова
+  - U-26-ETKSWS # person: Ольга Новикова
+  - U-26-0225HT # person: Наталья Павлова
 estimate_hours: 32
 start: 2026-07-13
 due: 2026-07-24

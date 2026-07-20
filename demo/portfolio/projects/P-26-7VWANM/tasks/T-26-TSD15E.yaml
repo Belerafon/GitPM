@@ -1,6 +1,6 @@
 schema: gitpm/task@1
-id: T-26-TSD15E
-project: P-26-7VWANM
+id: T-26-TSD15E # task: Провести параллельный расчёт отчётности
+project: P-26-7VWANM # project: Переезд аналитической платформы
 title: Провести параллельный расчёт отчётности
 type: task
 status: backlog
@@ -8,19 +8,19 @@ lifecycle: active
 acceptance_criteria_markdown:
   - Результат проверен ответственным сотрудником.
   - Связанные материалы сохранены в проекте.
-parent: T-26-SQ5YK5
-milestone: M-26-9HGQWY
+parent: T-26-SQ5YK5 # task: Перевести аналитику на новую платформу
+milestone: M-26-9HGQWY # milestone: Отключение старого хранилища
 assignees:
-  - U-26-J4FH55
-  - U-26-ETKSWS
-  - U-26-0225HT
+  - U-26-J4FH55 # person: Сергей Лебедев
+  - U-26-ETKSWS # person: Ольга Новикова
+  - U-26-0225HT # person: Наталья Павлова
 estimate_hours: 80
 start: 2026-11-30
 due: 2027-01-08
 depends_on:
-  - T-26-C9N14V
-  - T-26-VMXXK9
-  - T-26-R1JFHC
+  - T-26-C9N14V # task: Настроить проверки качества данных
+  - T-26-VMXXK9 # task: Пересобрать продуктовые дашборды
+  - T-26-R1JFHC # task: Внедрить ролевую модель доступа
 labels:
   - приёмка
   - отчётность

@@ -1,6 +1,6 @@
 schema: gitpm/project@1
-id: P-26-8S9HQQ
+id: P-26-8S9HQQ # project: Operations
 name: Operations
 status: backlog
 lifecycle: active
-owner: U-26-15QJP8
+owner: U-26-15QJP8 # person: Boris Sokolov

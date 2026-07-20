@@ -1,6 +1,6 @@
 schema: gitpm/task@1
-id: T-26-ZDA1WV
-project: P-26-7VWANM
+id: T-26-ZDA1WV # task: Спроектировать целевую архитектуру хранилища
+project: P-26-7VWANM # project: Переезд аналитической платформы
 title: Спроектировать целевую архитектуру хранилища
 type: feature
 status: review
@@ -8,17 +8,17 @@ lifecycle: active
 acceptance_criteria_markdown:
   - Результат проверен ответственным сотрудником.
   - Связанные материалы сохранены в проекте.
-parent: T-26-SQ5YK5
-milestone: M-26-T4JTV6
+parent: T-26-SQ5YK5 # task: Перевести аналитику на новую платформу
+milestone: M-26-T4JTV6 # milestone: Первые витрины в новой платформе
 assignees:
-  - U-26-FSB3GM
-  - U-26-1MV0QD
-  - U-26-AD9KDK
+  - U-26-FSB3GM # person: Илья Кузнецов
+  - U-26-1MV0QD # person: Максим Фёдоров
+  - U-26-AD9KDK # person: Алексей Виноградов
 estimate_hours: 64
 start: 2026-08-31
 due: 2026-09-18
 depends_on:
-  - T-26-XQRKPB
+  - T-26-XQRKPB # task: Инвентаризировать источники и потребителей данных
 labels:
   - архитектура
   - безопасность

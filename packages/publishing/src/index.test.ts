@@ -63,7 +63,7 @@ describe("commit, push and Merge Request contract", () => {
     await atomicWriteDomainFile(
       draft.worktree_path,
       projectFile,
-      (await readFile(absolute, "utf8")).replace("GitPM launch", "GitPM publish"),
+      (await readFile(absolute, "utf8")).replace("name: GitPM launch", "name: GitPM publish"),
     );
     await drafts.setWriterMode("DRF-PUBLISH", "42", "ui");
 

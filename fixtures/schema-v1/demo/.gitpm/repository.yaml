@@ -1,6 +1,6 @@
 schema: gitpm/repository@1
 default_branch: main
-default_calendar: C-26-QD7FJ4
+default_calendar: C-26-QD7FJ4 # calendar: Standard work week
 allowed_top_level_files:
   - README.md
 ui_poll_interval_seconds: 5

@@ -1,7 +1,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
-import { waitForGitPmServices } from "./gitpm-readiness.mjs";
+import { isTcpPortAvailable, waitForGitPmServices } from "./gitpm-readiness.mjs";
 import { prepareGitPmRuntime } from "./configure-gitpm-runtime.mjs";
 
 const isWindows = process.platform === "win32";
@@ -143,6 +143,22 @@ console.log(runtime.remoteUrl === undefined
 console.log(runtime.environment.GITPM_GITLAB_CLIENT_ID === undefined
   ? "[GitPM] GitLab OAuth не настроен — вход не требуется для локальной работы (настройки: .gitpm/config.json)."
   : "[GitPM] GitLab OAuth доступен и будет запрошен только для remote-операций.");
+
+const ports = [
+  { label: "API-сервер", host: "127.0.0.1", port: serverPort, environment: "GITPM_SERVER_PORT" },
+  { label: "web-интерфейс", host: "127.0.0.1", port: webPort, environment: "GITPM_WEB_PORT" },
+];
+const unavailable = (await Promise.all(ports.map(async (service) => ({
+  ...service,
+  available: await isTcpPortAvailable(service),
+})))).filter((service) => !service.available);
+if (unavailable.length > 0) {
+  for (const service of unavailable) {
+    console.error(`[GitPM] ${service.label} не запущен: порт ${service.host}:${service.port} уже занят.`);
+  }
+  console.error("[GitPM] Закройте предыдущий экземпляр GitPM или задайте другие порты через GITPM_SERVER_PORT/GITPM_WEB_PORT.");
+  process.exit(1);
+}
 
 start("сервер", serverCwd, [tsxCli, "watch", "src/index.ts"], {
   HOST: "127.0.0.1",

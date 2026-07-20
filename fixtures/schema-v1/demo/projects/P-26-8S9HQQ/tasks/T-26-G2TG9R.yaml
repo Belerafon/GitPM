@@ -1,6 +1,6 @@
 schema: gitpm/task@1
-id: T-26-G2TG9R
-project: P-26-8S9HQQ
+id: T-26-G2TG9R # task: Prepare operations
+project: P-26-8S9HQQ # project: Operations
 title: Prepare operations
 type: task
 status: backlog

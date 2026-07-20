@@ -1,7 +1,7 @@
 schema: gitpm/person@1
-id: U-26-1MV0QD
+id: U-26-1MV0QD # person: Максим Фёдоров
 name: Максим Фёдоров
 weekly_capacity_hours: 40
-calendar: C-26-G1AADY
+calendar: C-26-G1AADY # calendar: Производственный календарь России
 lifecycle: active
 email: maksim.fedorov@example.test

@@ -1,13 +1,13 @@
 schema: gitpm/task@1
-id: T-26-P9G3P8
-project: P-26-MGP84K
+id: T-26-P9G3P8 # task: Approve schema v1
+project: P-26-MGP84K # project: GitPM launch
 title: Approve schema v1
 type: task
 status: done
 lifecycle: active
-milestone: M-26-461GDJ
+milestone: M-26-461GDJ # milestone: Alpha
 assignees:
-  - U-26-5EBAE3
+  - U-26-5EBAE3 # person: Anna Petrova
 estimate_hours: 8
 start: 2026-07-01
 due: 2026-07-02

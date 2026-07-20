@@ -124,6 +124,20 @@ describe("localization runtime", () => {
 });
 
 describe("frontend draft lifecycle", () => {
+  it("shows the same compact repository status in the menu and beside the working copy", async () => {
+    const api = new FakeApi();
+    api.currentSession = { ...session, mode: "repository", repository: { name: "portfolio", path: "D:\\portfolio", has_remote: true }, gitlab: { configured: false } };
+    api.drafts = [draft({ draft_id: "DRF-LOCAL" })];
+    render(<App api={api} browserLanguages={["en"]} />);
+
+    const statuses = await screen.findAllByRole("button", { name: "Changed files: 2" });
+    expect(statuses).toHaveLength(2);
+    expect(statuses.map((status) => status.textContent)).toEqual(["2", "2"]);
+    fireEvent.click(statuses[0]!);
+    expect(window.location.pathname).toBe("/changes");
+    expect(statuses[0]!.closest(".navigation-item")?.classList.contains("active")).toBe(true);
+  });
+
   it("restores a person profile deep link", async () => {
     const api = new FakeApi();
     api.currentSession = { ...session, mode: "repository", repository: { name: "portfolio", path: "D:\\portfolio", has_remote: false }, gitlab: { configured: false } };

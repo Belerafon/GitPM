@@ -96,11 +96,15 @@ describe("domain entity store", () => {
       paths.push(created.path);
     }
     expect(paths).toHaveLength(7);
+    expect(await readFile(path.join(draft.worktree_path, "teams", "G-26-22K88P.yaml"), "utf8"))
+      .toContain("U-26-KB9RXB # person: New person");
 
     const project = await store.get("DRF-DOMAIN", "projects", "P-26-Y9S1D8");
     const updated = await store.update("DRF-DOMAIN", "42", "projects", String(project.document.id), fingerprint, project.blob_id, { ...project.document, name: "Updated project" });
     fingerprint = updated.draft_fingerprint;
     expect(updated.document.name).toBe("Updated project");
+    expect(await readFile(path.join(draft.worktree_path, "projects", "P-26-Y9S1D8", "milestones", "M-26-KK4VXH.yaml"), "utf8"))
+      .toContain("P-26-Y9S1D8 # project: Updated project");
     await expect(store.update("DRF-DOMAIN", "42", "projects", String(project.document.id), fingerprint, project.blob_id, updated.document))
       .rejects.toMatchObject({ code: "FILE_VERSION_MISMATCH" });
     fingerprint = (await manager.getDraft("DRF-DOMAIN")).fingerprint;

@@ -1,5 +1,5 @@
 schema: gitpm/calendar@1
-id: C-26-NX2TM1
+id: C-26-NX2TM1 # calendar: Гибкий график продуктовой команды
 name: Гибкий график продуктовой команды
 working_weekdays:
   - 1

@@ -1,6 +1,6 @@
 schema: gitpm/task@1
-id: T-26-AVEPT4
-project: P-26-ZMBJVA
+id: T-26-AVEPT4 # task: Запустить портал клиентской поддержки
+project: P-26-ZMBJVA # project: Портал поддержки клиентов
 title: Запустить портал клиентской поддержки
 type: epic
 status: in-progress
@@ -8,12 +8,12 @@ lifecycle: active
 acceptance_criteria_markdown:
   - Результат проверен ответственным сотрудником.
   - Связанные материалы сохранены в проекте.
-milestone: M-26-QP6SH8
+milestone: M-26-QP6SH8 # milestone: Открытие портала клиентам
 assignees:
-  - U-26-0225HT
-  - U-26-9C1ZR4
-  - U-26-RKTV2A
-  - U-26-NEDN00
+  - U-26-0225HT # person: Наталья Павлова
+  - U-26-9C1ZR4 # person: Елена Морозова
+  - U-26-RKTV2A # person: Дмитрий Орлов
+  - U-26-NEDN00 # person: Мария Соколова
 estimate_hours: 88
 start: 2026-07-13
 due: 2026-10-30

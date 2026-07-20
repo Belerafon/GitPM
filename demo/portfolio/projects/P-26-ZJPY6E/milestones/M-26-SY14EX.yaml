@@ -1,6 +1,6 @@
 schema: gitpm/milestone@1
-id: M-26-SY14EX
-project: P-26-ZJPY6E
+id: M-26-SY14EX # milestone: Публикация в магазинах
+project: P-26-ZJPY6E # project: Мобильный банк 2.0
 name: Публикация в магазинах
 lifecycle: active
 description_markdown: Промышленный релиз для всех клиентов.

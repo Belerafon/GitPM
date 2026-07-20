@@ -1,5 +1,5 @@
 schema: gitpm/calendar@1
-id: C-26-QD7FJ4
+id: C-26-QD7FJ4 # calendar: Standard work week
 name: Standard work week
 working_weekdays:
   - 1

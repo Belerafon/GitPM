@@ -1,13 +1,13 @@
 schema: gitpm/task@1
-id: T-26-RHBNH8
-project: P-26-MGP84K
+id: T-26-RHBNH8 # task: Implement parser
+project: P-26-MGP84K # project: GitPM launch
 title: Implement parser
 type: task
 status: backlog
 lifecycle: active
-milestone: M-26-461GDJ
+milestone: M-26-461GDJ # milestone: Alpha
 assignees:
-  - U-26-15QJP8
+  - U-26-15QJP8 # person: Boris Sokolov
 estimate_hours: 24.25
 depends_on:
-  - T-26-P9G3P8
+  - T-26-P9G3P8 # task: Approve schema v1

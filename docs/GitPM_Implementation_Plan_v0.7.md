@@ -257,7 +257,9 @@ repository settings UI.
 - duplicate keys запрещены;
 - anchors, aliases и custom tags запрещены;
 - formatter задает порядок полей;
-- комментарии в domain YAML не поддерживаются и могут быть удалены formatter;
+- formatter регенерирует у ID-ссылок канонические комментарии
+  `# <kind>: <name/title>` из полного индекса репозитория;
+- произвольные ручные комментарии могут быть удалены formatter;
 - manual editing разрешено, но commit и push блокируются при failed format или validation.
 
 Schema version присутствует в каждом объекте. Неизвестная версия отклоняется. Migration engine в v0.1 отсутствует.

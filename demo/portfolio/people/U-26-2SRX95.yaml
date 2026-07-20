@@ -1,7 +1,7 @@
 schema: gitpm/person@1
-id: U-26-2SRX95
+id: U-26-2SRX95 # person: Анна Волкова
 name: Анна Волкова
 weekly_capacity_hours: 40
-calendar: C-26-NX2TM1
+calendar: C-26-NX2TM1 # calendar: Гибкий график продуктовой команды
 lifecycle: active
 email: anna.volkova@example.test

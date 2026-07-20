@@ -1,6 +1,6 @@
 schema: gitpm/task@1
-id: T-26-SQ5YK5
-project: P-26-7VWANM
+id: T-26-SQ5YK5 # task: Перевести аналитику на новую платформу
+project: P-26-7VWANM # project: Переезд аналитической платформы
 title: Перевести аналитику на новую платформу
 type: epic
 status: planned
@@ -8,12 +8,12 @@ lifecycle: active
 acceptance_criteria_markdown:
   - Результат проверен ответственным сотрудником.
   - Связанные материалы сохранены в проекте.
-milestone: M-26-9HGQWY
+milestone: M-26-9HGQWY # milestone: Отключение старого хранилища
 assignees:
-  - U-26-1MV0QD
-  - U-26-FSB3GM
-  - U-26-ETKSWS
-  - U-26-AD9KDK
+  - U-26-1MV0QD # person: Максим Фёдоров
+  - U-26-FSB3GM # person: Илья Кузнецов
+  - U-26-ETKSWS # person: Ольга Новикова
+  - U-26-AD9KDK # person: Алексей Виноградов
 estimate_hours: 120
 start: 2026-08-10
 due: 2027-01-29

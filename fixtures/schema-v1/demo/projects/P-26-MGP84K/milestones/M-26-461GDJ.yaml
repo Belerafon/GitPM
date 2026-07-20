@@ -1,6 +1,6 @@
 schema: gitpm/milestone@1
-id: M-26-461GDJ
-project: P-26-MGP84K
+id: M-26-461GDJ # milestone: Alpha
+project: P-26-MGP84K # project: GitPM launch
 name: Alpha
 lifecycle: active
 due: 2026-08-31

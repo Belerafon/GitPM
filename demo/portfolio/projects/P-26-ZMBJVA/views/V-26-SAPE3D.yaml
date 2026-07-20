@@ -1,6 +1,6 @@
 schema: gitpm/saved-view@1
-id: V-26-SAPE3D
-project: P-26-ZMBJVA
+id: V-26-SAPE3D # view: Текущая работа команды
+project: P-26-ZMBJVA # project: Портал поддержки клиентов
 name: Текущая работа команды
 kind: board
 filters:
@@ -10,14 +10,14 @@ filters:
     - review
     - blocked
   assignees:
-    - U-26-0225HT
-    - U-26-9C1ZR4
-    - U-26-RKTV2A
-    - U-26-NEDN00
-    - U-26-ETKSWS
-    - U-26-AD9KDK
-    - U-26-FSB3GM
-    - U-26-J4FH55
-    - U-26-2SRX95
+    - U-26-0225HT # person: Наталья Павлова
+    - U-26-9C1ZR4 # person: Елена Морозова
+    - U-26-RKTV2A # person: Дмитрий Орлов
+    - U-26-NEDN00 # person: Мария Соколова
+    - U-26-ETKSWS # person: Ольга Новикова
+    - U-26-AD9KDK # person: Алексей Виноградов
+    - U-26-FSB3GM # person: Илья Кузнецов
+    - U-26-J4FH55 # person: Сергей Лебедев
+    - U-26-2SRX95 # person: Анна Волкова
 group_by: status
 lifecycle: active

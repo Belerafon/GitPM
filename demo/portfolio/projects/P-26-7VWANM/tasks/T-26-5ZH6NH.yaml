@@ -1,6 +1,6 @@
 schema: gitpm/task@1
-id: T-26-5ZH6NH
-project: P-26-7VWANM
+id: T-26-5ZH6NH # task: Перенести загрузку транзакционных данных
+project: P-26-7VWANM # project: Переезд аналитической платформы
 title: Перенести загрузку транзакционных данных
 type: feature
 status: in-progress
@@ -8,16 +8,16 @@ lifecycle: active
 acceptance_criteria_markdown:
   - Результат проверен ответственным сотрудником.
   - Связанные материалы сохранены в проекте.
-parent: T-26-SQ5YK5
-milestone: M-26-T4JTV6
+parent: T-26-SQ5YK5 # task: Перевести аналитику на новую платформу
+milestone: M-26-T4JTV6 # milestone: Первые витрины в новой платформе
 assignees:
-  - U-26-RKTV2A
-  - U-26-1MV0QD
+  - U-26-RKTV2A # person: Дмитрий Орлов
+  - U-26-1MV0QD # person: Максим Фёдоров
 estimate_hours: 96
 start: 2026-09-21
 due: 2026-10-23
 depends_on:
-  - T-26-5K0WZ2
+  - T-26-5K0WZ2 # task: Развернуть контуры разработки и эксплуатации
 labels:
   - etl
   - backend

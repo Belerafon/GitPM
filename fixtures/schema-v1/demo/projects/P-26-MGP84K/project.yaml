@@ -1,10 +1,10 @@
 schema: gitpm/project@1
-id: P-26-MGP84K
+id: P-26-MGP84K # project: GitPM launch
 name: GitPM launch
 status: in-progress
 lifecycle: active
 description_markdown: Build the first useful GitPM workflow.
-owner: U-26-5EBAE3
+owner: U-26-5EBAE3 # person: Anna Petrova
 start: 2026-07-01
 due: 2026-09-30
 labels:

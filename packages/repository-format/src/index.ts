@@ -1,4 +1,4 @@
-import { isAlias, parseDocument, stringify, visit } from "yaml";
+import { Document, isAlias, parseDocument, visit } from "yaml";
 
 const MAX_BYTES = 1_048_576;
 const MAX_LINE_LENGTH = 20_000;
@@ -20,6 +20,8 @@ export interface GitPmDocument {
   readonly schema: string;
   readonly [key: string]: unknown;
 }
+
+export type ReferenceLabels = ReadonlyMap<string, string>;
 
 function fail(code: string, message: string, source?: string): never {
   throw new RepositoryFormatError(code, message, source);
@@ -103,14 +105,55 @@ function normalizeNested(document: GitPmDocument): Record<string, unknown> {
   return result;
 }
 
-export function formatYamlDocument(document: GitPmDocument): string {
-  return stringify(normalizeNested(document), {
+const schemaKinds: Readonly<Record<string, string>> = {
+  "gitpm/project@1": "project",
+  "gitpm/task@1": "task",
+  "gitpm/milestone@1": "milestone",
+  "gitpm/person@1": "person",
+  "gitpm/team@1": "team",
+  "gitpm/calendar@1": "calendar",
+  "gitpm/saved-view@1": "view",
+};
+
+function singleLine(value: string): string {
+  return value.replace(/[\u0000-\u001f\u007f]+/gu, " ").replace(/\s+/gu, " ").trim();
+}
+
+export function referenceLabelForDocument(document: GitPmDocument): string | undefined {
+  if (typeof document.id !== "string") return undefined;
+  const displayValue = typeof document.title === "string" ? document.title : typeof document.name === "string" ? document.name : undefined;
+  if (displayValue === undefined) return undefined;
+  const display = singleLine(displayValue);
+  if (display === "") return undefined;
+  const kind = schemaKinds[document.schema] ?? document.schema.replace(/^gitpm\//u, "").replace(/@.*$/u, "");
+  return `${kind}: ${display}`;
+}
+
+export function referenceLabelsForDocuments(documents: Iterable<GitPmDocument>): ReferenceLabels {
+  const labels = new Map<string, string>();
+  for (const document of documents) {
+    if (typeof document.id !== "string") continue;
+    const label = referenceLabelForDocument(document);
+    if (label !== undefined) labels.set(document.id, label);
+  }
+  return labels;
+}
+
+export function formatYamlDocument(document: GitPmDocument, referenceLabels: ReferenceLabels = new Map()): string {
+  const yaml = new Document(normalizeNested(document));
+  visit(yaml, {
+    Scalar(key, node) {
+      if (key === "key" || typeof node.value !== "string") return;
+      const label = referenceLabels.get(node.value);
+      if (label !== undefined) node.comment = ` ${label}`;
+    },
+  });
+  return yaml.toString({
     indent: 2,
     lineWidth: 0,
-    sortMapEntries: false,
   });
 }
 
-export function formatYamlText(text: string, source?: string): string {
-  return formatYamlDocument(parseYamlDocument(text, source));
+export function formatYamlText(text: string, source?: string, referenceLabels?: ReferenceLabels): string {
+  return formatYamlDocument(parseYamlDocument(text, source), referenceLabels);
 }

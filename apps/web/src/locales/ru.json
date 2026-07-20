@@ -248,6 +248,7 @@
   ,"changes.description": "Проверьте точный Git diff, оцените изменения сущностей и опубликуйте рабочую копию целиком."
   ,"changes.readOnly": "Для этой рабочей копии или роли изменения доступны только для чтения."
   ,"changes.files": "файлов"
+  ,"changes.statusDescription": "Изменено файлов: {files}"
   ,"changes.created": "Создано"
   ,"changes.updated": "Обновлено"
   ,"changes.archived": "Архивировано"

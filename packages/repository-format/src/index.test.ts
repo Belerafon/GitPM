@@ -1,7 +1,7 @@
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { formatYamlText, parseYamlDocument, RepositoryFormatError } from "./index.js";
+import { formatYamlDocument, formatYamlText, parseYamlDocument, referenceLabelsForDocuments, RepositoryFormatError } from "./index.js";
 
 async function yamlFiles(root: string): Promise<string[]> {
   const result: string[] = [];
@@ -50,5 +50,33 @@ describe("safe YAML profile", () => {
     const nested = `${Array.from({ length: 70 }, (_, index) => `${"  ".repeat(index)}level${index}:`).join("\n")}\n${"  ".repeat(70)}value\n`;
     expect(() => parseYamlDocument(`schema: gitpm/project@1\nnested:\n${nested}`))
       .toThrowError(expect.objectContaining({ code: "YAML_DEPTH_LIMIT" }));
+  });
+
+  it("adds reproducible human-readable comments to every entity reference", () => {
+    const project = { schema: "gitpm/project@1", id: "P-26-111111", name: "Payments", lifecycle: "active" };
+    const milestone = { schema: "gitpm/milestone@1", id: "M-26-222222", project: project.id, name: "Public launch", lifecycle: "active" };
+    const person = { schema: "gitpm/person@1", id: "U-26-333333", name: "Ada\nLovelace", lifecycle: "active" };
+    const dependency = { schema: "gitpm/task@1", id: "T-26-444444", project: project.id, title: "Approve API", lifecycle: "active" };
+    const task = {
+      schema: "gitpm/task@1", id: "T-26-555555", project: project.id, title: "Ship checkout", lifecycle: "active",
+      milestone: milestone.id, assignees: [person.id], depends_on: [dependency.id],
+    };
+    const labels = referenceLabelsForDocuments([project, milestone, person, dependency, task]);
+
+    const formatted = formatYamlDocument(task, labels);
+
+    expect(formatted).toContain("id: T-26-555555 # task: Ship checkout");
+    expect(formatted).toContain("project: P-26-111111 # project: Payments");
+    expect(formatted).toContain("milestone: M-26-222222 # milestone: Public launch");
+    expect(formatted).toContain("- U-26-333333 # person: Ada Lovelace");
+    expect(formatted).toContain("- T-26-444444 # task: Approve API");
+    expect(formatYamlDocument({ ...milestone, task_order: [task.id, dependency.id] }, labels))
+      .toContain("- T-26-555555 # task: Ship checkout");
+    expect(formatYamlDocument({ ...project, milestone_order: [milestone.id], owner: person.id }, labels))
+      .toContain("- M-26-222222 # milestone: Public launch");
+    expect(formatYamlDocument({ schema: "gitpm/team@1", id: "G-26-666666", name: "Core", members: [person.id], lifecycle: "active" }, labels))
+      .toContain("- U-26-333333 # person: Ada Lovelace");
+    expect(formatYamlText(formatted, "task.yaml", labels)).toBe(formatted);
+    expect(parseYamlDocument(formatted)).toEqual(task);
   });
 });

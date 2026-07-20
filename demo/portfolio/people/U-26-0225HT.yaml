@@ -1,7 +1,7 @@
 schema: gitpm/person@1
-id: U-26-0225HT
+id: U-26-0225HT # person: Наталья Павлова
 name: Наталья Павлова
 weekly_capacity_hours: 32
-calendar: C-26-NX2TM1
+calendar: C-26-NX2TM1 # calendar: Гибкий график продуктовой команды
 lifecycle: active
 email: natalia.pavlova@example.test

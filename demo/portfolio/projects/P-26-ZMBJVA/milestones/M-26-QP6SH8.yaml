@@ -1,6 +1,6 @@
 schema: gitpm/milestone@1
-id: M-26-QP6SH8
-project: P-26-ZMBJVA
+id: M-26-QP6SH8 # milestone: Открытие портала клиентам
+project: P-26-ZMBJVA # project: Портал поддержки клиентов
 name: Открытие портала клиентам
 lifecycle: active
 description_markdown: Портал доступен всем клиентам и включён в процессы поддержки.

@@ -92,7 +92,7 @@ describe("draft manager", () => {
     const beforeBlob = await manager.fileBlobId("DRF-003", projectFile);
     const mutation = await manager.withUiMutation("DRF-003", "42", draft.fingerprint, async (metadata) => {
       const absolute = path.join(metadata.worktree_path, ...projectFile.split("/"));
-      const updated = (await readFile(absolute, "utf8")).replace("GitPM launch", "GitPM launch updated");
+      const updated = (await readFile(absolute, "utf8")).replace("name: GitPM launch", "name: GitPM launch updated");
       await atomicWriteDomainFile(metadata.worktree_path, projectFile, updated);
       return "written";
     });
@@ -154,7 +154,7 @@ describe("draft manager", () => {
     const draft = await manager.createDraft("DRF-007", "42");
     const mutation = (name: string) => manager.withUiMutation("DRF-007", "42", draft.fingerprint, async (metadata) => {
       const absolute = path.join(metadata.worktree_path, ...projectFile.split("/"));
-      const updated = (await readFile(absolute, "utf8")).replace("GitPM launch", name);
+      const updated = (await readFile(absolute, "utf8")).replace("name: GitPM launch", `name: ${name}`);
       await atomicWriteDomainFile(metadata.worktree_path, projectFile, updated);
       return name;
     });

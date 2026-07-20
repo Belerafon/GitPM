@@ -1,4 +1,5 @@
 import http from "node:http";
+import net from "node:net";
 
 function delay(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -12,6 +13,21 @@ function isHttpReady(url) {
     });
     request.setTimeout(500, () => request.destroy());
     request.once("error", () => resolve(false));
+  });
+}
+
+export function isTcpPortAvailable({ host, port }) {
+  return new Promise((resolve) => {
+    const probe = net.createServer();
+    const finish = (available) => {
+      probe.removeAllListeners();
+      resolve(available);
+    };
+    probe.unref();
+    probe.once("error", () => finish(false));
+    probe.listen({ host, port, exclusive: true }, () => {
+      probe.close((error) => finish(error === undefined));
+    });
   });
 }
 

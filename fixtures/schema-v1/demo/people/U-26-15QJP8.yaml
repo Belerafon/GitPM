@@ -1,6 +1,6 @@
 schema: gitpm/person@1
-id: U-26-15QJP8
+id: U-26-15QJP8 # person: Boris Sokolov
 name: Boris Sokolov
 weekly_capacity_hours: 32
-calendar: C-26-QD7FJ4
+calendar: C-26-QD7FJ4 # calendar: Standard work week
 lifecycle: active

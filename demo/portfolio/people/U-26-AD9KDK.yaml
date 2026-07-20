@@ -1,7 +1,7 @@
 schema: gitpm/person@1
-id: U-26-AD9KDK
+id: U-26-AD9KDK # person: Алексей Виноградов
 name: Алексей Виноградов
 weekly_capacity_hours: 40
-calendar: C-26-G1AADY
+calendar: C-26-G1AADY # calendar: Производственный календарь России
 lifecycle: active
 email: aleksey.vinogradov@example.test

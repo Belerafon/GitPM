@@ -1,6 +1,6 @@
 schema: gitpm/task@1
-id: T-26-R1JFHC
-project: P-26-7VWANM
+id: T-26-R1JFHC # task: Внедрить ролевую модель доступа
+project: P-26-7VWANM # project: Переезд аналитической платформы
 title: Внедрить ролевую модель доступа
 type: feature
 status: planned
@@ -8,17 +8,17 @@ lifecycle: active
 acceptance_criteria_markdown:
   - Результат проверен ответственным сотрудником.
   - Связанные материалы сохранены в проекте.
-parent: T-26-SQ5YK5
-milestone: M-26-9HGQWY
+parent: T-26-SQ5YK5 # task: Перевести аналитику на новую платформу
+milestone: M-26-9HGQWY # milestone: Отключение старого хранилища
 assignees:
-  - U-26-FSB3GM
-  - U-26-AD9KDK
+  - U-26-FSB3GM # person: Илья Кузнецов
+  - U-26-AD9KDK # person: Алексей Виноградов
 estimate_hours: 48
 start: 2026-10-19
 due: 2026-11-13
 depends_on:
-  - T-26-ZDA1WV
-  - T-26-5K0WZ2
+  - T-26-ZDA1WV # task: Спроектировать целевую архитектуру хранилища
+  - T-26-5K0WZ2 # task: Развернуть контуры разработки и эксплуатации
 labels:
   - безопасность
   - доступ

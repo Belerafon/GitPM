@@ -1,6 +1,6 @@
 schema: gitpm/task@1
-id: T-26-7RF20T
-project: P-26-ZJPY6E
+id: T-26-7RF20T # task: Организовать пилот для сотрудников банка
+project: P-26-ZJPY6E # project: Мобильный банк 2.0
 title: Организовать пилот для сотрудников банка
 type: task
 status: backlog
@@ -8,20 +8,20 @@ lifecycle: active
 acceptance_criteria_markdown:
   - Результат проверен ответственным сотрудником.
   - Связанные материалы сохранены в проекте.
-parent: T-26-HB2NX5
-milestone: M-26-SY14EX
+parent: T-26-HB2NX5 # task: Запустить программу обновления мобильного банка
+milestone: M-26-SY14EX # milestone: Публикация в магазинах
 assignees:
-  - U-26-J4FH55
-  - U-26-0225HT
-  - U-26-2SRX95
+  - U-26-J4FH55 # person: Сергей Лебедев
+  - U-26-0225HT # person: Наталья Павлова
+  - U-26-2SRX95 # person: Анна Волкова
 estimate_hours: 48
 start: 2026-10-19
 due: 2026-11-06
 depends_on:
-  - T-26-P5STZT
-  - T-26-T7STGV
-  - T-26-59E33K
-  - T-26-MMEAX4
+  - T-26-P5STZT # task: Добавить биометрический вход
+  - T-26-T7STGV # task: Собрать единую витрину продуктов
+  - T-26-59E33K # task: Подключить push-уведомления и предпочтения
+  - T-26-MMEAX4 # task: Провести нагрузочное тестирование API
 labels:
   - пилот
   - обратная-связь

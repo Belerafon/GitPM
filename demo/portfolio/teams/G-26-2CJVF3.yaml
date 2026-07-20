@@ -1,9 +1,9 @@
 schema: gitpm/team@1
-id: G-26-2CJVF3
+id: G-26-2CJVF3 # team: Качество и эксплуатация
 name: Качество и эксплуатация
 members:
-  - U-26-FSB3GM
-  - U-26-J4FH55
-  - U-26-0225HT
-  - U-26-AD9KDK
+  - U-26-FSB3GM # person: Илья Кузнецов
+  - U-26-J4FH55 # person: Сергей Лебедев
+  - U-26-0225HT # person: Наталья Павлова
+  - U-26-AD9KDK # person: Алексей Виноградов
 lifecycle: active

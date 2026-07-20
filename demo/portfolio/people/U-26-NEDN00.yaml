@@ -1,7 +1,7 @@
 schema: gitpm/person@1
-id: U-26-NEDN00
+id: U-26-NEDN00 # person: Мария Соколова
 name: Мария Соколова
 weekly_capacity_hours: 36
-calendar: C-26-NX2TM1
+calendar: C-26-NX2TM1 # calendar: Гибкий график продуктовой команды
 lifecycle: active
 email: maria.sokolova@example.test

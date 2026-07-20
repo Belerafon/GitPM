@@ -1,5 +1,5 @@
 schema: gitpm/calendar@1
-id: C-26-G1AADY
+id: C-26-G1AADY # calendar: Производственный календарь России
 name: Производственный календарь России
 working_weekdays:
   - 1

@@ -1,6 +1,6 @@
 schema: gitpm/saved-view@1
-id: V-26-Q5P2MZ
-project: P-26-7VWANM
+id: V-26-Q5P2MZ # view: Текущая работа команды
+project: P-26-7VWANM # project: Переезд аналитической платформы
 name: Текущая работа команды
 kind: board
 filters:
@@ -10,13 +10,13 @@ filters:
     - review
     - blocked
   assignees:
-    - U-26-1MV0QD
-    - U-26-FSB3GM
-    - U-26-ETKSWS
-    - U-26-AD9KDK
-    - U-26-RKTV2A
-    - U-26-J4FH55
-    - U-26-NEDN00
-    - U-26-0225HT
+    - U-26-1MV0QD # person: Максим Фёдоров
+    - U-26-FSB3GM # person: Илья Кузнецов
+    - U-26-ETKSWS # person: Ольга Новикова
+    - U-26-AD9KDK # person: Алексей Виноградов
+    - U-26-RKTV2A # person: Дмитрий Орлов
+    - U-26-J4FH55 # person: Сергей Лебедев
+    - U-26-NEDN00 # person: Мария Соколова
+    - U-26-0225HT # person: Наталья Павлова
 group_by: status
 lifecycle: active
