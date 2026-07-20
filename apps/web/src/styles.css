@@ -123,7 +123,7 @@ input { min-width: 0; width: 100%; border: 1px solid #c9cbc5; border-radius: 8px
 .project-register-head, .project-register-row { display: grid; grid-template-columns: minmax(240px, 2.2fr) minmax(100px, .8fr) minmax(130px, 1fr) 70px 70px minmax(100px, .8fr) minmax(90px, .8fr); gap: .75rem; align-items: center; }
 .project-register-head { background: #f3f5f2; padding: .55rem .75rem; color: #68706b; font-size: .72rem; font-weight: 700; }
 .project-register-row { width: 100%; border: 0; border-top: 1px solid #e3e5df; border-radius: 0; background: #fff; padding: .6rem .75rem; text-align: left; }
-.project-register-row:hover { background: #f4f8f5; }
+.project-register-row:hover:not(:disabled) { border-top-color: #e3e5df; background: #f4f8f5; }
 .project-register-row > span:first-child { display: grid; gap: .15rem; min-width: 0; }
 .project-register-row code { color: #767b77; font-size: .66rem; }
 .project-register-row small { overflow: hidden; color: #68706b; font-size: .7rem; text-overflow: ellipsis; white-space: nowrap; }
@@ -222,7 +222,7 @@ textarea { min-height: 76px; resize: vertical; border: 1px solid #c9cbc5; border
 .project-plan-summary small { margin-left: .25rem; color: #68706b; font-weight: 400; }
 .project-plan-stage-progress progress { width: 100%; accent-color: #3f7967; }
 .project-plan-work { display: grid; gap: .8rem; }
-.project-plan-toolbar { position: sticky; z-index: 5; top: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(130px, .4fr) minmax(160px, .5fr) minmax(170px, .55fr); gap: .75rem; align-items: end; border: 1px solid #d9ddd6; border-radius: 10px; background: #fff; padding: .6rem .75rem; }
+.project-plan-toolbar { position: sticky; z-index: 5; top: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(150px, .45fr) minmax(180px, .55fr); gap: .75rem; align-items: end; border: 1px solid #d9ddd6; border-radius: 10px; background: #fff; padding: .6rem .75rem; }
 .project-plan-toolbar h2 { margin: 0; font-size: 1rem; }
 .project-plan-toolbar > div span { color: #68706b; font-size: .7rem; }
 .project-plan-toolbar label { display: grid; gap: .2rem; color: #68706b; font-size: .7rem; }
@@ -239,12 +239,16 @@ textarea { min-height: 76px; resize: vertical; border: 1px solid #c9cbc5; border
 .project-plan-stage-description { overflow: hidden; color: #68706b; font-size: .74rem; text-overflow: ellipsis; white-space: nowrap; }
 .project-plan-stage-actions { display: flex; gap: .5rem; align-items: center; flex: 0 0 auto; }
 .project-plan-stage-actions time { color: #626b65; font-size: .78rem; font-weight: 650; }
+.plan-order-controls { display: inline-flex; gap: .2rem; align-items: center; }
+.plan-order-controls button { display: inline-grid; place-items: center; width: 30px; height: 30px; padding: 0; }
 .project-plan-stage-progress { display: grid; grid-template-columns: minmax(140px, 1fr) auto; gap: .75rem; align-items: center; margin: 0 .8rem; color: #68706b; font-size: .75rem; }
 .project-plan-task-list { display: grid; margin: 0 .8rem .7rem 1.4rem; border-left: 2px solid #d6e3dc; padding-left: .75rem; }
 .project-plan-task-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .75rem; align-items: center; width: 100%; border: 0; border-top: 1px solid #e5e7e1; border-left: 3px solid transparent; border-radius: 0; background: transparent; padding: .48rem .4rem .48rem .6rem; text-align: left; }
-.project-plan-task-row:hover { background: #f4f8f5; }
+.project-plan-task-row:hover:not(:disabled) { border-top-color: #e5e7e1; background: #f4f8f5; }
 .project-plan-task-row.selected { border-left-color: #3f7967; background: #eaf3ed; }
-.project-plan-task-row > span:first-child { display: grid; gap: .12rem; min-width: 0; }
+.project-plan-task-selector { display: grid; gap: .12rem; min-width: 0; border: 0; border-radius: 0; background: transparent; padding: 0; text-align: left; }
+.project-plan-task-selector:hover:not(:disabled) { border-color: transparent; color: #315f50; }
+.project-plan-task-kind { color: #617069; font-size: .66rem; font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
 .project-plan-task-row strong { font-size: .82rem; }
 .project-plan-task-row code { color: #777e79; font-size: .66rem; }
 .project-plan-task-meta { display: flex; gap: .65rem; align-items: center; color: #69716c; font-size: .72rem; }
@@ -306,7 +310,6 @@ textarea { min-height: 76px; resize: vertical; border: 1px solid #c9cbc5; border
 .empty-copy { color: #707671; }
 @media (max-width: 1350px) { .project-plan-layout.with-inspector { grid-template-columns: 1fr; } .project-plan-inspector { position: fixed; z-index: 50; inset: 0 0 0 auto; width: min(440px, 100vw); max-height: none; border: 0; border-left: 1px solid #d9ddd6; border-radius: 0; background: #fff; box-shadow: -12px 0 32px rgba(24, 53, 42, .16); padding: 1rem; } }
 @media (max-width: 1000px) { .portfolio-stats, .stage-stats, .project-plan-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .portfolio-project-grid, .project-directory-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .project-detail-layout { grid-template-columns: 1fr; } .task-create { grid-template-columns: 1fr 1fr; } .task-layout { grid-template-columns: 1fr; } .task-panel { border-left: 0; border-top: 1px solid #dedfd9; padding: 1rem 0 0; } }
-@media (max-width: 1000px) { .project-plan-toolbar { grid-template-columns: repeat(3, minmax(0, 1fr)); } .project-plan-toolbar > div { grid-column: 1 / -1; } }
 @media (max-width: 700px) { .portfolio-stats, .portfolio-project-grid, .project-directory-grid, .stage-stats, .project-plan-stats, .core-columns, .task-detail-meta { grid-template-columns: 1fr; } .project-directory .card-heading, .task-toolbar, .task-toolbar-controls, .stage-detail-header, .project-plan-work-heading, .project-plan-stage > header { align-items: stretch; flex-direction: column; } .project-plan-header, .project-plan-toolbar { grid-template-columns: 1fr; } .project-plan-actions, .project-plan-stage-actions { flex-direction: column; align-items: stretch; } .project-plan-meta { grid-column: 1; } .project-plan-summary, .project-register-summary { gap: .6rem 1rem; } .project-register { overflow-x: auto; } .project-register-head, .project-register-row { min-width: 780px; } .project-plan-stage-progress, .project-plan-task-row { grid-template-columns: 1fr; } .project-plan-task-meta { flex-wrap: wrap; } .stage-detail-actions { flex-direction: column; } .task-create, .task-row { grid-template-columns: 1fr; } }
 @media (max-width: 700px) {
   .project-plan-stage > header { grid-template-columns: 1fr; }

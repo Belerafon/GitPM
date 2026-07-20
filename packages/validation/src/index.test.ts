@@ -32,6 +32,14 @@ describe("repository validation", () => {
     expect(report).toMatchObject({ valid: true, documentCount: 14, errors: [], warnings: [] });
   });
 
+  it("accepts saved milestone and task order", async () => {
+    const root = await fixture();
+    await replace(root, `projects/${project}/project.yaml`, "labels:", "milestone_order:\n  - M-26-461GDJ\nlabels:");
+    await replace(root, `projects/${project}/milestones/M-26-461GDJ.yaml`, "due: 2026-08-31", `due: 2026-08-31\ntask_order:\n  - ${taskTwo}\n  - ${taskOne}`);
+    const report = await validateRepository(root);
+    expect(report).toMatchObject({ valid: true, errors: [] });
+  });
+
   it("rejects cross-project references", async () => {
     const root = await fixture();
     await replace(root, `projects/${project}/tasks/${taskTwo}.yaml`, taskOne, otherTask);

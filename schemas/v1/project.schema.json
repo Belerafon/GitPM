@@ -14,6 +14,11 @@
     "owner": {"$ref": "common.schema.json#/$defs/personId"},
     "start": {"$ref": "common.schema.json#/$defs/date"},
     "due": {"$ref": "common.schema.json#/$defs/date"},
+    "milestone_order": {
+      "type": "array",
+      "items": {"$ref": "common.schema.json#/$defs/milestoneId"},
+      "uniqueItems": true
+    },
     "labels": {"$ref": "common.schema.json#/$defs/labels"}
   }
 }

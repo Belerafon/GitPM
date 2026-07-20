@@ -55,8 +55,11 @@ ID имеет форму `<type>-<YY>-<random>`, где type — один из `
 
 Date-only имеет форму `YYYY-MM-DD`; календарная корректность и `start <= due`
 проверяются domain validator. `estimate_hours` неотрицателен и кратен 0.25.
-Списки ссылок и labels не содержат повторов. Markdown разрешён только в полях с
-суффиксом `_markdown`; renderer не интерпретирует raw HTML.
+Списки ссылок и labels не содержат повторов. Project `milestone_order` задаёт
+ручной порядок этапов, а Milestone `task_order` — ручной порядок его задач.
+Отсутствующие в этих списках активные сущности показываются после перечисленных.
+Markdown разрешён только в полях с суффиксом `_markdown`; renderer не
+интерпретирует raw HTML.
 
 ## Saved View filters
 

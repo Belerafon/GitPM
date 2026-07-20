@@ -41,6 +41,10 @@ echo.
 
 node scripts\run-gitpm-local.mjs %*
 set "EXIT_CODE=%ERRORLEVEL%"
+rem 0xC000013A is Windows' normal Ctrl+C/console-close status. Depending on
+rem cmd.exe, it can be exposed as either a signed or an unsigned number.
+if "%EXIT_CODE%"=="-1073741510" exit /b 0
+if "%EXIT_CODE%"=="3221225786" exit /b 0
 if not "%EXIT_CODE%"=="0" (
   echo.
   echo GitPM завершился с ошибкой ^(код %EXIT_CODE%^).

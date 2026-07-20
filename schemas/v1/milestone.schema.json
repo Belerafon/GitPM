@@ -11,6 +11,11 @@
     "name": {"type": "string", "minLength": 1},
     "lifecycle": {"$ref": "common.schema.json#/$defs/lifecycle"},
     "description_markdown": {"type": "string"},
-    "due": {"$ref": "common.schema.json#/$defs/date"}
+    "due": {"$ref": "common.schema.json#/$defs/date"},
+    "task_order": {
+      "type": "array",
+      "items": {"$ref": "common.schema.json#/$defs/taskId"},
+      "uniqueItems": true
+    }
   }
 }

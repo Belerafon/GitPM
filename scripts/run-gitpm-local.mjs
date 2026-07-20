@@ -1,4 +1,6 @@
 import { spawn, spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
+import { dirname, resolve } from "node:path";
 import { waitForGitPmServices } from "./gitpm-readiness.mjs";
 import { prepareGitPmRuntime } from "./configure-gitpm-runtime.mjs";
 
@@ -7,15 +9,28 @@ const serverPort = process.env.GITPM_SERVER_PORT ?? "3000";
 const webPort = process.env.GITPM_WEB_PORT ?? "5173";
 const serverUrl = `http://127.0.0.1:${serverPort}`;
 const webUrl = `http://127.0.0.1:${webPort}`;
+const serverCwd = resolve(process.cwd(), "apps/server");
+const webCwd = resolve(process.cwd(), "apps/web");
+const serverRequire = createRequire(resolve(serverCwd, "package.json"));
+const webRequire = createRequire(resolve(webCwd, "package.json"));
+const tsxCli = serverRequire.resolve("tsx/cli");
+const viteCli = resolve(dirname(webRequire.resolve("vite")), "../../bin/vite.js");
 const children = new Set();
 let stopping = false;
 let exitCode = 0;
 
-function start(label, args, extraEnv = {}) {
-  const child = spawn("corepack", args, {
-    cwd: process.cwd(),
+// Windows uses this NTSTATUS when a console process is stopped with Ctrl+C.
+// Depending on the layer reporting it, it can be represented as unsigned or signed.
+const windowsControlCExitCodes = new Set([0xC000013A, -1073741510]);
+
+function isWindowsControlCExit(code, signal) {
+  return isWindows && signal === null && code !== null && windowsControlCExitCodes.has(code);
+}
+
+function start(label, cwd, args, extraEnv = {}) {
+  const child = spawn(process.execPath, args, {
+    cwd,
     env: { ...process.env, ...extraEnv },
-    shell: isWindows,
     stdio: "inherit",
     windowsHide: true,
   });
@@ -29,10 +44,23 @@ function start(label, args, extraEnv = {}) {
   child.once("exit", (code, signal) => {
     children.delete(child);
     if (!stopping) {
-      const reason = signal === null ? `код ${code ?? 1}` : `сигнал ${signal}`;
-      console.error(`[GitPM] ${label} неожиданно завершился (${reason}).`);
-      exitCode = code && code !== 0 ? code : 1;
-      shutdown();
+      // There is still a small race when the terminal itself broadcasts a
+      // control event (for example while closing an older console window).
+      // Treat its native status as the same successful user-requested stop.
+      if (isWindowsControlCExit(code, signal)) {
+        shutdown();
+        return;
+      }
+      // On Windows all console processes receive Ctrl+C together. Give this
+      // supervisor's signal handler one event-loop turn before deciding that
+      // a child which exited first was an application failure.
+      setTimeout(() => {
+        if (stopping) return;
+        const reason = signal === null ? `код ${code ?? 1}` : `сигнал ${signal}`;
+        console.error(`[GitPM] ${label} неожиданно завершился (${reason}).`);
+        exitCode = code && code !== 0 ? code : 1;
+        shutdown();
+      }, isWindows ? 50 : 0);
     }
   });
   return child;
@@ -87,7 +115,11 @@ async function openWhenReady() {
   }
 }
 
-for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+const shutdownSignals = isWindows
+  ? ["SIGINT", "SIGTERM", "SIGHUP", "SIGBREAK"]
+  : ["SIGINT", "SIGTERM", "SIGHUP"];
+
+for (const signal of shutdownSignals) {
   process.once(signal, () => shutdown());
 }
 process.once("uncaughtException", (error) => {
@@ -112,14 +144,14 @@ console.log(runtime.environment.GITPM_GITLAB_CLIENT_ID === undefined
   ? "[GitPM] GitLab OAuth не настроен — вход не требуется для локальной работы (настройки: .gitpm/config.json)."
   : "[GitPM] GitLab OAuth доступен и будет запрошен только для remote-операций.");
 
-start("сервер", ["pnpm", "dev:server"], {
+start("сервер", serverCwd, [tsxCli, "watch", "src/index.ts"], {
   HOST: "127.0.0.1",
   PORT: serverPort,
   GITPM_WEB_URL: webUrl,
   ...runtime.environment,
 });
-start("web-интерфейс", [
-  "pnpm", "--filter", "@gitpm/web", "exec", "vite",
+start("web-интерфейс", webCwd, [
+  viteCli,
   "--host", "127.0.0.1", "--port", webPort, "--strictPort",
 ], { GITPM_API_TARGET: serverUrl });
 void openWhenReady();
