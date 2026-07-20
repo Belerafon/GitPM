@@ -11,9 +11,10 @@ const draft: DraftStatus = { draft_id: "DRF-STAGES", owner_gitlab_user_id: "42",
 const result = (document: GitPmDocument): EntityResult => ({ document, path: `${document.id}.yaml`, blob_id: "a".repeat(40), draft_fingerprint: fingerprint });
 
 const project = result({ schema: "gitpm/project@1", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
+const person = result({ schema: "gitpm/person@1", id: "U-26-888888", name: "Ada", weekly_capacity_hours: 40, calendar: "C-26-999999", lifecycle: "active" });
 const stage = result({ schema: "gitpm/milestone@1", id: "M-26-222222", project: project.document.id, name: "Launch", lifecycle: "active", due: "2026-08-01" });
 const laterStage = result({ schema: "gitpm/milestone@1", id: "M-26-777777", project: project.document.id, name: "Follow-up", lifecycle: "active", due: "2026-09-01" });
-const linked = result({ schema: "gitpm/task@1", id: "T-26-333333", project: project.document.id, milestone: stage.document.id, title: "Linked task", type: "task", status: "done", lifecycle: "active", estimate_hours: 20 });
+const linked = result({ schema: "gitpm/task@1", id: "T-26-333333", project: project.document.id, milestone: stage.document.id, title: "Linked task", type: "task", status: "done", lifecycle: "active", estimate_hours: 20, assignees: [person.document.id] });
 const other = result({ schema: "gitpm/task@1", id: "T-26-444444", project: project.document.id, title: "Without stage", type: "task", status: "backlog", lifecycle: "active" });
 const urgent = result({ schema: "gitpm/task@1", id: "T-26-555555", project: project.document.id, milestone: stage.document.id, title: "Zebra task", type: "task", status: "backlog", lifecycle: "active", due: "2026-07-20", estimate_hours: 2 });
 const large = result({ schema: "gitpm/task@1", id: "T-26-666666", project: project.document.id, milestone: stage.document.id, title: "Alpha task", type: "task", status: "backlog", lifecycle: "active", due: "2026-09-01", estimate_hours: 13 });
@@ -35,13 +36,13 @@ function api() {
     getConfiguration: vi.fn(async (_draftId: string, kind: "statuses" | "issue-types") => result(kind === "statuses"
       ? { schema: "gitpm/statuses@1", id: "CONFIG-STATUSES", lifecycle: "active", statuses: [{ slug: "backlog", title: "Backlog", active: true }, { slug: "done", title: "Done", active: true }] }
       : { schema: "gitpm/issue-types@1", id: "CONFIG-TYPES", lifecycle: "active", issue_types: [{ slug: "task", title: "Task", active: true }] })),
-    listEntities: vi.fn(async () => []),
+    listEntities: vi.fn(async (_draftId: string, type: string) => type === "people" ? [person] : type === "projects" ? [currentProject] : []),
     createEntity,
     updateEntity,
   } as unknown as GitPmApi & { createEntity: typeof createEntity; updateEntity: typeof updateEntity };
 }
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); localStorage.clear(); });
 
 describe("project plan and stage workspace", () => {
   it("shows every task inside the project plan and opens a stage as a first-class route", async () => {
@@ -53,6 +54,12 @@ describe("project plan and stage workspace", () => {
     expect(document.querySelector(".project-plan-project-kind")?.textContent).toBe(`Project ${project.document.id}`);
     expect(screen.getByText("Linked task")).toBeTruthy();
     expect(screen.getByText("Without stage")).toBeTruthy();
+    expect(stageCard.querySelector(".project-plan-stage-assignees")?.textContent).toContain("Ada");
+    expect(screen.getByText("Linked task").closest(".project-plan-task-row")?.querySelector(".task-assignees")?.textContent).toBe("Ada");
+    fireEvent.click(screen.getByText("Customize task fields"));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Assignees" }));
+    expect(stageCard.querySelector(".project-plan-stage-assignees")).toBeNull();
+    expect(screen.getByText("Linked task").closest(".project-plan-task-row")?.querySelector(".task-assignees")).toBeNull();
     fireEvent.click(within(stageCard).getByRole("button", { name: /Milestone: Launch/u }));
     expect(onNavigate).toHaveBeenCalledWith("stages", { projectId: project.document.id, stageId: stage.document.id });
 
@@ -68,9 +75,15 @@ describe("project plan and stage workspace", () => {
     fireEvent.click(within(stageCard).getByRole("button", { name: /New task/u }));
     const dialog = screen.getByRole("dialog", { name: "New task" });
     fireEvent.change(within(dialog).getByLabelText("Title"), { target: { value: "Created from plan" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /Add assignee/u }));
+    fireEvent.change(within(dialog).getByLabelText("Search people"), { target: { value: "Ada" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Ada" }));
+    fireEvent.change(within(dialog).getByLabelText("Start date"), { target: { value: "2026-07-20" } });
+    fireEvent.change(within(dialog).getByLabelText("Due date"), { target: { value: "2026-07-24" } });
+    fireEvent.change(within(dialog).getByLabelText("Estimate (hours)"), { target: { value: "20" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Create task" }));
     await waitFor(() => expect(client.createEntity).toHaveBeenCalled());
-    expect(client.createEntity.mock.calls[0]?.[3]).toMatchObject({ project: project.document.id, milestone: stage.document.id, title: "Created from plan" });
+    expect(client.createEntity.mock.calls[0]?.[3]).toMatchObject({ project: project.document.id, milestone: stage.document.id, title: "Created from plan", assignees: [person.document.id], start: "2026-07-20", due: "2026-07-24", estimate_hours: 20 });
   });
 
   it("numbers milestones and tasks and persists their manual order", async () => {
@@ -113,6 +126,8 @@ describe("project plan and stage workspace", () => {
 
     expect(await screen.findByRole("heading", { name: "Launch" })).toBeTruthy();
     expect(screen.getByText("Linked task")).toBeTruthy();
+    expect(document.querySelector(".stage-detail-assignees")?.textContent).toContain("Ada");
+    expect(screen.getByText("Linked task").closest(".stage-task-row")?.querySelector(".task-assignees")?.textContent).toBe("Ada");
     expect(screen.queryByText("Without stage")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /Linked task/u }));
     expect(onNavigate).toHaveBeenCalledWith("tasks", { projectId: project.document.id, taskId: linked.document.id });

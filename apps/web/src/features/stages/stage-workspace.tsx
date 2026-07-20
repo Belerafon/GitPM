@@ -2,6 +2,7 @@ import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import type { GitPmApi } from "../../api.js";
 import { AsyncBoundary, useAsyncLoad } from "../../async-data.js";
+import { AssigneeChecks } from "../../core-ui.js";
 import { EditorDrawer } from "../../editor-drawer.js";
 import { useExternalHighlights } from "../../external-updates.js";
 import { formatDateOnly, formatDurationHours, message, type Locale, type MessageKey } from "../../i18n.js";
@@ -30,6 +31,7 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
   const [workspace, setWorkspace] = useState<ProjectWorkspaceResult | null>(null);
   const [statuses, setStatuses] = useState<readonly ConfigValue[]>([]);
   const [types, setTypes] = useState<readonly ConfigValue[]>([]);
+  const [people, setPeople] = useState<readonly EntityResult[]>([]);
   const [editor, setEditor] = useState<"stage" | "task" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [statusPending, setStatusPending] = useState<string | null>(null);
@@ -38,14 +40,16 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
 
   const load = useCallback(async () => {
     await loader.run(async () => {
-      const [nextWorkspace, statusConfig, typeConfig] = await Promise.all([
+      const [nextWorkspace, nextPeople, statusConfig, typeConfig] = await Promise.all([
         api.projectWorkspace(draft.draft_id, projectId),
+        api.listEntities(draft.draft_id, "people"),
         api.getConfiguration(draft.draft_id, "statuses"),
         api.getConfiguration(draft.draft_id, "issue-types"),
       ]);
-      return { nextWorkspace, statusConfig, typeConfig };
-    }, ({ nextWorkspace, statusConfig, typeConfig }) => {
+      return { nextWorkspace, nextPeople, statusConfig, typeConfig };
+    }, ({ nextWorkspace, nextPeople, statusConfig, typeConfig }) => {
       setWorkspace(nextWorkspace);
+      setPeople(nextPeople.filter((item) => item.document.lifecycle === "active"));
       setStatuses(configValues(statusConfig.document, "statuses"));
       setTypes(configValues(typeConfig.document, "issue_types"));
     });
@@ -95,7 +99,8 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
     if (workspace === null || selectedStage === undefined) return;
     const data = new FormData(event.currentTarget);
     const id = newUniqueEntityId(ENTITY_ID_PREFIX.task, new Set(workspace.tasks.map((item) => item.document.id)));
-    const document = { schema: "gitpm/task@1", id, project: projectId, milestone: selectedStage.document.id, title: String(data.get("title")).trim(), type: String(data.get("type")), status: String(data.get("status")), lifecycle: "active", description_markdown: String(data.get("description")) } as GitPmDocument;
+    const start = String(data.get("start")); const due = String(data.get("due")); const estimate = String(data.get("estimate"));
+    const document = { schema: "gitpm/task@1", id, project: projectId, milestone: selectedStage.document.id, title: String(data.get("title")).trim(), type: String(data.get("type")), status: String(data.get("status")), lifecycle: "active", description_markdown: String(data.get("description")), assignees: data.getAll("assignees").map(String), ...(start ? { start } : {}), ...(due ? { due } : {}), ...(estimate ? { estimate_hours: Number(estimate) } : {}) } as GitPmDocument;
     void mutate(async () => await api.createEntity(draft.draft_id, "tasks", workspace.draft_fingerprint, document));
   };
 
@@ -126,6 +131,7 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
         onNewTask={() => setEditor("task")}
         onNavigate={onNavigate}
         onStatusChange={changeTaskStatus}
+        people={people}
         projectId={projectId}
         readOnly={readOnly || selectedStage.document.lifecycle === "archived"}
         stage={selectedStage}
@@ -151,6 +157,10 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
         <label>{t("core.title")}<input disabled={readOnly} name="title" required /></label>
         <label>{t("core.status")}<select disabled={readOnly} name="status">{statuses.map((item) => <option key={item.slug} value={item.slug}>{item.title}</option>)}</select></label>
         <label>{t("core.type")}<select disabled={readOnly} name="type">{types.map((item) => <option key={item.slug} value={item.slug}>{item.title}</option>)}</select></label>
+        <AssigneeChecks disabled={readOnly} people={people} selected={[]} t={t} />
+        <label>{t("projectPlan.start")}<input disabled={readOnly} name="start" type="date" /></label>
+        <label>{t("core.due")}<input disabled={readOnly} name="due" type="date" /></label>
+        <label>{t("projectPlan.estimate")}<input disabled={readOnly} min="0" name="estimate" step="0.25" type="number" /></label>
         <label>{t("core.description")}<textarea disabled={readOnly} name="description" /></label>
         <div className="editor-drawer-actions"><button onClick={() => setEditor(null)} type="button">{t("core.cancel")}</button><button className="primary" disabled={readOnly}>{t("core.createTask")}</button></div>
       </form>
@@ -158,11 +168,12 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
   </section>;
 }
 
-function StageDetails({ stage, tasks, projectId, locale, readOnly, changed, changedTaskIds, statusOptions, statusBusy, statusSavingId, onArchive, onEdit, onNewTask, onStatusChange, onNavigate, t }: {
+function StageDetails({ stage, tasks, projectId, locale, people, readOnly, changed, changedTaskIds, statusOptions, statusBusy, statusSavingId, onArchive, onEdit, onNewTask, onStatusChange, onNavigate, t }: {
   readonly stage: EntityResult;
   readonly tasks: readonly EntityResult[];
   readonly projectId: string;
   readonly locale: Locale;
+  readonly people: readonly EntityResult[];
   readonly readOnly: boolean;
   readonly changed: boolean;
   readonly changedTaskIds: ReadonlySet<string>;
@@ -179,9 +190,11 @@ function StageDetails({ stage, tasks, projectId, locale, readOnly, changed, chan
   const completed = tasks.filter((task) => text(task.document, "status") === "done").length;
   const overdue = tasks.filter((task) => text(task.document, "status") !== "done" && /^\d{4}-\d{2}-\d{2}$/u.test(text(task.document, "due")) && text(task.document, "due") < new Date().toISOString().slice(0, 10)).length;
   const estimate = tasks.reduce((sum, task) => sum + (typeof task.document.estimate_hours === "number" ? task.document.estimate_hours : 0), 0);
+  const personName = (id: string) => text(people.find((person) => person.document.id === id)?.document ?? { schema: "", id: "", lifecycle: "active" }, "name") || id;
+  const stageAssignees = [...new Set(tasks.flatMap((task) => Array.isArray(task.document.assignees) ? task.document.assignees.filter((id): id is string => typeof id === "string") : []))].map(personName);
   return <>
     <header className={`card stage-detail-header${changed ? " recently-changed" : ""}`}>
-      <div><span className="eyebrow">{t("core.milestone")}</span><h2>{text(stage.document, "name")}</h2><p>{text(stage.document, "description_markdown") || t("core.noDescription")}</p></div>
+      <div><span className="eyebrow">{t("core.milestone")}</span><h2>{text(stage.document, "name")}</h2><p>{text(stage.document, "description_markdown") || t("core.noDescription")}</p><p className="stage-detail-assignees">{t("core.assignees")}: {stageAssignees.length === 0 ? t("core.unassigned") : stageAssignees.join(", ")}</p></div>
       <div className="stage-detail-actions"><button disabled={readOnly} onClick={onEdit}>{t("core.edit")}</button><button disabled={readOnly} onClick={onArchive}>{t("core.archive")}</button><button className="primary" disabled={readOnly} onClick={onNewTask}>+ {t("stages.newTask")}</button></div>
     </header>
     <div className="stage-stats">
@@ -191,9 +204,9 @@ function StageDetails({ stage, tasks, projectId, locale, readOnly, changed, chan
       <div className="card"><span>{t("core.due")}</span><strong>{text(stage.document, "due") ? formatDateOnly(locale, text(stage.document, "due")) : "—"}</strong></div>
     </div>
     <section className="card stage-task-list"><div className="card-heading"><div><h3>{t("stages.tasks")}</h3><p>{t("stages.tasksDescription")}</p></div><button onClick={() => onNavigate("board", { projectId, query: { milestone: [stage.document.id] } })}>{t("stages.openBoard")}</button></div>
-      {tasks.length === 0 ? <p>{t("stages.emptyTasks")}</p> : tasks.map((task) => <div className={`stage-task-row${changedTaskIds.has(task.document.id) ? " recently-changed" : ""}${statusSavingId === task.document.id ? " is-saving" : ""}`} key={task.document.id}>
-        <button className="stage-task-link" onClick={() => onNavigate("tasks", { projectId, taskId: task.document.id })}><strong>{text(task.document, "title")}</strong><code>{task.document.id}</code></button>{readOnly ? <span className="state open">{statusOptions.find((status) => status.slug === text(task.document, "status"))?.title ?? text(task.document, "status")}</span> : <select aria-label={`${t("core.status")}: ${text(task.document, "title")}`} className="inline-status-select" disabled={statusBusy} onChange={(event) => onStatusChange(task, event.target.value)} value={text(task.document, "status")}>{statusOptions.map((status) => <option key={status.slug} value={status.slug}>{status.title}</option>)}</select>}
-      </div>)}
+      {tasks.length === 0 ? <p>{t("stages.emptyTasks")}</p> : tasks.map((task) => { const assignees = Array.isArray(task.document.assignees) ? task.document.assignees.filter((id): id is string => typeof id === "string").map(personName) : []; return <div className={`stage-task-row${changedTaskIds.has(task.document.id) ? " recently-changed" : ""}${statusSavingId === task.document.id ? " is-saving" : ""}`} key={task.document.id}>
+        <button className="stage-task-link" onClick={() => onNavigate("tasks", { projectId, taskId: task.document.id })}><strong>{text(task.document, "title")}</strong><code>{task.document.id}</code><span className="task-assignees">{assignees.length === 0 ? t("core.unassigned") : assignees.join(", ")}</span></button>{readOnly ? <span className="state open">{statusOptions.find((status) => status.slug === text(task.document, "status"))?.title ?? text(task.document, "status")}</span> : <select aria-label={`${t("core.status")}: ${text(task.document, "title")}`} className="inline-status-select" disabled={statusBusy} onChange={(event) => onStatusChange(task, event.target.value)} value={text(task.document, "status")}>{statusOptions.map((status) => <option key={status.slug} value={status.slug}>{status.title}</option>)}</select>}
+      </div>; })}
     </section>
   </>;
 }

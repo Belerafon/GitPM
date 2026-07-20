@@ -9,16 +9,18 @@ const draft: DraftStatus = { draft_id: "DRF-BOARD", owner_gitlab_user_id: "42", 
 const projectId = "P-26-111111";
 const taskId = "T-26-222222";
 const milestoneId = "M-26-333333";
+const personId = "U-26-444444";
 
 class BoardApi {
   revision = 0;
   entities: EntityResult[] = [
     this.result({ schema: "gitpm/project@1", id: projectId, name: "Alpha", status: "backlog", lifecycle: "active" }),
+    this.result({ schema: "gitpm/person@1", id: personId, name: "Ada", weekly_capacity_hours: 40, calendar: "C-26-555555", lifecycle: "active" }),
     this.result({ schema: "gitpm/milestone@1", id: milestoneId, project: projectId, name: "Beta", lifecycle: "active" }),
-    this.result({ schema: "gitpm/task@1", id: taskId, project: projectId, milestone: milestoneId, title: "Drag me", type: "task", status: "backlog", lifecycle: "active" }),
+    this.result({ schema: "gitpm/task@1", id: taskId, project: projectId, milestone: milestoneId, title: "Drag me", type: "task", status: "backlog", lifecycle: "active", assignees: [personId] }),
   ];
   private result(document: GitPmDocument): EntityResult { this.revision += 1; const project = String(document.project ?? ""); const path = document.schema === "gitpm/project@1" ? `projects/${document.id}/project.yaml` : document.schema === "gitpm/task@1" ? `projects/${project}/tasks/${document.id}.yaml` : `projects/${project}/views/${document.id}.yaml`; return { document, path, blob_id: String(this.revision).padStart(40, "a"), draft_fingerprint: String(this.revision).padStart(64, "b") }; }
-  async listEntities(_draftId: string, type: string, project?: string) { const schemas: Record<string, string> = { projects: "gitpm/project@1", tasks: "gitpm/task@1", milestones: "gitpm/milestone@1", views: "gitpm/saved-view@1" }; return this.entities.filter((item) => item.document.schema === schemas[type] && (project === undefined || item.document.project === project)); }
+  async listEntities(_draftId: string, type: string, project?: string) { const schemas: Record<string, string> = { projects: "gitpm/project@1", people: "gitpm/person@1", tasks: "gitpm/task@1", milestones: "gitpm/milestone@1", views: "gitpm/saved-view@1" }; return this.entities.filter((item) => item.document.schema === schemas[type] && (project === undefined || item.document.project === project)); }
   async createEntity(_draftId: string, _type: string, _fingerprint: string, document: GitPmDocument) { const result = this.result(document); this.entities.push(result); return result; }
   async updateEntity(_draftId: string, _type: string, entity: EntityResult, _fingerprint: string, document: GitPmDocument) { const result = this.result(document); this.entities = this.entities.map((item) => item.document.id === entity.document.id ? result : item); return result; }
   async getConfiguration(_draftId: string, kind: "statuses" | "issue-types"): Promise<EntityResult> { const document = (kind === "statuses" ? { schema: "gitpm/statuses@1", id: "CONFIG-STATUSES", lifecycle: "active", statuses: [{ slug: "backlog", title: "Backlog", active: true }, { slug: "done", title: "Done", active: true }] } : { schema: "gitpm/issue-types@1", id: "CONFIG-TYPES", lifecycle: "active", issue_types: [{ slug: "task", title: "Task", active: true }, { slug: "bug", title: "Bug", active: true }] }) as GitPmDocument; return this.result(document); }
@@ -32,6 +34,7 @@ describe("Board and Saved Views", () => {
     const { container } = render(<BoardWorkspace api={api} draft={draft} locale="en" onNavigate={onNavigate} onChanged={vi.fn(async () => undefined)} />);
     const card = await screen.findByText("Drag me");
     expect(container.querySelector(".board-milestone")?.textContent).toBe("Beta");
+    expect(container.querySelector(".board-assignees")?.textContent).toContain("Ada");
     fireEvent.click(screen.getByRole("button", { name: "Beta" }));
     expect(onNavigate).toHaveBeenCalledWith("stages", { projectId, stageId: milestoneId });
     fireEvent.click(card);

@@ -140,7 +140,7 @@ describe("frontend draft lifecycle", () => {
     expect(await screen.findByRole("heading", { level: 2, name: "Launch" })).toBeTruthy();
     expect(screen.getByRole("navigation", { name: "Project navigation" })).toBeTruthy();
     const breadcrumbs = screen.getByRole("navigation", { name: "Breadcrumbs" });
-    expect(within(breadcrumbs).getByText("Alpha").getAttribute("aria-current")).toBe("page");
+    expect((await within(breadcrumbs).findByText("Alpha")).getAttribute("aria-current")).toBe("page");
     fireEvent.click(screen.getByRole("button", { name: /First task/u }));
     expect(`${window.location.pathname}${window.location.search}`).toBe("/projects/P-26-7K4M9Q/tasks/T-26-X8D2FW");
     expect((await screen.findByRole("button", { name: /First task/u })).getAttribute("aria-current")).toBe("true");
@@ -248,7 +248,7 @@ describe("frontend draft lifecycle", () => {
     expect(`${window.location.pathname}${window.location.search}`).toBe("/projects/P-26-7K4M9Q");
     let breadcrumbs = screen.getByRole("navigation", { name: "Breadcrumbs" });
     expect(within(breadcrumbs).getByRole("button", { name: "Projects" })).toBeTruthy();
-    expect(within(breadcrumbs).getByText("Alpha").getAttribute("aria-current")).toBe("page");
+    expect((await within(breadcrumbs).findByText("Alpha")).getAttribute("aria-current")).toBe("page");
     expect(document.querySelector(".project-plan-header")).toBeTruthy();
     expect(await screen.findByRole("heading", { name: "Work plan" })).toBeTruthy();
     expect(screen.queryByRole("dialog")).toBeNull();

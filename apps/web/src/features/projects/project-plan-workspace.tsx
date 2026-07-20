@@ -2,7 +2,7 @@ import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import type { GitPmApi } from "../../api.js";
 import { AsyncBoundary, useAsyncLoad } from "../../async-data.js";
-import { TaskPanel, type ConfigValue } from "../../core-ui.js";
+import { AssigneeChecks, TaskPanel, type ConfigValue } from "../../core-ui.js";
 import { EditorDrawer } from "../../editor-drawer.js";
 import { EntityCatalog } from "../../entity-catalog.js";
 import { useExternalHighlights, useReducedMotion } from "../../external-updates.js";
@@ -12,6 +12,18 @@ import type { DraftStatus, EntityResult, GitPmDocument, ProjectWorkspaceResult }
 import type { WorkspaceNavigate } from "../../workspace-navigation.js";
 
 type PlanEditor = { readonly kind: "project" | "new-stage" } | { readonly kind: "edit-stage"; readonly stageId: string } | { readonly kind: "task"; readonly stageId?: string } | null;
+type TaskField = "assignees" | "due" | "estimate" | "status";
+type TaskFieldVisibility = Readonly<Record<TaskField, boolean>>;
+
+const TASK_FIELDS_STORAGE_KEY = "gitpm.projectPlan.taskFields";
+const defaultTaskFields: TaskFieldVisibility = { assignees: true, due: true, estimate: true, status: true };
+const readTaskFields = (): TaskFieldVisibility => {
+  try {
+    const stored = JSON.parse(localStorage.getItem(TASK_FIELDS_STORAGE_KEY) ?? "{}") as Partial<Record<TaskField, unknown>>;
+    return { assignees: stored.assignees !== false, due: stored.due !== false, estimate: stored.estimate !== false, status: stored.status !== false };
+  } catch { return defaultTaskFields; }
+};
+const writeTaskFields = (fields: TaskFieldVisibility) => { try { localStorage.setItem(TASK_FIELDS_STORAGE_KEY, JSON.stringify(fields)); } catch { /* Browser storage may be unavailable. */ } };
 
 const text = (document: GitPmDocument, key: string): string => typeof document[key] === "string" ? document[key] as string : "";
 const number = (document: GitPmDocument, key: string): number | undefined => typeof document[key] === "number" ? document[key] as number : undefined;
@@ -61,6 +73,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   const [editor, setEditor] = useState<PlanEditor>(null);
   const [statusFilter, setStatusFilter] = useState(initialStatusFilter);
   const [milestoneFilter, setMilestoneFilter] = useState(initialMilestoneFilter);
+  const [taskFields, setTaskFields] = useState<TaskFieldVisibility>(readTaskFields);
   const [error, setError] = useState<string | null>(null);
   const [orderPending, setOrderPending] = useState<readonly string[] | null>(null);
   const [statusPending, setStatusPending] = useState<string | null>(null);
@@ -90,6 +103,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { setStatusFilter(initialStatusFilter); setMilestoneFilter(initialMilestoneFilter); }, [initialMilestoneFilter, initialStatusFilter]);
+  useEffect(() => { writeTaskFields(taskFields); }, [taskFields]);
 
   const applyResult = (result: EntityResult) => {
     setWorkspace((current) => {
@@ -280,11 +294,13 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     if (workspace === null || editor?.kind !== "task") return;
     const data = new FormData(event.currentTarget);
     const id = newUniqueEntityId(ENTITY_ID_PREFIX.task, new Set(workspace.tasks.map((item) => item.document.id)));
-    const due = String(data.get("due")); const estimate = String(data.get("estimate"));
+    const start = String(data.get("start")); const due = String(data.get("due")); const estimate = String(data.get("estimate"));
     const document = {
       schema: "gitpm/task@1", id, project: projectId, title: String(data.get("title")).trim(), type: String(data.get("type")), status: String(data.get("status")), lifecycle: "active",
       description_markdown: String(data.get("description")),
+      assignees: data.getAll("assignees").map(String),
       ...(editor.stageId === undefined ? {} : { milestone: editor.stageId }),
+      ...(start ? { start } : {}),
       ...(due ? { due } : {}),
       ...(estimate ? { estimate_hours: Number(estimate) } : {}),
     } as GitPmDocument;
@@ -337,12 +353,14 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
               <div><h2>{t("projectPlan.workHeading")}</h2><span>{t("projectPlan.workDescription")}</span></div>
               <label>{t("core.filter")}<select value={statusFilter} onChange={(event) => applyFilters(event.target.value, milestoneFilter)}><option value="">{t("core.allStatuses")}</option>{statuses.map((status) => <option key={status.slug} value={status.slug}>{status.title}</option>)}</select></label>
               <label>{t("core.milestone")}<select value={milestoneFilter} onChange={(event) => applyFilters(statusFilter, event.target.value)}><option value="">{t("core.allMilestones")}</option><option value="none">{t("stages.withoutStage")}</option>{activeStages.map((stage) => <option key={stage.document.id} value={stage.document.id}>{text(stage.document, "name")}</option>)}</select></label>
+              <details className="task-field-settings"><summary>{t("projectPlan.configureFields")}</summary><div>{(["assignees", "due", "estimate", "status"] as const).map((field) => <label key={field}><input checked={taskFields[field]} onChange={(event) => setTaskFields((current) => ({ ...current, [field]: event.target.checked }))} type="checkbox" />{t(`projectPlan.field.${field}` as MessageKey)}</label>)}</div></details>
             </div>
             {activeStages.length === 0 && <div className="card empty-workspace">{t("projectPlan.emptyStages")}</div>}
             {visibleStages.map((stage) => <StageSection
               allTasks={activeTasks.filter((task) => task.document.milestone === stage.document.id)}
               key={stage.document.id}
               locale={locale}
+              people={people}
               onNavigate={onNavigate}
               onNewTask={() => setEditor({ kind: "task", stageId: stage.document.id })}
               onMoveStage={(offset) => moveStage(stage.document.id, offset)}
@@ -364,12 +382,13 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
               statusBusy={statusPending !== null}
               savingTaskIds={new Set([...(orderPending ?? []), ...(statusPending === null ? [] : [statusPending])])}
               tasks={visibleTasks.filter((task) => task.document.milestone === stage.document.id)}
+              taskFields={taskFields}
               changedTaskIds={new Set(Object.keys(recentChanges))}
               t={t}
             />)}
             {(milestoneFilter === "" || milestoneFilter === "none") && <section className={`project-plan-stage project-plan-unassigned${visibleOutsideStages.length > 0 ? " has-work" : ""}`}>
               <header><div><span className="project-plan-stage-kind">{t("projectPlan.systemGroup")}</span><h3>{t("projectPlan.unassignedHeading")}</h3><p>{t("projectPlan.unassignedDescription")}</p></div><div className="project-plan-stage-actions"><button disabled={readOnly} onClick={() => setEditor({ kind: "task" })}>+ {t("core.createTaskAction")}</button></div></header>
-              <TaskRows allTasks={outsideStages} locale={locale} onNavigate={onNavigate} onStatusChange={changeTaskStatus} projectId={projectId} query={navigationQuery} readOnly={readOnly} savingTaskIds={new Set([...(orderPending ?? []), ...(statusPending === null ? [] : [statusPending])])} selectedTaskId={selectedTaskId} statusBusy={statusPending !== null} statusOptions={statuses} statusTitle={statusTitle} tasks={visibleOutsideStages} t={t} />
+              <TaskRows allTasks={outsideStages} locale={locale} onNavigate={onNavigate} onStatusChange={changeTaskStatus} people={people} projectId={projectId} query={navigationQuery} readOnly={readOnly} savingTaskIds={new Set([...(orderPending ?? []), ...(statusPending === null ? [] : [statusPending])])} selectedTaskId={selectedTaskId} statusBusy={statusPending !== null} statusOptions={statuses} statusTitle={statusTitle} taskFields={taskFields} tasks={visibleOutsideStages} t={t} />
             </section>}
           </section>
         </div>
@@ -383,7 +402,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
 
         {selectedTask !== undefined && <aside className="project-plan-inspector task-inspector" aria-label={t("core.details")}>
           <button aria-label={t("core.closeEditor")} className="inspector-close" onClick={closeInspector} type="button">×</button>
-          <TaskPanel api={api} catalog={catalog} confirmDelete={(name) => confirmAction(t("core.deleteConfirm", { name }))} draft={draft} entity={selectedTask} fingerprint={workspace.draft_fingerprint} key={selectedTask.document.id} locale={locale} milestones={workspace.milestones} onDeleted={closeInspector} onNavigate={onNavigate} onStatusChange={(status) => changeTaskStatus(selectedTask, status)} projects={projects} readOnly={readOnly} remove={removeEntity} save={saveEntity} statusBusy={statusPending !== null} statusOptions={statuses} typeOptions={types} />
+          <TaskPanel api={api} catalog={catalog} confirmDelete={(name) => confirmAction(t("core.deleteConfirm", { name }))} draft={draft} entity={selectedTask} fingerprint={workspace.draft_fingerprint} key={selectedTask.document.id} locale={locale} milestones={workspace.milestones} onDeleted={closeInspector} onNavigate={onNavigate} onStatusChange={(status) => changeTaskStatus(selectedTask, status)} people={people} projects={projects} readOnly={readOnly} remove={removeEntity} save={saveEntity} statusBusy={statusPending !== null} statusOptions={statuses} typeOptions={types} />
         </aside>}
       </div>}
     </AsyncBoundary>
@@ -426,6 +445,8 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
         <label>{t("core.title")}<input disabled={readOnly} name="title" required /></label>
         <label>{t("core.status")}<select disabled={readOnly} name="status">{statuses.map((item) => <option key={item.slug} value={item.slug}>{item.title}</option>)}</select></label>
         <label>{t("core.type")}<select disabled={readOnly} name="type">{types.map((item) => <option key={item.slug} value={item.slug}>{item.title}</option>)}</select></label>
+        <AssigneeChecks disabled={readOnly} people={people} selected={[]} t={t} />
+        <label>{t("projectPlan.start")}<input disabled={readOnly} name="start" type="date" /></label>
         <label>{t("core.due")}<input disabled={readOnly} name="due" type="date" /></label>
         <label>{t("projectPlan.estimate")}<input disabled={readOnly} min="0" name="estimate" step="0.25" type="number" /></label>
         <label>{t("core.description")}<textarea disabled={readOnly} name="description" /></label>
@@ -435,7 +456,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   </section>;
 }
 
-function StageSection({ stage, tasks, allTasks, stageIndex, stageCount, projectId, query, locale, readOnly, orderBusy, selected, changed, saving, selectedTaskId, changedTaskIds, savingTaskIds, statusTitle, statusOptions, statusBusy, onNewTask, onMoveStage, onMoveTask, onStatusChange, onNavigate, t }: {
+function StageSection({ stage, tasks, allTasks, stageIndex, stageCount, projectId, query, locale, people, readOnly, orderBusy, selected, changed, saving, selectedTaskId, changedTaskIds, savingTaskIds, statusTitle, statusOptions, statusBusy, taskFields, onNewTask, onMoveStage, onMoveTask, onStatusChange, onNavigate, t }: {
   readonly stage: EntityResult;
   readonly tasks: readonly EntityResult[];
   readonly allTasks: readonly EntityResult[];
@@ -444,6 +465,7 @@ function StageSection({ stage, tasks, allTasks, stageIndex, stageCount, projectI
   readonly projectId: string;
   readonly query: Readonly<Record<string, readonly string[]>>;
   readonly locale: Locale;
+  readonly people: readonly EntityResult[];
   readonly readOnly: boolean;
   readonly orderBusy: boolean;
   readonly selected: boolean;
@@ -455,6 +477,7 @@ function StageSection({ stage, tasks, allTasks, stageIndex, stageCount, projectI
   readonly statusTitle: (slug: string) => string;
   readonly statusOptions: readonly ConfigValue[];
   readonly statusBusy: boolean;
+  readonly taskFields: TaskFieldVisibility;
   readonly onNewTask: () => void;
   readonly onMoveStage: (offset: -1 | 1) => void;
   readonly onMoveTask: (taskId: string, offset: -1 | 1) => void;
@@ -464,26 +487,30 @@ function StageSection({ stage, tasks, allTasks, stageIndex, stageCount, projectI
 }) {
   const completed = allTasks.filter((task) => text(task.document, "status") === "done").length;
   const progress = allTasks.length === 0 ? 0 : Math.round(completed / allTasks.length * 100);
+  const stageAssigneeIds = [...new Set(allTasks.flatMap((task) => strings(task.document, "assignees")))];
+  const stageAssignees = stageAssigneeIds.map((id) => text(people.find((person) => person.document.id === id)?.document ?? { schema: "", id: "", lifecycle: "active" }, "name") || id);
   return <article className={`project-plan-stage${selected ? " selected" : ""}${changed ? " recently-changed" : ""}${saving ? " is-saving" : ""}`} data-flip-key={`stage:${stage.document.id}`}>
     <header>
       <button aria-current={selected ? "true" : undefined} aria-label={`${t("core.milestone")}: ${text(stage.document, "name")} · ${stage.document.id}`} className="project-plan-stage-selector" onClick={() => onNavigate("stages", { projectId, stageId: stage.document.id, ...(Object.keys(query).length > 0 ? { query } : {}) })} type="button">
         <span className="project-plan-stage-kind">{t("core.milestone")} {stageIndex + 1}. <code>{stage.document.id}</code>.</span>
         <span aria-level={3} className="project-plan-stage-title" role="heading">{text(stage.document, "name")}</span>
         <span className="project-plan-stage-description">{text(stage.document, "description_markdown") || t("core.noDescription")}</span>
+        {taskFields.assignees && <span className="project-plan-stage-assignees">{t("core.assignees")}: {stageAssignees.length === 0 ? t("core.unassigned") : stageAssignees.join(", ")}</span>}
       </button>
       <div className="project-plan-stage-actions"><span className="plan-order-controls"><button aria-label={t("projectPlan.moveStageUp", { number: stageIndex + 1 })} disabled={readOnly || orderBusy || stageIndex === 0} onClick={() => onMoveStage(-1)} type="button">↑</button><button aria-label={t("projectPlan.moveStageDown", { number: stageIndex + 1 })} disabled={readOnly || orderBusy || stageIndex === stageCount - 1} onClick={() => onMoveStage(1)} type="button">↓</button></span><time dateTime={text(stage.document, "due")}>{text(stage.document, "due") ? formatDateOnly(locale, text(stage.document, "due")) : "—"}</time><button disabled={readOnly} onClick={onNewTask}>+ {t("core.createTaskAction")}</button></div>
     </header>
     <div className="project-plan-stage-progress"><progress aria-label={t("stages.progressLabel")} max="100" value={progress}>{progress}%</progress><span>{t("stages.progress", { completed, count: allTasks.length })}</span></div>
-    <TaskRows allTasks={allTasks} changedTaskIds={changedTaskIds} locale={locale} onMoveTask={onMoveTask} onNavigate={onNavigate} onStatusChange={onStatusChange} orderBusy={orderBusy} projectId={projectId} query={query} readOnly={readOnly} savingTaskIds={savingTaskIds} selectedTaskId={selectedTaskId} statusBusy={statusBusy} statusOptions={statusOptions} statusTitle={statusTitle} tasks={tasks} t={t} />
+    <TaskRows allTasks={allTasks} changedTaskIds={changedTaskIds} locale={locale} onMoveTask={onMoveTask} onNavigate={onNavigate} onStatusChange={onStatusChange} orderBusy={orderBusy} people={people} projectId={projectId} query={query} readOnly={readOnly} savingTaskIds={savingTaskIds} selectedTaskId={selectedTaskId} statusBusy={statusBusy} statusOptions={statusOptions} statusTitle={statusTitle} taskFields={taskFields} tasks={tasks} t={t} />
   </article>;
 }
 
-function TaskRows({ tasks, allTasks, projectId, query = {}, locale, readOnly = true, orderBusy = false, selectedTaskId, changedTaskIds = new Set<string>(), savingTaskIds = new Set<string>(), statusTitle, statusOptions = [], statusBusy = false, onMoveTask, onStatusChange, onNavigate, t }: {
+function TaskRows({ tasks, allTasks, projectId, query = {}, locale, people, readOnly = true, orderBusy = false, selectedTaskId, changedTaskIds = new Set<string>(), savingTaskIds = new Set<string>(), statusTitle, statusOptions = [], statusBusy = false, taskFields, onMoveTask, onStatusChange, onNavigate, t }: {
   readonly tasks: readonly EntityResult[];
   readonly allTasks: readonly EntityResult[];
   readonly projectId: string;
   readonly query?: Readonly<Record<string, readonly string[]>>;
   readonly locale: Locale;
+  readonly people: readonly EntityResult[];
   readonly readOnly?: boolean;
   readonly orderBusy?: boolean;
   readonly selectedTaskId: string;
@@ -492,6 +519,7 @@ function TaskRows({ tasks, allTasks, projectId, query = {}, locale, readOnly = t
   readonly statusTitle: (slug: string) => string;
   readonly statusOptions?: readonly ConfigValue[];
   readonly statusBusy?: boolean;
+  readonly taskFields: TaskFieldVisibility;
   readonly onMoveTask?: (taskId: string, offset: -1 | 1) => void;
   readonly onStatusChange?: (task: EntityResult, status: string) => void;
   readonly onNavigate: WorkspaceNavigate;
@@ -501,9 +529,10 @@ function TaskRows({ tasks, allTasks, projectId, query = {}, locale, readOnly = t
   return <div className="project-plan-task-list">{tasks.map((task) => {
     const selected = selectedTaskId === task.document.id;
     const taskIndex = allTasks.findIndex((item) => item.document.id === task.document.id);
+    const assignees = strings(task.document, "assignees").map((id) => text(people.find((person) => person.document.id === id)?.document ?? { schema: "", id: "", lifecycle: "active" }, "name") || id);
     return <div className={`project-plan-task-row${selected ? " selected" : ""}${changedTaskIds.has(task.document.id) ? " recently-changed" : ""}${savingTaskIds.has(task.document.id) ? " is-saving" : ""}`} data-flip-key={`task:${task.document.id}`} key={task.document.id}>
       <button aria-current={selected ? "true" : undefined} className="project-plan-task-selector" onClick={() => onNavigate("tasks", { projectId, taskId: task.document.id, ...(Object.keys(query).length > 0 ? { query } : {}) })} type="button"><span className="project-plan-task-kind">{t("projectPlan.taskLabel")} {taskIndex + 1}. <code>{task.document.id}</code>.</span><strong>{text(task.document, "title")}</strong></button>
-      <span className="project-plan-task-meta">{text(task.document, "due") && <time dateTime={text(task.document, "due")}>{formatDateOnly(locale, text(task.document, "due"))}</time>}{number(task.document, "estimate_hours") !== undefined && <span>{number(task.document, "estimate_hours")}h</span>}{onStatusChange === undefined || readOnly ? <span className="state open">{statusTitle(text(task.document, "status"))}</span> : <select aria-label={`${t("core.status")}: ${text(task.document, "title")}`} className="inline-status-select" disabled={statusBusy} onChange={(event) => onStatusChange(task, event.target.value)} value={text(task.document, "status")}>{statusOptions.map((status) => <option key={status.slug} value={status.slug}>{status.title}</option>)}</select>}{onMoveTask !== undefined && <span className="plan-order-controls"><button aria-label={t("projectPlan.moveTaskUp", { number: taskIndex + 1 })} disabled={readOnly || orderBusy || taskIndex === 0} onClick={() => onMoveTask(task.document.id, -1)} type="button">↑</button><button aria-label={t("projectPlan.moveTaskDown", { number: taskIndex + 1 })} disabled={readOnly || orderBusy || taskIndex === allTasks.length - 1} onClick={() => onMoveTask(task.document.id, 1)} type="button">↓</button></span>}</span>
+      <span className="project-plan-task-meta">{taskFields.assignees && <span className="task-assignees">{assignees.length === 0 ? t("core.unassigned") : assignees.join(", ")}</span>}{taskFields.due && text(task.document, "due") && <time dateTime={text(task.document, "due")}>{formatDateOnly(locale, text(task.document, "due"))}</time>}{taskFields.estimate && number(task.document, "estimate_hours") !== undefined && <span>{number(task.document, "estimate_hours")}h</span>}{taskFields.status && (onStatusChange === undefined || readOnly ? <span className="state open">{statusTitle(text(task.document, "status"))}</span> : <select aria-label={`${t("core.status")}: ${text(task.document, "title")}`} className="inline-status-select" disabled={statusBusy} onChange={(event) => onStatusChange(task, event.target.value)} value={text(task.document, "status")}>{statusOptions.map((status) => <option key={status.slug} value={status.slug}>{status.title}</option>)}</select>)}{onMoveTask !== undefined && <span className="plan-order-controls"><button aria-label={t("projectPlan.moveTaskUp", { number: taskIndex + 1 })} disabled={readOnly || orderBusy || taskIndex === 0} onClick={() => onMoveTask(task.document.id, -1)} type="button">↑</button><button aria-label={t("projectPlan.moveTaskDown", { number: taskIndex + 1 })} disabled={readOnly || orderBusy || taskIndex === allTasks.length - 1} onClick={() => onMoveTask(task.document.id, 1)} type="button">↓</button></span>}</span>
     </div>;
   })}</div>;
 }
