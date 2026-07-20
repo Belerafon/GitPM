@@ -58,6 +58,8 @@ describe("administration UI", () => {
     await waitFor(() => expect((admin.configurations.get("statuses")!.document.statuses as Array<{ title: string }>)[0]?.title).toBe("Queue"));
     fireEvent.click(within(statusesCard).getByRole("button", { name: "Edit" }));
     fireEvent.click(screen.getByRole("button", { name: "Move Queue down" }));
+    expect(screen.getByLabelText("Statuses backlog").closest(".config-row")?.classList.contains("recently-changed")).toBe(true);
+    expect(screen.getByLabelText("Statuses done").closest(".config-row")?.classList.contains("recently-changed")).toBe(true);
     await waitFor(() => expect((admin.configurations.get("statuses")!.document.statuses as Array<{ slug: string }>)[0]?.slug).toBe("done"));
     expect(changed).toHaveBeenCalled();
   });

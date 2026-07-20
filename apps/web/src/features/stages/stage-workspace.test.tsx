@@ -21,15 +21,17 @@ const large = result({ schema: "gitpm/task@1", id: "T-26-666666", project: proje
 function api() {
   let currentProject = project;
   let currentStages = [stage, laterStage];
+  let currentTasks = [linked, other, large, urgent];
   const createEntity = vi.fn(async (_draftId: string, _type: string, _fingerprint: string, document: GitPmDocument) => result(document));
   const updateEntity = vi.fn(async (_draftId: string, type: string, _entity: EntityResult, _fingerprint: string, document: GitPmDocument) => {
     const updated = result(document);
     if (type === "projects") currentProject = updated;
     if (type === "milestones") currentStages = currentStages.map((item) => item.document.id === document.id ? updated : item);
+    if (type === "tasks") currentTasks = currentTasks.map((item) => item.document.id === document.id ? updated : item);
     return updated;
   });
   return {
-    projectWorkspace: vi.fn(async () => ({ project: currentProject, milestones: currentStages, tasks: [linked, other, large, urgent], draft_fingerprint: fingerprint })),
+    projectWorkspace: vi.fn(async () => ({ project: currentProject, milestones: currentStages, tasks: currentTasks, draft_fingerprint: fingerprint })),
     getConfiguration: vi.fn(async (_draftId: string, kind: "statuses" | "issue-types") => result(kind === "statuses"
       ? { schema: "gitpm/statuses@1", id: "CONFIG-STATUSES", lifecycle: "active", statuses: [{ slug: "backlog", title: "Backlog", active: true }, { slug: "done", title: "Done", active: true }] }
       : { schema: "gitpm/issue-types@1", id: "CONFIG-TYPES", lifecycle: "active", issue_types: [{ slug: "task", title: "Task", active: true }] })),
@@ -48,6 +50,7 @@ describe("project plan and stage workspace", () => {
 
     const stageHeading = await screen.findByRole("heading", { name: "Launch" });
     const stageCard = stageHeading.closest<HTMLElement>("article")!;
+    expect(document.querySelector(".project-plan-project-kind")?.textContent).toBe(`Project ${project.document.id}`);
     expect(screen.getByText("Linked task")).toBeTruthy();
     expect(screen.getByText("Without stage")).toBeTruthy();
     fireEvent.click(within(stageCard).getByRole("button", { name: /Milestone: Launch/u }));
@@ -55,6 +58,11 @@ describe("project plan and stage workspace", () => {
 
     fireEvent.click(within(stageCard).getByRole("button", { name: /Linked task/u }));
     expect(onNavigate).toHaveBeenLastCalledWith("tasks", { projectId: project.document.id, taskId: linked.document.id });
+
+    const inlineStatus = screen.getByRole<HTMLSelectElement>("combobox", { name: "Status: Without stage" });
+    fireEvent.change(inlineStatus, { target: { value: "done" } });
+    expect(inlineStatus.value).toBe("done");
+    await waitFor(() => expect(client.updateEntity).toHaveBeenCalledWith(draft.draft_id, "tasks", other, fingerprint, expect.objectContaining({ status: "done" })));
 
     fireEvent.click(within(stageCard).getByRole("button", { name: /New task/u }));
     const dialog = screen.getByRole("dialog", { name: "New task" });
@@ -77,6 +85,8 @@ describe("project plan and stage workspace", () => {
 
     fireEvent.click(within(stageCard).getByRole("button", { name: "Move task 2 up" }));
     expect(titles()).toEqual(["Alpha task", "Zebra task", "Linked task"]);
+    expect(screen.getByText("Alpha task").closest(".project-plan-task-row")?.classList.contains("recently-changed")).toBe(true);
+    expect(screen.getByText("Zebra task").closest(".project-plan-task-row")?.classList.contains("recently-changed")).toBe(true);
     expect(document.querySelector(".workspace-loading")).toBeNull();
     await waitFor(() => expect(titles()).toEqual(["Alpha task", "Zebra task", "Linked task"]));
     expect(client.updateEntity.mock.calls[0]?.[1]).toBe("milestones");
@@ -85,6 +95,8 @@ describe("project plan and stage workspace", () => {
     const moveMilestoneDown = screen.getByRole<HTMLButtonElement>("button", { name: "Move milestone 1 down" });
     await waitFor(() => expect(moveMilestoneDown.disabled).toBe(false));
     fireEvent.click(moveMilestoneDown);
+    expect(stageCard.classList.contains("recently-changed")).toBe(true);
+    expect(screen.getByRole("heading", { name: "Follow-up" }).closest(".project-plan-stage")?.classList.contains("recently-changed")).toBe(true);
     await waitFor(() => expect(stageCard.querySelector(".project-plan-stage-kind")?.textContent).toBe(`Milestone 2. ${stage.document.id}.`));
     expect(client.updateEntity.mock.calls[1]?.[1]).toBe("projects");
     expect(client.updateEntity.mock.calls[1]?.[4]).toMatchObject({ milestone_order: [laterStage.document.id, stage.document.id] });
