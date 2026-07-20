@@ -4,6 +4,7 @@ export interface WorkspaceSelection {
   readonly projectId?: string;
   readonly stageId?: string;
   readonly taskId?: string;
+  readonly personId?: string;
   readonly commit?: string;
   readonly query?: Readonly<Record<string, readonly string[]>>;
 }

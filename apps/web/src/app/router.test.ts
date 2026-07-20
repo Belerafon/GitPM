@@ -6,7 +6,7 @@ const roundTrip = (path: string) => serializeAppRoute(parseAppRoute(path)!);
 describe("app route model", () => {
   it.each([
     "/workspaces", "/projects", "/board", "/people", "/calendars", "/settings", "/workload", "/gantt", "/changes", "/history",
-    "/projects/P-26-ALPHA", "/projects/P-26-ALPHA/stages/M-26-FIRST", "/projects/P-26-ALPHA/tasks/T-26-FIRST", "/projects/P-26-ALPHA/board", "/projects/P-26-ALPHA/timeline", "/history/abcdef123456",
+    "/projects/P-26-ALPHA", "/projects/P-26-ALPHA/stages/M-26-FIRST", "/projects/P-26-ALPHA/tasks/T-26-FIRST", "/projects/P-26-ALPHA/board", "/projects/P-26-ALPHA/timeline", "/people/U-26-ADA", "/history/abcdef123456",
   ])("round-trips %s", (path) => expect(roundTrip(path)).toBe(path));
 
   it("encodes entity identifiers and restores repeated query filters deterministically", () => {
@@ -25,6 +25,7 @@ describe("app route model", () => {
     expect(serializeAppRoute(routeForDestination("gantt", { projectId: "P-1" }))).toBe("/projects/P-1/timeline");
     expect(serializeAppRoute(routeForDestination("history", { commit: "abcdef" }))).toBe("/history/abcdef");
     expect(serializeAppRoute(routeForDestination("calendar"))).toBe("/calendars");
+    expect(serializeAppRoute(routeForDestination("people", { personId: "U-1" }))).toBe("/people/U-1");
   });
 
   it("canonicalizes legacy project query routes into the project workspace", () => {

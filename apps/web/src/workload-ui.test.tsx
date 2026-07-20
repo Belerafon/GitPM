@@ -43,6 +43,6 @@ describe("Workload UI", () => {
     fireEvent.change(screen.getByLabelText("Team"), { target: { value: reviewers.document.id } });
     await waitFor(() => expect(screen.getByText("Included Tasks").nextElementSibling?.textContent).toBe("1"));
     fireEvent.click(screen.getByRole("button", { name: "Ada" }));
-    expect(onNavigate).toHaveBeenCalledWith("people");
+    expect(onNavigate).toHaveBeenCalledWith("people", { personId: adaId });
   });
 });

@@ -49,7 +49,7 @@ class FakeApi implements GitPmApi {
   async reopenDraft(draftId: string) { return this.replace(draftId, { state: "open" }); }
   async cleanupDraft(draftId: string) { this.drafts = this.drafts.filter((item) => item.draft_id !== draftId); }
   async listEntities(_draftId: string, type: string, project?: string) {
-    const schemas: Record<string, string> = { projects: "gitpm/project@1", milestones: "gitpm/milestone@1", tasks: "gitpm/task@1" };
+    const schemas: Record<string, string> = { projects: "gitpm/project@1", milestones: "gitpm/milestone@1", tasks: "gitpm/task@1", people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1" };
     return this.entities.filter((item) => item.document.schema === schemas[type] && (project === undefined || item.document.project === project));
   }
   async projectWorkspace(draftId: string, projectId: string) {
@@ -124,6 +124,23 @@ describe("localization runtime", () => {
 });
 
 describe("frontend draft lifecycle", () => {
+  it("restores a person profile deep link", async () => {
+    const api = new FakeApi();
+    api.currentSession = { ...session, mode: "repository", repository: { name: "portfolio", path: "D:\\portfolio", has_remote: false }, gitlab: { configured: false } };
+    api.drafts = [draft({ draft_id: "DRF-LOCAL" })];
+    api.entities = [
+      { document: { schema: "gitpm/person@1", id: "U-26-ADA", name: "Ada Lovelace", weekly_capacity_hours: 32, calendar: "C-26-DEFAULT", lifecycle: "active" }, path: "people/U-26-ADA.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) },
+      { document: { schema: "gitpm/calendar@1", id: "C-26-DEFAULT", name: "Default", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" }, path: "calendars/C-26-DEFAULT.yaml", blob_id: "c".repeat(40), draft_fingerprint: "b".repeat(64) },
+    ];
+    window.history.replaceState({}, "", "/people/U-26-ADA");
+    render(<App api={api} browserLanguages={["en"]} />);
+
+    expect(await screen.findByRole("heading", { name: "Ada Lovelace" })).toBeTruthy();
+    expect(`${window.location.pathname}${window.location.search}`).toBe("/people/U-26-ADA");
+    fireEvent.click(screen.getByRole("button", { name: /All people and teams/u }));
+    expect(`${window.location.pathname}${window.location.search}`).toBe("/people");
+  });
+
   it("restores a project milestone deep link with project tabs and task navigation", async () => {
     const api = new FakeApi();
     api.currentSession = { ...session, mode: "repository", repository: { name: "portfolio", path: "D:\\portfolio", has_remote: false }, gitlab: { configured: false } };

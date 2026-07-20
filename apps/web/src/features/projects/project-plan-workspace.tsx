@@ -10,6 +10,7 @@ import { formatDateOnly, formatDurationHours, message, type Locale, type Message
 import { upsertEntity, useFlipList } from "../../optimistic-ui.js";
 import type { DraftStatus, EntityResult, GitPmDocument, ProjectWorkspaceResult } from "../../types.js";
 import type { WorkspaceNavigate } from "../../workspace-navigation.js";
+import { PersonLinks } from "../../person-link.js";
 
 type PlanEditor = { readonly kind: "project" | "new-stage" } | { readonly kind: "edit-stage"; readonly stageId: string } | { readonly kind: "task"; readonly stageId?: string } | null;
 type TaskField = "assignees" | "due" | "estimate" | "status";
@@ -193,7 +194,6 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   const navigationQuery = { ...(statusFilter ? { status: [statusFilter] } : {}), ...(milestoneFilter ? { milestone: [milestoneFilter] } : {}) };
   const progress = activeTasks.length === 0 ? 0 : Math.round(completed / activeTasks.length * 100);
   const statusTitle = (slug: string) => statuses.find((item) => item.slug === slug)?.title ?? slug;
-  const personName = (id: string) => text(people.find((item) => item.document.id === id)?.document ?? { schema: "", id: "", lifecycle: "active" }, "name") || t("core.unassigned");
   const dateLabel = (value: string) => /^\d{4}-\d{2}-\d{2}$/u.test(value) ? formatDateOnly(locale, value) : "—";
   const selectedStage = workspace?.milestones.find((item) => item.document.id === selectedStageId);
   const selectedTask = workspace?.tasks.find((item) => item.document.id === selectedTaskId);
@@ -335,7 +335,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
             <div className="project-plan-actions"><button disabled={readOnly} onClick={() => setEditor({ kind: "project" })}>{t("core.edit")}</button><button disabled={readOnly} onClick={() => setEditor({ kind: "new-stage" })}>+ {t("stages.new")}</button><button className="primary" disabled={readOnly} onClick={() => setEditor({ kind: "task" })}>+ {t("core.createTaskAction")}</button></div>
             <dl className="project-plan-meta">
               <div><dt>{t("core.status")}</dt><dd><span className="state open">{statusTitle(text(workspace.project.document, "status"))}</span></dd></div>
-              <div><dt>{t("core.owner")}</dt><dd>{personName(text(workspace.project.document, "owner"))}</dd></div>
+              <div><dt>{t("core.owner")}</dt><dd><PersonLinks empty={t("core.unassigned")} onOpen={(personId) => onNavigate("people", { personId })} people={people} personIds={text(workspace.project.document, "owner") ? [text(workspace.project.document, "owner")] : []} /></dd></div>
               <div><dt>{t("projectPlan.start")}</dt><dd>{dateLabel(text(workspace.project.document, "start"))}</dd></div>
               <div><dt>{t("core.due")}</dt><dd>{dateLabel(text(workspace.project.document, "due"))}</dd></div>
             </dl>
@@ -488,14 +488,13 @@ function StageSection({ stage, tasks, allTasks, stageIndex, stageCount, projectI
   const completed = allTasks.filter((task) => text(task.document, "status") === "done").length;
   const progress = allTasks.length === 0 ? 0 : Math.round(completed / allTasks.length * 100);
   const stageAssigneeIds = [...new Set(allTasks.flatMap((task) => strings(task.document, "assignees")))];
-  const stageAssignees = stageAssigneeIds.map((id) => text(people.find((person) => person.document.id === id)?.document ?? { schema: "", id: "", lifecycle: "active" }, "name") || id);
   return <article className={`project-plan-stage${selected ? " selected" : ""}${changed ? " recently-changed" : ""}${saving ? " is-saving" : ""}`} data-flip-key={`stage:${stage.document.id}`}>
     <header>
       <button aria-current={selected ? "true" : undefined} aria-label={`${t("core.milestone")}: ${text(stage.document, "name")} · ${stage.document.id}`} className="project-plan-stage-selector" onClick={() => onNavigate("stages", { projectId, stageId: stage.document.id, ...(Object.keys(query).length > 0 ? { query } : {}) })} type="button">
         <span className="project-plan-stage-kind">{t("core.milestone")} {stageIndex + 1}. <code>{stage.document.id}</code>.</span>
         <span aria-level={3} className="project-plan-stage-title" role="heading">{text(stage.document, "name")}</span>
         <span className="project-plan-stage-description">{text(stage.document, "description_markdown") || t("core.noDescription")}</span>
-        {taskFields.assignees && <span className="project-plan-stage-assignees">{t("core.assignees")}: {stageAssignees.length === 0 ? t("core.unassigned") : stageAssignees.join(", ")}</span>}
+        {taskFields.assignees && <span className="project-plan-stage-assignees">{t("core.assignees")}: <PersonLinks empty={t("core.unassigned")} onOpen={(personId) => onNavigate("people", { personId })} people={people} personIds={stageAssigneeIds} /></span>}
       </button>
       <div className="project-plan-stage-actions"><span className="plan-order-controls"><button aria-label={t("projectPlan.moveStageUp", { number: stageIndex + 1 })} disabled={readOnly || orderBusy || stageIndex === 0} onClick={() => onMoveStage(-1)} type="button">↑</button><button aria-label={t("projectPlan.moveStageDown", { number: stageIndex + 1 })} disabled={readOnly || orderBusy || stageIndex === stageCount - 1} onClick={() => onMoveStage(1)} type="button">↓</button></span><time dateTime={text(stage.document, "due")}>{text(stage.document, "due") ? formatDateOnly(locale, text(stage.document, "due")) : "—"}</time><button disabled={readOnly} onClick={onNewTask}>+ {t("core.createTaskAction")}</button></div>
     </header>
@@ -529,10 +528,10 @@ function TaskRows({ tasks, allTasks, projectId, query = {}, locale, people, read
   return <div className="project-plan-task-list">{tasks.map((task) => {
     const selected = selectedTaskId === task.document.id;
     const taskIndex = allTasks.findIndex((item) => item.document.id === task.document.id);
-    const assignees = strings(task.document, "assignees").map((id) => text(people.find((person) => person.document.id === id)?.document ?? { schema: "", id: "", lifecycle: "active" }, "name") || id);
+    const assignees = strings(task.document, "assignees");
     return <div className={`project-plan-task-row${selected ? " selected" : ""}${changedTaskIds.has(task.document.id) ? " recently-changed" : ""}${savingTaskIds.has(task.document.id) ? " is-saving" : ""}`} data-flip-key={`task:${task.document.id}`} key={task.document.id}>
       <button aria-current={selected ? "true" : undefined} className="project-plan-task-selector" onClick={() => onNavigate("tasks", { projectId, taskId: task.document.id, ...(Object.keys(query).length > 0 ? { query } : {}) })} type="button"><span className="project-plan-task-kind">{t("projectPlan.taskLabel")} {taskIndex + 1}. <code>{task.document.id}</code>.</span><strong>{text(task.document, "title")}</strong></button>
-      <span className="project-plan-task-meta">{taskFields.assignees && <span className="task-assignees">{assignees.length === 0 ? t("core.unassigned") : assignees.join(", ")}</span>}{taskFields.due && text(task.document, "due") && <time dateTime={text(task.document, "due")}>{formatDateOnly(locale, text(task.document, "due"))}</time>}{taskFields.estimate && number(task.document, "estimate_hours") !== undefined && <span>{number(task.document, "estimate_hours")}h</span>}{taskFields.status && (onStatusChange === undefined || readOnly ? <span className="state open">{statusTitle(text(task.document, "status"))}</span> : <select aria-label={`${t("core.status")}: ${text(task.document, "title")}`} className="inline-status-select" disabled={statusBusy} onChange={(event) => onStatusChange(task, event.target.value)} value={text(task.document, "status")}>{statusOptions.map((status) => <option key={status.slug} value={status.slug}>{status.title}</option>)}</select>)}{onMoveTask !== undefined && <span className="plan-order-controls"><button aria-label={t("projectPlan.moveTaskUp", { number: taskIndex + 1 })} disabled={readOnly || orderBusy || taskIndex === 0} onClick={() => onMoveTask(task.document.id, -1)} type="button">↑</button><button aria-label={t("projectPlan.moveTaskDown", { number: taskIndex + 1 })} disabled={readOnly || orderBusy || taskIndex === allTasks.length - 1} onClick={() => onMoveTask(task.document.id, 1)} type="button">↓</button></span>}</span>
+      <span className="project-plan-task-meta">{taskFields.assignees && <span className="task-assignees"><PersonLinks empty={t("core.unassigned")} onOpen={(personId) => onNavigate("people", { personId })} people={people} personIds={assignees} /></span>}{taskFields.due && text(task.document, "due") && <time dateTime={text(task.document, "due")}>{formatDateOnly(locale, text(task.document, "due"))}</time>}{taskFields.estimate && number(task.document, "estimate_hours") !== undefined && <span>{number(task.document, "estimate_hours")}h</span>}{taskFields.status && (onStatusChange === undefined || readOnly ? <span className="state open">{statusTitle(text(task.document, "status"))}</span> : <select aria-label={`${t("core.status")}: ${text(task.document, "title")}`} className="inline-status-select" disabled={statusBusy} onChange={(event) => onStatusChange(task, event.target.value)} value={text(task.document, "status")}>{statusOptions.map((status) => <option key={status.slug} value={status.slug}>{status.title}</option>)}</select>)}{onMoveTask !== undefined && <span className="plan-order-controls"><button aria-label={t("projectPlan.moveTaskUp", { number: taskIndex + 1 })} disabled={readOnly || orderBusy || taskIndex === 0} onClick={() => onMoveTask(task.document.id, -1)} type="button">↑</button><button aria-label={t("projectPlan.moveTaskDown", { number: taskIndex + 1 })} disabled={readOnly || orderBusy || taskIndex === allTasks.length - 1} onClick={() => onMoveTask(task.document.id, 1)} type="button">↓</button></span>}</span>
     </div>;
   })}</div>;
 }

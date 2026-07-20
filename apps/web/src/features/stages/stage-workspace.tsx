@@ -9,6 +9,7 @@ import { formatDateOnly, formatDurationHours, message, type Locale, type Message
 import { upsertEntity } from "../../optimistic-ui.js";
 import type { DraftStatus, EntityResult, GitPmDocument, ProjectWorkspaceResult } from "../../types.js";
 import type { WorkspaceNavigate } from "../../workspace-navigation.js";
+import { PersonLinks } from "../../person-link.js";
 
 interface ConfigValue { readonly slug: string; readonly title: string; readonly active: boolean }
 const text = (document: GitPmDocument, key: string): string => typeof document[key] === "string" ? document[key] as string : "";
@@ -190,11 +191,10 @@ function StageDetails({ stage, tasks, projectId, locale, people, readOnly, chang
   const completed = tasks.filter((task) => text(task.document, "status") === "done").length;
   const overdue = tasks.filter((task) => text(task.document, "status") !== "done" && /^\d{4}-\d{2}-\d{2}$/u.test(text(task.document, "due")) && text(task.document, "due") < new Date().toISOString().slice(0, 10)).length;
   const estimate = tasks.reduce((sum, task) => sum + (typeof task.document.estimate_hours === "number" ? task.document.estimate_hours : 0), 0);
-  const personName = (id: string) => text(people.find((person) => person.document.id === id)?.document ?? { schema: "", id: "", lifecycle: "active" }, "name") || id;
-  const stageAssignees = [...new Set(tasks.flatMap((task) => Array.isArray(task.document.assignees) ? task.document.assignees.filter((id): id is string => typeof id === "string") : []))].map(personName);
+  const stageAssignees = [...new Set(tasks.flatMap((task) => Array.isArray(task.document.assignees) ? task.document.assignees.filter((id): id is string => typeof id === "string") : []))];
   return <>
     <header className={`card stage-detail-header${changed ? " recently-changed" : ""}`}>
-      <div><span className="eyebrow">{t("core.milestone")}</span><h2>{text(stage.document, "name")}</h2><p>{text(stage.document, "description_markdown") || t("core.noDescription")}</p><p className="stage-detail-assignees">{t("core.assignees")}: {stageAssignees.length === 0 ? t("core.unassigned") : stageAssignees.join(", ")}</p></div>
+      <div><span className="eyebrow">{t("core.milestone")}</span><h2>{text(stage.document, "name")}</h2><p>{text(stage.document, "description_markdown") || t("core.noDescription")}</p><p className="stage-detail-assignees">{t("core.assignees")}: <PersonLinks empty={t("core.unassigned")} onOpen={(personId) => onNavigate("people", { personId })} people={people} personIds={stageAssignees} /></p></div>
       <div className="stage-detail-actions"><button disabled={readOnly} onClick={onEdit}>{t("core.edit")}</button><button disabled={readOnly} onClick={onArchive}>{t("core.archive")}</button><button className="primary" disabled={readOnly} onClick={onNewTask}>+ {t("stages.newTask")}</button></div>
     </header>
     <div className="stage-stats">
@@ -204,8 +204,8 @@ function StageDetails({ stage, tasks, projectId, locale, people, readOnly, chang
       <div className="card"><span>{t("core.due")}</span><strong>{text(stage.document, "due") ? formatDateOnly(locale, text(stage.document, "due")) : "—"}</strong></div>
     </div>
     <section className="card stage-task-list"><div className="card-heading"><div><h3>{t("stages.tasks")}</h3><p>{t("stages.tasksDescription")}</p></div><button onClick={() => onNavigate("board", { projectId, query: { milestone: [stage.document.id] } })}>{t("stages.openBoard")}</button></div>
-      {tasks.length === 0 ? <p>{t("stages.emptyTasks")}</p> : tasks.map((task) => { const assignees = Array.isArray(task.document.assignees) ? task.document.assignees.filter((id): id is string => typeof id === "string").map(personName) : []; return <div className={`stage-task-row${changedTaskIds.has(task.document.id) ? " recently-changed" : ""}${statusSavingId === task.document.id ? " is-saving" : ""}`} key={task.document.id}>
-        <button className="stage-task-link" onClick={() => onNavigate("tasks", { projectId, taskId: task.document.id })}><strong>{text(task.document, "title")}</strong><code>{task.document.id}</code><span className="task-assignees">{assignees.length === 0 ? t("core.unassigned") : assignees.join(", ")}</span></button>{readOnly ? <span className="state open">{statusOptions.find((status) => status.slug === text(task.document, "status"))?.title ?? text(task.document, "status")}</span> : <select aria-label={`${t("core.status")}: ${text(task.document, "title")}`} className="inline-status-select" disabled={statusBusy} onChange={(event) => onStatusChange(task, event.target.value)} value={text(task.document, "status")}>{statusOptions.map((status) => <option key={status.slug} value={status.slug}>{status.title}</option>)}</select>}
+      {tasks.length === 0 ? <p>{t("stages.emptyTasks")}</p> : tasks.map((task) => { const assignees = Array.isArray(task.document.assignees) ? task.document.assignees.filter((id): id is string => typeof id === "string") : []; return <div className={`stage-task-row${changedTaskIds.has(task.document.id) ? " recently-changed" : ""}${statusSavingId === task.document.id ? " is-saving" : ""}`} key={task.document.id}>
+        <button className="stage-task-link" onClick={() => onNavigate("tasks", { projectId, taskId: task.document.id })}><strong>{text(task.document, "title")}</strong><code>{task.document.id}</code><span className="task-assignees"><PersonLinks empty={t("core.unassigned")} onOpen={(personId) => onNavigate("people", { personId })} people={people} personIds={assignees} /></span></button>{readOnly ? <span className="state open">{statusOptions.find((status) => status.slug === text(task.document, "status"))?.title ?? text(task.document, "status")}</span> : <select aria-label={`${t("core.status")}: ${text(task.document, "title")}`} className="inline-status-select" disabled={statusBusy} onChange={(event) => onStatusChange(task, event.target.value)} value={text(task.document, "status")}>{statusOptions.map((status) => <option key={status.slug} value={status.slug}>{status.title}</option>)}</select>}
       </div>; })}
     </section>
   </>;

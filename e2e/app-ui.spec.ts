@@ -60,6 +60,24 @@ test.describe("GitPM browser UI", () => {
     await expect(page.getByRole("button", { name: /Approve schema v1/u })).toBeVisible();
   });
 
+  test("shows a person's project responsibilities and daily availability calendar", async ({ page }) => {
+    for (const width of [1280, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/people/U-26-5EBAE3");
+      await page.locator(".locale-picker select").selectOption("en");
+
+      await expect(page.getByRole("heading", { name: "Anna Petrova", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Schedule", exact: true })).toBeVisible();
+      await expect(page.locator('[data-date="2026-07-01"]')).toHaveClass(/busy/u);
+      await expect(page.locator('[data-date="2026-07-03"]')).toHaveClass(/free/u);
+      const responsibilities = page.getByRole("heading", { name: "Responsible for", exact: true }).locator("xpath=ancestor::section[1]");
+      await expect(responsibilities.getByRole("button", { name: /GitPM launch/u })).toBeVisible();
+      const tasks = page.getByRole("heading", { name: "Tasks by project", exact: true }).locator("xpath=ancestor::section[1]");
+      await expect(tasks.getByRole("button", { name: /Approve schema v1/u })).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    }
+  });
+
   test("keeps the configured repository open after reloading the page", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("button", { name: /^GitPM launch/u })).toBeVisible();

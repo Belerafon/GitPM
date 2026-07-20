@@ -8,6 +8,7 @@ export interface AppRoute {
   readonly projectId?: string;
   readonly stageId?: string;
   readonly taskId?: string;
+  readonly personId?: string;
   readonly commit?: string;
   readonly query: RouteQuery;
 }
@@ -58,6 +59,7 @@ export function parseAppRoute(input: string | URL): AppRoute | null {
   if (segments[0] === "projects" && segments[2] === "tasks" && segments.length === 4) return route("tasks", { projectId: segments[1], taskId: segments[3] }, query);
   if (segments[0] === "projects" && segments[2] === "board" && segments.length === 3) return route("board", { projectId: segments[1] }, query);
   if (segments[0] === "projects" && segments[2] === "timeline" && segments.length === 3) return route("gantt", { projectId: segments[1] }, query);
+  if (segments[0] === "people" && segments.length === 2) return route("people", { personId: segments[1] }, query);
   if (segments[0] === "history" && segments.length === 2) return route("history", { commit: segments[1] }, query);
   return null;
 }
@@ -72,7 +74,7 @@ export function serializeAppRoute(value: AppRoute): string {
     case "stages": pathname = value.projectId === undefined ? "/projects" : value.stageId === undefined ? `/projects/${segment(value.projectId)}` : `/projects/${segment(value.projectId)}/stages/${segment(value.stageId)}`; break;
     case "tasks": pathname = value.projectId === undefined ? "/projects" : value.taskId === undefined ? `/projects/${segment(value.projectId)}` : `/projects/${segment(value.projectId)}/tasks/${segment(value.taskId)}`; break;
     case "board": pathname = value.projectId === undefined ? "/board" : `/projects/${segment(value.projectId)}/board`; break;
-    case "people": pathname = "/people"; break;
+    case "people": pathname = value.personId === undefined ? "/people" : `/people/${segment(value.personId)}`; break;
     case "calendars": pathname = "/calendars"; break;
     case "settings": pathname = "/settings"; break;
     case "workload": pathname = "/workload"; break;
@@ -91,6 +93,7 @@ export function routeForDestination(destination: WorkspaceDestination | "workspa
   if (destination === "workspaces") return route("workspaces", {}, routeQuery);
   if (destination === "portfolio") return route("projects", {}, routeQuery);
   if (destination === "calendar") return route("calendars", {}, routeQuery);
+  if (destination === "people") return route("people", { personId: selection.personId }, routeQuery);
   if (destination === "projects") return route("projects", { projectId: selection.projectId }, routeQuery);
   if (destination === "stages") return selection.stageId === undefined
     ? route("projects", { projectId: selection.projectId }, routeQuery)

@@ -17,6 +17,7 @@ import { SectionTabs, type SectionTab } from "./app/SectionTabs.js";
 import { ProjectTabs } from "./features/projects/project-tabs.js";
 import { ProjectPlanWorkspace } from "./features/projects/project-plan-workspace.js";
 import { EntityCatalog } from "./entity-catalog.js";
+import { PeopleProfileWorkspace } from "./people-profile-ui.js";
 
 interface AppProps {
   readonly api: GitPmApi;
@@ -59,7 +60,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
       : ["nav.drafts", "nav.changes", "nav.history"].includes(view)
         ? "nav.repository"
         : view;
-  const workspaceSelection: WorkspaceSelection = { projectId: activeRoute?.projectId, stageId: activeRoute?.stageId, taskId: activeRoute?.taskId, commit: activeRoute?.commit, query: activeRoute?.query };
+  const workspaceSelection: WorkspaceSelection = { projectId: activeRoute?.projectId, stageId: activeRoute?.stageId, taskId: activeRoute?.taskId, personId: activeRoute?.personId, commit: activeRoute?.commit, query: activeRoute?.query };
   const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
   const workspaceName = (id: string) => repositoryMode && id === "DRF-LOCAL" ? t("drafts.localName") : id;
   const workspaceState = (state: string) => t(({ open: "drafts.stateOpen", closed: "drafts.stateClosed", published: "drafts.statePublished", abandoned: "drafts.stateAbandoned" } as const)[state as "open" | "closed" | "published" | "abandoned"] ?? "drafts.state");
@@ -223,7 +224,9 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
           : <CoreWorkspace api={api} confirmAction={confirmAction} draft={active} key={`${view}:${workspaceSelection.projectId ?? ""}:${workspaceSelection.taskId ?? ""}`} locale={locale} surface={view === "nav.portfolio" ? "portfolio" : view === "nav.tasks" ? "tasks" : "projects"} initialProjectId={workspaceSelection.projectId} initialTaskId={workspaceSelection.taskId} initialStatusFilter={workspaceSelection.query?.status?.[0]} initialMilestoneFilter={workspaceSelection.query?.milestone?.[0]} onNavigate={openWorkspace} onChanged={drafts.refresh} />)}
         {["nav.people", "nav.calendar", "nav.settings"].includes(view) && (active === undefined
           ? <div className="card empty-workspace">{t("core.selectProject")}</div>
-          : <AdminWorkspace api={api} confirmAction={confirmAction} draft={active} role={drafts.session.role} locale={locale} surface={view === "nav.people" ? "people" : view === "nav.calendar" ? "calendar" : "settings"} onChanged={drafts.refresh} />)}
+          : view === "nav.people" && workspaceSelection.personId !== undefined
+            ? <PeopleProfileWorkspace api={api} draft={active} locale={locale} onNavigate={openWorkspace} personId={workspaceSelection.personId} />
+            : <AdminWorkspace api={api} confirmAction={confirmAction} draft={active} role={drafts.session.role} locale={locale} onOpenPerson={(personId) => openWorkspace("people", { personId })} surface={view === "nav.people" ? "people" : view === "nav.calendar" ? "calendar" : "settings"} onChanged={drafts.refresh} />)}
         {view === "nav.changes" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <ChangesWorkspace api={api} draft={active} role={drafts.session.role} locale={locale} onChanged={drafts.refresh} confirmAction={confirmAction} remoteAvailable={repository?.has_remote === true} gitlabConfigured={gitlab?.configured === true} gitlabSignedIn={gitlab?.user !== undefined} onGitLabLogin={loginToGitLab} />)}
         {view === "nav.history" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <HistoryWorkspace api={api} draft={active} key={`nav.history:${workspaceSelection.commit ?? ""}`} locale={locale} canRevert={drafts.session.role !== "Reporter"} initialCommit={workspaceSelection.commit} onNavigate={openWorkspace} onDraftCreated={drafts.select} />)}
         {view === "nav.board" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <BoardWorkspace api={api} draft={active} key={`nav.board:${workspaceSelection.projectId ?? ""}`} locale={locale} initialProjectId={workspaceSelection.projectId} initialStatusFilter={workspaceSelection.query?.status?.[0]} initialTypeFilter={workspaceSelection.query?.type?.[0]} initialMilestoneFilter={workspaceSelection.query?.milestone?.[0]} initialViewId={workspaceSelection.query?.view?.[0]} onNavigate={openWorkspace} onChanged={drafts.refresh} />)}
