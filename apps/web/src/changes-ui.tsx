@@ -85,7 +85,7 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
   const canMutate = role !== "Reporter" && draft.state === "open" && draft.writer_mode === "ui";
   const selected = useMemo(() => changes.files.find((file) => file.path === selectedPath) ?? changes.files[0], [changes, selectedPath]);
 
-  const load = async (keepData = false) => {
+  const load = async (keepData = true) => {
     await loadRequest.run(async () => {
       const [nextChanges, nextSemantic] = await Promise.all([api.listChanges(draft.draft_id), api.semanticChanges(draft.draft_id)]);
       return { nextChanges, nextSemantic };

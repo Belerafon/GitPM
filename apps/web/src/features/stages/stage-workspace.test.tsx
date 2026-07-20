@@ -76,11 +76,15 @@ describe("project plan and stage workspace", () => {
     expect(stageCard.querySelector(".project-plan-task-kind")?.textContent).toBe(`Task 1. ${urgent.document.id}.`);
 
     fireEvent.click(within(stageCard).getByRole("button", { name: "Move task 2 up" }));
+    expect(titles()).toEqual(["Alpha task", "Zebra task", "Linked task"]);
+    expect(document.querySelector(".workspace-loading")).toBeNull();
     await waitFor(() => expect(titles()).toEqual(["Alpha task", "Zebra task", "Linked task"]));
     expect(client.updateEntity.mock.calls[0]?.[1]).toBe("milestones");
     expect(client.updateEntity.mock.calls[0]?.[4]).toMatchObject({ task_order: [large.document.id, urgent.document.id, linked.document.id] });
 
-    fireEvent.click(screen.getByRole("button", { name: "Move milestone 1 down" }));
+    const moveMilestoneDown = screen.getByRole<HTMLButtonElement>("button", { name: "Move milestone 1 down" });
+    await waitFor(() => expect(moveMilestoneDown.disabled).toBe(false));
+    fireEvent.click(moveMilestoneDown);
     await waitFor(() => expect(stageCard.querySelector(".project-plan-stage-kind")?.textContent).toBe(`Milestone 2. ${stage.document.id}.`));
     expect(client.updateEntity.mock.calls[1]?.[1]).toBe("projects");
     expect(client.updateEntity.mock.calls[1]?.[4]).toMatchObject({ milestone_order: [laterStage.document.id, stage.document.id] });

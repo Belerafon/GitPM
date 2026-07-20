@@ -5,7 +5,9 @@ import { AsyncBoundary, useAsyncLoad } from "../../async-data.js";
 import { TaskPanel, type ConfigValue } from "../../core-ui.js";
 import { EditorDrawer } from "../../editor-drawer.js";
 import { EntityCatalog } from "../../entity-catalog.js";
+import { useExternalHighlights, useReducedMotion } from "../../external-updates.js";
 import { formatDateOnly, formatDurationHours, message, type Locale, type MessageKey } from "../../i18n.js";
+import { upsertEntity, useFlipList } from "../../optimistic-ui.js";
 import type { DraftStatus, EntityResult, GitPmDocument, ProjectWorkspaceResult } from "../../types.js";
 import type { WorkspaceNavigate } from "../../workspace-navigation.js";
 
@@ -60,6 +62,10 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   const [statusFilter, setStatusFilter] = useState(initialStatusFilter);
   const [milestoneFilter, setMilestoneFilter] = useState(initialMilestoneFilter);
   const [error, setError] = useState<string | null>(null);
+  const [orderPending, setOrderPending] = useState<string | null>(null);
+  const { highlights: recentChanges, mark: markRecentChange } = useExternalHighlights(1_200);
+  const reducedMotion = useReducedMotion();
+  const animatedList = useFlipList(reducedMotion);
   const readOnly = draft.writer_mode !== "ui" || draft.state !== "open" || draft.changed_externally === true;
 
   const load = useCallback(async () => {
@@ -82,11 +88,25 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   }, [api, draft.draft_id, draft.fingerprint, loader.run, projectId]);
 
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => { setStatusFilter(initialStatusFilter); setMilestoneFilter(initialMilestoneFilter); }, [initialMilestoneFilter, initialStatusFilter]);
 
-  const mutate = async (operation: () => Promise<EntityResult>) => {
+  const applyResult = (result: EntityResult, highlightId = result.document.id) => {
+    setWorkspace((current) => {
+      if (current === null) return current;
+      const schema = result.document.schema;
+      if (result.document.id === current.project.document.id || schema === "gitpm/project@1") return { ...current, project: result, draft_fingerprint: result.draft_fingerprint };
+      if (schema === "gitpm/milestone@1") return { ...current, milestones: upsertEntity(current.milestones, result), draft_fingerprint: result.draft_fingerprint };
+      if (schema === "gitpm/task@1") return { ...current, tasks: upsertEntity(current.tasks, result), draft_fingerprint: result.draft_fingerprint };
+      return current;
+    });
+    markRecentChange({ [highlightId]: ["$entity"] });
+  };
+
+  const mutate = async (operation: () => Promise<EntityResult>, highlightId?: string) => {
     setError(null);
     try {
-      await operation();
+      const result = await operation();
+      applyResult(result, highlightId);
       await onChanged();
       await load();
       setEditor(null);
@@ -101,6 +121,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     setError(null);
     try {
       const result = await operation();
+      applyResult(result);
       await onChanged();
       await load();
       return result;
@@ -163,19 +184,31 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     onNavigate("projects", { projectId, ...(Object.keys(query).length > 0 ? { query } : {}) });
   };
   const moveStage = (stageId: string, offset: -1 | 1) => {
-    if (workspace === null) return;
+    if (workspace === null || orderPending !== null) return;
     const milestoneOrder = moveId(activeStages.map((stage) => stage.document.id), stageId, offset);
     if (milestoneOrder === null) return;
+    const previous = workspace;
     const document = { ...workspace.project.document, milestone_order: milestoneOrder } as GitPmDocument;
-    void mutate(async () => await api.updateEntity(draft.draft_id, "projects", workspace.project, workspace.draft_fingerprint, document));
+    setOrderPending(`stage:${stageId}`);
+    setWorkspace({ ...workspace, project: { ...workspace.project, document } });
+    markRecentChange({ [stageId]: ["milestone_order"] });
+    void mutate(async () => await api.updateEntity(draft.draft_id, "projects", previous.project, previous.draft_fingerprint, document), stageId)
+      .then((success) => { if (!success) setWorkspace(previous); })
+      .finally(() => setOrderPending(null));
   };
   const moveTask = (stage: EntityResult, taskId: string, offset: -1 | 1) => {
-    if (workspace === null) return;
+    if (workspace === null || orderPending !== null) return;
     const stageTasks = activeTasks.filter((task) => text(task.document, "milestone") === stage.document.id);
     const taskOrder = moveId(stageTasks.map((task) => task.document.id), taskId, offset);
     if (taskOrder === null) return;
+    const previous = workspace;
     const document = { ...stage.document, task_order: taskOrder } as GitPmDocument;
-    void mutate(async () => await api.updateEntity(draft.draft_id, "milestones", stage, workspace.draft_fingerprint, document));
+    setOrderPending(`task:${taskId}`);
+    setWorkspace({ ...workspace, milestones: workspace.milestones.map((item) => item.document.id === stage.document.id ? { ...item, document } : item) });
+    markRecentChange({ [taskId]: ["task_order"] });
+    void mutate(async () => await api.updateEntity(draft.draft_id, "milestones", stage, previous.draft_fingerprint, document), taskId)
+      .then((success) => { if (!success) setWorkspace(previous); })
+      .finally(() => setOrderPending(null));
   };
 
   const updateProject = (event: FormEvent<HTMLFormElement>) => {
@@ -261,7 +294,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     <AsyncBoundary state={loader.state} loading={t("status.loading")} retry={() => { void load(); }} error={(loadError, retry) => <div className="alert error">{loadError}<button onClick={retry}>{t("status.retry")}</button></div>}>
       {workspace !== null && <div className={`project-plan-layout${selectedStage !== undefined || selectedTask !== undefined ? " with-inspector" : ""}`}>
         <div className="project-plan-main">
-          <header className="project-plan-header">
+          <header className={`project-plan-header${recentChanges[workspace.project.document.id] ? " recently-changed" : ""}`}>
             <div className="project-plan-title"><h2>{text(workspace.project.document, "name")}</h2><p>{text(workspace.project.document, "description_markdown") || t("core.noDescription")}</p></div>
             <div className="project-plan-actions"><button disabled={readOnly} onClick={() => setEditor({ kind: "project" })}>{t("core.edit")}</button><button disabled={readOnly} onClick={() => setEditor({ kind: "new-stage" })}>+ {t("stages.new")}</button><button className="primary" disabled={readOnly} onClick={() => setEditor({ kind: "task" })}>+ {t("core.createTaskAction")}</button></div>
             <dl className="project-plan-meta">
@@ -279,7 +312,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
             <div><dt>{t("projectPlan.withoutStage")}</dt><dd>{outsideStages.length}</dd></div>
           </dl>
 
-          <section className="project-plan-work">
+          <section className="project-plan-work" ref={animatedList}>
             <div className="project-plan-toolbar">
               <div><h2>{t("projectPlan.workHeading")}</h2><span>{t("projectPlan.workDescription")}</span></div>
               <label>{t("core.filter")}<select value={statusFilter} onChange={(event) => applyFilters(event.target.value, milestoneFilter)}><option value="">{t("core.allStatuses")}</option>{statuses.map((status) => <option key={status.slug} value={status.slug}>{status.title}</option>)}</select></label>
@@ -294,16 +327,19 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
               onNewTask={() => setEditor({ kind: "task", stageId: stage.document.id })}
               onMoveStage={(offset) => moveStage(stage.document.id, offset)}
               onMoveTask={(taskId, offset) => moveTask(stage, taskId, offset)}
+              orderBusy={orderPending !== null}
               projectId={projectId}
               query={navigationQuery}
               readOnly={readOnly}
               selected={selectedStageId === stage.document.id}
               selectedTaskId={selectedTaskId}
               stage={stage}
+              changed={recentChanges[stage.document.id] !== undefined}
               stageCount={activeStages.length}
               stageIndex={activeStages.indexOf(stage)}
               statusTitle={statusTitle}
               tasks={visibleTasks.filter((task) => task.document.milestone === stage.document.id)}
+              changedTaskIds={new Set(Object.keys(recentChanges))}
               t={t}
             />)}
             {(milestoneFilter === "" || milestoneFilter === "none") && <section className={`project-plan-stage project-plan-unassigned${visibleOutsideStages.length > 0 ? " has-work" : ""}`}>
@@ -374,7 +410,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   </section>;
 }
 
-function StageSection({ stage, tasks, allTasks, stageIndex, stageCount, projectId, query, locale, readOnly, selected, selectedTaskId, statusTitle, onNewTask, onMoveStage, onMoveTask, onNavigate, t }: {
+function StageSection({ stage, tasks, allTasks, stageIndex, stageCount, projectId, query, locale, readOnly, orderBusy, selected, changed, selectedTaskId, changedTaskIds, statusTitle, onNewTask, onMoveStage, onMoveTask, onNavigate, t }: {
   readonly stage: EntityResult;
   readonly tasks: readonly EntityResult[];
   readonly allTasks: readonly EntityResult[];
@@ -384,8 +420,11 @@ function StageSection({ stage, tasks, allTasks, stageIndex, stageCount, projectI
   readonly query: Readonly<Record<string, readonly string[]>>;
   readonly locale: Locale;
   readonly readOnly: boolean;
+  readonly orderBusy: boolean;
   readonly selected: boolean;
+  readonly changed: boolean;
   readonly selectedTaskId: string;
+  readonly changedTaskIds: ReadonlySet<string>;
   readonly statusTitle: (slug: string) => string;
   readonly onNewTask: () => void;
   readonly onMoveStage: (offset: -1 | 1) => void;
@@ -395,28 +434,30 @@ function StageSection({ stage, tasks, allTasks, stageIndex, stageCount, projectI
 }) {
   const completed = allTasks.filter((task) => text(task.document, "status") === "done").length;
   const progress = allTasks.length === 0 ? 0 : Math.round(completed / allTasks.length * 100);
-  return <article className={`project-plan-stage${selected ? " selected" : ""}`}>
+  return <article className={`project-plan-stage${selected ? " selected" : ""}${changed ? " recently-changed" : ""}`} data-flip-key={`stage:${stage.document.id}`}>
     <header>
       <button aria-current={selected ? "true" : undefined} aria-label={`${t("core.milestone")}: ${text(stage.document, "name")} · ${stage.document.id}`} className="project-plan-stage-selector" onClick={() => onNavigate("stages", { projectId, stageId: stage.document.id, ...(Object.keys(query).length > 0 ? { query } : {}) })} type="button">
         <span className="project-plan-stage-kind">{t("core.milestone")} {stageIndex + 1}. <code>{stage.document.id}</code>.</span>
         <span aria-level={3} className="project-plan-stage-title" role="heading">{text(stage.document, "name")}</span>
         <span className="project-plan-stage-description">{text(stage.document, "description_markdown") || t("core.noDescription")}</span>
       </button>
-      <div className="project-plan-stage-actions"><span className="plan-order-controls"><button aria-label={t("projectPlan.moveStageUp", { number: stageIndex + 1 })} disabled={readOnly || stageIndex === 0} onClick={() => onMoveStage(-1)} type="button">↑</button><button aria-label={t("projectPlan.moveStageDown", { number: stageIndex + 1 })} disabled={readOnly || stageIndex === stageCount - 1} onClick={() => onMoveStage(1)} type="button">↓</button></span><time dateTime={text(stage.document, "due")}>{text(stage.document, "due") ? formatDateOnly(locale, text(stage.document, "due")) : "—"}</time><button disabled={readOnly} onClick={onNewTask}>+ {t("core.createTaskAction")}</button></div>
+      <div className="project-plan-stage-actions"><span className="plan-order-controls"><button aria-label={t("projectPlan.moveStageUp", { number: stageIndex + 1 })} disabled={readOnly || orderBusy || stageIndex === 0} onClick={() => onMoveStage(-1)} type="button">↑</button><button aria-label={t("projectPlan.moveStageDown", { number: stageIndex + 1 })} disabled={readOnly || orderBusy || stageIndex === stageCount - 1} onClick={() => onMoveStage(1)} type="button">↓</button></span><time dateTime={text(stage.document, "due")}>{text(stage.document, "due") ? formatDateOnly(locale, text(stage.document, "due")) : "—"}</time><button disabled={readOnly} onClick={onNewTask}>+ {t("core.createTaskAction")}</button></div>
     </header>
     <div className="project-plan-stage-progress"><progress aria-label={t("stages.progressLabel")} max="100" value={progress}>{progress}%</progress><span>{t("stages.progress", { completed, count: allTasks.length })}</span></div>
-    <TaskRows allTasks={allTasks} locale={locale} onMoveTask={onMoveTask} onNavigate={onNavigate} projectId={projectId} query={query} readOnly={readOnly} selectedTaskId={selectedTaskId} statusTitle={statusTitle} tasks={tasks} t={t} />
+    <TaskRows allTasks={allTasks} changedTaskIds={changedTaskIds} locale={locale} onMoveTask={onMoveTask} onNavigate={onNavigate} orderBusy={orderBusy} projectId={projectId} query={query} readOnly={readOnly} selectedTaskId={selectedTaskId} statusTitle={statusTitle} tasks={tasks} t={t} />
   </article>;
 }
 
-function TaskRows({ tasks, allTasks, projectId, query = {}, locale, readOnly = true, selectedTaskId, statusTitle, onMoveTask, onNavigate, t }: {
+function TaskRows({ tasks, allTasks, projectId, query = {}, locale, readOnly = true, orderBusy = false, selectedTaskId, changedTaskIds = new Set<string>(), statusTitle, onMoveTask, onNavigate, t }: {
   readonly tasks: readonly EntityResult[];
   readonly allTasks: readonly EntityResult[];
   readonly projectId: string;
   readonly query?: Readonly<Record<string, readonly string[]>>;
   readonly locale: Locale;
   readonly readOnly?: boolean;
+  readonly orderBusy?: boolean;
   readonly selectedTaskId: string;
+  readonly changedTaskIds?: ReadonlySet<string>;
   readonly statusTitle: (slug: string) => string;
   readonly onMoveTask?: (taskId: string, offset: -1 | 1) => void;
   readonly onNavigate: WorkspaceNavigate;
@@ -426,9 +467,9 @@ function TaskRows({ tasks, allTasks, projectId, query = {}, locale, readOnly = t
   return <div className="project-plan-task-list">{tasks.map((task) => {
     const selected = selectedTaskId === task.document.id;
     const taskIndex = allTasks.findIndex((item) => item.document.id === task.document.id);
-    return <div className={`project-plan-task-row${selected ? " selected" : ""}`} key={task.document.id}>
+    return <div className={`project-plan-task-row${selected ? " selected" : ""}${changedTaskIds.has(task.document.id) ? " recently-changed" : ""}`} data-flip-key={`task:${task.document.id}`} key={task.document.id}>
       <button aria-current={selected ? "true" : undefined} className="project-plan-task-selector" onClick={() => onNavigate("tasks", { projectId, taskId: task.document.id, ...(Object.keys(query).length > 0 ? { query } : {}) })} type="button"><span className="project-plan-task-kind">{t("projectPlan.taskLabel")} {taskIndex + 1}. <code>{task.document.id}</code>.</span><strong>{text(task.document, "title")}</strong></button>
-      <span className="project-plan-task-meta">{text(task.document, "due") && <time dateTime={text(task.document, "due")}>{formatDateOnly(locale, text(task.document, "due"))}</time>}{number(task.document, "estimate_hours") !== undefined && <span>{number(task.document, "estimate_hours")}h</span>}<span className="state open">{statusTitle(text(task.document, "status"))}</span>{onMoveTask !== undefined && <span className="plan-order-controls"><button aria-label={t("projectPlan.moveTaskUp", { number: taskIndex + 1 })} disabled={readOnly || taskIndex === 0} onClick={() => onMoveTask(task.document.id, -1)} type="button">↑</button><button aria-label={t("projectPlan.moveTaskDown", { number: taskIndex + 1 })} disabled={readOnly || taskIndex === allTasks.length - 1} onClick={() => onMoveTask(task.document.id, 1)} type="button">↓</button></span>}</span>
+      <span className="project-plan-task-meta">{text(task.document, "due") && <time dateTime={text(task.document, "due")}>{formatDateOnly(locale, text(task.document, "due"))}</time>}{number(task.document, "estimate_hours") !== undefined && <span>{number(task.document, "estimate_hours")}h</span>}<span className="state open">{statusTitle(text(task.document, "status"))}</span>{onMoveTask !== undefined && <span className="plan-order-controls"><button aria-label={t("projectPlan.moveTaskUp", { number: taskIndex + 1 })} disabled={readOnly || orderBusy || taskIndex === 0} onClick={() => onMoveTask(task.document.id, -1)} type="button">↑</button><button aria-label={t("projectPlan.moveTaskDown", { number: taskIndex + 1 })} disabled={readOnly || orderBusy || taskIndex === allTasks.length - 1} onClick={() => onMoveTask(task.document.id, 1)} type="button">↓</button></span>}</span>
     </div>;
   })}</div>;
 }

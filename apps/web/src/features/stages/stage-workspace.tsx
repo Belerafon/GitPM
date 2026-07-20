@@ -3,7 +3,9 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 import type { GitPmApi } from "../../api.js";
 import { AsyncBoundary, useAsyncLoad } from "../../async-data.js";
 import { EditorDrawer } from "../../editor-drawer.js";
+import { useExternalHighlights } from "../../external-updates.js";
 import { formatDateOnly, formatDurationHours, message, type Locale, type MessageKey } from "../../i18n.js";
+import { upsertEntity } from "../../optimistic-ui.js";
 import type { DraftStatus, EntityResult, GitPmDocument, ProjectWorkspaceResult } from "../../types.js";
 import type { WorkspaceNavigate } from "../../workspace-navigation.js";
 
@@ -30,6 +32,7 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
   const [types, setTypes] = useState<readonly ConfigValue[]>([]);
   const [editor, setEditor] = useState<"stage" | "task" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { highlights, mark } = useExternalHighlights(1_200);
   const readOnly = draft.writer_mode !== "ui" || draft.state !== "open" || draft.changed_externally === true;
 
   const load = useCallback(async () => {
@@ -52,7 +55,13 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
   const mutate = async (operation: () => Promise<EntityResult>) => {
     setError(null);
     try {
-      await operation();
+      const result = await operation();
+      setWorkspace((current) => current === null ? current : result.document.schema === "gitpm/milestone@1"
+        ? { ...current, milestones: upsertEntity(current.milestones, result), draft_fingerprint: result.draft_fingerprint }
+        : result.document.schema === "gitpm/task@1"
+          ? { ...current, tasks: upsertEntity(current.tasks, result), draft_fingerprint: result.draft_fingerprint }
+          : current);
+      mark({ [result.document.id]: ["$local"] });
       await onChanged();
       await load();
       setEditor(null);
@@ -100,6 +109,8 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
     <AsyncBoundary state={loader.state} loading={t("status.loading")} retry={() => { void load(); }} error={(loadError, retry) => <div className="alert error">{loadError}<button onClick={retry}>{t("status.retry")}</button></div>}>
       {workspace !== null && (selectedStage === undefined ? <div className="card empty-workspace">{t("stages.notFound")}</div> : <StageDetails
         locale={locale}
+        changed={highlights[selectedStage.document.id] !== undefined}
+        changedTaskIds={new Set(Object.keys(highlights))}
         onArchive={archiveStage}
         onEdit={() => setEditor("stage")}
         onNewTask={() => setEditor("task")}
@@ -134,12 +145,14 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
   </section>;
 }
 
-function StageDetails({ stage, tasks, projectId, locale, readOnly, statusTitle, onArchive, onEdit, onNewTask, onNavigate, t }: {
+function StageDetails({ stage, tasks, projectId, locale, readOnly, changed, changedTaskIds, statusTitle, onArchive, onEdit, onNewTask, onNavigate, t }: {
   readonly stage: EntityResult;
   readonly tasks: readonly EntityResult[];
   readonly projectId: string;
   readonly locale: Locale;
   readonly readOnly: boolean;
+  readonly changed: boolean;
+  readonly changedTaskIds: ReadonlySet<string>;
   readonly statusTitle: (slug: string) => string;
   readonly onArchive: () => void;
   readonly onEdit: () => void;
@@ -151,7 +164,7 @@ function StageDetails({ stage, tasks, projectId, locale, readOnly, statusTitle, 
   const overdue = tasks.filter((task) => text(task.document, "status") !== "done" && /^\d{4}-\d{2}-\d{2}$/u.test(text(task.document, "due")) && text(task.document, "due") < new Date().toISOString().slice(0, 10)).length;
   const estimate = tasks.reduce((sum, task) => sum + (typeof task.document.estimate_hours === "number" ? task.document.estimate_hours : 0), 0);
   return <>
-    <header className="card stage-detail-header">
+    <header className={`card stage-detail-header${changed ? " recently-changed" : ""}`}>
       <div><span className="eyebrow">{t("core.milestone")}</span><h2>{text(stage.document, "name")}</h2><p>{text(stage.document, "description_markdown") || t("core.noDescription")}</p></div>
       <div className="stage-detail-actions"><button disabled={readOnly} onClick={onEdit}>{t("core.edit")}</button><button disabled={readOnly} onClick={onArchive}>{t("core.archive")}</button><button className="primary" disabled={readOnly} onClick={onNewTask}>+ {t("stages.newTask")}</button></div>
     </header>
@@ -162,7 +175,7 @@ function StageDetails({ stage, tasks, projectId, locale, readOnly, statusTitle, 
       <div className="card"><span>{t("core.due")}</span><strong>{text(stage.document, "due") ? formatDateOnly(locale, text(stage.document, "due")) : "—"}</strong></div>
     </div>
     <section className="card stage-task-list"><div className="card-heading"><div><h3>{t("stages.tasks")}</h3><p>{t("stages.tasksDescription")}</p></div><button onClick={() => onNavigate("board", { projectId, query: { milestone: [stage.document.id] } })}>{t("stages.openBoard")}</button></div>
-      {tasks.length === 0 ? <p>{t("stages.emptyTasks")}</p> : tasks.map((task) => <button className="stage-task-row" key={task.document.id} onClick={() => onNavigate("tasks", { projectId, taskId: task.document.id })}>
+      {tasks.length === 0 ? <p>{t("stages.emptyTasks")}</p> : tasks.map((task) => <button className={`stage-task-row${changedTaskIds.has(task.document.id) ? " recently-changed" : ""}`} key={task.document.id} onClick={() => onNavigate("tasks", { projectId, taskId: task.document.id })}>
         <span><strong>{text(task.document, "title")}</strong><code>{task.document.id}</code></span><span className="state open">{statusTitle(text(task.document, "status"))}</span>
       </button>)}
     </section>

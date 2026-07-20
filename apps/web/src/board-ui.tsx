@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type DragEvent, type FormEvent } from "react";
 import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
 import type { GitPmApi } from "./api.js";
 import { message, type Locale, type MessageKey } from "./i18n.js";
@@ -6,6 +6,8 @@ import type { DraftStatus, EntityResult, GitPmDocument } from "./types.js";
 import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
 import type { WorkspaceNavigate } from "./workspace-navigation.js";
 import { EntityCatalog } from "./entity-catalog.js";
+import { useExternalHighlights, useReducedMotion } from "./external-updates.js";
+import { upsertEntity, useFlipList } from "./optimistic-ui.js";
 
 interface ConfigValue { readonly slug: string; readonly title: string; readonly active: boolean }
 const text = (document: GitPmDocument, key: string) => typeof document[key] === "string" ? document[key] as string : "";
@@ -41,7 +43,9 @@ export function BoardWorkspace({ api, draft, locale, initialProjectId = "", init
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [activeViewId, setActiveViewId] = useState(initialViewId);
   const [error, setError] = useState<string | null>(null);
-  const columnsRef = useRef<HTMLDivElement>(null);
+  const { highlights, mark } = useExternalHighlights(1_200);
+  const reducedMotion = useReducedMotion();
+  const columnsRef = useFlipList<HTMLDivElement>(reducedMotion);
   const loadRequest = useAsyncLoad();
   const readOnly = draft.writer_mode !== "ui" || draft.state !== "open" || draft.changed_externally === true;
 
@@ -64,11 +68,21 @@ export function BoardWorkspace({ api, draft, locale, initialProjectId = "", init
   }, [api, draft.draft_id, draft.fingerprint, loadRequest.run, projectId]);
 
   useEffect(() => { void load(initialProjectId); }, [draft.draft_id, draft.external_fingerprint]);
+  useEffect(() => {
+    setStatusFilter(initialStatusFilter); setTypeFilter(initialTypeFilter); setMilestoneFilter(initialMilestoneFilter); setActiveViewId(initialViewId);
+  }, [initialMilestoneFilter, initialStatusFilter, initialTypeFilter, initialViewId]);
   const report = (caught: unknown) => setError(caught instanceof Error ? caught.message : String(caught));
-  const mutate = async (operation: () => Promise<EntityResult>) => {
+  const mutate = async (operation: () => Promise<EntityResult>): Promise<EntityResult | null> => {
     setError(null);
-    try { const result = await operation(); setFingerprint(result.draft_fingerprint); await load(); await onChanged(); }
-    catch (caught) { report(caught); }
+    try {
+      const result = await operation();
+      setFingerprint(result.draft_fingerprint);
+      if (result.document.schema === "gitpm/task@1") setTasks((current) => upsertEntity(current, result));
+      if (result.document.schema === "gitpm/saved-view@1") setViews((current) => upsertEntity(current, result));
+      mark({ [result.document.id]: ["$entity"] });
+      await onChanged(); await load();
+      return result;
+    } catch (caught) { report(caught); return null; }
   };
 
   const activeTasks = tasks.filter((item) => item.document.lifecycle === "active");
@@ -85,7 +99,11 @@ export function BoardWorkspace({ api, draft, locale, initialProjectId = "", init
     const task = tasks.find((item) => item.document.id === id);
     setDraggedTaskId(null);
     if (readOnly || task === undefined || text(task.document, "status") === status) return;
-    void mutate(async () => await api.updateEntity(draft.draft_id, "tasks", task, fingerprint, { ...task.document, status }));
+    const previous = tasks;
+    const document = { ...task.document, status } as GitPmDocument;
+    setTasks(upsertEntity(tasks, { ...task, document }));
+    mark({ [task.document.id]: ["status"] });
+    void mutate(async () => await api.updateEntity(draft.draft_id, "tasks", task, fingerprint, document)).then((result) => { if (result === null) setTasks(previous); });
   };
   const drop = (event: DragEvent<HTMLElement>, status: string) => {
     event.preventDefault();
@@ -131,7 +149,7 @@ export function BoardWorkspace({ api, draft, locale, initialProjectId = "", init
       const columnTasks = visibleTasks.filter((item) => text(item.document, "status") === status);
       return <section className="board-column" data-status={status} key={status} onDragOver={(event) => event.preventDefault()} onDrop={(event) => drop(event, status)} onPointerUp={() => { if (draggedTaskId !== null) moveTask(status, draggedTaskId); }}>
         <header><h3>{titleForStatus(status)}</h3><span>{columnTasks.length}</span></header>
-        <div className="board-cards">{columnTasks.map((task) => <article className="board-card" draggable={!readOnly} data-task-id={task.document.id} key={task.document.id} onPointerDown={() => { if (!readOnly) setDraggedTaskId(task.document.id); }} onDragStart={(event) => { setDraggedTaskId(task.document.id); event.dataTransfer.setData("text/plain", task.document.id); }} onDragEnd={() => setDraggedTaskId(null)}>
+        <div className="board-cards">{columnTasks.map((task) => <article className={`board-card${highlights[task.document.id] ? " recently-changed" : ""}`} draggable={!readOnly} data-flip-key={`board-task:${task.document.id}`} data-task-id={task.document.id} key={task.document.id} onPointerDown={() => { if (!readOnly) setDraggedTaskId(task.document.id); }} onDragStart={(event) => { setDraggedTaskId(task.document.id); event.dataTransfer.setData("text/plain", task.document.id); }} onDragEnd={() => setDraggedTaskId(null)}>
           {!readOnly && <span aria-hidden="true" className="board-drag-handle">⋮⋮</span>}<button className="board-task-link" onPointerDown={(event) => event.stopPropagation()} onClick={() => onNavigate("tasks", { projectId, taskId: task.document.id })}><strong>{text(task.document, "title")}</strong><code>{task.document.id}</code></button>{catalog.milestone(task.document.milestone) !== undefined && <button className="board-milestone" onPointerDown={(event) => event.stopPropagation()} onClick={() => onNavigate("stages", { projectId, stageId: text(task.document, "milestone") })} type="button">{catalog.milestone(task.document.milestone)?.name}{catalog.milestone(task.document.milestone)?.lifecycle === "archived" ? ` · ${t("core.archived")}` : ""}</button>}<span>{types.find((type) => type.slug === text(task.document, "type"))?.title ?? text(task.document, "type")}</span><label className="board-status-control" onPointerDown={(event) => event.stopPropagation()}>{t("core.status")}<select disabled={readOnly} value={text(task.document, "status")} onChange={(event) => moveTask(event.target.value, task.document.id)}>{boardStatuses.map((nextStatus) => <option key={nextStatus} value={nextStatus}>{titleForStatus(nextStatus)}</option>)}</select></label>
         </article>)}</div>
       </section>;

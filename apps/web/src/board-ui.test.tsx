@@ -40,6 +40,8 @@ describe("Board and Saved Views", () => {
     fireEvent.dragStart(card.closest("article")!, { dataTransfer });
     const doneColumn = container.querySelector<HTMLElement>('[data-status="done"]')!;
     fireEvent.dragOver(doneColumn, { dataTransfer }); fireEvent.drop(doneColumn, { dataTransfer });
+    expect(doneColumn.textContent).toContain("Drag me");
+    expect(container.querySelector(".workspace-loading")).toBeNull();
     await waitFor(() => expect(entityApi.entities.find((item) => item.document.id === taskId)?.document.status).toBe("done"));
     await waitFor(() => expect(doneColumn.textContent).toContain("Drag me"));
     fireEvent.change(screen.getByLabelText("Status"), { target: { value: "backlog" } });

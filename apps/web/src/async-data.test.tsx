@@ -5,8 +5,9 @@ import { useAsyncLoad } from "./async-data.js";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((next) => { resolve = next; });
-  return { promise, resolve };
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((next, fail) => { resolve = next; reject = fail; });
+  return { promise, resolve, reject };
 }
 
 describe("useAsyncLoad", () => {
@@ -30,5 +31,22 @@ describe("useAsyncLoad", () => {
 
     await act(async () => { first.resolve("old"); await firstRun; });
     expect(applied).toEqual(["new"]);
+  });
+
+  it("keeps ready data visible while a later request is in flight or fails", async () => {
+    const refresh = deferred<string>();
+    const applied: string[] = [];
+    const { result } = renderHook(() => useAsyncLoad());
+
+    await act(async () => { await result.current.run(async () => "current", (value) => applied.push(value)); });
+    expect(result.current.state.status).toBe("ready");
+
+    let refreshRun!: Promise<string | undefined>;
+    act(() => { refreshRun = result.current.run(() => refresh.promise, (value) => applied.push(value)); });
+    expect(result.current.state.status).toBe("ready");
+
+    await act(async () => { refresh.reject(new Error("offline")); await refreshRun; });
+    expect(result.current.state).toEqual({ status: "ready", refreshError: "offline" });
+    expect(applied).toEqual(["current"]);
   });
 });

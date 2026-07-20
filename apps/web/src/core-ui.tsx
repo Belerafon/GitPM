@@ -8,6 +8,7 @@ import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
 import type { WorkspaceNavigate } from "./workspace-navigation.js";
 import { EntityCatalog } from "./entity-catalog.js";
 import { EditorDrawer } from "./editor-drawer.js";
+import { upsertEntity } from "./optimistic-ui.js";
 
 const value = (document: GitPmDocument, key: string) => typeof document[key] === "string" ? document[key] as string : "";
 export interface ConfigValue { readonly slug: string; readonly title: string; readonly active: boolean }
@@ -54,7 +55,7 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
   const [projectId, setProjectId] = useState<string>(initialProjectId);
   const [selectedTask, setSelectedTask] = useState<string>(initialTaskId);
   const [filter, setFilter] = useState(initialStatusFilter);
-  const [milestoneFilter] = useState(initialMilestoneFilter);
+  const [milestoneFilter, setMilestoneFilter] = useState(initialMilestoneFilter);
   const [fingerprint, setFingerprint] = useState(draft.fingerprint);
   const [error, setError] = useState<string | null>(null);
   const [statusOptions, setStatusOptions] = useState<readonly ConfigValue[]>([]);
@@ -85,10 +86,11 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
       setProjects(nextProjects); setPeople(nextPeople); setProjectId(nextProject); setMilestones(nextMilestones); setTasks(nextTasks);
       setStatusOptions(configValues(statusConfig.document, "statuses")); setTypeOptions(configValues(typeConfig.document, "issue_types"));
       setFingerprint(nextProjects[0]?.draft_fingerprint ?? nextMilestones[0]?.draft_fingerprint ?? nextTasks[0]?.draft_fingerprint ?? draft.fingerprint);
-    }, { keepData: externalUpdate });
+    }, { keepData: true });
   }, [api, draft.draft_id, draft.fingerprint, loadRequest.run, mark, projectId, surface]);
 
   useEffect(() => { setSelectedTask(initialTaskId); void load(initialProjectId); }, [draft.draft_id, surface]);
+  useEffect(() => { setFilter(initialStatusFilter); setMilestoneFilter(initialMilestoneFilter); }, [initialMilestoneFilter, initialStatusFilter]);
   useEffect(() => {
     if (draft.writer_mode !== "external" || draft.external_fingerprint === undefined || draft.external_fingerprint === lastExternalFingerprint.current) return;
     lastExternalFingerprint.current = draft.external_fingerprint;
@@ -97,7 +99,15 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
 
   const mutate = async (operation: () => Promise<EntityResult>, preferredProject = projectId) => {
     setError(null); setFeedback({ kind: "saving", text: t("feedback.saving") });
-    try { const result = await operation(); setFingerprint(result.draft_fingerprint); await load(preferredProject); await onChanged(); setFeedback({ kind: "saved", text: t("feedback.saved") }); return result; }
+    try {
+      const result = await operation(); setFingerprint(result.draft_fingerprint);
+      if (result.document.schema === "gitpm/project@1") setProjects((current) => upsertEntity(current, result));
+      if (result.document.schema === "gitpm/person@1") setPeople((current) => upsertEntity(current, result));
+      if (result.document.schema === "gitpm/milestone@1") setMilestones((current) => upsertEntity(current, result));
+      if (result.document.schema === "gitpm/task@1") setTasks((current) => upsertEntity(current, result));
+      mark({ [result.document.id]: ["$local"] });
+      await onChanged(); await load(preferredProject); setFeedback({ kind: "saved", text: t("feedback.saved") }); return result;
+    }
     catch (caught) { setFeedback(null); setError(caught instanceof Error ? caught.message : String(caught)); return null; }
   };
   const remove = async (operation: () => Promise<void>) => {
@@ -171,7 +181,7 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
       <EntityEditor api={api} confirmDelete={confirmDelete} detail entity={selectedProject} entityType="projects" draft={draft} fingerprint={fingerprint} readOnly={readOnly} externalFields={highlights[selectedProject.document.id]} t={t} statusLabel={statusTitle(value(selectedProject.document, "status"))} openTasks={() => onNavigate("tasks", { projectId })} openBoard={() => onNavigate("board", { projectId })} openGantt={() => onNavigate("gantt", { projectId })} save={mutate} remove={remove} />
       <section className="card entity-column"><h3>{t("core.milestonesFor", { project: selectedProjectName })}</h3>
         <button className="primary editor-trigger" disabled={readOnly} onClick={() => setCreateEditor("milestone")} type="button">+ {t("core.createMilestoneAction")}</button><EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setCreateEditor(null)} open={createEditor === "milestone"} title={t("core.createMilestoneAction")}><form className="editor-drawer-form" onSubmit={createMilestone}><label>{t("core.name")}<input disabled={readOnly} name="name" required /></label><label>{t("core.due")}<input disabled={readOnly} name="due" type="date" /></label><label>{t("core.description")}<textarea disabled={readOnly} name="description" /></label><div className="editor-drawer-actions"><button onClick={() => setCreateEditor(null)} type="button">{t("core.cancel")}</button><button className="primary" disabled={readOnly}>{t("core.createMilestone")}</button></div></form></EditorDrawer>
-        <div className="entity-list">{activeMilestones.length === 0 ? <p>{t("core.noMilestones")}</p> : activeMilestones.map((milestone) => { const milestoneTasks = activeTasks.filter((item) => item.document.milestone === milestone.document.id); const completed = milestoneTasks.filter((item) => value(item.document, "status") === "done").length; return <EntityEditor api={api} confirmArchive={() => confirmAction(t("core.archiveMilestoneConfirm", { name: value(milestone.document, "name"), count: milestoneTasks.length }))} confirmDelete={confirmDelete} key={`${milestone.document.id}:${milestone.blob_id}`} entity={milestone} entityType="milestones" draft={draft} fingerprint={fingerprint} readOnly={readOnly} externalFields={highlights[milestone.document.id]} t={t} milestoneTaskCount={milestoneTasks.length} milestoneCompletedCount={completed} openMilestoneTasks={() => onNavigate("stages", { projectId, stageId: milestone.document.id })} save={mutate} remove={remove} />; })}</div>
+        <div className="entity-list">{activeMilestones.length === 0 ? <p>{t("core.noMilestones")}</p> : activeMilestones.map((milestone) => { const milestoneTasks = activeTasks.filter((item) => item.document.milestone === milestone.document.id); const completed = milestoneTasks.filter((item) => value(item.document, "status") === "done").length; return <EntityEditor api={api} confirmArchive={() => confirmAction(t("core.archiveMilestoneConfirm", { name: value(milestone.document, "name"), count: milestoneTasks.length }))} confirmDelete={confirmDelete} key={milestone.document.id} entity={milestone} entityType="milestones" draft={draft} fingerprint={fingerprint} readOnly={readOnly} externalFields={highlights[milestone.document.id]} t={t} milestoneTaskCount={milestoneTasks.length} milestoneCompletedCount={completed} openMilestoneTasks={() => onNavigate("stages", { projectId, stageId: milestone.document.id })} save={mutate} remove={remove} />; })}</div>
       </section>
     </div>)}
     {surface === "tasks" && (task !== undefined ? <div className="task-detail-page"><button className="text-link back-link" onClick={() => onNavigate("tasks", { projectId, query: taskQuery() })}>← {t("core.backToTasks")}</button><TaskPanel api={api} catalog={catalog} confirmDelete={confirmDelete} draft={draft} entity={task} fingerprint={fingerprint} milestones={milestones} projects={activeProjects} readOnly={readOnly} externalFields={highlights[task.document.id]} locale={locale} statusOptions={statusOptions} typeOptions={typeOptions} onNavigate={onNavigate} onDeleted={() => onNavigate("tasks", { projectId })} save={mutate} remove={remove} /></div> : selectedTask !== "" ? <div className="card empty-workspace"><p>{t("core.taskNotFound")}</p><button onClick={() => onNavigate("tasks", { projectId, query: taskQuery() })}>{t("core.backToTasks")}</button></div> : <section className="card task-area"><div className="task-toolbar"><div><h3>{projectId === "" ? t("core.allTasks") : t("core.tasksFor", { project: selectedProjectName })}</h3><p>{t(projectId === "" ? "core.allTasksHint" : "core.projectTasksHint")}</p></div><div className="task-toolbar-controls"><label>{t("core.project")}<select aria-label={t("core.project")} value={projectId} onChange={(event) => onNavigate("tasks", { projectId: event.target.value, query: taskQuery(filter, "") })}><option value="">{t("core.chooseProjectOption")}</option>{activeProjects.map((project) => <option key={project.document.id} value={project.document.id}>{value(project.document, "name")}</option>)}</select></label><label>{t("core.filter")}<select value={filter} onChange={(event) => onNavigate("tasks", { projectId, query: taskQuery(event.target.value, milestoneFilter) })}><option value="">{t("core.allStatuses")}</option>{statuses.map((status) => <option key={status} value={status}>{statusTitle(status)}</option>)}</select></label><label>{t("core.milestone")}<select aria-label={t("core.milestone")} value={milestoneFilter} onChange={(event) => onNavigate("tasks", { projectId, query: taskQuery(filter, event.target.value) })}><option value="">{t("core.allMilestones")}</option>{projectId !== "" && <option value="none">{t("stages.withoutStage")}</option>}{filterMilestones.map((milestone) => <option key={milestone.document.id} value={milestone.document.id}>{projectId === "" ? `${catalog.project(milestone.document.project).name} · ` : ""}{value(milestone.document, "name")}</option>)}</select></label></div></div>
