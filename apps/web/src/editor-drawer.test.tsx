@@ -18,7 +18,9 @@ describe("EditorDrawer", () => {
     trigger.focus();
     fireEvent.click(trigger);
 
-    expect(screen.getByRole("dialog", { name: "Edit item" })).toBeTruthy();
+    const dialog = screen.getByRole("dialog", { name: "Edit item" });
+    expect(dialog).toBeTruthy();
+    expect(dialog.parentElement?.parentElement).toBe(document.body);
     expect(document.activeElement).toBe(screen.getByLabelText("Name"));
     expect(document.body.style.overflow).toBe("hidden");
 

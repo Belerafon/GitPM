@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 export function EditorDrawer({ open, title, closeLabel, onClose, children }: {
   readonly open: boolean;
@@ -40,7 +41,7 @@ export function EditorDrawer({ open, title, closeLabel, onClose, children }: {
   }, [open]);
 
   if (!open) return null;
-  return <div className="editor-drawer-layer">
+  return createPortal(<div className="editor-drawer-layer">
     <button aria-label={closeLabel} className="editor-drawer-backdrop" onClick={onClose} type="button" />
     <aside aria-labelledby={titleId} aria-modal="true" className="editor-drawer" ref={drawer} role="dialog">
       <header className="editor-drawer-header">
@@ -49,5 +50,5 @@ export function EditorDrawer({ open, title, closeLabel, onClose, children }: {
       </header>
       <div className="editor-drawer-body">{children}</div>
     </aside>
-  </div>;
+  </div>, document.body);
 }

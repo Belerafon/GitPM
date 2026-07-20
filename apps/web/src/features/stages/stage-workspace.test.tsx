@@ -12,13 +12,15 @@ const result = (document: GitPmDocument): EntityResult => ({ document, path: `${
 
 const project = result({ schema: "gitpm/project@1", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
 const stage = result({ schema: "gitpm/milestone@1", id: "M-26-222222", project: project.document.id, name: "Launch", lifecycle: "active", due: "2026-08-01" });
-const linked = result({ schema: "gitpm/task@1", id: "T-26-333333", project: project.document.id, milestone: stage.document.id, title: "Linked task", type: "task", status: "done", lifecycle: "active", estimate_hours: 8 });
+const linked = result({ schema: "gitpm/task@1", id: "T-26-333333", project: project.document.id, milestone: stage.document.id, title: "Linked task", type: "task", status: "done", lifecycle: "active", estimate_hours: 20 });
 const other = result({ schema: "gitpm/task@1", id: "T-26-444444", project: project.document.id, title: "Without stage", type: "task", status: "backlog", lifecycle: "active" });
+const urgent = result({ schema: "gitpm/task@1", id: "T-26-555555", project: project.document.id, milestone: stage.document.id, title: "Zebra task", type: "task", status: "backlog", lifecycle: "active", due: "2026-07-20", estimate_hours: 2 });
+const large = result({ schema: "gitpm/task@1", id: "T-26-666666", project: project.document.id, milestone: stage.document.id, title: "Alpha task", type: "task", status: "backlog", lifecycle: "active", due: "2026-09-01", estimate_hours: 13 });
 
 function api() {
   const createEntity = vi.fn(async (_draftId: string, _type: string, _fingerprint: string, document: GitPmDocument) => result(document));
   return {
-    projectWorkspace: vi.fn(async () => ({ project, milestones: [stage], tasks: [linked, other], draft_fingerprint: fingerprint })),
+    projectWorkspace: vi.fn(async () => ({ project, milestones: [stage], tasks: [linked, other, large, urgent], draft_fingerprint: fingerprint })),
     getConfiguration: vi.fn(async (_draftId: string, kind: "statuses" | "issue-types") => result(kind === "statuses"
       ? { schema: "gitpm/statuses@1", id: "CONFIG-STATUSES", lifecycle: "active", statuses: [{ slug: "backlog", title: "Backlog", active: true }, { slug: "done", title: "Done", active: true }] }
       : { schema: "gitpm/issue-types@1", id: "CONFIG-TYPES", lifecycle: "active", issue_types: [{ slug: "task", title: "Task", active: true }] })),
@@ -50,6 +52,26 @@ describe("project plan and stage workspace", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Create task" }));
     await waitFor(() => expect(client.createEntity).toHaveBeenCalled());
     expect(client.createEntity.mock.calls[0]?.[3]).toMatchObject({ project: project.document.id, milestone: stage.document.id, title: "Created from plan" });
+  });
+
+  it("sorts tasks within each milestone and preserves the selected mode in navigation", async () => {
+    const client = api(); const onNavigate = vi.fn();
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={onNavigate} projectId={project.document.id} />);
+
+    const stageHeading = await screen.findByRole("heading", { name: "Launch" });
+    const stageCard = stageHeading.closest<HTMLElement>("article")!;
+    const titles = () => Array.from(stageCard.querySelectorAll(".project-plan-task-row strong"), (element) => element.textContent);
+    expect(titles()).toEqual(["Zebra task", "Alpha task", "Linked task"]);
+
+    fireEvent.change(screen.getByLabelText("Sort tasks"), { target: { value: "title" } });
+    expect(titles()).toEqual(["Alpha task", "Linked task", "Zebra task"]);
+    expect(onNavigate).toHaveBeenLastCalledWith("projects", { projectId: project.document.id, query: { sort: ["title"] } });
+
+    fireEvent.click(within(stageCard).getByRole("button", { name: /Zebra task/u }));
+    expect(onNavigate).toHaveBeenLastCalledWith("tasks", { projectId: project.document.id, taskId: urgent.document.id, query: { sort: ["title"] } });
+
+    fireEvent.change(screen.getByLabelText("Sort tasks"), { target: { value: "estimate" } });
+    expect(titles()).toEqual(["Linked task", "Alpha task", "Zebra task"]);
   });
 
   it("shows only stage tasks and creates a task inside the stage context", async () => {

@@ -10,19 +10,34 @@ import type { DraftStatus, EntityResult, GitPmDocument, ProjectWorkspaceResult }
 import type { WorkspaceNavigate } from "../../workspace-navigation.js";
 
 type PlanEditor = { readonly kind: "project" | "new-stage" } | { readonly kind: "edit-stage"; readonly stageId: string } | { readonly kind: "task"; readonly stageId?: string } | null;
+type TaskSortMode = "smart" | "due" | "status" | "title" | "estimate";
+
+const taskSortModes: readonly TaskSortMode[] = ["smart", "due", "status", "title", "estimate"];
+const normalizeTaskSort = (value: string): TaskSortMode => taskSortModes.includes(value as TaskSortMode) ? value as TaskSortMode : "smart";
 
 const text = (document: GitPmDocument, key: string): string => typeof document[key] === "string" ? document[key] as string : "";
 const number = (document: GitPmDocument, key: string): number | undefined => typeof document[key] === "number" ? document[key] as number : undefined;
 const configValues = (document: GitPmDocument, key: "statuses" | "issue_types"): ConfigValue[] => Array.isArray(document[key])
   ? (document[key] as unknown[]).filter((item): item is ConfigValue => typeof item === "object" && item !== null && typeof (item as ConfigValue).slug === "string" && typeof (item as ConfigValue).title === "string" && (item as ConfigValue).active === true)
   : [];
-const sortTasks = (left: EntityResult, right: EntityResult) => {
+const compareTasks = (left: EntityResult, right: EntityResult, mode: TaskSortMode, locale: Locale, statuses: readonly ConfigValue[]) => {
+  const byTitle = text(left.document, "title").localeCompare(text(right.document, "title"), locale) || left.document.id.localeCompare(right.document.id);
   const byCompletion = Number(text(left.document, "status") === "done") - Number(text(right.document, "status") === "done");
   const byDue = (text(left.document, "due") || "9999-12-31").localeCompare(text(right.document, "due") || "9999-12-31");
-  return byCompletion !== 0 ? byCompletion : byDue !== 0 ? byDue : text(left.document, "title").localeCompare(text(right.document, "title"));
+  if (mode === "title") return byTitle;
+  if (mode === "due") return byDue || byTitle;
+  if (mode === "status") {
+    const statusIndex = (slug: string) => {
+      const index = statuses.findIndex((status) => status.slug === slug);
+      return index < 0 ? statuses.length : index;
+    };
+    return statusIndex(text(left.document, "status")) - statusIndex(text(right.document, "status")) || byDue || byTitle;
+  }
+  if (mode === "estimate") return (number(right.document, "estimate_hours") ?? -1) - (number(left.document, "estimate_hours") ?? -1) || byTitle;
+  return byCompletion || byDue || byTitle;
 };
 
-export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedStageId = "", selectedTaskId = "", initialStatusFilter = "", initialMilestoneFilter = "", onNavigate, onChanged, confirmAction = () => true }: {
+export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedStageId = "", selectedTaskId = "", initialStatusFilter = "", initialMilestoneFilter = "", initialTaskSort = "", onNavigate, onChanged, confirmAction = () => true }: {
   readonly api: GitPmApi;
   readonly draft: DraftStatus;
   readonly locale: Locale;
@@ -31,6 +46,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   readonly selectedTaskId?: string;
   readonly initialStatusFilter?: string;
   readonly initialMilestoneFilter?: string;
+  readonly initialTaskSort?: string;
   readonly onNavigate: WorkspaceNavigate;
   readonly onChanged: () => Promise<void>;
   readonly confirmAction?: (message: string) => boolean;
@@ -45,6 +61,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   const [editor, setEditor] = useState<PlanEditor>(null);
   const [statusFilter, setStatusFilter] = useState(initialStatusFilter);
   const [milestoneFilter, setMilestoneFilter] = useState(initialMilestoneFilter);
+  const [taskSort, setTaskSort] = useState<TaskSortMode>(normalizeTaskSort(initialTaskSort));
   const [error, setError] = useState<string | null>(null);
   const readOnly = draft.writer_mode !== "ui" || draft.state !== "open" || draft.changed_externally === true;
 
@@ -113,7 +130,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     const byDue = (text(left.document, "due") || "9999-12-31").localeCompare(text(right.document, "due") || "9999-12-31");
     return byDue !== 0 ? byDue : text(left.document, "name").localeCompare(text(right.document, "name"));
   }), [workspace]);
-  const activeTasks = useMemo(() => [...(workspace?.tasks.filter((item) => item.document.lifecycle === "active") ?? [])].sort(sortTasks), [workspace]);
+  const activeTasks = useMemo(() => [...(workspace?.tasks.filter((item) => item.document.lifecycle === "active") ?? [])].sort((left, right) => compareTasks(left, right, taskSort, locale, statuses)), [locale, statuses, taskSort, workspace]);
   const visibleTasks = useMemo(() => activeTasks.filter((task) =>
     (statusFilter === "" || text(task.document, "status") === statusFilter)
     && (milestoneFilter === "" || (milestoneFilter === "none" ? text(task.document, "milestone") === "" : text(task.document, "milestone") === milestoneFilter))), [activeTasks, milestoneFilter, statusFilter]);
@@ -123,7 +140,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   const visibleStages = milestoneFilter === "" ? activeStages : activeStages.filter((stage) => stage.document.id === milestoneFilter);
   const outsideStages = activeTasks.filter((task) => !activeStageIds.has(text(task.document, "milestone")));
   const visibleOutsideStages = visibleTasks.filter((task) => !activeStageIds.has(text(task.document, "milestone")));
-  const navigationQuery = { ...(statusFilter ? { status: [statusFilter] } : {}), ...(milestoneFilter ? { milestone: [milestoneFilter] } : {}) };
+  const navigationQuery = { ...(statusFilter ? { status: [statusFilter] } : {}), ...(milestoneFilter ? { milestone: [milestoneFilter] } : {}), ...(taskSort !== "smart" ? { sort: [taskSort] } : {}) };
   const progress = activeTasks.length === 0 ? 0 : Math.round(completed / activeTasks.length * 100);
   const statusTitle = (slug: string) => statuses.find((item) => item.slug === slug)?.title ?? slug;
   const personName = (id: string) => text(people.find((item) => item.document.id === id)?.document ?? { schema: "", id: "", lifecycle: "active" }, "name") || t("core.unassigned");
@@ -131,11 +148,18 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   const selectedStage = workspace?.milestones.find((item) => item.document.id === selectedStageId);
   const selectedTask = workspace?.tasks.find((item) => item.document.id === selectedTaskId);
   const catalog = useMemo(() => new EntityCatalog({ projects, milestones: workspace?.milestones ?? [], tasks: workspace?.tasks ?? [] }), [projects, workspace]);
-  const closeInspector = () => onNavigate("projects", { projectId, query: { ...(statusFilter ? { status: [statusFilter] } : {}), ...(milestoneFilter ? { milestone: [milestoneFilter] } : {}) } });
+  const closeInspector = () => onNavigate("projects", { projectId, ...(Object.keys(navigationQuery).length > 0 ? { query: navigationQuery } : {}) });
   const applyFilters = (status: string, milestone: string) => {
     setStatusFilter(status);
     setMilestoneFilter(milestone);
-    onNavigate("projects", { projectId, query: { ...(status ? { status: [status] } : {}), ...(milestone ? { milestone: [milestone] } : {}) } });
+    const query = { ...(status ? { status: [status] } : {}), ...(milestone ? { milestone: [milestone] } : {}), ...(taskSort !== "smart" ? { sort: [taskSort] } : {}) };
+    onNavigate("projects", { projectId, ...(Object.keys(query).length > 0 ? { query } : {}) });
+  };
+  const applyTaskSort = (value: string) => {
+    const sort = normalizeTaskSort(value);
+    setTaskSort(sort);
+    const query = { ...(statusFilter ? { status: [statusFilter] } : {}), ...(milestoneFilter ? { milestone: [milestoneFilter] } : {}), ...(sort !== "smart" ? { sort: [sort] } : {}) };
+    onNavigate("projects", { projectId, ...(Object.keys(query).length > 0 ? { query } : {}) });
   };
 
   const updateProject = (event: FormEvent<HTMLFormElement>) => {
@@ -244,6 +268,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
               <div><h2>{t("projectPlan.workHeading")}</h2><span>{t("projectPlan.workDescription")}</span></div>
               <label>{t("core.filter")}<select value={statusFilter} onChange={(event) => applyFilters(event.target.value, milestoneFilter)}><option value="">{t("core.allStatuses")}</option>{statuses.map((status) => <option key={status.slug} value={status.slug}>{status.title}</option>)}</select></label>
               <label>{t("core.milestone")}<select value={milestoneFilter} onChange={(event) => applyFilters(statusFilter, event.target.value)}><option value="">{t("core.allMilestones")}</option><option value="none">{t("stages.withoutStage")}</option>{activeStages.map((stage) => <option key={stage.document.id} value={stage.document.id}>{text(stage.document, "name")}</option>)}</select></label>
+              <label>{t("projectPlan.sortTasks")}<select value={taskSort} onChange={(event) => applyTaskSort(event.target.value)}><option value="smart">{t("projectPlan.sortSmart")}</option><option value="due">{t("projectPlan.sortDue")}</option><option value="status">{t("projectPlan.sortStatus")}</option><option value="title">{t("projectPlan.sortTitle")}</option><option value="estimate">{t("projectPlan.sortEstimate")}</option></select></label>
             </div>
             {activeStages.length === 0 && <div className="card empty-workspace">{t("projectPlan.emptyStages")}</div>}
             {visibleStages.map((stage) => <StageSection
