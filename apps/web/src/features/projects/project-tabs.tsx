@@ -4,7 +4,7 @@ import type { WorkspaceDestination, WorkspaceNavigate, WorkspaceSelection } from
 const tabs: readonly { readonly destination: WorkspaceDestination; readonly label: MessageKey }[] = [
   { destination: "projects", label: "projectTabs.overview" },
   { destination: "board", label: "projectTabs.board" },
-  { destination: "gantt", label: "projectTabs.timeline" },
+  { destination: "gantt", label: "projectTabs.gantt" },
 ];
 
 export function ProjectTabs({ active, projectId, query, onNavigate, t }: {

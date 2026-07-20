@@ -407,7 +407,7 @@
   ,"projectTabs.overview": "Plan"
   ,"projectTabs.tasks": "Tasks"
   ,"projectTabs.board": "Board"
-  ,"projectTabs.timeline": "Timeline"
+  ,"projectTabs.gantt": "Gantt"
   ,"projectPlan.start": "Start date"
   ,"projectPlan.progress": "Overall progress"
   ,"projectPlan.stages": "Active milestones"

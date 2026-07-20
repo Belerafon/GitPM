@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GitPmApi } from "./api.js";
-import { buildGanttModel, GanttWorkspace } from "./gantt-ui.js";
+import { buildGanttModel, dependencyPath, GanttWorkspace } from "./gantt-ui.js";
 import type { DraftStatus, EntityResult, GitPmDocument } from "./types.js";
 
 const projectId = "P-26-111111";
@@ -14,13 +14,18 @@ const parent = task("2", "Plan release", "2026-07-01", "2026-07-05");
 const child = task("3", "Build API", "2026-07-02", "2026-07-03", { parent: parent.document.id, milestone: "M-26-888888" });
 const dependent = task("4", "Ship UI", "2026-07-04", "2026-07-06", { depends_on: [child.document.id] });
 const review = task("5", "Review", "2026-07-06", "2026-07-07", { depends_on: [dependent.document.id] });
-const launch = task("6", "Launch", "2026-07-08", "2026-07-08", { depends_on: [review.document.id] });
+const launch = task("6", "Launch", "2026-07-08", "2026-07-08", { depends_on: [review.document.id, dependent.document.id] });
 const undated = task("7", "Undated");
 const archived = task("9", "Archived", "2026-07-01", "2026-07-02", { lifecycle: "archived" });
 const milestone = result({ schema: "gitpm/milestone@1", id: "M-26-888888", project: projectId, name: "Beta", due: "2026-07-08", lifecycle: "active" });
 
 afterEach(cleanup);
 describe("read-only Gantt", () => {
+  it("routes dependencies orthogonally into the centers of task bars", () => {
+    expect(dependencyPath(100, 27, 180, 85)).toBe("M 100 27 H 116 V 85 H 180");
+    expect(dependencyPath(180, 27, 100, 85)).toBe("M 180 27 H 196 V 56 H 84 V 85 H 100");
+  });
+
   it("builds deterministic bars, hierarchy, milestones, and dependency edges", () => {
     const model = buildGanttModel([parent, child, dependent, review, launch, undated, archived], [milestone])!;
     expect(model.rows).toHaveLength(5);
@@ -28,7 +33,7 @@ describe("read-only Gantt", () => {
     expect(model.rows.map((row) => row.title)).not.toContain("Archived");
     expect(model.rows.find((row) => row.id === child.document.id)).toMatchObject({ startOffset: 1, duration: 2, depth: 1, milestone: milestone.document.id });
     expect(model.milestones).toEqual([{ id: milestone.document.id, name: "Beta", due: "2026-07-08", offset: 7 }]);
-    expect(model.dependencies).toEqual([{ from: child.document.id, to: dependent.document.id }, { from: dependent.document.id, to: review.document.id }, { from: review.document.id, to: launch.document.id }]);
+    expect(model.dependencies).toEqual([{ from: child.document.id, to: dependent.document.id }, { from: dependent.document.id, to: review.document.id }, { from: review.document.id, to: launch.document.id }, { from: dependent.document.id, to: launch.document.id }]);
   });
 
   it("renders five bars and cannot mutate repository data", async () => {
@@ -42,7 +47,11 @@ describe("read-only Gantt", () => {
     const { container } = render(<GanttWorkspace api={api} draft={draft} locale="en" onNavigate={onNavigate} />);
     await waitFor(() => expect(container.querySelectorAll(".gantt-bar")).toHaveLength(5));
     expect(screen.queryByText("Undated")).toBeNull(); expect(screen.queryByText("Archived")).toBeNull();
-    expect(container.querySelectorAll(".gantt-dependencies path[data-from]")).toHaveLength(3);
+    expect(container.querySelectorAll(".gantt-dependencies path[data-from]")).toHaveLength(4);
+    expect(container.querySelector(".gantt-dependencies path[data-from]")?.getAttribute("d")).not.toContain("C");
+    expect(new Set(Array.from(container.querySelectorAll<SVGPathElement>(".gantt-dependencies path[data-from]"), (path) => path.style.stroke)).size).toBe(4);
+    expect(container.querySelector(`[data-branch-from="${dependent.document.id}"]`)).not.toBeNull();
+    expect(container.querySelectorAll(".gantt-dependency-branch")).toHaveLength(1);
     expect(container.querySelector('[data-milestone-id]')?.getAttribute("title")).toBe("Beta: 2026-07-08");
     fireEvent.click(container.querySelector<HTMLElement>('[data-milestone-id]')!);
     expect(onNavigate).toHaveBeenCalledWith("stages", { projectId, stageId: milestone.document.id });

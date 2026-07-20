@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import type { GitPmApi } from "./api.js";
 import { formatDateOnly, message, type Locale, type MessageKey } from "./i18n.js";
 import type { DraftStatus, EntityResult, GitPmDocument } from "./types.js";
@@ -6,10 +6,25 @@ import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
 import type { WorkspaceNavigate } from "./workspace-navigation.js";
 
 const DAY_MS = 86_400_000;
+const GANTT_HEADER_HEIGHT = 42;
+const GANTT_ROW_HEIGHT = 58;
+const GANTT_BAR_TOP = 51;
+const GANTT_BAR_HEIGHT = 36;
+const DEPENDENCY_CLEARANCE = 16;
+const DEPENDENCY_COLORS = ["#6c5c91", "#b24c63", "#2f6f9f", "#9a5b13", "#8a4f9e", "#c2410c", "#4361a3", "#39796b", "#8b3a3a", "#7a5c00", "#ad3f8c", "#3e6f2b"] as const;
 const text = (document: GitPmDocument, key: string) => typeof document[key] === "string" ? document[key] as string : "";
 const strings = (value: unknown): readonly string[] => Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 const dayNumber = (value: string) => Math.floor(Date.parse(`${value}T00:00:00Z`) / DAY_MS);
 const isoDate = (day: number) => new Date(day * DAY_MS).toISOString().slice(0, 10);
+
+export function dependencyPath(x1: number, y1: number, x2: number, y2: number): string {
+  if (x2 - x1 >= DEPENDENCY_CLEARANCE * 2) {
+    return `M ${x1} ${y1} H ${x1 + DEPENDENCY_CLEARANCE} V ${y2} H ${x2}`;
+  }
+  const rowDirection = Math.sign(y2 - y1) || 1;
+  const trackY = y2 - rowDirection * GANTT_ROW_HEIGHT / 2;
+  return `M ${x1} ${y1} H ${x1 + DEPENDENCY_CLEARANCE} V ${trackY} H ${x2 - DEPENDENCY_CLEARANCE} V ${y2} H ${x2}`;
+}
 
 export interface GanttRow {
   readonly entity: EntityResult;
@@ -68,6 +83,7 @@ export function buildGanttModel(tasks: readonly EntityResult[], milestones: read
 
 export function GanttWorkspace({ api, draft, locale, initialProjectId = "", onNavigate = () => undefined }: { readonly api: GitPmApi; readonly draft: DraftStatus; readonly locale: Locale; readonly initialProjectId?: string; readonly onNavigate?: WorkspaceNavigate }) {
   const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
+  const markerPrefix = useId().replaceAll(":", "");
   const [projects, setProjects] = useState<readonly EntityResult[]>([]);
   const [tasks, setTasks] = useState<readonly EntityResult[]>([]);
   const [milestones, setMilestones] = useState<readonly EntityResult[]>([]);
@@ -88,6 +104,8 @@ export function GanttWorkspace({ api, draft, locale, initialProjectId = "", onNa
   useEffect(() => { void load(initialProjectId); }, [draft.draft_id, draft.external_fingerprint]);
   const model = useMemo(() => buildGanttModel(tasks, milestones), [tasks, milestones]);
   const rowIndex = new Map(model?.rows.map((row, index) => [row.id, index]) ?? []);
+  const outgoingCounts = new Map<string, number>();
+  for (const dependency of model?.dependencies ?? []) outgoingCounts.set(dependency.from, (outgoingCounts.get(dependency.from) ?? 0) + 1);
   const milestoneNames = new Map(milestones.map((item) => [item.document.id, text(item.document, "name")]));
   const timelineWidth = Math.max(720, (model?.days.length ?? 0) * dayWidth);
   const today = new Date().toISOString().slice(0, 10);
@@ -107,13 +125,22 @@ export function GanttWorkspace({ api, draft, locale, initialProjectId = "", onNa
         <div className="gantt-days" style={{ gridTemplateColumns: `repeat(${model.days.length}, ${dayWidth}px)` }}>{model.days.map((day) => <time key={day} dateTime={day}><span>{day.slice(8)}</span><small>{day.slice(5, 7)}</small></time>)}</div>
         <div className="gantt-grid" style={{ backgroundSize: `${dayWidth}px 100%` }} />
         {todayOffset >= 0 && <div aria-label={t("gantt.legendToday")} className="gantt-today" style={{ left: `${todayOffset * dayWidth + dayWidth / 2}px` }} />}
-        {model.rows.map((row, index) => <button className="gantt-bar" data-task-id={row.id} data-start={row.start} data-due={row.due} key={row.id} title={`${row.title}: ${row.start} — ${row.due}`} style={{ left: `${row.startOffset * dayWidth + 4}px`, top: `${index * 58 + 51}px`, width: `${Math.max(28, row.duration * dayWidth - 8)}px` }} onClick={() => onNavigate("tasks", { projectId, taskId: row.id })}><span>{row.title}</span></button>)}
+        {model.rows.map((row, index) => <button className="gantt-bar" data-task-id={row.id} data-start={row.start} data-due={row.due} key={row.id} title={`${row.title}: ${row.start} — ${row.due}`} style={{ left: `${row.startOffset * dayWidth + 4}px`, top: `${index * GANTT_ROW_HEIGHT + GANTT_BAR_TOP}px`, width: `${Math.max(28, row.duration * dayWidth - 8)}px` }} onClick={() => onNavigate("tasks", { projectId, taskId: row.id })}><span>{row.title}</span></button>)}
         {model.milestones.map((milestone) => <button type="button" className="gantt-milestone" data-milestone-id={milestone.id} key={milestone.id} onClick={() => onNavigate("stages", { projectId, stageId: milestone.id })} title={`${milestone.name}: ${milestone.due}`} style={{ left: `${milestone.offset * dayWidth + 13}px` }}><span>{milestone.name}</span></button>)}
-        <svg className="gantt-dependencies" aria-label={t("gantt.dependencies")} height={model.rows.length * 58 + 48} width={timelineWidth}>{model.dependencies.map((dependency) => {
+        <svg className="gantt-dependencies" aria-label={t("gantt.dependencies")} height={model.rows.length * GANTT_ROW_HEIGHT + 48} width={timelineWidth}>{model.dependencies.map((dependency, index) => {
           const from = model.rows.find((row) => row.id === dependency.from)!; const to = model.rows.find((row) => row.id === dependency.to)!;
-          const x1 = (from.startOffset + from.duration) * dayWidth - 4; const x2 = to.startOffset * dayWidth + 4; const y1 = (rowIndex.get(from.id) ?? 0) * 58 + 69; const y2 = (rowIndex.get(to.id) ?? 0) * 58 + 69;
-          return <path data-from={from.id} data-to={to.id} key={`${from.id}-${to.id}`} d={`M ${x1} ${y1} C ${x1 + 18} ${y1}, ${x2 - 18} ${y2}, ${x2} ${y2}`} markerEnd="url(#gantt-arrow)" />;
-        })}<defs><marker id="gantt-arrow" markerHeight="6" markerWidth="6" orient="auto" refX="5" refY="3"><path d="M0,0 L0,6 L6,3 z" /></marker></defs></svg>
+          const x1 = (from.startOffset + from.duration) * dayWidth - 4; const x2 = to.startOffset * dayWidth + 4;
+          const y1 = (rowIndex.get(from.id) ?? 0) * GANTT_ROW_HEIGHT + GANTT_BAR_TOP + GANTT_BAR_HEIGHT / 2 - GANTT_HEADER_HEIGHT;
+          const y2 = (rowIndex.get(to.id) ?? 0) * GANTT_ROW_HEIGHT + GANTT_BAR_TOP + GANTT_BAR_HEIGHT / 2 - GANTT_HEADER_HEIGHT;
+          return <path data-from={from.id} data-to={to.id} key={`${from.id}-${to.id}`} d={dependencyPath(x1, y1, x2, y2)} markerEnd={`url(#${markerPrefix}-gantt-arrow-${index})`} style={{ stroke: DEPENDENCY_COLORS[index % DEPENDENCY_COLORS.length] }} />;
+        })}
+        {model.rows.filter((row) => (outgoingCounts.get(row.id) ?? 0) > 1).map((row) => {
+          const dependencyIndex = model.dependencies.findIndex((dependency) => dependency.from === row.id);
+          const x = (row.startOffset + row.duration) * dayWidth - 4 + DEPENDENCY_CLEARANCE;
+          const y = (rowIndex.get(row.id) ?? 0) * GANTT_ROW_HEIGHT + GANTT_BAR_TOP + GANTT_BAR_HEIGHT / 2 - GANTT_HEADER_HEIGHT;
+          return <circle className="gantt-dependency-branch" data-branch-from={row.id} key={row.id} cx={x} cy={y} r="4" style={{ fill: DEPENDENCY_COLORS[dependencyIndex % DEPENDENCY_COLORS.length] }} />;
+        })}
+        <defs>{model.dependencies.map((dependency, index) => <marker id={`${markerPrefix}-gantt-arrow-${index}`} key={`${dependency.from}-${dependency.to}`} markerHeight="6" markerWidth="6" orient="auto" refX="5" refY="3"><path d="M0,0 L0,6 L6,3 z" style={{ fill: DEPENDENCY_COLORS[index % DEPENDENCY_COLORS.length] }} /></marker>)}</defs></svg>
       </div>
     </section>}
     </>
