@@ -62,6 +62,7 @@ describe("project plan and stage workspace", () => {
     const inlineStatus = screen.getByRole<HTMLSelectElement>("combobox", { name: "Status: Without stage" });
     fireEvent.change(inlineStatus, { target: { value: "done" } });
     expect(inlineStatus.value).toBe("done");
+    expect(screen.getByText("Without stage").closest(".project-plan-task-row")?.classList.contains("is-saving")).toBe(true);
     await waitFor(() => expect(client.updateEntity).toHaveBeenCalledWith(draft.draft_id, "tasks", other, fingerprint, expect.objectContaining({ status: "done" })));
 
     fireEvent.click(within(stageCard).getByRole("button", { name: /New task/u }));
@@ -85,9 +86,11 @@ describe("project plan and stage workspace", () => {
 
     fireEvent.click(within(stageCard).getByRole("button", { name: "Move task 2 up" }));
     expect(titles()).toEqual(["Alpha task", "Zebra task", "Linked task"]);
-    expect(screen.getByText("Alpha task").closest(".project-plan-task-row")?.classList.contains("recently-changed")).toBe(true);
-    expect(screen.getByText("Zebra task").closest(".project-plan-task-row")?.classList.contains("recently-changed")).toBe(true);
+    expect(screen.getByText("Alpha task").closest(".project-plan-task-row")?.classList.contains("is-saving")).toBe(true);
+    expect(screen.getByText("Zebra task").closest(".project-plan-task-row")?.classList.contains("is-saving")).toBe(true);
     expect(document.querySelector(".workspace-loading")).toBeNull();
+    await waitFor(() => expect(screen.getByText("Alpha task").closest(".project-plan-task-row")?.classList.contains("recently-changed")).toBe(true));
+    expect(screen.getByText("Zebra task").closest(".project-plan-task-row")?.classList.contains("recently-changed")).toBe(true);
     await waitFor(() => expect(titles()).toEqual(["Alpha task", "Zebra task", "Linked task"]));
     expect(client.updateEntity.mock.calls[0]?.[1]).toBe("milestones");
     expect(client.updateEntity.mock.calls[0]?.[4]).toMatchObject({ task_order: [large.document.id, urgent.document.id, linked.document.id] });
@@ -95,7 +98,9 @@ describe("project plan and stage workspace", () => {
     const moveMilestoneDown = screen.getByRole<HTMLButtonElement>("button", { name: "Move milestone 1 down" });
     await waitFor(() => expect(moveMilestoneDown.disabled).toBe(false));
     fireEvent.click(moveMilestoneDown);
-    expect(stageCard.classList.contains("recently-changed")).toBe(true);
+    expect(stageCard.classList.contains("is-saving")).toBe(true);
+    expect(screen.getByRole("heading", { name: "Follow-up" }).closest(".project-plan-stage")?.classList.contains("is-saving")).toBe(true);
+    await waitFor(() => expect(stageCard.classList.contains("recently-changed")).toBe(true));
     expect(screen.getByRole("heading", { name: "Follow-up" }).closest(".project-plan-stage")?.classList.contains("recently-changed")).toBe(true);
     await waitFor(() => expect(stageCard.querySelector(".project-plan-stage-kind")?.textContent).toBe(`Milestone 2. ${stage.document.id}.`));
     expect(client.updateEntity.mock.calls[1]?.[1]).toBe("projects");

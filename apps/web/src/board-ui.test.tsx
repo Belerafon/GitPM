@@ -41,6 +41,7 @@ describe("Board and Saved Views", () => {
     const doneColumn = container.querySelector<HTMLElement>('[data-status="done"]')!;
     fireEvent.dragOver(doneColumn, { dataTransfer }); fireEvent.drop(doneColumn, { dataTransfer });
     expect(doneColumn.textContent).toContain("Drag me");
+    expect(doneColumn.querySelector(".board-card")?.classList.contains("is-saving")).toBe(true);
     expect(container.querySelector(".workspace-loading")).toBeNull();
     await waitFor(() => expect(entityApi.entities.find((item) => item.document.id === taskId)?.document.status).toBe("done"));
     await waitFor(() => expect(doneColumn.textContent).toContain("Drag me"));

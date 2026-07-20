@@ -33,7 +33,7 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
   const [editor, setEditor] = useState<"stage" | "task" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [statusPending, setStatusPending] = useState<string | null>(null);
-  const { highlights, mark } = useExternalHighlights(1_200);
+  const { highlights, mark } = useExternalHighlights(500);
   const readOnly = draft.writer_mode !== "ui" || draft.state !== "open" || draft.changed_externally === true;
 
   const load = useCallback(async () => {
@@ -109,8 +109,7 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
     const document = { ...task.document, status } as GitPmDocument;
     setStatusPending(task.document.id);
     setWorkspace({ ...workspace, tasks: workspace.tasks.map((item) => item.document.id === task.document.id ? { ...item, document } : item) });
-    mark({ [task.document.id]: ["status"] });
-    void mutate(async () => await api.updateEntity(draft.draft_id, "tasks", task, previous.draft_fingerprint, document))
+    void mutate(async () => { const result = await api.updateEntity(draft.draft_id, "tasks", task, previous.draft_fingerprint, document); setStatusPending(null); return result; })
       .then((success) => { if (!success) setWorkspace(previous); })
       .finally(() => setStatusPending(null));
   };
@@ -133,6 +132,7 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
         tasks={stageTasks}
         statusOptions={statuses}
         statusBusy={statusPending !== null}
+        statusSavingId={statusPending}
         t={t}
       />)}
     </AsyncBoundary>
@@ -158,7 +158,7 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
   </section>;
 }
 
-function StageDetails({ stage, tasks, projectId, locale, readOnly, changed, changedTaskIds, statusOptions, statusBusy, onArchive, onEdit, onNewTask, onStatusChange, onNavigate, t }: {
+function StageDetails({ stage, tasks, projectId, locale, readOnly, changed, changedTaskIds, statusOptions, statusBusy, statusSavingId, onArchive, onEdit, onNewTask, onStatusChange, onNavigate, t }: {
   readonly stage: EntityResult;
   readonly tasks: readonly EntityResult[];
   readonly projectId: string;
@@ -168,6 +168,7 @@ function StageDetails({ stage, tasks, projectId, locale, readOnly, changed, chan
   readonly changedTaskIds: ReadonlySet<string>;
   readonly statusOptions: readonly ConfigValue[];
   readonly statusBusy: boolean;
+  readonly statusSavingId: string | null;
   readonly onArchive: () => void;
   readonly onEdit: () => void;
   readonly onNewTask: () => void;
@@ -190,7 +191,7 @@ function StageDetails({ stage, tasks, projectId, locale, readOnly, changed, chan
       <div className="card"><span>{t("core.due")}</span><strong>{text(stage.document, "due") ? formatDateOnly(locale, text(stage.document, "due")) : "—"}</strong></div>
     </div>
     <section className="card stage-task-list"><div className="card-heading"><div><h3>{t("stages.tasks")}</h3><p>{t("stages.tasksDescription")}</p></div><button onClick={() => onNavigate("board", { projectId, query: { milestone: [stage.document.id] } })}>{t("stages.openBoard")}</button></div>
-      {tasks.length === 0 ? <p>{t("stages.emptyTasks")}</p> : tasks.map((task) => <div className={`stage-task-row${changedTaskIds.has(task.document.id) ? " recently-changed" : ""}`} key={task.document.id}>
+      {tasks.length === 0 ? <p>{t("stages.emptyTasks")}</p> : tasks.map((task) => <div className={`stage-task-row${changedTaskIds.has(task.document.id) ? " recently-changed" : ""}${statusSavingId === task.document.id ? " is-saving" : ""}`} key={task.document.id}>
         <button className="stage-task-link" onClick={() => onNavigate("tasks", { projectId, taskId: task.document.id })}><strong>{text(task.document, "title")}</strong><code>{task.document.id}</code></button>{readOnly ? <span className="state open">{statusOptions.find((status) => status.slug === text(task.document, "status"))?.title ?? text(task.document, "status")}</span> : <select aria-label={`${t("core.status")}: ${text(task.document, "title")}`} className="inline-status-select" disabled={statusBusy} onChange={(event) => onStatusChange(task, event.target.value)} value={text(task.document, "status")}>{statusOptions.map((status) => <option key={status.slug} value={status.slug}>{status.title}</option>)}</select>}
       </div>)}
     </section>

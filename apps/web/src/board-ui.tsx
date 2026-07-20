@@ -43,7 +43,8 @@ export function BoardWorkspace({ api, draft, locale, initialProjectId = "", init
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [activeViewId, setActiveViewId] = useState(initialViewId);
   const [error, setError] = useState<string | null>(null);
-  const { highlights, mark } = useExternalHighlights(1_200);
+  const [savingTaskId, setSavingTaskId] = useState<string | null>(null);
+  const { highlights, mark } = useExternalHighlights(500);
   const reducedMotion = useReducedMotion();
   const columnsRef = useFlipList<HTMLDivElement>(reducedMotion);
   const loadRequest = useAsyncLoad();
@@ -101,9 +102,9 @@ export function BoardWorkspace({ api, draft, locale, initialProjectId = "", init
     if (readOnly || task === undefined || text(task.document, "status") === status) return;
     const previous = tasks;
     const document = { ...task.document, status } as GitPmDocument;
+    setSavingTaskId(task.document.id);
     setTasks(upsertEntity(tasks, { ...task, document }));
-    mark({ [task.document.id]: ["status"] });
-    void mutate(async () => await api.updateEntity(draft.draft_id, "tasks", task, fingerprint, document)).then((result) => { if (result === null) setTasks(previous); });
+    void mutate(async () => { const result = await api.updateEntity(draft.draft_id, "tasks", task, fingerprint, document); setSavingTaskId(null); return result; }).then((result) => { if (result === null) setTasks(previous); }).finally(() => setSavingTaskId(null));
   };
   const drop = (event: DragEvent<HTMLElement>, status: string) => {
     event.preventDefault();
@@ -149,7 +150,7 @@ export function BoardWorkspace({ api, draft, locale, initialProjectId = "", init
       const columnTasks = visibleTasks.filter((item) => text(item.document, "status") === status);
       return <section className="board-column" data-status={status} key={status} onDragOver={(event) => event.preventDefault()} onDrop={(event) => drop(event, status)} onPointerUp={() => { if (draggedTaskId !== null) moveTask(status, draggedTaskId); }}>
         <header><h3>{titleForStatus(status)}</h3><span>{columnTasks.length}</span></header>
-        <div className="board-cards">{columnTasks.map((task) => <article className={`board-card${highlights[task.document.id] ? " recently-changed" : ""}`} draggable={!readOnly} data-flip-key={`board-task:${task.document.id}`} data-task-id={task.document.id} key={task.document.id} onPointerDown={() => { if (!readOnly) setDraggedTaskId(task.document.id); }} onDragStart={(event) => { setDraggedTaskId(task.document.id); event.dataTransfer.setData("text/plain", task.document.id); }} onDragEnd={() => setDraggedTaskId(null)}>
+        <div className="board-cards">{columnTasks.map((task) => <article className={`board-card${highlights[task.document.id] ? " recently-changed" : ""}${savingTaskId === task.document.id ? " is-saving" : ""}`} draggable={!readOnly} data-flip-key={`board-task:${task.document.id}`} data-task-id={task.document.id} key={task.document.id} onPointerDown={() => { if (!readOnly) setDraggedTaskId(task.document.id); }} onDragStart={(event) => { setDraggedTaskId(task.document.id); event.dataTransfer.setData("text/plain", task.document.id); }} onDragEnd={() => setDraggedTaskId(null)}>
           {!readOnly && <span aria-hidden="true" className="board-drag-handle">⋮⋮</span>}<button className="board-task-link" onPointerDown={(event) => event.stopPropagation()} onClick={() => onNavigate("tasks", { projectId, taskId: task.document.id })}><strong>{text(task.document, "title")}</strong><code>{task.document.id}</code></button>{catalog.milestone(task.document.milestone) !== undefined && <button className="board-milestone" onPointerDown={(event) => event.stopPropagation()} onClick={() => onNavigate("stages", { projectId, stageId: text(task.document, "milestone") })} type="button">{catalog.milestone(task.document.milestone)?.name}{catalog.milestone(task.document.milestone)?.lifecycle === "archived" ? ` · ${t("core.archived")}` : ""}</button>}<span>{types.find((type) => type.slug === text(task.document, "type"))?.title ?? text(task.document, "type")}</span><label className="board-status-control" onPointerDown={(event) => event.stopPropagation()}>{t("core.status")}<select disabled={readOnly} value={text(task.document, "status")} onChange={(event) => moveTask(event.target.value, task.document.id)}>{boardStatuses.map((nextStatus) => <option key={nextStatus} value={nextStatus}>{titleForStatus(nextStatus)}</option>)}</select></label>
         </article>)}</div>
       </section>;

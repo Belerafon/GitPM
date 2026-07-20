@@ -35,6 +35,24 @@ describe("core UI", () => {
     expect((screen.getByLabelText("Project") as HTMLSelectElement).value).toBe("");
   });
 
+  it("animates the task row while an inline status change is being saved", async () => {
+    const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
+    const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
+    await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@1", id: "T-26-222222", project: project.document.id, title: "Animated task", type: "task", status: "backlog", lifecycle: "active" });
+    let finishRefresh: () => void = () => undefined;
+    const onChanged = vi.fn(() => new Promise<void>((resolve) => { finishRefresh = resolve; }));
+
+    render(<CoreWorkspace api={api} draft={draft} initialProjectId={project.document.id} locale="en" surface="tasks" onChanged={onChanged} />);
+    const status = await screen.findByRole<HTMLSelectElement>("combobox", { name: "Status: Animated task" });
+    fireEvent.change(status, { target: { value: "done" } });
+    expect(screen.getByText("Animated task").closest(".task-row")?.classList.contains("is-saving")).toBe(true);
+    await waitFor(() => expect(entityApi.entities.find((item) => item.document.id === "T-26-222222")?.document.status).toBe("done"));
+    await waitFor(() => expect(status.disabled).toBe(false));
+    expect(screen.getByText("Animated task").closest(".task-row")?.classList.contains("is-saving")).toBe(false);
+    expect(onChanged).toHaveBeenCalled();
+    finishRefresh();
+  });
+
   it("creates valid immutable IDs and renders Markdown without creating raw HTML", () => {
     expect(newEntityId("T", () => 0, new Date("2026-01-01T00:00:00Z"))).toBe("T-26-000000");
     const { container } = render(<SafeMarkdown source={'# **Safe**\n<img src=x onerror="alert(1)">'} />);
