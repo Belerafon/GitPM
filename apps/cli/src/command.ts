@@ -1,5 +1,7 @@
-import { readdir, readFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { promisify } from "node:util";
 import { GITPM_VERSION } from "@gitpm/shared";
 import { formatYamlText, parseYamlDocument, referenceLabelsForDocuments, RepositoryFormatError } from "@gitpm/repository-format";
 import { validateRepository } from "@gitpm/validation";
@@ -209,6 +211,122 @@ async function runDoctor(args: readonly string[], cwd: string): Promise<CliResul
   };
 }
 
+const execFileAsync = promisify(execFile);
+
+const INIT_REPOSITORY_YAML = `schema: gitpm/repository@1
+default_branch: main
+default_calendar: C-26-WRKDAY # calendar: Standard work week
+allowed_top_level_files:
+  - README.md
+ui_poll_interval_seconds: 5
+`;
+
+const INIT_STATUSES_YAML = `schema: gitpm/statuses@1
+statuses:
+  - slug: backlog
+    title: Backlog
+    color: gray
+    active: true
+  - slug: in-progress
+    title: In progress
+    color: blue
+    active: true
+  - slug: done
+    title: Done
+    color: green
+    active: true
+`;
+
+const INIT_ISSUE_TYPES_YAML = `schema: gitpm/issue-types@1
+issue_types:
+  - slug: task
+    title: Task
+    color: blue
+    active: true
+  - slug: bug
+    title: Bug
+    color: red
+    active: true
+`;
+
+const INIT_CALENDAR_YAML = `schema: gitpm/calendar@1
+id: C-26-WRKDAY # calendar: Standard work week
+name: Standard work week
+working_weekdays:
+  - 1
+  - 2
+  - 3
+  - 4
+  - 5
+holidays: []
+lifecycle: active
+`;
+
+const INIT_README_MD = `# Project portfolio managed by GitPM
+
+This repository was initialised by \`gitpm init\`. Use the GitPM web UI or CLI
+to create projects, people, teams, calendars and tasks. See
+https://github.com/Belerafon/GitPM for details.
+`;
+
+const INIT_KEEPERS = ["people", "teams", "projects"] as const;
+
+async function directoryIsEmpty(directory: string): Promise<boolean> {
+  try {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      if (entry.name === ".git") continue;
+      return false;
+    }
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return true;
+    throw error;
+  }
+}
+
+async function runInit(args: readonly string[], cwd: string): Promise<CliResult> {
+  const parsed = options(args, cwd);
+  const target = parsed.rest[0] !== undefined ? path.resolve(cwd, parsed.rest[0]) : path.resolve(cwd);
+  await mkdir(target, { recursive: true });
+  if (!(await directoryIsEmpty(target))) {
+    throw new RepositoryFormatError("INIT_TARGET_NOT_EMPTY", `Target directory is not empty (excluding .git): ${target}`);
+  }
+  await mkdir(path.join(target, ".gitpm"), { recursive: true });
+  await mkdir(path.join(target, "calendars"), { recursive: true });
+  for (const sub of INIT_KEEPERS) {
+    const directory = path.join(target, sub);
+    await mkdir(directory, { recursive: true });
+    await writeFile(path.join(directory, ".gitkeep"), "", "utf8");
+  }
+  await writeFile(path.join(target, ".gitpm", "repository.yaml"), INIT_REPOSITORY_YAML, "utf8");
+  await writeFile(path.join(target, ".gitpm", "statuses.yaml"), INIT_STATUSES_YAML, "utf8");
+  await writeFile(path.join(target, ".gitpm", "issue-types.yaml"), INIT_ISSUE_TYPES_YAML, "utf8");
+  await writeFile(path.join(target, "calendars", "C-26-WRKDAY.yaml"), INIT_CALENDAR_YAML, "utf8");
+  await writeFile(path.join(target, "README.md"), INIT_README_MD, "utf8");
+
+  const gitEnv = { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null" };
+  const branch = process.env.GITPM_INIT_BRANCH?.trim() || "main";
+  try {
+    await execFileAsync("git", ["-C", target, "rev-parse", "--git-dir"], { windowsHide: true });
+  } catch {
+    await execFileAsync("git", ["init", "-b", branch, target], { windowsHide: true, env: gitEnv });
+  }
+  await execFileAsync("git", ["-C", target, "add", "."], { windowsHide: true, env: gitEnv });
+  const authorName = process.env.GITPM_INIT_AUTHOR_NAME?.trim() || "GitPM";
+  const authorEmail = process.env.GITPM_INIT_AUTHOR_EMAIL?.trim() || "gitpm@localhost";
+  const message = process.env.GITPM_INIT_MESSAGE?.trim() || "Initialise GitPM repository";
+  await execFileAsync(
+    "git",
+    ["-C", target, "-c", `user.name=${authorName}`, "-c", `user.email=${authorEmail}`, "commit", "-m", message],
+    { windowsHide: true, env: gitEnv },
+  );
+  const { stdout: commit } = await execFileAsync("git", ["-C", target, "rev-parse", "HEAD"], { windowsHide: true });
+  return {
+    exitCode: 0,
+    output: render(parsed.json, { ok: true, code: "OK", path: target, commit: commit.trim() }, `Initialised GitPM repository at ${target} (${commit.trim()})`),
+  };
+}
+
 export async function run(args: readonly string[], cwd = process.cwd(), dependencies: CliDependencies = {}): Promise<CliResult> {
   if (args.includes("--version") || args.includes("-v")) return { exitCode: 0, output: GITPM_VERSION };
   const [command, ...commandArgs] = args;
@@ -225,10 +343,11 @@ export async function run(args: readonly string[], cwd = process.cwd(), dependen
     if (command === "push") return await runPush(commandArgs, dependencies);
     if (command === "mr") return await runMr(commandArgs, dependencies);
     if (command === "doctor") return await runDoctor(commandArgs, cwd);
+    if (command === "init") return await runInit(commandArgs, cwd);
     const json = args.includes("--json");
     return {
       exitCode: 2,
-      output: render(json, { ok: false, code: "CLI_USAGE" }, "Usage: gitpm <draft|entity create|format|validate|diff --semantic|commit --all|push|mr create|doctor> [options]"),
+      output: render(json, { ok: false, code: "CLI_USAGE" }, "Usage: gitpm <init|draft|entity create|format|validate|diff --semantic|commit --all|push|mr create|doctor> [options]"),
     };
   } catch (error) {
     const code = error instanceof RepositoryFormatError || (typeof error === "object" && error !== null && "code" in error && typeof error.code === "string") ? error.code : "CLI_INTERNAL";

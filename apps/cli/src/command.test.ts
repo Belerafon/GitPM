@@ -109,3 +109,32 @@ describe("CLI P12 agent commands", () => {
     expect(JSON.parse((await run(["draft", "status", "--draft", "DRF-X", "--json"])).output)).toMatchObject({ code: "CLI_AGENT_CONFIGURATION_REQUIRED" });
   });
 });
+
+describe("CLI init command", () => {
+  it("creates a valid schema v1 skeleton in an empty directory", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "gitpm-init-"));
+    roots.push(root);
+    const target = path.join(root, "portfolio");
+    const init = await run(["init", target, "--json"], root);
+    expect(init.exitCode).toBe(0);
+    const initPayload = JSON.parse(init.output);
+    expect(initPayload).toMatchObject({ ok: true, code: "OK" });
+    expect(initPayload.commit).toMatch(/^[0-9a-f]{40}$/u);
+
+    const validate = await run(["validate", "--json", "--root", target]);
+    expect(validate.exitCode).toBe(0);
+    expect(JSON.parse(validate.output)).toMatchObject({ ok: true, code: "OK", documentCount: 4 });
+
+    const doctor = await run(["doctor", "--json", "--root", target]);
+    expect(JSON.parse(doctor.output)).toMatchObject({ ok: true, checks: { repository_valid: true, schemas_loaded: true } });
+  });
+
+  it("rejects a non-empty target directory", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "gitpm-init-busy-"));
+    roots.push(root);
+    await writeFile(path.join(root, "leftover.txt"), "noise", "utf8");
+    const result = await run(["init", root, "--json"], root);
+    expect(result.exitCode).toBe(1);
+    expect(JSON.parse(result.output)).toMatchObject({ ok: false, code: "INIT_TARGET_NOT_EMPTY" });
+  });
+});
