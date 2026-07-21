@@ -1,6 +1,6 @@
 import type { DraftManager, DraftMetadata } from "@gitpm/drafts";
 import { DraftRuntimeError } from "@gitpm/drafts";
-import type { EntityStore } from "@gitpm/domain";
+import type { CommentStore, EntityStore } from "@gitpm/domain";
 import { DomainOperationError } from "@gitpm/domain";
 import type { ChangesService } from "@gitpm/changes";
 import { ChangesError } from "@gitpm/changes";
@@ -211,6 +211,41 @@ describe("entity API contract", () => {
     expect(response.statusCode).toBe(403);
     expect(response.json()).toMatchObject({ error: { code: "DRAFT_FORBIDDEN" } });
     expect(entityStore.updateConfiguration).not.toHaveBeenCalled();
+  });
+});
+
+describe("comment API contract", () => {
+  it("derives the author on the server and forwards stable mention notifications", async () => {
+    const created = {
+      document: { schema: "gitpm/comment@1", id: "N-26-ABC123", project: "P-26-MGP84K", task: "T-26-P9G3P8", author: { provider: "git", subject: "anna@example.test", display_name: "Anna" }, created_at: "2026-07-20T10:00:00.000Z", state: "active", body_markdown: "Hello", mentions: [] },
+      path: "projects/P-26-MGP84K/comments/T-26-P9G3P8/N-26-ABC123.yaml", blob_id: "c".repeat(40), draft_fingerprint: metadata.fingerprint, can_edit: true, can_delete: true,
+    };
+    const commentStore = {
+      create: vi.fn(async () => created),
+      notifications: vi.fn(async () => ({ recipient_person_id: "U-26-5EBAE3", items: [] })),
+    } as unknown as CommentStore;
+    const app = buildApp({
+      authenticate: () => ({ userId: "42", role: "Developer", provider: "git", displayName: "Anna", email: "ANNA@example.test" }),
+      commentStore,
+      draftManager: manager(),
+    });
+    apps.push(app);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/drafts/DRF-API/projects/P-26-MGP84K/tasks/T-26-P9G3P8/comments",
+      payload: { expected_fingerprint: metadata.fingerprint, body_markdown: "Hello", author: { subject: "spoofed" } },
+    });
+    expect(response.statusCode).toBe(201);
+    expect(commentStore.create).toHaveBeenCalledWith("DRF-API", "P-26-MGP84K", "T-26-P9G3P8", metadata.fingerprint, "Hello", expect.objectContaining({
+      userId: "42",
+      identity: { provider: "git", subject: "anna@example.test", display_name: "Anna" },
+      email: "ANNA@example.test",
+    }));
+
+    const notifications = await app.inject({ method: "GET", url: "/api/drafts/DRF-API/notifications" });
+    expect(notifications.statusCode).toBe(200);
+    expect(notifications.json()).toMatchObject({ recipient_person_id: "U-26-5EBAE3", items: [] });
   });
 });
 

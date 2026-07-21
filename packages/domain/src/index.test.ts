@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { DraftManager } from "@gitpm/drafts";
 import { GitClient } from "@gitpm/git-client";
 import type { GitPmDocument } from "@gitpm/repository-format";
-import { DomainOperationError, EntityStore } from "./index.js";
+import { CommentStore, DomainOperationError, EntityStore, type CommentActor } from "./index.js";
 
 const execFileAsync = promisify(execFile);
 const roots: string[] = [];
@@ -17,7 +17,7 @@ async function git(cwd: string, ...args: string[]): Promise<void> {
   await execFileAsync("git", args, { cwd, windowsHide: true });
 }
 
-async function runtime(): Promise<{ manager: DraftManager; store: EntityStore }> {
+async function runtime(): Promise<{ manager: DraftManager; store: EntityStore; comments: CommentStore }> {
   const root = await mkdtemp(path.join(os.tmpdir(), "gitpm-domain-"));
   roots.push(root);
   const source = path.join(root, "source");
@@ -33,12 +33,40 @@ async function runtime(): Promise<{ manager: DraftManager; store: EntityStore }>
   await git(source, "push", "origin", "main");
   const client = new GitClient({ dataDirectory: data, remoteUrl: remote, defaultBranch: "main", allowLocalTestRemote: true });
   const manager = new DraftManager(client, data);
-  return { manager, store: new EntityStore(manager) };
+  return { manager, store: new EntityStore(manager), comments: new CommentStore(manager) };
 }
 
 afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))));
 
 describe("domain entity store", () => {
+  it("persists task comments, resolves stable mentions and exposes in-app notifications", async () => {
+    const { manager, comments } = await runtime();
+    const draft = await manager.createDraft("DRF-COMMENTS", "42");
+    const author: CommentActor = { userId: "42", role: "Developer", identity: { provider: "git", subject: "boris@example.test", display_name: "Boris" }, email: "boris@example.test" };
+    const anna: CommentActor = { userId: "42", role: "Developer", identity: { provider: "git", subject: "anna@example.test", display_name: "Anna" }, email: "ANNA@example.test" };
+    const project = "P-26-MGP84K";
+    const task = "T-26-P9G3P8";
+
+    const created = await comments.create("DRF-COMMENTS", project, task, draft.fingerprint, "Please review @[Anna Petrova](person:U-26-5EBAE3)", author);
+    expect(created.document).toMatchObject({ schema: "gitpm/comment@1", project, task, state: "active", mentions: [{ person: "U-26-5EBAE3" }] });
+    expect(created.path).toMatch(new RegExp(`^projects/${project}/comments/${task}/N-\\d{2}-[0-9A-HJKMNP-TV-Z]{6}\\.yaml$`, "u"));
+    expect((await comments.list("DRF-COMMENTS", project, task, author))[0]).toMatchObject({ can_edit: true, can_delete: true });
+
+    const notifications = await comments.notifications("DRF-COMMENTS", anna);
+    expect(notifications.recipient_person_id).toBe("U-26-5EBAE3");
+    expect(notifications.items).toHaveLength(1);
+    expect(notifications.items[0]).toMatchObject({ task_id: task, comment_id: created.document.id, excerpt: "Please review @Anna Petrova" });
+    expect((await comments.notifications("DRF-COMMENTS", author)).items).toHaveLength(0);
+
+    await expect(comments.update("DRF-COMMENTS", project, task, created.document.id, created.draft_fingerprint, created.blob_id, "Not allowed", anna))
+      .rejects.toMatchObject({ code: "COMMENT_FORBIDDEN" });
+    const current = (await comments.list("DRF-COMMENTS", project, task, author))[0]!;
+    const deleted = await comments.delete("DRF-COMMENTS", project, task, current.document.id, current.draft_fingerprint, current.blob_id, author);
+    expect(deleted.document).toMatchObject({ state: "deleted", mentions: [] });
+    expect(deleted.document.body_markdown).toBeUndefined();
+    expect((await comments.notifications("DRF-COMMENTS", anna)).items).toHaveLength(0);
+  });
+
   it("returns a project-scoped workspace snapshot", async () => {
     const { manager, store } = await runtime();
     await manager.createDraft("DRF-WORKSPACE", "42");
@@ -63,13 +91,15 @@ describe("domain entity store", () => {
   });
 
   it("moves a task between projects and rejects moves that break project-local references", async () => {
-    const { manager, store } = await runtime();
+    const { manager, store, comments } = await runtime();
     const draft = await manager.createDraft("DRF-MOVE", "42");
     const task = await store.get("DRF-MOVE", "tasks", "T-26-G2TG9R");
-    const moved = await store.moveTask("DRF-MOVE", "42", String(task.document.id), draft.fingerprint, task.blob_id, "P-26-MGP84K", "M-26-461GDJ");
+    const comment = await comments.create("DRF-MOVE", String(task.document.project), String(task.document.id), draft.fingerprint, "Moves with its task", { userId: "42", role: "Developer", identity: { provider: "git", subject: "author@example.test", display_name: "Author" } });
+    const moved = await store.moveTask("DRF-MOVE", "42", String(task.document.id), comment.draft_fingerprint, task.blob_id, "P-26-MGP84K", "M-26-461GDJ");
 
     expect(moved.document).toMatchObject({ project: "P-26-MGP84K", milestone: "M-26-461GDJ" });
     expect(moved.path).toBe("projects/P-26-MGP84K/tasks/T-26-G2TG9R.yaml");
+    expect(await readFile(path.join(draft.worktree_path, "projects", "P-26-MGP84K", "comments", "T-26-G2TG9R", `${comment.document.id}.yaml`), "utf8")).toContain("project: P-26-MGP84K");
     const dependent = await store.get("DRF-MOVE", "tasks", "T-26-P9G3P8");
     await expect(store.moveTask("DRF-MOVE", "42", String(dependent.document.id), moved.draft_fingerprint, dependent.blob_id, "P-26-8S9HQQ"))
       .rejects.toMatchObject({ code: "VALIDATION_FAILED" });

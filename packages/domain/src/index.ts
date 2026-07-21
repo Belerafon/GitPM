@@ -7,6 +7,8 @@ import { atomicWriteDomainFile, resolveDomainPath } from "@gitpm/security";
 import { ENTITY_ID_PREFIX, isEntityId } from "@gitpm/shared";
 import { validateDelete, validateRepository } from "@gitpm/validation";
 
+export * from "./comments.js";
+
 export class DomainOperationError extends Error {
   constructor(
     public readonly code: string,
@@ -62,6 +64,7 @@ const schemaIdPrefixes = {
   "gitpm/team@1": ENTITY_ID_PREFIX.team,
   "gitpm/calendar@1": ENTITY_ID_PREFIX.calendar,
   "gitpm/saved-view@1": ENTITY_ID_PREFIX.view,
+  "gitpm/comment@1": ENTITY_ID_PREFIX.comment,
 } as const;
 
 export function assertEntityType(entityType: string, document: GitPmDocument): void {
@@ -87,6 +90,11 @@ export function entityPathForDocument(document: GitPmDocument): string {
     case "gitpm/task@1": return `projects/${project}/tasks/${id}.yaml`;
     case "gitpm/milestone@1": return `projects/${project}/milestones/${id}.yaml`;
     case "gitpm/saved-view@1": return `projects/${project}/views/${id}.yaml`;
+    case "gitpm/comment@1": {
+      const task = String(document.task ?? "");
+      if (!isEntityId(task, ENTITY_ID_PREFIX.task)) throw new DomainOperationError("ENTITY_ID_INVALID", "Comment task ID is invalid");
+      return `projects/${project}/comments/${task}/${id}.yaml`;
+    }
     case "gitpm/person@1": return `people/${id}.yaml`;
     case "gitpm/team@1": return `teams/${id}.yaml`;
     case "gitpm/calendar@1": return `calendars/${id}.yaml`;
@@ -166,12 +174,17 @@ export class EntityStore {
   }
 
   private async result(draftId: string, metadata: DraftMetadata, entity: IndexedEntity): Promise<EntityResult> {
-    return {
+    return (await this.results(draftId, metadata, [entity]))[0]!;
+  }
+
+  private async results(draftId: string, metadata: DraftMetadata, entities: readonly IndexedEntity[]): Promise<readonly EntityResult[]> {
+    const blobIds = await this.drafts.fileBlobIds(draftId, entities.map((entity) => entity.relative));
+    return entities.map((entity) => ({
       document: entity.document,
       path: entity.relative,
-      blob_id: await this.drafts.fileBlobId(draftId, entity.relative),
+      blob_id: blobIds.get(entity.relative)!,
       draft_fingerprint: metadata.fingerprint,
-    };
+    }));
   }
 
   private labels(repository: RepositoryIndex, replacement?: GitPmDocument) {
@@ -189,8 +202,8 @@ export class EntityStore {
     if (!schema) throw new DomainOperationError("ENTITY_TYPE_INVALID", `Unknown entity type ${entityType}`);
     const matching = (await this.index(draftId, metadata)).entities
       .filter((entity) => entity.document.schema === schema && (project === undefined || entity.document.project === project));
-    const result = await Promise.all(matching.map(async (entity) => await this.result(draftId, metadata, entity)));
-    return result.sort((left, right) => String(left.document.id).localeCompare(String(right.document.id)));
+    const result = await this.results(draftId, metadata, matching);
+    return [...result].sort((left, right) => String(left.document.id).localeCompare(String(right.document.id)));
   }
 
   private async find(draftId: string, metadata: DraftMetadata, entityType: string, id: string): Promise<IndexedEntity> {
@@ -214,11 +227,10 @@ export class EntityStore {
     if (indexedProject === undefined) throw new DomainOperationError("ENTITY_NOT_FOUND", `projects/${projectId} not found`);
     const indexedMilestones = repository.entities.filter((entity) => entity.document.schema === "gitpm/milestone@1" && entity.document.project === projectId);
     const indexedTasks = repository.entities.filter((entity) => entity.document.schema === "gitpm/task@1" && entity.document.project === projectId);
-    const [project, milestones, tasks] = await Promise.all([
-      this.result(draftId, metadata, indexedProject),
-      Promise.all(indexedMilestones.map(async (entity) => await this.result(draftId, metadata, entity))),
-      Promise.all(indexedTasks.map(async (entity) => await this.result(draftId, metadata, entity))),
-    ]);
+    const results = await this.results(draftId, metadata, [indexedProject, ...indexedMilestones, ...indexedTasks]);
+    const project = results[0]!;
+    const milestones = results.slice(1, 1 + indexedMilestones.length);
+    const tasks = results.slice(1 + indexedMilestones.length);
     return { project, milestones, tasks, draft_fingerprint: project.draft_fingerprint };
   }
 
@@ -360,17 +372,33 @@ export class EntityStore {
       const targetRelative = entityPathForDocument(movedDocument);
       const targetAbsolute = path.join(metadata.worktree_path, ...targetRelative.split("/"));
       if (await exists(targetAbsolute)) throw new DomainOperationError("ENTITY_EXISTS", `${targetRelative} already exists`);
-      const original = await readFile(found.absolute, "utf8");
-      const referenceLabels = this.labels(await this.index(draftId, metadata), movedDocument);
-      await mkdir(path.dirname(targetAbsolute), { recursive: true, mode: 0o700 });
-      await resolveDomainPath(metadata.worktree_path, targetRelative);
-      await atomicWriteDomainFile(metadata.worktree_path, targetRelative, formatYamlDocument(movedDocument, referenceLabels));
-      await rm(found.absolute);
+      const repository = await this.index(draftId, metadata);
+      const comments = repository.entities.filter((entity) => entity.document.schema === "gitpm/comment@1" && entity.document.task === id);
+      const movedComments = comments.map((comment) => ({ source: comment, document: { ...comment.document, project: targetProject } as GitPmDocument }));
+      const targets = [
+        { source: found, document: movedDocument },
+        ...movedComments,
+      ].map((item) => ({ ...item, relative: entityPathForDocument(item.document) }));
+      for (const target of targets) if (await exists(path.join(metadata.worktree_path, ...target.relative.split("/")))) throw new DomainOperationError("ENTITY_EXISTS", `${target.relative} already exists`);
+      const originals = new Map<string, string>();
+      const referenceLabels = this.labels(repository, movedDocument);
       try {
+        for (const target of targets) {
+          originals.set(target.source.relative, await readFile(target.source.absolute, "utf8"));
+          const absolute = path.join(metadata.worktree_path, ...target.relative.split("/"));
+          await mkdir(path.dirname(absolute), { recursive: true, mode: 0o700 });
+          await resolveDomainPath(metadata.worktree_path, target.relative);
+          await atomicWriteDomainFile(metadata.worktree_path, target.relative, formatYamlDocument(target.document, referenceLabels));
+        }
+        for (const target of targets) await rm(target.source.absolute);
         await this.assertRepositoryValid(metadata.worktree_path);
       } catch (error) {
-        await atomicWriteDomainFile(metadata.worktree_path, found.relative, original);
-        await rm(targetAbsolute, { force: true });
+        for (const target of targets) await rm(path.join(metadata.worktree_path, ...target.relative.split("/")), { force: true });
+        for (const [sourceRelative, original] of originals) {
+          const absolute = path.join(metadata.worktree_path, ...sourceRelative.split("/"));
+          await mkdir(path.dirname(absolute), { recursive: true, mode: 0o700 });
+          await atomicWriteDomainFile(metadata.worktree_path, sourceRelative, original);
+        }
         throw error;
       }
       return targetRelative;
@@ -390,14 +418,24 @@ export class EntityStore {
     const mutation = await this.drafts.withUiMutation(draftId, owner, expectedFingerprint, async (metadata) => {
       const found = await this.find(draftId, metadata, entityType, id);
       await this.drafts.assertFileBlobId(draftId, found.relative, expectedBlobId);
-      const restrictions = await validateDelete(metadata.worktree_path, id);
+      const repository = await this.index(draftId, metadata);
+      const cascadedComments = found.document.schema === "gitpm/task@1"
+        ? repository.entities.filter((entity) => entity.document.schema === "gitpm/comment@1" && entity.document.task === id)
+        : [];
+      const commentPaths = new Set(cascadedComments.map((comment) => comment.relative));
+      const restrictions = (await validateDelete(metadata.worktree_path, id)).filter((restriction) => !commentPaths.has(restriction.path));
       if (restrictions.length > 0) throw new DomainOperationError("DELETE_RESTRICTED", `${id} is referenced`, restrictions);
-      const original = await readFile(found.absolute, "utf8");
-      await rm(found.absolute);
+      const removed = [found, ...cascadedComments];
+      const originals = new Map<string, string>();
+      for (const entity of removed) { originals.set(entity.relative, await readFile(entity.absolute, "utf8")); await rm(entity.absolute); }
       try {
         await this.assertRepositoryValid(metadata.worktree_path);
       } catch (error) {
-        await atomicWriteDomainFile(metadata.worktree_path, found.relative, original);
+        for (const [relative, original] of originals) {
+          const absolute = path.join(metadata.worktree_path, ...relative.split("/"));
+          await mkdir(path.dirname(absolute), { recursive: true, mode: 0o700 });
+          await atomicWriteDomainFile(metadata.worktree_path, relative, original);
+        }
         throw error;
       }
       return found.relative;

@@ -1,4 +1,4 @@
-import type { ChangesList, CommitHistoryDetail, CommitHistoryItem, CommitResult, DraftSnapshot, DraftStatus, EntityResult, GitPmDocument, MergeRequestStatus, ProjectWorkspaceResult, PublicSession, PushResult, RevertDraftResult, SemanticDiff, ValidationSummary, WriterMode, ChangesSummary } from "./types.js";
+import type { ChangesList, CommentResult, CommitHistoryDetail, CommitHistoryItem, CommitResult, DraftSnapshot, DraftStatus, EntityResult, GitPmDocument, MergeRequestStatus, NotificationsResult, ProjectWorkspaceResult, PublicSession, PushResult, RevertDraftResult, SemanticDiff, ValidationSummary, WriterMode, ChangesSummary } from "./types.js";
 
 export class ApiError extends Error {
   constructor(public readonly code: string, message: string) {
@@ -40,6 +40,11 @@ export interface GitPmApi {
   commitDetail(draftId: string, commit: string): Promise<CommitHistoryDetail>;
   fileHistory(draftId: string, path: string): Promise<readonly CommitHistoryItem[]>;
   createRevertDraft(draftId: string, commit: string, newDraftId: string): Promise<RevertDraftResult>;
+  listComments(draftId: string, projectId: string, taskId: string): Promise<readonly CommentResult[]>;
+  createComment(draftId: string, projectId: string, taskId: string, fingerprint: string, bodyMarkdown: string): Promise<CommentResult>;
+  updateComment(draftId: string, projectId: string, taskId: string, comment: CommentResult, fingerprint: string, bodyMarkdown: string): Promise<CommentResult>;
+  deleteComment(draftId: string, projectId: string, taskId: string, comment: CommentResult, fingerprint: string): Promise<CommentResult>;
+  notifications(draftId: string): Promise<NotificationsResult>;
 }
 
 interface ErrorBody { readonly error?: { readonly code?: string; readonly message?: string } }
@@ -171,5 +176,20 @@ export class HttpGitPmApi implements GitPmApi {
   }
   async createRevertDraft(draftId: string, commit: string, draft_id: string): Promise<RevertDraftResult> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/history/${encodeURIComponent(commit)}/revert`, { method: "POST", body: JSON.stringify({ draft_id }) });
+  }
+  async listComments(draftId: string, projectId: string, taskId: string): Promise<readonly CommentResult[]> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}/comments`);
+  }
+  async createComment(draftId: string, projectId: string, taskId: string, expected_fingerprint: string, body_markdown: string): Promise<CommentResult> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}/comments`, { method: "POST", body: JSON.stringify({ expected_fingerprint, body_markdown }) });
+  }
+  async updateComment(draftId: string, projectId: string, taskId: string, comment: CommentResult, expected_fingerprint: string, body_markdown: string): Promise<CommentResult> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}/comments/${encodeURIComponent(comment.document.id)}`, { method: "PATCH", body: JSON.stringify({ expected_fingerprint, expected_blob_id: comment.blob_id, body_markdown }) });
+  }
+  async deleteComment(draftId: string, projectId: string, taskId: string, comment: CommentResult, expected_fingerprint: string): Promise<CommentResult> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}/comments/${encodeURIComponent(comment.document.id)}`, { method: "DELETE", body: JSON.stringify({ expected_fingerprint, expected_blob_id: comment.blob_id }) });
+  }
+  async notifications(draftId: string): Promise<NotificationsResult> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/notifications`);
   }
 }

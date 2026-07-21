@@ -2,8 +2,8 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { DraftRuntimeError } from "@gitpm/drafts";
 import type { DraftManager, DraftMetadata, WriterMode } from "@gitpm/drafts";
 import { GitCommandError } from "@gitpm/git-client";
-import { assertEntityType, DomainOperationError } from "@gitpm/domain";
-import type { EntityStore } from "@gitpm/domain";
+import { assertEntityType, CommentOperationError, DomainOperationError } from "@gitpm/domain";
+import type { CommentActor, CommentStore, EntityStore } from "@gitpm/domain";
 import type { GitPmDocument } from "@gitpm/repository-format";
 import { ChangesError } from "@gitpm/changes";
 import type { ChangesService } from "@gitpm/changes";
@@ -18,6 +18,11 @@ export type ProjectRole = "Reporter" | "Developer" | "Maintainer";
 export interface RequestActor {
   readonly userId: string;
   readonly role: ProjectRole;
+  readonly displayName?: string;
+  readonly email?: string;
+  readonly personId?: string;
+  readonly provider?: "gitlab" | "git";
+  readonly instance?: string;
 }
 
 export type Authenticate = (request: FastifyRequest) => RequestActor | Promise<RequestActor>;
@@ -49,6 +54,21 @@ function requireMutationRole(actor: RequestActor): void {
   if (actor.role !== "Developer" && actor.role !== "Maintainer") {
     throw new DraftRuntimeError("DRAFT_FORBIDDEN", "Project role is read-only");
   }
+}
+
+function asCommentActor(actor: RequestActor): CommentActor {
+  return {
+    userId: actor.userId,
+    role: actor.role,
+    identity: {
+      provider: actor.provider ?? "gitlab",
+      ...(actor.instance === undefined ? {} : { instance: actor.instance }),
+      subject: actor.provider === "git" && actor.email !== undefined ? actor.email.trim().toLocaleLowerCase() : actor.userId,
+      display_name: actor.displayName?.trim() || actor.userId,
+    },
+    ...(actor.email === undefined ? {} : { email: actor.email }),
+    ...(actor.personId === undefined ? {} : { personId: actor.personId }),
+  };
 }
 
 function requireEntityMutationRole(actor: RequestActor, entityType: string): void {
@@ -90,6 +110,14 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
       message = error.message;
       if (error.code === "ENTITY_NOT_FOUND") status = 404;
       else if (["ENTITY_TYPE_INVALID", "ENTITY_ID_INVALID", "ENTITY_PROJECT_INVALID"].includes(error.code)) status = 400;
+      else if (error.code === "VALIDATION_FAILED") status = 422;
+      else status = 409;
+    } else if (error instanceof CommentOperationError) {
+      code = error.code;
+      message = error.message;
+      if (["COMMENT_NOT_FOUND", "ENTITY_NOT_FOUND"].includes(error.code)) status = 404;
+      else if (error.code === "COMMENT_FORBIDDEN") status = 403;
+      else if (["COMMENT_BODY_REQUIRED", "COMMENT_BODY_TOO_LONG", "COMMENT_MENTION_INVALID", "COMMENT_MENTION_ARCHIVED", "ENTITY_ID_INVALID", "ENTITY_PROJECT_INVALID"].includes(error.code)) status = 400;
       else if (error.code === "VALIDATION_FAILED") status = 422;
       else status = 409;
     } else if (error instanceof ChangesError) {
@@ -177,6 +205,56 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
     if (actor.role !== "Maintainer") throw new DraftRuntimeError("DRAFT_FORBIDDEN", "Cleanup requires Maintainer");
     await manager.cleanupDraft(request.params.draftId, request.body.confirmation);
     await reply.code(204).send();
+  });
+}
+
+export function registerCommentApi(
+  app: FastifyInstance,
+  manager: DraftManager,
+  comments: CommentStore,
+  authenticate: Authenticate,
+): void {
+  app.get<{ Params: { draftId: string; projectId: string; taskId: string } }>(
+    "/api/drafts/:draftId/projects/:projectId/tasks/:taskId/comments",
+    async (request) => {
+      const actor = await authenticate(request);
+      await requireDraftRead(manager, actor, request.params.draftId);
+      return await comments.list(request.params.draftId, request.params.projectId, request.params.taskId, asCommentActor(actor));
+    },
+  );
+
+  app.post<{ Params: { draftId: string; projectId: string; taskId: string }; Body: { expected_fingerprint: string; body_markdown: string } }>(
+    "/api/drafts/:draftId/projects/:projectId/tasks/:taskId/comments",
+    async (request, reply) => {
+      const actor = await authenticate(request);
+      requireMutationRole(actor);
+      const result = await comments.create(request.params.draftId, request.params.projectId, request.params.taskId, request.body.expected_fingerprint, request.body.body_markdown, asCommentActor(actor));
+      await reply.code(201).send(result);
+    },
+  );
+
+  app.patch<{ Params: { draftId: string; projectId: string; taskId: string; commentId: string }; Body: { expected_fingerprint: string; expected_blob_id: string; body_markdown: string } }>(
+    "/api/drafts/:draftId/projects/:projectId/tasks/:taskId/comments/:commentId",
+    async (request) => {
+      const actor = await authenticate(request);
+      requireMutationRole(actor);
+      return await comments.update(request.params.draftId, request.params.projectId, request.params.taskId, request.params.commentId, request.body.expected_fingerprint, request.body.expected_blob_id, request.body.body_markdown, asCommentActor(actor));
+    },
+  );
+
+  app.delete<{ Params: { draftId: string; projectId: string; taskId: string; commentId: string }; Body: { expected_fingerprint: string; expected_blob_id: string } }>(
+    "/api/drafts/:draftId/projects/:projectId/tasks/:taskId/comments/:commentId",
+    async (request) => {
+      const actor = await authenticate(request);
+      requireMutationRole(actor);
+      return await comments.delete(request.params.draftId, request.params.projectId, request.params.taskId, request.params.commentId, request.body.expected_fingerprint, request.body.expected_blob_id, asCommentActor(actor));
+    },
+  );
+
+  app.get<{ Params: { draftId: string } }>("/api/drafts/:draftId/notifications", async (request) => {
+    const actor = await authenticate(request);
+    await requireDraftRead(manager, actor, request.params.draftId);
+    return await comments.notifications(request.params.draftId, asCommentActor(actor));
   });
 }
 

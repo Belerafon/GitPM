@@ -104,6 +104,19 @@ describe("draft manager", () => {
     expect((await manager.poll("DRF-003")).changedExternally).toBe(false);
   });
 
+  it("computes file revisions as one batch", async () => {
+    const test = await fixture();
+    const { manager } = runtime(test.remote, test.data);
+    await manager.createDraft("DRF-BLOBS", "42");
+    const paths = [projectFile, "people/U-26-5EBAE3.yaml"];
+
+    const blobs = await manager.fileBlobIds("DRF-BLOBS", paths);
+
+    expect(blobs.size).toBe(2);
+    expect(blobs.get(projectFile)).toMatch(/^[0-9a-f]{40}$/u);
+    expect(blobs.get(paths[1]!)).toMatch(/^[0-9a-f]{40}$/u);
+  });
+
   it("reports an orphaned worktree left before metadata persistence", async () => {
     const test = await fixture();
     const { gitClient, manager } = runtime(test.remote, test.data);

@@ -113,6 +113,7 @@ async function executeGit(
   environment: NodeJS.ProcessEnv,
   timeoutMs: number,
   onCommand?: (record: GitCommandRecord) => void,
+  input?: string,
 ): Promise<CommandResult> {
   const started = performance.now();
   return await new Promise((resolve, reject) => {
@@ -151,6 +152,7 @@ async function executeGit(
         else reject(new GitCommandError("GIT_FAILED", result.stderr.trim() || "Git command failed", code));
       }
     });
+    if (input !== undefined) child.stdin.end(input, "utf8");
   });
 }
 
@@ -181,8 +183,8 @@ export class GitClient {
     this.onCommand = options.onCommand;
   }
 
-  private async git(args: readonly string[]): Promise<CommandResult> {
-    return await executeGit(args, safeEnvironment(this.homeDirectory), this.timeoutMs, this.onCommand);
+  private async git(args: readonly string[], input?: string): Promise<CommandResult> {
+    return await executeGit(args, safeEnvironment(this.homeDirectory), this.timeoutMs, this.onCommand, input);
   }
 
   private async gitWithEnvironment(args: readonly string[], environment: NodeJS.ProcessEnv): Promise<CommandResult> {
@@ -515,5 +517,23 @@ export class GitClient {
       });
       child.stdin.end(content, "utf8");
     });
+  }
+
+  async hashFiles(worktree: string, relativePaths: readonly string[]): Promise<ReadonlyMap<string, string>> {
+    if (relativePaths.length === 0) return new Map();
+    if (relativePaths.some((value) => path.isAbsolute(value)
+      || !/^[A-Za-z0-9._/-]+$/u.test(value)
+      || value.split("/").some((part) => part === "" || part === "." || part === ".."))) {
+      throw new GitCommandError("GIT_PATH_INVALID", "Batched Git paths must use the repository path allowlist");
+    }
+    const result = await this.git(
+      ["-C", await realpath(worktree), "hash-object", "--no-filters", "--stdin-paths"],
+      `${relativePaths.join("\n")}\n`,
+    );
+    const hashes = result.stdout.trim().split(/\r?\n/u);
+    if (hashes.length !== relativePaths.length || hashes.some((hash) => !/^[0-9a-f]{40,64}$/u.test(hash))) {
+      throw new GitCommandError("GIT_OUTPUT_INVALID", "git hash-object returned an invalid batch");
+    }
+    return new Map(relativePaths.map((relativePath, index) => [relativePath, hashes[index]!]));
   }
 }

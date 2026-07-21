@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -89,5 +89,27 @@ describe("controlled Git client", () => {
     const expected = await git(fixture.source, "hash-object", contentFile);
     expect(actual).toMatch(/^[0-9a-f]{40}$/u);
     expect(actual).toBe(expected);
+  });
+
+  it("computes multiple working-tree blob IDs in one Git command", async () => {
+    const fixture = await remoteFixture();
+    const commands: string[][] = [];
+    const client = new GitClient({
+      dataDirectory: path.join(fixture.root, "data"),
+      remoteUrl: fixture.remote,
+      defaultBranch: "main",
+      allowLocalTestRemote: true,
+      onCommand: (record) => commands.push([...record.args]),
+    });
+    await client.initialize();
+    await writeFile(path.join(fixture.source, "second.txt"), "second\n", "utf8");
+    commands.length = 0;
+
+    const actual = await client.hashFiles(fixture.source, ["README.md", "second.txt"]);
+    const batchCommands = [...commands];
+
+    expect(actual.get("README.md")).toBe(await client.hashObject(await readFile(path.join(fixture.source, "README.md"), "utf8")));
+    expect(actual.get("second.txt")).toBe(await client.hashObject(await readFile(path.join(fixture.source, "second.txt"), "utf8")));
+    expect(batchCommands).toEqual([expect.arrayContaining(["hash-object", "--stdin-paths"])]);
   });
 });

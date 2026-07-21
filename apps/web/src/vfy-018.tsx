@@ -133,6 +133,11 @@ class BrowserAcceptanceApi implements GitPmApi {
   async commitDetail(_draftId: string, commit: string) { return { ...(await this.history())[0]!, commit, body: "", files: [{ path: "projects/P-26-A1PHA1/tasks/T-26-H1ST0R.yaml", additions: 1, deletions: 1 }], diff: "@@ -1 +1 @@\n-title: Before\n+title: After\n" }; }
   async fileHistory() { return await this.history(); }
   async createRevertDraft(_draftId: string, commit: string, newDraftId: string) { const draft = await this.createDraft(newDraftId); this.changedFiles = [{ path: "projects/P-26-A1PHA1/tasks/T-26-H1ST0R.yaml", kind: "Modified", diff_token: "revert-token", diff: "@@ -1 +1 @@\n-title: After\n+title: Before\n", hunks: [{ old_start: 1, old_count: 1, new_start: 1, new_count: 1, lines: ["-title: After", "+title: Before"] }] }]; document.documentElement.dataset.revertedCommit = commit; return { draft, reverted_commit: commit, conflicted: false, conflicted_files: [] }; }
+  async listComments() { return []; }
+  async createComment(): Promise<never> { throw new Error("not used in acceptance fixture"); }
+  async updateComment(): Promise<never> { throw new Error("not used in acceptance fixture"); }
+  async deleteComment(): Promise<never> { throw new Error("not used in acceptance fixture"); }
+  async notifications() { return { items: [] }; }
   private entityResult(document: GitPmDocument): EntityResult { const project = String(document.project ?? ""); const paths: Record<string, string> = { "gitpm/calendar@1": `calendars/${document.id}.yaml`, "gitpm/person@1": `people/${document.id}.yaml`, "gitpm/team@1": `teams/${document.id}.yaml`, "gitpm/saved-view@1": `projects/${project}/views/${document.id}.yaml` }; const path = document.schema === "gitpm/project@1" ? `projects/${document.id}/project.yaml` : document.schema === "gitpm/task@1" ? `projects/${project}/tasks/${document.id}.yaml` : document.schema === "gitpm/milestone@1" ? `projects/${project}/milestones/${document.id}.yaml` : paths[document.schema] ?? `${document.id}.yaml`; return { document, path, blob_id: "c".repeat(40), draft_fingerprint: "d".repeat(64) }; }
   private capture(path: string) { this.changedPaths.add(path); document.documentElement.dataset.gitDiff = JSON.stringify([...this.changedPaths].sort()); }
   private replace(draftId: string, values: Partial<DraftStatus>) {

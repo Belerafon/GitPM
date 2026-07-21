@@ -267,9 +267,13 @@ export class DraftManager {
   }
 
   async fileBlobId(draftId: string, relativePath: string): Promise<string> {
+    return (await this.fileBlobIds(draftId, [relativePath])).get(relativePath)!;
+  }
+
+  async fileBlobIds(draftId: string, relativePaths: readonly string[]): Promise<ReadonlyMap<string, string>> {
     const metadata = await this.getDraft(draftId);
-    const file = await resolveDomainPath(metadata.worktree_path, relativePath);
-    return await this.git.hashObject(await readFile(file, "utf8"));
+    await Promise.all(relativePaths.map(async (relativePath) => await resolveDomainPath(metadata.worktree_path, relativePath)));
+    return await this.git.hashFiles(metadata.worktree_path, relativePaths);
   }
 
   async assertFileBlobId(draftId: string, relativePath: string, expectedBlobId: string): Promise<string> {

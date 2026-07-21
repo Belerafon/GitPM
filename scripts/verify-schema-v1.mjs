@@ -64,6 +64,7 @@ const schemaIds = new Map([
   ["gitpm/team@1", "https://gitpm.dev/schemas/v1/team.schema.json"],
   ["gitpm/calendar@1", "https://gitpm.dev/schemas/v1/calendar.schema.json"],
   ["gitpm/saved-view@1", "https://gitpm.dev/schemas/v1/saved-view.schema.json"],
+  ["gitpm/comment@1", "https://gitpm.dev/schemas/v1/comment.schema.json"],
   ["gitpm/repository@1", "https://gitpm.dev/schemas/v1/repository.schema.json"],
   ["gitpm/statuses@1", "https://gitpm.dev/schemas/v1/statuses.schema.json"],
   ["gitpm/issue-types@1", "https://gitpm.dev/schemas/v1/issue-types.schema.json"],
@@ -75,6 +76,7 @@ function expectedPath(document) {
     case "gitpm/task@1": return `projects/${document.project}/tasks/${document.id}.yaml`;
     case "gitpm/milestone@1": return `projects/${document.project}/milestones/${document.id}.yaml`;
     case "gitpm/saved-view@1": return `projects/${document.project}/views/${document.id}.yaml`;
+    case "gitpm/comment@1": return `projects/${document.project}/comments/${document.task}/${document.id}.yaml`;
     case "gitpm/person@1": return `people/${document.id}.yaml`;
     case "gitpm/team@1": return `teams/${document.id}.yaml`;
     case "gitpm/calendar@1": return `calendars/${document.id}.yaml`;
@@ -178,6 +180,18 @@ function validateReferences(documents) {
           if (target.project !== document.project) fail("REF_CROSS_PROJECT", `${relative}: ${milestone} belongs to another project`);
         }
         break;
+      case "gitpm/comment@1": {
+        reference(document.project, "gitpm/project@1", `${relative}.project`);
+        const task = reference(document.task, "gitpm/task@1", `${relative}.task`);
+        if (task.project !== document.project) fail("REF_CROSS_PROJECT", `${relative}: ${document.task} belongs to another project`);
+        const people = (document.mentions ?? []).map((mention) => mention.person);
+        if (new Set(people).size !== people.length) fail("COMMENT_MENTION_DUPLICATE", `${relative}: duplicate mention`);
+        const embeddedPeople = typeof document.body_markdown === "string" ? [...document.body_markdown.matchAll(/@\[[^\]\r\n]{1,200}\]\(person:(U-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6})\)/gu)].map((match) => match[1]) : [];
+        const uniqueEmbeddedPeople = [...new Set(embeddedPeople)];
+        if (uniqueEmbeddedPeople.length !== people.length || uniqueEmbeddedPeople.some((person, index) => person !== people[index])) fail("COMMENT_MENTION_MISMATCH", `${relative}: mention metadata must match body_markdown`);
+        for (const person of people) reference(person, "gitpm/person@1", `${relative}.mentions`);
+        break;
+      }
     }
   }
 }

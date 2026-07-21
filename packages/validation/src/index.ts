@@ -43,6 +43,7 @@ const schemaIds = new Map([
   ["gitpm/team@1", "https://gitpm.dev/schemas/v1/team.schema.json"],
   ["gitpm/calendar@1", "https://gitpm.dev/schemas/v1/calendar.schema.json"],
   ["gitpm/saved-view@1", "https://gitpm.dev/schemas/v1/saved-view.schema.json"],
+  ["gitpm/comment@1", "https://gitpm.dev/schemas/v1/comment.schema.json"],
   ["gitpm/repository@1", "https://gitpm.dev/schemas/v1/repository.schema.json"],
   ["gitpm/statuses@1", "https://gitpm.dev/schemas/v1/statuses.schema.json"],
   ["gitpm/issue-types@1", "https://gitpm.dev/schemas/v1/issue-types.schema.json"],
@@ -93,6 +94,7 @@ function expectedPath(document: GitPmDocument): string | undefined {
     case "gitpm/task@1": return `projects/${project}/tasks/${id}.yaml`;
     case "gitpm/milestone@1": return `projects/${project}/milestones/${id}.yaml`;
     case "gitpm/saved-view@1": return `projects/${project}/views/${id}.yaml`;
+    case "gitpm/comment@1": return `projects/${project}/comments/${String(document.task ?? "")}/${id}.yaml`;
     case "gitpm/person@1": return `people/${id}.yaml`;
     case "gitpm/team@1": return `teams/${id}.yaml`;
     case "gitpm/calendar@1": return `calendars/${id}.yaml`;
@@ -129,6 +131,11 @@ function directReferences(document: GitPmDocument): string[] {
         ...values(filters?.milestones),
       ]);
     }
+    case "gitpm/comment@1": return values([
+      document.project,
+      document.task,
+      ...((document.mentions as Array<{ person?: unknown }> | undefined) ?? []).map((item) => item.person),
+    ]);
     default: return [];
   }
 }
@@ -302,6 +309,22 @@ export async function validateRepository(repositoryRoot: string): Promise<Valida
       }
       for (const status of values(filters.statuses)) if (!statuses.has(status)) add({ severity: "error", code: "CONFIG_REFERENCE", path: document.path, message: `Unknown status ${status}` });
       for (const issueType of values(filters.types)) if (!issueTypes.has(issueType)) add({ severity: "error", code: "CONFIG_REFERENCE", path: document.path, message: `Unknown type ${issueType}` });
+    } else if (value.schema === "gitpm/comment@1") {
+      reference(value.project, "gitpm/project@1", document);
+      const task = reference(value.task, "gitpm/task@1", document);
+      if (task && task.value.project !== value.project) add({ severity: "error", code: "REF_CROSS_PROJECT", path: document.path, message: `${String(value.task)} belongs to another project` });
+      const mentions = (value.mentions as Array<{ person?: unknown; mentioned_at?: unknown }> | undefined) ?? [];
+      const mentionedPeople = mentions.map((mention) => mention.person).filter((person): person is string => typeof person === "string");
+      if (new Set(mentionedPeople).size !== mentionedPeople.length) add({ severity: "error", code: "COMMENT_MENTION_DUPLICATE", path: document.path, message: "Comment mentions the same person more than once" });
+      const embeddedPeople = typeof value.body_markdown === "string"
+        ? [...value.body_markdown.matchAll(/@\[[^\]\r\n]{1,200}\]\(person:(U-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6})\)/gu)].map((match) => match[1]!)
+        : [];
+      const uniqueEmbeddedPeople = [...new Set(embeddedPeople)];
+      if (uniqueEmbeddedPeople.length !== mentionedPeople.length || uniqueEmbeddedPeople.some((person, index) => person !== mentionedPeople[index])) add({ severity: "error", code: "COMMENT_MENTION_MISMATCH", path: document.path, message: "Comment mention metadata must match body_markdown" });
+      for (const person of mentionedPeople) reference(person, "gitpm/person@1", document);
+      for (const mention of mentions) if (typeof mention.mentioned_at === "string" && typeof value.created_at === "string" && mention.mentioned_at < value.created_at) add({ severity: "error", code: "COMMENT_TIMESTAMP_ORDER", path: document.path, message: "mentioned_at must not be before created_at" });
+      if (typeof value.updated_at === "string" && typeof value.created_at === "string" && value.updated_at < value.created_at) add({ severity: "error", code: "COMMENT_TIMESTAMP_ORDER", path: document.path, message: "updated_at must not be before created_at" });
+      if (typeof value.deleted_at === "string" && typeof value.created_at === "string" && value.deleted_at < value.created_at) add({ severity: "error", code: "COMMENT_TIMESTAMP_ORDER", path: document.path, message: "deleted_at must not be before created_at" });
     }
   }
 

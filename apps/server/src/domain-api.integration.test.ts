@@ -85,7 +85,10 @@ describe("domain API integration", () => {
     }
 
     for (const entity of entities) {
-      const previous = current.get(entity.type)!;
+      const known = current.get(entity.type)!;
+      const latestResponse = await app.inject({ method: "GET", url: `/api/drafts/DRF-HTTP/entities/${entity.type}/${String(known.document.id)}` });
+      expect(latestResponse.statusCode).toBe(200);
+      const previous = latestResponse.json<ApiEntityResult>();
       const key = entity.type === "tasks" ? "title" : "name";
       const document = { ...previous.document, [key]: `${String(previous.document[key])} updated` };
       const response = await app.inject({

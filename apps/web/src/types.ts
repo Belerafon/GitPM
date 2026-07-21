@@ -149,3 +149,51 @@ export interface ProjectWorkspaceResult {
   readonly tasks: readonly EntityResult[];
   readonly draft_fingerprint: string;
 }
+
+export interface ActorSnapshot {
+  readonly provider: "gitlab" | "git";
+  readonly instance?: string;
+  readonly subject: string;
+  readonly display_name: string;
+}
+
+export interface CommentDocument {
+  readonly schema: "gitpm/comment@1";
+  readonly id: string;
+  readonly project: string;
+  readonly task: string;
+  readonly author: ActorSnapshot;
+  readonly created_at: string;
+  readonly updated_at?: string;
+  readonly state: "active" | "deleted";
+  readonly body_markdown?: string;
+  readonly mentions: readonly { readonly person: string; readonly mentioned_at: string }[];
+  readonly deleted_at?: string;
+  readonly deleted_by?: ActorSnapshot;
+}
+
+export interface CommentResult {
+  readonly document: CommentDocument;
+  readonly path: string;
+  readonly blob_id: string;
+  readonly draft_fingerprint: string;
+  readonly can_edit: boolean;
+  readonly can_delete: boolean;
+}
+
+export interface MentionNotification {
+  readonly key: string;
+  readonly person_id: string;
+  readonly mentioned_at: string;
+  readonly project_id: string;
+  readonly task_id: string;
+  readonly task_title: string;
+  readonly comment_id: string;
+  readonly author: ActorSnapshot;
+  readonly excerpt: string;
+}
+
+export interface NotificationsResult {
+  readonly recipient_person_id?: string;
+  readonly items: readonly MentionNotification[];
+}

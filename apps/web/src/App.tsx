@@ -18,6 +18,7 @@ import { ProjectTabs } from "./features/projects/project-tabs.js";
 import { ProjectPlanWorkspace } from "./features/projects/project-plan-workspace.js";
 import { EntityCatalog } from "./entity-catalog.js";
 import { PeopleProfileWorkspace } from "./people-profile-ui.js";
+import { NotificationsMenu } from "./notifications-ui.js";
 
 interface AppProps {
   readonly api: GitPmApi;
@@ -168,6 +169,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
       repositoryStatus={repositoryStatus}
       t={t}
       topActions={<>
+            <NotificationsMenu api={api} draft={active} locale={locale} namespace={`${repository?.path ?? repository?.name ?? "repository"}:${drafts.session.user.id}`} onNavigate={openWorkspace} />
             {active !== undefined && <div className="workspace-switcher">
               <label htmlFor="current-workspace">{t("drafts.current")}</label>
               <div className="workspace-selection-row">
@@ -231,7 +233,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
           : <ProjectPlanWorkspace api={api} confirmAction={confirmAction} draft={active} initialMilestoneFilter={workspaceSelection.query?.milestone?.[0]} initialStatusFilter={workspaceSelection.query?.status?.[0]} key={`project-plan:${activeRoute.projectId}`} locale={locale} onChanged={drafts.refresh} onNavigate={openWorkspace} projectId={activeRoute.projectId} selectedStageId={activeRoute.stageId} selectedTaskId={activeRoute.taskId} />)}
         {["nav.portfolio", "nav.projects", "nav.tasks"].includes(view) && !projectWorkspaceRoute && (active === undefined
           ? <div className="card empty-workspace">{t("core.selectProject")}</div>
-          : <CoreWorkspace api={api} confirmAction={confirmAction} draft={active} key={`${view}:${workspaceSelection.projectId ?? ""}:${workspaceSelection.taskId ?? ""}`} locale={locale} surface={view === "nav.portfolio" ? "portfolio" : view === "nav.tasks" ? "tasks" : "projects"} initialProjectId={workspaceSelection.projectId} initialTaskId={workspaceSelection.taskId} initialStatusFilter={workspaceSelection.query?.status?.[0]} initialMilestoneFilter={workspaceSelection.query?.milestone?.[0]} onNavigate={openWorkspace} onChanged={drafts.refresh} />)}
+          : <CoreWorkspace api={api} confirmAction={confirmAction} draft={active} key={`${view}:${workspaceSelection.projectId ?? ""}:${workspaceSelection.taskId ?? ""}`} locale={locale} surface={view === "nav.portfolio" ? "portfolio" : view === "nav.tasks" ? "tasks" : "projects"} initialProjectId={workspaceSelection.projectId} initialTaskId={workspaceSelection.taskId} initialCommentId={workspaceSelection.query?.comment?.[0]} initialStatusFilter={workspaceSelection.query?.status?.[0]} initialMilestoneFilter={workspaceSelection.query?.milestone?.[0]} onNavigate={openWorkspace} onChanged={drafts.refresh} />)}
         {["nav.people", "nav.calendar", "nav.settings"].includes(view) && (active === undefined
           ? <div className="card empty-workspace">{t("core.selectProject")}</div>
           : view === "nav.people" && workspaceSelection.personId !== undefined

@@ -9,6 +9,7 @@ describe("short entity IDs", () => {
   it("validates both the common shape and the expected entity type", () => {
     expect(isEntityId("T-26-X8D2FW", ENTITY_ID_PREFIX.task)).toBe(true);
     expect(isEntityId("P-26-7K4M9Q", ENTITY_ID_PREFIX.task)).toBe(false);
+    expect(isEntityId("N-26-X8D2FW", ENTITY_ID_PREFIX.comment)).toBe(true);
     expect(isEntityId("T-26-OOOOOO")).toBe(false);
   });
 

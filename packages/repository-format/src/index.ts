@@ -76,6 +76,7 @@ const fieldOrder: Record<string, readonly string[]> = {
   "gitpm/team@1": ["schema", "id", "name", "members", "lifecycle"],
   "gitpm/calendar@1": ["schema", "id", "name", "working_weekdays", "holidays", "lifecycle"],
   "gitpm/saved-view@1": ["schema", "id", "project", "name", "kind", "filters", "group_by", "lifecycle"],
+  "gitpm/comment@1": ["schema", "id", "project", "task", "author", "created_at", "updated_at", "state", "body_markdown", "mentions", "deleted_at", "deleted_by"],
   "gitpm/repository@1": ["schema", "default_branch", "default_calendar", "allowed_top_level_files", "ui_poll_interval_seconds"],
   "gitpm/statuses@1": ["schema", "statuses"],
   "gitpm/issue-types@1": ["schema", "issue_types"],
@@ -96,6 +97,11 @@ function normalizeNested(document: GitPmDocument): Record<string, unknown> {
   const result = orderedRecord(document as Record<string, unknown>, fieldOrder[document.schema] ?? ["schema"]);
   if (document.schema === "gitpm/saved-view@1" && result.filters && typeof result.filters === "object") {
     result.filters = orderedRecord(result.filters as Record<string, unknown>, ["statuses", "types", "assignees", "milestones", "labels"]);
+  }
+  if (document.schema === "gitpm/comment@1") {
+    if (result.author && typeof result.author === "object") result.author = orderedRecord(result.author as Record<string, unknown>, ["provider", "instance", "subject", "display_name"]);
+    if (result.deleted_by && typeof result.deleted_by === "object") result.deleted_by = orderedRecord(result.deleted_by as Record<string, unknown>, ["provider", "instance", "subject", "display_name"]);
+    if (Array.isArray(result.mentions)) result.mentions = (result.mentions as Record<string, unknown>[]).map((item) => orderedRecord(item, ["person", "mentioned_at"]));
   }
   const listKey = document.schema === "gitpm/statuses@1" ? "statuses" : document.schema === "gitpm/issue-types@1" ? "issue_types" : undefined;
   if (listKey && Array.isArray(result[listKey])) {

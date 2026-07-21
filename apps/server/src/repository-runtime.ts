@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { ChangesService } from "@gitpm/changes";
 import { DraftManager } from "@gitpm/drafts";
-import { EntityStore } from "@gitpm/domain";
+import { CommentStore, EntityStore } from "@gitpm/domain";
 import { GitClient } from "@gitpm/git-client";
 import { AuthService, GitLabHttpProtocol } from "@gitpm/gitlab";
 import { HistoryService } from "@gitpm/history";
@@ -109,8 +109,9 @@ export async function buildRepositoryApp() {
     await draftManager.createDraft(DEFAULT_LOCAL_DRAFT_ID, LOCAL_USER_ID);
   }
   const app = buildApp({
-    authenticate: () => ({ userId: LOCAL_USER_ID, role: "Maintainer" }),
+    authenticate: () => ({ userId: LOCAL_USER_ID, role: "Maintainer", provider: "git", displayName: configuration.authorName, email: configuration.authorEmail }),
     changesService: new ChangesService(draftManager, gitClient),
+    commentStore: new CommentStore(draftManager),
     draftManager,
     entityStore: new EntityStore(draftManager),
     historyService: new HistoryService(draftManager, gitClient),
