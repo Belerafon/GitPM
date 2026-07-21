@@ -1,6 +1,8 @@
 # GitPM agent workflow v1
 
-The agent uses the same draft worktree, repository format and CLI as the UI. There is no MCP server and no separate agent API.
+The agent uses the same draft worktree, repository format and CLI as the UI. There is no MCP server and no separate agent API. Every external draft contains generated `AGENTS.md` and `.agents/skills/gitpm/SKILL.md`; `draft create`, `draft open`, `draft status`, and switching writer mode to `external` restore the current versions when necessary. These are local worktree runtime files: Project scope, semantic diff, commit-all, clean checks, push, and Merge Requests exclude them.
+
+The generated runtime `AGENTS.md` is distinct from the GitPM source repository's root `AGENTS.md`: the root file governs development of the application, while the generated file and skill govern CLI-only portfolio work inside the reported draft worktree. The runtime skill is never installed in the source root.
 
 ## Runtime configuration
 
@@ -29,9 +31,19 @@ Create and open switch the draft to `external` writer mode. While that mode is a
 gitpm draft set-writer ui --draft DRF-AGENT-001 --owner 42
 ```
 
-## Edit loop
+## CLI-only mutation boundary
 
-Edit YAML directly under the reported `worktree_path`, then run:
+Repository YAML may be read for context but must not be edited directly. Entity creation goes through the CLI using a temporary input file outside the worktree:
+
+```bash
+gitpm entity create --draft DRF-AGENT-001 --file /tmp/entity.yaml --project P-26-MGP84K --json
+```
+
+The v0.1 CLI does not expose update, archive, or delete entity commands. An agent must report that capability gap instead of editing repository files or inventing a command.
+
+For any GitPM error, ambiguous contract, inconsistent output or missing CLI operation, the agent reports the sanitized command and stable error code, explains observed versus expected behavior, and gives the user a concrete GitPM improvement proposal. Product feedback does not authorize a manual workaround or changes to the GitPM application from the portfolio draft.
+
+After each supported mutation, run:
 
 ```bash
 gitpm format --draft DRF-AGENT-001 --project P-26-MGP84K
@@ -41,7 +53,7 @@ gitpm diff --semantic --draft DRF-AGENT-001 --project P-26-MGP84K
 
 When `--project` is present, every changed path must belong to that Project. Repository-global configuration, People, Teams, Calendars and other Projects are rejected with `AGENT_SCOPE_VIOLATION`.
 
-Deletion is rejected unless the same verification/commit command includes `--allow-delete`. This flag authorizes the declared deletion only for that invocation; reference and repository validation still apply.
+Deletion is rejected unless the same verification/commit command includes `--allow-delete`. This flag authorizes the declared deletion only for that invocation; reference and repository validation still apply. It does not authorize bypassing the CLI.
 
 ## Publish
 

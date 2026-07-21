@@ -458,15 +458,19 @@ export class GitClient {
     await this.git(["--git-dir", this.bareRepository, "branch", "-D", safeBranch]);
   }
 
-  async commitAll(worktree: string, message: string, authorName: string, authorEmail: string): Promise<string> {
+  async commitAll(worktree: string, message: string, authorName: string, authorEmail: string, excludedPaths: readonly string[] = []): Promise<string> {
     if (!message.trim() || message.length > 500 || /[\r\n\0]/u.test(message)) {
       throw new GitCommandError("COMMIT_MESSAGE_INVALID", "Commit message must be one non-empty line up to 500 characters");
     }
     if (!authorName.trim() || /[\r\n\0]/u.test(authorName) || !/^[^\s@]+@[^\s@]+$/u.test(authorEmail)) {
       throw new GitCommandError("GIT_AUTHOR_INVALID", "Git author identity is invalid");
     }
+    if (excludedPaths.some((value) => !/^[A-Za-z0-9._/-]+$/u.test(value))) {
+      throw new GitCommandError("GIT_PATH_INVALID", "Excluded commit paths must use the repository path allowlist");
+    }
     const canonical = await realpath(worktree);
     await this.git(["-C", canonical, "add", "--all"]);
+    if (excludedPaths.length > 0) await this.git(["-C", canonical, "reset", "--", ...excludedPaths]);
     await this.git([
       "-c", `user.name=${authorName}`,
       "-c", `user.email=${authorEmail}`,

@@ -1,4 +1,4 @@
-import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -30,6 +30,14 @@ describe("repository validation", () => {
   it("accepts the deterministic demo", async () => {
     const report = await validateRepository(demo);
     expect(report).toMatchObject({ valid: true, documentCount: 14, errors: [], warnings: [] });
+  });
+
+  it("accepts reserved agent guidance paths", async () => {
+    const root = await fixture();
+    await mkdir(path.join(root, ".agents", "skills", "gitpm"), { recursive: true });
+    await writeFile(path.join(root, "AGENTS.md"), "# Agent instructions\n", "utf8");
+    await writeFile(path.join(root, ".agents", "skills", "gitpm", "SKILL.md"), "---\nname: gitpm\ndescription: Use GitPM CLI.\n---\n", "utf8");
+    expect(await validateRepository(root)).toMatchObject({ valid: true, errors: [] });
   });
 
   it("accepts saved milestone and task order", async () => {

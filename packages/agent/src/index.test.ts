@@ -9,6 +9,7 @@ import { DraftManager } from "@gitpm/drafts";
 import { GitClient } from "@gitpm/git-client";
 import { GitLabProtocolTestDouble } from "@gitpm/gitlab";
 import { atomicWriteDomainFile } from "@gitpm/security";
+import { validateRepository } from "@gitpm/validation";
 import { AgentWorkflow, AgentWorkflowError } from "./index.js";
 
 const execFileAsync = promisify(execFile);
@@ -36,6 +37,11 @@ describe("agent file and CLI workflow core", () => {
     const drafts = new DraftManager(client, data); const changes = new ChangesService(drafts, client); const gitlab = new GitLabProtocolTestDouble();
     const workflow = new AgentWorkflow(drafts, client, changes, { accessToken: "agent-memory-token", authorName: "agent-42", authorEmail: "42@users.noreply.gitlab.example.test", defaultBranch: "main", mergeRequests: gitlab });
     const draft = await workflow.createDraft("DRF-AGENT", "42"); expect(draft.writer_mode).toBe("external");
+    expect(await readFile(path.join(draft.worktree_path, "AGENTS.md"), "utf8")).toContain("GitPM draft `DRF-AGENT`");
+    expect(await readFile(path.join(draft.worktree_path, ".agents", "skills", "gitpm", "SKILL.md"), "utf8")).toContain("name: gitpm");
+    await rm(path.join(draft.worktree_path, "AGENTS.md"));
+    await workflow.status("DRF-AGENT");
+    expect(await readFile(path.join(draft.worktree_path, "AGENTS.md"), "utf8")).toContain("GitPM draft `DRF-AGENT`");
     await atomicWriteDomainFile(draft.worktree_path, projectFile, (await readFile(path.join(draft.worktree_path, ...projectFile.split("/")), "utf8")).replace("name: GitPM launch", "name: Agent delivery"));
     expect(await workflow.semanticDiff("DRF-AGENT", { allowedProject: projectId })).toMatchObject({ counts: { updated: 1 }, affected_projects: [projectId] });
 
@@ -49,8 +55,13 @@ describe("agent file and CLI workflow core", () => {
     expect((await workflow.assertScope("DRF-AGENT", { allowedProject: projectId, allowDelete: true })).changed_files).toEqual(expect.arrayContaining([expect.objectContaining({ path: taskFile, kind: "Deleted" })]));
     await atomicWriteDomainFile(draft.worktree_path, taskFile, taskOriginal);
 
+    expect(await validateRepository(draft.worktree_path)).toMatchObject({ valid: true, errors: [] });
     const committed = await workflow.commitAll("DRF-AGENT", "Agent updates project", { allowedProject: projectId });
     expect(committed.commit).toMatch(/^[0-9a-f]{40}$/u);
+    const committedPaths = await git(draft.worktree_path, "show", "--pretty=format:", "--name-only", "HEAD");
+    expect(committedPaths).not.toContain("AGENTS.md");
+    expect(committedPaths).not.toContain(".agents/skills/gitpm/SKILL.md");
+    expect(await readFile(path.join(draft.worktree_path, "AGENTS.md"), "utf8")).toContain("GitPM draft `DRF-AGENT`");
     const pushed = await workflow.push("DRF-AGENT"); expect(await git(root, "--git-dir", remote, "rev-parse", "refs/heads/gitpm/42/DRF-AGENT")).toBe(pushed.commit);
     const mr = await workflow.createMergeRequest("DRF-AGENT", "42", "Agent updates project");
     expect(mr).toMatchObject({ source_branch: "gitpm/42/DRF-AGENT", target_branch: "main", state: "opened" });

@@ -1,0 +1,280 @@
+export const GITPM_AGENT_FILE = "AGENTS.md";
+export const GITPM_SKILL_FILE = ".agents/skills/gitpm/SKILL.md";
+
+export const GITPM_GUIDANCE_PATHS = [GITPM_AGENT_FILE, GITPM_SKILL_FILE] as const;
+export const GITPM_GUIDANCE_FILES = new Set<string>(GITPM_GUIDANCE_PATHS);
+
+export function gitPmAgentFile(draftId: string): string {
+  return `# GitPM draft agent instructions
+
+This worktree is GitPM draft \`${draftId}\`. Read and follow
+\`.agents/skills/gitpm/SKILL.md\` before doing any GitPM work. GitPM manages this file and
+the skill; do not edit or delete them.
+
+This is the portfolio-data runtime contract, not the GitPM source-development \`AGENTS.md\`. Do not
+edit or patch the GitPM application from this worktree.
+
+## Product philosophy
+
+GitPM is Git-first project management. The repository is the source of truth, YAML is the
+portable human-readable representation, and a draft worktree is the isolated unit of change.
+There is no separate agent database or agent API. The CLI is the supported policy and safety
+boundary around repository mutations; bypassing it can violate identity, references, scope,
+writer ownership, validation, deletion, and publishing rules.
+
+The guidance files are local runtime material for this worktree. GitPM excludes them from
+Project scope, semantic diff, commits, and Merge Requests; their presence does not widen the
+requested business change.
+
+Work conservatively:
+
+- understand current state before changing it;
+- keep one external writer per draft and work only in the reported worktree;
+- preserve immutable IDs and explicit references;
+- limit work to the requested Project whenever possible;
+- validate the complete repository and review the semantic diff;
+- commit the complete draft atomically through GitPM;
+- publish only when the user explicitly requests it;
+- prefer a clear blocker over a guessed command or a hidden manual edit.
+
+## Repository model
+
+- \`.gitpm/repository.yaml\`, \`.gitpm/statuses.yaml\`, and
+  \`.gitpm/issue-types.yaml\` contain repository-wide configuration.
+- \`people/\`, \`teams/\`, and \`calendars/\` contain global entities.
+- \`projects/<project-id>/project.yaml\` contains a Project.
+- Project milestones, tasks, saved views, and task comments live below the same Project.
+- Entity references use immutable IDs such as \`P-26-7K4M9Q\` and
+  \`T-26-X8D2FW\`; paths and IDs are validated together.
+- Project-scoped work must not change global configuration, People, Teams, Calendars, or
+  another Project.
+- Archive is a lifecycle state. Physical deletion is separate, restricted by references, and
+  always requires explicit authorization.
+
+## Mandatory operating rules
+
+- Use the \`gitpm\` CLI for every mutation, format, validation, semantic diff, commit, push,
+  and Merge Request operation.
+- Never edit, rename, or delete files under \`.gitpm/\`, \`people/\`, \`teams/\`,
+  \`calendars/\`, or \`projects/\` directly.
+- Never use raw \`git add\`, \`git commit\`, \`git push\`, Git hosting APIs, MCP, or UI API
+  calls to mutate GitPM data.
+- Reading repository files and using read-only Git commands for orientation is allowed.
+- Prefer \`--json\`; evaluate both the process exit code and the stable GitPM result code.
+- Never place credentials in arguments, repository URLs, files, Git configuration, logs, or
+  responses.
+- If the installed CLI has no command for a requested mutation, stop and report the missing
+  capability. Do not bypass the CLI.
+
+## CLI workflow
+
+Start with:
+
+\`gitpm --version\`
+
+\`gitpm draft status --draft ${draftId} --json\`
+
+For supported entity creation, supply a complete YAML document from a temporary path outside
+this worktree:
+
+\`gitpm entity create --draft ${draftId} --file <temporary-yaml> [--project <project-id>] --json\`
+
+Then run \`format\`, \`validate --changed\`, and \`diff --semantic\` with
+\`--draft ${draftId}\`, \`--json\`, and \`--project\` when scoped. Commit only with
+\`gitpm commit --all\`. Use \`gitpm push\` and \`gitpm mr create\` only when publication was
+requested. The full command reference and decision rules are in the skill.
+
+## Errors, ambiguity, and product feedback
+
+Do not silently work around a GitPM error, unclear contract, inconsistent output, missing CLI
+operation, or ambiguous repository state. Tell the user:
+
+1. what operation is blocked and what you were trying to achieve;
+2. the exact sanitized command, exit code, and stable GitPM error code;
+3. what was observed and what behavior was expected;
+4. whether the likely cause is repository data, runtime configuration, or a GitPM product gap;
+5. a concrete improvement GitPM should make, such as a new CLI command, clearer validation
+   message, safer default, additional machine-readable field, or documentation clarification.
+
+Ask the user before expanding scope or changing intent. Do not patch the GitPM application from
+inside a portfolio draft, and do not turn a product suggestion into an unauthorized workaround.
+`;
+}
+
+export const GITPM_SKILL_FILE_CONTENT = `---
+name: gitpm
+description: Operate a GitPM project-management draft safely through the GitPM CLI. Use for understanding GitPM repository data, creating supported entities, validating and formatting draft changes, viewing semantic diffs, committing, pushing, opening Merge Requests, and diagnosing GitPM errors or ambiguous behavior. Enforces CLI-only mutation and requires actionable product feedback instead of workarounds.
+---
+
+# Work with a GitPM draft
+
+## Understand the philosophy
+
+Treat GitPM as a Git-first system, not as a collection of YAML files. Git is the history and
+publishing protocol; YAML is the reviewable storage format; the draft worktree is the isolated
+transaction; the CLI is the mutation and policy boundary. Correct work preserves all four.
+
+\`AGENTS.md\` and this skill are local worktree runtime guidance. GitPM keeps them out of the
+business diff, commit, and Merge Request.
+
+Do not confuse this runtime skill with source development of the GitPM application. If the
+current directory is the GitPM monorepo rather than the \`worktree_path\` reported by draft status,
+stop: the root source-development \`AGENTS.md\` applies there and this skill does not.
+
+Apply these principles:
+
+- Repository truth over hidden state: do not create side databases or private shadow files.
+- Explicit workflow over convenience: acquire external writer mode, validate, review, commit
+  all, and publish deliberately.
+- Semantic intent over textual patches: use semantic diff and stable entity IDs to understand
+  the result.
+- Safety over improvisation: stop when the CLI cannot express the requested operation.
+- Useful transparency over silent recovery: surface errors and propose improvements to GitPM.
+
+## Know the model
+
+The repository-wide documents are \`.gitpm/repository.yaml\`,
+\`.gitpm/statuses.yaml\`, and \`.gitpm/issue-types.yaml\`. Global entity directories are
+\`people/\`, \`teams/\`, and \`calendars/\`. A Project occupies
+\`projects/<P-id>/\` and contains \`project.yaml\`, plus \`milestones/\`, \`tasks/\`,
+\`views/\`, and task-scoped \`comments/\`.
+
+Core schemas and relations:
+
+- \`gitpm/project@1\`: status, lifecycle, optional owner, dates, milestone order, labels.
+- \`gitpm/task@1\`: owning Project, title, type, status, lifecycle, optional parent and
+  milestone, assignees, estimate, dates, dependencies, labels, Markdown fields.
+- \`gitpm/milestone@1\`: owning Project, name, lifecycle, due date, task order.
+- \`gitpm/person@1\`: name, weekly capacity, Calendar, lifecycle, optional email.
+- \`gitpm/team@1\`: name, Person members, lifecycle.
+- \`gitpm/calendar@1\`: working weekdays, holidays, lifecycle.
+- \`gitpm/saved-view@1\`: owning Project, list or board kind, filters, optional status grouping.
+- \`gitpm/comment@1\`: owning Project and Task, author snapshot, timestamps, state, body, and
+  mentions.
+
+IDs are immutable and have the form \`<type>-<UTC-year>-<six Crockford Base32 characters>\`.
+Type prefixes are \`P\` Project, \`T\` Task, \`M\` Milestone, \`U\` Person, \`G\` Team,
+\`C\` Calendar, and \`V\` Saved View. Do not rename IDs or move an entity by changing its
+path. References must resolve, task/milestone/view references cannot cross Project boundaries,
+and active configuration slugs must exist. Dates are \`YYYY-MM-DD\`; estimates are
+nonnegative quarter-hour multiples. YAML uses UTF-8, LF, two-space indentation, no duplicate
+keys, aliases, anchors, or custom tags.
+
+Read YAML only to understand state or prepare a complete temporary input. Never mutate domain
+files directly.
+
+## Establish the draft context
+
+1. Read \`AGENTS.md\`; take the exact draft ID from it.
+2. Run \`gitpm --version\`.
+3. Run \`gitpm draft status --draft <draft-id> --json\`.
+4. Require \`state: open\`, \`writer_mode: external\`, and a \`worktree_path\` equal to the
+   current worktree.
+5. If any check fails, stop and use the error-reporting procedure below.
+
+Do not run \`gitpm init\` inside a draft. Do not create another draft unless the user explicitly
+asks. Do not switch writer mode back to \`ui\` until agent writes have stopped and the user or
+orchestrating workflow requests the handoff.
+
+## Respect the mutation boundary
+
+Never write, rename, or delete data below \`.gitpm/\`, \`people/\`, \`teams/\`,
+\`calendars/\`, or \`projects/\` with an editor, shell redirection, scripts, filesystem tools,
+raw Git, an MCP server, or a private API call. Never modify \`AGENTS.md\` or this skill; GitPM
+manages them.
+
+Read-only inspection of repository data and read-only Git commands is allowed. Every state
+change must be attributable to a documented \`gitpm\` command.
+
+## Use the supported CLI surface
+
+All commands accept \`--json\`; use it for automation.
+
+- \`gitpm draft create|open|status|set-writer --draft <id> [--owner <id>]\` manages draft
+  lifecycle and writer ownership.
+- \`gitpm entity create --draft <id> --file <file> [--project <id>]\` creates an entity from a
+  complete YAML input document.
+- \`gitpm format [--draft <id>] [--project <id>] [--check]\` applies or checks canonical YAML.
+- \`gitpm validate [--draft <id>] [--project <id>] [--changed]\` validates repository structure,
+  schemas, identities, references, dates, and scope closure.
+- \`gitpm diff --semantic [--draft <id>] [--project <id>]\` reports created, updated, archived,
+  and deleted entities.
+- \`gitpm commit --all --draft <id> -m <message> [--project <id>]\` validates and commits the
+  complete draft. Partial staging is unsupported.
+- \`gitpm push --draft <id>\` publishes a clean committed branch.
+- \`gitpm mr create --draft <id> --owner <id> --title <title> [--description <text>]\` opens a
+  Merge Request against the configured default branch.
+- \`gitpm doctor\` checks runtime and repository readiness.
+- \`gitpm --version\` reports the CLI version.
+
+The current CLI exposes creation but not general entity update, archive, physical delete,
+move, configuration update, or comment-specific commands. When the request needs one of these,
+report the capability gap and recommend adding the corresponding CLI operation. Do not invent
+syntax and do not fall back to editing YAML.
+
+For entity creation, keep the temporary input outside the worktree, derive fields only from the
+documented schema and existing read-only examples, and never guess a reference or configuration
+slug. If a valid unique ID cannot be obtained through an approved mechanism, report that the CLI
+needs ID generation rather than implementing an ad hoc generator.
+
+## Scope the work
+
+Use \`--project <project-id>\` whenever the request concerns one Project. Under Project scope,
+changes to global configuration, People, Teams, Calendars, guidance files, or another Project
+must not be treated as permission to widen scope. Ask the user if the requested outcome truly
+requires global changes.
+
+Physical deletion is distinct from archive. Even if a future CLI mutation creates a deletion,
+verification and commit require explicit user intent plus \`--allow-delete\`; reference and
+repository validation still apply.
+
+## Verify every supported mutation
+
+Run, in order:
+
+\`gitpm format --draft <draft-id> [--project <project-id>] --json\`
+
+\`gitpm validate --changed --draft <draft-id> [--project <project-id>] --json\`
+
+\`gitpm diff --semantic --draft <draft-id> [--project <project-id>] --json\`
+
+Check the process exit code, \`ok\`, stable \`code\`, affected Projects, entity counts, fields,
+and unclassified files. Stop on any unexpected path, scope, deletion, warning requiring user
+judgment, or semantic result that differs from the request. Do not hide failures by reformatting
+or retrying with broader scope.
+
+## Commit and publish deliberately
+
+Commit only after the semantic result matches the user's intent:
+
+\`gitpm commit --all --draft <draft-id> -m <message> [--project <project-id>] --json\`
+
+This intentionally stages all validated draft changes; partial staging is not supported. Do not
+substitute raw Git commands.
+
+Run \`gitpm push --draft <draft-id> --json\` and \`gitpm mr create ... --json\` only when the
+user requested remote publication. Never expose an access token in arguments, URLs, files, Git
+configuration, logs, or responses.
+
+## Report errors, ambiguity, and improvement opportunities
+
+Never silently work around an error, ambiguous contract, inconsistent output, unsafe default,
+missing command, or unclear repository state. Separate a data problem from a runtime problem
+and a GitPM product problem. Report:
+
+1. Goal: the user outcome and operation that is blocked.
+2. Evidence: the sanitized command, exit code, stable GitPM code, and minimal relevant output.
+3. Diagnosis: observed behavior versus expected behavior and the likely problem category.
+4. Impact: what cannot be completed safely and whether any draft changes were made.
+5. GitPM improvement: one concrete product change, for example a missing CLI verb, generated ID,
+   clearer validation path, machine-readable diagnostic field, safer transaction, or clarified
+   documentation.
+6. Next decision: the smallest user choice or external fix needed to continue.
+
+Use wording such as: "GitPM currently lacks an entity update command, so I did not edit the YAML
+directly. GitPM should add a validated \`entity update\` CLI operation with immutable identity and
+Project-scope enforcement."
+
+Do not patch the GitPM application from inside the managed portfolio draft. Product feedback is
+an explicit handoff to the user, not authorization for an improvised workaround or broader work.
+`;

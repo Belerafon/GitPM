@@ -155,6 +155,6 @@ The planning validator checks document consistency. The gate checker checks actu
 - No rebase or conflict UI.
 - Commit always includes all draft changes.
 - Read-only Gantt and approximate Workload.
-- Agent edits files and uses CLI; no MCP.
+- Agent may read repository files, but mutates GitPM data only through the CLI; no MCP or manual YAML edits.
 - Physical delete and archive are both supported.
 - Locale packs support multiple languages; Russian is mandatory and complete for v0.1.

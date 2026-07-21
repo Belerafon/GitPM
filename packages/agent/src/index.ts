@@ -6,8 +6,9 @@ import { entityPathForDocument } from "@gitpm/domain";
 import type { GitClient } from "@gitpm/git-client";
 import type { GitLabMergeRequestProtocol, MergeRequestPayload, MergeRequestState } from "@gitpm/gitlab";
 import { formatYamlDocument, parseYamlDocument, referenceLabelsForDocuments, type GitPmDocument } from "@gitpm/repository-format";
-import { atomicWriteDomainFile } from "@gitpm/security";
+import { atomicWriteDomainFile, resolveDomainPath } from "@gitpm/security";
 import { validateRepository } from "@gitpm/validation";
+import { GITPM_AGENT_FILE, GITPM_GUIDANCE_FILES, GITPM_GUIDANCE_PATHS, GITPM_SKILL_FILE, GITPM_SKILL_FILE_CONTENT, gitPmAgentFile } from "./worktree-guidance.js";
 
 export class AgentWorkflowError extends Error {
   constructor(public readonly code: string, message: string, public readonly details?: unknown) {
@@ -35,6 +36,41 @@ export interface AgentScopeReport {
 
 const projectPath = (value: string): string | undefined => /^projects\/(P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6})\//u.exec(value)?.[1];
 
+async function ensureDirectory(root: string, relative: string): Promise<void> {
+  const absolute = await resolveDomainPath(root, relative);
+  try {
+    await mkdir(absolute, { mode: 0o700 });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+  }
+  const details = await lstat(absolute);
+  if (!details.isDirectory() || details.isSymbolicLink()) {
+    throw new AgentWorkflowError("AGENT_GUIDANCE_PATH_INVALID", `${relative} must be a regular directory`);
+  }
+}
+
+async function writeGuidanceFile(root: string, relative: string, content: string): Promise<boolean> {
+  const absolute = await resolveDomainPath(root, relative);
+  try {
+    if (await readFile(absolute, "utf8") === content) return false;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  await atomicWriteDomainFile(root, relative, content);
+  return true;
+}
+
+async function provisionAgentGuidance(root: string, draftId: string): Promise<boolean> {
+  await ensureDirectory(root, ".agents");
+  await ensureDirectory(root, ".agents/skills");
+  await ensureDirectory(root, ".agents/skills/gitpm");
+  const changed = await Promise.all([
+    writeGuidanceFile(root, GITPM_AGENT_FILE, gitPmAgentFile(draftId)),
+    writeGuidanceFile(root, GITPM_SKILL_FILE, GITPM_SKILL_FILE_CONTENT),
+  ]);
+  return changed.some(Boolean);
+}
+
 async function repositoryDocuments(root: string): Promise<GitPmDocument[]> {
   const result: GitPmDocument[] = [];
   const walk = async (directory: string): Promise<void> => {
@@ -59,23 +95,39 @@ export class AgentWorkflow {
 
   async createDraft(draftId: string, owner: string): Promise<DraftMetadata> {
     await this.drafts.createDraft(draftId, owner);
-    return await this.drafts.setWriterMode(draftId, owner, "external");
+    const draft = await this.drafts.setWriterMode(draftId, owner, "external");
+    await provisionAgentGuidance(draft.worktree_path, draft.draft_id);
+    return await this.drafts.refreshFingerprint(draftId);
   }
 
   async openDraft(draftId: string, owner: string): Promise<DraftMetadata> {
-    return await this.drafts.setWriterMode(draftId, owner, "external");
+    const draft = await this.drafts.setWriterMode(draftId, owner, "external");
+    await provisionAgentGuidance(draft.worktree_path, draft.draft_id);
+    return await this.drafts.refreshFingerprint(draftId);
   }
 
   async setWriterMode(draftId: string, owner: string, mode: WriterMode): Promise<DraftMetadata> {
-    return await this.drafts.setWriterMode(draftId, owner, mode);
+    const draft = await this.drafts.setWriterMode(draftId, owner, mode);
+    if (mode === "external") {
+      await provisionAgentGuidance(draft.worktree_path, draft.draft_id);
+      return await this.drafts.refreshFingerprint(draftId);
+    }
+    return draft;
   }
 
-  async status(draftId: string): Promise<DraftMetadata> { return await this.drafts.getDraft(draftId); }
+  async status(draftId: string): Promise<DraftMetadata> {
+    const draft = await this.drafts.getDraft(draftId);
+    if (draft.writer_mode === "external" && await provisionAgentGuidance(draft.worktree_path, draft.draft_id)) {
+      return await this.drafts.refreshFingerprint(draftId);
+    }
+    return draft;
+  }
 
   async assertScope(draftId: string, scope: AgentScope = {}): Promise<AgentScopeReport> {
     const metadata = await this.externalDraft(draftId);
     const report = await this.changes.list(draftId);
     for (const file of report.files) {
+      if (GITPM_GUIDANCE_FILES.has(file.path)) continue;
       if (scope.allowedProject !== undefined && projectPath(file.path) !== scope.allowedProject) {
         throw new AgentWorkflowError("AGENT_SCOPE_VIOLATION", `Path ${file.path} is outside Project ${scope.allowedProject}`);
       }
@@ -84,12 +136,13 @@ export class AgentWorkflow {
       }
     }
     if (metadata.writer_mode !== "external") throw new AgentWorkflowError("AGENT_EXTERNAL_MODE_REQUIRED", "Agent workflow requires external writer mode");
-    return { affected_projects: report.affected_projects, changed_files: report.files.map(({ path, kind }) => ({ path, kind })) };
+    return { affected_projects: report.affected_projects, changed_files: report.files.filter((file) => !GITPM_GUIDANCE_FILES.has(file.path)).map(({ path, kind }) => ({ path, kind })) };
   }
 
   async semanticDiff(draftId: string, scope: AgentScope = {}): Promise<SemanticDiff> {
     await this.assertScope(draftId, scope);
-    return await this.changes.semantic(draftId);
+    const report = await this.changes.semantic(draftId);
+    return { ...report, unclassified_files: report.unclassified_files.filter((file) => !GITPM_GUIDANCE_FILES.has(file)) };
   }
 
   async createEntity(draftId: string, document: GitPmDocument, scope: AgentScope = {}) {
@@ -121,18 +174,19 @@ export class AgentWorkflow {
 
   async commitAll(draftId: string, message: string, scope: AgentScope = {}) {
     const draft = await this.externalDraft(draftId);
-    await this.assertScope(draftId, scope);
+    const scoped = await this.assertScope(draftId, scope);
     const validation = await validateRepository(draft.worktree_path);
     if (!validation.valid) throw new AgentWorkflowError("VALIDATION_FAILED", "Commit is blocked by repository validation", validation.errors);
-    if (!(await this.git.statusPorcelain(draft.worktree_path)).trim()) throw new AgentWorkflowError("NOTHING_TO_COMMIT", "Draft has no changes");
-    const commit = await this.git.commitAll(draft.worktree_path, message, this.options.authorName, this.options.authorEmail);
+    if (scoped.changed_files.length === 0) throw new AgentWorkflowError("NOTHING_TO_COMMIT", "Draft has no business changes");
+    const commit = await this.git.commitAll(draft.worktree_path, message, this.options.authorName, this.options.authorEmail, GITPM_GUIDANCE_PATHS);
     const metadata = await this.drafts.refreshFingerprint(draftId);
     return { commit, branch: metadata.branch, draft_fingerprint: metadata.fingerprint };
   }
 
   async push(draftId: string) {
     const draft = await this.externalDraft(draftId);
-    if ((await this.git.statusPorcelain(draft.worktree_path)).trim()) throw new AgentWorkflowError("UNCOMMITTED_CHANGES", "Push requires a clean committed draft");
+    const changes = await this.changes.list(draftId);
+    if (changes.files.some((file) => !GITPM_GUIDANCE_FILES.has(file.path))) throw new AgentWorkflowError("UNCOMMITTED_CHANGES", "Push requires a clean committed draft");
     if (!this.options.accessToken) throw new AgentWorkflowError("AGENT_TOKEN_REQUIRED", "Push requires an in-memory access token");
     await this.git.pushBranch(draft.worktree_path, draft.branch, this.options.accessToken);
     return { branch: draft.branch, commit: await this.git.headCommit(draft.worktree_path) };
@@ -149,9 +203,10 @@ export class AgentWorkflow {
   }
 
   private async externalDraft(draftId: string): Promise<DraftMetadata> {
-    const draft = await this.drafts.getDraft(draftId);
+    let draft = await this.drafts.getDraft(draftId);
     if (draft.state !== "open") throw new AgentWorkflowError("DRAFT_NOT_OPEN", "Draft is not open");
     if (draft.writer_mode !== "external") throw new AgentWorkflowError("AGENT_EXTERNAL_MODE_REQUIRED", "Agent workflow requires external writer mode");
+    if (await provisionAgentGuidance(draft.worktree_path, draft.draft_id)) draft = await this.drafts.refreshFingerprint(draftId);
     return draft;
   }
 }
