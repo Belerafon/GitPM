@@ -25,6 +25,7 @@
   "nav.workload": "Team workload",
   "nav.gantt": "Gantt",
   "nav.changes": "Changes",
+  "nav.files": "Files",
   "nav.history": "History",
   "nav.team": "Team",
   "nav.repository": "Repository",
@@ -80,6 +81,14 @@
   "status.error": "Could not complete the action: {message}",
   "status.retry": "Retry",
   "common.notAvailable": "Not available"
+  ,"worktree.heading": "Working tree"
+  ,"worktree.description": "Browse every file in the selected working copy. This view is read-only; Git metadata is hidden."
+  ,"worktree.previewHeading": "File preview"
+  ,"worktree.selectFile": "Select a text file in the tree to view its contents."
+  ,"worktree.empty": "The working tree is empty."
+  ,"worktree.emptyDirectory": "Empty directory"
+  ,"worktree.symlinkUnavailable": "Symbolic-link targets are not opened for security reasons."
+  ,"worktree.entryUnavailable": "This entry type cannot be previewed."
   ,"core.heading": "Portfolio work"
   ,"core.portfolioHeading": "Portfolio overview"
   ,"core.portfolioDescription": "A summary of active projects, milestones and tasks across the repository."

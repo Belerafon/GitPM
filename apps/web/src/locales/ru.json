@@ -25,6 +25,7 @@
   "nav.workload": "Загрузка команды",
   "nav.gantt": "Диаграмма Ганта",
   "nav.changes": "Изменения",
+  "nav.files": "Файлы",
   "nav.history": "История",
   "nav.team": "Команда",
   "nav.repository": "Репозиторий",
@@ -80,6 +81,14 @@
   "status.error": "Не удалось выполнить действие: {message}",
   "status.retry": "Повторить",
   "common.notAvailable": "Недоступно"
+  ,"worktree.heading": "Рабочее дерево"
+  ,"worktree.description": "Просмотр всех файлов выбранной рабочей копии. Раздел работает только на чтение; служебные данные Git скрыты."
+  ,"worktree.previewHeading": "Просмотр файла"
+  ,"worktree.selectFile": "Выберите текстовый файл в дереве, чтобы посмотреть его содержимое."
+  ,"worktree.empty": "Рабочее дерево пусто."
+  ,"worktree.emptyDirectory": "Пустой каталог"
+  ,"worktree.symlinkUnavailable": "Ссылки не открываются из соображений безопасности."
+  ,"worktree.entryUnavailable": "Этот тип файла нельзя просмотреть."
   ,"core.heading": "Работа портфеля"
   ,"core.portfolioHeading": "Обзор портфеля"
   ,"core.portfolioDescription": "Сводка активных проектов, этапов и задач во всём репозитории."

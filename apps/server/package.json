@@ -21,6 +21,7 @@
     "@gitpm/logging": "workspace:*",
     "@gitpm/shared": "workspace:*",
     "@gitpm/repository-format": "workspace:*",
+    "@gitpm/security": "workspace:*",
     "@gitpm/publishing": "workspace:*",
     "@gitpm/validation": "workspace:*",
     "fastify": "5.10.0",

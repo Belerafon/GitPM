@@ -356,6 +356,37 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
   .project-plan-unassigned .project-plan-stage-actions { grid-column: 1; }
   .project-plan-inspector { position: fixed; z-index: 50; inset: 0; max-height: none; border: 0; border-radius: 0; background: #fff; padding: 1rem; }
 }
+
+.worktree-layout { display: grid; grid-template-columns: minmax(260px, .38fr) minmax(0, 1fr); gap: 1rem; align-items: stretch; }
+.worktree-browser, .worktree-preview { min-height: 560px; }
+.worktree-browser h2, .worktree-placeholder h2 { margin: 0; }
+.worktree-root { max-height: 66vh; overflow: auto; margin-top: 1rem; border: 1px solid #e0e3de; border-radius: 8px; background: #fbfcfa; padding: .45rem; }
+.worktree-directory { margin: 0; }
+.worktree-directory > summary, .worktree-file, .worktree-unavailable { display: flex; align-items: center; gap: .4rem; width: 100%; min-height: 30px; border: 0; border-radius: 5px; padding: .28rem .4rem; color: #333a35; font: inherit; font-size: .78rem; text-align: left; }
+.worktree-directory > summary { cursor: pointer; list-style: none; font-weight: 650; }
+.worktree-directory > summary::-webkit-details-marker { display: none; }
+.worktree-directory > summary:hover, .worktree-file:hover { background: #edf3ee; }
+.worktree-directory > summary .worktree-icon { transition: transform .12s ease; }
+.worktree-directory[open] > summary .worktree-icon { transform: rotate(90deg); }
+.worktree-children { margin-left: .65rem; border-left: 1px solid #dfe4df; padding-left: .35rem; }
+.worktree-file { justify-content: flex-start; background: transparent; cursor: pointer; }
+.worktree-file.selected { background: #dfece4; color: #245541; font-weight: 700; }
+.worktree-file > span:nth-child(2) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.worktree-file small { margin-left: auto; color: #7a807c; font-size: .63rem; font-weight: 400; white-space: nowrap; }
+.worktree-icon { display: inline-grid; flex: 0 0 14px; place-items: center; color: #587065; }
+.worktree-unavailable { color: #858a86; cursor: not-allowed; }
+.worktree-note { display: block; padding: .45rem; color: #727873; font-size: .72rem; }
+.worktree-note.error { color: #9b3932; }
+.worktree-preview { min-width: 0; padding: 0; overflow: hidden; }
+.worktree-preview > header { display: flex; align-items: start; justify-content: space-between; gap: 1rem; border-bottom: 1px solid #dfe2dd; padding: 1rem 1.1rem; }
+.worktree-preview > header h2 { margin: .15rem 0 .25rem; overflow-wrap: anywhere; font-size: 1rem; }
+.worktree-preview > header code { color: #6b736d; font-size: .7rem; overflow-wrap: anywhere; }
+.worktree-preview > header > span { color: #737a75; font-size: .7rem; white-space: nowrap; }
+.worktree-preview > p, .worktree-preview > .alert { margin: 1rem; }
+.worktree-preview pre { max-height: 66vh; overflow: auto; margin: 0; background: #17231e; color: #e8eee9; padding: 1rem; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .76rem; line-height: 1.55; tab-size: 2; white-space: pre; }
+.worktree-placeholder { display: grid; place-content: center; min-height: 520px; padding: 2rem; color: #68706a; text-align: center; }
+.worktree-placeholder p { max-width: 34rem; }
+@media (max-width: 800px) { .worktree-layout { grid-template-columns: 1fr; } .worktree-browser, .worktree-preview { min-height: auto; } .worktree-root { max-height: 42vh; } .worktree-placeholder { min-height: 220px; } }
 .admin-workspace { margin-top: 1.5rem; }
 .admin-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; }
 .admin-create { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .55rem; align-items: start; }

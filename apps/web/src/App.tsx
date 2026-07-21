@@ -19,6 +19,7 @@ import { ProjectPlanWorkspace } from "./features/projects/project-plan-workspace
 import { EntityCatalog } from "./entity-catalog.js";
 import { PeopleProfileWorkspace } from "./people-profile-ui.js";
 import { NotificationsMenu } from "./notifications-ui.js";
+import { WorktreeWorkspace } from "./worktree-ui.js";
 
 interface AppProps {
   readonly api: GitPmApi;
@@ -36,6 +37,7 @@ const teamTabs: readonly SectionTab[] = [
 const repositoryTabs: readonly SectionTab[] = [
   { destination: "workspaces", label: "nav.drafts" },
   { destination: "changes", label: "nav.changes" },
+  { destination: "files", label: "nav.files" },
   { destination: "history", label: "nav.history" },
 ];
 
@@ -58,7 +60,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
     ? "nav.projects"
     : ["nav.people", "nav.workload", "nav.calendar"].includes(view)
       ? "nav.team"
-      : ["nav.drafts", "nav.changes", "nav.history"].includes(view)
+      : ["nav.drafts", "nav.changes", "nav.files", "nav.history"].includes(view)
         ? "nav.repository"
         : view;
   const workspaceSelection: WorkspaceSelection = { projectId: activeRoute?.projectId, stageId: activeRoute?.stageId, taskId: activeRoute?.taskId, personId: activeRoute?.personId, commit: activeRoute?.commit, query: activeRoute?.query };
@@ -185,7 +187,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
           </>}
     >
         {["nav.people", "nav.workload", "nav.calendar"].includes(view) && <SectionTabs active={view} ariaLabel={t("nav.team")} items={teamTabs} onNavigate={(destination) => navigateToRoute(routeForDestination(destination))} t={t} />}
-        {["nav.drafts", "nav.changes", "nav.history"].includes(view) && <SectionTabs active={view} ariaLabel={t("nav.repository")} items={repositoryTabs} onNavigate={(destination) => navigateToRoute(routeForDestination(destination))} t={t} />}
+        {["nav.drafts", "nav.changes", "nav.files", "nav.history"].includes(view) && <SectionTabs active={view} ariaLabel={t("nav.repository")} items={repositoryTabs} onNavigate={(destination) => navigateToRoute(routeForDestination(destination))} t={t} />}
         {view === "nav.drafts" && <section className="draft-layout">
           <div className="draft-list card">
             <h2 aria-hidden="true">{t("drafts.heading")}</h2><p className="workspace-description">{t("drafts.description")}</p>
@@ -240,11 +242,12 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
             ? <PeopleProfileWorkspace api={api} draft={active} locale={locale} onNavigate={openWorkspace} personId={workspaceSelection.personId} />
             : <AdminWorkspace api={api} confirmAction={confirmAction} draft={active} role={drafts.session.role} locale={locale} onOpenPerson={(personId) => openWorkspace("people", { personId })} surface={view === "nav.people" ? "people" : view === "nav.calendar" ? "calendar" : "settings"} onChanged={drafts.refresh} />)}
         {view === "nav.changes" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <ChangesWorkspace api={api} draft={active} role={drafts.session.role} locale={locale} onChanged={drafts.refresh} confirmAction={confirmAction} remoteAvailable={repository?.has_remote === true} gitlabConfigured={gitlab?.configured === true} gitlabSignedIn={gitlab?.user !== undefined} onGitLabLogin={loginToGitLab} />)}
+        {view === "nav.files" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <WorktreeWorkspace api={api} draft={active} key={`nav.files:${active.draft_id}:${active.fingerprint}:${active.external_fingerprint ?? ""}`} locale={locale} />)}
         {view === "nav.history" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <HistoryWorkspace api={api} draft={active} key={`nav.history:${workspaceSelection.commit ?? ""}`} locale={locale} canRevert={drafts.session.role !== "Reporter"} initialCommit={workspaceSelection.commit} onNavigate={openWorkspace} onDraftCreated={drafts.select} />)}
         {view === "nav.board" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <BoardWorkspace api={api} draft={active} key={`nav.board:${workspaceSelection.projectId ?? ""}`} locale={locale} initialProjectId={workspaceSelection.projectId} initialStatusFilter={workspaceSelection.query?.status?.[0]} initialTypeFilter={workspaceSelection.query?.type?.[0]} initialMilestoneFilter={workspaceSelection.query?.milestone?.[0]} initialViewId={workspaceSelection.query?.view?.[0]} onNavigate={openWorkspace} onChanged={drafts.refresh} />)}
         {view === "nav.gantt" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <GanttWorkspace api={api} draft={active} key={`nav.gantt:${workspaceSelection.projectId ?? ""}`} locale={locale} initialProjectId={workspaceSelection.projectId} onNavigate={openWorkspace} />)}
         {view === "nav.workload" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <WorkloadWorkspace api={api} draft={active} locale={locale} onNavigate={openWorkspace} />)}
-        {!projectWorkspaceRoute && !["nav.drafts", "nav.portfolio", "nav.projects", "nav.tasks", "nav.people", "nav.calendar", "nav.settings", "nav.changes", "nav.history", "nav.board", "nav.gantt", "nav.workload"].includes(view) && <div className="card empty-workspace">{t("common.notAvailable")}</div>}
+        {!projectWorkspaceRoute && !["nav.drafts", "nav.portfolio", "nav.projects", "nav.tasks", "nav.people", "nav.calendar", "nav.settings", "nav.changes", "nav.files", "nav.history", "nav.board", "nav.gantt", "nav.workload"].includes(view) && <div className="card empty-workspace">{t("common.notAvailable")}</div>}
     </AppShell>
   );
 }

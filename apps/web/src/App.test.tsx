@@ -5,7 +5,7 @@ import { App } from "./App.js";
 import type { GitPmApi } from "./api.js";
 import { POLL_INTERVAL_MS } from "./draft-context.js";
 import { assertLocalePacks, formatDateOnly, formatDurationHours, formatNumber, localeRegistry, LOCALE_STORAGE_KEY, message, pluralCategory, registerLocale, selectLocale } from "./i18n.js";
-import type { ChangesList, CommitHistoryDetail, CommitResult, DraftSnapshot, DraftStatus, EntityResult, GitPmDocument, MergeRequestStatus, PublicSession, PushResult, RevertDraftResult, SemanticDiff, WriterMode } from "./types.js";
+import type { ChangesList, CommitHistoryDetail, CommitResult, DraftSnapshot, DraftStatus, EntityResult, GitPmDocument, MergeRequestStatus, PublicSession, PushResult, RevertDraftResult, SemanticDiff, WriterMode, WorktreeDirectory, WorktreeFile } from "./types.js";
 
 const session: PublicSession = {
   user: { id: "42", username: "developer" },
@@ -70,6 +70,8 @@ class FakeApi implements GitPmApi {
   }
   async updateConfiguration(): Promise<EntityResult> { throw new Error("not used"); }
   async listChanges(): Promise<ChangesList> { throw new Error("not used"); }
+  async listWorktree(): Promise<WorktreeDirectory> { return { path: "", entries: [] }; }
+  async readWorktreeFile(): Promise<WorktreeFile> { throw new Error("not used"); }
   async semanticChanges(): Promise<SemanticDiff> { throw new Error("not used"); }
   async restoreFile() { throw new Error("not used"); }
   async restoreHunk() { throw new Error("not used"); }

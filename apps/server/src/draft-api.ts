@@ -12,6 +12,7 @@ import { PublishingError } from "@gitpm/publishing";
 import { HistoryError } from "@gitpm/history";
 import type { HistoryService } from "@gitpm/history";
 import { validateRepository } from "@gitpm/validation";
+import { WorktreeReadError } from "./worktree-api.js";
 
 export type ProjectRole = "Reporter" | "Developer" | "Maintainer";
 
@@ -136,6 +137,14 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
       code = error.code;
       message = error.message;
       status = 400;
+    } else if (error instanceof WorktreeReadError) {
+      code = error.code;
+      message = error.message;
+      if (error.code === "DRAFT_FORBIDDEN" || error.code === "WORKTREE_PATH_FORBIDDEN") status = 403;
+      else if (error.code === "WORKTREE_ENTRY_NOT_FOUND") status = 404;
+      else if (error.code === "WORKTREE_FILE_TOO_LARGE") status = 413;
+      else if (error.code === "WORKTREE_FILE_BINARY") status = 415;
+      else status = 400;
     } else if ((error as { code?: string }).code === "FST_ERR_CTP_BODY_TOO_LARGE") {
       status = 413;
       code = "REQUEST_TOO_LARGE";

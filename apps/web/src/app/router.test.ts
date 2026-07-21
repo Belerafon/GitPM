@@ -5,7 +5,7 @@ const roundTrip = (path: string) => serializeAppRoute(parseAppRoute(path)!);
 
 describe("app route model", () => {
   it.each([
-    "/workspaces", "/projects", "/board", "/people", "/calendars", "/settings", "/workload", "/gantt", "/changes", "/history",
+    "/workspaces", "/projects", "/board", "/people", "/calendars", "/settings", "/workload", "/gantt", "/changes", "/files", "/history",
     "/projects/P-26-ALPHA", "/projects/P-26-ALPHA/stages/M-26-FIRST", "/projects/P-26-ALPHA/tasks/T-26-FIRST", "/projects/P-26-ALPHA/board", "/projects/P-26-ALPHA/timeline", "/people/U-26-ADA", "/history/abcdef123456",
   ])("round-trips %s", (path) => expect(roundTrip(path)).toBe(path));
 

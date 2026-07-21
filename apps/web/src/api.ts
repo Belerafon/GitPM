@@ -1,4 +1,4 @@
-import type { ChangesList, CommentResult, CommitHistoryDetail, CommitHistoryItem, CommitResult, DraftSnapshot, DraftStatus, EntityResult, GitPmDocument, MergeRequestStatus, NotificationsResult, ProjectWorkspaceResult, PublicSession, PushResult, RevertDraftResult, SemanticDiff, ValidationSummary, WriterMode, ChangesSummary } from "./types.js";
+import type { ChangesList, CommentResult, CommitHistoryDetail, CommitHistoryItem, CommitResult, DraftSnapshot, DraftStatus, EntityResult, GitPmDocument, MergeRequestStatus, NotificationsResult, ProjectWorkspaceResult, PublicSession, PushResult, RevertDraftResult, SemanticDiff, ValidationSummary, WriterMode, ChangesSummary, WorktreeDirectory, WorktreeFile } from "./types.js";
 
 export class ApiError extends Error {
   constructor(public readonly code: string, message: string) {
@@ -28,6 +28,8 @@ export interface GitPmApi {
   getConfiguration(draftId: string, kind: "statuses" | "issue-types"): Promise<EntityResult>;
   updateConfiguration(draftId: string, kind: "statuses" | "issue-types", entity: EntityResult, fingerprint: string, document: GitPmDocument): Promise<EntityResult>;
   listChanges(draftId: string): Promise<ChangesList>;
+  listWorktree(draftId: string, path?: string): Promise<WorktreeDirectory>;
+  readWorktreeFile(draftId: string, path: string): Promise<WorktreeFile>;
   semanticChanges(draftId: string): Promise<SemanticDiff>;
   restoreFile(draftId: string, fingerprint: string, path: string): Promise<void>;
   restoreHunk(draftId: string, fingerprint: string, path: string, diffToken: string, hunkIndex: number): Promise<void>;
@@ -140,6 +142,13 @@ export class HttpGitPmApi implements GitPmApi {
   }
   async listChanges(draftId: string): Promise<ChangesList> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/changes`);
+  }
+  async listWorktree(draftId: string, path?: string): Promise<WorktreeDirectory> {
+    const query = path === undefined || path === "" ? "" : `?path=${encodeURIComponent(path)}`;
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/worktree${query}`);
+  }
+  async readWorktreeFile(draftId: string, path: string): Promise<WorktreeFile> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/worktree/file?path=${encodeURIComponent(path)}`);
   }
   async semanticChanges(draftId: string): Promise<SemanticDiff> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/changes/semantic`);

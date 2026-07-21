@@ -95,6 +95,9 @@ importers:
       '@gitpm/repository-format':
         specifier: workspace:*
         version: link:../../packages/repository-format
+      '@gitpm/security':
+        specifier: workspace:*
+        version: link:../../packages/security
       '@gitpm/shared':
         specifier: workspace:*
         version: link:../../packages/shared

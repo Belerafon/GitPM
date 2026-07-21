@@ -34,6 +34,24 @@ export interface ChangesSummary {
   readonly changed_files_count: number;
 }
 
+export interface WorktreeEntry {
+  readonly name: string;
+  readonly path: string;
+  readonly type: "directory" | "file" | "symlink" | "other";
+  readonly size?: number;
+}
+
+export interface WorktreeDirectory {
+  readonly path: string;
+  readonly entries: readonly WorktreeEntry[];
+}
+
+export interface WorktreeFile {
+  readonly path: string;
+  readonly size: number;
+  readonly content: string;
+}
+
 export type ChangeKind = "Added" | "Modified" | "Deleted";
 
 export interface DiffHunk {

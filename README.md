@@ -116,6 +116,12 @@ Server предоставляет `GET /health/live` и `GET /health/ready` на
 `http://127.0.0.1:3000`. Каждый ответ возвращает `x-correlation-id`, а
 структурный request log содержит тот же идентификатор.
 
+В разделе «Репозиторий → Файлы» доступен файловый менеджер рабочего дерева только для чтения.
+Каталоги загружаются по мере раскрытия, а текстовые файлы до 1 МиБ открываются во встроенном
+просмотрщике. Служебный каталог `.git`, символьные ссылки, бинарные и более крупные файлы не
+открываются. HTTP-контракт использует `GET /api/drafts/:draftId/worktree` для списка каталога и
+`GET /api/drafts/:draftId/worktree/file?path=...` для текстового содержимого.
+
 ## Active documents
 
 - `docs/GitPM_Implementation_Plan_v0.7.md` - architecture and normative domain model;
