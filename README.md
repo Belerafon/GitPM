@@ -33,6 +33,68 @@ Git-first система управления проектами и задача
 
 Redirect URI приложения: `http://127.0.0.1:3000/api/auth/callback`; scopes: `api` и `write_repository`. Вход предлагается только перед push/Merge Request. Регистрация OAuth Application описана в [документации GitLab](https://docs.gitlab.com/api/oauth2/).
 
+## Server deployment (Docker, optional)
+
+Для запуска на сервере рядом с GitLab (или иным git remote) используйте
+опциональный профиль `compose.server.yaml`. Дефолтный `compose.yaml`
+не меняется — он остаётся локальным, без авторизации, как и `run-gitpm.bat`.
+
+### Подготовка репозитория
+
+```bash
+# клонируем GitPM и собираем CLI
+git clone https://github.com/Belerafon/GitPM.git
+cd GitPM
+corepack pnpm install --frozen-lockfile
+corepack pnpm build
+
+# создаём пустой репозиторий схемы v1 (один коммит с skeleton)
+node apps/cli/dist/index.js init /srv/gitpm/repository
+```
+
+Можно также скопировать готовый starter из `fixtures/schema-v1/demo`.
+
+### Конфигурация окружения
+
+Положите рядом с `compose.yaml` файл `.env`:
+
+```dotenv
+GITPM_BIND_IP=10.0.0.1
+GITPM_WEB_PORT=86
+GITPM_REPOSITORY_PATH=/srv/gitpm/repository
+GITPM_GITLAB_URL=http://10.0.0.1:81
+GITPM_GITLAB_PROJECT=group/portfolio-data
+GITPM_GITLAB_CLIENT_ID=GITLAB_OAUTH_APPLICATION_ID
+GITPM_OAUTH_REDIRECT_URL=http://10.0.0.1:86/api/auth/callback
+# Если UI published через plain HTTP (без TLS-терминатора впереди):
+GITPM_COOKIE_SECURE=false
+```
+
+OAuth Application в GitLab регистрируется с redirect URI из
+`GITPM_OAUTH_REDIRECT_URL` и scopes `api`, `write_repository`.
+
+### Запуск
+
+```bash
+docker compose -f compose.yaml -f compose.server.yaml up -d --build
+```
+
+Проверка:
+
+```bash
+curl -s http://127.0.0.1:3000/health/ready   # внутри контейнера
+```
+
+### Замечания
+
+- **Порт 87 не использовать** — он в списке `unsafe_ports` Chromium/Firefox
+  (`ERR_UNSAFE_PORT`). По умолчанию предлагается `86`.
+- `/app/.gitpm` смонтирован в volume `gitpm-config`, чтобы `client_id` и
+  автогенерируемый `config.json` переживали пересоздание контейнера.
+- Для HTTPS и/или basic auth перед web UI поставьте reverse-proxy (Caddy,
+  nginx, Traefik). Сам GitPM не содержит встроенной аутентификации сессии —
+  вход только через GitLab OAuth и только для remote-операций.
+
 ## Development
 
 Требуются Node.js 20.19.2, pnpm 10.12.1 через Corepack и Python 3.11 с PyYAML.
