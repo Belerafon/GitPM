@@ -1,0 +1,25 @@
+FROM node:20.19.2-bookworm-slim
+
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y ca-certificates git \
+    && git config --system --add safe.directory /repository \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY . .
+
+RUN corepack enable \
+    && corepack pnpm install --frozen-lockfile \
+    && corepack pnpm build
+
+ENV GITPM_RUNTIME_MODE=production \
+    GITPM_BIND_HOST=0.0.0.0 \
+    GITPM_NO_BROWSER=1
+
+EXPOSE 3000 5173
+
+HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=3 \
+  CMD node -e "Promise.all([fetch('http://127.0.0.1:3000/health/ready'),fetch('http://127.0.0.1:5173/')]).then(r=>{if(r.some(x=>!x.ok))process.exit(1)}).catch(()=>process.exit(1))"
+
+CMD ["node", "scripts/run-gitpm-local.mjs"]

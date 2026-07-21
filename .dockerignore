@@ -1,0 +1,16 @@
+.git
+.github
+.gitpm
+.gitpm-local
+.tmp
+.env
+.env.*
+coverage
+evidence
+node_modules
+**/node_modules
+**/dist
+playwright-report
+test-results
+*.log
+*.tsbuildinfo

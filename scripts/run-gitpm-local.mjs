@@ -5,6 +5,8 @@ import { isTcpPortAvailable, waitForGitPmServices } from "./gitpm-readiness.mjs"
 import { prepareGitPmRuntime } from "./configure-gitpm-runtime.mjs";
 
 const isWindows = process.platform === "win32";
+const isProduction = process.env.GITPM_RUNTIME_MODE === "production";
+const bindHost = process.env.GITPM_BIND_HOST ?? "127.0.0.1";
 const serverPort = process.env.GITPM_SERVER_PORT ?? "3000";
 const webPort = process.env.GITPM_WEB_PORT ?? "5173";
 const serverUrl = `http://127.0.0.1:${serverPort}`;
@@ -160,14 +162,15 @@ if (unavailable.length > 0) {
   process.exit(1);
 }
 
-start("сервер", serverCwd, [tsxCli, "watch", "src/index.ts"], {
-  HOST: "127.0.0.1",
+start("сервер", serverCwd, isProduction ? ["dist/index.js"] : [tsxCli, "watch", "src/index.ts"], {
+  HOST: bindHost,
   PORT: serverPort,
   GITPM_WEB_URL: webUrl,
   ...runtime.environment,
 });
 start("web-интерфейс", webCwd, [
   viteCli,
-  "--host", "127.0.0.1", "--port", webPort, "--strictPort",
+  ...(isProduction ? ["preview"] : []),
+  "--host", bindHost, "--port", webPort, "--strictPort",
 ], { GITPM_API_TARGET: serverUrl });
 void openWhenReady();
