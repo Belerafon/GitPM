@@ -8,7 +8,7 @@ worktree. The runtime file tells an agent to mutate portfolio data only through 
 source-development file authorizes normal, scoped source edits and requires the repository's
 build and test workflow. The GitPM runtime skill must not be installed at
 `.agents/skills/gitpm/` in this source root. Its generated content lives in
-`packages/agent/src/worktree-guidance.ts` and is materialized only in draft worktrees.
+`packages/drafts/src/worktree-guidance.ts` and is materialized only in draft worktrees.
 
 ## Product philosophy
 
@@ -87,8 +87,8 @@ proportion to risk. Build workspace dependencies before tests when package impor
 - Do not add a parallel agent API or instruct agents to bypass the CLI.
 - Keep root source-development instructions separate from draft runtime guidance.
 
-When changing draft guidance, update `packages/agent/src/worktree-guidance.ts`. Verify that an
-external draft creates or restores `AGENTS.md` and `.agents/skills/gitpm/SKILL.md`, that the
+When changing draft guidance, update `packages/drafts/src/worktree-guidance.ts`. Verify that every
+draft creates or restores `AGENTS.md` and `.agents/skills/gitpm/SKILL.md`, that the
 content describes the actual installed CLI, and that runtime guidance is excluded from business
 scope, semantic diff, commits, push clean checks, and Merge Requests.
 

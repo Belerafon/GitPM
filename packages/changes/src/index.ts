@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile, rm } from "node:fs/promises";
 import path from "node:path";
+import { GITPM_GUIDANCE_FILES } from "@gitpm/drafts";
 import type { DraftManager } from "@gitpm/drafts";
 import type { GitClient } from "@gitpm/git-client";
 import { parseYamlDocument, type GitPmDocument } from "@gitpm/repository-format";
@@ -199,7 +200,8 @@ export class ChangesService {
 
   async list(draftId: string): Promise<{ files: readonly FileChange[]; changed_files_count: number; affected_projects: readonly string[] }> {
     const metadata = await this.drafts.getDraft(draftId);
-    const status = parseStatus(await this.git.statusPorcelainZ(metadata.worktree_path));
+    const status = parseStatus(await this.git.statusPorcelainZ(metadata.worktree_path))
+      .filter((change) => !GITPM_GUIDANCE_FILES.has(change.path));
     const batchPaths = status.filter((change) => change.kind !== "Added" && /^[A-Za-z0-9._/-]+$/u.test(change.path)).map((change) => change.path);
     const batchDiffs = await this.git.diffFiles(metadata.worktree_path, batchPaths, 1);
     const files = await mapConcurrent(status, 16, async (change): Promise<FileChange> => {

@@ -1,6 +1,6 @@
 # GitPM agent workflow v1
 
-The agent uses the same draft worktree, repository format and CLI as the UI. There is no MCP server and no separate agent API. Every external draft contains generated `AGENTS.md` and `.agents/skills/gitpm/SKILL.md`; `draft create`, `draft open`, `draft status`, and switching writer mode to `external` restore the current versions when necessary. These are local worktree runtime files: Project scope, semantic diff, commit-all, clean checks, push, and Merge Requests exclude them.
+The agent uses the same draft worktree, repository format and CLI as the UI. There is no MCP server and no separate agent API. Every draft contains generated `AGENTS.md` and `.agents/skills/gitpm/SKILL.md`, regardless of writer mode, so an agent can join at any stage. Draft creation and runtime recovery restore the current versions; agent status also repairs them when necessary. These are local worktree runtime files: Project scope, semantic diff, commit-all, clean checks, push, and Merge Requests exclude them in both UI and CLI workflows.
 
 The generated runtime `AGENTS.md` is distinct from the GitPM source repository's root `AGENTS.md`: the root file governs development of the application, while the generated file and skill govern CLI-only portfolio work inside the reported draft worktree. The runtime skill is never installed in the source root.
 

@@ -24,13 +24,18 @@ describe("working tree browser", () => {
     const listWorktree = vi.fn(async (_draftId: string, path?: string) => path === "docs"
       ? { path: "docs", entries: [{ name: "guide.txt", path: "docs/guide.txt", type: "file" as const, size: 6 }] }
       : { path: "", entries: [
+        { name: ".agents", path: ".agents", type: "directory" as const },
         { name: "docs", path: "docs", type: "directory" as const },
+        { name: "AGENTS.md", path: "AGENTS.md", type: "file" as const, size: 32 },
         { name: "README.md", path: "README.md", type: "file" as const, size: 28 },
         { name: "external", path: "external", type: "symlink" as const },
       ] });
     const readWorktreeFile = vi.fn(async (_draftId: string, path: string) => ({ path, size: 28, content: "<img src=x onerror=alert(1)>" }));
     const api = { listWorktree, readWorktreeFile } as unknown as GitPmApi;
     render(<WorktreeWorkspace api={api} draft={draft} locale="en" />);
+
+    expect(await screen.findByText(".agents")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /AGENTS\.md/u })).toBeTruthy();
 
     fireEvent.click(await screen.findByRole("button", { name: /README\.md/u }));
     expect(await screen.findByText("<img src=x onerror=alert(1)>")).toBeTruthy();

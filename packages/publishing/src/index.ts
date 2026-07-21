@@ -1,5 +1,5 @@
 import type { DraftManager } from "@gitpm/drafts";
-import { DraftRuntimeError } from "@gitpm/drafts";
+import { DraftRuntimeError, GITPM_GUIDANCE_PATHS } from "@gitpm/drafts";
 import type { GitClient } from "@gitpm/git-client";
 import type { AuthService, GitLabMergeRequestProtocol, MergeRequestPayload } from "@gitpm/gitlab";
 import { validateRepository } from "@gitpm/validation";
@@ -29,13 +29,14 @@ export class PublishingService {
     const draft = await this.ownedDraft(draftId, authorized.session.user.id);
     const validation = await validateRepository(draft.worktree_path);
     if (!validation.valid) throw new PublishingError("VALIDATION_FAILED", "Commit is blocked by repository validation", validation.errors);
-    const status = await this.git.statusPorcelain(draft.worktree_path);
+    const status = await this.git.statusPorcelain(draft.worktree_path, GITPM_GUIDANCE_PATHS);
     if (!status.trim()) throw new PublishingError("NOTHING_TO_COMMIT", "Draft has no changes");
     const commit = await this.git.commitAll(
       draft.worktree_path,
       message,
       authorized.session.user.username,
       `${authorized.session.user.id}@users.noreply.gitlab.example.test`,
+      GITPM_GUIDANCE_PATHS,
     );
     const metadata = await this.drafts.refreshFingerprint(draftId);
     return { commit, branch: metadata.branch, draft_fingerprint: metadata.fingerprint };
@@ -44,7 +45,7 @@ export class PublishingService {
   async push(sessionId: string, draftId: string) {
     const authorized = await this.auth.authorize(sessionId, "push");
     const draft = await this.ownedDraft(draftId, authorized.session.user.id);
-    if ((await this.git.statusPorcelain(draft.worktree_path)).trim()) {
+    if ((await this.git.statusPorcelain(draft.worktree_path, GITPM_GUIDANCE_PATHS)).trim()) {
       throw new PublishingError("UNCOMMITTED_CHANGES", "Push requires a clean committed draft");
     }
     await this.git.pushBranch(draft.worktree_path, draft.branch, authorized.accessToken);

@@ -21,8 +21,8 @@ gitpm --version
 
 Каждая команда поддерживает `--json` для машинно-читаемого вывода.
 
-Внешний agent workflow создаёт в worktree локальные `AGENTS.md` и
-`.agents/skills/gitpm/SKILL.md`. Они описывают GitPM и CLI-only правила, автоматически
+Каждый черновик создаёт в worktree локальные `AGENTS.md` и
+`.agents/skills/gitpm/SKILL.md`, чтобы агент мог подключиться на любом этапе. Они описывают GitPM и CLI-only правила, автоматически
 восстанавливаются и не входят в business diff, commit или MR. Корневой `AGENTS.md` исходного
 репозитория GitPM относится только к разработке программы; runtime skill в корне не создаётся.
 

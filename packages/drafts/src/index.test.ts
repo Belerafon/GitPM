@@ -64,10 +64,18 @@ describe("draft manager", () => {
       state: "open",
     });
     expect(await firstRuntime.gitClient.headCommit(draft.worktree_path)).toBe(remoteHead);
+    expect(await readFile(path.join(draft.worktree_path, "AGENTS.md"), "utf8")).toContain("GitPM draft `DRF-001`");
+    expect(await readFile(path.join(draft.worktree_path, ".agents", "skills", "gitpm", "SKILL.md"), "utf8")).toContain("name: gitpm");
+
+    await rm(path.join(draft.worktree_path, "AGENTS.md"));
+    await rm(path.join(draft.worktree_path, ".agents", "skills", "gitpm", "SKILL.md"));
 
     const restarted = runtime(test.remote, test.data);
     const recovery = await restarted.manager.recover();
     expect(recovery).toMatchObject({ drafts: [expect.objectContaining({ draft_id: "DRF-001" })], orphaned_worktrees: [], missing_worktrees: [] });
+    expect(await readFile(path.join(draft.worktree_path, "AGENTS.md"), "utf8")).toContain("GitPM draft `DRF-001`");
+    expect(await readFile(path.join(draft.worktree_path, ".agents", "skills", "gitpm", "SKILL.md"), "utf8")).toContain("name: gitpm");
+    expect((await restarted.manager.poll("DRF-001")).changedExternally).toBe(false);
   });
 
   it("invalidates UI mutation after an external edit and enforces writer mode", async () => {

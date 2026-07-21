@@ -3,6 +3,9 @@ import { mkdir, readFile, readdir, realpath, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import type { GitClient } from "@gitpm/git-client";
 import { atomicWriteDomainFile, resolveDomainPath } from "@gitpm/security";
+import { provisionGitPmWorktreeGuidance } from "./worktree-guidance.js";
+
+export { GITPM_AGENT_FILE, GITPM_GUIDANCE_FILES, GITPM_GUIDANCE_PATHS, GITPM_SKILL_FILE, GITPM_SKILL_FILE_CONTENT, gitPmAgentFile, provisionGitPmWorktreeGuidance, WorktreeGuidanceError } from "./worktree-guidance.js";
 
 export type WriterMode = "ui" | "external";
 export type DraftState = "open" | "closed" | "published" | "abandoned";
@@ -146,6 +149,7 @@ export class DraftManager {
       const baseCommit = await this.git.fetch();
       const branch = `gitpm/${owner}/${draftId}`;
       const worktree = await this.git.addWorktree(branch, draftId, baseCommit);
+      await provisionGitPmWorktreeGuidance(worktree, draftId);
       const now = new Date().toISOString();
       const metadata: DraftMetadata = {
         version: 1,
@@ -324,9 +328,18 @@ export class DraftManager {
       const metadata = await this.readMetadata(draftId);
       try {
         await realpath(metadata.worktree_path);
-        drafts.push(metadata);
       } catch {
         missingWorktrees.push(draftId);
+        continue;
+      }
+      const fingerprintBefore = await this.fingerprint(metadata.worktree_path);
+      const guidanceChanged = await provisionGitPmWorktreeGuidance(metadata.worktree_path, draftId);
+      if (guidanceChanged && fingerprintBefore === metadata.fingerprint) {
+        const recovered = { ...metadata, fingerprint: await this.fingerprint(metadata.worktree_path), updated_at: new Date().toISOString() };
+        await this.persist(recovered);
+        drafts.push(recovered);
+      } else {
+        drafts.push(metadata);
       }
     }
     const knownPaths = new Set(drafts.map((draft) => path.resolve(draft.worktree_path)));

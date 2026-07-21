@@ -32,7 +32,10 @@ beforeEach(async () => {
   root = await mkdtemp(path.join(os.tmpdir(), "gitpm-worktree-api-"));
   const worktree = path.join(root, "worktree");
   await mkdir(path.join(worktree, "docs"), { recursive: true });
+  await mkdir(path.join(worktree, ".agents", "skills", "gitpm"), { recursive: true });
   await mkdir(path.join(worktree, ".git"), { recursive: true });
+  await writeFile(path.join(worktree, "AGENTS.md"), "# GitPM draft agent instructions\n", "utf8");
+  await writeFile(path.join(worktree, ".agents", "skills", "gitpm", "SKILL.md"), "---\nname: gitpm\n---\n", "utf8");
   await writeFile(path.join(worktree, "README.md"), "# Привет\n", "utf8");
   await writeFile(path.join(worktree, "docs", "guide.txt"), "Guide", "utf8");
   await writeFile(path.join(worktree, "binary.bin"), Buffer.from([0, 1, 2, 3]));
@@ -57,7 +60,9 @@ describe("read-only working tree API", () => {
     expect(listing.json()).toEqual({
       path: "",
       entries: [
+        { name: ".agents", path: ".agents", type: "directory" },
         { name: "docs", path: "docs", type: "directory" },
+        { name: "AGENTS.md", path: "AGENTS.md", type: "file", size: Buffer.byteLength("# GitPM draft agent instructions\n") },
         { name: "README.md", path: "README.md", type: "file", size: Buffer.byteLength("# Привет\n") },
         { name: "binary.bin", path: "binary.bin", type: "file", size: 4 },
         { name: "large.txt", path: "large.txt", type: "file", size: 1_048_577 },
@@ -68,6 +73,8 @@ describe("read-only working tree API", () => {
 
     const nested = await app.inject({ method: "GET", url: "/api/drafts/DRF-TREE/worktree?path=docs" });
     expect(nested.json()).toMatchObject({ path: "docs", entries: [{ path: "docs/guide.txt", type: "file" }] });
+    const skill = await app.inject({ method: "GET", url: "/api/drafts/DRF-TREE/worktree?path=.agents%2Fskills%2Fgitpm" });
+    expect(skill.json()).toMatchObject({ path: ".agents/skills/gitpm", entries: [{ path: ".agents/skills/gitpm/SKILL.md", type: "file" }] });
     const file = await app.inject({ method: "GET", url: "/api/drafts/DRF-TREE/worktree/file?path=README.md" });
     expect(file.statusCode).toBe(200);
     expect(file.json()).toEqual({ path: "README.md", size: Buffer.byteLength("# Привет\n"), content: "# Привет\n" });

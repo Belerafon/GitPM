@@ -263,8 +263,14 @@ export class GitClient {
     return result.stdout.trim();
   }
 
-  async statusPorcelain(worktree: string): Promise<string> {
-    const result = await this.git(["-C", await realpath(worktree), "status", "--porcelain=v2", "--untracked-files=all"]);
+  async statusPorcelain(worktree: string, excludedPaths: readonly string[] = []): Promise<string> {
+    if (excludedPaths.some((value) => !/^[A-Za-z0-9._/-]+$/u.test(value))) {
+      throw new GitCommandError("GIT_PATH_INVALID", "Excluded status paths must use the repository path allowlist");
+    }
+    const result = await this.git([
+      "-C", await realpath(worktree), "status", "--porcelain=v2", "--untracked-files=all",
+      ...(excludedPaths.length === 0 ? [] : ["--", ".", ...excludedPaths.map((value) => `:(exclude)${value}`)]),
+    ]);
     return result.stdout;
   }
 

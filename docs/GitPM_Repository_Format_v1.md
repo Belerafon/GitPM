@@ -13,7 +13,7 @@ JSON Schema 2020-12. Этот документ фиксирует правила
 
 Обязательные каталоги верхнего уровня: `.gitpm`, `people`, `teams`, `calendars`
 и `projects`. Пути `AGENTS.md` и `.agents/skills/gitpm/SKILL.md` зарезервированы
-для инструкций, которые GitPM CLI создаёт в рабочем дереве внешнего черновика.
+для инструкций, которые GitPM создаёт в рабочем дереве каждого черновика независимо от writer mode.
 Это локальные runtime-файлы: GitPM не включает их в semantic diff, commit и MR.
 Дополнительные файлы верхнего уровня разрешены только если их
 имена перечислены в `.gitpm/repository.yaml` в `allowed_top_level_files`.

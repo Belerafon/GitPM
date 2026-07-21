@@ -1,8 +1,53 @@
+import { lstat, mkdir, readFile } from "node:fs/promises";
+import { atomicWriteDomainFile, resolveDomainPath } from "@gitpm/security";
+
 export const GITPM_AGENT_FILE = "AGENTS.md";
 export const GITPM_SKILL_FILE = ".agents/skills/gitpm/SKILL.md";
 
 export const GITPM_GUIDANCE_PATHS = [GITPM_AGENT_FILE, GITPM_SKILL_FILE] as const;
 export const GITPM_GUIDANCE_FILES = new Set<string>(GITPM_GUIDANCE_PATHS);
+
+export class WorktreeGuidanceError extends Error {
+  constructor(public readonly code: string, message: string) {
+    super(message);
+    this.name = "WorktreeGuidanceError";
+  }
+}
+
+async function ensureDirectory(root: string, relative: string): Promise<void> {
+  const absolute = await resolveDomainPath(root, relative);
+  try {
+    await mkdir(absolute, { mode: 0o700 });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+  }
+  const details = await lstat(absolute);
+  if (!details.isDirectory() || details.isSymbolicLink()) {
+    throw new WorktreeGuidanceError("WORKTREE_GUIDANCE_PATH_INVALID", `${relative} must be a regular directory`);
+  }
+}
+
+async function writeGuidanceFile(root: string, relative: string, content: string): Promise<boolean> {
+  const absolute = await resolveDomainPath(root, relative);
+  try {
+    if (await readFile(absolute, "utf8") === content) return false;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  await atomicWriteDomainFile(root, relative, content);
+  return true;
+}
+
+export async function provisionGitPmWorktreeGuidance(root: string, draftId: string): Promise<boolean> {
+  await ensureDirectory(root, ".agents");
+  await ensureDirectory(root, ".agents/skills");
+  await ensureDirectory(root, ".agents/skills/gitpm");
+  const changed = await Promise.all([
+    writeGuidanceFile(root, GITPM_AGENT_FILE, gitPmAgentFile(draftId)),
+    writeGuidanceFile(root, GITPM_SKILL_FILE, GITPM_SKILL_FILE_CONTENT),
+  ]);
+  return changed.some(Boolean);
+}
 
 export function gitPmAgentFile(draftId: string): string {
   return `# GitPM draft agent instructions
