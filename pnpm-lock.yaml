@@ -223,6 +223,9 @@ importers:
       '@gitpm/security':
         specifier: workspace:*
         version: link:../security
+      '@gitpm/shared':
+        specifier: workspace:*
+        version: link:../shared
 
   packages/git-client:
     dependencies:

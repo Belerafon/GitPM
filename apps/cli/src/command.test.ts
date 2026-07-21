@@ -1,11 +1,15 @@
 import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 import { run } from "./command.js";
+import { DirectCliRuntime } from "./direct-runtime.js";
 import type { AgentWorkflow } from "@gitpm/agent";
 import type { GitPmDocument } from "@gitpm/repository-format";
 
+const execFileAsync = promisify(execFile);
 const roots: string[] = [];
 const demo = path.join(process.cwd(), "fixtures", "schema-v1", "demo");
 
@@ -14,6 +18,37 @@ async function fixture(): Promise<string> {
   roots.push(root);
   await cp(demo, root, { recursive: true });
   return root;
+}
+
+async function git(cwd: string, ...args: string[]): Promise<string> {
+  const { stdout } = await execFileAsync("git", args, { cwd, encoding: "utf8", windowsHide: true });
+  return stdout.trim();
+}
+
+async function directFixture(): Promise<{ root: string; remote: string; data: string; direct: DirectCliRuntime }> {
+  const root = await mkdtemp(path.join(os.tmpdir(), "gitpm-cli-direct-"));
+  roots.push(root);
+  const source = path.join(root, "source");
+  const remote = path.join(root, "remote.git");
+  const data = path.join(root, "data");
+  await cp(demo, source, { recursive: true });
+  await git(source, "init", "-b", "main");
+  await git(source, "add", ".");
+  await git(source, "-c", "user.name=GitPM Test", "-c", "user.email=gitpm@example.test", "commit", "-m", "initial portfolio");
+  await git(root, "init", "--bare", remote);
+  await git(source, "remote", "add", "origin", remote);
+  await git(source, "push", "-u", "origin", "main");
+  const direct = new DirectCliRuntime({
+    dataDirectory: data,
+    remoteUrl: remote,
+    defaultBranch: "main",
+    authorName: "GitPM Direct CLI",
+    authorEmail: "direct@example.test",
+    allowLocalRepository: true,
+    askPassPath: path.resolve("scripts", "git-askpass.mjs"),
+    pushAccessToken: "unused-local-token",
+  });
+  return { root, remote, data, direct };
 }
 
 afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))));
@@ -136,5 +171,60 @@ describe("CLI init command", () => {
     const result = await run(["init", root, "--json"], root);
     expect(result.exitCode).toBe(1);
     expect(JSON.parse(result.output)).toMatchObject({ ok: false, code: "INIT_TARGET_NOT_EMPTY" });
+  });
+});
+
+describe("CLI direct mode", () => {
+  it("status reports direct mode, checkout path, branch, HEAD and clean state without --draft", async () => {
+    const { direct } = await directFixture();
+    const result = await run(["status", "--json"], process.cwd(), { direct });
+    expect(result.exitCode).toBe(0);
+    const payload = JSON.parse(result.output);
+    expect(payload).toMatchObject({ ok: true, code: "OK", status: { mode: "direct", branch: "main", dirty: false, ahead: 0, behind: 0 } });
+    expect(payload.status.head).toMatch(/^[0-9a-f]{40}$/u);
+    expect(payload.status.path).toBe(path.resolve(direct.checkoutPath));
+  });
+
+  it("commit --all validates and commits onto main without --draft", async () => {
+    const { direct, data } = await directFixture();
+    await run(["status", "--json"], process.cwd(), { direct });
+    const projectFile = path.join(data, "repository", "projects", "P-26-MGP84K", "project.yaml");
+    await writeFile(projectFile, (await readFile(projectFile, "utf8")).replace("name: GitPM launch", "name: CLI direct"), "utf8");
+    const result = await run(["commit", "--all", "-m", "cli direct commit", "--json"], process.cwd(), { direct });
+    expect(result.exitCode).toBe(0);
+    expect(JSON.parse(result.output)).toMatchObject({ ok: true, code: "OK", branch: "main" });
+    expect(await git(path.join(data, "repository"), "log", "-1", "--format=%s")).toBe("cli direct commit");
+  });
+
+  it("push publishes main to origin without --draft and refuses force push", async () => {
+    const { direct, data, remote } = await directFixture();
+    await run(["status", "--json"], process.cwd(), { direct });
+    const projectFile = path.join(data, "repository", "projects", "P-26-MGP84K", "project.yaml");
+    await writeFile(projectFile, (await readFile(projectFile, "utf8")).replace("name: GitPM launch", "name: Pushed"), "utf8");
+    await run(["commit", "--all", "-m", "push me", "--json"], process.cwd(), { direct });
+    const push = await run(["push", "--json"], process.cwd(), { direct });
+    expect(push.exitCode).toBe(0);
+    const payload = JSON.parse(push.output);
+    expect(payload).toMatchObject({ ok: true, code: "OK", branch: "main" });
+    expect(await git(remote, "rev-parse", "main")).toBe(payload.commit);
+  });
+
+  it("format/validate/diff operate on the managed checkout by default without --draft", async () => {
+    const { direct } = await directFixture();
+    await run(["status", "--json"], process.cwd(), { direct });
+    const format = await run(["format", "--json"], process.cwd(), { direct });
+    expect(format.exitCode).toBe(0);
+    expect(JSON.parse(format.output)).toMatchObject({ ok: true, code: "OK" });
+    const validate = await run(["validate", "--json"], process.cwd(), { direct });
+    expect(validate.exitCode).toBe(0);
+    expect(JSON.parse(validate.output)).toMatchObject({ ok: true, code: "OK" });
+    const diff = await run(["diff", "--semantic", "--json"], process.cwd(), { direct });
+    expect(diff.exitCode).toBe(0);
+  });
+
+  it("requires direct runtime configuration for direct commands", async () => {
+    expect(JSON.parse((await run(["status", "--json"])).output)).toMatchObject({ code: "CLI_DIRECT_CONFIGURATION_REQUIRED" });
+    expect(JSON.parse((await run(["commit", "--all", "-m", "x", "--json"])).output)).toMatchObject({ code: "CLI_DIRECT_CONFIGURATION_REQUIRED" });
+    expect(JSON.parse((await run(["push", "--json"])).output)).toMatchObject({ code: "CLI_DIRECT_CONFIGURATION_REQUIRED" });
   });
 });

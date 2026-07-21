@@ -292,6 +292,7 @@
   ,"changes.loginForPush": "Войти в GitLab для push"
   ,"changes.committed": "Коммит создан"
   ,"changes.push": "Отправить ветку"
+  ,"changes.pushed": "Отправлено в {branch}"
   ,"changes.mrTitle": "Заголовок Merge Request"
   ,"changes.mrDescription": "Описание"
   ,"changes.createMr": "Создать Merge Request"

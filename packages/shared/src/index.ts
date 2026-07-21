@@ -65,3 +65,48 @@ export interface HealthPayload {
   correlation_id: string;
   status: "ok" | "not_ready";
 }
+
+export const REPOSITORY_MODES = ["direct", "worktree"] as const;
+export type RepositoryMode = (typeof REPOSITORY_MODES)[number];
+export const DEFAULT_REPOSITORY_MODE: RepositoryMode = "direct";
+export const REPOSITORY_MODE_ENV = "GITPM_REPOSITORY_MODE";
+
+export class RepositoryModeError extends Error {
+  constructor(public readonly code: string, message: string) {
+    super(message);
+    this.name = "RepositoryModeError";
+  }
+}
+
+export function isRepositoryMode(value: unknown): value is RepositoryMode {
+  return typeof value === "string" && (REPOSITORY_MODES as readonly string[]).includes(value);
+}
+
+/**
+ * Resolve the GitPM repository mode. The environment variable always wins over
+ * the configuration file. Unknown non-empty values are rejected with a stable
+ * error; an empty/unset value falls back to {@link DEFAULT_REPOSITORY_MODE}.
+ */
+export function resolveRepositoryMode(options: {
+  readonly configValue?: unknown;
+  readonly envValue?: string;
+}): RepositoryMode {
+  const env = options.envValue?.trim();
+  if (env !== undefined && env !== "") {
+    if (!isRepositoryMode(env)) {
+      throw new RepositoryModeError(
+        "REPOSITORY_MODE_UNKNOWN",
+        `Unknown repository mode "${env}". Expected one of: ${REPOSITORY_MODES.join(", ")}.`,
+      );
+    }
+    return env;
+  }
+  if (options.configValue === undefined || options.configValue === null) return DEFAULT_REPOSITORY_MODE;
+  if (!isRepositoryMode(options.configValue)) {
+    throw new RepositoryModeError(
+      "REPOSITORY_MODE_UNKNOWN",
+      `Unknown repository mode "${String(options.configValue)}". Expected one of: ${REPOSITORY_MODES.join(", ")}.`,
+    );
+  }
+  return options.configValue;
+}

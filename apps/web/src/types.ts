@@ -6,7 +6,8 @@ export interface PublicSession {
   readonly user: { readonly id: string; readonly username: string };
   readonly role: GitPmRole;
   readonly mode?: "repository";
-  readonly repository?: { readonly name: string; readonly path: string; readonly has_remote: boolean };
+  readonly repository_mode?: "direct" | "worktree";
+  readonly repository?: { readonly name: string; readonly path: string; readonly has_remote: boolean; readonly branch?: string };
   readonly gitlab?: {
     readonly configured: boolean;
     readonly user?: { readonly id: string; readonly username: string };

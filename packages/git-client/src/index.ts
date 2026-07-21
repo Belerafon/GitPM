@@ -510,6 +510,178 @@ export class GitClient {
     ], environment);
   }
 
+  get defaultBranchName(): string {
+    return this.defaultBranch;
+  }
+
+  get fetchRemoteUrl(): string {
+    return this.remoteUrl;
+  }
+
+  get controlledHome(): string {
+    return this.homeDirectory;
+  }
+
+  get hasPushRemote(): boolean {
+    return this.pushRemoteUrl !== undefined;
+  }
+
+  /**
+   * Direct mode: clone the configured remote into {@link checkoutPath} when it is
+   * absent, or reuse an existing checkout without touching uncommitted changes,
+   * local commits, or user files. Never performs rebase, merge, reset, or stash.
+   */
+  async cloneOrReuseCheckout(checkoutPath: string): Promise<string> {
+    const checkout = path.resolve(checkoutPath);
+    const remote = this.allowLocalRepository ? path.resolve(this.remoteUrl) : this.remoteUrl;
+    let existing: { toplevel: string; head: string } | undefined;
+    try {
+      const statResult = await stat(checkout);
+      if (!statResult.isDirectory()) {
+        throw new GitCommandError("GIT_CHECKOUT_INVALID", "Checkout path exists and is not a directory");
+      }
+      const toplevelResult = await this.git(["-C", checkout, "rev-parse", "--show-toplevel"]);
+      const toplevel = toplevelResult.stdout.trim();
+      await this.git(["-C", checkout, "rev-parse", "HEAD^{commit}"]);
+      const headResult = await this.git(["-C", checkout, "rev-parse", "HEAD^{commit}"]);
+      existing = { toplevel: path.resolve(toplevel), head: headResult.stdout.trim() };
+    } catch (error) {
+      if (!(error instanceof GitCommandError) || error.code !== "GIT_FAILED") {
+        if (error instanceof GitCommandError && error.code === "GIT_CHECKOUT_INVALID") throw error;
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+          // fall through to clone
+        } else {
+          throw error;
+        }
+      }
+    }
+    if (existing !== undefined) {
+      if (existing.toplevel !== checkout) {
+        throw new GitCommandError("GIT_CHECKOUT_INVALID", `Existing checkout is not the repository root: ${existing.toplevel}`);
+      }
+      return await realpath(checkout);
+    }
+    const parent = path.dirname(checkout);
+    await mkdir(parent, { recursive: true });
+    const cloneArgs = [
+      ...this.localProtocolArgs(),
+      "clone",
+      "--branch",
+      this.defaultBranch,
+      "--",
+      remote,
+      checkout,
+    ];
+    await this.git(cloneArgs);
+    return await realpath(checkout);
+  }
+
+  /** Direct mode: fetch the default branch reflect into refs/remotes/origin. */
+  async fetchCheckoutRemote(checkoutPath: string): Promise<void> {
+    const checkout = await realpath(checkoutPath);
+    await this.git([
+      ...this.localProtocolArgs(),
+      "-C", checkout,
+      "fetch", "--prune", "origin",
+      `+refs/heads/${this.defaultBranch}:refs/remotes/origin/${this.defaultBranch}`,
+    ]);
+  }
+
+  async checkoutCurrentBranch(checkoutPath: string): Promise<string> {
+    const checkout = await realpath(checkoutPath);
+    const result = await this.git(["-C", checkout, "rev-parse", "--abbrev-ref", "HEAD"]);
+    const branch = result.stdout.trim();
+    if (branch === "HEAD" || branch === "") {
+      throw new GitCommandError("GIT_DETACHED_HEAD", "Checkout is in detached HEAD state");
+    }
+    return branch;
+  }
+
+  async checkoutRealPath(checkoutPath: string): Promise<string> {
+    return await realpath(checkoutPath);
+  }
+
+  async checkoutOriginUrl(checkoutPath: string): Promise<string | undefined> {
+    const checkout = await realpath(checkoutPath);
+    try {
+      const result = await this.git(["-C", checkout, "remote", "get-url", "origin"]);
+      const url = result.stdout.trim();
+      return url === "" ? undefined : url;
+    } catch (error) {
+      if (error instanceof GitCommandError && error.code === "GIT_FAILED") return undefined;
+      throw error;
+    }
+  }
+
+  async checkoutRemoteCommit(checkoutPath: string): Promise<string | undefined> {
+    const checkout = await realpath(checkoutPath);
+    try {
+      const result = await this.git(["-C", checkout, "rev-parse", `refs/remotes/origin/${this.defaultBranch}^{commit}`]);
+      const commit = result.stdout.trim();
+      if (!/^[0-9a-f]{40,64}$/u.test(commit)) return undefined;
+      return commit;
+    } catch (error) {
+      if (error instanceof GitCommandError && error.code === "GIT_FAILED") return undefined;
+      throw error;
+    }
+  }
+
+  /**
+   * Direct mode: ahead/behind counts for the checkout HEAD versus
+   * refs/remotes/origin/<defaultBranch>. Both counts are 0 when no remote ref
+   * exists (for example a brand-new local-only repository).
+   */
+  async checkoutAheadBehind(checkoutPath: string): Promise<{ ahead: number; behind: number; remoteCommit?: string }> {
+    const checkout = await realpath(checkoutPath);
+    const remoteCommit = await this.checkoutRemoteCommit(checkout);
+    if (remoteCommit === undefined) {
+      return { ahead: 0, behind: 0, remoteCommit: undefined };
+    }
+    const counts = await this.git([
+      "-C", checkout, "rev-list", "--left-right", "--count",
+      `refs/remotes/origin/${this.defaultBranch}...HEAD`,
+    ]);
+    const [behind = "0", ahead = "0"] = counts.stdout.trim().split(/\s+/u);
+    return { ahead: Number.parseInt(ahead, 10) || 0, behind: Number.parseInt(behind, 10) || 0, remoteCommit };
+  }
+
+  /**
+   * Direct mode: push the checkout's default branch to origin with --ff-only.
+   * Caller must fetch first. Refuses non-fast-forward, force push, rebase, merge
+   * commit, hard reset, and stash. Returns the published branch and commit.
+   */
+  async pushMainFastForward(checkoutPath: string, accessToken: string): Promise<{ branch: string; commit: string }> {
+    if (!this.askPassPath) throw new GitCommandError("GIT_ASKPASS_REQUIRED", "Controlled ASKPASS path is required for push");
+    const checkout = await realpath(checkoutPath);
+    const remoteCommit = await this.checkoutRemoteCommit(checkout);
+    const localHead = await this.git(["-C", checkout, "rev-parse", "HEAD^{commit}"]);
+    const head = localHead.stdout.trim();
+    if (remoteCommit !== undefined) {
+      try {
+        await this.git(["-C", checkout, "merge-base", "--is-ancestor", `refs/remotes/origin/${this.defaultBranch}`, "HEAD"]);
+      } catch (error) {
+        if (error instanceof GitCommandError && error.code === "GIT_FAILED") {
+          throw new GitCommandError("GIT_NON_FAST_FORWARD", "Local branch has diverged from origin; refusing non-fast-forward push", error.exitCode);
+        }
+        throw error;
+      }
+    }
+    const environment = createGitProcessEnvironment({
+      askPassPath: this.askPassPath,
+      hooksPath: path.join(this.homeDirectory, "hooks"),
+      isolatedHome: this.homeDirectory,
+      token: accessToken,
+      baseEnvironment: process.env,
+    });
+    await this.gitWithEnvironment([
+      ...this.localProtocolArgs(),
+      "-C", checkout,
+      "push", "origin",
+      `refs/heads/${this.defaultBranch}:refs/heads/${this.defaultBranch}`,
+    ], environment);
+    return { branch: this.defaultBranch, commit: head };
+  }
+
   async hashObject(content: string): Promise<string> {
     const started = performance.now();
     return await new Promise((resolve, reject) => {

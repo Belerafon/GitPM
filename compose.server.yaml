@@ -12,6 +12,7 @@
 #   GITPM_BIND_IP            LAN IP to bind published ports to (required).
 #                            Example: 10.0.0.1
 #   GITPM_WEB_PORT           Host port for the web UI (default 86).
+#   GITPM_REPOSITORY_MODE    Repository mode: "direct" (default) or "worktree".
 #   GITPM_REPOSITORY_PATH    Host path to the Git repository managed by GitPM.
 #   GITPM_OAUTH_REDIRECT_URL GitLab OAuth redirect URI pointed at this server,
 #                            e.g. http://10.0.0.1:86/api/auth/callback
@@ -35,6 +36,7 @@ services:
       GITPM_RUNTIME_MODE: production
       GITPM_BIND_HOST: 0.0.0.0
       GITPM_NO_BROWSER: "1"
+      GITPM_REPOSITORY_MODE: ${GITPM_REPOSITORY_MODE:-direct}
       GITPM_OAUTH_REDIRECT_URL: ${GITPM_OAUTH_REDIRECT_URL:-}
       GITPM_GITLAB_URL: ${GITPM_GITLAB_URL:-}
       GITPM_GITLAB_PROJECT: ${GITPM_GITLAB_PROJECT:-}

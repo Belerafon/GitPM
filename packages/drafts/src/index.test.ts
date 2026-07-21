@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { GitClient } from "@gitpm/git-client";
 import { atomicWriteDomainFile } from "@gitpm/security";
 import { DraftManager, DraftRuntimeError } from "./index.js";
+import { DirectDraftBackend, directPushStrategy } from "./draft-backend.js";
 
 const execFileAsync = promisify(execFile);
 const roots: string[] = [];
@@ -183,5 +184,73 @@ describe("draft manager", () => {
     expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
     const rejected = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
     expect(rejected?.reason).toMatchObject({ code: "DRAFT_CHANGED_EXTERNALLY" });
+  });
+});
+
+describe("direct mode draft manager", () => {
+  function directRuntime(remote: string, data: string): { gitClient: GitClient; manager: DraftManager } {
+    const gitClient = new GitClient({
+      dataDirectory: data,
+      remoteUrl: remote,
+      defaultBranch: "main",
+      allowLocalRepository: true,
+      askPassPath: path.resolve("scripts", "git-askpass.mjs"),
+    });
+    const manager = new DraftManager(gitClient, data, {
+      backend: new DirectDraftBackend(gitClient, data),
+      push: directPushStrategy(gitClient),
+    });
+    return { gitClient, manager };
+  }
+
+  it("clones a managed checkout once and commits straight onto main", async () => {
+    const test = await fixture();
+    const { gitClient, manager } = directRuntime(test.remote, test.data);
+    const draft = await manager.createDraft("DRF-LOCAL", "local-user");
+    expect(manager.repositoryMode).toBe("direct");
+    expect(draft.branch).toBe("main");
+    expect(draft.worktree_path).toBe(path.resolve(test.data, "repository"));
+    expect(await git(draft.worktree_path, "rev-parse", "--abbrev-ref", "HEAD")).toBe("main");
+    // No bare repository and no worktrees directory contents are created in direct mode.
+    await expect(stat(path.join(test.data, "repository.git"))).rejects.toMatchObject({ code: "ENOENT" });
+
+    await atomicWriteDomainFile(draft.worktree_path, projectFile, (await readFile(path.join(draft.worktree_path, ...projectFile.split("/")), "utf8")).replace("name: GitPM launch", "name: Direct rename"));
+    const commit = await gitClient.commitAll(draft.worktree_path, "direct edit", "Direct", "direct@example.test", []);
+    expect(commit).toMatch(/^[0-9a-f]{40}$/u);
+    expect(await git(draft.worktree_path, "log", "-1", "--format=%s")).toBe("direct edit");
+  });
+
+  it("does not destroy the managed checkout on cleanup and preserves local commits", async () => {
+    const test = await fixture();
+    const { gitClient, manager } = directRuntime(test.remote, test.data);
+    const draft = await manager.createDraft("DRF-LOCAL", "local-user");
+    await atomicWriteDomainFile(draft.worktree_path, "local.txt", "local\n");
+    await gitClient.commitAll(draft.worktree_path, "local keep", "Direct", "direct@example.test", []);
+    const localHead = await git(draft.worktree_path, "rev-parse", "HEAD");
+
+    await manager.closeDraft("DRF-LOCAL", "local-user");
+    await manager.cleanupDraft("DRF-LOCAL", "DRF-LOCAL");
+    // The managed checkout must survive cleanup in direct mode.
+    expect(await git(draft.worktree_path, "rev-parse", "HEAD")).toBe(localHead);
+    expect(await readFile(path.join(draft.worktree_path, "local.txt"), "utf8")).toBe("local\n");
+  });
+
+  it("push fast-forwards main to origin/main", async () => {
+    const test = await fixture();
+    const { gitClient, manager } = directRuntime(test.remote, test.data);
+    const draft = await manager.createDraft("DRF-LOCAL", "local-user");
+    await atomicWriteDomainFile(draft.worktree_path, projectFile, (await readFile(path.join(draft.worktree_path, ...projectFile.split("/")), "utf8")).replace("name: GitPM launch", "name: Direct push"));
+    await gitClient.commitAll(draft.worktree_path, "direct push commit", "Direct", "direct@example.test", []);
+    const result = await manager.push("DRF-LOCAL", "unused-local-token");
+    expect(result.branch).toBe("main");
+    expect(await git(test.remote, "rev-parse", "main")).toBe(result.commit);
+  });
+
+  it("reports no orphaned worktrees in direct mode", async () => {
+    const test = await fixture();
+    const { manager } = directRuntime(test.remote, test.data);
+    await manager.createDraft("DRF-LOCAL", "local-user");
+    const report = await manager.recover();
+    expect(report.orphaned_worktrees).toEqual([]);
   });
 });

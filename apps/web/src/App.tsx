@@ -34,12 +34,6 @@ const teamTabs: readonly SectionTab[] = [
   { destination: "people", label: "nav.people" },
   { destination: "calendar", label: "nav.calendar" },
 ];
-const repositoryTabs: readonly SectionTab[] = [
-  { destination: "workspaces", label: "nav.drafts" },
-  { destination: "changes", label: "nav.changes" },
-  { destination: "files", label: "nav.files" },
-  { destination: "history", label: "nav.history" },
-];
 
 const suggestedDraftId = () => `DRF-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${Math.random().toString(36).slice(2, 6).toUpperCase().padEnd(4, "0")}`;
 
@@ -55,7 +49,23 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
   const [activeRoute, setActiveRoute] = useState<AppRoute | null>(() => parseAppRoute(window.location.href));
   const [catalog, setCatalog] = useState(() => new EntityCatalog({}));
   const repositoryMode = drafts.session?.mode === "repository";
-  const view = activeRoute === null ? (repositoryMode ? "nav.projects" : "nav.drafts") : routeViews[activeRoute.name];
+  const directMode = drafts.session?.repository_mode === "direct";
+  const repositoryTabs: readonly SectionTab[] = directMode
+    ? [
+        { destination: "changes", label: "nav.changes" },
+        { destination: "files", label: "nav.files" },
+        { destination: "history", label: "nav.history" },
+      ]
+    : [
+        { destination: "workspaces", label: "nav.drafts" },
+        { destination: "changes", label: "nav.changes" },
+        { destination: "files", label: "nav.files" },
+        { destination: "history", label: "nav.history" },
+      ];
+  const rawView = activeRoute === null ? (repositoryMode ? "nav.projects" : "nav.drafts") : routeViews[activeRoute.name];
+  // Direct mode has no drafts/workspaces surface; a stale deep link or the
+  // repository nav lands on changes instead of the draft management panel.
+  const view: typeof rawView = directMode && rawView === "nav.drafts" ? "nav.changes" : rawView;
   const shellActiveView = activeRoute?.projectId !== undefined && ["projects", "stages", "tasks", "board", "gantt"].includes(activeRoute.name)
     ? "nav.projects"
     : ["nav.people", "nav.workload", "nav.calendar"].includes(view)
@@ -85,7 +95,12 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
   };
   const selectNavigationView = (key: MessageKey) => {
     const destination = navigationDestinations[key];
-    if (destination !== undefined) navigateToRoute(routeForDestination(destination));
+    if (destination !== undefined) {
+      // In direct mode the Repository section has no drafts/workspaces landing —
+      // route to the changes view (branch, commit, push, sync) instead.
+      const resolved = destination === "workspaces" && directMode ? "changes" : destination;
+      navigateToRoute(routeForDestination(resolved));
+    }
   };
   const activeDraft = drafts.snapshot?.draft;
   useEffect(() => {
@@ -160,19 +175,19 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
     <AppShell activeView={shellActiveView}
       banner={drafts.error !== null && <div className="alert error">{t("status.error", { message: drafts.error })}<button onClick={() => { void drafts.refresh(); }}>{t("status.retry")}</button></div>}
       breadcrumbs={breadcrumbs}
-        headerMeta={<><strong>{repository?.name ?? t("app.repository")}</strong><span className="runtime-context">{t("auth.localMode")} · {t("auth.role", { role: drafts.session.role })}</span></>}
+        headerMeta={<><strong>{repository?.name ?? t("app.repository")}</strong>{directMode && repository?.branch !== undefined && <span className="runtime-context"><code>{repository.branch}</code></span>}<span className="runtime-context">{t("auth.localMode")} · {t("auth.role", { role: drafts.session.role })}</span></>}
       headerTitle={pageTitle}
       navigationGroups={navigationGroups}
       onNavigate={selectNavigationView}
       onOpenRepositoryStatus={openRepositoryStatus}
-      repositoryDetails={<><strong>{t("app.repositoryDetails")}</strong><code>{repository?.path ?? drafts.session.user.username}</code></>}
+      repositoryDetails={<><strong>{t("app.repositoryDetails")}</strong><code>{repository?.path ?? drafts.session.user.username}</code>{directMode && repository?.branch !== undefined && <><span className="runtime-context">{t("drafts.branch")}</span><code>{repository.branch}</code></>}</>}
       repositoryMode={repositoryMode}
       repositoryName={repository?.name ?? t("app.repository")}
       repositoryStatus={repositoryStatus}
       t={t}
       topActions={<>
             <NotificationsMenu api={api} draft={active} locale={locale} namespace={`${repository?.path ?? repository?.name ?? "repository"}:${drafts.session.user.id}`} onNavigate={openWorkspace} />
-            {active !== undefined && <div className="workspace-switcher">
+            {active !== undefined && !directMode && <div className="workspace-switcher">
               <label htmlFor="current-workspace">{t("drafts.current")}</label>
               <div className="workspace-selection-row">
                 <select id="current-workspace" value={active.draft_id} onChange={(event) => { void drafts.select(event.target.value); }}>
@@ -241,7 +256,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
           : view === "nav.people" && workspaceSelection.personId !== undefined
             ? <PeopleProfileWorkspace api={api} draft={active} locale={locale} onNavigate={openWorkspace} personId={workspaceSelection.personId} />
             : <AdminWorkspace api={api} confirmAction={confirmAction} draft={active} role={drafts.session.role} locale={locale} onOpenPerson={(personId) => openWorkspace("people", { personId })} surface={view === "nav.people" ? "people" : view === "nav.calendar" ? "calendar" : "settings"} onChanged={drafts.refresh} />)}
-        {view === "nav.changes" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <ChangesWorkspace api={api} draft={active} role={drafts.session.role} locale={locale} onChanged={drafts.refresh} confirmAction={confirmAction} remoteAvailable={repository?.has_remote === true} gitlabConfigured={gitlab?.configured === true} gitlabSignedIn={gitlab?.user !== undefined} onGitLabLogin={loginToGitLab} />)}
+        {view === "nav.changes" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <ChangesWorkspace api={api} draft={active} role={drafts.session.role} locale={locale} onChanged={drafts.refresh} confirmAction={confirmAction} remoteAvailable={repository?.has_remote === true} gitlabConfigured={gitlab?.configured === true} gitlabSignedIn={gitlab?.user !== undefined} onGitLabLogin={loginToGitLab} directMode={directMode} />)}
         {view === "nav.files" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <WorktreeWorkspace api={api} draft={active} key={`nav.files:${active.draft_id}:${active.fingerprint}:${active.external_fingerprint ?? ""}`} locale={locale} />)}
         {view === "nav.history" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <HistoryWorkspace api={api} draft={active} key={`nav.history:${workspaceSelection.commit ?? ""}`} locale={locale} canRevert={drafts.session.role !== "Reporter"} initialCommit={workspaceSelection.commit} onNavigate={openWorkspace} onDraftCreated={drafts.select} />)}
         {view === "nav.board" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <BoardWorkspace api={api} draft={active} key={`nav.board:${workspaceSelection.projectId ?? ""}`} locale={locale} initialProjectId={workspaceSelection.projectId} initialStatusFilter={workspaceSelection.query?.status?.[0]} initialTypeFilter={workspaceSelection.query?.type?.[0]} initialMilestoneFilter={workspaceSelection.query?.milestone?.[0]} initialViewId={workspaceSelection.query?.view?.[0]} onNavigate={openWorkspace} onChanged={drafts.refresh} />)}

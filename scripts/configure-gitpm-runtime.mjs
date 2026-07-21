@@ -72,14 +72,23 @@ export async function directoryFingerprint(directory) {
 
 async function readBundledDemoVersion() {
   try {
-    return (await readFile(BUNDLED_DEMO_VERSION_PATH, "utf8")).trim();
+    const raw = (await readFile(BUNDLED_DEMO_VERSION_PATH, "utf8")).trim();
+    if (raw.startsWith("{")) {
+      const parsed = JSON.parse(raw);
+      return {
+        fingerprint: typeof parsed.fingerprint === "string" ? parsed.fingerprint : undefined,
+        mode: REPOSITORY_MODES.includes(parsed.mode) ? parsed.mode : undefined,
+      };
+    }
+    // Backwards compatibility with the old plain-fingerprint marker.
+    return { fingerprint: raw || undefined, mode: undefined };
   } catch (error) {
     if (error.code === "ENOENT") return undefined;
     throw error;
   }
 }
 
-async function initializeBundledDemoRepository(templateVersion) {
+async function initializeBundledDemoRepository(templateVersion, mode) {
   await rm(BUNDLED_DEMO_REPOSITORY, { recursive: true, force: true });
   await rm(BUNDLED_DEMO_DATA_DIRECTORY, { recursive: true, force: true });
   await mkdir(path.dirname(BUNDLED_DEMO_REPOSITORY), { recursive: true });
@@ -90,7 +99,7 @@ async function initializeBundledDemoRepository(templateVersion) {
     ["-c", "user.name=GitPM Демо", "-c", "user.email=demo@localhost", "commit", "-m", "Создать русскоязычный демонстрационный портфель"],
   ];
   for (const args of commands) await execFileAsync("git", args, { cwd: BUNDLED_DEMO_REPOSITORY, windowsHide: true });
-  await writeFile(BUNDLED_DEMO_VERSION_PATH, `${templateVersion}\n`, "utf8");
+  await writeFile(BUNDLED_DEMO_VERSION_PATH, `${JSON.stringify({ fingerprint: templateVersion, mode })}\n`, "utf8");
   console.log(`[GitPM] Создан рабочий демо-репозиторий: ${BUNDLED_DEMO_REPOSITORY}`);
 }
 
@@ -123,8 +132,28 @@ export function localServerLogLevel(environment = process.env) {
   return configured || "error";
 }
 
+const REPOSITORY_MODES = ["direct", "worktree"];
+export function resolveRepositoryMode(configValue, envValue) {
+  const env = typeof envValue === "string" ? envValue.trim() : "";
+  if (env !== "") {
+    if (!REPOSITORY_MODES.includes(env)) {
+      throw new Error(`Unknown repository mode "${env}". Expected one of: ${REPOSITORY_MODES.join(", ")}.`);
+    }
+    return env;
+  }
+  if (configValue === undefined || configValue === null) return "direct";
+  if (!REPOSITORY_MODES.includes(configValue)) {
+    throw new Error(`Unknown repository mode "${String(configValue)}". Expected one of: ${REPOSITORY_MODES.join(", ")}.`);
+  }
+  return configValue;
+}
+
 export async function prepareGitPmRuntime() {
   const configuration = await readConfiguration();
+  const repositoryMode = resolveRepositoryMode(configuration.repositoryMode, process.env.GITPM_REPOSITORY_MODE);
+  const defaultBranch = (typeof configuration.defaultBranch === "string" && configuration.defaultBranch.trim() !== ""
+    ? configuration.defaultBranch.trim()
+    : process.env.GITPM_DEFAULT_BRANCH?.trim() || "main");
   const requestedPath = process.env.GITPM_REPOSITORY_PATH ?? configuration.repository;
   const configuredPath = typeof requestedPath === "string" && requestedPath.trim() !== ""
     ? requestedPath
@@ -134,11 +163,18 @@ export async function prepareGitPmRuntime() {
   if (usesBundledDemo) {
     const templateVersion = await directoryFingerprint(BUNDLED_DEMO_TEMPLATE);
     const installedVersion = await readBundledDemoVersion();
-    if (repository === undefined || installedVersion !== templateVersion) {
-      console.log(installedVersion === undefined
-        ? "[GitPM] Подготавливаю актуальную версию встроенного демо..."
-        : "[GitPM] Шаблон встроенного демо изменился — обновляю рабочую копию...");
-      await initializeBundledDemoRepository(templateVersion);
+    const stale = installedVersion === undefined
+      || installedVersion.fingerprint !== templateVersion
+      || installedVersion.mode !== repositoryMode;
+    if (stale) {
+      if (installedVersion === undefined) {
+        console.log("[GitPM] Подготавливаю актуальную версию встроенного демо...");
+      } else if (installedVersion.mode !== repositoryMode) {
+        console.log(`[GitPM] Режим репозитория изменился (${installedVersion.mode ?? "unknown"} → ${repositoryMode}) — пересоздаю демо-runtime...`);
+      } else {
+        console.log("[GitPM] Шаблон встроенного демо изменился — обновляю рабочую копию...");
+      }
+      await initializeBundledDemoRepository(templateVersion, repositoryMode);
     }
     repository = await validRepository(BUNDLED_DEMO_REPOSITORY);
   }
@@ -153,12 +189,16 @@ export async function prepareGitPmRuntime() {
   const nextConfiguration = {
     ...configuration,
     repository,
+    repositoryMode,
+    defaultBranch,
     ...(inferredGitLab === undefined ? {} : { gitlab: { ...inferredGitLab, ...(configuration.gitlab ?? {}) } }),
   };
   await saveConfiguration(nextConfiguration);
   const gitlab = nextConfiguration.gitlab;
   const environment = {
     GITPM_REPOSITORY_PATH: repository,
+    GITPM_REPOSITORY_MODE: repositoryMode,
+    GITPM_DEFAULT_BRANCH: defaultBranch,
     ...(usesBundledDemo ? { GITPM_DATA_DIR: BUNDLED_DEMO_DATA_DIRECTORY } : {}),
     LOG_LEVEL: localServerLogLevel(),
     ...(remoteUrl === undefined ? {} : { GITPM_PUSH_REMOTE_URL: remoteUrl }),
@@ -166,5 +206,5 @@ export async function prepareGitPmRuntime() {
     ...(gitlab?.project ? { GITPM_GITLAB_PROJECT: String(gitlab.project) } : {}),
     ...(gitlab?.clientId ? { GITPM_GITLAB_CLIENT_ID: String(gitlab.clientId) } : {}),
   };
-  return { configuration: nextConfiguration, environment, remoteUrl };
+  return { configuration: nextConfiguration, environment, remoteUrl, repositoryMode, defaultBranch };
 }

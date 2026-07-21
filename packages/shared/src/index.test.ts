@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ENTITY_ID_PREFIX, isEntityId, newEntityId, newUniqueEntityId } from "./index.js";
+import { ENTITY_ID_PREFIX, isEntityId, newEntityId, newUniqueEntityId, resolveRepositoryMode, DEFAULT_REPOSITORY_MODE, REPOSITORY_MODES } from "./index.js";
 
 describe("short entity IDs", () => {
   it("includes the entity type, UTC year and six Crockford Base32 characters", () => {
@@ -21,5 +21,36 @@ describe("short entity IDs", () => {
     const values = [1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2];
     const id = newUniqueEntityId(ENTITY_ID_PREFIX.task, new Set(["T-26-111111"]), () => values.shift() ?? 0, new Date("2026-01-01"));
     expect(id).toBe("T-26-222222");
+  });
+});
+
+describe("repository mode resolution", () => {
+  it("defaults to direct when nothing is configured", () => {
+    expect(DEFAULT_REPOSITORY_MODE).toBe("direct");
+    expect(resolveRepositoryMode({})).toBe("direct");
+    expect(resolveRepositoryMode({ envValue: "", configValue: undefined })).toBe("direct");
+  });
+
+  it("uses the configuration file value when env is absent", () => {
+    expect(resolveRepositoryMode({ configValue: "worktree" })).toBe("worktree");
+    expect(resolveRepositoryMode({ configValue: "direct" })).toBe("direct");
+  });
+
+  it("environment variable takes precedence over the configuration file", () => {
+    expect(resolveRepositoryMode({ configValue: "worktree", envValue: "direct" })).toBe("direct");
+    expect(resolveRepositoryMode({ configValue: "direct", envValue: "worktree" })).toBe("worktree");
+  });
+
+  it("rejects unknown env values with a stable error code", () => {
+    expect(() => resolveRepositoryMode({ envValue: "bare" })).toThrow(/Expected one of/u);
+    expect(() => resolveRepositoryMode({ envValue: "bare" })).toThrow(expect.objectContaining({ code: "REPOSITORY_MODE_UNKNOWN" }));
+  });
+
+  it("rejects unknown config values when env is absent", () => {
+    expect(() => resolveRepositoryMode({ configValue: "sidebar" })).toThrow(expect.objectContaining({ code: "REPOSITORY_MODE_UNKNOWN" }));
+  });
+
+  it("exposes the accepted modes", () => {
+    expect(REPOSITORY_MODES).toEqual(["direct", "worktree"]);
   });
 });

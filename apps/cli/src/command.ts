@@ -7,6 +7,7 @@ import { formatYamlText, parseYamlDocument, referenceLabelsForDocuments, Reposit
 import { validateRepository } from "@gitpm/validation";
 import { atomicWriteDomainFile } from "@gitpm/security";
 import type { AgentScope, AgentScopeReport, AgentWorkflow } from "@gitpm/agent";
+import type { DirectCliRuntime } from "./direct-runtime.js";
 
 export interface CliResult {
   readonly exitCode: number;
@@ -22,7 +23,10 @@ interface CommonOptions {
 type CliAgent = Pick<AgentWorkflow, "assertScope" | "commitAll" | "createDraft" | "createMergeRequest" | "openDraft" | "push" | "semanticDiff" | "setWriterMode" | "status">
   & Partial<Pick<AgentWorkflow, "createEntity">>;
 
-export interface CliDependencies { readonly agent?: CliAgent }
+export interface CliDependencies {
+  readonly agent?: CliAgent;
+  readonly direct?: DirectCliRuntime;
+}
 
 function flagValue(args: readonly string[], name: string): string | undefined {
   const index = args.indexOf(name); return index < 0 ? undefined : args[index + 1];
@@ -141,6 +145,42 @@ function required(value: string | undefined, name: string): string {
 function requireAgent(dependencies: CliDependencies): NonNullable<CliDependencies["agent"]> {
   if (!dependencies.agent) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Agent runtime configuration is unavailable");
   return dependencies.agent;
+}
+
+function requireDirect(dependencies: CliDependencies): NonNullable<CliDependencies["direct"]> {
+  if (!dependencies.direct) throw new RepositoryFormatError("CLI_DIRECT_CONFIGURATION_REQUIRED", "Direct runtime configuration is unavailable");
+  return dependencies.direct;
+}
+
+async function runDirectStatus(args: readonly string[], dependencies: CliDependencies): Promise<CliResult> {
+  const direct = requireDirect(dependencies);
+  const status = await direct.status();
+  const json = args.includes("--json");
+  const human = [
+    `Repository mode: ${status.mode}`,
+    `Repository path: ${status.path}`,
+    `Branch: ${status.branch}`,
+    `HEAD: ${status.head}`,
+    `Dirty: ${status.dirty ? "yes" : "no"}`,
+    `Ahead: ${status.ahead}`,
+    `Behind: ${status.behind}`,
+    status.remote === undefined ? "Remote: (none)" : `Remote: ${status.remote}`,
+  ].join("\n");
+  return { exitCode: 0, output: render(json, { ok: true, code: "OK", status }, human) };
+}
+
+async function runDirectCommit(args: readonly string[], dependencies: CliDependencies): Promise<CliResult> {
+  if (!args.includes("--all")) throw new RepositoryFormatError("CLI_USAGE", "commit requires --all");
+  const direct = requireDirect(dependencies);
+  const message = required(flagValue(args, "-m") ?? flagValue(args, "--message"), "-m");
+  const result = await direct.commitAll(message);
+  return { exitCode: 0, output: render(args.includes("--json"), { ok: true, code: "OK", ...result }, `Committed all changes: ${result.commit} (${result.branch})`) };
+}
+
+async function runDirectPush(args: readonly string[], dependencies: CliDependencies): Promise<CliResult> {
+  const direct = requireDirect(dependencies);
+  const result = await direct.push();
+  return { exitCode: 0, output: render(args.includes("--json"), { ok: true, code: "OK", ...result }, `Pushed ${result.branch} at ${result.commit}`) };
 }
 
 async function draftRoot(args: readonly string[], dependencies: CliDependencies): Promise<{ draftId: string; root: string; scope: AgentScopeReport }> {
@@ -330,24 +370,45 @@ async function runInit(args: readonly string[], cwd: string): Promise<CliResult>
 export async function run(args: readonly string[], cwd = process.cwd(), dependencies: CliDependencies = {}): Promise<CliResult> {
   if (args.includes("--version") || args.includes("-v")) return { exitCode: 0, output: GITPM_VERSION };
   const [command, ...commandArgs] = args;
+  const hasDraft = commandArgs.includes("--draft");
+  const direct = dependencies.direct;
+  // In direct mode, format/validate/diff operate on the managed checkout by default.
+  const directRootArgs = (!hasDraft && direct !== undefined && !commandArgs.includes("--root"))
+    ? ["--root", direct.checkoutPath]
+    : [];
   try {
+    if (command === "status") {
+      if (hasDraft) {
+        const agent = requireAgent(dependencies);
+        const draftId = required(flagValue(commandArgs, "--draft"), "--draft");
+        const metadata = await agent.status(draftId);
+        return { exitCode: 0, output: render(commandArgs.includes("--json"), { ok: true, code: "OK", draft: metadata }, `Draft ${metadata.draft_id}: ${metadata.writer_mode} (${metadata.state})\n${metadata.worktree_path}`) };
+      }
+      return await runDirectStatus(commandArgs, dependencies);
+    }
     if (command === "draft") return await runDraft(commandArgs, dependencies);
     if (command === "entity") return await runEntity(commandArgs, cwd, dependencies);
-    if (command === "format" && commandArgs.includes("--draft")) { const context = await draftRoot(commandArgs, dependencies); return await runFormat([...commandArgs, "--root", context.root], cwd, context.scope); }
-    if (command === "format") return await runFormat(commandArgs, cwd);
-    if (command === "validate" && commandArgs.includes("--draft")) { const context = await draftRoot(commandArgs, dependencies); return await runValidate([...commandArgs, "--root", context.root], cwd); }
-    if (command === "validate") return await runValidate(commandArgs, cwd);
-    if (command === "diff" && commandArgs.includes("--draft")) { const agent = requireAgent(dependencies); const draftId = required(flagValue(commandArgs, "--draft"), "--draft"); const report = await agent.semanticDiff(draftId, agentScope(commandArgs)); return { exitCode: 0, output: render(commandArgs.includes("--json"), { ok: true, code: "OK", ...report }, `Semantic diff: ${report.counts.created + report.counts.updated + report.counts.archived + report.counts.deleted} changed entities`) }; }
-    if (command === "diff") return await runSemanticDiff(commandArgs, cwd);
-    if (command === "commit") return await runCommit(commandArgs, dependencies);
-    if (command === "push") return await runPush(commandArgs, dependencies);
+    if (command === "format" && hasDraft) { const context = await draftRoot(commandArgs, dependencies); return await runFormat([...commandArgs, "--root", context.root], cwd, context.scope); }
+    if (command === "format") return await runFormat([...directRootArgs, ...commandArgs], cwd);
+    if (command === "validate" && hasDraft) { const context = await draftRoot(commandArgs, dependencies); return await runValidate([...commandArgs, "--root", context.root], cwd); }
+    if (command === "validate") return await runValidate([...directRootArgs, ...commandArgs], cwd);
+    if (command === "diff" && hasDraft) { const agent = requireAgent(dependencies); const draftId = required(flagValue(commandArgs, "--draft"), "--draft"); const report = await agent.semanticDiff(draftId, agentScope(commandArgs)); return { exitCode: 0, output: render(commandArgs.includes("--json"), { ok: true, code: "OK", ...report }, `Semantic diff: ${report.counts.created + report.counts.updated + report.counts.archived + report.counts.deleted} changed entities`) }; }
+    if (command === "diff") return await runSemanticDiff([...directRootArgs, ...commandArgs], cwd);
+    if (command === "commit") {
+      if (hasDraft) return await runCommit(commandArgs, dependencies);
+      return await runDirectCommit(commandArgs, dependencies);
+    }
+    if (command === "push") {
+      if (hasDraft) return await runPush(commandArgs, dependencies);
+      return await runDirectPush(commandArgs, dependencies);
+    }
     if (command === "mr") return await runMr(commandArgs, dependencies);
     if (command === "doctor") return await runDoctor(commandArgs, cwd);
     if (command === "init") return await runInit(commandArgs, cwd);
     const json = args.includes("--json");
     return {
       exitCode: 2,
-      output: render(json, { ok: false, code: "CLI_USAGE" }, "Usage: gitpm <init|draft|entity create|format|validate|diff --semantic|commit --all|push|mr create|doctor> [options]"),
+      output: render(json, { ok: false, code: "CLI_USAGE" }, "Usage: gitpm <init|status|draft|entity create|format|validate|diff --semantic|commit --all|push|mr create|doctor> [options]"),
     };
   } catch (error) {
     const code = error instanceof RepositoryFormatError || (typeof error === "object" && error !== null && "code" in error && typeof error.code === "string") ? error.code : "CLI_INTERNAL";

@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@gitpm/git-client": "workspace:*",
-    "@gitpm/security": "workspace:*"
+    "@gitpm/security": "workspace:*",
+    "@gitpm/shared": "workspace:*"
   }
 }

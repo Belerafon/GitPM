@@ -141,12 +141,12 @@ export class AgentWorkflow {
   }
 
   async push(draftId: string) {
-    const draft = await this.externalDraft(draftId);
+    await this.externalDraft(draftId);
     const changes = await this.changes.list(draftId);
     if (changes.files.some((file) => !GITPM_GUIDANCE_FILES.has(file.path))) throw new AgentWorkflowError("UNCOMMITTED_CHANGES", "Push requires a clean committed draft");
     if (!this.options.accessToken) throw new AgentWorkflowError("AGENT_TOKEN_REQUIRED", "Push requires an in-memory access token");
-    await this.git.pushBranch(draft.worktree_path, draft.branch, this.options.accessToken);
-    return { branch: draft.branch, commit: await this.git.headCommit(draft.worktree_path) };
+    const result = await this.drafts.push(draftId, this.options.accessToken);
+    return { branch: result.branch, commit: result.commit };
   }
 
   async createMergeRequest(draftId: string, owner: string, title: string, description?: string): Promise<MergeRequestState> {

@@ -2,6 +2,46 @@
 
 Git-first система управления проектами и задачами с web UI, GitLab Merge Request workflow и файловой работой агентов через CLI.
 
+## Repository modes
+
+GitPM работает с Git-репозиторием в одном из двух режимов. Режим задаётся в
+`.gitpm/config.json` полем `repositoryMode` или переменной окружения
+`GITPM_REPOSITORY_MODE` (переменная имеет приоритет). По умолчанию используется
+`direct`.
+
+- **`direct`** (по умолчанию) — GitPM работает с одним обычным Git-репозиторием с
+  рабочей копией в `<data-dir>/repository`. Чтение и изменения происходят прямо в
+  этой копии, коммиты идут в основную ветку (по умолчанию `main`), а push
+  выполняется как обычный fast-forward `main` в `origin/main`. Нет bare-репозитория,
+  draft-веток, `git worktree`, writer-mode и Merge Request. CLI-команды не требуют
+  `--draft`:
+
+  ```text
+  gitpm status --json
+  gitpm format --json
+  gitpm validate --changed --json
+  gitpm diff --semantic --json
+  gitpm commit --all -m "..." --json
+  gitpm push --json
+  ```
+
+- **`worktree`** — прежняя схема с bare repository, изолированными draft-ветками и
+  рабочими деревьями, writer mode, push draft-ветки и Merge Request. Включается
+  явно через `"repositoryMode": "worktree"` или `GITPM_REPOSITORY_MODE=worktree`.
+
+Подробнее — в [`docs/Repository_Modes.md`](docs/Repository_Modes.md).
+
+Пример конфигурации direct-режима с remote и веткой:
+
+```json
+{
+  "repositoryMode": "direct",
+  "repository": "D:\\projects\\portfolio-data",
+  "repositoryUrl": "https://gitlab.example/group/portfolio.git",
+  "defaultBranch": "main"
+}
+```
+
 ## Current status
 
 Статус: `v0.1_release_accepted`. P00-P14 закрыты; Alpha, Beta, release candidate и release gates пройдены. Русский web UI, локальная эксплуатация, performance smoke и полный набор автоматических тестов приняты. CLI остаётся нейтральным по локали и проверен на UTF-8 кириллицу.

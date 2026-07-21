@@ -56,7 +56,7 @@ function DiffViewer({ file, canRestore, busy, restoreFile, restoreHunk, labels }
   </div>;
 }
 
-export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmAction, remoteAvailable = true, gitlabConfigured = true, gitlabSignedIn = true, onGitLabLogin = () => undefined }: {
+export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmAction, remoteAvailable = true, gitlabConfigured = true, gitlabSignedIn = true, onGitLabLogin = () => undefined, directMode = false }: {
   readonly api: GitPmApi;
   readonly draft: DraftStatus;
   readonly role: GitPmRole;
@@ -67,6 +67,7 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
   readonly gitlabConfigured?: boolean;
   readonly gitlabSignedIn?: boolean;
   readonly onGitLabLogin?: () => void;
+  readonly directMode?: boolean;
 }) {
   const t = (key: Parameters<typeof message>[1], values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
   const [changes, setChanges] = useState<ChangesList>(emptyChanges);
@@ -154,7 +155,7 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
     <div className="card publish-panel"><div><span className="eyebrow">{t("changes.publishEyebrow")}</span><h3>{t("changes.publishHeading")}</h3><p>{t("changes.commitAllHint")}</p></div>
       {commit === undefined ? <div className="publish-action"><button className="primary" disabled={!canMutate || busy || changes.changed_files_count === 0} onClick={() => setCommitOpen(true)}>{t("changes.openCommit")}</button>{changes.changed_files_count === 0 && <span>{t("changes.cleanHint")}</span>}</div> : <div className="publish-flow">
         <div className="publish-step complete"><span>1</span><div><strong>{t("changes.committed")}</strong><code>{commit.commit.slice(0, 12)}</code></div></div>
-        {!remoteAvailable ? <span>{t("changes.localOnly")}</span> : !gitlabConfigured ? <span>{t("changes.gitlabNotConfigured")}</span> : !gitlabSignedIn ? <button className="primary" onClick={onGitLabLogin}>{t("changes.loginForPush")}</button> : !pushed ? <button className="primary" disabled={busy} onClick={() => void push()}>{t("changes.push")}</button> : mergeRequest === undefined ? <div className="mr-form"><label>{t("changes.mrTitle")}<input value={mrTitle} onChange={(event) => setMrTitle(event.target.value)} /></label><label>{t("changes.mrDescription")}<textarea value={mrDescription} onChange={(event) => setMrDescription(event.target.value)} /></label><button className="primary" disabled={busy || !mrTitle.trim()} onClick={() => void createMr()}>{t("changes.createMr")}</button></div> : safeExternalUrl(mergeRequest.web_url) === undefined
+        {!remoteAvailable ? <span>{t("changes.localOnly")}</span> : !gitlabConfigured ? <span>{t("changes.gitlabNotConfigured")}</span> : !gitlabSignedIn ? <button className="primary" onClick={onGitLabLogin}>{t("changes.loginForPush")}</button> : !pushed ? <button className="primary" disabled={busy} onClick={() => void push()}>{t("changes.push")}</button> : directMode ? <span className="mr-result">{t("changes.pushed", { branch: draft.branch })}</span> : mergeRequest === undefined ? <div className="mr-form"><label>{t("changes.mrTitle")}<input value={mrTitle} onChange={(event) => setMrTitle(event.target.value)} /></label><label>{t("changes.mrDescription")}<textarea value={mrDescription} onChange={(event) => setMrDescription(event.target.value)} /></label><button className="primary" disabled={busy || !mrTitle.trim()} onClick={() => void createMr()}>{t("changes.createMr")}</button></div> : safeExternalUrl(mergeRequest.web_url) === undefined
           ? <span className="mr-result">{t("changes.mrReady", { iid: mergeRequest.iid, state: mergeRequest.state })}</span>
           : <a className="mr-result" href={safeExternalUrl(mergeRequest.web_url)} target="_blank" rel="noreferrer">{t("changes.mrReady", { iid: mergeRequest.iid, state: mergeRequest.state })}</a>}
       </div>}

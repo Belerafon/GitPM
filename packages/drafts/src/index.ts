@@ -3,9 +3,13 @@ import { mkdir, readFile, readdir, realpath, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import type { GitClient } from "@gitpm/git-client";
 import { atomicWriteDomainFile, resolveDomainPath } from "@gitpm/security";
-import { provisionGitPmWorktreeGuidance } from "./worktree-guidance.js";
+import type { DraftBackend, DraftPushStrategy } from "./draft-backend.js";
+import { WorktreeDraftBackend, worktreePushStrategy } from "./draft-backend.js";
 
 export { GITPM_AGENT_FILE, GITPM_GUIDANCE_FILES, GITPM_GUIDANCE_PATHS, GITPM_SKILL_FILE, GITPM_SKILL_FILE_CONTENT, gitPmAgentFile, provisionGitPmWorktreeGuidance, WorktreeGuidanceError } from "./worktree-guidance.js";
+export { provisionGitPmDirectGuidance, gitPmDirectAgentFile, GITPM_DIRECT_SKILL_FILE_CONTENT, type DirectGuidanceInfo } from "./direct-guidance.js";
+export type { DraftBackend, DraftProvisioning, DraftPushStrategy } from "./draft-backend.js";
+export { DirectDraftBackend, WorktreeDraftBackend, directPushStrategy, worktreePushStrategy } from "./draft-backend.js";
 
 export type WriterMode = "ui" | "external";
 export type DraftState = "open" | "closed" | "published" | "abandoned";
@@ -76,18 +80,32 @@ async function yamlFiles(directory: string): Promise<string[]> {
   return result.sort();
 }
 
+export interface DraftManagerOptions {
+  readonly backend?: DraftBackend;
+  readonly push?: DraftPushStrategy;
+}
+
 export class DraftManager {
   private readonly dataDirectory: string;
   private readonly metadataDirectory: string;
   private readonly repositoryLock = new AsyncMutex();
   private readonly draftLocks = new Map<string, AsyncMutex>();
+  private readonly backend: DraftBackend;
+  private readonly pushStrategy: DraftPushStrategy;
 
   constructor(
     private readonly git: GitClient,
     dataDirectory: string,
+    options: DraftManagerOptions = {},
   ) {
     this.dataDirectory = path.resolve(dataDirectory);
     this.metadataDirectory = path.join(this.dataDirectory, "drafts");
+    this.backend = options.backend ?? new WorktreeDraftBackend(git);
+    this.pushStrategy = options.push ?? worktreePushStrategy(git);
+  }
+
+  get repositoryMode(): "direct" | "worktree" {
+    return this.backend.mode;
   }
 
   private lock(draftId: string): AsyncMutex {
@@ -145,22 +163,20 @@ export class DraftManager {
       } catch (error) {
         if (!(error instanceof DraftRuntimeError) || error.code !== "DRAFT_NOT_FOUND") throw error;
       }
-      await this.git.initialize();
-      const baseCommit = await this.git.fetch();
-      const branch = `gitpm/${owner}/${draftId}`;
-      const worktree = await this.git.addWorktree(branch, draftId, baseCommit);
-      await provisionGitPmWorktreeGuidance(worktree, draftId);
+      await this.backend.prepare();
+      const provisioning = await this.backend.provision(draftId, owner);
+      await this.backend.provisionGuidance(provisioning.worktreePath, draftId);
       const now = new Date().toISOString();
       const metadata: DraftMetadata = {
         version: 1,
         draft_id: draftId,
         owner_gitlab_user_id: owner,
-        branch,
-        base_commit: baseCommit,
-        worktree_path: worktree,
+        branch: provisioning.branch,
+        base_commit: provisioning.baseCommit,
+        worktree_path: provisioning.worktreePath,
         writer_mode: "ui",
         state: "open",
-        fingerprint: await this.fingerprint(worktree),
+        fingerprint: await this.fingerprint(provisioning.worktreePath),
         created_at: now,
         updated_at: now,
       };
@@ -228,10 +244,19 @@ export class DraftManager {
       const metadata = await this.getDraft(safeDraftId);
       if (metadata.state === "open") throw new DraftRuntimeError("DRAFT_STATE_INVALID", "Close or abandon the draft before cleanup");
       const dirty = (await this.git.statusPorcelain(metadata.worktree_path)).trim() !== "";
-      await this.git.removeWorktree(metadata.worktree_path, metadata.branch, dirty);
+      await this.backend.remove(metadata.worktree_path, metadata.branch, dirty);
       const metadataPath = await resolveDomainPath(this.dataDirectory, this.metadataRelativePath(safeDraftId));
       await rm(metadataPath);
     }));
+  }
+
+  /**
+   * Publish a draft through the configured push strategy. In worktree mode this pushes the
+   * draft branch to origin; in direct mode it fast-forwards the active branch to origin.
+   */
+  async push(draftId: string, accessToken: string): Promise<{ branch: string; commit: string }> {
+    const metadata = await this.getDraft(draftId);
+    return await this.pushStrategy(metadata.worktree_path, metadata.branch, accessToken);
   }
 
   async withUiMutation<T>(
@@ -319,7 +344,6 @@ export class DraftManager {
 
   async recover(): Promise<RecoveryReport> {
     await mkdir(this.metadataDirectory, { recursive: true, mode: 0o700 });
-    await mkdir(this.git.worktreesDirectory, { recursive: true, mode: 0o700 });
     const drafts: DraftMetadata[] = [];
     const missingWorktrees: string[] = [];
     for (const entry of await readdir(this.metadataDirectory)) {
@@ -333,7 +357,7 @@ export class DraftManager {
         continue;
       }
       const fingerprintBefore = await this.fingerprint(metadata.worktree_path);
-      const guidanceChanged = await provisionGitPmWorktreeGuidance(metadata.worktree_path, draftId);
+      const guidanceChanged = await this.backend.provisionGuidance(metadata.worktree_path, draftId);
       if (guidanceChanged && fingerprintBefore === metadata.fingerprint) {
         const recovered = { ...metadata, fingerprint: await this.fingerprint(metadata.worktree_path), updated_at: new Date().toISOString() };
         await this.persist(recovered);
@@ -342,13 +366,8 @@ export class DraftManager {
         drafts.push(metadata);
       }
     }
-    const knownPaths = new Set(drafts.map((draft) => path.resolve(draft.worktree_path)));
-    const orphanedWorktrees: string[] = [];
-    for (const entry of await readdir(this.git.worktreesDirectory, { withFileTypes: true })) {
-      if (entry.isDirectory() && !knownPaths.has(path.resolve(this.git.worktreesDirectory, entry.name))) {
-        orphanedWorktrees.push(entry.name);
-      }
-    }
+    const knownPaths = drafts.map((draft) => path.resolve(draft.worktree_path));
+    const orphanedWorktrees = [...await this.backend.listOrphanedWorktrees(knownPaths)];
     return {
       drafts: drafts.sort((left, right) => left.draft_id.localeCompare(right.draft_id)),
       orphaned_worktrees: orphanedWorktrees.sort(),

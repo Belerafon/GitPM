@@ -38,8 +38,8 @@ export class RepositoryPublishingService {
     if ((await this.git.statusPorcelain(draft.worktree_path, GITPM_GUIDANCE_PATHS)).trim()) {
       throw new PublishingError("UNCOMMITTED_CHANGES", "Push requires a clean committed draft");
     }
-    await this.git.pushBranch(draft.worktree_path, draft.branch, authorized.accessToken);
-    return { branch: draft.branch, commit: await this.git.headCommit(draft.worktree_path) };
+    const result = await this.drafts.push(draftId, authorized.accessToken);
+    return { branch: result.branch, commit: result.commit };
   }
 
   async createMergeRequest(sessionId: string, draftId: string, title: string, description?: string) {

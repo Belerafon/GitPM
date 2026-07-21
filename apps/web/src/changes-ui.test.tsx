@@ -70,4 +70,19 @@ describe("Changes workspace", () => {
     await waitFor(() => expect(fixture.createMergeRequest).toHaveBeenCalledWith("DRF-CHANGES", "Alpha delivery", "Acceptance"));
     expect(await screen.findByText("Merge request !7: opened")).toBeTruthy();
   });
+
+  it("direct mode commits and pushes without offering a Merge Request", async () => {
+    const fixture = new ChangesApi();
+    render(<ChangesWorkspace api={fixture as unknown as GitPmApi} draft={{ ...draft, branch: "main" }} role="Developer" locale="en" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} directMode />);
+    await screen.findAllByText("projects/P-26-111111/project.yaml");
+    fireEvent.click(screen.getByRole("button", { name: "Prepare commit" }));
+    fireEvent.change(screen.getByLabelText("Commit message"), { target: { value: "Direct publish" } });
+    fireEvent.click(screen.getByRole("button", { name: "Commit all" }));
+    await waitFor(() => expect(fixture.commitAll).toHaveBeenCalledWith("DRF-CHANGES", "Direct publish"));
+    fireEvent.click(await screen.findByRole("button", { name: "Push branch" }));
+    await waitFor(() => expect(fixture.push).toHaveBeenCalledWith("DRF-CHANGES"));
+    expect(await screen.findByText("Pushed to main")).toBeTruthy();
+    expect(screen.queryByLabelText("Merge request title")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Create merge request" })).toBeNull();
+  });
 });

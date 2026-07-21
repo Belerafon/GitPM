@@ -382,4 +382,26 @@ describe("frontend draft lifecycle", () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS); });
     expect(api.snapshotCalls).toBeGreaterThan(before);
   });
+
+  it("direct mode hides the create-working-copy surface and the workspace switcher", async () => {
+    const api = new FakeApi();
+    api.currentSession = {
+      ...session,
+      mode: "repository",
+      repository_mode: "direct",
+      repository: { name: "portfolio", path: "/data/repository", has_remote: false, branch: "main" },
+    };
+    api.drafts = [draft({ draft_id: "DRF-LOCAL", branch: "main" })];
+    api.listChanges = async () => ({ changed_files_count: 0, affected_projects: [], files: [] });
+    api.semanticChanges = async () => ({ created: [], updated: [], archived: [], deleted: [], counts: { created: 0, updated: 0, archived: 0, deleted: 0 }, affected_projects: [], unclassified_files: [] });
+    render(<App api={api} browserLanguages={["en"]} />);
+    // The Repository nav lands on Changes in direct mode, never on the draft panel.
+    fireEvent.click(await screen.findByRole("button", { name: "Repository" }));
+    await screen.findByText(/Commit, push/i);
+    expect(screen.queryByLabelText("Working copy ID")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Create working copy" })).toBeNull();
+    expect(screen.queryByLabelText("Current working copy")).toBeNull();
+    // The active branch (main) is surfaced instead of a draft branch.
+    expect(screen.getAllByText("main").length).toBeGreaterThan(0);
+  });
 });

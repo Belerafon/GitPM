@@ -292,6 +292,7 @@
   ,"changes.loginForPush": "Sign in to GitLab to push"
   ,"changes.committed": "Committed"
   ,"changes.push": "Push branch"
+  ,"changes.pushed": "Pushed to {branch}"
   ,"changes.mrTitle": "Merge request title"
   ,"changes.mrDescription": "Description"
   ,"changes.createMr": "Create merge request"

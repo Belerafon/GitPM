@@ -3,6 +3,7 @@ FROM node:20.19.2-bookworm-slim
 RUN apt-get update \
     && apt-get install --no-install-recommends -y ca-certificates git \
     && git config --system --add safe.directory /repository \
+    && git config --system --add safe.directory /data/repository \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

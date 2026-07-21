@@ -138,10 +138,16 @@ try {
   console.error(`[GitPM] Не удалось настроить репозиторий: ${error instanceof Error ? error.message : String(error)}`);
   process.exit(1);
 }
-console.log(`[GitPM] Репозиторий: ${runtime.configuration.repository}`);
+const managedCheckout = runtime.repositoryMode === "direct"
+  ? `${runtime.environment.GITPM_DATA_DIR ?? "<data-dir>"}/repository`
+  : runtime.configuration.repository;
+console.log(`Repository mode: ${runtime.repositoryMode}`);
+console.log(`Repository path: ${managedCheckout}`);
+console.log(`Branch: ${runtime.defaultBranch}`);
 console.log(runtime.remoteUrl === undefined
   ? "[GitPM] Remote не настроен — локальная работа доступна, push отключён."
   : `[GitPM] Remote: ${runtime.remoteUrl}`);
+console.log(`[GitPM] Репозиторий-источник: ${runtime.configuration.repository}`);
 console.log(runtime.environment.GITPM_GITLAB_CLIENT_ID === undefined
   ? "[GitPM] GitLab OAuth не настроен — вход не требуется для локальной работы (настройки: .gitpm/config.json)."
   : "[GitPM] GitLab OAuth доступен и будет запрошен только для remote-операций.");
