@@ -11,7 +11,8 @@ COPY . .
 
 RUN corepack enable \
     && corepack pnpm install --frozen-lockfile \
-    && corepack pnpm build
+    && corepack pnpm build \
+    && ln -sf /app/apps/cli/dist/index.js /usr/local/bin/gitpm
 
 ENV GITPM_RUNTIME_MODE=production \
     GITPM_BIND_HOST=0.0.0.0 \

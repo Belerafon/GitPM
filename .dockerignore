@@ -7,10 +7,13 @@
 .env.*
 coverage
 evidence
+e2e
+fixtures
+playwright-report
+test-results
+docs
 node_modules
 **/node_modules
 **/dist
-playwright-report
-test-results
 *.log
 *.tsbuildinfo

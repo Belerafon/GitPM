@@ -17,6 +17,15 @@ services:
       - type: volume
         source: gitpm-data
         target: /data
+      # Uncomment to persist .gitpm/config.json (OAuth client_id etc.)
+      # across container recreation:
+      # - type: volume
+      #   source: gitpm-config
+      #   target: /app/.gitpm
+
+# For server deployment (LAN bind IP, OAuth, healthcheck, .gitpm volume)
+# use the optional `compose.server.yaml` override:
+#   docker compose -f compose.yaml -f compose.server.yaml up -d --build
 
 volumes:
   gitpm-data:

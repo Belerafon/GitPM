@@ -1,0 +1,63 @@
+# Production-grade server deployment profile.
+#
+# This file is an OPTIONAL override for `compose.yaml`. The default
+# `compose.yaml` keeps the local, single-user, no-auth flow unchanged.
+# Use this profile when you expose GitPM on a LAN interface next to a
+# GitLab instance (or any other reverse-proxied server scenario).
+#
+# Usage:
+#   docker compose -f compose.yaml -f compose.server.yaml up -d --build
+#
+# Configuration via environment (place in .env next to compose.yaml):
+#   GITPM_BIND_IP            LAN IP to bind published ports to (required).
+#                            Example: 10.0.0.1
+#   GITPM_WEB_PORT           Host port for the web UI (default 86).
+#   GITPM_REPOSITORY_PATH    Host path to the Git repository managed by GitPM.
+#   GITPM_OAUTH_REDIRECT_URL GitLab OAuth redirect URI pointed at this server,
+#                            e.g. http://10.0.0.1:86/api/auth/callback
+#   GITPM_GITLAB_URL         Base URL of the GitLab instance.
+#   GITPM_GITLAB_PROJECT     group/project path.
+#   GITPM_GITLAB_CLIENT_ID   OAuth Application ID registered in GitLab.
+#
+# Notes:
+#   * Port 87 is intentionally avoided — Chromium/Firefox block it
+#     (ERR_UNSAFE_PORT). Pick something else (e.g. 85, 88, 89, ...).
+#   * The default `compose.yaml` already EXPOSEs 3000+5173 inside the image;
+#     here we override `ports` to publish only the web UI on a chosen IP.
+#   * `/app/.gitpm` is mounted to a named volume so the OAuth client_id
+#     and other runtime configuration survive container recreation.
+
+services:
+  gitpm:
+    ports: !override
+      - "${GITPM_BIND_IP:?set GITPM_BIND_IP in .env}:${GITPM_WEB_PORT:-86}:5173"
+    environment:
+      GITPM_RUNTIME_MODE: production
+      GITPM_BIND_HOST: 0.0.0.0
+      GITPM_NO_BROWSER: "1"
+      GITPM_OAUTH_REDIRECT_URL: ${GITPM_OAUTH_REDIRECT_URL:-}
+      GITPM_GITLAB_URL: ${GITPM_GITLAB_URL:-}
+      GITPM_GITLAB_PROJECT: ${GITPM_GITLAB_PROJECT:-}
+      GITPM_GITLAB_CLIENT_ID: ${GITPM_GITLAB_CLIENT_ID:-}
+      # Set to "false" when serving over plain HTTP (no TLS terminator in front).
+      GITPM_COOKIE_SECURE: ${GITPM_COOKIE_SECURE:-true}
+    volumes: !override
+      - type: bind
+        source: ${GITPM_REPOSITORY_PATH:?set GITPM_REPOSITORY_PATH in .env}
+        target: /repository
+      - type: volume
+        source: gitpm-data
+        target: /data
+      - type: volume
+        source: gitpm-config
+        target: /app/.gitpm
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  gitpm-data:
+  gitpm-config:

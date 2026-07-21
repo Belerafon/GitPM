@@ -3,6 +3,12 @@ import { AuthError } from "@gitpm/gitlab";
 import type { AuthService } from "@gitpm/gitlab";
 import type { PublishingService } from "@gitpm/publishing";
 
+const COOKIE_SECURE = process.env.GITPM_COOKIE_SECURE?.trim().toLowerCase() !== "false";
+
+function sessionCookieFlags(): string {
+  return `Path=/; HttpOnly;${COOKIE_SECURE ? " Secure;" : ""} SameSite=Strict`;
+}
+
 function cookie(request: FastifyRequest, name: string): string | undefined {
   const header = request.headers.cookie;
   if (!header) return undefined;
@@ -36,7 +42,7 @@ export function registerAuthAndPublishingApi(
     const maxAge = Math.max(0, Math.floor((Date.parse(session.expires_at) - Date.now()) / 1000));
     reply.header(
       "set-cookie",
-      `gitpm_session=${encodeURIComponent(session.session_id)}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${maxAge}`,
+      `gitpm_session=${encodeURIComponent(session.session_id)}; ${sessionCookieFlags()}; Max-Age=${maxAge}`,
     );
     return session;
   });
@@ -44,7 +50,7 @@ export function registerAuthAndPublishingApi(
   app.post("/api/auth/logout", async (request, reply) => {
     const session = cookie(request, "gitpm_session");
     if (session) auth.logout(session);
-    reply.header("set-cookie", "gitpm_session=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0");
+    reply.header("set-cookie", `gitpm_session=; ${sessionCookieFlags()}; Max-Age=0`);
     await reply.code(204).send();
   });
 
