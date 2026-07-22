@@ -76,6 +76,10 @@ class FakeApi implements GitPmApi {
   async listChanges(): Promise<ChangesList> { throw new Error("not used"); }
   async listWorktree(): Promise<WorktreeDirectory> { return { path: "", entries: [] }; }
   async readWorktreeFile(): Promise<WorktreeFile> { throw new Error("not used"); }
+  async deleteWorktreeEntry(): Promise<string> { throw new Error("not used"); }
+  async createWorktreeDirectory(): Promise<string> { throw new Error("not used"); }
+  async uploadWorktreeFile(): Promise<string> { throw new Error("not used"); }
+  async moveWorktreeEntry(): Promise<string> { throw new Error("not used"); }
   async semanticChanges(): Promise<SemanticDiff> { throw new Error("not used"); }
   async restoreFile() { throw new Error("not used"); }
   async restoreHunk() { throw new Error("not used"); }

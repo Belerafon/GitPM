@@ -153,8 +153,9 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
       message = error.message;
       if (error.code === "DRAFT_FORBIDDEN" || error.code === "WORKTREE_PATH_FORBIDDEN") status = 403;
       else if (error.code === "WORKTREE_ENTRY_NOT_FOUND") status = 404;
-      else if (error.code === "WORKTREE_FILE_TOO_LARGE") status = 413;
+      else if (error.code === "WORKTREE_FILE_TOO_LARGE" || error.code === "WORKTREE_UPLOAD_TOO_LARGE") status = 413;
       else if (error.code === "WORKTREE_FILE_BINARY") status = 415;
+      else if (error.code === "WORKTREE_ENTRY_EXISTS" || error.code === "WORKTREE_MOVE_INVALID") status = 409;
       else status = 400;
     } else if (error instanceof RepositoryConnectionError || error instanceof SecurityBoundaryError) {
       code = error.code;
