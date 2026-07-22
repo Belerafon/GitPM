@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { DraftManager } from "@gitpm/drafts";
 import { GitClient } from "@gitpm/git-client";
 import type { GitPmDocument } from "@gitpm/repository-format";
-import { CommentStore, DomainOperationError, EntityStore, planEntityCreation, type CommentActor } from "./index.js";
+import { CommentStore, DomainOperationError, EntityStore, planEntityCreation, planEntityUpdate, type CommentActor } from "./index.js";
 
 const execFileAsync = promisify(execFile);
 const roots: string[] = [];
@@ -61,6 +61,46 @@ describe("entity create planning", () => {
     ], [repository, calendar], "person")).toThrowError(expect.objectContaining({ code: "ENTITY_EXISTS" }));
     expect(() => planEntityCreation([{ name: "Archived calendar", weekly_capacity_hours: 40 }], [repository, { ...calendar, lifecycle: "archived" }], "person"))
       .toThrowError(expect.objectContaining({ code: "ENTITY_CALENDAR_INACTIVE" }));
+  });
+});
+
+describe("entity update planning", () => {
+  const documents: GitPmDocument[] = [
+    { schema: "gitpm/project@1", id: "P-26-Y9S1D8", name: "Project", status: "backlog", lifecycle: "active" },
+    { schema: "gitpm/task@1", id: "T-26-FM5Q4W", project: "P-26-Y9S1D8", title: "Task", type: "task", status: "backlog", lifecycle: "active" },
+    { schema: "gitpm/milestone@1", id: "M-26-KK4VXH", project: "P-26-Y9S1D8", name: "Milestone", lifecycle: "active" },
+    { schema: "gitpm/person@1", id: "U-26-KB9RXB", name: "Person", email: "old@example.test", weekly_capacity_hours: 40, calendar: "C-26-7GQW87", lifecycle: "active" },
+    { schema: "gitpm/team@1", id: "G-26-22K88P", name: "Team", members: [], lifecycle: "active" },
+    { schema: "gitpm/calendar@1", id: "C-26-7GQW87", name: "Calendar", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" },
+    { schema: "gitpm/saved-view@1", id: "V-26-B0C5A1", project: "P-26-Y9S1D8", name: "View", kind: "list", filters: {}, lifecycle: "active" },
+  ];
+
+  it("patches every editable entity type and removes optional fields with null", () => {
+    const cases = [
+      ["project", "P-26-Y9S1D8", { name: "Проект" }, "name", "Проект"],
+      ["task", "T-26-FM5Q4W", { title: "Задача" }, "title", "Задача"],
+      ["milestone", "M-26-KK4VXH", { name: "Этап" }, "name", "Этап"],
+      ["person", "U-26-KB9RXB", { email: "new@example.test" }, "email", "new@example.test"],
+      ["team", "G-26-22K88P", { name: "Команда" }, "name", "Команда"],
+      ["calendar", "C-26-7GQW87", { name: "Календарь" }, "name", "Календарь"],
+      ["saved-view", "V-26-B0C5A1", { name: "Представление" }, "name", "Представление"],
+    ] as const;
+    for (const [type, id, patch, field, expected] of cases) {
+      const plan = planEntityUpdate(patch, documents, type, id);
+      expect(plan.document[field]).toBe(expected);
+      expect(plan.document.id).toBe(id);
+      expect(plan.path).toContain(id);
+    }
+    expect(planEntityUpdate({ email: null }, documents, "person", "U-26-KB9RXB").document).not.toHaveProperty("email");
+  });
+
+  it("rejects identity, schema and owning-Project changes", () => {
+    expect(() => planEntityUpdate({ id: "T-26-RHBNH8" }, documents, "task", "T-26-FM5Q4W"))
+      .toThrowError(expect.objectContaining({ code: "ENTITY_IDENTITY_IMMUTABLE" }));
+    expect(() => planEntityUpdate({ schema: "gitpm/person@1" }, documents, "task", "T-26-FM5Q4W"))
+      .toThrowError(expect.objectContaining({ code: "ENTITY_IDENTITY_IMMUTABLE" }));
+    expect(() => planEntityUpdate({ project: "P-26-MGP84K" }, documents, "task", "T-26-FM5Q4W"))
+      .toThrowError(expect.objectContaining({ code: "ENTITY_IDENTITY_IMMUTABLE" }));
   });
 });
 

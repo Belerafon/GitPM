@@ -3,10 +3,10 @@ import path from "node:path";
 import type { ChangesService, SemanticDiff } from "@gitpm/changes";
 import { GITPM_GUIDANCE_FILES, GITPM_GUIDANCE_PATHS, provisionGitPmWorktreeGuidance } from "@gitpm/drafts";
 import type { DraftManager, DraftMetadata, WriterMode } from "@gitpm/drafts";
-import { planEntityCreation, type EntityCreateBatchResult } from "@gitpm/domain";
+import { containsEntityReference, planEntityCreation, planEntityUpdate, type EntityCreateBatchResult } from "@gitpm/domain";
 import type { GitClient } from "@gitpm/git-client";
 import type { GitLabMergeRequestProtocol, MergeRequestPayload, MergeRequestState } from "@gitpm/gitlab";
-import { formatYamlDocument, parseYamlDocument, referenceLabelsForDocuments, type GitPmDocument } from "@gitpm/repository-format";
+import { formatYamlDocument, parseYamlDocument, referenceLabelForDocument, referenceLabelsForDocuments, type GitPmDocument } from "@gitpm/repository-format";
 import { atomicWriteDomainFile } from "@gitpm/security";
 import { validateRepository } from "@gitpm/validation";
 
@@ -60,18 +60,31 @@ export function assertAgentScope(
   };
 }
 
-async function repositoryDocuments(root: string): Promise<GitPmDocument[]> {
-  const result: GitPmDocument[] = [];
+interface RepositoryEntry {
+  readonly absolute: string;
+  readonly relative: string;
+  readonly document: GitPmDocument;
+}
+
+async function repositoryEntries(root: string): Promise<RepositoryEntry[]> {
+  const result: RepositoryEntry[] = [];
   const walk = async (directory: string): Promise<void> => {
     for (const entry of await readdir(directory, { withFileTypes: true })) {
       if (entry.name === ".git") continue;
       const absolute = path.join(directory, entry.name);
       if (entry.isDirectory()) await walk(absolute);
-      else if (entry.name.endsWith(".yaml")) result.push(parseYamlDocument(await readFile(absolute, "utf8"), path.relative(root, absolute)));
+      else if (entry.name.endsWith(".yaml")) {
+        const relative = path.relative(root, absolute).split(path.sep).join("/");
+        result.push({ absolute, relative, document: parseYamlDocument(await readFile(absolute, "utf8"), relative) });
+      }
     }
   };
   await walk(root);
   return result;
+}
+
+async function repositoryDocuments(root: string): Promise<GitPmDocument[]> {
+  return (await repositoryEntries(root)).map((entry) => entry.document);
 }
 
 async function pathExists(absolute: string): Promise<boolean> {
@@ -126,6 +139,50 @@ export class AgentWorkflow {
     const batch = await this.createEntities(draftId, [document], requestedType, scope, false);
     const item = batch.items[0]!;
     return { path: item.path, draft_fingerprint: batch.draft_fingerprint, document: item.document };
+  }
+
+  async updateEntity(
+    draftId: string,
+    patch: Readonly<Record<string, unknown>>,
+    requestedType: string,
+    requestedId: string,
+    scope: AgentScope = {},
+  ) {
+    await this.assertScope(draftId, scope);
+    const draft = await this.externalDraft(draftId);
+    const entries = await repositoryEntries(draft.worktree_path);
+    const plan = planEntityUpdate(patch, entries.map((entry) => entry.document), requestedType, requestedId);
+    assertAgentScope({
+      affected_projects: projectPath(plan.path) === undefined ? [] : [projectPath(plan.path)!],
+      files: [{ path: plan.path, kind: "Modified" }],
+    }, scope);
+    const target = entries.find((entry) => entry.relative === plan.path)!;
+    const referenceLabels = referenceLabelsForDocuments(entries.map((entry) => entry.relative === plan.path ? plan.document : entry.document));
+    const originals = new Map<string, string>();
+    try {
+      const original = await readFile(target.absolute, "utf8");
+      originals.set(target.relative, original);
+      await atomicWriteDomainFile(draft.worktree_path, target.relative, formatYamlDocument(plan.document, referenceLabels));
+      if (referenceLabelForDocument(plan.before) !== referenceLabelForDocument(plan.document)) {
+        for (const entry of entries) {
+          if (entry.relative === target.relative || !containsEntityReference(entry.document, plan.id)) continue;
+          const relatedOriginal = await readFile(entry.absolute, "utf8");
+          const relatedFormatted = formatYamlDocument(entry.document, referenceLabels);
+          if (relatedFormatted === relatedOriginal) continue;
+          originals.set(entry.relative, relatedOriginal);
+          await atomicWriteDomainFile(draft.worktree_path, entry.relative, relatedFormatted);
+        }
+      }
+      await this.assertScope(draftId, scope);
+      const validation = await validateRepository(draft.worktree_path);
+      if (!validation.valid) throw new AgentWorkflowError("VALIDATION_FAILED", "Updated entity makes the repository invalid", validation.errors);
+      const metadata = await this.drafts.refreshFingerprint(draftId);
+      return { path: plan.path, draft_fingerprint: metadata.fingerprint, document: plan.document };
+    } catch (error) {
+      for (const [relative, original] of originals) await atomicWriteDomainFile(draft.worktree_path, relative, original);
+      await this.drafts.refreshFingerprint(draftId);
+      throw error;
+    }
   }
 
   async createEntities(

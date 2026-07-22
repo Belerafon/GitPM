@@ -10,6 +10,7 @@ gitpm init [path]                    Создать skeleton схемы v1 в pa
 gitpm status [--draft <id>]
 gitpm draft create|open|status|set-writer --draft <id> [--owner <id>]
 gitpm entity create [--draft <id>] --file <file> [--type <type>] [--project <id>]
+gitpm entity update [--draft <id>] --type <type> --id <entity-id> [--file <yaml-patch>] [--set <field>=<yaml-value>]... [--unset <field>]... [--project <id>]
 gitpm entity import [--draft <id>] --type <type> --format csv|yaml|jsonl (--file <file>|--path <file>) [--dry-run]
 gitpm schema list
 gitpm schema show <type> [--example]
@@ -31,6 +32,13 @@ gitpm --version [--json]
 остаётся обязательным явным значением. Сохранённый repository YAML всегда содержит полный
 канонический документ.
 
+`entity update` атомарно изменяет любую поддерживаемую сущность. `--type` и `--id` однозначно
+выбирают существующую сущность. Небольшой patch задаётся повторяемыми `--set field=yaml-value` и
+`--unset field`; для большого patch можно использовать YAML mapping через `--file`. Источники можно
+комбинировать, inline-поля имеют приоритет. `schema`, `id` и владеющий Project неизменяемы; `null`
+в YAML patch и `--unset` удаляют необязательное поле. После записи CLI проверяет весь репозиторий и
+откатывает все затронутые файлы при ошибке validation или Project scope.
+
 `entity import` (alias: `entity bulk-import`) выполняет пакет атомарно: сначала планирует все ID, затем записывает пакет,
 один раз валидирует полный репозиторий и откатывает все файлы при любой ошибке. `--dry-run`
 выполняет тот же pipeline без сохранения изменений. CSV использует строку заголовков;
@@ -43,7 +51,7 @@ gitpm --version [--json]
 возвращает digest набора схем и optional build commit из `GITPM_BUILD_COMMIT`, что позволяет
 обнаруживать устаревшую установленную сборку.
 
-В `direct` mode команды `status`, `entity create`, `entity import`, `format`, `validate`, `diff`, `commit` и
+В `direct` mode команды `status`, `entity create`, `entity update`, `entity import`, `format`, `validate`, `diff`, `commit` и
 `push` работают с managed checkout без `--draft`. В `worktree` mode для них требуется
 `--draft <id>`; `mr create` доступна только в `worktree` mode. `--project <id>` проверяет, что
 все текущие business changes принадлежат указанному Project, а физическое удаление требует

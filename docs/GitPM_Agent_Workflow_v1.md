@@ -39,6 +39,20 @@ Repository YAML may be read for context but must not be edited directly. Entity 
 gitpm entity create --draft DRF-AGENT-001 --type task --file /tmp/entity.yaml --project P-26-MGP84K --json
 ```
 
+Existing entities are updated through a transactional field patch. A temporary file is not needed
+for a few top-level fields:
+
+```bash
+gitpm entity update --draft DRF-AGENT-001 --type person --id U-26-5EBAE3 --set email=anna.new@example.test --set weekly_capacity_hours=36 --json
+gitpm entity update --draft DRF-AGENT-001 --type task --id T-26-RHBNH8 --unset milestone --project P-26-MGP84K --json
+```
+
+Repeat `--set field=yaml-value` as needed. Values are parsed as YAML, so numbers, booleans, arrays,
+and mappings retain their types. Use `--unset field` to remove an optional top-level field, or
+`--file <yaml-patch>` for a larger patch. GitPM preserves unspecified fields, rejects changes to
+`schema`, `id`, or the owning Project, validates the complete repository, enforces Project scope,
+and rolls back every affected file on failure.
+
 Use `--type <type>` when the temporary create input omits `schema`. GitPM generates a missing
 entity ID and defaults `lifecycle` to `active`; for Person it also materializes a missing Calendar
 from repository `default_calendar`. A supplied valid ID is preserved. Inspect contracts with
@@ -55,7 +69,9 @@ CSV, YAML-array and JSONL imports plan all IDs, validate the complete resulting 
 and roll back the whole batch on failure. Review row-level diagnostics and generated ID/path
 mappings before continuing.
 
-The v0.1 CLI does not expose update, archive, or delete entity commands. An agent must report that capability gap instead of editing repository files or inventing a command.
+The v0.1 CLI exposes general entity update but does not expose archive or delete entity commands.
+An agent must report those remaining capability gaps instead of editing repository files or
+inventing a command.
 
 For any GitPM error, ambiguous contract, inconsistent output or missing CLI operation, the agent reports the sanitized command and stable error code, explains observed versus expected behavior, and gives the user a concrete GitPM improvement proposal. Product feedback does not authorize a manual workaround or changes to the GitPM application from the portfolio draft.
 

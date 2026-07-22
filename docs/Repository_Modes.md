@@ -68,6 +68,7 @@ A `direct`-mode CLI session looks like this:
 ```text
 gitpm status --json
 gitpm entity create --file /tmp/entity.yaml --project P-26-MGP84K --json
+gitpm entity update --type task --id T-26-RHBNH8 --set status=done --project P-26-MGP84K --json
 gitpm format --json
 gitpm validate --changed --json
 gitpm diff --semantic --json

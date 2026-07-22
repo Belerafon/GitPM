@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { GITPM_VERSION } from "@gitpm/shared";
-import { formatYamlText, parseYamlDocument, referenceLabelsForDocuments, RepositoryFormatError } from "@gitpm/repository-format";
+import { formatYamlText, parseYamlDocument, parseYamlValue, referenceLabelsForDocuments, RepositoryFormatError } from "@gitpm/repository-format";
 import { validateRepository } from "@gitpm/validation";
 import { atomicWriteDomainFile } from "@gitpm/security";
 import type { AgentScope, AgentScopeReport, AgentWorkflow } from "@gitpm/agent";
@@ -24,7 +24,7 @@ interface CommonOptions {
 }
 
 type CliAgent = Pick<AgentWorkflow, "assertScope" | "commitAll" | "createDraft" | "createMergeRequest" | "openDraft" | "push" | "semanticDiff" | "setWriterMode" | "status">
-  & Partial<Pick<AgentWorkflow, "createEntity" | "createEntities">>;
+  & Partial<Pick<AgentWorkflow, "createEntity" | "createEntities" | "updateEntity">>;
 
 export interface CliDependencies {
   readonly agent?: CliAgent;
@@ -33,6 +33,50 @@ export interface CliDependencies {
 
 function flagValue(args: readonly string[], name: string): string | undefined {
   const index = args.indexOf(name); return index < 0 ? undefined : args[index + 1];
+}
+
+function flagValues(args: readonly string[], name: string): readonly string[] {
+  const values: string[] = [];
+  for (let index = 0; index < args.length; index += 1) {
+    if (args[index] !== name) continue;
+    const value = args[index + 1];
+    if (value === undefined) throw new RepositoryFormatError("CLI_USAGE", `${name} requires a value`);
+    values.push(value);
+    index += 1;
+  }
+  return values;
+}
+
+function updateField(name: string, source: string): string {
+  if (!/^[a-z][a-z0-9_]*$/u.test(name)) throw new RepositoryFormatError("CLI_USAGE", `${source} field name is invalid`);
+  return name;
+}
+
+async function entityUpdatePatch(args: readonly string[], cwd: string): Promise<Readonly<Record<string, unknown>>> {
+  const file = flagValue(args, "--file") ?? flagValue(args, "--path");
+  const result: Record<string, unknown> = file === undefined
+    ? {}
+    : { ...parseEntityMapping(await readFile(path.resolve(cwd, file), "utf8"), path.resolve(cwd, file)) };
+  const inlineFields = new Set<string>();
+  for (const assignment of flagValues(args, "--set")) {
+    const separator = assignment.indexOf("=");
+    if (separator <= 0) throw new RepositoryFormatError("CLI_USAGE", "--set requires field=value");
+    const field = updateField(assignment.slice(0, separator), "--set");
+    if (inlineFields.has(field)) throw new RepositoryFormatError("CLI_USAGE", `Field ${field} is specified more than once`);
+    inlineFields.add(field);
+    const value = assignment.slice(separator + 1);
+    result[field] = value === "" ? "" : parseYamlValue(value, `--set ${field}`);
+  }
+  for (const rawField of flagValues(args, "--unset")) {
+    const field = updateField(rawField, "--unset");
+    if (inlineFields.has(field)) throw new RepositoryFormatError("CLI_USAGE", `Field ${field} is specified more than once`);
+    inlineFields.add(field);
+    result[field] = null;
+  }
+  if (file === undefined && inlineFields.size === 0) {
+    throw new RepositoryFormatError("CLI_USAGE", "entity update requires --file, --set or --unset");
+  }
+  return result;
 }
 
 function agentScope(args: readonly string[]): AgentScope {
@@ -62,7 +106,7 @@ function render(json: boolean, payload: Record<string, unknown>, human: string):
 }
 
 const SCHEMA_DIRECTORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../schemas/v1");
-const ROOT_USAGE = "Usage: gitpm <init|status|draft|entity create|entity import|schema|format|validate|diff --semantic|commit --all|push|mr create|doctor> [options]";
+const ROOT_USAGE = "Usage: gitpm <init|status|draft|entity create|entity update|entity import|schema|format|validate|diff --semantic|commit --all|push|mr create|doctor> [options]";
 
 const commandHelp: Readonly<Record<string, string>> = {
   root: [
@@ -73,11 +117,13 @@ const commandHelp: Readonly<Record<string, string>> = {
   entity: [
     "Usage:",
     "  gitpm entity create [--draft <id>] --file <yaml> [--type <type>] [--project <id>] [--json]",
+    "  gitpm entity update [--draft <id>] --type <type> --id <entity-id> [--file <yaml-patch>] [--set <field>=<yaml-value>]... [--unset <field>]... [--project <id>] [--json]",
     "  gitpm entity import [--draft <id>] --type <type> --format <csv|yaml|jsonl> (--file <path>|--path <path>) [--dry-run] [--json]",
     "",
     "create accepts a YAML mapping. schema, id and lifecycle may be omitted when --type is supplied.",
     "Person calendar may be omitted and is materialized from repository default_calendar.",
     "A supplied valid ID is preserved; otherwise GitPM generates <prefix>-<UTC YY>-<6 Crockford Base32>.",
+    "update applies a YAML field patch from --file and/or repeatable --set/--unset options. Entity ID, schema and owning Project are immutable.",
     "import is atomic: the complete batch is validated once and rolled back on any error.",
   ].join("\n"),
   schema: [
@@ -321,15 +367,29 @@ async function runCommit(args: readonly string[], dependencies: CliDependencies)
 
 async function runEntity(args: readonly string[], cwd: string, dependencies: CliDependencies): Promise<CliResult> {
   const action = args[0] === "bulk-import" ? "import" : args[0];
-  if (action !== "create" && action !== "import") throw new RepositoryFormatError("CLI_USAGE", "entity requires create or import");
+  if (action !== "create" && action !== "update" && action !== "import") throw new RepositoryFormatError("CLI_USAGE", "entity requires create, update or import");
   const draftId = flagValue(args, "--draft");
   const agent = args.includes("--draft") ? requireAgent(dependencies) : undefined;
-  if (agent !== undefined && agent.createEntity === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Entity creation is unavailable");
+  if (agent !== undefined && action === "create" && agent.createEntity === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Entity creation is unavailable");
+  if (agent !== undefined && action === "import" && agent.createEntities === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Atomic entity import is unavailable");
+  if (agent !== undefined && action === "update" && agent.updateEntity === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Entity update is unavailable");
   const direct = agent === undefined ? requireDirect(dependencies) : undefined;
+  const entityType = requestedEntityType(args);
+  if (action === "update") {
+    const requestedType = required(entityType, "--type");
+    const requestedId = required(flagValue(args, "--id"), "--id");
+    const patch = await entityUpdatePatch(args, cwd);
+    const updated = agent?.updateEntity === undefined
+      ? await direct!.updateEntity(patch, requestedType, requestedId, agentScope(args))
+      : await agent.updateEntity(required(draftId, "--draft"), patch, requestedType, requestedId, agentScope(args));
+    return {
+      exitCode: 0,
+      output: render(args.includes("--json"), { ok: true, code: "OK", ...updated }, `Updated ${updated.path}`),
+    };
+  }
   const file = required(flagValue(args, "--file") ?? flagValue(args, "--path"), "--file or --path");
   const source = path.resolve(cwd, file);
   const text = await readFile(source, "utf8");
-  const entityType = requestedEntityType(args);
   if (action === "import") {
     const format = (flagValue(args, "--format") ?? path.extname(source).slice(1)).toLocaleLowerCase();
     const documents = format === "csv" ? parseCsvEntities(text, source)

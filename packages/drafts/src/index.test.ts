@@ -65,8 +65,11 @@ describe("draft manager", () => {
       state: "open",
     });
     expect(await firstRuntime.gitClient.headCommit(draft.worktree_path)).toBe(remoteHead);
-    expect(await readFile(path.join(draft.worktree_path, "AGENTS.md"), "utf8")).toContain("GitPM draft `DRF-001`");
-    expect(await readFile(path.join(draft.worktree_path, ".agents", "skills", "gitpm", "SKILL.md"), "utf8")).toContain("name: gitpm");
+    expect(await readFile(path.join(draft.worktree_path, "AGENTS.md"), "utf8")).toContain("gitpm entity update --draft DRF-001 --type <type> --id <entity-id>");
+    const initialSkill = await readFile(path.join(draft.worktree_path, ".agents", "skills", "gitpm", "SKILL.md"), "utf8");
+    expect(initialSkill).toContain("name: gitpm");
+    expect(initialSkill).toContain("gitpm entity update --draft <id> --type <type> --id <entity-id>");
+    expect(initialSkill).not.toContain("lacks an entity update command");
 
     await rm(path.join(draft.worktree_path, "AGENTS.md"));
     await rm(path.join(draft.worktree_path, ".agents", "skills", "gitpm", "SKILL.md"));
@@ -213,9 +216,12 @@ describe("direct mode draft manager", () => {
     expect(await git(draft.worktree_path, "rev-parse", "--abbrev-ref", "HEAD")).toBe("main");
     expect(await readFile(path.join(draft.worktree_path, "AGENTS.md"), "utf8"))
       .toContain("gitpm entity create --type <type> --file <temporary-yaml> [--project <project-id>] --json");
+    expect(await readFile(path.join(draft.worktree_path, "AGENTS.md"), "utf8"))
+      .toContain("gitpm entity update --type <type> --id <entity-id> --set <field>=<yaml-value>");
     const skill = await readFile(path.join(draft.worktree_path, ".agents", "skills", "gitpm", "SKILL.md"), "utf8");
     expect(skill).toContain("Direct-mode commands do not take `--draft`");
     expect(skill).toContain("gitpm diff --semantic [--project <id>]");
+    expect(skill).toContain("gitpm entity update --type <type> --id <entity-id>");
     // No bare repository and no worktrees directory contents are created in direct mode.
     await expect(stat(path.join(test.data, "repository.git"))).rejects.toMatchObject({ code: "ENOENT" });
 

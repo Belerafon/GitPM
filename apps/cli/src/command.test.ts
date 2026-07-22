@@ -117,6 +117,7 @@ describe("CLI P12 agent commands", () => {
     const agent = {
       createDraft: async () => metadata, openDraft: async () => metadata, status: async () => metadata, setWriterMode: async () => metadata,
       createEntity: async (_draftId: string, document: GitPmDocument) => ({ path: `people/${String(document.id)}.yaml`, draft_fingerprint: "f".repeat(64), document }),
+      updateEntity: async (_draftId: string, patch: GitPmDocument, type: string, id: string) => ({ path: `${type}/${id}.yaml`, draft_fingerprint: "e".repeat(64), document: { ...patch, id } }),
       assertScope: async () => ({ affected_projects: [metadata.draft_id], changed_files: [] }),
       semanticDiff: async () => ({ created: [], updated: [{ id: "P-26-111111", schema: "gitpm/project@1", path: "project.yaml", fields: [{ field: "name", before: "Old", after: "New" }] }], archived: [], deleted: [], counts: { created: 0, updated: 1, archived: 0, deleted: 0 }, affected_projects: ["P-26-111111"], unclassified_files: [] }),
       commitAll: async () => ({ commit: "c".repeat(40), branch: metadata.branch, draft_fingerprint: "d".repeat(64) }),
@@ -141,6 +142,12 @@ describe("CLI P12 agent commands", () => {
       ok: true,
       path: "people/U-26-KB9RXB.yaml",
       document: { schema: "gitpm/person@1", name: "Елена Соколова" },
+    });
+    expect(JSON.parse((await run(["entity", "update", "--draft", "DRF-AGENT", "--type", "person", "--id", "U-26-KB9RXB", "--set", "email=new-elena@example.test", "--set", "weekly_capacity_hours=36", "--set", "labels=[backend, urgent]", "--json"], process.cwd(), { agent })).output)).toMatchObject({
+      ok: true,
+      code: "OK",
+      path: "person/U-26-KB9RXB.yaml",
+      document: { id: "U-26-KB9RXB", email: "new-elena@example.test", weekly_capacity_hours: 36, labels: ["backend", "urgent"] },
     });
     expect(JSON.parse((await run(["diff", "--semantic", "--draft", "DRF-AGENT", "--project", "P-26-111111", "--json"], process.cwd(), { agent })).output)).toMatchObject({ ok: true, counts: { updated: 1 } });
     expect(JSON.parse((await run(["commit", "--all", "-m", "Agent update", "--draft", "DRF-AGENT", "--project", "P-26-111111", "--json"], process.cwd(), { agent })).output)).toMatchObject({ ok: true, commit: "c".repeat(40) });
@@ -302,6 +309,36 @@ describe("CLI direct mode", () => {
     const commit = await run(["commit", "--all", "-m", "direct entity", "--project", "P-26-MGP84K", "--json"], process.cwd(), { direct });
     expect(commit.exitCode).toBe(0);
     expect(await git(path.join(data, "repository"), "log", "-1", "--format=%s")).toBe("direct entity");
+  });
+
+  it("updates entity fields inline, preserves other fields and rolls back invalid patches", async () => {
+    const { direct, data } = await directFixture();
+    const personPath = path.join(data, "repository", "people", "U-26-5EBAE3.yaml");
+    const updated = await run([
+      "entity", "update", "--type", "person", "--id", "U-26-5EBAE3",
+      "--set", "name=Анна Петрова", "--set", "email=anna.new@example.test", "--set", "weekly_capacity_hours=36", "--json",
+    ], process.cwd(), { direct });
+    expect(updated.exitCode).toBe(0);
+    expect(JSON.parse(updated.output)).toMatchObject({
+      ok: true,
+      code: "OK",
+      path: "people/U-26-5EBAE3.yaml",
+      document: { id: "U-26-5EBAE3", name: "Анна Петрова", email: "anna.new@example.test", weekly_capacity_hours: 36, calendar: "C-26-QD7FJ4", lifecycle: "active" },
+    });
+    await expect(readFile(personPath, "utf8")).resolves.toContain("email: anna.new@example.test");
+
+    const removed = await run(["entity", "update", "--type", "person", "--id", "U-26-5EBAE3", "--unset", "email", "--json"], process.cwd(), { direct });
+    expect(JSON.parse(removed.output).document).not.toHaveProperty("email");
+    await expect(readFile(personPath, "utf8")).resolves.not.toContain("email:");
+
+    const beforeInvalid = await readFile(personPath, "utf8");
+    const invalid = await run(["entity", "update", "--type", "person", "--id", "U-26-5EBAE3", "--set", "weekly_capacity_hours=-1", "--json"], process.cwd(), { direct });
+    expect(JSON.parse(invalid.output)).toMatchObject({ ok: false, code: "VALIDATION_FAILED" });
+    expect(await readFile(personPath, "utf8")).toBe(beforeInvalid);
+
+    const scoped = await run(["entity", "update", "--type", "person", "--id", "U-26-5EBAE3", "--set", "email=scoped@example.test", "--project", "P-26-MGP84K", "--json"], process.cwd(), { direct });
+    expect(JSON.parse(scoped.output)).toMatchObject({ ok: false, code: "AGENT_SCOPE_VIOLATION" });
+    expect(await readFile(personPath, "utf8")).toBe(beforeInvalid);
   });
 
   it("enforces Project scope and rolls back invalid direct entity creation", async () => {

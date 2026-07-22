@@ -90,6 +90,14 @@ export interface EntityCreatePlanItem {
   readonly source_index: number;
 }
 
+export interface EntityUpdatePlan {
+  readonly entityType: string;
+  readonly id: string;
+  readonly before: GitPmDocument;
+  readonly document: GitPmDocument;
+  readonly path: string;
+}
+
 export function canonicalEntityType(value: string): string {
   const normalized = entityTypeAliases[value] ?? value;
   if (ENTITY_TYPE_SCHEMAS[normalized] === undefined) {
@@ -168,6 +176,41 @@ export function planEntityCreation(
   });
 }
 
+export function planEntityUpdate(
+  patch: Readonly<Record<string, unknown>>,
+  existingDocuments: readonly GitPmDocument[],
+  requestedType: string,
+  requestedId: string,
+): EntityUpdatePlan {
+  const entityType = canonicalEntityType(requestedType);
+  const schema = ENTITY_TYPE_SCHEMAS[entityType]!;
+  const prefix = schemaIdPrefixes[schema as keyof typeof schemaIdPrefixes];
+  if (prefix === undefined || !isEntityId(requestedId, prefix)) {
+    throw new DomainOperationError("ENTITY_ID_INVALID", `Entity ID ${requestedId} is invalid for ${entityType}`);
+  }
+  const before = existingDocuments.find((document) => document.schema === schema && document.id === requestedId);
+  if (before === undefined) throw new DomainOperationError("ENTITY_NOT_FOUND", `${entityType}/${requestedId} not found`);
+  if ((patch.schema !== undefined && patch.schema !== schema) || (patch.id !== undefined && patch.id !== requestedId)) {
+    throw new DomainOperationError("ENTITY_IDENTITY_IMMUTABLE", "Entity ID and schema are immutable");
+  }
+  if (typeof before.project === "string" && patch.project !== undefined && patch.project !== before.project) {
+    throw new DomainOperationError("ENTITY_IDENTITY_IMMUTABLE", "Entity ID, schema and owning project are immutable");
+  }
+  const next: Record<string, unknown> = { ...before };
+  for (const [field, value] of Object.entries(patch)) {
+    if (value === null) delete next[field];
+    else next[field] = value;
+  }
+  next.schema = schema;
+  next.id = requestedId;
+  const document = next as GitPmDocument;
+  const path = entityPathForDocument(before);
+  if (entityPathForDocument(document) !== path) {
+    throw new DomainOperationError("ENTITY_IDENTITY_IMMUTABLE", "Entity ID, schema and owning project are immutable");
+  }
+  return { entityType, id: requestedId, before, document, path };
+}
+
 export function assertEntityType(entityType: string, document: GitPmDocument): void {
   const schema = ENTITY_TYPE_SCHEMAS[entityType];
   if (!schema || schema !== document.schema) {
@@ -221,10 +264,10 @@ async function exists(file: string): Promise<boolean> {
   }
 }
 
-function containsReference(value: unknown, id: string): boolean {
+export function containsEntityReference(value: unknown, id: string): boolean {
   if (value === id) return true;
-  if (Array.isArray(value)) return value.some((item) => containsReference(item, id));
-  if (value !== null && typeof value === "object") return Object.values(value).some((item) => containsReference(item, id));
+  if (Array.isArray(value)) return value.some((item) => containsEntityReference(item, id));
+  if (value !== null && typeof value === "object") return Object.values(value).some((item) => containsEntityReference(item, id));
   return false;
 }
 
@@ -344,6 +387,17 @@ export class EntityStore {
     const metadata = await this.drafts.getDraft(draftId);
     const repository = await this.index(draftId, metadata);
     return planEntityCreation(inputs, repository.entities.map((entity) => entity.document), requestedType);
+  }
+
+  async planUpdate(
+    draftId: string,
+    patch: Readonly<Record<string, unknown>>,
+    requestedType: string,
+    requestedId: string,
+  ): Promise<EntityUpdatePlan> {
+    const metadata = await this.drafts.getDraft(draftId);
+    const repository = await this.index(draftId, metadata);
+    return planEntityUpdate(patch, repository.entities.map((entity) => entity.document), requestedType, requestedId);
   }
 
   async list(draftId: string, entityType: string, project?: string): Promise<readonly EntityResult[]> {
@@ -529,6 +583,7 @@ export class EntityStore {
     expectedFingerprint: string,
     expectedBlobId: string,
     document: GitPmDocument,
+    assertChangedPaths?: (paths: readonly string[]) => void,
   ): Promise<EntityResult> {
     const mutation = await this.drafts.withUiMutation(draftId, owner, expectedFingerprint, async (metadata) => {
       const found = await this.find(draftId, metadata, entityType, id);
@@ -545,7 +600,7 @@ export class EntityStore {
         await atomicWriteDomainFile(metadata.worktree_path, found.relative, formatYamlDocument(document, referenceLabels));
         if (referenceLabelForDocument(found.document) !== referenceLabelForDocument(document)) {
           for (const entity of repository.entities) {
-            if (entity.relative === found.relative || !containsReference(entity.document, id)) continue;
+            if (entity.relative === found.relative || !containsEntityReference(entity.document, id)) continue;
             const relatedOriginal = await readFile(entity.absolute, "utf8");
             const relatedFormatted = formatYamlDocument(entity.document, referenceLabels);
             if (relatedFormatted === relatedOriginal) continue;
@@ -553,6 +608,7 @@ export class EntityStore {
             await atomicWriteDomainFile(metadata.worktree_path, entity.relative, relatedFormatted);
           }
         }
+        assertChangedPaths?.([...originals.keys()]);
         await this.assertRepositoryValid(metadata.worktree_path);
       } catch (error) {
         for (const [relative, original] of originals) await atomicWriteDomainFile(metadata.worktree_path, relative, original);

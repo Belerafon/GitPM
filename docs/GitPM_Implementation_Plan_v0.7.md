@@ -385,6 +385,7 @@ Comment в обычный текст и только затем удаляет P
 Общие команды используются UI, CI и агентом:
 
 ```bash
+gitpm entity update --type task --id T-... --set status=done --project P-...
 gitpm format
 gitpm format --check
 gitpm validate
@@ -525,7 +526,10 @@ Workload:
 
 ## 21. Агент через files и CLI
 
-Агент получает отдельный draft в `external` writer mode и редактирует YAML непосредственно.
+Агент получает отдельный draft в `external` writer mode, читает YAML для контекста, но выполняет
+все изменения только через CLI. Создание использует `entity create`/`entity import`, а изменение
+полей существующих сущностей — транзакционный `entity update` с неизменяемыми identity и owning
+Project. Прямое редактирование YAML запрещено.
 
 Рекомендуемый цикл:
 

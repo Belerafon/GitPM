@@ -80,4 +80,29 @@ describe("agent file and CLI workflow core", () => {
     const error = new AgentWorkflowError("AGENT_EXTERNAL_MODE_REQUIRED", "required");
     expect(error.code).toBe("AGENT_EXTERNAL_MODE_REQUIRED");
   });
+
+  it("updates existing entities transactionally through the external workflow", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "gitpm-agent-update-")); roots.push(root);
+    const source = path.join(root, "source"); const remote = path.join(root, "remote.git"); const data = path.join(root, "data");
+    await mkdir(source); await cp(demo, source, { recursive: true }); await git(source, "init", "-b", "main"); await git(source, "add", ".");
+    await git(source, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-m", "fixture");
+    await git(root, "init", "--bare", remote); await git(source, "remote", "add", "origin", remote); await git(source, "push", "origin", "main");
+    const client = new GitClient({ dataDirectory: data, remoteUrl: remote, defaultBranch: "main", allowLocalTestRemote: true, askPassPath: path.join(process.cwd(), "scripts", "git-askpass.mjs") });
+    const drafts = new DraftManager(client, data); const changes = new ChangesService(drafts, client);
+    const workflow = new AgentWorkflow(drafts, client, changes, { authorName: "agent-42", authorEmail: "42@example.test", defaultBranch: "main" });
+    const draft = await workflow.createDraft("DRF-UPDATE", "42");
+    const personPath = path.join(draft.worktree_path, ...personFile.split("/"));
+
+    const updated = await workflow.updateEntity("DRF-UPDATE", { email: "новая-почта@example.test", weekly_capacity_hours: 36 }, "person", "U-26-5EBAE3");
+    expect(updated.document).toMatchObject({ name: "Anna Petrova", email: "новая-почта@example.test", weekly_capacity_hours: 36 });
+    await expect(readFile(personPath, "utf8")).resolves.toContain("email: новая-почта@example.test");
+
+    const beforeInvalid = await readFile(personPath, "utf8");
+    await expect(workflow.updateEntity("DRF-UPDATE", { weekly_capacity_hours: -1 }, "person", "U-26-5EBAE3"))
+      .rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+    expect(await readFile(personPath, "utf8")).toBe(beforeInvalid);
+    await expect(workflow.updateEntity("DRF-UPDATE", { email: "scoped@example.test" }, "person", "U-26-5EBAE3", { allowedProject: projectId }))
+      .rejects.toMatchObject({ code: "AGENT_SCOPE_VIOLATION" });
+    expect(await readFile(personPath, "utf8")).toBe(beforeInvalid);
+  }, 60_000);
 });

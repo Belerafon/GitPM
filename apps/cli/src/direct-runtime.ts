@@ -133,6 +133,44 @@ export class DirectCliRuntime {
     return await this.entities.createMany(draftId, metadata.owner_gitlab_user_id, metadata.fingerprint, plan, dryRun);
   }
 
+  async updateEntity(
+    patch: Readonly<Record<string, unknown>>,
+    requestedType: string,
+    requestedId: string,
+    scope: AgentScope = {},
+  ): Promise<EntityResult> {
+    const draftId = await this.draftId();
+    await this.assertScope(scope);
+    const plan = await this.entities.planUpdate(draftId, patch, requestedType, requestedId);
+    const affectedProject = /^projects\/(P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6})\//u.exec(plan.path)?.[1];
+    const assertPaths = (paths: readonly string[]): void => {
+      const affectedProjects = [...new Set(paths.flatMap((relative) => {
+        const project = /^projects\/(P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6})\//u.exec(relative)?.[1];
+        return project === undefined ? [] : [project];
+      }))];
+      assertAgentScope({
+        affected_projects: affectedProjects,
+        files: paths.map((relative) => ({ path: relative, kind: "Modified" as const })),
+      }, scope);
+    };
+    assertAgentScope({
+      affected_projects: affectedProject === undefined ? [] : [affectedProject],
+      files: [{ path: plan.path, kind: "Modified" }],
+    }, scope);
+    const metadata = await this.drafts.refreshFingerprint(draftId);
+    const current = await this.entities.get(draftId, plan.entityType, plan.id);
+    return await this.entities.update(
+      draftId,
+      metadata.owner_gitlab_user_id,
+      plan.entityType,
+      plan.id,
+      metadata.fingerprint,
+      current.blob_id,
+      plan.document,
+      assertPaths,
+    );
+  }
+
   async semanticDiff(scope: AgentScope = {}): Promise<SemanticDiff> {
     const draftId = await this.draftId();
     await this.assertScope(scope);

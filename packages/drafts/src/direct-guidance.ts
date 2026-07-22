@@ -102,6 +102,11 @@ Use \`--type\` when schema is omitted; GitPM generates a missing ID and applies 
 
 \`gitpm entity create --type <type> --file <temporary-yaml> [--project <project-id>] --json\`
 
+Update one or more fields without a temporary file by repeating \`--set\`; use \`--unset\` to
+remove an optional field:
+
+\`gitpm entity update --type <type> --id <entity-id> --set <field>=<yaml-value> [--set ...] [--unset <field>] [--project <project-id>] --json\`
+
 Inspect fields with \`gitpm schema show <type> --json\`. For bulk creation, use \`gitpm entity
 import --type <type> --format <csv|yaml|jsonl> --file <file>\`, first with \`--dry-run\` and then
 without it.
@@ -128,7 +133,7 @@ inside this managed portfolio checkout.
 
 export const GITPM_DIRECT_SKILL_FILE_CONTENT = `---
 name: gitpm
-description: Operate a GitPM project-management checkout in direct repository mode through the GitPM CLI. Use for understanding GitPM repository data, creating supported entities, validating and formatting changes, viewing semantic diffs, committing to the active branch, pushing to origin, and diagnosing GitPM errors or ambiguous behavior. Enforces CLI-only mutation and requires actionable product feedback instead of workarounds.
+description: Operate a GitPM project-management checkout in direct repository mode through the GitPM CLI. Use for understanding GitPM repository data, creating and updating supported entities, validating and formatting changes, viewing semantic diffs, committing to the active branch, pushing to origin, and diagnosing GitPM errors or ambiguous behavior. Enforces CLI-only mutation and requires actionable product feedback instead of workarounds.
 ---
 
 # Work with a GitPM direct-mode checkout
@@ -169,8 +174,8 @@ and active configuration slugs must exist. Dates are \`YYYY-MM-DD\`; estimates a
 quarter-hour multiples. YAML uses UTF-8, LF, two-space indentation, no duplicate keys, aliases,
 anchors, or custom tags.
 
-Read YAML only to understand state or prepare a complete temporary input. Never mutate domain
-files directly.
+Read YAML only to understand state or prepare a temporary create input or update patch. Never
+mutate domain files directly.
 
 ## Establish the direct-mode context
 
@@ -198,6 +203,10 @@ All commands accept \`--json\`; use it for automation. Direct-mode commands do n
   ahead/behind versus origin.
 - \`gitpm entity create --type <type> --file <file> [--project <id>]\` creates an entity from a
   YAML mapping, generating a missing ID and applying documented defaults.
+- \`gitpm entity update --type <type> --id <entity-id> [--file <yaml-patch>]
+  [--set <field>=<yaml-value>]... [--unset <field>]... [--project <id>]\` transactionally patches
+  any supported entity type. Inline values use YAML scalar/collection types; \`--unset\` removes
+  an optional field. Identity, schema, and owning Project are immutable.
 - \`gitpm entity import --type <type> --format <csv|yaml|jsonl> --file <file> [--dry-run]\`
   atomically validates and creates a batch.
 - \`gitpm schema list|show <type> [--example]\` exposes the installed schema contract.
@@ -212,15 +221,17 @@ All commands accept \`--json\`; use it for automation. Direct-mode commands do n
 - \`gitpm doctor\` checks runtime and repository readiness.
 - \`gitpm --version\` reports the CLI version.
 
-There is no \`mr\` command in direct mode. The current CLI exposes creation but not general entity
-update, archive, physical delete, move, configuration update, or comment-specific commands. When the
+There is no \`mr\` command in direct mode. The current CLI exposes entity creation and general
+entity update, but not archive, physical delete, move, configuration update, or comment-specific commands. When the
 request needs one of these, report the capability gap and recommend adding the corresponding CLI
 operation. Do not invent syntax and do not fall back to editing YAML.
 
 For entity creation, keep the temporary input outside the checkout, inspect fields with
 \`gitpm schema show\`, and never guess a reference or configuration slug. Omit \`id\` to let GitPM
 generate it. For Person, omit \`calendar\` to materialize the repository default, or supply an
-explicit active Calendar. A supplied valid ID is preserved and never silently replaced.
+explicit active Calendar. A supplied valid ID is preserved and never silently replaced. For
+updates, prefer repeatable \`--set\`/\`--unset\` for a few top-level fields; use \`--file\` for a
+larger YAML patch. Read the current entity first, and verify the resulting semantic fields.
 
 ## Scope the work
 
