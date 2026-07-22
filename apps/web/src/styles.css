@@ -409,6 +409,20 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .card-heading h3 { margin: 0; }
 .search-field { display: grid; gap: .25rem; min-width: min(280px, 100%); color: #5d625f; font-size: .78rem; }
 .admin-actions { display: flex; flex-wrap: wrap; gap: .35rem; }
+.people-admin-sections { display: grid; gap: 1.25rem; }
+.directory-card { min-width: 0; }
+.directory-card > .editor-trigger { margin-bottom: 1rem; }
+.directory-table-wrap { overflow-x: auto; border: 1px solid #e2e4df; border-radius: 9px; }
+.directory-table { width: 100%; min-width: 760px; border-collapse: collapse; }
+.directory-table th, .directory-table td { border-right: 1px solid #e2e4df; border-bottom: 1px solid #e2e4df; padding: .75rem; text-align: left; vertical-align: middle; }
+.directory-table tr:last-child > * { border-bottom: 0; }
+.directory-table tr > *:last-child { border-right: 0; }
+.directory-table thead th { background: #f2f4f0; color: #59625c; font-size: .72rem; white-space: nowrap; }
+.directory-table tbody th { position: sticky; left: 0; z-index: 1; min-width: 180px; background: #fff; font-size: .82rem; }
+.directory-table tbody td { color: #646b66; font-size: .8rem; }
+.directory-table tbody tr:hover > * { background-color: #f8faf7; }
+.directory-table tbody tr.recently-changed > * { background-color: #fff3c9; }
+.team-directory-table td:last-child { width: 1%; white-space: nowrap; }
 .person-link { cursor: pointer; color: #245f4c; font-weight: 650; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
 .person-link:hover { color: #173f31; text-decoration-thickness: 2px; }
 .person-link:focus-visible { border-radius: 3px; outline: 2px solid #5a8d77; outline-offset: 2px; }
@@ -422,6 +436,8 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .people-profile-identity a { color: #315f50; font-size: .84rem; }
 .people-team-chips { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .65rem; }
 .people-team-chips span { border-radius: 999px; background: #edf3ee; color: #31584c; padding: .2rem .5rem; font-size: .72rem; }
+.people-profile-controls { display: grid; gap: .8rem; min-width: 260px; }
+.people-profile-controls > button { justify-self: end; }
 .people-profile-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; margin: 0; }
 .people-profile-meta div { border-left: 2px solid #dce5de; padding-left: .75rem; }
 .people-profile-meta dt { color: #6b726d; font-size: .7rem; }
@@ -502,7 +518,7 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .people-project-heading > strong { display: grid; place-items: center; min-width: 1.6rem; height: 1.6rem; border-radius: 999px; background: #edf3ee; color: #31584c; font-size: .75rem; }
 @media (max-width: 1100px) { .people-profile-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 900px) { .people-profile-layout { grid-template-columns: 1fr; } }
-@media (max-width: 700px) { .people-profile-header, .people-profile-stats { grid-template-columns: 1fr; } .people-profile-meta { grid-template-columns: 1fr 1fr; } .people-calendar-heading { align-items: stretch; flex-direction: column; } .people-calendar-navigation { width: 100%; } .people-task-list > button { grid-template-columns: 1fr auto; } .people-task-list time { grid-column: 1 / -1; text-align: left; } .people-schedule-list li { grid-template-columns: 1fr; gap: .2rem; } .people-schedule-list time { padding-top: 0; } }
+@media (max-width: 700px) { .people-profile-header, .people-profile-stats { grid-template-columns: 1fr; } .people-profile-controls { min-width: 0; } .people-profile-controls > button { justify-self: stretch; } .people-profile-meta { grid-template-columns: 1fr 1fr; } .people-calendar-heading { align-items: stretch; flex-direction: column; } .people-calendar-navigation { width: 100%; } .people-task-list > button { grid-template-columns: 1fr auto; } .people-task-list time { grid-column: 1 / -1; text-align: left; } .people-schedule-list li { grid-template-columns: 1fr; gap: .2rem; } .people-schedule-list time { padding-top: 0; } }
 fieldset { display: flex; flex-wrap: wrap; gap: .5rem; border: 1px solid #dedfd9; border-radius: 8px; }
 fieldset label { display: flex; gap: .25rem; align-items: center; }
 .assignee-fieldset { display: grid; align-items: stretch; }

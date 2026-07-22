@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import type { GitPmApi } from "./api.js";
 import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
+import { EditorDrawer } from "./editor-drawer.js";
 import { formatDateOnly, formatNumber, message, type Locale, type MessageKey } from "./i18n.js";
-import type { DraftStatus, EntityResult, GitPmDocument } from "./types.js";
+import type { DraftStatus, EntityResult, GitPmDocument, GitPmRole } from "./types.js";
 import type { WorkspaceNavigate } from "./workspace-navigation.js";
 
 const text = (document: GitPmDocument, key: string) => typeof document[key] === "string" ? document[key] as string : "";
@@ -19,9 +20,11 @@ interface ProfileData {
   readonly tasks: readonly EntityResult[];
 }
 
-export function PeopleProfileWorkspace({ api, draft, locale, personId, onNavigate }: { readonly api: GitPmApi; readonly draft: DraftStatus; readonly locale: Locale; readonly personId: string; readonly onNavigate: WorkspaceNavigate }) {
+export function PeopleProfileWorkspace({ api, confirmAction = () => true, draft, locale, onChanged = async () => undefined, personId, role = "Reporter", onNavigate }: { readonly api: GitPmApi; readonly confirmAction?: (message: string) => boolean; readonly draft: DraftStatus; readonly locale: Locale; readonly onChanged?: () => Promise<void>; readonly personId: string; readonly role?: GitPmRole; readonly onNavigate: WorkspaceNavigate }) {
   const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
   const [data, setData] = useState<ProfileData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
   const loadRequest = useAsyncLoad();
   const load = useCallback(async () => {
     await loadRequest.run(async () => {
@@ -36,15 +39,41 @@ export function PeopleProfileWorkspace({ api, draft, locale, personId, onNavigat
     }, setData);
   }, [api, draft.draft_id, draft.external_fingerprint, loadRequest.run]);
   useEffect(() => { void load(); }, [load]);
+  const readOnly = role !== "Maintainer" || draft.writer_mode !== "ui" || draft.state !== "open" || draft.changed_externally === true;
+  const person = data?.people.find((item) => item.document.id === personId);
+  const updatePerson = async (document: GitPmDocument) => {
+    if (person === undefined || readOnly) return false;
+    setError(null);
+    try {
+      const result = await api.updateEntity(draft.draft_id, "people", person, person.draft_fingerprint, document);
+      setData((current) => current === null ? current : { ...current, people: current.people.map((item) => item.document.id === result.document.id ? result : item) });
+      await onChanged();
+      return true;
+    } catch (caught) { setError(caught instanceof Error ? caught.message : String(caught)); return false; }
+  };
+  const archivePerson = async () => {
+    if (person === undefined || readOnly) return false;
+    setError(null);
+    try { await api.archiveEntity(draft.draft_id, "people", person, person.draft_fingerprint); await onChanged(); onNavigate("people"); return true; }
+    catch (caught) { setError(caught instanceof Error ? caught.message : String(caught)); return false; }
+  };
+  const deletePerson = async () => {
+    if (person === undefined || readOnly || !confirmAction(t("core.deleteConfirm", { name: text(person.document, "name") }))) return false;
+    setError(null);
+    try { await api.deleteEntity(draft.draft_id, "people", person, person.draft_fingerprint); await onChanged(); onNavigate("people"); return true; }
+    catch (caught) { setError(caught instanceof Error ? caught.message : String(caught)); return false; }
+  };
 
   return <section className="people-profile-workspace">
+    {role !== "Maintainer" && <div className="alert warning">{t("admin.maintainerOnly")}</div>}
+    {error !== null && <div className="alert error">{error}</div>}
     <AsyncBoundary state={loadRequest.state} loading={t("status.loading")} retry={() => { void load(); }} error={(error, retry) => <div className="alert error">{error}<button onClick={retry}>{t("status.retry")}</button></div>}>
-      {data !== null && <PeopleProfile data={data} locale={locale} onNavigate={onNavigate} personId={personId} t={t} />}
+      {data !== null && <PeopleProfile archivePerson={archivePerson} data={data} deletePerson={deletePerson} editorOpen={editorOpen} locale={locale} onCloseEditor={() => setEditorOpen(false)} onEdit={() => setEditorOpen(true)} onNavigate={onNavigate} personId={personId} readOnly={readOnly} savePerson={updatePerson} t={t} />}
     </AsyncBoundary>
   </section>;
 }
 
-function PeopleProfile({ data, locale, personId, onNavigate, t }: { readonly data: ProfileData; readonly locale: Locale; readonly personId: string; readonly onNavigate: WorkspaceNavigate; readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string }) {
+function PeopleProfile({ archivePerson, data, deletePerson, editorOpen, locale, onCloseEditor, onEdit, personId, readOnly, savePerson, onNavigate, t }: { readonly archivePerson: () => Promise<boolean>; readonly data: ProfileData; readonly deletePerson: () => Promise<boolean>; readonly editorOpen: boolean; readonly locale: Locale; readonly onCloseEditor: () => void; readonly onEdit: () => void; readonly personId: string; readonly readOnly: boolean; readonly savePerson: (document: GitPmDocument) => Promise<boolean>; readonly onNavigate: WorkspaceNavigate; readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string }) {
   const person = data.people.find((item) => item.document.id === personId);
   if (person === undefined) return <div className="card empty-workspace"><p>{t("people.notFound")}</p><button onClick={() => onNavigate("people")}>← {t("people.back")}</button></div>;
 
@@ -79,8 +108,9 @@ function PeopleProfile({ data, locale, personId, onNavigate, t }: { readonly dat
     <header className="card people-profile-header">
       <div className="people-avatar" aria-hidden="true">{initials}</div>
       <div className="people-profile-identity"><span className="eyebrow">{person.document.id}</span><h2>{name}</h2>{text(person.document, "email") !== "" && <a href={`mailto:${text(person.document, "email")}`}>{text(person.document, "email")}</a>}<div className="people-team-chips">{teams.map((team) => <span key={team.document.id}>{text(team.document, "name")}</span>)}</div></div>
-      <dl className="people-profile-meta"><div><dt>{t("people.capacity")}</dt><dd>{t("people.hoursPerWeek", { count: formatNumber(locale, number(person.document, "weekly_capacity_hours")) })}</dd></div><div><dt>{t("people.calendar")}</dt><dd>{calendar === undefined ? "—" : text(calendar.document, "name")}</dd></div></dl>
+      <div className="people-profile-controls"><dl className="people-profile-meta"><div><dt>{t("people.capacity")}</dt><dd>{t("people.hoursPerWeek", { count: formatNumber(locale, number(person.document, "weekly_capacity_hours")) })}</dd></div><div><dt>{t("people.calendar")}</dt><dd>{calendar === undefined ? "—" : text(calendar.document, "name")}</dd></div></dl><button className="primary" disabled={readOnly} onClick={onEdit} type="button">{t("admin.editPerson")}</button></div>
     </header>
+    <PersonEditorDrawer archivePerson={archivePerson} calendars={data.calendars.filter((item) => item.document.lifecycle === "active")} close={onCloseEditor} deletePerson={deletePerson} open={editorOpen} person={person} readOnly={readOnly} savePerson={savePerson} t={t} />
 
     <dl className="people-profile-stats"><div className="card"><dt>{t("people.assignedTasks")}</dt><dd>{assignedTasks.length}</dd></div><div className="card"><dt>{t("people.responsibleProjects")}</dt><dd>{ownedProjects.length}</dd></div><div className="card"><dt>{t("people.participatingProjects")}</dt><dd>{contributingProjects.length}</dd></div><div className="card"><dt>{t("people.teams")}</dt><dd>{teams.length}</dd></div></dl>
 
@@ -102,6 +132,15 @@ function PeopleProfile({ data, locale, personId, onNavigate, t }: { readonly dat
       </aside>
     </div>
   </>;
+}
+
+function PersonEditorDrawer({ archivePerson, calendars, close, deletePerson, open, person, readOnly, savePerson, t }: { readonly archivePerson: () => Promise<boolean>; readonly calendars: readonly EntityResult[]; readonly close: () => void; readonly deletePerson: () => Promise<boolean>; readonly open: boolean; readonly person: EntityResult; readonly readOnly: boolean; readonly savePerson: (document: GitPmDocument) => Promise<boolean>; readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string }) {
+  const name = text(person.document, "name");
+  const save = async (form: HTMLFormElement) => {
+    const data = new FormData(form); const email = String(data.get("email") ?? ""); const calendar = String(data.get("calendar") ?? "");
+    return await savePerson({ ...person.document, name: String(data.get("name") ?? ""), email: email || undefined, weekly_capacity_hours: Number(data.get("capacity")), calendar: calendar || undefined });
+  };
+  return <EditorDrawer closeLabel={t("core.closeEditor")} onClose={close} open={open} title={`${t("admin.editPerson")}: ${name}`}><form className="editor-drawer-form" onSubmit={(event) => { event.preventDefault(); void save(event.currentTarget).then((success) => { if (success) close(); }); }}><label>{t("core.name")}<input name="name" defaultValue={name} required /></label><label>{t("admin.email")}<input name="email" defaultValue={text(person.document, "email")} type="email" /></label><label>{t("admin.capacity")}<input name="capacity" type="number" min="0" step="0.25" defaultValue={number(person.document, "weekly_capacity_hours")} required /></label><label>{t("admin.calendar")}<select name="calendar" defaultValue={text(person.document, "calendar")}><option value="">{t("admin.defaultCalendar")}</option>{calendars.map((item) => <option key={item.document.id} value={item.document.id}>{text(item.document, "name")}</option>)}</select></label><div className="editor-drawer-actions"><details className="more-actions"><summary>{t("core.moreActions")}</summary><div><button disabled={readOnly} onClick={() => { void archivePerson(); }} type="button">{t("core.archive")}</button><button className="danger" disabled={readOnly} onClick={() => { void deletePerson(); }} type="button">{t("core.delete")}</button></div></details><button onClick={close} type="button">{t("core.cancel")}</button><button className="primary" disabled={readOnly}>{t("core.save")}</button></div></form></EditorDrawer>;
 }
 
 function ProjectResponsibility({ title, empty, projects, projectTaskCounts, onNavigate, t }: { readonly title: string; readonly empty: string; readonly projects: readonly EntityResult[]; readonly projectTaskCounts: ReadonlyMap<string, number>; readonly onNavigate: WorkspaceNavigate; readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string }) {

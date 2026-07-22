@@ -40,8 +40,10 @@ test.describe("GitPM browser UI", () => {
 
   test("persists the selected locale across a browser reload", async ({ page }) => {
     await page.goto("/");
+    await page.locator(".interface-settings > summary").click();
     const locale = page.getByLabel("Язык", { exact: true });
     await locale.selectOption("en");
+    await page.locator(".interface-settings > summary").click();
     await expect(page.getByRole("heading", { name: "Projects", exact: true })).toBeVisible();
 
     await page.reload();
@@ -64,7 +66,9 @@ test.describe("GitPM browser UI", () => {
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto("/people/U-26-5EBAE3");
+      await page.locator(".interface-settings > summary").click();
       await page.locator(".locale-picker select").selectOption("en");
+      await page.locator(".interface-settings > summary").click();
 
       await expect(page.getByRole("heading", { name: "Anna Petrova", exact: true })).toBeVisible();
       await expect(page.getByRole("heading", { name: "Schedule", exact: true })).toBeVisible();
@@ -94,7 +98,9 @@ test.describe("GitPM browser UI", () => {
     for (const width of [320, 390, 800, 1280, 1920]) {
       await page.setViewportSize({ width, height: 844 });
       await page.goto("/");
+      await page.locator(".interface-settings > summary").click();
       await page.locator(".locale-picker select").selectOption("en");
+      await page.locator(".interface-settings > summary").click();
 
       for (const destination of destinations) {
         if (width <= 880) {
@@ -111,7 +117,7 @@ test.describe("GitPM browser UI", () => {
       if (width === 1280) {
         for (const [section, tabs] of [
           ["Team", ["Team workload", "People and teams", "Working calendars"]],
-          ["Repository", ["Working copies", "Changes", "History"]],
+          ["Repository", ["Changes", "Files", "History"]],
         ] as const) {
           await page.getByRole("button", { name: section, exact: true }).click();
           for (const tab of tabs) {
@@ -127,7 +133,9 @@ test.describe("GitPM browser UI", () => {
 
   test("restores routed sections, selected entities and browser history", async ({ page }) => {
     await page.goto("/");
+    await page.locator(".interface-settings > summary").click();
     await page.locator(".locale-picker select").selectOption("en");
+    await page.locator(".interface-settings > summary").click();
     await expect(page).toHaveURL(/\/projects$/u);
 
     await page.goto("/tasks");

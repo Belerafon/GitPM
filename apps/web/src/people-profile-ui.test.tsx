@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GitPmApi } from "./api.js";
 import { PeopleProfileWorkspace } from "./people-profile-ui.js";
@@ -50,5 +50,77 @@ describe("person profile", () => {
     fireEvent.click(within(projects).getByRole("button", { name: /Alpha/u }));
     expect(onNavigate).toHaveBeenCalledWith("projects", { projectId });
     expect(screen.getByRole("heading", { name: "Participates in" })).toBeTruthy();
+  });
+
+  it("edits a person only from the profile and keeps the latest draft fingerprint", async () => {
+    const personId = "U-26-ADA";
+    const calendar = result({ schema: "gitpm/calendar@1", id: "C-26-DEFAULT", name: "Default", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
+    let person = result({ schema: "gitpm/person@1", id: personId, name: "Ada", email: "ada@example.test", weekly_capacity_hours: 32, calendar: calendar.document.id, lifecycle: "active" });
+    let revision = 0;
+    const schemaByType: Record<string, string> = { people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1", projects: "gitpm/project@1", tasks: "gitpm/task@1" };
+    const updateEntity = vi.fn(async (_draftId: string, _type: string, _entity: EntityResult, _fingerprint: string, document: GitPmDocument) => {
+      revision += 1;
+      person = { ...result(document), draft_fingerprint: (revision === 1 ? "c" : "d").repeat(64) };
+      return person;
+    });
+    const api = {
+      listEntities: vi.fn(async (_draftId: string, type: string) => [person, calendar].filter((item) => item.document.schema === schemaByType[type])),
+      updateEntity,
+    } as unknown as GitPmApi;
+    const onChanged = vi.fn(async () => undefined);
+
+    render(<PeopleProfileWorkspace api={api} draft={draft} locale="en" onChanged={onChanged} onNavigate={vi.fn()} personId={personId} role="Maintainer" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Edit person" }));
+    const dialog = screen.getByRole("dialog", { name: "Edit person: Ada" });
+    fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "Ada Byron" } });
+    fireEvent.change(within(dialog).getByLabelText("Weekly capacity (hours)"), { target: { value: "36" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByRole("heading", { name: "Ada Byron" })).toBeTruthy();
+    expect(updateEntity).toHaveBeenCalledWith(draft.draft_id, "people", expect.objectContaining({ document: expect.objectContaining({ name: "Ada" }) }), "b".repeat(64), expect.objectContaining({ name: "Ada Byron", weekly_capacity_hours: 36 }));
+    expect(onChanged).toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit person" }));
+    const updatedDialog = screen.getByRole("dialog", { name: "Edit person: Ada Byron" });
+    fireEvent.change(within(updatedDialog).getByLabelText("Weekly capacity (hours)"), { target: { value: "38" } });
+    fireEvent.click(within(updatedDialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(updateEntity).toHaveBeenCalledTimes(2));
+    expect(updateEntity.mock.calls[1]?.[3]).toBe("c".repeat(64));
+  });
+
+  it("protects permanent deletion in the profile and redirects after confirmation", async () => {
+    const personId = "U-26-ADA";
+    const person = result({ schema: "gitpm/person@1", id: personId, name: "Ada", weekly_capacity_hours: 32, calendar: "C-26-DEFAULT", lifecycle: "active" });
+    const calendar = result({ schema: "gitpm/calendar@1", id: "C-26-DEFAULT", name: "Default", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
+    const schemaByType: Record<string, string> = { people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1", projects: "gitpm/project@1", tasks: "gitpm/task@1" };
+    const deleteEntity = vi.fn(async () => undefined);
+    const confirmAction = vi.fn(() => false);
+    const onNavigate = vi.fn();
+    const api = { listEntities: vi.fn(async (_draftId: string, type: string) => [person, calendar].filter((item) => item.document.schema === schemaByType[type])), deleteEntity } as unknown as GitPmApi;
+
+    render(<PeopleProfileWorkspace api={api} confirmAction={confirmAction} draft={draft} locale="en" onNavigate={onNavigate} personId={personId} role="Maintainer" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Edit person" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    expect(confirmAction).toHaveBeenCalledWith("Delete Ada permanently? This action cannot be undone.");
+    expect(deleteEntity).not.toHaveBeenCalled();
+
+    confirmAction.mockReturnValue(true);
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(deleteEntity).toHaveBeenCalledWith(draft.draft_id, "people", person, person.draft_fingerprint));
+    expect(onNavigate).toHaveBeenCalledWith("people");
+  });
+
+  it("keeps the profile editor unavailable outside Maintainer UI drafts", async () => {
+    const personId = "U-26-ADA";
+    const person = result({ schema: "gitpm/person@1", id: personId, name: "Ada", weekly_capacity_hours: 32, calendar: "C-26-DEFAULT", lifecycle: "active" });
+    const calendar = result({ schema: "gitpm/calendar@1", id: "C-26-DEFAULT", name: "Default", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
+    const schemaByType: Record<string, string> = { people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1", projects: "gitpm/project@1", tasks: "gitpm/task@1" };
+    const api = { listEntities: vi.fn(async (_draftId: string, type: string) => [person, calendar].filter((item) => item.document.schema === schemaByType[type])) } as unknown as GitPmApi;
+
+    render(<PeopleProfileWorkspace api={api} draft={draft} locale="en" onNavigate={vi.fn()} personId={personId} role="Developer" />);
+
+    expect(await screen.findByText("Administrative changes require Maintainer.")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Edit person" }) as HTMLButtonElement).disabled).toBe(true);
   });
 });

@@ -36,20 +36,26 @@ describe("administration UI", () => {
     expect(await screen.findByText("Default")).toBeTruthy();
     expect(screen.getByLabelText("Working week preview").querySelectorAll(".working")).toHaveLength(5);
 
-    rendered.rerender(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="people" onChanged={changed} />);
+    const onOpenPerson = vi.fn();
+    rendered.rerender(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" onOpenPerson={onOpenPerson} surface="people" onChanged={changed} />);
     fireEvent.click(await screen.findByRole("button", { name: /Create person/u }));
     const personForm = within(screen.getByRole("dialog", { name: "Create person" })).getByRole("button", { name: "Create person" }).closest("form")!;
     fireEvent.change(within(personForm).getByLabelText("Name"), { target: { value: "Alice" } }); fireEvent.change(within(personForm).getByLabelText("Weekly capacity (hours)"), { target: { value: "32" } }); fireEvent.submit(personForm);
     expect(await screen.findByText("Alice")).toBeTruthy();
+    expect(document.querySelectorAll(".people-directory-table tbody tr")).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Edit person" })).toBeNull();
+    fireEvent.click(screen.getByRole("link", { name: "Alice" }));
+    expect(onOpenPerson).toHaveBeenCalledWith(expect.stringMatching(/^U-/u));
     fireEvent.click(screen.getByRole("button", { name: /Create team/u }));
     const teamForm = within(screen.getByRole("dialog", { name: "Create team" })).getByRole("button", { name: "Create team" }).closest("form")!;
     fireEvent.change(within(teamForm).getByLabelText("Name"), { target: { value: "Core" } }); fireEvent.click(within(teamForm).getByLabelText("Alice")); fireEvent.submit(teamForm);
-    expect(await screen.findByText("Core")).toBeTruthy();
+    const teamTable = document.querySelector<HTMLElement>(".team-directory-table")!;
+    expect(await within(teamTable).findByText("Core")).toBeTruthy();
     expect(admin.entities.find((item) => item.document.schema === "gitpm/team@1")?.document.members).toHaveLength(1);
     fireEvent.change(screen.getByLabelText("Search teams or members"), { target: { value: "Alice" } });
-    expect(screen.getByText("Core")).toBeTruthy();
+    expect(within(teamTable).getByText("Core")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Search teams or members"), { target: { value: "Nobody" } });
-    expect(screen.queryByText("Core")).toBeNull();
+    expect(within(teamTable).queryByText("Core")).toBeNull();
 
     rendered.rerender(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="settings" onChanged={changed} />);
     const statusesCard = (await screen.findByRole("heading", { name: "Statuses" })).closest<HTMLElement>(".config-editor")!;
