@@ -29,6 +29,7 @@
   "nav.history": "История",
   "nav.team": "Команда",
   "nav.repository": "Репозиторий",
+  "nav.repositoryConnection": "Подключение репозитория",
   "nav.label": "Основная навигация",
   "nav.openMenu": "Открыть навигацию",
   "nav.closeMenu": "Закрыть навигацию",

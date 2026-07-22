@@ -29,6 +29,7 @@
   "nav.history": "History",
   "nav.team": "Team",
   "nav.repository": "Repository",
+  "nav.repositoryConnection": "Repository connection",
   "nav.label": "Main navigation",
   "nav.openMenu": "Open navigation",
   "nav.closeMenu": "Close navigation",

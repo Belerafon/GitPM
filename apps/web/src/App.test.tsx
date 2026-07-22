@@ -199,7 +199,7 @@ describe("frontend draft lifecycle", () => {
     await screen.findByRole("heading", { name: "Working copies" });
     expect(screen.queryByText("Work")).toBeNull();
     expect(screen.queryByText("Git")).toBeNull();
-    expect(screen.getAllByRole("button", { name: /Projects|Team|Repository|Statuses/u })).toHaveLength(4);
+    expect(screen.getAllByRole("button", { name: /^(Projects|Team|Repository|Statuses and task types)$/u })).toHaveLength(4);
     expect(screen.getByRole("button", { name: "Team" })).toBeTruthy();
     const menuButton = screen.getByRole("button", { name: "Open navigation" });
 
@@ -340,6 +340,21 @@ describe("frontend draft lifecycle", () => {
     expect(await screen.findByRole("heading", { name: "Working copies" })).toBeTruthy();
     expect(screen.getAllByText("Main local copy").length).toBeGreaterThan(0);
     expect(screen.getAllByText("DRF-LOCAL").length).toBeGreaterThan(0);
+  });
+
+  it("moves repository connection into the Repository section, away from Statuses", async () => {
+    const api = new FakeApi();
+    render(<App api={api} browserLanguages={["en"]} />);
+    await screen.findByRole("heading", { name: "Working copies" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Repository" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Repository connection" }));
+    expect(await screen.findByText("D:/portfolio")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Repository connection" }).getAttribute("aria-current")).toBe("page");
+
+    fireEvent.click(screen.getByRole("button", { name: "Statuses and task types" }));
+    await screen.findByRole("heading", { level: 1, name: "Statuses and task types" });
+    expect(screen.queryByText("D:/portfolio")).toBeNull();
   });
 
   it("persists locale and changes lang/dir without changing API payloads", async () => {

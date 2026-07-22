@@ -22,7 +22,7 @@ export function RepositoryConnectionSettings({ api, locale, maintainer, confirmA
     return () => { active = false; };
   }, [api]);
 
-  if (connection === null) return <section className="card"><h3>{t("repositoryConnection.heading")}</h3>{error === null ? <p>{t("status.loading")}</p> : <div className="alert error">{error}</div>}</section>;
+  if (connection === null) return <section className="card repository-connection-settings">{error === null ? <p>{t("status.loading")}</p> : <div className="alert error">{error}</div>}</section>;
   const editable = maintainer && connection.remote_editable && connection.gitlab_editable;
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
@@ -68,7 +68,7 @@ export function RepositoryConnectionSettings({ api, locale, maintainer, confirmA
   };
 
   return <section className="card repository-connection-settings">
-    <div className="card-heading"><div><h3>{t("repositoryConnection.heading")}</h3><p>{t("repositoryConnection.description")}</p></div></div>
+    <p className="card-lede">{t("repositoryConnection.description")}</p>
     {!maintainer && <div className="alert warning">{t("admin.maintainerOnly")}</div>}
     {(!connection.remote_editable || !connection.gitlab_editable) && <div className="alert info">{t("repositoryConnection.managedExternally")}</div>}
     {error !== null && <div className="alert error">{error}</div>}{result !== null && <div className="alert success">{result}</div>}

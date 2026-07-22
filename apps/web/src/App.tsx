@@ -20,6 +20,7 @@ import { EntityCatalog } from "./entity-catalog.js";
 import { PeopleProfileWorkspace } from "./people-profile-ui.js";
 import { NotificationsMenu } from "./notifications-ui.js";
 import { WorktreeWorkspace } from "./worktree-ui.js";
+import { RepositoryConnectionSettings } from "./repository-connection-ui.js";
 
 interface AppProps {
   readonly api: GitPmApi;
@@ -55,12 +56,14 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
         { destination: "changes", label: "nav.changes" },
         { destination: "files", label: "nav.files" },
         { destination: "history", label: "nav.history" },
+        { destination: "connection", label: "nav.repositoryConnection" },
       ]
     : [
         { destination: "workspaces", label: "nav.drafts" },
         { destination: "changes", label: "nav.changes" },
         { destination: "files", label: "nav.files" },
         { destination: "history", label: "nav.history" },
+        { destination: "connection", label: "nav.repositoryConnection" },
       ];
   const rawView = activeRoute === null ? (repositoryMode ? "nav.projects" : "nav.drafts") : routeViews[activeRoute.name];
   // Direct mode has no drafts/workspaces surface; a stale deep link or the
@@ -70,7 +73,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
     ? "nav.projects"
     : ["nav.people", "nav.workload", "nav.calendar"].includes(view)
       ? "nav.team"
-      : ["nav.drafts", "nav.changes", "nav.files", "nav.history"].includes(view)
+      : ["nav.drafts", "nav.changes", "nav.files", "nav.history", "nav.repositoryConnection"].includes(view)
         ? "nav.repository"
         : view;
   const workspaceSelection: WorkspaceSelection = { projectId: activeRoute?.projectId, stageId: activeRoute?.stageId, taskId: activeRoute?.taskId, personId: activeRoute?.personId, commit: activeRoute?.commit, query: activeRoute?.query };
@@ -203,7 +206,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
           </>}
     >
         {["nav.people", "nav.workload", "nav.calendar"].includes(view) && <SectionTabs active={view} ariaLabel={t("nav.team")} items={teamTabs} onNavigate={(destination) => navigateToRoute(routeForDestination(destination))} t={t} />}
-        {["nav.drafts", "nav.changes", "nav.files", "nav.history"].includes(view) && <SectionTabs active={view} ariaLabel={t("nav.repository")} items={repositoryTabs} onNavigate={(destination) => navigateToRoute(routeForDestination(destination))} t={t} />}
+        {["nav.drafts", "nav.changes", "nav.files", "nav.history", "nav.repositoryConnection"].includes(view) && <SectionTabs active={view} ariaLabel={t("nav.repository")} items={repositoryTabs} onNavigate={(destination) => navigateToRoute(routeForDestination(destination))} t={t} />}
         {view === "nav.drafts" && <section className="draft-layout">
           <div className="draft-list card">
             <h2 aria-hidden="true">{t("drafts.heading")}</h2><p className="workspace-description">{t("drafts.description")}</p>
@@ -260,10 +263,11 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
         {view === "nav.changes" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <ChangesWorkspace api={api} draft={active} role={drafts.session.role} locale={locale} onChanged={drafts.refresh} confirmAction={confirmAction} remoteAvailable={repository?.has_remote === true} gitlabConfigured={gitlab?.configured === true} gitlabSignedIn={gitlab?.user !== undefined} onGitLabLogin={loginToGitLab} directMode={directMode} />)}
         {view === "nav.files" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <WorktreeWorkspace api={api} confirmAction={confirmAction} draft={active} key={`nav.files:${active.draft_id}:${active.external_fingerprint ?? ""}`} locale={locale} onChanged={drafts.refresh} role={drafts.session.role} />)}
         {view === "nav.history" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <HistoryWorkspace api={api} draft={active} key={`nav.history:${workspaceSelection.commit ?? ""}`} locale={locale} canRevert={drafts.session.role !== "Reporter" && !directMode} initialCommit={workspaceSelection.commit} onNavigate={openWorkspace} onDraftCreated={drafts.select} />)}
+        {view === "nav.repositoryConnection" && <div className="repository-connection-page"><RepositoryConnectionSettings api={api} locale={locale} maintainer={maintainer} confirmAction={confirmAction} /></div>}
         {view === "nav.board" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <BoardWorkspace api={api} draft={active} key={`nav.board:${workspaceSelection.projectId ?? ""}`} locale={locale} initialProjectId={workspaceSelection.projectId} initialStatusFilter={workspaceSelection.query?.status?.[0]} initialTypeFilter={workspaceSelection.query?.type?.[0]} initialMilestoneFilter={workspaceSelection.query?.milestone?.[0]} initialViewId={workspaceSelection.query?.view?.[0]} onNavigate={openWorkspace} onChanged={drafts.refresh} />)}
         {view === "nav.gantt" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <GanttWorkspace api={api} draft={active} key={`nav.gantt:${workspaceSelection.projectId ?? ""}`} locale={locale} initialProjectId={workspaceSelection.projectId} onNavigate={openWorkspace} />)}
         {view === "nav.workload" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <WorkloadWorkspace api={api} draft={active} locale={locale} onNavigate={openWorkspace} />)}
-        {!projectWorkspaceRoute && !["nav.drafts", "nav.portfolio", "nav.projects", "nav.tasks", "nav.people", "nav.calendar", "nav.settings", "nav.changes", "nav.files", "nav.history", "nav.board", "nav.gantt", "nav.workload"].includes(view) && <div className="card empty-workspace">{t("common.notAvailable")}</div>}
+        {!projectWorkspaceRoute && !["nav.drafts", "nav.portfolio", "nav.projects", "nav.tasks", "nav.people", "nav.calendar", "nav.settings", "nav.changes", "nav.files", "nav.history", "nav.repositoryConnection", "nav.board", "nav.gantt", "nav.workload"].includes(view) && <div className="card empty-workspace">{t("common.notAvailable")}</div>}
     </AppShell>
   );
 }

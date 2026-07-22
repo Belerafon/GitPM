@@ -21,16 +21,12 @@ class AdminApi {
   async deleteEntity(_draftId: string, _type: string, entity: EntityResult) { this.mutations += 1; this.entities = this.entities.filter((item) => item !== entity); }
   async getConfiguration(_draftId: string, kind: "statuses" | "issue-types") { return this.configurations.get(kind)!; }
   async updateConfiguration(_draftId: string, kind: "statuses" | "issue-types", _entity: EntityResult, _fingerprint: string, document: GitPmDocument) { const result = this.result(document); this.configurations.set(kind, result); return result; }
-  async repositoryConnection() { return { repository_path: "D:/portfolio", repository_mode: "direct" as const, default_branch: "main", repository_url: "https://gitlab.example/group/portfolio.git", remote_source: "config" as const, remote_editable: true, gitlab_editable: true, gitlab: { configured: true, base_url: "https://gitlab.example", project: "group/portfolio", client_id: "client-id" } }; }
-  async updateRepositoryConnection() { return await this.repositoryConnection(); }
-  async testRepositoryConnection() { return { ok: true as const, branch: "main", commit: "a".repeat(40) }; }
-  async login() { return "https://gitlab.example/oauth/authorize"; }
 }
 
 afterEach(cleanup);
 
 describe("administration UI", () => {
-  it("lets Maintainer create Calendar, Person and Team and edit repository configuration", async () => {
+  it("lets Maintainer create Calendar, Person and Team and edit statuses", async () => {
     const admin = new AdminApi(); const api = admin as unknown as GitPmApi; const changed = vi.fn(async () => undefined);
     const rendered = render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="calendar" onChanged={changed} />);
     fireEvent.click(await screen.findByRole("button", { name: /Create calendar/u }));
@@ -62,7 +58,6 @@ describe("administration UI", () => {
     expect(within(teamTable).queryByText("Core")).toBeNull();
 
     rendered.rerender(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="settings" onChanged={changed} />);
-    expect(await screen.findByDisplayValue("https://gitlab.example/group/portfolio.git")).toBeTruthy();
     const statusesCard = (await screen.findByRole("heading", { name: "Statuses" })).closest<HTMLElement>(".config-editor")!;
     fireEvent.click(within(statusesCard).getByRole("button", { name: "Edit" }));
     const statusTitle = await screen.findByLabelText("Statuses backlog"); fireEvent.change(statusTitle, { target: { value: "Queue" } }); fireEvent.submit(statusTitle.closest("form")!);
