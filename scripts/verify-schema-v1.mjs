@@ -49,9 +49,11 @@ async function loadSchemas() {
 
 async function loadDocuments(root) {
   const documents = new Map();
-  for (const yamlPath of await filesUnder(root, ".yaml")) {
-    const relative = normalize(path.relative(root, yamlPath));
-    documents.set(relative, parse(await readFile(yamlPath, "utf8"), { uniqueKeys: true }));
+  for (const domainRoot of [".gitpm", "people", "teams", "calendars", "projects"]) {
+    for (const yamlPath of await filesUnder(path.join(root, domainRoot), ".yaml")) {
+      const relative = normalize(path.relative(root, yamlPath));
+      documents.set(relative, parse(await readFile(yamlPath, "utf8"), { uniqueKeys: true }));
+    }
   }
   return documents;
 }
@@ -198,7 +200,19 @@ function validateReferences(documents) {
 
 async function validateTopLevel(root, documents) {
   const repository = documents.get(".gitpm/repository.yaml");
-  const allowed = new Set([".gitpm", "people", "teams", "calendars", "projects", ...repository.allowed_top_level_files]);
+  const allowed = new Set([
+    ".git",
+    ".gitpm",
+    ".agents",
+    "AGENTS.md",
+    ".gitignore",
+    "people",
+    "teams",
+    "calendars",
+    "projects",
+    ...(repository.allowed_top_level_files ?? []),
+    ...(repository.allowed_top_level_directories ?? []),
+  ]);
   for (const entry of await readdir(root)) {
     if (!allowed.has(entry)) fail("REPOSITORY_TOP_LEVEL", `unknown top-level entry ${entry}`);
   }

@@ -1,206 +1,207 @@
 # GitPM
 
-Git-first система управления проектами и задачами с web UI, GitLab Merge Request workflow и файловой работой агентов через CLI.
+GitPM — Git-first система управления проектами. Проекты, задачи, этапы, люди,
+команды, календари, представления и комментарии хранятся в обычных YAML-файлах;
+Git остаётся единственным источником бизнес-данных. Web UI и CLI используют один
+доменный слой, одну валидацию и одни правила публикации.
 
-## Repository modes
+Текущая версия пакетов — `0.1.0`. Release baseline v0.1 принят, после него продукт
+продолжил развиваться: появился режим прямой работы с веткой по умолчанию,
+транзакционные CLI-команды создания/изменения/импорта, project-centric интерфейс,
+комментарии и уведомления, просмотр файлов, подробная история и Docker-профили.
 
-GitPM работает с Git-репозиторием в одном из двух режимов. Режим задаётся в
-`.gitpm/config.json` полем `repositoryMode` или переменной окружения
-`GITPM_REPOSITORY_MODE` (переменная имеет приоритет). По умолчанию используется
-`direct`.
+## Что уже работает
 
-- **`direct`** (по умолчанию) — GitPM работает с одним обычным Git-репозиторием с
-  рабочей копией в `<data-dir>/repository`. Чтение и изменения происходят прямо в
-  этой копии, коммиты идут в основную ветку (по умолчанию `main`), а push
-  выполняется как обычный fast-forward `main` в `origin/main`. Нет bare-репозитория,
-  draft-веток, `git worktree`, writer-mode и Merge Request. CLI-команды не требуют
-  `--draft`:
+- Project workspace с этапами, иерархией и ручным порядком задач;
+- редактор задач, Board, read-only Gantt и расчёт Workload;
+- каталог людей, профили, доступность, команды, календари и настройки справочников;
+- комментарии к задачам, упоминания и уведомления;
+- файловый и semantic diff, restore, commit-all, push и GitLab Merge Request;
+- история коммитов, история сущности и diff отдельных файлов;
+- read-only просмотр рабочего дерева с защитой от traversal, symlink и бинарных файлов;
+- русский и английский интерфейс, адаптивная навигация и адресуемые маршруты;
+- CLI для агентов без отдельного MCP/API и без прямого редактирования domain YAML;
+- два режима репозитория: `direct` по умолчанию и изолированные draft worktree.
 
-  ```text
-  gitpm status --json
-  gitpm format --json
-  gitpm validate --changed --json
-  gitpm diff --semantic --json
-  gitpm commit --all -m "..." --json
-  gitpm push --json
-  ```
+## Быстрый запуск на Windows
 
-- **`worktree`** — прежняя схема с bare repository, изолированными draft-ветками и
-  рабочими деревьями, writer mode, push draft-ветки и Merge Request. Включается
-  явно через `"repositoryMode": "worktree"` или `GITPM_REPOSITORY_MODE=worktree`.
+Требуются Node.js `20.19.2`, pnpm `10.12.1` через Corepack и системный Git.
 
-Подробнее — в [`docs/Repository_Modes.md`](docs/Repository_Modes.md).
+```powershell
+corepack pnpm install --frozen-lockfile
+.\run-gitpm.bat
+```
 
-Пример конфигурации direct-режима с remote и веткой:
+Launcher подготовит актуальный русскоязычный demo repository, запустит API на
+`http://127.0.0.1:3000`, web UI на `http://127.0.0.1:5173` и откроет браузер.
+Демо содержит 3 проекта, 6 этапов, 30 задач, 10 сотрудников, команды, календари
+и сохранённые представления.
+
+Чтобы использовать существующий GitPM repository, укажите его корень в
+`.gitpm/config.json`:
 
 ```json
 {
   "repositoryMode": "direct",
   "repository": "D:\\projects\\portfolio-data",
-  "repositoryUrl": "https://gitlab.example/group/portfolio.git",
   "defaultBranch": "main"
 }
 ```
 
-## Current status
+В `direct` mode GitPM клонирует этот repository-источник в управляемую рабочую
+копию внутри data directory. Исходная папка не используется как временный draft
+и не очищается. Если у неё есть безопасный credential-free HTTPS `origin`,
+launcher подхватит remote; локальные изменения и коммиты не требуют входа.
 
-Статус: `v0.1_release_accepted`. P00-P14 закрыты; Alpha, Beta, release candidate и release gates пройдены. Русский web UI, локальная эксплуатация, performance smoke и полный набор автоматических тестов приняты. CLI остаётся нейтральным по локали и проверен на UTF-8 кириллицу.
+Пустой schema-v1 repository можно создать CLI:
 
-## Обычный запуск на Windows
-
-Запустите `run-gitpm.bat`. По умолчанию GitPM создаст рабочую копию русскоязычного демонстрационного портфеля из `demo/portfolio` в `.gitpm/demo-repository` и откроет её. В демо находятся 3 проекта, 30 задач, 10 сотрудников, общие команды, этапы, зависимости и сроки.
-
-Чтобы открыть свой существующий репозиторий, измените поле `repository` в `.gitpm/config.json`:
-
-```json
-{
-  "repository": "D:\\projects\\portfolio-data"
-}
+```powershell
+node apps/cli/dist/index.js init D:\projects\portfolio-data
 ```
 
-Локальная работа и локальные коммиты не требуют входа. Если у выбранного репозитория есть credential-free HTTPS `origin` GitLab, launcher определит адрес инстанса и путь проекта. Для входа через GitLab добавьте Application ID зарегистрированного OAuth-приложения в `.gitpm/config.json`:
+## Режимы репозитория
 
-```json
-{
-  "repository": "D:\\projects\\portfolio-data",
-  "gitlab": {
-    "baseUrl": "https://gitlab.com",
-    "project": "group/portfolio-data",
-    "clientId": "GITLAB_OAUTH_APPLICATION_ID"
-  }
-}
-```
+| | `direct` (по умолчанию) | `worktree` |
+| --- | --- | --- |
+| Рабочая копия | один managed checkout | bare repository и отдельный `git worktree` на draft |
+| Ветка | настроенная основная ветка | `gitpm/<owner>/<draft>` |
+| CLI | без `--draft` | с `--draft <id>` |
+| Публикация | safe fast-forward push | push draft branch и GitLab MR |
+| Writer mode | отсутствует | `ui` или `external` |
 
-Redirect URI приложения: `http://127.0.0.1:3000/api/auth/callback`; scopes: `api` и `write_repository`. Вход предлагается только перед push/Merge Request. Регистрация OAuth Application описана в [документации GitLab](https://docs.gitlab.com/api/oauth2/).
+Режим задаётся через `repositoryMode` или `GITPM_REPOSITORY_MODE`; переменная
+окружения имеет приоритет. GitPM не делает force push, rebase, автоматический
+merge, hard reset или stash. Подробнее: [режимы репозитория](docs/Repository_Modes.md).
 
-## Server deployment (Docker, optional)
+## CLI
 
-Для запуска на сервере рядом с GitLab (или иным git remote) используйте
-опциональный профиль `compose.server.yaml`. Дефолтный `compose.yaml`
-не меняется — он остаётся локальным, без авторизации, как и `run-gitpm.bat`.
-
-### Подготовка репозитория
+После сборки CLI находится в `apps/cli/dist/index.js`; Docker-образ устанавливает
+его как `gitpm` на `PATH`. Все команды поддерживают locale-neutral `--json`.
 
 ```bash
-# клонируем GitPM и собираем CLI
-git clone https://github.com/Belerafon/GitPM.git
-cd GitPM
-corepack pnpm install --frozen-lockfile
-corepack pnpm build
+gitpm status --json
+gitpm schema list --json
+gitpm schema show task --example
 
-# создаём пустой репозиторий схемы v1 (один коммит с skeleton)
-node apps/cli/dist/index.js init /srv/gitpm/repository
+gitpm entity create --type task --file /tmp/task.yaml --project P-26-7VWANM
+gitpm entity update --type task --id T-26-5K0WZ2 --set status=done --project P-26-7VWANM
+gitpm entity import --type person --format csv --file /tmp/people.csv --dry-run
+
+gitpm format --check
+gitpm validate --changed
+gitpm diff --semantic
+gitpm commit --all -m "Update delivery plan"
+gitpm push
 ```
 
-Можно также скопировать готовый starter из `fixtures/schema-v1/demo`.
+`entity create`, `entity update` и `entity import` выполняются транзакционно:
+GitPM проверяет весь repository и откатывает затронутые файлы при ошибке.
+Импорт CSV/YAML/JSONL атомарен для всего пакета. В `worktree` mode к рабочим
+командам добавляется `--draft <id>`, а публикация завершается `gitpm mr create`.
+Полный контракт флагов и переменных окружения находится в [документации CLI](docs/CLI.md).
 
-### Конфигурация окружения
+## Docker
 
-Положите рядом с `compose.yaml` файл `.env`:
+Для локального доверенного запуска скопируйте `.env.example` в `.env`, укажите
+host path GitPM repository и запустите:
 
-```dotenv
-GITPM_BIND_IP=10.0.0.1
-GITPM_WEB_PORT=86
-GITPM_REPOSITORY_PATH=/srv/gitpm/repository
-GITPM_GITLAB_URL=http://10.0.0.1:81
-GITPM_GITLAB_PROJECT=group/portfolio-data
-GITPM_GITLAB_CLIENT_ID=GITLAB_OAUTH_APPLICATION_ID
-GITPM_OAUTH_REDIRECT_URL=http://10.0.0.1:86/api/auth/callback
-# Если UI published через plain HTTP (без TLS-терминатора впереди):
-GITPM_COOKIE_SECURE=false
+```bash
+docker compose up -d --build
 ```
 
-OAuth Application в GitLab регистрируется с redirect URI из
-`GITPM_OAUTH_REDIRECT_URL` и scopes `api`, `write_repository`.
-
-### Запуск
+Будут опубликованы порты `3000` и `5173`, а managed data сохранится в volume
+`gitpm-data`. Для LAN/server-профиля с одним опубликованным web-портом,
+healthcheck, постоянной конфигурацией и GitLab OAuth используйте:
 
 ```bash
 docker compose -f compose.yaml -f compose.server.yaml up -d --build
 ```
 
-Проверка:
+Обязательные и дополнительные переменные описаны в комментариях
+`compose.server.yaml` и в [CLI/deployment reference](docs/CLI.md). Для публичного
+доступа нужен отдельный TLS/reverse proxy и deployment review; встроенная GitLab
+авторизация защищает remote-операции, а не заменяет perimeter authentication.
 
-```bash
-curl -s http://127.0.0.1:3000/health/ready   # внутри контейнера
+## Формат данных
+
+```text
+.gitpm/
+  repository.yaml
+  statuses.yaml
+  issue-types.yaml
+people/
+teams/
+calendars/
+projects/
+  P-26-....../
+    project.yaml
+    milestones/
+    tasks/
+    views/
+    comments/<task-id>/
+uploads/                 # ignored входные документы, не business data
 ```
 
-### Замечания
+У сущности один immutable ID вида `P-26-7K4M9Q`: префикс типа, две цифры
+UTC-года и шесть криптографически случайных символов Crockford Base32. Project
+является единственным path exception: его ID совпадает с именем каталога, а сама
+сущность хранится в `project.yaml`.
 
-- **Порт 87 не использовать** — он в списке `unsafe_ports` Chromium/Firefox
-  (`ERR_UNSAFE_PORT`). По умолчанию предлагается `86`.
-- `/app/.gitpm` смонтирован в volume `gitpm-config`, чтобы `client_id` и
-  автогенерируемый `config.json` переживали пересоздание контейнера.
-- Для HTTPS и/или basic auth перед web UI поставьте reverse-proxy (Caddy,
-  nginx, Traefik). Сам GitPM не содержит встроенной аутентификации сессии —
-  вход только через GitLab OAuth и только для remote-операций.
+JSON Schema 2020-12 лежат в `schemas/v1`. Канонический YAML использует UTF-8,
+LF и два пробела; duplicate keys, aliases, custom tags, неизвестные схемы и
+нарушения ссылок отклоняются. Полный контракт: [repository format v1](docs/GitPM_Repository_Format_v1.md).
 
-## Development
+`gitpm init` также создаёт `.gitignore` и `uploads/.gitkeep`. В `uploads/` можно
+положить исходные PDF/DOCX/XLSX для разбора агентом; их содержимое игнорируется
+Git и не входит в GitPM validation, semantic diff или публикацию.
 
-Требуются Node.js 20.19.2, pnpm 10.12.1 через Corepack и Python 3.11 с PyYAML.
+## Архитектура репозитория исходного кода
+
+- `apps/cli` — CLI и agent workflow;
+- `apps/server` — HTTP API, runtime, OAuth и publication wiring;
+- `apps/web` — React UI и locale packs;
+- `packages/domain`, `validation`, `repository-format` — бизнес-операции и формат;
+- `packages/drafts`, `git-client`, `gitlab`, `publishing` — рабочие копии и Git;
+- `packages/changes`, `history`, `calendar`, `workload` — read models и расчёты;
+- `schemas/v1`, `fixtures/schema-v1/demo`, `demo/portfolio` — контракты и примеры.
+
+Бизнес-базы данных нет. Credentials живут только в памяти процесса и не должны
+попадать в URL, Git config, argv, файлы или логи. Agent читает repository для
+контекста, но изменяет GitPM-данные только через CLI.
+
+## Разработка и проверка
+
+Дополнительно нужен Python 3.11 с PyYAML для planning validators.
 
 ```bash
 corepack pnpm install --frozen-lockfile
-corepack pnpm verify
-set GITPM_REPOSITORY_PATH=D:\path\to\repository
-corepack pnpm dev:server
+corepack pnpm build
+corepack pnpm lint
+corepack pnpm typecheck
+corepack pnpm test
+corepack pnpm schema:verify
+corepack pnpm planning:verify
 ```
 
-## Идентификаторы
+`corepack pnpm verify` запускает полный набор, включая E2E и smoke; для локальной
+итерации лучше начинать с узкого package/test target.
 
-Все сущности используют единый короткий ID вида `P-26-7K4M9Q`:
-односимвольный тип, две цифры UTC-года и шесть криптографически случайных
-символов Crockford Base32. Старый формат prefixed ULID не поддерживается.
-
-Server предоставляет `GET /health/live` и `GET /health/ready` на
-`http://127.0.0.1:3000`. Каждый ответ возвращает `x-correlation-id`, а
-структурный request log содержит тот же идентификатор.
-
-В разделе «Репозиторий → Файлы» доступен файловый менеджер рабочего дерева только для чтения.
-Каталоги загружаются по мере раскрытия, а текстовые файлы до 1 МиБ открываются во встроенном
-просмотрщике. Служебный каталог `.git`, символьные ссылки, бинарные и более крупные файлы не
-открываются. HTTP-контракт использует `GET /api/drafts/:draftId/worktree` для списка каталога и
-`GET /api/drafts/:draftId/worktree/file?path=...` для текстового содержимого.
-
-## Active documents
-
-- `docs/GitPM_Implementation_Plan_v0.7.md` - architecture and normative domain model;
-- `docs/GitPM_Work_Plan_v0.8.md` - executable stages, commit cadence and acceptance;
-- `docs/GitPM_Requirements_Traceability_v0.5.yaml` - DAG, requirements, verification checks and gate composition;
-- `docs/GitPM_Execution_Status_v0.1.yaml` - actual stage/check status and evidence;
-- `docs/GitPM_Delivery_Policies_v0.5.md` - product and operational boundaries;
-- `docs/GitPM_Security_Baseline_v0.5.md` - early security controls;
-- `docs/GitPM_Planning_Maintenance_Guide_v0.3.md` - how to maintain planning and localization artifacts;
-- `docs/GitPM_Repository_Format_v1.md` - approved schema v1 repository layout and reference rules;
-- `docs/PROGRESS.md` - decisions, blockers and next action.
-
-Old versions remain only in Git history.
-
-## Planning and gate commands
+Низкоуровневые проверки завершённого planning/evidence set доступны отдельно:
 
 ```bash
-python3 scripts/validate_planning.py
-python3 scripts/test_planning_validator.py
-python3 scripts/test_release_gate.py
-python3 scripts/check_release_gate.py --gate alpha
-corepack pnpm schema:verify
+python scripts/validate_planning.py
+python scripts/test_planning_validator.py
+python scripts/test_release_gate.py
+python scripts/check_release_gate.py --gate release
 ```
 
-The planning validator checks document consistency. The gate checker checks actual status and evidence and is expected to fail until the milestone is completed.
+## Документация
 
-## v0.1 principles
+Навигация по актуальным руководствам, нормативным контрактам и историческим
+release-планам собрана в [docs/README.md](docs/README.md). Начинать обычно стоит с:
 
-- Dedicated GitPM repository.
-- One immutable ID; explicit Project directory exception.
-- Approved schema v1 before parser implementation.
-- Fetch current remote main before creating each draft.
-- One writer mode per draft.
-- One configured repository per server.
-- No business database, backup, safety refs, migration engine or quota engine.
-- OAuth 2.0 with memory-only user token; no webhook.
-- No rebase or conflict UI.
-- Commit always includes all draft changes.
-- Read-only Gantt and approximate Workload.
-- Agent may read repository files, but mutates GitPM data only through the CLI; no MCP or manual YAML edits.
-- Physical delete and archive are both supported.
-- Locale packs support multiple languages; Russian is mandatory and complete for v0.1.
+- [CLI и environment reference](docs/CLI.md);
+- [режимы репозитория](docs/Repository_Modes.md);
+- [agent workflow](docs/GitPM_Agent_Workflow_v1.md);
+- [repository format v1](docs/GitPM_Repository_Format_v1.md);
+- [локальная эксплуатация](docs/runbooks/GitPM_Local_Operations_v0.1.md).

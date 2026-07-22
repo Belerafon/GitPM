@@ -1,7 +1,7 @@
 # GitPM: ранний baseline безопасности
 
 Версия документа: 0.5  
-Статус: обязательный до P03
+Статус: действующий security baseline (принят до P03, расширен для direct mode)
 
 ## 1. Принцип
 
@@ -9,7 +9,7 @@ Security controls добавляются вместе с рискованным 
 
 ## 2. Assets
 
-- bare repository and worktrees;
+- direct managed checkout или bare repository и worktrees;
 - local-only draft data;
 - in-memory user OAuth token;
 - mounted read-only fetch credential;
@@ -22,7 +22,7 @@ Webhook secret, backup assets, safety refs, token keyring, quota state and MCP c
 ## 3. Trust boundaries
 
 - Browser -> GitPM HTTP;
-- Agent process -> dedicated external-mode worktree and CLI;
+- Agent process -> managed checkout и CLI;
 - GitPM -> Git child process;
 - GitPM -> worktree filesystem;
 - GitPM -> GitLab OAuth/API/Git transport;
@@ -90,10 +90,10 @@ Webhook secret, backup assets, safety refs, token keyring, quota state and MCP c
 - backend checks role, ownership and writer mode before mutation;
 - UI controls are not a security boundary.
 
-## 9. Draft and agent workflow
+## 9. Workspace and agent workflow
 
-- one writer mode per draft;
-- external mode makes UI read-only;
+- direct mode has one managed checkout and blocks stale UI writes after external changes;
+- worktree mode has one writer mode per draft; external mode makes UI read-only;
 - direct external change invalidates stale UI mutation;
 - CLI may restrict allowed Project ID and delete flag;
 - format and validate required before commit/push;

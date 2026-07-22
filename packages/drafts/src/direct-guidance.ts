@@ -99,13 +99,12 @@ import verbatim into the GitPM data store. \`uploads/\` is listed in
 - read, parse, and convert these files freely;
 - never copy their bytes into \`projects/\`, \`people/\`, \`teams/\`, \`calendars/\`,
   or \`.gitpm/\`;
-- never \`git add\` or commit anything under \`uploads/\`;
+- never \`git add\` or commit incoming files under \`uploads/\`;
 - never delete or rename files under \`uploads/\` unless explicitly requested.
 
-When asked to seed or update GitPM data from such a document, convert it to a
-textual form (for example via \`markitdown\` or \`pandoc\`), extract the relevant
-fields, and use \`gitpm entity create\` / \`gitpm entity update\` /
-\`gitpm entity import\` with a temporary YAML/CSV/JSONL file outside this checkout.
+When asked to seed or update GitPM data from a document, extract the relevant fields and use
+\`gitpm entity create\`, \`gitpm entity update\`, or \`gitpm entity import\` with a temporary
+YAML/CSV/JSONL file outside this checkout.
 
 ## CLI workflow (direct mode)
 

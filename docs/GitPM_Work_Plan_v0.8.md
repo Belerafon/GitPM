@@ -1,7 +1,7 @@
 # GitPM: исполнимый план работ, верификации и поставки
 
 Версия документа: 0.8
-Статус: активный план v0.1
+Статус: завершённый release plan v0.1; historical evidence, не текущий backlog
 
 ## 1. Источники истины
 
@@ -982,7 +982,7 @@
 ### Work packages
 
 - Create/open draft in external writer mode.
-- Direct YAML editing workflow.
+- CLI-only entity mutation workflow over repository files.
 - CLI scope and explicit delete flag.
 - Format, validate, semantic diff, commit all, push and MR commands.
 - UI read-only enforcement during external mode.

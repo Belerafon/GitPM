@@ -1,6 +1,9 @@
 # GitPM local operations runbook v0.1
 
-This runbook covers the supported v0.1 profile: one trusted local user, one Node.js process, system Git and a persistent data directory. A container image is not required.
+This runbook covers the supported local profiles: the Windows launcher with a
+Node.js process and system Git, plus the Docker image with persistent volumes.
+Both modes assume one configured GitPM repository; public-internet deployment
+requires a separate reverse proxy/TLS and security review.
 
 ## Verified toolchain
 
@@ -27,10 +30,13 @@ The install must not modify `pnpm-lock.yaml`. `verify` performs a clean build, l
 ## Start and health verification
 
 ```powershell
-$env:HOST = "127.0.0.1"
-$env:PORT = "3000"
-corepack pnpm dev:server
+.\run-gitpm.bat
 ```
+
+Without `.gitpm/config.json` the launcher prepares the bundled demo. For a real
+repository set `repository`, `repositoryMode` and optional `defaultBranch` in
+that file. The launcher starts API and web UI together, checks both ports and
+opens `http://127.0.0.1:5173` when ready.
 
 In another terminal:
 
@@ -43,7 +49,7 @@ Both endpoints must return `status: ok`. Keep the service bound to loopback unle
 
 ## Restart and draft durability
 
-Stop the process with `Ctrl+C` or `SIGTERM`, then start it with the same configuration and persistent data directory. OAuth sessions are memory-only, so login is required again. Draft metadata and worktrees remain on disk.
+Stop the process with `Ctrl+C` or `SIGTERM`, then start it with the same configuration and persistent data directory. OAuth sessions are memory-only, so login is required again. Direct checkout metadata, draft metadata and worktrees remain on disk.
 
 The automated operational check creates a dirty draft, constructs a fresh runtime instance over the same data directory and verifies that:
 
@@ -55,6 +61,23 @@ Run it with:
 
 ```powershell
 corepack pnpm operations:p13b
+```
+
+## Docker
+
+Copy `.env.example` to `.env`, set `GITPM_REPOSITORY_PATH` and run:
+
+```powershell
+docker compose up -d --build
+docker compose ps
+```
+
+The local profile publishes API `:3000` and web `:5173`; managed repository data
+survives in `gitpm-data`. The optional server override publishes only the chosen
+web port and adds healthcheck, persistent application config and GitLab OAuth:
+
+```powershell
+docker compose -f compose.yaml -f compose.server.yaml up -d --build
 ```
 
 ## Explicit cleanup
@@ -79,7 +102,8 @@ The command generates a temporary deterministic portfolio with 30 Projects, 30 P
   revert-draft operation belongs to worktree mode; direct mode always uses its one internal
   `DRF-LOCAL` workspace.
 - `CLEANUP_CONFIRMATION_REQUIRED`: close the draft and repeat cleanup with the exact draft ID.
-- `VALIDATION_FAILED`: run `gitpm validate --changed --draft <ID>` and correct the first stable validation code.
+- `VALIDATION_FAILED`: run `gitpm validate --changed` in direct mode or add
+  `--draft <ID>` in worktree mode, then correct the first stable validation code.
 - Health endpoint unavailable: confirm the selected port is free and inspect structured server logs using the response correlation ID.
 - Performance failure: confirm that the fixture count, Node/pnpm/Git versions, filesystem and runner metadata match the report before treating it as a product regression.
 
@@ -87,4 +111,4 @@ The command generates a temporary deterministic portfolio with 30 Projects, 30 P
 
 - The accepted performance numbers below are a local Windows smoke, not the Linux x64 4-vCPU/8-GiB reference profile from the architecture document.
 - Network and live GitLab latency are excluded.
-- Backup, multi-user isolation, public-internet hardening and container operations are outside v0.1.
+- Backup, multi-tenant isolation and public-internet hardening are not provided by GitPM.

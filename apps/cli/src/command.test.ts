@@ -179,6 +179,11 @@ describe("CLI init command", () => {
 
     const doctor = await run(["doctor", "--json", "--root", target]);
     expect(JSON.parse(doctor.output)).toMatchObject({ ok: true, checks: { repository_valid: true, schemas_loaded: true } });
+
+    expect(await readFile(path.join(target, ".gitignore"), "utf8")).toContain("/uploads/*");
+    expect(await readFile(path.join(target, "uploads", ".gitkeep"), "utf8")).toBe("");
+    expect((await git(target, "ls-files")).split(/\r?\n/u)).toEqual(expect.arrayContaining([".gitignore", "uploads/.gitkeep"]));
+    expect(await git(target, "check-ignore", "uploads/incoming-report.pdf")).toBe("uploads/incoming-report.pdf");
   });
 
   it("rejects a non-empty target directory", async () => {

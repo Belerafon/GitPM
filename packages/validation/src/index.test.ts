@@ -40,6 +40,12 @@ describe("repository validation", () => {
     expect(await validateRepository(root)).toMatchObject({ valid: true, errors: [] });
   });
 
+  it("accepts ignored input files in an allowed non-domain directory", async () => {
+    const root = await fixture();
+    await writeFile(path.join(root, "uploads", "incoming-report.pdf"), "opaque user input", "utf8");
+    expect(await validateRepository(root)).toMatchObject({ valid: true, errors: [] });
+  });
+
   it("accepts saved milestone and task order", async () => {
     const root = await fixture();
     await replace(root, `projects/${project}/project.yaml`, "labels:", "milestone_order:\n  - M-26-461GDJ\nlabels:");

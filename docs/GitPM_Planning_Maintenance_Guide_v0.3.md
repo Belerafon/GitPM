@@ -1,16 +1,18 @@
 # GitPM: инструкция по поддержке планов и evidence
 
 Версия документа: 0.3  
-Статус: обязательная рабочая инструкция
+Статус: инструкция для maintenance завершённого planning set v0.1
 
 ## 1. Назначение файлов
 
 - `GitPM_Implementation_Plan_v0.7.md`: что строится и какие решения нормативны.
-- `GitPM_Work_Plan_v0.8.md`: в каком порядке выполняется работа, как поддерживается ритм коммитов и как принимается stage.
+- `GitPM_Work_Plan_v0.8.md`: завершённый порядок работ и acceptance релиза v0.1;
+  новые product stages требуют новой planning revision, а не переоткрытия этого плана.
 - `GitPM_Requirements_Traceability_v0.5.yaml`: machine-readable DAG, requirements, verification checks and gates.
 - `GitPM_Execution_Status_v0.1.yaml`: единственный machine-readable источник фактического выполнения.
 - `GitPM_Repository_Format_v1.md` и `schemas/v1/`: утвержденный repository/schema contract.
-- `PROGRESS.md`: краткий человеческий журнал решений, blockers and next action.
+- `PROGRESS.md`: краткая актуальная сводка, ограничения и отсутствие/наличие blockers;
+  release checklist в нём не дублируется.
 - Delivery Policies and Security Baseline: cross-cutting constraints.
 
 ## 2. Что обновлять при изменении архитектуры

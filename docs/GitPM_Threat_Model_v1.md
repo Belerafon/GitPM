@@ -1,12 +1,12 @@
 # GitPM threat model v1
 
-Статус: P00S baseline, обязательный до реализации Git core.
+Статус: действующий P00S baseline, расширенный для direct mode.
 
 ## Scope and assets
 
 Модель покрывает Browser -> HTTP, GitPM -> filesystem/Git process и GitPM ->
-GitLab OAuth/API/Git transport. Защищаемые активы: repository и worktrees,
-неопубликованные draft changes, OAuth access token, mounted fetch credential,
+GitLab OAuth/API/Git transport. Защищаемые активы: direct managed checkout или
+bare repository/worktrees, неопубликованные workspace changes, OAuth access token, mounted fetch credential,
 identity/role state, доступность server и безопасные logs.
 
 Вне scope v0.1: multi-tenant isolation, backup, token keyring, webhook secret,

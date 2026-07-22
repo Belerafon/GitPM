@@ -1,7 +1,7 @@
 # GitPM: политики поставки и эксплуатации
 
 Версия документа: 0.5  
-Статус: обязательный baseline v0.1
+Статус: обязательный baseline v0.1 с принятыми post-release дополнениями
 
 ## 1. Milestones
 
@@ -32,7 +32,7 @@ P01 должен завершиться approved schema v1 baseline. Parser impl
 
 ## 6. Editable entities
 
-Normal UI: Project, Task, Milestone and Saved View.
+Normal UI: Project, Task, Milestone, Saved View и Task Comment.
 
 Maintainer UI: Person, Team, Calendar, statuses and issue types.
 
@@ -44,19 +44,22 @@ Formatter authoritative. ID известных сущностей получаю
 `# <kind>: <name/title>` для читаемых YAML и Git diff; произвольные ручные
 комментарии не гарантируются. Unknown schema version отклоняется. Migration engine отсутствует.
 
-## 8. Draft consistency
+## 8. Workspace consistency
 
-- один owner;
-- one writer mode: `ui` or `external`;
-- multiple readers allowed;
+- `direct` mode использует один managed checkout и не публикует draft/writer lifecycle;
+- `worktree` draft имеет одного owner и one writer mode: `ui` or `external`;
+- multiple readers allowed в обоих режимах;
 - browser uses polling every 3 seconds;
-- commit always includes all draft changes;
-- dirty draft is never auto-cleaned;
-- close does not delete worktree or branch.
+- commit always includes all draft changes в `worktree` mode и все изменения
+  единственного managed checkout в `direct` mode;
+- dirty workspace/draft is never auto-cleaned;
+- worktree close does not delete worktree or branch.
 
 ## 9. No backup
 
-Нет safety refs, backup, replication or off-volume copy. Persistent volume is the only local durability boundary. Loss of volume can destroy unpushed data.
+Нет safety refs, backup, replication or off-volume copy. Configured persistent
+data directory/volume is the only local durability boundary. Его потеря может
+уничтожить unpushed data.
 
 ## 10. Authorization
 
@@ -74,7 +77,9 @@ OAuth 2.0 Authorization Code with PKCE is the only login flow. Access token is m
 
 ## 12. Delete and restore
 
-Physical delete and archive are separate. Delete uses `restrict`. Restore supports whole file, deleted file and hunk. Selected lines are absent.
+Physical delete and archive are separate. Delete обычно использует `restrict`.
+Для Person доступно отдельное подтверждённое unlink поддерживаемых ссылок перед
+delete. Restore supports whole file, deleted file and hunk. Selected lines are absent.
 
 ## 13. No quota engine
 

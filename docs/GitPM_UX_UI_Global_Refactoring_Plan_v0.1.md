@@ -1,23 +1,26 @@
 # GitPM: план глобального UX/UI-рефакторинга
 
 Версия документа: 0.1  
-Статус: active  
+Статус: historical planning artifact; не является текущим backlog
 Область: web UI  
 Оценка: 36–53 engineer-days
 
 ## Прогресс выполнения
 
-Последнее обновление: 2026-07-15
+Последнее обновление статуса: 2026-07-22
 
 | Этап | Состояние | Примечание |
 | --- | --- | --- |
 | UX00 | Завершён | Work packages, automated verification, manual acceptance, exit gate и handoff закрыты 2026-07-14; пакет зафиксирован commit `4a4c816`. |
 | UX01 | Завершён | Route adapter, History API, deep links/reload/back-forward, App Shell, grouped navigation, breadcrumbs, упрощённый topbar и route/query restoration закрыты 2026-07-14. |
-| UX02 | Не начат | Следующий общий фундамент: UI Kit и design tokens. |
-| UX03 | В работе | Поставлен project-centric vertical slice: project tabs, отдельные маршруты и экран этапа, scoped task entry point, project read model. |
-| UX04–UX07 | Не начаты | Ожидают зависимостей по плану. |
+| UX02 | Не принимался отдельно | Часть token/component work выполнялась внутри последующих feature changes; exit gate этого плана не переоценивался. |
+| UX03–UX06 | План рассинхронизирован с реализацией | После 2026-07-15 появились project plan hierarchy/order, полный drawer editing, people profiles, comments/notifications, working-tree browser и per-file History diff. Эти изменения не закрывались по исходным work packages. |
+| UX07 | Не принимался | Отдельного hardening/acceptance gate по этому плану после post-release изменений не было. |
 
-Текущий следующий шаг: выполнить UX02, затем продолжить UX03 полным редактором задачи и декомпозицией оставшегося `CoreWorkspace`.
+Документ сохраняется как rationale и исходная декомпозиция. Его оценки, зависимости
+и «следующие шаги» ниже нельзя использовать для планирования без новой ревизии:
+фактический UI ушёл вперёд другим набором изменений. Текущее состояние кратко
+зафиксировано в `PROGRESS.md` и пользовательской документации.
 
 ## 1. Цель
 

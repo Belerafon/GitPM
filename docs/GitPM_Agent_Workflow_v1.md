@@ -1,23 +1,66 @@
 # GitPM agent workflow v1
 
-The agent uses the same draft worktree, repository format and CLI as the UI. There is no MCP server and no separate agent API. Every draft contains generated `AGENTS.md` and `.agents/skills/gitpm/SKILL.md`, regardless of writer mode, so an agent can join at any stage. Draft creation and runtime recovery restore the current versions; agent status also repairs them when necessary. These are local worktree runtime files: Project scope, semantic diff, commit-all, clean checks, push, and Merge Requests exclude them in both UI and CLI workflows.
+Agent работает в том же managed checkout и через тот же CLI, что и web UI.
+Отдельного MCP mutation server или agent API нет. YAML можно читать для контекста,
+но domain-сущности изменяются только командами `gitpm`.
 
-The generated runtime `AGENTS.md` is distinct from the GitPM source repository's root `AGENTS.md`: the root file governs development of the application, while the generated file and skill govern CLI-only portfolio work inside the reported draft worktree. The runtime skill is never installed in the source root.
+GitPM создаёт в managed checkout `AGENTS.md` и
+`.agents/skills/gitpm/SKILL.md`. В `worktree` mode они создаются в каждом draft,
+в `direct` mode — в единственной управляемой рабочей копии. Runtime восстанавливает
+их при необходимости; Project scope, semantic diff, commit-all, clean checks,
+push и MR исключают эти файлы.
+
+Корневой `AGENTS.md` репозитория исходного кода GitPM относится к разработке
+приложения. Runtime skill не устанавливается в source root.
 
 ## Runtime configuration
 
-The CLI discovers the persisted draft runtime through environment variables:
+CLI использует:
 
-- `GITPM_DATA_DIR` — server persistent data directory containing `drafts/` and `worktrees/`;
-- `GITPM_REMOTE_URL` — exact configured repository remote;
-- `GITPM_DEFAULT_BRANCH` — default branch, `main` when omitted;
-- `GITPM_ASKPASS_PATH` — controlled ASKPASS program used for push;
-- `GITPM_ACCESS_TOKEN` — process-memory token used only by push/MR adapters;
-- `GITPM_AGENT_AUTHOR_NAME` and `GITPM_AGENT_AUTHOR_EMAIL` — commit identity.
+- `GITPM_REPOSITORY_MODE` — `direct` (default) или `worktree`;
+- `GITPM_REPOSITORY_PATH` — managed checkout/source repository;
+- `GITPM_DATA_DIR` — persistent metadata и worktrees;
+- `GITPM_REMOTE_URL` — configured fetch/push remote CLI workflow;
+- `GITPM_DEFAULT_BRANCH` — default branch, обычно `main`;
+- `GITPM_ASKPASS_PATH` и `GITPM_ACCESS_TOKEN` — controlled remote authentication;
+- `GITPM_AGENT_AUTHOR_NAME` и `GITPM_AGENT_AUTHOR_EMAIL` — commit identity.
 
-Tokens must not be written into repository URLs, Git configuration, arguments, logs or files.
+Token запрещено записывать в repository URL, Git configuration, arguments, logs
+или files. Проверить фактически установленный CLI можно командами:
 
-## Create or open an external draft
+```bash
+gitpm --version --json
+gitpm schema list --json
+gitpm status --json
+```
+
+`status` возвращает mode и фактический checkout path. Все дальнейшие команды
+нужно выполнять именно в этом checkout, а не в source repository GitPM.
+
+## Direct mode (default)
+
+В `direct` mode публичного draft lifecycle нет, `--draft` не нужен. Agent и UI
+разделяют одну рабочую копию и основную ветку; одновременную запись нужно
+координировать организационно.
+
+```bash
+gitpm status --json
+gitpm entity update --type task --id T-26-RHBNH8 \
+  --set status=done --project P-26-MGP84K --json
+gitpm format --project P-26-MGP84K
+gitpm validate --changed --project P-26-MGP84K
+gitpm diff --semantic --project P-26-MGP84K
+gitpm commit --all -m "Complete delivery task" --project P-26-MGP84K
+gitpm push
+```
+
+Push сначала fetch-ит remote и допускает только безопасный fast-forward. Команды
+`draft ...` и `mr create` в direct mode недоступны.
+
+## Worktree mode
+
+Для изолированной agent-сессии создайте или откройте draft. Обе команды переводят
+его в `external` writer mode; web UI остаётся read-only до явного возврата writer:
 
 ```bash
 gitpm draft create --draft DRF-AGENT-001 --owner 42
@@ -25,80 +68,98 @@ gitpm draft open --draft DRF-AGENT-001 --owner 42
 gitpm draft status --draft DRF-AGENT-001
 ```
 
-Create and open switch the draft to `external` writer mode. While that mode is active, UI mutation controls remain disabled. Switch back only after the agent stops writing:
+После завершения записи:
 
 ```bash
 gitpm draft set-writer ui --draft DRF-AGENT-001 --owner 42
 ```
 
-## CLI-only mutation boundary
-
-Repository YAML may be read for context but must not be edited directly. Entity creation goes through the CLI using a temporary input file outside the worktree:
-
-```bash
-gitpm entity create --draft DRF-AGENT-001 --type task --file /tmp/entity.yaml --project P-26-MGP84K --json
-```
-
-Existing entities are updated through a transactional field patch. A temporary file is not needed
-for a few top-level fields:
+Все рабочие команды получают `--draft DRF-AGENT-001`. Публикация выполняется в
+draft branch и завершается Merge Request:
 
 ```bash
-gitpm entity update --draft DRF-AGENT-001 --type person --id U-26-5EBAE3 --set email=anna.new@example.test --set weekly_capacity_hours=36 --json
-gitpm entity update --draft DRF-AGENT-001 --type task --id T-26-RHBNH8 --unset milestone --project P-26-MGP84K --json
-```
-
-Repeat `--set field=yaml-value` as needed. Values are parsed as YAML, so numbers, booleans, arrays,
-and mappings retain their types. Use `--unset field` to remove an optional top-level field, or
-`--file <yaml-patch>` for a larger patch. GitPM preserves unspecified fields, rejects changes to
-`schema`, `id`, or the owning Project, validates the complete repository, enforces Project scope,
-and rolls back every affected file on failure.
-
-Use `--type <type>` when the temporary create input omits `schema`. GitPM generates a missing
-entity ID and defaults `lifecycle` to `active`; for Person it also materializes a missing Calendar
-from repository `default_calendar`. A supplied valid ID is preserved. Inspect contracts with
-`gitpm schema show <type> --json` instead of inferring fields from existing files.
-
-For atomic bulk creation use:
-
-```bash
-gitpm entity import --draft DRF-AGENT-001 --type person --format csv --file /tmp/people.csv --dry-run --json
-gitpm entity import --draft DRF-AGENT-001 --type person --format csv --file /tmp/people.csv --json
-```
-
-CSV, YAML-array and JSONL imports plan all IDs, validate the complete resulting repository once,
-and roll back the whole batch on failure. Review row-level diagnostics and generated ID/path
-mappings before continuing.
-
-The v0.1 CLI exposes general entity update but does not expose archive or delete entity commands.
-An agent must report those remaining capability gaps instead of editing repository files or
-inventing a command.
-
-For any GitPM error, ambiguous contract, inconsistent output or missing CLI operation, the agent reports the sanitized command and stable error code, explains observed versus expected behavior, and gives the user a concrete GitPM improvement proposal. Product feedback does not authorize a manual workaround or changes to the GitPM application from the portfolio draft.
-
-After each supported mutation, run:
-
-```bash
-gitpm format --draft DRF-AGENT-001 --project P-26-MGP84K
-gitpm validate --changed --draft DRF-AGENT-001 --project P-26-MGP84K
-gitpm diff --semantic --draft DRF-AGENT-001 --project P-26-MGP84K
-```
-
-When `--project` is present, every changed path must belong to that Project. Repository-global configuration, People, Teams, Calendars and other Projects are rejected with `AGENT_SCOPE_VIOLATION`.
-
-Deletion is rejected unless the same verification/commit command includes `--allow-delete`. This flag authorizes the declared deletion only for that invocation; reference and repository validation still apply. It does not authorize bypassing the CLI.
-
-## Publish
-
-```bash
-gitpm commit --all -m "Update delivery plan" --draft DRF-AGENT-001 --project P-26-MGP84K
+gitpm commit --all --draft DRF-AGENT-001 --project P-26-MGP84K \
+  -m "Update delivery plan"
 gitpm push --draft DRF-AGENT-001
 gitpm mr create --draft DRF-AGENT-001 --owner 42 --title "Update delivery plan"
 ```
 
-Commit always stages every draft change after scope and repository validation. Partial staging is not supported. Push requires a clean committed worktree. MR creation uses the configured GitLab protocol adapter and marks the draft published.
+## CLI-only mutation boundary
 
-Use `--json` for locale-neutral automation output. Human output follows the CLI source locale policy.
+Пользовательские исходные документы помещаются в разрешённый non-domain каталог
+`uploads/`. Его содержимое игнорируется Git: agent может читать и преобразовывать
+эти файлы, но не должен коммитить их или копировать binary content в domain paths.
+Извлечённые данные передаются CLI через temporary YAML/CSV/JSONL вне checkout.
+
+Для создания передайте temporary YAML mapping вне managed checkout. При `--type`
+можно опустить `schema`, `id` и `lifecycle`; CLI подставит schema, сгенерирует ID
+и использует `active`. У Person отсутствующий `calendar` берётся из repository
+`default_calendar`.
+
+```bash
+gitpm entity create --type task --file /tmp/task.yaml \
+  --project P-26-MGP84K --json
+```
+
+Существующую сущность изменяйте transactional patch:
+
+```bash
+gitpm entity update --type person --id U-26-5EBAE3 \
+  --set email=anna.new@example.test --set weekly_capacity_hours=36 --json
+gitpm entity update --type task --id T-26-RHBNH8 \
+  --unset milestone --project P-26-MGP84K --json
+```
+
+Значения `--set` разбираются как YAML. Для большого patch используйте
+`--file <yaml-patch>`. `schema`, `id` и owning Project неизменяемы; `null` в patch
+и `--unset` удаляют optional field. После записи GitPM валидирует весь repository
+и откатывает все затронутые файлы при ошибке.
+
+Для атомарного bulk creation:
+
+```bash
+gitpm entity import --type person --format csv --file /tmp/people.csv --dry-run --json
+gitpm entity import --type person --format csv --file /tmp/people.csv --json
+```
+
+Поддерживаются CSV, YAML array и JSONL. Import сначала планирует все ID, затем
+однократно валидирует итоговый repository и откатывает весь batch при любой
+ошибке. Поля следует сверять через `gitpm schema show <type> --json`, а не выводить
+из случайных существующих файлов.
+
+CLI v0.1 пока не предоставляет отдельные archive/delete entity commands. Agent
+обязан сообщить этот product gap и не обходить его ручным удалением или правкой YAML.
+
+## Scope, validation и publication
+
+После каждой группы mutation выполняйте format, changed validation и semantic diff.
+В worktree mode добавляйте `--draft`:
+
+```bash
+gitpm format --project P-26-MGP84K
+gitpm validate --changed --project P-26-MGP84K
+gitpm diff --semantic --project P-26-MGP84K
+```
+
+`--project` требует, чтобы все business changes принадлежали указанному Project.
+Repository configuration, People, Teams, Calendars и другие Projects приводят к
+`AGENT_SCOPE_VIOLATION`. Physical deletion дополнительно требует
+`--allow-delete` в соответствующей validation/diff/commit-команде, но этот флаг
+не разрешает обходить CLI mutation boundary.
+
+Commit всегда включает все изменения managed checkout/draft после полной scope и
+repository validation. Partial staging не поддерживается. Push требует clean
+committed tree.
+
+При ошибке, неоднозначном контракте или отсутствующей операции agent сообщает
+sanitized command, стабильный error code, observed/expected behavior и конкретное
+предложение по улучшению GitPM. Product feedback не даёт разрешения менять
+исходники приложения из portfolio checkout.
 
 ## Open UI behavior
 
-The UI polls the draft every three seconds. A changed external fingerprint reloads affected read-models without a browser reload. Changed fields or collapsed entity cards receive a short external-update indication. Consecutive writes coalesce by extending one indication; reduced-motion mode uses the same static highlight without animation. Polling does not move focus or scroll position.
+UI периодически сверяет fingerprint. В worktree external mode новые revision
+перезагружают затронутые read models и кратко отмечают изменённые поля без смены
+focus/scroll. В direct mode неожиданное внешнее изменение блокирует stale UI write,
+пока пользователь не просмотрит и явно не подтвердит текущий checkout fingerprint;
+подтверждение само по себе не меняет и не валидирует файлы.

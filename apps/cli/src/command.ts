@@ -517,10 +517,14 @@ const INIT_README_MD = `# Project portfolio managed by GitPM
 This repository was initialised by \`gitpm init\`. Use the GitPM web UI or CLI
 to create projects, people, teams, calendars and tasks. See
 https://github.com/Belerafon/GitPM for details.
+
+Place local source documents in \`uploads/\`. Git ignores their contents; convert
+them to temporary CLI input instead of committing them as GitPM business data.
 `;
 
-const INIT_GITIGNORE = `# User-supplied artefacts that must not enter the GitPM history.
-/uploads/
+const INIT_GITIGNORE = `# User-supplied artefacts are local inputs, not GitPM business data.
+/uploads/*
+!/uploads/.gitkeep
 `;
 
 const INIT_KEEPERS = ["people", "teams", "projects"] as const;
