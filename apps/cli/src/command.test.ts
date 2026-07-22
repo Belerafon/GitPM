@@ -1,4 +1,4 @@
-import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
@@ -56,6 +56,16 @@ afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recur
 describe("CLI P02 commands", () => {
   it("prints a stable version", async () => {
     expect(await run(["--version"])).toEqual({ exitCode: 0, output: "0.1.0" });
+    expect(JSON.parse((await run(["--version", "--json"])).output)).toMatchObject({ ok: true, version: "0.1.0", repository_schema: 1, schema_digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u) });
+  });
+
+  it("provides command help and inspectable schemas without runtime configuration", async () => {
+    const help = await run(["entity", "create", "--help", "--json"]);
+    expect(help.exitCode).toBe(0);
+    expect(JSON.parse(help.output)).toMatchObject({ ok: true, command: "entity", help: expect.stringContaining("default_calendar") });
+    const schema = await run(["schema", "show", "person", "--json"]);
+    expect(JSON.parse(schema.output)).toMatchObject({ ok: true, name: "person", required: expect.arrayContaining(["calendar", "weekly_capacity_hours"]), optional: expect.arrayContaining(["email"]) });
+    expect((await run(["schema", "show", "person", "--example"])).output).toContain("schema: gitpm/person@1");
   });
 
   it("checks and applies canonical formatting", async () => {
@@ -175,6 +185,37 @@ describe("CLI init command", () => {
 });
 
 describe("CLI direct mode", () => {
+  it("generates Person identity, applies defaults and imports CSV atomically", async () => {
+    const { direct, data } = await directFixture();
+    const inputRoot = await mkdtemp(path.join(os.tmpdir(), "gitpm-cli-import-"));
+    roots.push(inputRoot);
+    const personFile = path.join(inputRoot, "person.yaml");
+    await writeFile(personFile, "name: Generated Person\nweekly_capacity_hours: 35\nemail: generated@example.test\n", "utf8");
+    const created = await run(["entity", "create", "--type", "person", "--file", personFile, "--json"], process.cwd(), { direct });
+    expect(created.exitCode).toBe(0);
+    const createdPayload = JSON.parse(created.output);
+    expect(createdPayload.document).toMatchObject({ schema: "gitpm/person@1", name: "Generated Person", calendar: "C-26-QD7FJ4", lifecycle: "active" });
+    expect(createdPayload.document.id).toMatch(/^U-\d{2}-[0-9A-HJKMNP-TV-Z]{6}$/u);
+
+    const peopleDirectory = path.join(data, "repository", "people");
+    const baseline = (await readdir(peopleDirectory)).length;
+    const dryFile = path.join(inputRoot, "dry.csv");
+    await writeFile(dryFile, "name,email,weekly_capacity_hours\nDry One,dry1@example.test,40\nDry Two,dry2@example.test,32\n", "utf8");
+    const dry = await run(["entity", "import", "--type", "person", "--format", "csv", "--file", dryFile, "--dry-run", "--json"], process.cwd(), { direct });
+    expect(JSON.parse(dry.output)).toMatchObject({ ok: true, dry_run: true, items: [{ row: 2 }, { row: 3 }] });
+    expect(await readdir(peopleDirectory)).toHaveLength(baseline);
+
+    const invalidFile = path.join(inputRoot, "invalid.csv");
+    await writeFile(invalidFile, "name,email,weekly_capacity_hours\nDuplicate One,duplicate@example.test,40\nDuplicate Two,DUPLICATE@example.test,40\n", "utf8");
+    const invalid = await run(["entity", "import", "--type", "person", "--format", "csv", "--file", invalidFile, "--json"], process.cwd(), { direct });
+    expect(JSON.parse(invalid.output)).toMatchObject({ ok: false, code: "VALIDATION_FAILED", details: expect.arrayContaining([expect.objectContaining({ code: "PERSON_EMAIL_DUPLICATE" })]) });
+    expect(await readdir(peopleDirectory)).toHaveLength(baseline);
+
+    const imported = await run(["entity", "bulk-import", "--schema", "person", "--format", "csv", "--path", dryFile, "--json"], process.cwd(), { direct });
+    expect(JSON.parse(imported.output)).toMatchObject({ ok: true, dry_run: false, items: [{ row: 2 }, { row: 3 }] });
+    expect(await readdir(peopleDirectory)).toHaveLength(baseline + 2);
+  });
+
   it("status reports direct mode, checkout path, branch, HEAD and clean state without --draft", async () => {
     const { direct } = await directFixture();
     const result = await run(["status", "--json"], process.cwd(), { direct });

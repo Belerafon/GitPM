@@ -37,6 +37,14 @@ describe("agent file and CLI workflow core", () => {
     const drafts = new DraftManager(client, data); const changes = new ChangesService(drafts, client); const gitlab = new GitLabProtocolTestDouble();
     const workflow = new AgentWorkflow(drafts, client, changes, { accessToken: "agent-memory-token", authorName: "agent-42", authorEmail: "42@users.noreply.gitlab.example.test", defaultBranch: "main", mergeRequests: gitlab });
     const draft = await workflow.createDraft("DRF-AGENT", "42"); expect(draft.writer_mode).toBe("external");
+    const dryImport = await workflow.createEntities("DRF-AGENT", [
+      { name: "Dry Ada", weekly_capacity_hours: 40, email: "dry-ada@example.test" },
+      { name: "Dry Grace", weekly_capacity_hours: 32, email: "dry-grace@example.test" },
+    ], "person", {}, true);
+    expect(dryImport).toMatchObject({ dry_run: true, items: [{ source_index: 0 }, { source_index: 1 }] });
+    for (const item of dryImport.items) {
+      await expect(readFile(path.join(draft.worktree_path, ...item.path.split("/")), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    }
     expect(await readFile(path.join(draft.worktree_path, "AGENTS.md"), "utf8")).toContain("GitPM draft `DRF-AGENT`");
     expect(await readFile(path.join(draft.worktree_path, ".agents", "skills", "gitpm", "SKILL.md"), "utf8")).toContain("name: gitpm");
     await rm(path.join(draft.worktree_path, "AGENTS.md"));

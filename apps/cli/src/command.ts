@@ -1,6 +1,8 @@
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { GITPM_VERSION } from "@gitpm/shared";
 import { formatYamlText, parseYamlDocument, referenceLabelsForDocuments, RepositoryFormatError } from "@gitpm/repository-format";
@@ -8,6 +10,7 @@ import { validateRepository } from "@gitpm/validation";
 import { atomicWriteDomainFile } from "@gitpm/security";
 import type { AgentScope, AgentScopeReport, AgentWorkflow } from "@gitpm/agent";
 import type { DirectCliRuntime } from "./direct-runtime.js";
+import { parseCsvEntities, parseEntityMapping, parseJsonLinesEntities, parseYamlEntities } from "./entity-input.js";
 
 export interface CliResult {
   readonly exitCode: number;
@@ -21,7 +24,7 @@ interface CommonOptions {
 }
 
 type CliAgent = Pick<AgentWorkflow, "assertScope" | "commitAll" | "createDraft" | "createMergeRequest" | "openDraft" | "push" | "semanticDiff" | "setWriterMode" | "status">
-  & Partial<Pick<AgentWorkflow, "createEntity">>;
+  & Partial<Pick<AgentWorkflow, "createEntity" | "createEntities">>;
 
 export interface CliDependencies {
   readonly agent?: CliAgent;
@@ -56,6 +59,114 @@ function options(args: readonly string[], cwd: string): CommonOptions {
 
 function render(json: boolean, payload: Record<string, unknown>, human: string): string {
   return json ? JSON.stringify(payload, null, 2) : human;
+}
+
+const SCHEMA_DIRECTORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../schemas/v1");
+const ROOT_USAGE = "Usage: gitpm <init|status|draft|entity create|entity import|schema|format|validate|diff --semantic|commit --all|push|mr create|doctor> [options]";
+
+const commandHelp: Readonly<Record<string, string>> = {
+  root: [
+    ROOT_USAGE,
+    "",
+    "Run 'gitpm <command> --help' for command-specific help. All commands support --json.",
+  ].join("\n"),
+  entity: [
+    "Usage:",
+    "  gitpm entity create [--draft <id>] --file <yaml> [--type <type>] [--project <id>] [--json]",
+    "  gitpm entity import [--draft <id>] --type <type> --format <csv|yaml|jsonl> (--file <path>|--path <path>) [--dry-run] [--json]",
+    "",
+    "create accepts a YAML mapping. schema, id and lifecycle may be omitted when --type is supplied.",
+    "Person calendar may be omitted and is materialized from repository default_calendar.",
+    "A supplied valid ID is preserved; otherwise GitPM generates <prefix>-<UTC YY>-<6 Crockford Base32>.",
+    "import is atomic: the complete batch is validated once and rolled back on any error.",
+  ].join("\n"),
+  schema: [
+    "Usage:",
+    "  gitpm schema list [--json]",
+    "  gitpm schema show <type> [--example] [--json]",
+  ].join("\n"),
+  validate: "Usage: gitpm validate [--draft <id>] [--project <id>] [--changed] [--json]",
+  format: "Usage: gitpm format [--draft <id>] [--project <id>] [--check] [--json]",
+  diff: "Usage: gitpm diff --semantic [--draft <id>] [--project <id>] [--json]",
+  commit: "Usage: gitpm commit --all [--draft <id>] -m <message> [--project <id>] [--json]",
+  status: "Usage: gitpm status [--draft <id>] [--json]",
+  draft: "Usage: gitpm draft create|open|status|set-writer --draft <id> [--owner <id>] [ui|external] [--json]",
+  push: "Usage: gitpm push [--draft <id>] [--json]",
+  mr: "Usage: gitpm mr create --draft <id> --owner <id> --title <title> [--description <text>] [--json]",
+  init: "Usage: gitpm init [path] [--json]",
+  doctor: "Usage: gitpm doctor [--json]",
+};
+
+function requestedEntityType(args: readonly string[]): string | undefined {
+  const value = flagValue(args, "--type") ?? flagValue(args, "--schema");
+  if (value === undefined) return undefined;
+  const match = /^gitpm\/(project|task|milestone|person|team|calendar|saved-view)@1$/u.exec(value);
+  return match?.[1] ?? value;
+}
+
+async function versionPayload(): Promise<Record<string, unknown>> {
+  const hash = createHash("sha256");
+  for (const file of (await readdir(SCHEMA_DIRECTORY)).filter((entry) => entry.endsWith(".schema.json")).sort()) {
+    hash.update(file).update("\0").update(await readFile(path.join(SCHEMA_DIRECTORY, file))).update("\0");
+  }
+  return {
+    ok: true,
+    code: "OK",
+    version: GITPM_VERSION,
+    repository_schema: 1,
+    schema_digest: `sha256:${hash.digest("hex")}`,
+    build_commit: process.env.GITPM_BUILD_COMMIT?.trim() || "unknown",
+    node: process.versions.node,
+  };
+}
+
+const schemaAliases: Readonly<Record<string, string>> = {
+  project: "project", projects: "project", task: "task", tasks: "task",
+  milestone: "milestone", milestones: "milestone", person: "person", people: "person",
+  team: "team", teams: "team", calendar: "calendar", calendars: "calendar",
+  view: "saved-view", views: "saved-view", "saved-view": "saved-view",
+  comment: "comment", repository: "repository", statuses: "statuses", "issue-types": "issue-types",
+};
+
+const schemaExamples: Readonly<Record<string, string>> = {
+  person: [
+    "schema: gitpm/person@1", "id: U-26-7K4M9Q", "name: Ada Lovelace",
+    "weekly_capacity_hours: 40", "calendar: C-26-QD7FJ4", "lifecycle: active",
+    "email: ada@example.test", "",
+  ].join("\n"),
+  calendar: [
+    "schema: gitpm/calendar@1", "id: C-26-QD7FJ4", "name: Standard work week",
+    "working_weekdays: [1, 2, 3, 4, 5]", "holidays: []", "lifecycle: active", "",
+  ].join("\n"),
+};
+
+async function runSchema(args: readonly string[]): Promise<CliResult> {
+  const json = args.includes("--json");
+  const action = args[0];
+  const available = ["project", "task", "milestone", "person", "team", "calendar", "saved-view", "comment", "repository", "statuses", "issue-types"];
+  if (action === "list") {
+    return { exitCode: 0, output: render(json, { ok: true, code: "OK", schemas: available }, available.join("\n")) };
+  }
+  if (action !== "show") throw new RepositoryFormatError("CLI_USAGE", "schema requires list or show");
+  const requested = args[1];
+  const name = requested === undefined ? undefined : schemaAliases[requested];
+  if (name === undefined) throw new RepositoryFormatError("SCHEMA_UNKNOWN", `Unknown schema ${requested ?? ""}`.trim());
+  const schema = JSON.parse(await readFile(path.join(SCHEMA_DIRECTORY, `${name}.schema.json`), "utf8")) as Record<string, unknown>;
+  const requiredFields = Array.isArray(schema.required) ? schema.required : [];
+  const properties = schema.properties !== null && typeof schema.properties === "object" ? Object.keys(schema.properties as Record<string, unknown>) : [];
+  const optionalFields = properties.filter((field) => !requiredFields.includes(field));
+  const example = schemaExamples[name];
+  if (args.includes("--example") && !json) {
+    return { exitCode: 0, output: example ?? `No example is available for ${name}` };
+  }
+  const human = [
+    `${name}: ${String(schema.$id ?? "")}`,
+    `Required: ${requiredFields.join(", ") || "(none)"}`,
+    `Optional: ${optionalFields.join(", ") || "(none)"}`,
+    name === "person" ? "Create defaults: generated id, lifecycle=active, calendar=repository default_calendar" : "Create defaults: generated id, lifecycle=active",
+    ...(example === undefined ? [] : ["", example.trimEnd()]),
+  ].join("\n");
+  return { exitCode: 0, output: render(json, { ok: true, code: "OK", name, required: requiredFields, optional: optionalFields, schema, ...(example === undefined ? {} : { example }) }, human) };
 }
 
 async function yamlFiles(root: string): Promise<string[]> {
@@ -209,17 +320,50 @@ async function runCommit(args: readonly string[], dependencies: CliDependencies)
 }
 
 async function runEntity(args: readonly string[], cwd: string, dependencies: CliDependencies): Promise<CliResult> {
-  if (args[0] !== "create") throw new RepositoryFormatError("CLI_USAGE", "entity requires create");
+  const action = args[0] === "bulk-import" ? "import" : args[0];
+  if (action !== "create" && action !== "import") throw new RepositoryFormatError("CLI_USAGE", "entity requires create or import");
   const draftId = flagValue(args, "--draft");
   const agent = args.includes("--draft") ? requireAgent(dependencies) : undefined;
   if (agent !== undefined && agent.createEntity === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Entity creation is unavailable");
   const direct = agent === undefined ? requireDirect(dependencies) : undefined;
-  const file = required(flagValue(args, "--file"), "--file");
+  const file = required(flagValue(args, "--file") ?? flagValue(args, "--path"), "--file or --path");
   const source = path.resolve(cwd, file);
-  const document = parseYamlDocument(await readFile(source, "utf8"), source);
+  const text = await readFile(source, "utf8");
+  const entityType = requestedEntityType(args);
+  if (action === "import") {
+    const format = (flagValue(args, "--format") ?? path.extname(source).slice(1)).toLocaleLowerCase();
+    const documents = format === "csv" ? parseCsvEntities(text, source)
+      : ["yaml", "yml"].includes(format) ? parseYamlEntities(text, source)
+        : ["jsonl", "ndjson"].includes(format) ? parseJsonLinesEntities(text, source)
+          : (() => { throw new RepositoryFormatError("IMPORT_FORMAT_INVALID", "--format must be csv, yaml or jsonl"); })();
+    const requestedType = required(entityType, "--type");
+    const dryRun = args.includes("--dry-run");
+    const rowOffset = format === "csv" ? 2 : 1;
+    let imported;
+    try {
+      imported = agent === undefined
+        ? await direct!.createEntities(documents, requestedType, agentScope(args), dryRun)
+        : agent.createEntities === undefined
+          ? (() => { throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Atomic entity import is unavailable"); })()
+          : await agent.createEntities(required(draftId, "--draft"), documents, requestedType, agentScope(args), dryRun);
+    } catch (error) {
+      if (error !== null && typeof error === "object" && "details" in error && Array.isArray(error.details)) {
+        error.details = error.details.map((detail) => detail !== null && typeof detail === "object" && "source_index" in detail && typeof detail.source_index === "number"
+          ? { ...detail, row: detail.source_index + rowOffset }
+          : detail);
+      }
+      throw error;
+    }
+    const items = imported.items.map((item) => ({ ...item, row: item.source_index + rowOffset }));
+    return {
+      exitCode: 0,
+      output: render(args.includes("--json"), { ok: true, code: "OK", ...imported, items }, `${dryRun ? "Validated" : "Imported"} ${items.length} entities`),
+    };
+  }
+  const document = parseEntityMapping(text, source);
   const created = agent?.createEntity === undefined
-    ? await direct!.createEntity(document, agentScope(args))
-    : await agent.createEntity(required(draftId, "--draft"), document, agentScope(args));
+    ? await direct!.createEntity(document, agentScope(args), entityType)
+    : await agent.createEntity(required(draftId, "--draft"), document, agentScope(args), entityType);
   return {
     exitCode: 0,
     output: render(args.includes("--json"), { ok: true, code: "OK", ...created }, `Created ${created.path}`),
@@ -371,8 +515,18 @@ async function runInit(args: readonly string[], cwd: string): Promise<CliResult>
 }
 
 export async function run(args: readonly string[], cwd = process.cwd(), dependencies: CliDependencies = {}): Promise<CliResult> {
-  if (args.includes("--version") || args.includes("-v")) return { exitCode: 0, output: GITPM_VERSION };
+  if (args.includes("--version") || args.includes("-v")) {
+    const payload = await versionPayload();
+    return { exitCode: 0, output: args.includes("--json") ? JSON.stringify(payload, null, 2) : GITPM_VERSION };
+  }
   const [command, ...commandArgs] = args;
+  if (command === "help" || args.includes("--help") || args.includes("-h")) {
+    const requested = command === "help" ? commandArgs[0] : command;
+    const key = requested === undefined ? "root" : requested;
+    const help = commandHelp[key] ?? commandHelp.root!;
+    const json = args.includes("--json");
+    return { exitCode: 0, output: render(json, { ok: true, code: "OK", command: key, help }, help) };
+  }
   const hasDraft = commandArgs.includes("--draft");
   const direct = dependencies.direct;
   // In direct mode, format/validate/diff operate on the managed checkout by default.
@@ -391,6 +545,7 @@ export async function run(args: readonly string[], cwd = process.cwd(), dependen
     }
     if (command === "draft") return await runDraft(commandArgs, dependencies);
     if (command === "entity") return await runEntity(commandArgs, cwd, dependencies);
+    if (command === "schema") return await runSchema(commandArgs);
     if (command === "format" && hasDraft) { const context = await draftRoot(commandArgs, dependencies); return await runFormat([...commandArgs, "--root", context.root], cwd, context.scope); }
     if (command === "format" && direct !== undefined) {
       const scope = await direct.assertScope(agentScope(commandArgs));
@@ -418,7 +573,7 @@ export async function run(args: readonly string[], cwd = process.cwd(), dependen
     const json = args.includes("--json");
     return {
       exitCode: 2,
-      output: render(json, { ok: false, code: "CLI_USAGE" }, "Usage: gitpm <init|status|draft|entity create|format|validate|diff --semantic|commit --all|push|mr create|doctor> [options]"),
+      output: render(json, { ok: false, code: "CLI_USAGE" }, ROOT_USAGE),
     };
   } catch (error) {
     const code = error instanceof RepositoryFormatError || (typeof error === "object" && error !== null && "code" in error && typeof error.code === "string") ? error.code : "CLI_INTERNAL";

@@ -1,10 +1,10 @@
-import { lstat, mkdir, readFile, readdir, rm } from "node:fs/promises";
+import { lstat, mkdir, readFile, readdir, rm, rmdir } from "node:fs/promises";
 import path from "node:path";
 import type { DraftManager, DraftMetadata } from "@gitpm/drafts";
 import { formatYamlDocument, parseYamlDocument, referenceLabelForDocument, referenceLabelsForDocuments } from "@gitpm/repository-format";
 import type { GitPmDocument } from "@gitpm/repository-format";
 import { atomicWriteDomainFile, resolveDomainPath } from "@gitpm/security";
-import { ENTITY_ID_PREFIX, isEntityId } from "@gitpm/shared";
+import { ENTITY_ID_PREFIX, isEntityId, newUniqueEntityId, type EntityIdPrefix } from "@gitpm/shared";
 import { validateDelete, validateRepository } from "@gitpm/validation";
 
 export * from "./comments.js";
@@ -27,6 +27,12 @@ export interface EntityResult {
   readonly draft_fingerprint: string;
 }
 
+export interface EntityCreateBatchResult {
+  readonly items: readonly { readonly document: GitPmDocument; readonly path: string; readonly source_index: number }[];
+  readonly draft_fingerprint: string;
+  readonly dry_run: boolean;
+}
+
 export interface ProjectWorkspaceResult {
   readonly project: EntityResult;
   readonly milestones: readonly EntityResult[];
@@ -46,7 +52,7 @@ interface RepositoryIndex {
   readonly bySchemaAndId: ReadonlyMap<string, IndexedEntity>;
 }
 
-const typeSchemas: Record<string, string> = {
+export const ENTITY_TYPE_SCHEMAS: Readonly<Record<string, string>> = {
   projects: "gitpm/project@1",
   tasks: "gitpm/task@1",
   milestones: "gitpm/milestone@1",
@@ -54,6 +60,17 @@ const typeSchemas: Record<string, string> = {
   teams: "gitpm/team@1",
   calendars: "gitpm/calendar@1",
   views: "gitpm/saved-view@1",
+};
+
+const entityTypeAliases: Readonly<Record<string, string>> = {
+  project: "projects",
+  task: "tasks",
+  milestone: "milestones",
+  person: "people",
+  team: "teams",
+  calendar: "calendars",
+  view: "views",
+  "saved-view": "views",
 };
 
 const schemaIdPrefixes = {
@@ -67,8 +84,92 @@ const schemaIdPrefixes = {
   "gitpm/comment@1": ENTITY_ID_PREFIX.comment,
 } as const;
 
+export interface EntityCreatePlanItem {
+  readonly document: GitPmDocument;
+  readonly path: string;
+  readonly source_index: number;
+}
+
+export function canonicalEntityType(value: string): string {
+  const normalized = entityTypeAliases[value] ?? value;
+  if (ENTITY_TYPE_SCHEMAS[normalized] === undefined) {
+    throw new DomainOperationError("ENTITY_TYPE_INVALID", `Unknown entity type ${value}`);
+  }
+  return normalized;
+}
+
+function entityTypeForInputs(inputs: readonly Readonly<Record<string, unknown>>[], requestedType?: string): string {
+  if (requestedType !== undefined) return canonicalEntityType(requestedType);
+  const schemas = new Set(inputs.map((input) => input.schema).filter((schema): schema is string => typeof schema === "string"));
+  if (schemas.size !== 1) {
+    throw new DomainOperationError("ENTITY_TYPE_REQUIRED", "--type is required when input schema is absent or mixed");
+  }
+  const schema = [...schemas][0]!;
+  const found = Object.entries(ENTITY_TYPE_SCHEMAS).find(([, candidate]) => candidate === schema)?.[0];
+  if (found === undefined) throw new DomainOperationError("ENTITY_TYPE_INVALID", `Unsupported entity schema ${schema}`);
+  return found;
+}
+
+export function planEntityCreation(
+  inputs: readonly Readonly<Record<string, unknown>>[],
+  existingDocuments: readonly GitPmDocument[],
+  requestedType?: string,
+): readonly EntityCreatePlanItem[] {
+  if (inputs.length === 0) throw new DomainOperationError("IMPORT_EMPTY", "Entity input is empty");
+  const entityType = entityTypeForInputs(inputs, requestedType);
+  const schema = ENTITY_TYPE_SCHEMAS[entityType]!;
+  const prefix = schemaIdPrefixes[schema as keyof typeof schemaIdPrefixes] as EntityIdPrefix | undefined;
+  if (prefix === undefined) throw new DomainOperationError("ENTITY_TYPE_INVALID", `Unsupported entity schema ${schema}`);
+  const reservedIds = new Set(existingDocuments.flatMap((document) => typeof document.id === "string" ? [document.id] : []));
+  const repository = existingDocuments.find((document) => document.schema === "gitpm/repository@1");
+  const defaultCalendar = typeof repository?.default_calendar === "string" ? repository.default_calendar : undefined;
+  const calendars = new Map(existingDocuments
+    .filter((document) => document.schema === "gitpm/calendar@1" && typeof document.id === "string")
+    .map((document) => [String(document.id), document]));
+
+  return inputs.map((input, sourceIndex) => {
+    if (input.schema !== undefined && input.schema !== schema) {
+      throw new DomainOperationError("ENTITY_TYPE_INVALID", `Input ${sourceIndex + 1} schema ${String(input.schema)} does not match ${schema}`, { source_index: sourceIndex });
+    }
+    let id: string;
+    if (input.id === undefined) {
+      id = newUniqueEntityId(prefix, reservedIds);
+    } else if (typeof input.id !== "string" || !isEntityId(input.id, prefix)) {
+      throw new DomainOperationError("ENTITY_ID_INVALID", `Input ${sourceIndex + 1} entity ID is invalid`, { source_index: sourceIndex, expected_prefix: prefix });
+    } else {
+      id = input.id;
+    }
+    if (reservedIds.has(id)) {
+      throw new DomainOperationError("ENTITY_EXISTS", `Input ${sourceIndex + 1} entity ID ${id} already exists`, { source_index: sourceIndex, id });
+    }
+    reservedIds.add(id);
+
+    const lifecycle = input.lifecycle ?? "active";
+    let calendar = input.calendar;
+    if (schema === "gitpm/person@1" && calendar === undefined) {
+      if (defaultCalendar === undefined) {
+        throw new DomainOperationError("DEFAULT_CALENDAR_UNAVAILABLE", "Person input omits calendar but repository default_calendar is unavailable", { source_index: sourceIndex });
+      }
+      calendar = defaultCalendar;
+    }
+    if (schema === "gitpm/person@1" && lifecycle === "active" && typeof calendar === "string" && calendars.get(calendar)?.lifecycle !== "active") {
+      throw new DomainOperationError("ENTITY_CALENDAR_INACTIVE", `Person input ${sourceIndex + 1} requires an active Calendar`, { source_index: sourceIndex, calendar });
+    }
+    const email = typeof input.email === "string" ? input.email.trim() : input.email;
+    const document = {
+      ...input,
+      schema,
+      id,
+      lifecycle,
+      ...(calendar === undefined ? {} : { calendar }),
+      ...(email === undefined ? {} : { email }),
+    } as GitPmDocument;
+    return { document, path: entityPathForDocument(document), source_index: sourceIndex };
+  });
+}
+
 export function assertEntityType(entityType: string, document: GitPmDocument): void {
-  const schema = typeSchemas[entityType];
+  const schema = ENTITY_TYPE_SCHEMAS[entityType];
   if (!schema || schema !== document.schema) {
     throw new DomainOperationError("ENTITY_TYPE_INVALID", `Entity type ${entityType} does not match ${document.schema}`);
   }
@@ -196,9 +297,19 @@ export class EntityStore {
     ]);
   }
 
+  async planCreate(
+    draftId: string,
+    inputs: readonly Readonly<Record<string, unknown>>[],
+    requestedType?: string,
+  ): Promise<readonly EntityCreatePlanItem[]> {
+    const metadata = await this.drafts.getDraft(draftId);
+    const repository = await this.index(draftId, metadata);
+    return planEntityCreation(inputs, repository.entities.map((entity) => entity.document), requestedType);
+  }
+
   async list(draftId: string, entityType: string, project?: string): Promise<readonly EntityResult[]> {
     const metadata = await this.drafts.getDraft(draftId);
-    const schema = typeSchemas[entityType];
+    const schema = ENTITY_TYPE_SCHEMAS[entityType];
     if (!schema) throw new DomainOperationError("ENTITY_TYPE_INVALID", `Unknown entity type ${entityType}`);
     const matching = (await this.index(draftId, metadata)).entities
       .filter((entity) => entity.document.schema === schema && (project === undefined || entity.document.project === project));
@@ -207,7 +318,7 @@ export class EntityStore {
   }
 
   private async find(draftId: string, metadata: DraftMetadata, entityType: string, id: string): Promise<IndexedEntity> {
-    const schema = typeSchemas[entityType];
+    const schema = ENTITY_TYPE_SCHEMAS[entityType];
     if (!schema) throw new DomainOperationError("ENTITY_TYPE_INVALID", `Unknown entity type ${entityType}`);
     const found = (await this.index(draftId, metadata)).bySchemaAndId.get(`${schema}:${id}`);
     if (found !== undefined) return found;
@@ -275,7 +386,16 @@ export class EntityStore {
     return await this.getWithFingerprint(draftId, document, relative, mutation.metadata.fingerprint);
   }
 
-  async create(draftId: string, owner: string, expectedFingerprint: string, document: GitPmDocument): Promise<EntityResult> {
+  async create(
+    draftId: string,
+    owner: string,
+    expectedFingerprint: string,
+    input: Readonly<Record<string, unknown>>,
+    requestedType?: string,
+  ): Promise<EntityResult> {
+    const document = requestedType === undefined && typeof input.schema === "string" && typeof input.id === "string"
+      ? input as GitPmDocument
+      : (await this.planCreate(draftId, [input], requestedType))[0]!.document;
     const relative = entityPathForDocument(document);
     const mutation = await this.drafts.withUiMutation(draftId, owner, expectedFingerprint, async (metadata) => {
       const referenceLabels = this.labels(await this.index(draftId, metadata), document);
@@ -293,6 +413,73 @@ export class EntityStore {
       return relative;
     });
     return await this.getWithFingerprint(draftId, document, relative, mutation.metadata.fingerprint);
+  }
+
+  async createMany(
+    draftId: string,
+    owner: string,
+    expectedFingerprint: string,
+    plan: readonly EntityCreatePlanItem[],
+    dryRun = false,
+  ): Promise<EntityCreateBatchResult> {
+    if (plan.length === 0) throw new DomainOperationError("IMPORT_EMPTY", "Entity input is empty");
+    const paths = new Set<string>();
+    for (const item of plan) {
+      const expected = entityPathForDocument(item.document);
+      if (expected !== item.path) throw new DomainOperationError("PATH_ENTITY_FILENAME", `Expected ${expected}`);
+      if (paths.has(item.path)) throw new DomainOperationError("ENTITY_EXISTS", `Duplicate batch path ${item.path}`);
+      paths.add(item.path);
+    }
+    const mutation = await this.drafts.withUiMutation(draftId, owner, expectedFingerprint, async (metadata) => {
+      const repository = await this.index(draftId, metadata);
+      const referenceLabels = referenceLabelsForDocuments([
+        ...repository.entities.map((entity) => entity.document),
+        ...plan.map((item) => item.document),
+      ]);
+      const written: string[] = [];
+      const createdParents = new Set<string>();
+      const cleanup = async (): Promise<void> => {
+        for (const relative of written.reverse()) await rm(path.join(metadata.worktree_path, ...relative.split("/")), { force: true });
+        for (const relative of [...createdParents].sort((left, right) => right.length - left.length)) {
+          try { await rmdir(path.join(metadata.worktree_path, ...relative.split("/"))); }
+          catch (error) { if (!["ENOENT", "ENOTEMPTY"].includes((error as NodeJS.ErrnoException).code ?? "")) throw error; }
+        }
+      };
+      try {
+        for (const item of plan) {
+          const absolute = path.join(metadata.worktree_path, ...item.path.split("/"));
+          if (await exists(absolute)) throw new DomainOperationError("ENTITY_EXISTS", `${item.path} already exists`);
+          let parent = path.posix.dirname(item.path);
+          while (parent !== "." && !(await exists(path.join(metadata.worktree_path, ...parent.split("/"))))) {
+            createdParents.add(parent);
+            parent = path.posix.dirname(parent);
+          }
+          await mkdir(path.dirname(absolute), { recursive: true, mode: 0o700 });
+          await resolveDomainPath(metadata.worktree_path, item.path);
+          await atomicWriteDomainFile(metadata.worktree_path, item.path, formatYamlDocument(item.document, referenceLabels));
+          written.push(item.path);
+        }
+        await this.assertRepositoryValid(metadata.worktree_path);
+        if (dryRun) await cleanup();
+      } catch (error) {
+        await cleanup();
+        if (error instanceof DomainOperationError && error.code === "VALIDATION_FAILED" && Array.isArray(error.details)) {
+          const sources = new Map(plan.map((item) => [item.path, item.source_index]));
+          throw new DomainOperationError(error.code, error.message, error.details.map((issue) => {
+            if (issue === null || typeof issue !== "object" || !("path" in issue) || typeof issue.path !== "string") return issue;
+            const sourceIndex = sources.get(issue.path);
+            return sourceIndex === undefined ? issue : { ...issue, source_index: sourceIndex };
+          }));
+        }
+        throw error;
+      }
+      return undefined;
+    });
+    return {
+      items: plan.map((item) => ({ document: item.document, path: item.path, source_index: item.source_index })),
+      draft_fingerprint: mutation.metadata.fingerprint,
+      dry_run: dryRun,
+    };
   }
 
   async update(

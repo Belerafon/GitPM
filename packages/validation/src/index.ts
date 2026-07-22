@@ -12,6 +12,25 @@ export interface ValidationIssue {
   readonly code: string;
   readonly path: string;
   readonly message: string;
+  readonly field?: string;
+  readonly schema_keyword?: string;
+  readonly schema_params?: Readonly<Record<string, unknown>>;
+  readonly expected?: string;
+}
+
+function schemaField(instancePath: string, params: Readonly<Record<string, unknown>>): string | undefined {
+  if (typeof params.missingProperty === "string") return params.missingProperty;
+  const segments = instancePath.split("/").filter(Boolean);
+  return segments.length === 0 ? undefined : segments.map((segment) => segment.replaceAll("~1", "/").replaceAll("~0", "~")).join(".");
+}
+
+function schemaExpectation(field: string | undefined): string | undefined {
+  if (field === "calendar") return "existing Calendar ID matching C-YY-XXXXXX";
+  if (field === "id") return "entity ID matching <type>-<UTC YY>-<6 Crockford Base32>";
+  if (field === "lifecycle") return "active or archived";
+  if (field === "weekly_capacity_hours") return "nonnegative number";
+  if (field === "email") return "email address";
+  return undefined;
 }
 
 export interface ValidationReport {
@@ -191,7 +210,21 @@ export async function validateRepository(repositoryRoot: string): Promise<Valida
       if (!validator) {
         loadedIssues.push({ severity: "error", code: "SCHEMA_UNKNOWN", path: relative, message: `Unknown schema ${value.schema}` });
       } else if (!validator(value)) {
-        loadedIssues.push({ severity: "error", code: "SCHEMA_INVALID", path: relative, message: validator.errors?.[0]?.message ?? "Schema validation failed" });
+        for (const error of validator.errors ?? []) {
+          const params = error.params as Readonly<Record<string, unknown>>;
+          const field = schemaField(error.instancePath, params);
+          const expected = schemaExpectation(field);
+          loadedIssues.push({
+            severity: "error",
+            code: "SCHEMA_INVALID",
+            path: relative,
+            message: error.message ?? "Schema validation failed",
+            ...(field === undefined ? {} : { field }),
+            schema_keyword: error.keyword,
+            schema_params: params,
+            ...(expected === undefined ? {} : { expected }),
+          });
+        }
       } else {
         structurallyValid = true;
       }
@@ -231,6 +264,20 @@ export async function validateRepository(repositoryRoot: string): Promise<Valida
     } else {
       byId.set(document.value.id, document);
     }
+  }
+  const peopleByEmail = new Map<string, LoadedDocument>();
+  for (const document of validDocuments.filter((item) => item.value.schema === "gitpm/person@1" && typeof item.value.email === "string")) {
+    const email = String(document.value.email).trim().toLowerCase();
+    const existing = peopleByEmail.get(email);
+    if (existing !== undefined) {
+      add({
+        severity: "error",
+        code: "PERSON_EMAIL_DUPLICATE",
+        path: document.path,
+        field: "email",
+        message: `Person email duplicates ${existing.path}`,
+      });
+    } else peopleByEmail.set(email, document);
   }
 
   const repository = validDocuments.find((document) => document.value.schema === "gitpm/repository@1");

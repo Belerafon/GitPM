@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { DraftManager } from "@gitpm/drafts";
 import { GitClient } from "@gitpm/git-client";
 import type { GitPmDocument } from "@gitpm/repository-format";
-import { CommentStore, DomainOperationError, EntityStore, type CommentActor } from "./index.js";
+import { CommentStore, DomainOperationError, EntityStore, planEntityCreation, type CommentActor } from "./index.js";
 
 const execFileAsync = promisify(execFile);
 const roots: string[] = [];
@@ -37,6 +37,32 @@ async function runtime(): Promise<{ manager: DraftManager; store: EntityStore; c
 }
 
 afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))));
+
+describe("entity create planning", () => {
+  const calendar = { schema: "gitpm/calendar@1", id: "C-26-QD7FJ4", name: "Default", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" };
+  const repository = { schema: "gitpm/repository@1", default_calendar: calendar.id };
+
+  it("generates identity and materializes Person defaults while preserving a supplied ID", () => {
+    const generated = planEntityCreation([{ name: "Ada", weekly_capacity_hours: 40 }], [repository, calendar], "person")[0]!;
+    expect(generated.document).toMatchObject({ schema: "gitpm/person@1", name: "Ada", weekly_capacity_hours: 40, calendar: calendar.id, lifecycle: "active" });
+    expect(generated.document.id).toMatch(/^U-\d{2}-[0-9A-HJKMNP-TV-Z]{6}$/u);
+    expect(generated.path).toBe(`people/${String(generated.document.id)}.yaml`);
+
+    const supplied = planEntityCreation([{ id: "U-26-KB9RXB", name: "Grace", weekly_capacity_hours: 32 }], [repository, calendar], "people")[0]!;
+    expect(supplied.document.id).toBe("U-26-KB9RXB");
+  });
+
+  it("rejects invalid, duplicate and inactive-calendar inputs before writing", () => {
+    expect(() => planEntityCreation([{ id: "person-1", name: "Bad", weekly_capacity_hours: 40 }], [repository, calendar], "person"))
+      .toThrowError(expect.objectContaining({ code: "ENTITY_ID_INVALID" }));
+    expect(() => planEntityCreation([
+      { id: "U-26-KB9RXB", name: "One", weekly_capacity_hours: 40 },
+      { id: "U-26-KB9RXB", name: "Two", weekly_capacity_hours: 40 },
+    ], [repository, calendar], "person")).toThrowError(expect.objectContaining({ code: "ENTITY_EXISTS" }));
+    expect(() => planEntityCreation([{ name: "Archived calendar", weekly_capacity_hours: 40 }], [repository, { ...calendar, lifecycle: "archived" }], "person"))
+      .toThrowError(expect.objectContaining({ code: "ENTITY_CALENDAR_INACTIVE" }));
+  });
+});
 
 describe("domain entity store", () => {
   it("persists task comments, resolves stable mentions and exposes in-app notifications", async () => {

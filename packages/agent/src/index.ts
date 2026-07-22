@@ -1,9 +1,9 @@
-import { lstat, mkdir, readFile, readdir, rm } from "node:fs/promises";
+import { lstat, mkdir, readFile, readdir, rm, rmdir } from "node:fs/promises";
 import path from "node:path";
 import type { ChangesService, SemanticDiff } from "@gitpm/changes";
 import { GITPM_GUIDANCE_FILES, GITPM_GUIDANCE_PATHS, provisionGitPmWorktreeGuidance } from "@gitpm/drafts";
 import type { DraftManager, DraftMetadata, WriterMode } from "@gitpm/drafts";
-import { entityPathForDocument } from "@gitpm/domain";
+import { planEntityCreation, type EntityCreateBatchResult } from "@gitpm/domain";
 import type { GitClient } from "@gitpm/git-client";
 import type { GitLabMergeRequestProtocol, MergeRequestPayload, MergeRequestState } from "@gitpm/gitlab";
 import { formatYamlDocument, parseYamlDocument, referenceLabelsForDocuments, type GitPmDocument } from "@gitpm/repository-format";
@@ -74,6 +74,11 @@ async function repositoryDocuments(root: string): Promise<GitPmDocument[]> {
   return result;
 }
 
+async function pathExists(absolute: string): Promise<boolean> {
+  try { await lstat(absolute); return true; }
+  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return false; throw error; }
+}
+
 export class AgentWorkflow {
   constructor(
     private readonly drafts: DraftManager,
@@ -117,29 +122,73 @@ export class AgentWorkflow {
     return { ...report, unclassified_files: report.unclassified_files.filter((file) => !GITPM_GUIDANCE_FILES.has(file)) };
   }
 
-  async createEntity(draftId: string, document: GitPmDocument, scope: AgentScope = {}) {
+  async createEntity(draftId: string, document: Readonly<Record<string, unknown>>, scope: AgentScope = {}, requestedType?: string) {
+    const batch = await this.createEntities(draftId, [document], requestedType, scope, false);
+    const item = batch.items[0]!;
+    return { path: item.path, draft_fingerprint: batch.draft_fingerprint, document: item.document };
+  }
+
+  async createEntities(
+    draftId: string,
+    documents: readonly Readonly<Record<string, unknown>>[],
+    requestedType: string | undefined,
+    scope: AgentScope = {},
+    dryRun = false,
+  ): Promise<EntityCreateBatchResult> {
+    await this.assertScope(draftId, scope);
     const draft = await this.externalDraft(draftId);
-    const referenceLabels = referenceLabelsForDocuments([...await repositoryDocuments(draft.worktree_path), document]);
-    const relative = entityPathForDocument(document);
-    const absolute = path.join(draft.worktree_path, ...relative.split("/"));
+    const existing = await repositoryDocuments(draft.worktree_path);
+    const plan = planEntityCreation(documents, existing, requestedType);
+    const referenceLabels = referenceLabelsForDocuments([...existing, ...plan.map((item) => item.document)]);
+    const written: string[] = [];
+    const createdParents = new Set<string>();
+    const cleanup = async (): Promise<void> => {
+      for (const relative of written.reverse()) await rm(path.join(draft.worktree_path, ...relative.split("/")), { force: true });
+      for (const relative of [...createdParents].sort((left, right) => right.length - left.length)) {
+        try { await rmdir(path.join(draft.worktree_path, ...relative.split("/"))); }
+        catch (error) { if (!["ENOENT", "ENOTEMPTY"].includes((error as NodeJS.ErrnoException).code ?? "")) throw error; }
+      }
+    };
     try {
-      await lstat(absolute);
-      throw new AgentWorkflowError("ENTITY_EXISTS", `${relative} already exists`);
-    } catch (error) {
-      if (error instanceof AgentWorkflowError) throw error;
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    }
-    await mkdir(path.dirname(absolute), { recursive: true, mode: 0o700 });
-    await atomicWriteDomainFile(draft.worktree_path, relative, formatYamlDocument(document, referenceLabels));
-    try {
+      for (const item of plan) {
+        const absolute = path.join(draft.worktree_path, ...item.path.split("/"));
+        try {
+          await lstat(absolute);
+          throw new AgentWorkflowError("ENTITY_EXISTS", `${item.path} already exists`);
+        } catch (error) {
+          if (error instanceof AgentWorkflowError) throw error;
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        }
+        let parent = path.posix.dirname(item.path);
+        while (parent !== "." && !(await pathExists(path.join(draft.worktree_path, ...parent.split("/"))))) {
+          createdParents.add(parent);
+          parent = path.posix.dirname(parent);
+        }
+        await mkdir(path.dirname(absolute), { recursive: true, mode: 0o700 });
+        await atomicWriteDomainFile(draft.worktree_path, item.path, formatYamlDocument(item.document, referenceLabels));
+        written.push(item.path);
+      }
       await this.assertScope(draftId, scope);
       const validation = await validateRepository(draft.worktree_path);
-      if (!validation.valid) throw new AgentWorkflowError("VALIDATION_FAILED", `Entity ${relative} makes the repository invalid`, validation.errors);
+      if (!validation.valid) throw new AgentWorkflowError("VALIDATION_FAILED", "Imported entities make the repository invalid", validation.errors);
+      if (dryRun) await cleanup();
       const metadata = await this.drafts.refreshFingerprint(draftId);
-      return { path: relative, draft_fingerprint: metadata.fingerprint, document };
+      return {
+        items: plan.map((item) => ({ document: item.document, path: item.path, source_index: item.source_index })),
+        draft_fingerprint: metadata.fingerprint,
+        dry_run: dryRun,
+      };
     } catch (error) {
-      await rm(absolute, { force: true });
+      await cleanup();
       await this.drafts.refreshFingerprint(draftId);
+      if (error instanceof AgentWorkflowError && error.code === "VALIDATION_FAILED" && Array.isArray(error.details)) {
+        const sources = new Map(plan.map((item) => [item.path, item.source_index]));
+        throw new AgentWorkflowError(error.code, error.message, error.details.map((issue) => {
+          if (issue === null || typeof issue !== "object" || !("path" in issue) || typeof issue.path !== "string") return issue;
+          const sourceIndex = sources.get(issue.path);
+          return sourceIndex === undefined ? issue : { ...issue, source_index: sourceIndex };
+        }));
+      }
       throw error;
     }
   }

@@ -54,6 +54,11 @@ ID имеет форму `<type>-<YY>-<random>`, где type — один из `
 - Существующая ссылка на archived entity допустима; новая создающая операция не
   должна её предлагать. Delete использует restrict.
 
+Email Person, если задан, синтаксически валиден и уникален в repository без учёта регистра.
+Во входе CLI create/import Person может не содержать Calendar: mutation boundary подставляет
+активный repository `default_calendar`. Это только input default; в сохранённом каноническом
+Person поле `calendar` остаётся обязательным и явным.
+
 ## Scalar rules
 
 Date-only имеет форму `YYYY-MM-DD`; календарная корректность и `start <= due`

@@ -2,8 +2,7 @@ import { assertAgentScope, type AgentScope, type AgentScopeReport } from "@gitpm
 import { ChangesService, type SemanticDiff } from "@gitpm/changes";
 import { GitClient, GitCommandError } from "@gitpm/git-client";
 import { DirectDraftBackend, directPushStrategy, DraftManager, GITPM_GUIDANCE_FILES, GITPM_GUIDANCE_PATHS } from "@gitpm/drafts";
-import { EntityStore, entityPathForDocument, type EntityResult } from "@gitpm/domain";
-import type { GitPmDocument } from "@gitpm/repository-format";
+import { EntityStore, entityPathForDocument, type EntityCreateBatchResult, type EntityResult } from "@gitpm/domain";
 import { validateRepository } from "@gitpm/validation";
 
 export interface DirectStatus {
@@ -98,10 +97,11 @@ export class DirectCliRuntime {
     return assertAgentScope(report, scope);
   }
 
-  async createEntity(document: GitPmDocument, scope: AgentScope = {}): Promise<EntityResult> {
+  async createEntity(document: Readonly<Record<string, unknown>>, scope: AgentScope = {}, requestedType?: string): Promise<EntityResult> {
     const draftId = await this.draftId();
     await this.assertScope(scope);
-    const relative = entityPathForDocument(document);
+    const planned = (await this.entities.planCreate(draftId, [document], requestedType))[0]!;
+    const relative = entityPathForDocument(planned.document);
     const project = /^projects\/(P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6})\//u.exec(relative)?.[1];
     assertAgentScope({
       affected_projects: project === undefined ? [] : [project],
@@ -112,8 +112,29 @@ export class DirectCliRuntime {
       draftId,
       metadata.owner_gitlab_user_id,
       metadata.fingerprint,
-      document,
+      planned.document,
     );
+  }
+
+  async createEntities(
+    documents: readonly Readonly<Record<string, unknown>>[],
+    requestedType: string | undefined,
+    scope: AgentScope = {},
+    dryRun = false,
+  ): Promise<EntityCreateBatchResult> {
+    const draftId = await this.draftId();
+    await this.assertScope(scope);
+    const plan = await this.entities.planCreate(draftId, documents, requestedType);
+    const affectedProjects = [...new Set(plan.flatMap((item) => {
+      const project = /^projects\/(P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6})\//u.exec(item.path)?.[1];
+      return project === undefined ? [] : [project];
+    }))];
+    assertAgentScope({
+      affected_projects: affectedProjects,
+      files: plan.map((item) => ({ path: item.path, kind: "Added" as const })),
+    }, scope);
+    const metadata = await this.drafts.refreshFingerprint(draftId);
+    return await this.entities.createMany(draftId, metadata.owner_gitlab_user_id, metadata.fingerprint, plan, dryRun);
   }
 
   async semanticDiff(scope: AgentScope = {}): Promise<SemanticDiff> {

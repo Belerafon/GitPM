@@ -97,10 +97,14 @@ Direct-mode commands do not need \`--draft\`. Start with:
 
 \`gitpm status --json\`
 
-For supported entity creation, supply a complete YAML document from a temporary path outside
-this checkout:
+For supported entity creation, supply a YAML mapping from a temporary path outside this checkout.
+Use \`--type\` when schema is omitted; GitPM generates a missing ID and applies documented defaults:
 
-\`gitpm entity create --file <temporary-yaml> [--project <project-id>] --json\`
+\`gitpm entity create --type <type> --file <temporary-yaml> [--project <project-id>] --json\`
+
+Inspect fields with \`gitpm schema show <type> --json\`. For bulk creation, use \`gitpm entity
+import --type <type> --format <csv|yaml|jsonl> --file <file>\`, first with \`--dry-run\` and then
+without it.
 
 Then run \`format\`, \`validate --changed\`, and \`diff --semantic\` with \`--json\` and
 \`--project\` when scoped. Commit with \`gitpm commit --all\`. Use \`gitpm push\` only when
@@ -192,8 +196,11 @@ All commands accept \`--json\`; use it for automation. Direct-mode commands do n
 
 - \`gitpm status\` reports mode, checkout path, active branch, HEAD commit, dirty state, and
   ahead/behind versus origin.
-- \`gitpm entity create --file <file> [--project <id>]\` creates an entity from a complete YAML
-  input document.
+- \`gitpm entity create --type <type> --file <file> [--project <id>]\` creates an entity from a
+  YAML mapping, generating a missing ID and applying documented defaults.
+- \`gitpm entity import --type <type> --format <csv|yaml|jsonl> --file <file> [--dry-run]\`
+  atomically validates and creates a batch.
+- \`gitpm schema list|show <type> [--example]\` exposes the installed schema contract.
 - \`gitpm format [--project <id>] [--check]\` applies or checks canonical YAML.
 - \`gitpm validate [--project <id>] [--changed]\` validates repository structure, schemas,
   identities, references, dates, and scope closure.
@@ -210,10 +217,10 @@ update, archive, physical delete, move, configuration update, or comment-specifi
 request needs one of these, report the capability gap and recommend adding the corresponding CLI
 operation. Do not invent syntax and do not fall back to editing YAML.
 
-For entity creation, keep the temporary input outside the checkout, derive fields only from the
-documented schema and existing read-only examples, and never guess a reference or configuration slug.
-If a valid unique ID cannot be obtained through an approved mechanism, report that the CLI needs ID
-generation rather than implementing an ad hoc generator.
+For entity creation, keep the temporary input outside the checkout, inspect fields with
+\`gitpm schema show\`, and never guess a reference or configuration slug. Omit \`id\` to let GitPM
+generate it. For Person, omit \`calendar\` to materialize the repository default, or supply an
+explicit active Calendar. A supplied valid ID is preserved and never silently replaced.
 
 ## Scope the work
 

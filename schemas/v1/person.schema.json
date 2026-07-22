@@ -11,6 +11,11 @@
     "weekly_capacity_hours": {"type": "number", "minimum": 0},
     "calendar": {"$ref": "common.schema.json#/$defs/calendarId"},
     "lifecycle": {"$ref": "common.schema.json#/$defs/lifecycle"},
-    "email": {"type": "string", "minLength": 3}
+    "email": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 254,
+      "pattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"
+    }
   }
 }

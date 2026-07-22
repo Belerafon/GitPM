@@ -172,6 +172,7 @@
   ,"admin.email": "Email"
   ,"admin.capacity": "Weekly capacity (hours)"
   ,"admin.calendar": "Calendar"
+  ,"admin.defaultCalendar": "Repository default calendar"
   ,"admin.members": "Members"
   ,"admin.weekdays": "Working weekdays (1–7)"
   ,"admin.holidays": "Holidays (YYYY-MM-DD, comma-separated)"

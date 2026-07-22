@@ -394,7 +394,7 @@ export function registerEntityApi(
       const actor = await authenticate(request);
       requireEntityMutationRole(actor, request.params.entityType);
       assertEntityType(request.params.entityType, request.body.document);
-      const result = await store.create(request.params.draftId, actor.userId, request.body.expected_fingerprint, request.body.document);
+      const result = await store.create(request.params.draftId, actor.userId, request.body.expected_fingerprint, request.body.document, request.params.entityType);
       await reply.code(201).send(result);
     },
   );

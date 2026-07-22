@@ -1,7 +1,7 @@
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { formatYamlDocument, formatYamlText, parseYamlDocument, referenceLabelsForDocuments, RepositoryFormatError } from "./index.js";
+import { formatYamlDocument, formatYamlText, parseYamlDocument, parseYamlMapping, parseYamlValue, referenceLabelsForDocuments, RepositoryFormatError } from "./index.js";
 
 async function yamlFiles(root: string): Promise<string[]> {
   const result: string[] = [];
@@ -14,6 +14,12 @@ async function yamlFiles(root: string): Promise<string[]> {
 }
 
 describe("safe YAML profile", () => {
+  it("parses safe create mappings and batch arrays without weakening repository document parsing", () => {
+    expect(parseYamlMapping("name: Ada\nweekly_capacity_hours: 40\n")).toEqual({ name: "Ada", weekly_capacity_hours: 40 });
+    expect(parseYamlValue("- name: Ada\n- name: Grace\n")).toEqual([{ name: "Ada" }, { name: "Grace" }]);
+    expect(() => parseYamlDocument("name: Ada\n")).toThrowError(expect.objectContaining({ code: "SCHEMA_MISSING" }));
+  });
+
   it("formats every demo document idempotently and removes comments", async () => {
     const fixtureRoot = path.join(process.cwd(), "fixtures", "schema-v1", "demo");
     const files = await yamlFiles(fixtureRoot);

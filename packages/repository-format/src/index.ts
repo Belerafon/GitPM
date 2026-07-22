@@ -27,7 +27,7 @@ function fail(code: string, message: string, source?: string): never {
   throw new RepositoryFormatError(code, message, source);
 }
 
-export function parseYamlDocument(text: string, source?: string): GitPmDocument {
+export function parseYamlValue(text: string, source?: string): unknown {
   if (Buffer.byteLength(text, "utf8") > MAX_BYTES) fail("YAML_SIZE_LIMIT", "YAML file exceeds the byte limit", source);
   if (text.includes("\r")) fail("YAML_LINE_ENDING", "YAML must use LF line endings", source);
   if (text.includes("\0")) fail("YAML_NUL", "YAML must not contain NUL", source);
@@ -59,11 +59,19 @@ export function parseYamlDocument(text: string, source?: string): GitPmDocument 
     }
   });
 
-  const value: unknown = parsed.toJS({ maxAliasCount: 0, mapAsMap: false });
+  return parsed.toJS({ maxAliasCount: 0, mapAsMap: false });
+}
+
+export function parseYamlMapping(text: string, source?: string): Record<string, unknown> {
+  const value = parseYamlValue(text, source);
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     fail("YAML_ROOT_TYPE", "YAML root must be a mapping", source);
   }
-  const record = value as Record<string, unknown>;
+  return value as Record<string, unknown>;
+}
+
+export function parseYamlDocument(text: string, source?: string): GitPmDocument {
+  const record = parseYamlMapping(text, source);
   if (typeof record.schema !== "string") fail("SCHEMA_MISSING", "YAML document must contain schema", source);
   return record as GitPmDocument;
 }

@@ -212,7 +212,7 @@ describe("direct mode draft manager", () => {
     expect(draft.worktree_path).toBe(path.resolve(test.data, "repository"));
     expect(await git(draft.worktree_path, "rev-parse", "--abbrev-ref", "HEAD")).toBe("main");
     expect(await readFile(path.join(draft.worktree_path, "AGENTS.md"), "utf8"))
-      .toContain("gitpm entity create --file <temporary-yaml> [--project <project-id>] --json");
+      .toContain("gitpm entity create --type <type> --file <temporary-yaml> [--project <project-id>] --json");
     const skill = await readFile(path.join(draft.worktree_path, ".agents", "skills", "gitpm", "SKILL.md"), "utf8");
     expect(skill).toContain("Direct-mode commands do not take `--draft`");
     expect(skill).toContain("gitpm diff --semantic [--project <id>]");

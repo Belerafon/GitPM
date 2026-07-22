@@ -66,6 +66,25 @@ describe("repository validation", () => {
     ]));
   });
 
+  it("reports schema fields and rejects invalid or duplicate Person email", async () => {
+    const missingCalendar = await fixture();
+    await replace(missingCalendar, "people/U-26-15QJP8.yaml", "calendar: C-26-QD7FJ4 # calendar: Standard work week\n", "");
+    let report = await validateRepository(missingCalendar);
+    expect(report.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "SCHEMA_INVALID", field: "calendar", schema_keyword: "required", expected: expect.stringContaining("Calendar ID") }),
+    ]));
+
+    const duplicate = await fixture();
+    await replace(duplicate, "people/U-26-15QJP8.yaml", "lifecycle: active", "lifecycle: active\nemail: ANNA@example.test");
+    report = await validateRepository(duplicate);
+    expect(report.errors).toEqual(expect.arrayContaining([expect.objectContaining({ code: "PERSON_EMAIL_DUPLICATE", field: "email" })]));
+
+    const invalid = await fixture();
+    await replace(invalid, "people/U-26-5EBAE3.yaml", "anna@example.test", "not-an-email");
+    report = await validateRepository(invalid);
+    expect(report.errors).toEqual(expect.arrayContaining([expect.objectContaining({ code: "SCHEMA_INVALID", field: "email", expected: "email address" })]));
+  });
+
   it("detects dependency cycles", async () => {
     const root = await fixture();
     await replace(root, `projects/${project}/tasks/${taskOne}.yaml`, "labels:\n  - architecture", `depends_on:\n  - ${taskTwo}\nlabels:\n  - architecture`);

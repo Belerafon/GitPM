@@ -172,6 +172,7 @@
   ,"admin.email": "Электронная почта"
   ,"admin.capacity": "Недельная ёмкость (часы)"
   ,"admin.calendar": "Календарь"
+  ,"admin.defaultCalendar": "Календарь репозитория по умолчанию"
   ,"admin.members": "Участники"
   ,"admin.weekdays": "Рабочие дни недели (1–7)"
   ,"admin.holidays": "Праздники (ГГГГ-ММ-ДД, через запятую)"

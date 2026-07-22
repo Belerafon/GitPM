@@ -36,8 +36,24 @@ gitpm draft set-writer ui --draft DRF-AGENT-001 --owner 42
 Repository YAML may be read for context but must not be edited directly. Entity creation goes through the CLI using a temporary input file outside the worktree:
 
 ```bash
-gitpm entity create --draft DRF-AGENT-001 --file /tmp/entity.yaml --project P-26-MGP84K --json
+gitpm entity create --draft DRF-AGENT-001 --type task --file /tmp/entity.yaml --project P-26-MGP84K --json
 ```
+
+Use `--type <type>` when the temporary create input omits `schema`. GitPM generates a missing
+entity ID and defaults `lifecycle` to `active`; for Person it also materializes a missing Calendar
+from repository `default_calendar`. A supplied valid ID is preserved. Inspect contracts with
+`gitpm schema show <type> --json` instead of inferring fields from existing files.
+
+For atomic bulk creation use:
+
+```bash
+gitpm entity import --draft DRF-AGENT-001 --type person --format csv --file /tmp/people.csv --dry-run --json
+gitpm entity import --draft DRF-AGENT-001 --type person --format csv --file /tmp/people.csv --json
+```
+
+CSV, YAML-array and JSONL imports plan all IDs, validate the complete resulting repository once,
+and roll back the whole batch on failure. Review row-level diagnostics and generated ID/path
+mappings before continuing.
 
 The v0.1 CLI does not expose update, archive, or delete entity commands. An agent must report that capability gap instead of editing repository files or inventing a command.
 

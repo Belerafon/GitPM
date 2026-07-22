@@ -119,10 +119,14 @@ Start with:
 
 \`gitpm draft status --draft ${draftId} --json\`
 
-For supported entity creation, supply a complete YAML document from a temporary path outside
-this worktree:
+For supported entity creation, supply a YAML mapping from a temporary path outside this worktree.
+Use \`--type\` when schema is omitted; GitPM generates a missing ID and applies documented defaults:
 
-\`gitpm entity create --draft ${draftId} --file <temporary-yaml> [--project <project-id>] --json\`
+\`gitpm entity create --draft ${draftId} --type <type> --file <temporary-yaml> [--project <project-id>] --json\`
+
+Inspect fields with \`gitpm schema show <type> --json\`. For bulk creation, use \`gitpm entity
+import --draft <draft-id> --type <type> --format <csv|yaml|jsonl> --file <file>\`, first with
+\`--dry-run\` and then without it.
 
 Then run \`format\`, \`validate --changed\`, and \`diff --semantic\` with
 \`--draft ${draftId}\`, \`--json\`, and \`--project\` when scoped. Commit only with
@@ -237,8 +241,11 @@ All commands accept \`--json\`; use it for automation.
 
 - \`gitpm draft create|open|status|set-writer --draft <id> [--owner <id>]\` manages draft
   lifecycle and writer ownership.
-- \`gitpm entity create --draft <id> --file <file> [--project <id>]\` creates an entity from a
-  complete YAML input document.
+- \`gitpm entity create --draft <id> --type <type> --file <file> [--project <id>]\` creates an
+  entity from a YAML mapping, generating a missing ID and applying documented defaults.
+- \`gitpm entity import --draft <id> --type <type> --format <csv|yaml|jsonl> --file <file>
+  [--dry-run]\` atomically validates and creates a batch.
+- \`gitpm schema list|show <type> [--example]\` exposes the installed schema contract.
 - \`gitpm format [--draft <id>] [--project <id>] [--check]\` applies or checks canonical YAML.
 - \`gitpm validate [--draft <id>] [--project <id>] [--changed]\` validates repository structure,
   schemas, identities, references, dates, and scope closure.
@@ -257,10 +264,10 @@ move, configuration update, or comment-specific commands. When the request needs
 report the capability gap and recommend adding the corresponding CLI operation. Do not invent
 syntax and do not fall back to editing YAML.
 
-For entity creation, keep the temporary input outside the worktree, derive fields only from the
-documented schema and existing read-only examples, and never guess a reference or configuration
-slug. If a valid unique ID cannot be obtained through an approved mechanism, report that the CLI
-needs ID generation rather than implementing an ad hoc generator.
+For entity creation, keep the temporary input outside the worktree, inspect fields with
+\`gitpm schema show\`, and never guess a reference or configuration slug. Omit \`id\` to let GitPM
+generate it. For Person, omit \`calendar\` to materialize the repository default, or supply an
+explicit active Calendar. A supplied valid ID is preserved and never silently replaced.
 
 ## Scope the work
 

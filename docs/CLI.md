@@ -9,7 +9,10 @@ CLI живёт в `apps/cli` и собирается в `apps/cli/dist/index.js`
 gitpm init [path]                    Создать skeleton схемы v1 в path (по умолчанию cwd)
 gitpm status [--draft <id>]
 gitpm draft create|open|status|set-writer --draft <id> [--owner <id>]
-gitpm entity create [--draft <id>] --file <file> [--project <id>]
+gitpm entity create [--draft <id>] --file <file> [--type <type>] [--project <id>]
+gitpm entity import [--draft <id>] --type <type> --format csv|yaml|jsonl (--file <file>|--path <file>) [--dry-run]
+gitpm schema list
+gitpm schema show <type> [--example]
 gitpm format [--draft <id>] [--project <id>] [--check]
 gitpm validate [--draft <id>] [--project <id>] [--changed]
 gitpm diff --semantic [--draft <id>] [--project <id>]
@@ -17,10 +20,30 @@ gitpm commit --all [--draft <id>] -m <message> [--project <id>]
 gitpm push [--draft <id>]
 gitpm mr create --draft <id> --owner <id> --title <title> [--description <text>]
 gitpm doctor
-gitpm --version
+gitpm --version [--json]
 ```
 
-В `direct` mode команды `status`, `entity create`, `format`, `validate`, `diff`, `commit` и
+`entity create` принимает YAML mapping. При наличии `--type` поля `schema`, `id` и
+`lifecycle` во входе можно опустить: CLI подставляет schema, генерирует ID формата
+`<prefix>-<UTC YY>-<6 Crockford Base32>` и использует `lifecycle: active`. Явно переданный
+корректный ID сохраняется, а не игнорируется. Для Person отсутствующий `calendar`
+материализуется из `.gitpm/repository.yaml/default_calendar`; `weekly_capacity_hours`
+остаётся обязательным явным значением. Сохранённый repository YAML всегда содержит полный
+канонический документ.
+
+`entity import` (alias: `entity bulk-import`) выполняет пакет атомарно: сначала планирует все ID, затем записывает пакет,
+один раз валидирует полный репозиторий и откатывает все файлы при любой ошибке. `--dry-run`
+выполняет тот же pipeline без сохранения изменений. CSV использует строку заголовков;
+числовые поля (`weekly_capacity_hours`, `estimate_hours`) разбираются как числа, а списочные
+поля задаются JSON-массивами. YAML import содержит массив mappings, JSONL — один object на
+строку. В JSON-результате элементы содержат `source_index`, `row`, сгенерированный `id` и
+канонический `path`.
+
+`schema list/show` доступны без runtime configuration. `gitpm --version --json` дополнительно
+возвращает digest набора схем и optional build commit из `GITPM_BUILD_COMMIT`, что позволяет
+обнаруживать устаревшую установленную сборку.
+
+В `direct` mode команды `status`, `entity create`, `entity import`, `format`, `validate`, `diff`, `commit` и
 `push` работают с managed checkout без `--draft`. В `worktree` mode для них требуется
 `--draft <id>`; `mr create` доступна только в `worktree` mode. `--project <id>` проверяет, что
 все текущие business changes принадлежат указанному Project, а физическое удаление требует
