@@ -83,7 +83,7 @@ Implementation code: P00-P14 complete; Alpha, Beta, release candidate and releas
 
 - Draft lifecycle and entity REST contracts return stable errors with correlation IDs.
 - HTTP integration creates and updates all seven editable entity types.
-- Archive preserves a file; explicit delete removes it; referenced delete returns 409 without mutation.
+- Archive preserves a file; explicit delete removes it; referenced delete returns 409 with structured reference details without mutation. A separately confirmed Person deletion can atomically unlink supported references before removal.
 - Maintainer-only configuration and static request/YAML limits are enforced without quota state.
 - Full suite contains 13 test files and 56 tests.
 

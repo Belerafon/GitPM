@@ -1,7 +1,7 @@
 import type { ChangesList, CommentResult, CommitHistoryDetail, CommitHistoryItem, CommitResult, DraftSnapshot, DraftStatus, EntityResult, GitPmDocument, MergeRequestStatus, NotificationsResult, ProjectWorkspaceResult, PublicSession, PushResult, RevertDraftResult, SemanticDiff, ValidationSummary, WriterMode, ChangesSummary, WorktreeDirectory, WorktreeFile } from "./types.js";
 
 export class ApiError extends Error {
-  constructor(public readonly code: string, message: string) {
+  constructor(public readonly code: string, message: string, public readonly details?: unknown) {
     super(message);
     this.name = "ApiError";
   }
@@ -25,7 +25,7 @@ export interface GitPmApi {
   updateEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string, document: GitPmDocument): Promise<EntityResult>;
   moveTask(draftId: string, entity: EntityResult, fingerprint: string, targetProject: string, targetMilestone?: string): Promise<EntityResult>;
   archiveEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string): Promise<EntityResult>;
-  deleteEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string): Promise<void>;
+  deleteEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string, unlinkReferences?: boolean): Promise<void>;
   getConfiguration(draftId: string, kind: "statuses" | "issue-types"): Promise<EntityResult>;
   updateConfiguration(draftId: string, kind: "statuses" | "issue-types", entity: EntityResult, fingerprint: string, document: GitPmDocument): Promise<EntityResult>;
   listChanges(draftId: string): Promise<ChangesList>;
@@ -50,7 +50,7 @@ export interface GitPmApi {
   notifications(draftId: string): Promise<NotificationsResult>;
 }
 
-interface ErrorBody { readonly error?: { readonly code?: string; readonly message?: string } }
+interface ErrorBody { readonly error?: { readonly code?: string; readonly message?: string; readonly details?: unknown } }
 
 export class HttpGitPmApi implements GitPmApi {
   constructor(private readonly baseUrl = "") {}
@@ -66,7 +66,7 @@ export class HttpGitPmApi implements GitPmApi {
     if (!response.ok) {
       let body: ErrorBody = {};
       try { body = await response.json() as ErrorBody; } catch { /* stable fallback below */ }
-      throw new ApiError(body.error?.code ?? `HTTP_${response.status}`, body.error?.message ?? response.statusText);
+      throw new ApiError(body.error?.code ?? `HTTP_${response.status}`, body.error?.message ?? response.statusText, body.error?.details);
     }
     if (response.status === 204) return undefined as T;
     return await response.json() as T;
@@ -136,8 +136,8 @@ export class HttpGitPmApi implements GitPmApi {
   async archiveEntity(draftId: string, entityType: string, entity: EntityResult, expected_fingerprint: string): Promise<EntityResult> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entity.document.id)}/archive`, { method: "POST", body: JSON.stringify({ expected_fingerprint, expected_blob_id: entity.blob_id }) });
   }
-  async deleteEntity(draftId: string, entityType: string, entity: EntityResult, expected_fingerprint: string): Promise<void> {
-    await this.request(`/api/drafts/${encodeURIComponent(draftId)}/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entity.document.id)}`, { method: "DELETE", body: JSON.stringify({ expected_fingerprint, expected_blob_id: entity.blob_id }) });
+  async deleteEntity(draftId: string, entityType: string, entity: EntityResult, expected_fingerprint: string, unlinkReferences = false): Promise<void> {
+    await this.request(`/api/drafts/${encodeURIComponent(draftId)}/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entity.document.id)}`, { method: "DELETE", body: JSON.stringify({ expected_fingerprint, expected_blob_id: entity.blob_id, ...(unlinkReferences ? { unlink_references: true } : {}) }) });
   }
   async getConfiguration(draftId: string, kind: "statuses" | "issue-types"): Promise<EntityResult> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/config/${kind}`);

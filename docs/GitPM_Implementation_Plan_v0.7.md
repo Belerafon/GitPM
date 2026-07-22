@@ -371,6 +371,13 @@ Archive меняет `lifecycle: archived` и оставляет файл.
 
 Delete удаляет файл из worktree. Перед delete server проверяет прямые ссылки. В v0.1 используется только `restrict`.
 
+Для Person UI после ответа `409 DELETE_RESTRICTED` может запросить отдельное подтверждение и повторить delete с
+`unlink_references: true`. Это явная Maintainer-only операция: server атомарно удаляет Person из Team members,
+Task assignees и Saved View assignees, очищает необязательный Project owner, превращает ссылки-упоминания в
+Comment в обычный текст и только затем удаляет Person. Ответ `DELETE_RESTRICTED` содержит locale-neutral `details`
+с canonical path, entity ID, schema и label каждой ссылки; UI локализует объяснение и показывает список до
+повторного подтверждения. Для остальных типов `restrict` остаётся единственной политикой.
+
 Восстановление удаленного файла выполняется Git restore до commit или revert draft после commit/merge.
 
 ## 13. Validation и CLI

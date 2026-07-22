@@ -228,6 +228,45 @@ function containsReference(value: unknown, id: string): boolean {
   return false;
 }
 
+function entityDisplayLabel(document: GitPmDocument): string | undefined {
+  if (typeof document.name === "string" && document.name.trim() !== "") return document.name;
+  if (typeof document.title === "string" && document.title.trim() !== "") return document.title;
+  if (typeof document.id === "string") return document.id;
+  return undefined;
+}
+
+function unlinkPersonReference(document: GitPmDocument, personId: string): GitPmDocument | undefined {
+  if (document.schema === "gitpm/project@1" && document.owner === personId) {
+    const project: Record<string, unknown> = { ...document };
+    delete project.owner;
+    return project as GitPmDocument;
+  }
+  if (document.schema === "gitpm/team@1" && Array.isArray(document.members) && document.members.includes(personId)) {
+    return { ...document, members: document.members.filter((member) => member !== personId) };
+  }
+  if (document.schema === "gitpm/task@1" && Array.isArray(document.assignees) && document.assignees.includes(personId)) {
+    return { ...document, assignees: document.assignees.filter((assignee) => assignee !== personId) };
+  }
+  if (document.schema === "gitpm/saved-view@1" && document.filters !== null && typeof document.filters === "object") {
+    const filters = document.filters as Record<string, unknown>;
+    if (Array.isArray(filters.assignees) && filters.assignees.includes(personId)) {
+      return { ...document, filters: { ...filters, assignees: filters.assignees.filter((assignee) => assignee !== personId) } };
+    }
+  }
+  if (document.schema === "gitpm/comment@1" && Array.isArray(document.mentions)) {
+    const mentions = document.mentions as Array<Record<string, unknown>>;
+    if (mentions.some((mention) => mention.person === personId)) {
+      const mentionPattern = new RegExp(`@\\[([^\\]\\r\\n]{1,200})\\]\\(person:${personId}\\)`, "gu");
+      return {
+        ...document,
+        ...(typeof document.body_markdown === "string" ? { body_markdown: document.body_markdown.replace(mentionPattern, "@$1") } : {}),
+        mentions: mentions.filter((mention) => mention.person !== personId),
+      };
+    }
+  }
+  return undefined;
+}
+
 export class EntityStore {
   private readonly indexes = new Map<string, RepositoryIndex>();
   private readonly pendingIndexes = new Map<string, { readonly fingerprint: string; readonly promise: Promise<RepositoryIndex> }>();
@@ -601,21 +640,51 @@ export class EntityStore {
     id: string,
     expectedFingerprint: string,
     expectedBlobId: string,
-  ): Promise<{ deleted: true; path: string; draft_fingerprint: string }> {
+    unlinkReferences = false,
+  ): Promise<{ deleted: true; path: string; unlinked_paths: readonly string[]; draft_fingerprint: string }> {
     const mutation = await this.drafts.withUiMutation(draftId, owner, expectedFingerprint, async (metadata) => {
       const found = await this.find(draftId, metadata, entityType, id);
       await this.drafts.assertFileBlobId(draftId, found.relative, expectedBlobId);
       const repository = await this.index(draftId, metadata);
+      if (unlinkReferences && found.document.schema !== "gitpm/person@1") {
+        throw new DomainOperationError("DELETE_UNLINK_UNSUPPORTED", "Automatic reference removal is supported only for people");
+      }
       const cascadedComments = found.document.schema === "gitpm/task@1"
         ? repository.entities.filter((entity) => entity.document.schema === "gitpm/comment@1" && entity.document.task === id)
         : [];
       const commentPaths = new Set(cascadedComments.map((comment) => comment.relative));
       const restrictions = (await validateDelete(metadata.worktree_path, id)).filter((restriction) => !commentPaths.has(restriction.path));
-      if (restrictions.length > 0) throw new DomainOperationError("DELETE_RESTRICTED", `${id} is referenced`, restrictions);
+      if (restrictions.length > 0 && !unlinkReferences) {
+        const entitiesByPath = new Map(repository.entities.map((entity) => [entity.relative, entity.document]));
+        throw new DomainOperationError("DELETE_RESTRICTED", `${id} is referenced`, restrictions.map((restriction) => {
+          const document = entitiesByPath.get(restriction.path);
+          return document === undefined ? restriction : {
+            ...restriction,
+            entity_id: document.id,
+            schema: document.schema,
+            label: entityDisplayLabel(document),
+          };
+        }));
+      }
+      const updates = unlinkReferences
+        ? repository.entities.flatMap((entity) => {
+          if (entity.relative === found.relative) return [];
+          const document = unlinkPersonReference(entity.document, id);
+          return document === undefined ? [] : [{ entity, document }];
+        })
+        : [];
       const removed = [found, ...cascadedComments];
       const originals = new Map<string, string>();
-      for (const entity of removed) { originals.set(entity.relative, await readFile(entity.absolute, "utf8")); await rm(entity.absolute); }
       try {
+        const referenceLabels = this.labels(repository);
+        for (const update of updates) {
+          originals.set(update.entity.relative, await readFile(update.entity.absolute, "utf8"));
+          await atomicWriteDomainFile(metadata.worktree_path, update.entity.relative, formatYamlDocument(update.document, referenceLabels));
+        }
+        for (const entity of removed) {
+          originals.set(entity.relative, await readFile(entity.absolute, "utf8"));
+          await rm(entity.absolute);
+        }
         await this.assertRepositoryValid(metadata.worktree_path);
       } catch (error) {
         for (const [relative, original] of originals) {
@@ -625,9 +694,9 @@ export class EntityStore {
         }
         throw error;
       }
-      return found.relative;
+      return { path: found.relative, unlinked_paths: updates.map((update) => update.entity.relative) };
     });
-    return { deleted: true, path: mutation.result, draft_fingerprint: mutation.metadata.fingerprint };
+    return { deleted: true, ...mutation.result, draft_fingerprint: mutation.metadata.fingerprint };
   }
 
   private async getWithFingerprint(draftId: string, document: GitPmDocument, relative: string, fingerprint: string): Promise<EntityResult> {

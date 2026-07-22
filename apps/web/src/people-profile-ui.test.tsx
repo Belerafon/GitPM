@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { GitPmApi } from "./api.js";
+import { ApiError, type GitPmApi } from "./api.js";
 import { PeopleProfileWorkspace } from "./people-profile-ui.js";
 import type { DraftStatus, EntityResult, GitPmDocument } from "./types.js";
 
@@ -108,6 +108,32 @@ describe("person profile", () => {
     confirmAction.mockReturnValue(true);
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(deleteEntity).toHaveBeenCalledWith(draft.draft_id, "people", person, person.draft_fingerprint));
+    expect(onNavigate).toHaveBeenCalledWith("people");
+  });
+
+  it("asks a second time with understandable references before unlinking and deleting", async () => {
+    const personId = "U-26-ADA";
+    const person = result({ schema: "gitpm/person@1", id: personId, name: "Ada", weekly_capacity_hours: 32, calendar: "C-26-DEFAULT", lifecycle: "active" });
+    const calendar = result({ schema: "gitpm/calendar@1", id: "C-26-DEFAULT", name: "Default", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
+    const schemaByType: Record<string, string> = { people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1", projects: "gitpm/project@1", tasks: "gitpm/task@1" };
+    const deleteEntity = vi.fn()
+      .mockRejectedValueOnce(new ApiError("DELETE_RESTRICTED", `${personId} is referenced`, [
+        { path: "teams/G-26-CORE.yaml", label: "Core team" },
+        { path: "projects/P-26-ALPHA/project.yaml", label: "Alpha" },
+      ]))
+      .mockResolvedValueOnce(undefined);
+    const confirmAction = vi.fn(() => true);
+    const onNavigate = vi.fn();
+    const api = { listEntities: vi.fn(async (_draftId: string, type: string) => [person, calendar].filter((item) => item.document.schema === schemaByType[type])), deleteEntity } as unknown as GitPmApi;
+
+    render(<PeopleProfileWorkspace api={api} confirmAction={confirmAction} draft={draft} locale="en" onNavigate={onNavigate} personId={personId} role="Maintainer" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Edit person" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => expect(deleteEntity).toHaveBeenCalledTimes(2));
+    expect(confirmAction).toHaveBeenNthCalledWith(1, "Delete Ada permanently? This action cannot be undone.");
+    expect(confirmAction).toHaveBeenNthCalledWith(2, "Ada is still used in 2 items:\n• Core team (teams/G-26-CORE.yaml)\n• Alpha (projects/P-26-ALPHA/project.yaml)\n\nRemove this person from those items and then delete the person permanently?");
+    expect(deleteEntity).toHaveBeenNthCalledWith(2, draft.draft_id, "people", person, person.draft_fingerprint, true);
     expect(onNavigate).toHaveBeenCalledWith("people");
   });
 

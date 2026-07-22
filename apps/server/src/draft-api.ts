@@ -33,6 +33,7 @@ interface ErrorPayload {
     readonly code: string;
     readonly message: string;
     readonly correlation_id: string;
+    readonly details?: unknown;
   };
 }
 
@@ -104,6 +105,7 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
     let status = 500;
     let code = "INTERNAL_ERROR";
     let message = "Unexpected server error";
+    let details: unknown;
     if (error instanceof DraftRuntimeError) {
       status = statusFor(error);
       code = error.code;
@@ -115,6 +117,7 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
     } else if (error instanceof DomainOperationError) {
       code = error.code;
       message = error.message;
+      details = error.details;
       if (error.code === "ENTITY_NOT_FOUND") status = 404;
       else if (["ENTITY_TYPE_INVALID", "ENTITY_ID_INVALID", "ENTITY_PROJECT_INVALID"].includes(error.code)) status = 400;
       else if (error.code === "VALIDATION_FAILED") status = 422;
@@ -156,7 +159,7 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
       code = "REQUEST_TOO_LARGE";
       message = "Request body exceeds the static limit";
     }
-    const payload: ErrorPayload = { error: { code, message, correlation_id: request.id } };
+    const payload: ErrorPayload = { error: { code, message, correlation_id: request.id, ...(details === undefined ? {} : { details }) } };
     await reply.code(status).send(payload);
   });
 
@@ -467,7 +470,7 @@ export function registerEntityApi(
     },
   );
 
-  app.delete<{ Params: { draftId: string; entityType: string; id: string }; Body: { expected_fingerprint: string; expected_blob_id: string } }>(
+  app.delete<{ Params: { draftId: string; entityType: string; id: string }; Body: { expected_fingerprint: string; expected_blob_id: string; unlink_references?: boolean } }>(
     "/api/drafts/:draftId/entities/:entityType/:id",
     async (request) => {
       const actor = await authenticate(request);
@@ -479,6 +482,7 @@ export function registerEntityApi(
         request.params.id,
         request.body.expected_fingerprint,
         request.body.expected_blob_id,
+        request.body.unlink_references ?? false,
       );
     },
   );

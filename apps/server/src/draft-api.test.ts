@@ -174,7 +174,7 @@ describe("entity API contract", () => {
 
   it("maps delete restrict to a stable conflict response", async () => {
     const entityStore = {
-      delete: vi.fn(async () => { throw new DomainOperationError("DELETE_RESTRICTED", "referenced"); }),
+      delete: vi.fn(async () => { throw new DomainOperationError("DELETE_RESTRICTED", "referenced", [{ path: "teams/G-26-CORE.yaml", label: "Core" }]); }),
     } as unknown as EntityStore;
     const app = buildApp({
       authenticate: () => ({ userId: "42", role: "Maintainer" }),
@@ -188,7 +188,24 @@ describe("entity API contract", () => {
       payload: { expected_fingerprint: metadata.fingerprint, expected_blob_id: "a".repeat(40) },
     });
     expect(response.statusCode).toBe(409);
-    expect(response.json()).toMatchObject({ error: { code: "DELETE_RESTRICTED" } });
+    expect(response.json()).toMatchObject({ error: { code: "DELETE_RESTRICTED", details: [{ path: "teams/G-26-CORE.yaml", label: "Core" }] } });
+  });
+
+  it("forwards explicit reference unlink confirmation to person deletion", async () => {
+    const deleteEntity = vi.fn(async () => ({ deleted: true, path: "people/U-26-5EBAE3.yaml", unlinked_paths: ["teams/G-26-CORE.yaml"], draft_fingerprint: metadata.fingerprint }));
+    const app = buildApp({
+      authenticate: () => ({ userId: "42", role: "Maintainer" }),
+      draftManager: manager(),
+      entityStore: { delete: deleteEntity } as unknown as EntityStore,
+    });
+    apps.push(app);
+    const response = await app.inject({
+      method: "DELETE",
+      url: "/api/drafts/DRF-API/entities/people/U-26-5EBAE3",
+      payload: { expected_fingerprint: metadata.fingerprint, expected_blob_id: "a".repeat(40), unlink_references: true },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(deleteEntity).toHaveBeenCalledWith("DRF-API", "42", "people", "U-26-5EBAE3", metadata.fingerprint, "a".repeat(40), true);
   });
 
   it("reserves repository configuration mutation for Maintainer", async () => {

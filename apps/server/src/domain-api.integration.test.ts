@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { cp, mkdtemp, mkdir, rm } from "node:fs/promises";
+import { cp, mkdtemp, mkdir, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -137,18 +137,33 @@ describe("domain API integration", () => {
       payload: { expected_fingerprint: fingerprint, expected_blob_id: person.blob_id },
     });
     expect(restricted.statusCode).toBe(409);
-    expect(restricted.json()).toMatchObject({ error: { code: "DELETE_RESTRICTED" } });
+    expect(restricted.json()).toMatchObject({
+      error: {
+        code: "DELETE_RESTRICTED",
+        details: expect.arrayContaining([expect.objectContaining({ path: "teams/G-26-22K88P.yaml", label: "HTTP team updated" })]),
+      },
+    });
+
+    const confirmed = await app.inject({
+      method: "DELETE",
+      url: `/api/drafts/DRF-HTTP/entities/people/${String(person.document.id)}`,
+      payload: { expected_fingerprint: fingerprint, expected_blob_id: person.blob_id, unlink_references: true },
+    });
+    expect(confirmed.statusCode).toBe(200);
+    expect(confirmed.json()).toMatchObject({ deleted: true, unlinked_paths: ["teams/G-26-22K88P.yaml"] });
+    expect((await app.inject({ method: "GET", url: `/api/drafts/DRF-HTTP/entities/people/${String(person.document.id)}` })).statusCode).toBe(404);
+    expect(await readFile(path.join(draft.worktree_path, "teams", "G-26-22K88P.yaml"), "utf8")).not.toContain(String(person.document.id));
 
     const changed = await client.statusPorcelain(draft.worktree_path);
     const expectedPaths = [
       "calendars/C-26-7GQW87.yaml",
-      "people/U-26-KB9RXB.yaml",
       "teams/G-26-22K88P.yaml",
       "projects/P-26-Y9S1D8/project.yaml",
       "projects/P-26-Y9S1D8/milestones/M-26-KK4VXH.yaml",
       "projects/P-26-Y9S1D8/views/V-26-B0C5A1.yaml",
     ];
     for (const expected of expectedPaths) expect(changed).toContain(expected);
+    expect(changed).not.toContain("people/U-26-KB9RXB.yaml");
     expect(changed).not.toContain("T-26-FM5Q4W.yaml");
   }, 60_000);
 });

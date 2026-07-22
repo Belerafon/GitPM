@@ -132,6 +132,50 @@ describe("domain entity store", () => {
     expect((await store.get("DRF-MOVE", "tasks", String(dependent.document.id))).path).toBe(dependent.path);
   });
 
+  it("unlinks a person from every supported reference before confirmed deletion", async () => {
+    const { manager, store, comments } = await runtime();
+    const draft = await manager.createDraft("DRF-UNLINK-PERSON", "42");
+    const personId = "U-26-15QJP8";
+    const comment = await comments.create(
+      "DRF-UNLINK-PERSON",
+      "P-26-MGP84K",
+      "T-26-P9G3P8",
+      draft.fingerprint,
+      "Please ask @[Boris Sokolov](person:U-26-15QJP8)",
+      { userId: "42", role: "Developer", identity: { provider: "git", subject: "author@example.test", display_name: "Author" } },
+    );
+    const person = await store.get("DRF-UNLINK-PERSON", "people", personId);
+
+    await expect(store.delete("DRF-UNLINK-PERSON", "42", "people", personId, comment.draft_fingerprint, person.blob_id))
+      .rejects.toMatchObject({
+        code: "DELETE_RESTRICTED",
+        details: expect.arrayContaining([
+          expect.objectContaining({ path: "teams/G-26-XB86WT.yaml", label: "Core team" }),
+          expect.objectContaining({ path: "projects/P-26-MGP84K/views/V-26-AG873M.yaml", label: "Active work" }),
+          expect.objectContaining({ path: "projects/P-26-MGP84K/tasks/T-26-RHBNH8.yaml", label: "Implement parser" }),
+          expect.objectContaining({ path: "projects/P-26-8S9HQQ/project.yaml", label: "Operations" }),
+          expect.objectContaining({ path: comment.path }),
+        ]),
+      });
+
+    const deleted = await store.delete("DRF-UNLINK-PERSON", "42", "people", personId, comment.draft_fingerprint, person.blob_id, true);
+    expect(deleted.unlinked_paths).toEqual(expect.arrayContaining([
+      "teams/G-26-XB86WT.yaml",
+      "projects/P-26-MGP84K/views/V-26-AG873M.yaml",
+      "projects/P-26-MGP84K/tasks/T-26-RHBNH8.yaml",
+      "projects/P-26-8S9HQQ/project.yaml",
+      comment.path,
+    ]));
+    await expect(store.get("DRF-UNLINK-PERSON", "people", personId)).rejects.toMatchObject({ code: "ENTITY_NOT_FOUND" });
+    expect(await readFile(path.join(draft.worktree_path, "teams", "G-26-XB86WT.yaml"), "utf8")).not.toContain(personId);
+    expect(await readFile(path.join(draft.worktree_path, "projects", "P-26-MGP84K", "views", "V-26-AG873M.yaml"), "utf8")).not.toContain(personId);
+    expect(await readFile(path.join(draft.worktree_path, "projects", "P-26-MGP84K", "tasks", "T-26-RHBNH8.yaml"), "utf8")).not.toContain(personId);
+    expect(await readFile(path.join(draft.worktree_path, "projects", "P-26-8S9HQQ", "project.yaml"), "utf8")).not.toContain("owner:");
+    const updatedComment = await readFile(path.join(draft.worktree_path, ...comment.path.split("/")), "utf8");
+    expect(updatedComment).toContain("Please ask @Boris Sokolov");
+    expect(updatedComment).not.toContain(personId);
+  }, 60_000);
+
   it("creates all editable entity types, updates, archives and deletes with restrict", async () => {
     const { manager, store } = await runtime();
     const draft = await manager.createDraft("DRF-DOMAIN", "42");

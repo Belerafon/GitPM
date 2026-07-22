@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { GitPmApi } from "./api.js";
+import { ApiError, type GitPmApi } from "./api.js";
 import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
 import { EditorDrawer } from "./editor-drawer.js";
 import { formatDateOnly, formatNumber, message, type Locale, type MessageKey } from "./i18n.js";
@@ -12,6 +12,16 @@ const number = (document: GitPmDocument, key: string) => typeof document[key] ==
 const strings = (document: GitPmDocument, key: string) => Array.isArray(document[key]) ? (document[key] as unknown[]).filter((item): item is string => typeof item === "string") : [];
 const numbers = (document: GitPmDocument, key: string) => Array.isArray(document[key]) ? (document[key] as unknown[]).filter((item): item is number => typeof item === "number") : [];
 const validDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/u.test(value);
+
+function deleteRestrictions(details: unknown): readonly string[] {
+  if (!Array.isArray(details)) return [];
+  return [...new Set(details.flatMap((detail) => {
+    if (detail === null || typeof detail !== "object") return [];
+    const value = detail as { readonly label?: unknown; readonly path?: unknown };
+    if (typeof value.path !== "string") return [];
+    return [typeof value.label === "string" && value.label.trim() !== "" ? `${value.label} (${value.path})` : value.path];
+  }))];
+}
 
 interface ProfileData {
   readonly people: readonly EntityResult[];
@@ -59,10 +69,36 @@ export function PeopleProfileWorkspace({ api, confirmAction = () => true, draft,
     catch (caught) { setError(caught instanceof Error ? caught.message : String(caught)); return false; }
   };
   const deletePerson = async () => {
-    if (person === undefined || readOnly || !confirmAction(t("core.deleteConfirm", { name: text(person.document, "name") }))) return false;
+    if (person === undefined || readOnly) return false;
+    const name = text(person.document, "name");
+    if (!confirmAction(t("core.deleteConfirm", { name }))) return false;
     setError(null);
-    try { await api.deleteEntity(draft.draft_id, "people", person, person.draft_fingerprint); await onChanged(); onNavigate("people"); return true; }
-    catch (caught) { setError(caught instanceof Error ? caught.message : String(caught)); return false; }
+    try {
+      await api.deleteEntity(draft.draft_id, "people", person, person.draft_fingerprint);
+    } catch (caught) {
+      if (!(caught instanceof ApiError) || caught.code !== "DELETE_RESTRICTED") {
+        setError(t("people.deleteFailed", { name, message: caught instanceof Error ? caught.message : String(caught) }));
+        return false;
+      }
+      const references = deleteRestrictions(caught.details);
+      if (references.length === 0) {
+        setError(t("people.deleteRestrictedUnknown", { name }));
+        return false;
+      }
+      if (!confirmAction(t("people.deleteReferencesConfirm", { name, count: references.length, references: references.map((reference) => `• ${reference}`).join("\n") }))) return false;
+      try {
+        await api.deleteEntity(draft.draft_id, "people", person, person.draft_fingerprint, true);
+      } catch (retryError) {
+        const messageKey = retryError instanceof ApiError && retryError.code === "DELETE_RESTRICTED"
+          ? "people.deleteRestrictedChanged"
+          : "people.deleteFailed";
+        setError(t(messageKey, { name, message: retryError instanceof Error ? retryError.message : String(retryError) }));
+        return false;
+      }
+    }
+    await onChanged();
+    onNavigate("people");
+    return true;
   };
 
   return <section className="people-profile-workspace">
