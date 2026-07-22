@@ -31,6 +31,10 @@ export interface GitPmApi {
   listChanges(draftId: string): Promise<ChangesList>;
   listWorktree(draftId: string, path?: string): Promise<WorktreeDirectory>;
   readWorktreeFile(draftId: string, path: string): Promise<WorktreeFile>;
+  deleteWorktreeEntry(draftId: string, fingerprint: string, path: string): Promise<string>;
+  createWorktreeDirectory(draftId: string, fingerprint: string, path: string): Promise<string>;
+  uploadWorktreeFile(draftId: string, fingerprint: string, path: string, contentBase64: string): Promise<string>;
+  moveWorktreeEntry(draftId: string, fingerprint: string, from: string, to: string): Promise<string>;
   semanticChanges(draftId: string): Promise<SemanticDiff>;
   restoreFile(draftId: string, fingerprint: string, path: string): Promise<void>;
   restoreHunk(draftId: string, fingerprint: string, path: string, diffToken: string, hunkIndex: number): Promise<void>;
@@ -154,6 +158,18 @@ export class HttpGitPmApi implements GitPmApi {
   }
   async readWorktreeFile(draftId: string, path: string): Promise<WorktreeFile> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/worktree/file?path=${encodeURIComponent(path)}`);
+  }
+  async deleteWorktreeEntry(draftId: string, expected_fingerprint: string, path: string): Promise<string> {
+    return (await this.request<{ draft_fingerprint: string }>(`/api/drafts/${encodeURIComponent(draftId)}/worktree/entry`, { method: "DELETE", body: JSON.stringify({ expected_fingerprint, path }) })).draft_fingerprint;
+  }
+  async createWorktreeDirectory(draftId: string, expected_fingerprint: string, path: string): Promise<string> {
+    return (await this.request<{ draft_fingerprint: string }>(`/api/drafts/${encodeURIComponent(draftId)}/worktree/directory`, { method: "POST", body: JSON.stringify({ expected_fingerprint, path }) })).draft_fingerprint;
+  }
+  async uploadWorktreeFile(draftId: string, expected_fingerprint: string, path: string, content_base64: string): Promise<string> {
+    return (await this.request<{ draft_fingerprint: string }>(`/api/drafts/${encodeURIComponent(draftId)}/worktree/file`, { method: "POST", body: JSON.stringify({ expected_fingerprint, path, content_base64 }) })).draft_fingerprint;
+  }
+  async moveWorktreeEntry(draftId: string, expected_fingerprint: string, from: string, to: string): Promise<string> {
+    return (await this.request<{ draft_fingerprint: string }>(`/api/drafts/${encodeURIComponent(draftId)}/worktree/move`, { method: "POST", body: JSON.stringify({ expected_fingerprint, from, to }) })).draft_fingerprint;
   }
   async semanticChanges(draftId: string): Promise<SemanticDiff> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/changes/semantic`);

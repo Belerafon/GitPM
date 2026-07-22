@@ -1,12 +1,15 @@
 import { constants } from "node:fs";
-import { lstat, open, readdir, realpath } from "node:fs/promises";
+import { lstat, mkdir, open, readdir, realpath, rename, rm } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import type { DraftManager } from "@gitpm/drafts";
 import { resolveDomainPath, SecurityBoundaryError } from "@gitpm/security";
-import type { Authenticate } from "./draft-api.js";
+import type { Authenticate, RequestActor } from "./draft-api.js";
 
 const MAX_TEXT_FILE_BYTES = 1_048_576;
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const UPLOAD_BODY_LIMIT = 15 * 1024 * 1024;
 
 type WorktreeEntryType = "directory" | "file" | "symlink" | "other";
 
@@ -41,6 +44,15 @@ async function containedPath(root: string, relativePath: string): Promise<string
   }
 }
 
+async function safeTarget(root: string, relativePath: string): Promise<string> {
+  try {
+    return await containedPath(root, relativePath);
+  } catch (error) {
+    if (error instanceof WorktreeReadError) throw error;
+    statusFor(error as NodeJS.ErrnoException);
+  }
+}
+
 function entryType(stat: Awaited<ReturnType<typeof lstat>>): WorktreeEntryType {
   if (stat.isSymbolicLink()) return "symlink";
   if (stat.isDirectory()) return "directory";
@@ -52,6 +64,78 @@ function statusFor(error: NodeJS.ErrnoException): never {
   if (error.code === "ENOENT") throw new WorktreeReadError("WORKTREE_ENTRY_NOT_FOUND", "The requested working tree entry does not exist");
   if (error.code === "EACCES" || error.code === "EPERM") throw new WorktreeReadError("WORKTREE_PATH_FORBIDDEN", "The requested working tree entry cannot be read");
   throw error;
+}
+
+async function assertExists(target: string): Promise<void> {
+  try {
+    await lstat(target);
+  } catch (error) {
+    statusFor(error as NodeJS.ErrnoException);
+  }
+}
+
+async function assertAbsent(target: string): Promise<void> {
+  try {
+    await lstat(target);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") statusFor(error as NodeJS.ErrnoException);
+    return;
+  }
+  throw new WorktreeReadError("WORKTREE_ENTRY_EXISTS", "An entry with this path already exists");
+}
+
+function requireMutationActor(actor: RequestActor): void {
+  if (actor.role !== "Developer" && actor.role !== "Maintainer") {
+    throw new WorktreeReadError("DRAFT_FORBIDDEN", "Project role is read-only");
+  }
+}
+
+async function atomicWriteBytes(target: string, bytes: Buffer): Promise<void> {
+  const parent = path.dirname(target);
+  const canonicalParent = await realpath(parent);
+  const tempPath = path.join(parent, `.gitpm-upload-${randomUUID()}.tmp`);
+  let tempCreated = false;
+  try {
+    const handle = await open(tempPath, "wx", 0o600);
+    tempCreated = true;
+    try {
+      await handle.writeFile(bytes);
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    if (await realpath(parent) !== canonicalParent) {
+      throw new WorktreeReadError("WORKTREE_PATH_FORBIDDEN", "The target folder changed during upload");
+    }
+    try {
+      const targetStat = await lstat(target);
+      if (targetStat.isSymbolicLink()) throw new WorktreeReadError("WORKTREE_PATH_FORBIDDEN", "The target path is a symlink");
+    } catch (error) {
+      if (error instanceof WorktreeReadError) throw error;
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+    await rename(tempPath, target);
+    tempCreated = false;
+  } finally {
+    if (tempCreated) {
+      try {
+        if (await realpath(parent) === canonicalParent) await rm(tempPath, { force: true });
+      } catch {
+        // A changed or missing parent leaves at most an unreferenced random temp file.
+      }
+    }
+  }
+}
+
+function decodeUpload(contentBase64: string): Buffer {
+  if (!/^[A-Za-z0-9+/]*={0,2}$/u.test(contentBase64) || contentBase64.length % 4 !== 0) {
+    throw new WorktreeReadError("WORKTREE_UPLOAD_INVALID", "The uploaded file content is not valid base64");
+  }
+  const bytes = Buffer.from(contentBase64, "base64");
+  if (bytes.byteLength > MAX_UPLOAD_BYTES) {
+    throw new WorktreeReadError("WORKTREE_UPLOAD_TOO_LARGE", "The uploaded file exceeds the 10 MiB limit");
+  }
+  return bytes;
 }
 
 async function draftRoot(manager: DraftManager, authenticate: Authenticate, request: Parameters<Authenticate>[0], draftId: string): Promise<string> {
@@ -67,7 +151,7 @@ export function registerWorktreeApi(app: FastifyInstance, manager: DraftManager,
   app.get<{ Params: { draftId: string }; Querystring: { path?: string } }>("/api/drafts/:draftId/worktree", async (request) => {
     const root = await draftRoot(manager, authenticate, request, request.params.draftId);
     const relativePath = requestedPath(request.query.path, true);
-    const absolutePath = await containedPath(root, relativePath);
+    const absolutePath = await safeTarget(root, relativePath);
     let directoryStat;
     try {
       directoryStat = await lstat(absolutePath);
@@ -103,7 +187,7 @@ export function registerWorktreeApi(app: FastifyInstance, manager: DraftManager,
   app.get<{ Params: { draftId: string }; Querystring: { path?: string } }>("/api/drafts/:draftId/worktree/file", async (request) => {
     const root = await draftRoot(manager, authenticate, request, request.params.draftId);
     const relativePath = requestedPath(request.query.path, false);
-    const absolutePath = await containedPath(root, relativePath);
+    const absolutePath = await safeTarget(root, relativePath);
     let handle;
     try {
       handle = await open(absolutePath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
@@ -133,4 +217,76 @@ export function registerWorktreeApi(app: FastifyInstance, manager: DraftManager,
       await handle.close();
     }
   });
+
+  app.delete<{ Params: { draftId: string }; Body: { expected_fingerprint: string; path: string } }>(
+    "/api/drafts/:draftId/worktree/entry",
+    async (request) => {
+      const actor = await authenticate(request);
+      requireMutationActor(actor);
+      const relativePath = requestedPath(request.body.path, false);
+      const outcome = await manager.withUiMutation(request.params.draftId, actor.userId, request.body.expected_fingerprint, async (metadata) => {
+        const target = await safeTarget(metadata.worktree_path, relativePath);
+        await assertExists(target);
+        await rm(target, { recursive: true, force: false });
+        return { path: relativePath };
+      });
+      return { path: outcome.result.path, draft_fingerprint: outcome.metadata.fingerprint };
+    },
+  );
+
+  app.post<{ Params: { draftId: string }; Body: { expected_fingerprint: string; path: string } }>(
+    "/api/drafts/:draftId/worktree/directory",
+    async (request, reply) => {
+      const actor = await authenticate(request);
+      requireMutationActor(actor);
+      const relativePath = requestedPath(request.body.path, false);
+      const outcome = await manager.withUiMutation(request.params.draftId, actor.userId, request.body.expected_fingerprint, async (metadata) => {
+        const target = await safeTarget(metadata.worktree_path, relativePath);
+        await assertAbsent(target);
+        await mkdir(target, { mode: 0o755 });
+        return { path: relativePath };
+      });
+      await reply.code(201).send({ path: outcome.result.path, draft_fingerprint: outcome.metadata.fingerprint });
+    },
+  );
+
+  app.post<{ Params: { draftId: string }; Body: { expected_fingerprint: string; path: string; content_base64: string } }>(
+    "/api/drafts/:draftId/worktree/file",
+    { bodyLimit: UPLOAD_BODY_LIMIT },
+    async (request, reply) => {
+      const actor = await authenticate(request);
+      requireMutationActor(actor);
+      const relativePath = requestedPath(request.body.path, false);
+      const bytes = decodeUpload(request.body.content_base64);
+      const outcome = await manager.withUiMutation(request.params.draftId, actor.userId, request.body.expected_fingerprint, async (metadata) => {
+        const target = await safeTarget(metadata.worktree_path, relativePath);
+        await atomicWriteBytes(target, bytes);
+        return { path: relativePath, size: bytes.byteLength };
+      });
+      await reply.code(201).send({ path: outcome.result.path, size: outcome.result.size, draft_fingerprint: outcome.metadata.fingerprint });
+    },
+  );
+
+  app.post<{ Params: { draftId: string }; Body: { expected_fingerprint: string; from: string; to: string } }>(
+    "/api/drafts/:draftId/worktree/move",
+    async (request) => {
+      const actor = await authenticate(request);
+      requireMutationActor(actor);
+      const fromPath = requestedPath(request.body.from, false);
+      const toPath = requestedPath(request.body.to, false);
+      const outcome = await manager.withUiMutation(request.params.draftId, actor.userId, request.body.expected_fingerprint, async (metadata) => {
+        const from = await safeTarget(metadata.worktree_path, fromPath);
+        const to = await safeTarget(metadata.worktree_path, toPath);
+        await assertExists(from);
+        await assertAbsent(to);
+        const relative = path.relative(from, to);
+        if (relative === "" || !relative.startsWith("..")) {
+          throw new WorktreeReadError("WORKTREE_MOVE_INVALID", "Cannot move an entry into itself or one of its descendants");
+        }
+        await rename(from, to);
+        return { from: fromPath, to: toPath };
+      });
+      return { from: outcome.result.from, to: outcome.result.to, draft_fingerprint: outcome.metadata.fingerprint };
+    },
+  );
 }

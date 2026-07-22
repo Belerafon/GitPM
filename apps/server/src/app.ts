@@ -16,6 +16,8 @@ import { registerWorktreeApi } from "./worktree-api.js";
 
 const MAX_CORRELATION_ID_LENGTH = 128;
 const REQUEST_BODY_LIMIT = 1_048_576;
+const UPLOAD_BODY_LIMIT = 15 * 1024 * 1024;
+const UPLOAD_PATH = /\/api\/drafts\/[^/]+\/worktree\/file$/u;
 const SAFE_CORRELATION_ID = /^[A-Za-z0-9._:-]+$/u;
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 const CONTENT_SECURITY_POLICY = [
@@ -99,7 +101,8 @@ export function buildApp(options: AppOptions = {}) {
     reply.header("x-content-type-options", "nosniff");
     reply.header("x-frame-options", "DENY");
     const contentLength = Number(request.headers["content-length"]);
-    if (Number.isFinite(contentLength) && contentLength > REQUEST_BODY_LIMIT) {
+    const bodyLimit = UPLOAD_PATH.test(requestPath(request.url)) ? UPLOAD_BODY_LIMIT : REQUEST_BODY_LIMIT;
+    if (Number.isFinite(contentLength) && contentLength > bodyLimit) {
       // Keep draining the socket so clients receive a stable 413 instead of ECONNRESET
       // while they are still transmitting the rejected body.
       request.raw.resume();

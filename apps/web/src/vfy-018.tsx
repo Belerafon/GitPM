@@ -116,6 +116,10 @@ class BrowserAcceptanceApi implements GitPmApi {
   async listChanges(): Promise<ChangesList> { if (new URLSearchParams(window.location.search).get("git_error") === "1") throw new Error("Git diff недоступен: рабочее дерево изменилось"); return { files: this.changedFiles, changed_files_count: this.changedFiles.length, affected_projects: this.changedFiles.length === 0 ? [] : ["P-26-A1PHA1"] }; }
   async listWorktree(_draftId: string, path?: string) { return { path: path ?? "", entries: [] }; }
   async readWorktreeFile(_draftId: string, path: string) { return { path, size: 0, content: "" }; }
+  async deleteWorktreeEntry(): Promise<string> { return "f".repeat(64); }
+  async createWorktreeDirectory(): Promise<string> { return "f".repeat(64); }
+  async uploadWorktreeFile(): Promise<string> { return "f".repeat(64); }
+  async moveWorktreeEntry(): Promise<string> { return "f".repeat(64); }
   async semanticChanges(): Promise<SemanticDiff> {
     const paths = new Set(this.changedFiles.map((file) => file.path));
     const item = (id: string, path: string, field: string, before: unknown, after: unknown) => ({ id, path, schema: id === "P-26-A1PHA1" ? "gitpm/project@1" : "gitpm/task@1", project: "P-26-A1PHA1", fields: [{ field, before, after }] });
