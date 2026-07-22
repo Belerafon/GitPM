@@ -184,6 +184,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
       repositoryMode={repositoryMode}
       repositoryName={repository?.name ?? t("app.repository")}
       repositoryStatus={repositoryStatus}
+      showSingleRepositoryLabel={!directMode}
       t={t}
       topActions={<>
             <NotificationsMenu api={api} draft={active} locale={locale} namespace={`${repository?.path ?? repository?.name ?? "repository"}:${drafts.session.user.id}`} onNavigate={openWorkspace} />

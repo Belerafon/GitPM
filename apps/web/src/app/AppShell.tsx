@@ -6,7 +6,7 @@ export interface NavigationGroup {
   readonly items: readonly MessageKey[];
 }
 
-export function AppShell({ activeView, banner, breadcrumbs, children, headerMeta, headerTitle, navigationGroups, onNavigate, onOpenRepositoryStatus, repositoryDetails, repositoryMode, repositoryName, repositoryStatus, t, topActions }: {
+export function AppShell({ activeView, banner, breadcrumbs, children, headerMeta, headerTitle, navigationGroups, onNavigate, onOpenRepositoryStatus, repositoryDetails, repositoryMode, repositoryName, repositoryStatus, showSingleRepositoryLabel, t, topActions }: {
   readonly activeView: MessageKey;
   readonly banner?: ReactNode;
   readonly breadcrumbs?: ReactNode;
@@ -20,6 +20,7 @@ export function AppShell({ activeView, banner, breadcrumbs, children, headerMeta
   readonly repositoryMode: boolean;
   readonly repositoryName: string;
   readonly repositoryStatus?: { readonly label: string; readonly description: string };
+  readonly showSingleRepositoryLabel: boolean;
   readonly t: (key: MessageKey) => string;
   readonly topActions: ReactNode;
 }) {
@@ -77,7 +78,7 @@ export function AppShell({ activeView, banner, breadcrumbs, children, headerMeta
           {key === "nav.repository" && repositoryStatus !== undefined && <button aria-label={repositoryStatus.description} className="repository-status navigation-repository-status" onClick={() => { onOpenRepositoryStatus?.(); setNavigationOpen(false); }} title={repositoryStatus.description}>{repositoryStatus.label}</button>}
         </div>)}</div>
       </div>)}</nav>
-      <div className="repository-card"><span>{t("app.singleRepository")}</span>{repositoryDetails === undefined
+      <div className="repository-card">{showSingleRepositoryLabel && <span>{t("app.singleRepository")}</span>}{repositoryDetails === undefined
         ? <strong>{repositoryName}</strong>
         : <details><summary>{repositoryName}</summary><div>{repositoryDetails}</div></details>}</div>
     </aside>

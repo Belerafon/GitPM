@@ -139,6 +139,7 @@ describe("frontend draft lifecycle", () => {
     render(<App api={api} browserLanguages={["en"]} />);
 
     const statuses = await screen.findAllByRole("button", { name: "Changed files: 2" });
+    expect(screen.getByText("One configured repository")).toBeTruthy();
     expect(statuses).toHaveLength(1);
     expect(statuses[0]!.textContent).toBe("2");
     fireEvent.click(statuses[0]!);
@@ -402,6 +403,8 @@ describe("frontend draft lifecycle", () => {
     expect(screen.queryByLabelText("Working copy ID")).toBeNull();
     expect(screen.queryByRole("button", { name: "Create working copy" })).toBeNull();
     expect(screen.queryByLabelText("Current working copy")).toBeNull();
+    expect(screen.queryByText("One configured repository")).toBeNull();
+    expect(screen.getAllByText("portfolio").length).toBeGreaterThan(0);
     // The active branch (main) is surfaced instead of a draft branch.
     expect(screen.getAllByText("main").length).toBeGreaterThan(0);
   });
