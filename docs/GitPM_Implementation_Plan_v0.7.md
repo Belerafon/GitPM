@@ -5,7 +5,7 @@
 
 ## 1. Цель и источник истины
 
-GitPM является Git-first системой управления проектами и задачами. Пользователь работает через UI, а агент изменяет данные только через CLI; прямое редактирование domain YAML агентом запрещено. По умолчанию оба используют один managed checkout в `direct` mode. Для изолированной работы доступен `worktree` mode с отдельной draft branch, writer mode и GitLab Merge Request. Оба режима используют общий domain layer, file/semantic diff, validation, commit и безопасный push.
+GitPM является Git-first системой управления проектами и задачами. Пользователь работает через UI, а агент изменяет данные только через CLI; прямое редактирование domain YAML агентом запрещено. По умолчанию оба используют выбранный существующий checkout в `direct` mode. Для изолированной работы доступен `worktree` mode с отдельной draft branch, writer mode и GitLab Merge Request. Оба режима используют общий domain layer, file/semantic diff, validation, commit и безопасный push.
 
 Git является единственным источником бизнес-данных. Веб-интерфейс редактирует и отображает содержимое worktree, но не хранит отдельную бизнес-модель в базе данных.
 
@@ -286,7 +286,7 @@ repository settings UI.
 
 Schema version присутствует в каждом объекте. Неизвестная версия отклоняется. Migration engine в v0.1 отсутствует.
 
-## 8. Git clone, fetch и main synchronization
+## 8. Git repository, fetch и main synchronization
 
 Server обслуживает один configured repository и один configured `default_branch`.
 Топология определяется repository mode; сравнительный контракт зафиксирован в
@@ -294,11 +294,12 @@ Server обслуживает один configured repository и один configu
 
 ### 8.1. Локальный repository
 
-В `direct` mode `<data-dir>/repository` является обычным managed checkout.
-GitPM клонирует configured source при первом запуске, затем переиспользует
-рабочую копию без удаления local commits, uncommitted changes или user files.
-Commit идёт в default branch; явный push сначала fetch-ит remote и допускает
-только fast-forward. Публичного draft lifecycle и Merge Request в этом mode нет.
+В `direct` mode configured `repository` является выбранным обычным Git
+checkout. GitPM не создаёт второй clone и не добавляет remote `source`.
+Checkout обязан находиться на configured default branch; другая ветка и detached
+HEAD блокируют mutation/commit/push. Commit идёт в эту ветку; явный push сначала
+fetch-ит её из единственного `origin` и допускает только fast-forward.
+Публичного draft lifecycle и Merge Request в этом mode нет.
 
 В `worktree` mode `/data/repository.git` является bare repository. При первом запуске server:
 
@@ -307,7 +308,7 @@ Commit идёт в default branch; явный push сначала fetch-ит rem
 3. fetch выполняется с явным refspec в `refs/remotes/origin/*`;
 4. проверяется наличие `origin/<default_branch>`.
 
-Для clone/fetch используется read-only service credential, переданный server через mounted secret file. Пользовательские OAuth tokens для этого не используются.
+В `worktree` mode для clone/fetch используется read-only service credential, переданный server через mounted secret file. Пользовательские OAuth tokens для этого не используются.
 
 ### 8.2. Создание draft
 
@@ -361,7 +362,7 @@ Fetch и операции, меняющие общий bare repository, сери
 
 Каждый открытый worktree draft имеет отдельную in-memory model. В `direct` mode
 общие сервисы используют один internal workspace `DRF-LOCAL`, но не публикуют
-draft lifecycle: runtime сверяет его с каноническим managed checkout и хранит
+draft lifecycle: runtime сверяет его с выбранным checkout и хранит
 metadata отдельно от worktree drafts.
 
 Server не использует filesystem watcher в v0.1. Browser polling выполняется каждые 3 секунды. Перед read, mutation, validation и commit server сравнивает worktree revision fingerprint:
@@ -555,7 +556,7 @@ Workload:
 
 ## 21. Агент через files и CLI
 
-В `direct` mode агент работает в единственном managed checkout без `--draft` и без MR.
+В `direct` mode агент работает прямо в выбранном checkout без `--draft` и без MR.
 В `worktree` mode агент получает отдельный draft в `external` writer mode. В обоих случаях
 он читает YAML для контекста, но выполняет все изменения только через CLI. Создание использует `entity create`/`entity import`, а изменение
 полей существующих сущностей — транзакционный `entity update` с неизменяемыми identity и owning
@@ -630,7 +631,7 @@ GitPM запускается локально как Node.js process с сист
 поддерживаемого Docker image. Persistent data зависит от mode:
 
 ```text
-/data/repository       # direct managed checkout
+/repository            # direct selected checkout, bind-mounted by Docker
 /data/repository.git   # worktree bare repository
 /data/worktrees        # worktree drafts
 /data/drafts           # mode-scoped metadata

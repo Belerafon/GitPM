@@ -36,7 +36,10 @@ Normal UI: Project, Task, Milestone, Saved View и Task Comment.
 
 Maintainer UI: Person, Team, Calendar, statuses and issue types.
 
-Server repository URL, GitLab project ID, OAuth secret and read credential изменяются только external configuration.
+Credential-free repository URL, GitLab project и OAuth Application ID доступны
+Maintainer в repository settings, если не заданы environment variables. OAuth
+access token, read credential и другие секреты остаются только во внешней
+конфигурации или памяти процесса и никогда не принимаются settings UI.
 
 ## 7. YAML
 
@@ -46,19 +49,20 @@ Formatter authoritative. ID известных сущностей получаю
 
 ## 8. Workspace consistency
 
-- `direct` mode использует один managed checkout и не публикует draft/writer lifecycle;
+- `direct` mode использует выбранный checkout и не публикует draft/writer lifecycle;
 - `worktree` draft имеет одного owner и one writer mode: `ui` or `external`;
 - multiple readers allowed в обоих режимах;
 - browser uses polling every 3 seconds;
 - commit always includes all draft changes в `worktree` mode и все изменения
-  единственного managed checkout в `direct` mode;
+  выбранного checkout в `direct` mode;
 - dirty workspace/draft is never auto-cleaned;
 - worktree close does not delete worktree or branch.
 
 ## 9. No backup
 
-Нет safety refs, backup, replication or off-volume copy. Configured persistent
-data directory/volume is the only local durability boundary. Его потеря может
+Нет safety refs, backup, replication or off-volume copy. Выбранный checkout в
+`direct` mode и configured persistent data directory/volume в `worktree`
+mode являются соответствующей local durability boundary. Их потеря может
 уничтожить unpushed data.
 
 ## 10. Authorization
@@ -67,7 +71,7 @@ data directory/volume is the only local durability boundary. Его потеря
 - Reporter: read-only;
 - Developer: own drafts and normal entities;
 - Maintainer: administrative entities and explicit cleanup;
-- Administrator: external server operator, no server-settings UI.
+- Administrator: external deployment/secrets operator; secret settings UI отсутствует.
 
 Role is refreshed before mutation, commit, push and MR. GitLab remains final control for push/MR.
 

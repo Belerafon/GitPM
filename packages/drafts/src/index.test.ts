@@ -232,6 +232,15 @@ describe("direct mode draft manager", () => {
     expect(await git(draft.worktree_path, "log", "-1", "--format=%s")).toBe("direct edit");
   });
 
+  it("does not open a direct workspace on a non-default branch", async () => {
+    const test = await fixture();
+    await git(test.source, "checkout", "-b", "feature/not-main");
+    const { manager } = directRuntime(test.source, test.remote, test.data);
+
+    await expect(manager.createDraft("DRF-WRONG-BRANCH", "local-user"))
+      .rejects.toMatchObject({ code: "GIT_WRONG_BRANCH" });
+  });
+
   it("does not destroy the selected checkout on cleanup and preserves local commits", async () => {
     const test = await fixture();
     const { gitClient, manager } = directRuntime(test.source, test.remote, test.data);

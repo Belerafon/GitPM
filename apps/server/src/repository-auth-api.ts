@@ -6,6 +6,11 @@ import type { RepositoryConnectionManager, RepositoryConnectionUpdate } from "./
 
 const COOKIE_NAME = "gitpm_gitlab_session";
 
+function sessionCookieFlags(): string {
+  const secure = process.env.GITPM_COOKIE_SECURE?.trim().toLowerCase() !== "false";
+  return `Path=/; HttpOnly;${secure ? " Secure;" : ""} SameSite=Lax`;
+}
+
 interface RepositoryAuthentication {
   startLogin(): { authorization_url: string; state: string };
   completeLogin(state: string, code: string): Promise<PublicSession>;
@@ -82,14 +87,14 @@ export function registerRepositoryAuthApi(
     if (auth === undefined) throw new AuthError("GITLAB_NOT_CONFIGURED", "GitLab login is not configured for this repository");
     const session = await auth.completeLogin(request.query.state, request.query.code);
     const maxAge = Math.max(0, Math.floor((Date.parse(session.expires_at) - Date.now()) / 1000));
-    reply.header("set-cookie", `${COOKIE_NAME}=${encodeURIComponent(session.session_id)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}`);
+    reply.header("set-cookie", `${COOKIE_NAME}=${encodeURIComponent(session.session_id)}; ${sessionCookieFlags()}; Max-Age=${maxAge}`);
     return await reply.redirect(webUrl);
   });
 
   app.post("/api/auth/logout", async (request, reply) => {
     const session = cookie(request);
     if (auth !== undefined && session !== undefined) auth.logout(session);
-    reply.header("set-cookie", `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
+    reply.header("set-cookie", `${COOKIE_NAME}=; ${sessionCookieFlags()}; Max-Age=0`);
     await reply.code(204).send();
   });
 

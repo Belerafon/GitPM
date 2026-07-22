@@ -21,6 +21,9 @@ const child = spawn("corepack", ["pnpm", "--filter", "@gitpm/server", "exec", "t
   detached: !isWindows,
   env: {
     ...process.env,
+    // This suite exercises the public draft lifecycle. Keep its repository mode
+    // explicit now that the application default is the single-checkout direct mode.
+    GITPM_REPOSITORY_MODE: "worktree",
     GITPM_REPOSITORY_PATH: repository,
     GITPM_DATA_DIR: runtimeData,
     HOST: "127.0.0.1",

@@ -113,7 +113,11 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
       code = error.code;
       message = error.message;
     } else if (error instanceof GitCommandError) {
-      status = error.code === "GIT_TIMEOUT" ? 504 : 502;
+      status = error.code === "GIT_TIMEOUT"
+        ? 504
+        : ["GIT_WRONG_BRANCH", "GIT_DETACHED_HEAD", "GIT_NON_FAST_FORWARD"].includes(error.code)
+          ? 409
+          : 502;
       code = error.code;
       message = error.message;
     } else if (error instanceof DomainOperationError) {

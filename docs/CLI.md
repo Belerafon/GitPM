@@ -55,7 +55,7 @@ domain schemas (включая `comment`) и три repository configuration sch
 обнаруживать устаревшую установленную сборку.
 
 В `direct` mode команды `status`, `entity create`, `entity update`, `entity import`, `format`, `validate`, `diff`, `commit` и
-`push` работают с managed checkout без `--draft`. В `worktree` mode для них требуется
+`push` работают с выбранным checkout без `--draft`. В `worktree` mode для них требуется
 `--draft <id>`; `mr create` доступна только в `worktree` mode. `--project <id>` проверяет, что
 все текущие business changes принадлежат указанному Project, а физическое удаление требует
 явного `--allow-delete` при проверке diff/validation и commit.
@@ -87,15 +87,15 @@ domain schemas (включая `comment`) и три repository configuration sch
 Нужный набор зависит от repository mode. В `direct` mode CLI может построить
 runtime из `GITPM_REPOSITORY_PATH`, `GITPM_DATA_DIR` и mode; в `worktree` mode
 draft/publish-командам дополнительно нужен remote runtime. `schema`, `doctor` и
-`init` не требуют существующего managed checkout.
+`init` не требуют существующего runtime checkout.
 
 | Переменная | Назначение |
 |------------|------------|
 | `GITPM_REPOSITORY_MODE` | `direct` (по умолчанию) или `worktree`. |
-| `GITPM_REPOSITORY_PATH` | Source/managed repository path, в зависимости от launcher/runtime. |
-| `GITPM_DATA_DIR` | Persistent каталог managed checkout, draft metadata и worktrees. |
-| `GITPM_REMOTE_URL` | URL push-remote. Для file-path remote требует `GITPM_ALLOW_LOCAL_REPOSITORY=1` или `GITPM_ALLOW_LOCAL_TEST_REMOTE=1`. |
-| `GITPM_DEFAULT_BRANCH` | Бранч под который идут MR (по умолчанию `main`). |
+| `GITPM_REPOSITORY_PATH` | Выбранный существующий checkout в `direct`; repository source для `worktree`. |
+| `GITPM_DATA_DIR` | Persistent каталог runtime metadata и worktrees; в `direct` второй checkout здесь не создаётся. |
+| `GITPM_REMOTE_URL` | Fetch/push remote для `worktree` mode. Для file-path remote требует `GITPM_ALLOW_LOCAL_REPOSITORY=1` или `GITPM_ALLOW_LOCAL_TEST_REMOTE=1`; в `direct` не используется. |
+| `GITPM_DEFAULT_BRANCH` | Основная ветка direct checkout и target MR (по умолчанию `main`). |
 | `GITPM_ASKPASS_PATH` | Скрипт git askpass для авторизации при push. По умолчанию `scripts/git-askpass.mjs`. |
 | `GITPM_ACCESS_TOKEN` | Токен GitLab API. В логи/commits не попадает, передаётся только в in-memory calls. |
 | `GITPM_AGENT_AUTHOR_NAME` | `user.name` для коммитов от лица агента (по умолчанию `GitPM Agent`). |
@@ -124,12 +124,16 @@ draft/publish-командам дополнительно нужен remote runt
 
 | Переменная | По умолчанию | Назначение |
 |------------|--------------|------------|
-| `GITPM_GITLAB_URL` | — | Base URL GitLab-инстанса, например `http://10.0.0.1:81`. |
+| `GITPM_GITLAB_URL` | — | HTTPS base URL GitLab-инстанса, например `https://gitlab.example`; HTTP разрешён только для localhost/127.0.0.1. |
 | `GITPM_GITLAB_PROJECT` | — | `group/project` для MR. |
 | `GITPM_GITLAB_CLIENT_ID` | — | OAuth Application ID, зарегистрированный в GitLab. |
 | `GITPM_GITLAB_REDIRECT_URI` | `http://127.0.0.1:3000/api/auth/callback` | Redirect URI OAuth. На сервере указать внешний URL (например `http://10.0.0.1:86/api/auth/callback`). |
 | `GITPM_COOKIE_SECURE` | `true` | Когда web UI опубликован по plain HTTP (без TLS-терминатора), поставьте `false` — иначе браузер не примет сессионную cookie. |
 | `GITPM_PUSH_REMOTE_URL` | auto из `origin` | Override push-remote URL. Принимает только credential-free HTTPS. |
+
+Если connection fields не заданы через environment, Maintainer может настроить
+credential-free `origin`, GitLab project и OAuth Application ID в web UI.
+Секреты через UI не принимаются; access token остаётся только в памяти процесса.
 
 ## Сценарии
 
@@ -147,8 +151,8 @@ GITPM_REPOSITORY_PATH=/path/to/portfolio docker compose up -d --build
 ```
 
 Открывает `:3000` и `:5173` на `0.0.0.0` без perimeter auth. Подходит для
-разработки и доверенной локальной сети; managed checkout и metadata сохраняются
-в volume `gitpm-data`.
+разработки и доверенной локальной сети; выбранный checkout bind-mount-ится в
+`/repository`, а metadata сохраняется в volume `gitpm-data`.
 
 ### Docker (сервер)
 

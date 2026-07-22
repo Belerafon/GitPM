@@ -188,6 +188,28 @@ describe("direct-mode checkout", () => {
     expect(await git(fixture.remote, "rev-parse", "main")).toBe(result.commit);
   });
 
+  it("refuses to publish when the selected checkout is not on the configured default branch", async () => {
+    const fixture = await remoteFixture();
+    const client = new GitClient({
+      dataDirectory: path.join(fixture.root, "data"),
+      remoteUrl: fixture.source,
+      pushRemoteUrl: fixture.remote,
+      defaultBranch: "main",
+      allowLocalTestRemote: true,
+      askPassPath: path.resolve("scripts", "git-askpass.mjs"),
+    });
+    const remoteMain = await git(fixture.remote, "rev-parse", "main");
+    await git(fixture.source, "checkout", "-b", "feature/not-main");
+    await writeFile(path.join(fixture.source, "feature.txt"), "feature\n", "utf8");
+    await client.commitAll(fixture.source, "feature commit", "GitPM Direct", "direct@example.test", []);
+
+    await expect(client.assertCheckoutOnDefaultBranch(fixture.source))
+      .rejects.toMatchObject({ code: "GIT_WRONG_BRANCH" });
+    await expect(client.pushMainFastForward(fixture.source, "unused-local-token"))
+      .rejects.toMatchObject({ code: "GIT_WRONG_BRANCH" });
+    expect(await git(fixture.remote, "rev-parse", "main")).toBe(remoteMain);
+  });
+
   it("refuses non-fast-forward push instead of force pushing", async () => {
     const fixture = await remoteFixture();
     const client = new GitClient({

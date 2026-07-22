@@ -1,12 +1,12 @@
 # GitPM agent workflow v1
 
-Agent работает в том же managed checkout и через тот же CLI, что и web UI.
+Agent работает в той же runtime рабочей копии и через тот же CLI, что и web UI.
 Отдельного MCP mutation server или agent API нет. YAML можно читать для контекста,
 но domain-сущности изменяются только командами `gitpm`.
 
-GitPM создаёт в managed checkout `AGENTS.md` и
+GitPM создаёт в runtime checkout `AGENTS.md` и
 `.agents/skills/gitpm/SKILL.md`. В `worktree` mode они создаются в каждом draft,
-в `direct` mode — в единственной управляемой рабочей копии. Runtime восстанавливает
+в `direct` mode — прямо в выбранной рабочей копии. Runtime восстанавливает
 их при необходимости; Project scope, semantic diff, commit-all, clean checks,
 push и MR исключают эти файлы.
 
@@ -18,9 +18,9 @@ push и MR исключают эти файлы.
 CLI использует:
 
 - `GITPM_REPOSITORY_MODE` — `direct` (default) или `worktree`;
-- `GITPM_REPOSITORY_PATH` — managed checkout/source repository;
+- `GITPM_REPOSITORY_PATH` — выбранный checkout в `direct` или source repository в `worktree`;
 - `GITPM_DATA_DIR` — persistent metadata и worktrees;
-- `GITPM_REMOTE_URL` — configured fetch/push remote CLI workflow;
+- `GITPM_REMOTE_URL` — configured fetch/push remote только для `worktree` workflow;
 - `GITPM_DEFAULT_BRANCH` — default branch, обычно `main`;
 - `GITPM_ASKPASS_PATH` и `GITPM_ACCESS_TOKEN` — controlled remote authentication;
 - `GITPM_AGENT_AUTHOR_NAME` и `GITPM_AGENT_AUTHOR_EMAIL` — commit identity.
@@ -40,8 +40,9 @@ gitpm status --json
 ## Direct mode (default)
 
 В `direct` mode публичного draft lifecycle нет, `--draft` не нужен. Agent и UI
-разделяют одну рабочую копию и основную ветку; одновременную запись нужно
-координировать организационно.
+разделяют выбранную рабочую копию. Она должна находиться на настроенной основной
+ветке; другая ветка или detached HEAD блокируют работу стабильной Git-ошибкой.
+Одновременную запись нужно координировать организационно.
 
 ```bash
 gitpm status --json
@@ -91,7 +92,7 @@ gitpm mr create --draft DRF-AGENT-001 --owner 42 --title "Update delivery plan"
 эти файлы, но не должен коммитить их или копировать binary content в domain paths.
 Извлечённые данные передаются CLI через temporary YAML/CSV/JSONL вне checkout.
 
-Для создания передайте temporary YAML mapping вне managed checkout. При `--type`
+Для создания передайте temporary YAML mapping вне runtime checkout. При `--type`
 можно опустить `schema`, `id` и `lifecycle`; CLI подставит schema, сгенерирует ID
 и использует `active`. У Person отсутствующий `calendar` берётся из repository
 `default_calendar`.
@@ -147,7 +148,7 @@ Repository configuration, People, Teams, Calendars и другие Projects пр
 `--allow-delete` в соответствующей validation/diff/commit-команде, но этот флаг
 не разрешает обходить CLI mutation boundary.
 
-Commit всегда включает все изменения managed checkout/draft после полной scope и
+Commit всегда включает все изменения runtime checkout/draft после полной scope и
 repository validation. Partial staging не поддерживается. Push требует clean
 committed tree.
 

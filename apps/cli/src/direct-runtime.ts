@@ -28,7 +28,7 @@ export interface DirectPushResult {
 
 export interface DirectCliRuntimeOptions {
   readonly dataDirectory: string;
-  readonly remoteUrl: string;
+  readonly checkoutPath: string;
   readonly defaultBranch: string;
   readonly authorName: string;
   readonly authorEmail: string;
@@ -54,14 +54,14 @@ export class DirectCliRuntime {
   constructor(options: DirectCliRuntimeOptions) {
     this.git = new GitClient({
       dataDirectory: options.dataDirectory,
-      remoteUrl: options.remoteUrl,
+      remoteUrl: options.checkoutPath,
       defaultBranch: options.defaultBranch,
       ...(options.allowLocalRepository ? { allowLocalRepository: true } : {}),
       ...(options.allowLocalTestRemote ? { allowLocalTestRemote: true } : {}),
       ...(options.askPassPath === undefined ? {} : { askPassPath: options.askPassPath }),
     });
     if (!options.allowLocalRepository && !options.allowLocalTestRemote) throw new Error("Direct mode requires an existing local Git checkout");
-    this.backend = new DirectDraftBackend(this.git, options.remoteUrl);
+    this.backend = new DirectDraftBackend(this.git, options.checkoutPath);
     this.drafts = new DraftManager(this.git, options.dataDirectory, {
       backend: this.backend,
       push: directPushStrategy(this.git),
@@ -79,6 +79,7 @@ export class DirectCliRuntime {
   }
 
   async prepare(): Promise<void> {
+    await this.backend.prepare();
     if (this.prepared) return;
     const workspace = await this.drafts.ensureDirectWorkspace("DRF-LOCAL", "local-user");
     this.workspaceDraftId = workspace.draft_id;

@@ -48,10 +48,16 @@ Launcher подготовит актуальный русскоязычный de
 }
 ```
 
-В `direct` mode GitPM клонирует этот repository-источник в управляемую рабочую
-копию внутри data directory. Исходная папка не используется как временный draft
-и не очищается. Если у неё есть безопасный credential-free HTTPS `origin`,
-launcher подхватит remote; локальные изменения и коммиты не требуют входа.
+В `direct` mode указанная папка и есть единственная рабочая копия: GitPM не
+создаёт второй clone и remote `source`. Она должна быть обычным Git checkout на
+настроенной основной ветке. Изменения коммитятся в ней и явным действием
+публикуются fast-forward push в её единственный `origin`. Локальные изменения и
+коммиты не требуют входа.
+
+Credential-free HTTPS URL `origin`, GitLab project и OAuth Application ID можно
+настроить в «Администрирование → Настройки репозитория», если их не зафиксировали
+переменные окружения. OAuth token после входа хранится только в памяти процесса и
+передаётся Git через controlled ASKPASS; в URL и Git config он не записывается.
 
 Пустой schema-v1 repository можно создать CLI:
 
@@ -63,7 +69,7 @@ node apps/cli/dist/index.js init D:\projects\portfolio-data
 
 | | `direct` (по умолчанию) | `worktree` |
 | --- | --- | --- |
-| Рабочая копия | один managed checkout | bare repository и отдельный `git worktree` на draft |
+| Рабочая копия | выбранный существующий checkout | bare repository и отдельный `git worktree` на draft |
 | Ветка | настроенная основная ветка | `gitpm/<owner>/<draft>` |
 | CLI | без `--draft` | с `--draft <id>` |
 | Публикация | safe fast-forward push | push draft branch и GitLab MR |
@@ -109,8 +115,9 @@ host path GitPM repository и запустите:
 docker compose up -d --build
 ```
 
-Будут опубликованы порты `3000` и `5173`, а managed data сохранится в volume
-`gitpm-data`. Для LAN/server-профиля с одним опубликованным web-портом,
+Будут опубликованы порты `3000` и `5173`, выбранный checkout смонтирован как
+`/repository`, а runtime metadata сохраняется в volume `gitpm-data`. Для
+LAN/server-профиля с одним опубликованным web-портом,
 healthcheck, постоянной конфигурацией и GitLab OAuth используйте:
 
 ```bash

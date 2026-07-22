@@ -29,6 +29,9 @@ export class RepositoryPublishingService {
 
   async commitAll(draftId: string, message: string) {
     const draft = await this.ownedDraft(draftId);
+    if (this.drafts.repositoryMode === "direct") {
+      await this.git.assertCheckoutOnDefaultBranch(draft.worktree_path);
+    }
     const validation = await validateRepository(draft.worktree_path);
     if (!validation.valid) throw new PublishingError("VALIDATION_FAILED", "Commit is blocked by repository validation", validation.errors);
     if (!(await this.git.statusPorcelain(draft.worktree_path, GITPM_GUIDANCE_PATHS)).trim()) throw new PublishingError("NOTHING_TO_COMMIT", "Draft has no changes");

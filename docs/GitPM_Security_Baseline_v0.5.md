@@ -9,7 +9,7 @@ Security controls добавляются вместе с рискованным 
 
 ## 2. Assets
 
-- direct managed checkout или bare repository и worktrees;
+- выбранный direct checkout или bare repository и worktrees;
 - local-only draft data;
 - in-memory user OAuth token;
 - mounted read-only fetch credential;
@@ -22,7 +22,7 @@ Webhook secret, backup assets, safety refs, token keyring, quota state and MCP c
 ## 3. Trust boundaries
 
 - Browser -> GitPM HTTP;
-- Agent process -> managed checkout и CLI;
+- Agent process -> runtime checkout и CLI;
 - GitPM -> Git child process;
 - GitPM -> worktree filesystem;
 - GitPM -> GitLab OAuth/API/Git transport;
@@ -86,13 +86,15 @@ Webhook secret, backup assets, safety refs, token keyring, quota state and MCP c
 - Reporter read-only;
 - Developer owns and edits normal drafts;
 - Maintainer controls administrative repository entities and cleanup;
-- server configuration is external;
+- non-secret repository/GitLab connection fields могут изменяться Maintainer UI,
+  если не зафиксированы environment; credentials и deployment configuration external;
 - backend checks role, ownership and writer mode before mutation;
 - UI controls are not a security boundary.
 
 ## 9. Workspace and agent workflow
 
-- direct mode has one managed checkout and blocks stale UI writes after external changes;
+- direct mode has one selected checkout, requires its configured default branch
+  and blocks stale UI writes after external changes;
 - worktree mode has one writer mode per draft; external mode makes UI read-only;
 - direct external change invalidates stale UI mutation;
 - CLI may restrict allowed Project ID and delete flag;

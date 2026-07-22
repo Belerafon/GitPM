@@ -5,7 +5,7 @@
 ## Scope and assets
 
 Модель покрывает Browser -> HTTP, GitPM -> filesystem/Git process и GitPM ->
-GitLab OAuth/API/Git transport. Защищаемые активы: direct managed checkout или
+GitLab OAuth/API/Git transport. Защищаемые активы: выбранный direct checkout или
 bare repository/worktrees, неопубликованные workspace changes, OAuth access token, mounted fetch credential,
 identity/role state, доступность server и безопасные logs.
 

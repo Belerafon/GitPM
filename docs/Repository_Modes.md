@@ -39,6 +39,10 @@ GitPM reads and writes files directly in this working copy, works on the
 configured default branch, commits onto it, and — on an explicit user action —
 pushes it to `origin/main`.
 
+The checkout must already be on the configured default branch. GitPM does not
+switch branches implicitly: a different branch is rejected as
+`GIT_WRONG_BRANCH`, and detached HEAD is rejected as `GIT_DETACHED_HEAD`.
+
 The shared domain services use one internal `DRF-LOCAL` workspace, but direct mode has no public
 draft lifecycle. Creating another draft, changing writer mode, closing, reopening, cleaning up,
 or creating a revert draft through the HTTP draft API returns
@@ -63,6 +67,10 @@ available.
 Push always performs a `fetch` first and only allows a safe fast-forward. GitPM
 never does rebase, merge commit, hard reset, stash, or force push. When the local
 and remote branches have diverged, GitPM returns a clear error.
+
+For an HTTPS origin, login supplies the OAuth access token only to the controlled
+ASKPASS child environment. The token is not placed in the origin URL, Git config,
+command arguments, files, or logs.
 
 A `direct`-mode CLI session looks like this:
 

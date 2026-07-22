@@ -40,7 +40,7 @@ async function directFixture(): Promise<{ root: string; checkout: string; remote
   await git(source, "push", "-u", "origin", "main");
   const direct = new DirectCliRuntime({
     dataDirectory: data,
-    remoteUrl: source,
+    checkoutPath: source,
     defaultBranch: "main",
     authorName: "GitPM Direct CLI",
     authorEmail: "direct@example.test",
@@ -237,6 +237,16 @@ describe("CLI direct mode", () => {
     expect(payload).toMatchObject({ ok: true, code: "OK", status: { mode: "direct", branch: "main", dirty: false, ahead: 0, behind: 0 } });
     expect(payload.status.head).toMatch(/^[0-9a-f]{40}$/u);
     expect(payload.status.path).toBe(path.resolve(direct.checkoutPath));
+  });
+
+  it("rechecks the default branch after the direct runtime is already prepared", async () => {
+    const { direct, checkout } = await directFixture();
+    expect(JSON.parse((await run(["status", "--json"], process.cwd(), { direct })).output))
+      .toMatchObject({ ok: true });
+    await git(checkout, "checkout", "-b", "feature/not-main");
+
+    const result = await run(["status", "--json"], process.cwd(), { direct });
+    expect(JSON.parse(result.output)).toMatchObject({ ok: false, code: "GIT_WRONG_BRANCH" });
   });
 
   it("commit --all validates and commits onto main without --draft", async () => {

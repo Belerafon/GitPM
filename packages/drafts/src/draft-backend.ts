@@ -108,19 +108,19 @@ export class DirectDraftBackend implements DraftBackend {
 
   async prepare(): Promise<void> {
     await this.git.checkoutRealPath(this.checkoutPath);
-    await this.git.checkoutCurrentBranch(this.checkoutPath);
+    await this.git.assertCheckoutOnDefaultBranch(this.checkoutPath);
     await this.git.headCommit(this.checkoutPath);
   }
 
   async provision(): Promise<DraftProvisioning> {
     const worktreePath = await this.git.checkoutRealPath(this.checkoutPath);
-    const branch = await this.git.checkoutCurrentBranch(worktreePath);
+    const branch = await this.git.assertCheckoutOnDefaultBranch(worktreePath);
     const baseCommit = await this.git.headCommit(worktreePath);
     return { branch, worktreePath, baseCommit };
   }
 
   async provisionGuidance(worktreePath: string): Promise<boolean> {
-    const branch = await this.git.checkoutCurrentBranch(worktreePath);
+    const branch = await this.git.assertCheckoutOnDefaultBranch(worktreePath);
     let remoteUrl: string | undefined;
     try {
       remoteUrl = await this.git.checkoutOriginUrl(worktreePath);

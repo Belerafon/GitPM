@@ -26,11 +26,11 @@ export interface GitClientOptions {
   readonly dataDirectory: string;
   readonly remoteUrl: string;
   readonly defaultBranch: string;
-  /** Allows a user-selected local repository to be used as the fetch source. */
+  /** Allows a local worktree source or direct-mode checkout path. */
   readonly allowLocalRepository?: boolean;
   /** @deprecated Test compatibility alias. Prefer allowLocalRepository. */
   readonly allowLocalTestRemote?: boolean;
-  /** Optional real upstream used by push while remoteUrl remains the local fetch source. */
+  /** Optional publication upstream; direct mode applies it as the selected checkout's origin. */
   readonly pushRemoteUrl?: string;
   readonly askPassPath?: string;
   readonly timeoutMs?: number;
@@ -646,6 +646,17 @@ export class GitClient {
     return branch;
   }
 
+  async assertCheckoutOnDefaultBranch(checkoutPath: string): Promise<string> {
+    const branch = await this.checkoutCurrentBranch(checkoutPath);
+    if (branch !== this.defaultBranch) {
+      throw new GitCommandError(
+        "GIT_WRONG_BRANCH",
+        `Selected checkout must be on ${this.defaultBranch}; current branch is ${branch}`,
+      );
+    }
+    return branch;
+  }
+
   async checkoutRealPath(checkoutPath: string): Promise<string> {
     return await realpath(checkoutPath);
   }
@@ -702,13 +713,18 @@ export class GitClient {
   async pushMainFastForward(checkoutPath: string, accessToken: string): Promise<{ branch: string; commit: string }> {
     if (!this.askPassPath) throw new GitCommandError("GIT_ASKPASS_REQUIRED", "Controlled ASKPASS path is required for push");
     const checkout = await realpath(checkoutPath);
+    await this.assertCheckoutOnDefaultBranch(checkout);
     await this.assertCheckoutHasSafeOrigin(checkout);
     const remoteCommit = await this.checkoutRemoteCommit(checkout);
-    const localHead = await this.git(["-C", checkout, "rev-parse", "HEAD^{commit}"]);
+    const localHead = await this.git(["-C", checkout, "rev-parse", `refs/heads/${this.defaultBranch}^{commit}`]);
     const head = localHead.stdout.trim();
     if (remoteCommit !== undefined) {
       try {
-        await this.git(["-C", checkout, "merge-base", "--is-ancestor", `refs/remotes/origin/${this.defaultBranch}`, "HEAD"]);
+        await this.git([
+          "-C", checkout, "merge-base", "--is-ancestor",
+          `refs/remotes/origin/${this.defaultBranch}`,
+          `refs/heads/${this.defaultBranch}`,
+        ]);
       } catch (error) {
         if (error instanceof GitCommandError && error.code === "GIT_FAILED") {
           throw new GitCommandError("GIT_NON_FAST_FORWARD", "Local branch has diverged from origin; refusing non-fast-forward push", error.exitCode);

@@ -13,7 +13,7 @@ const WORKSPACE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url))
 
 interface DirectEnv {
   readonly dataDirectory: string;
-  readonly remoteUrl: string;
+  readonly checkoutPath: string;
   readonly defaultBranch: string;
   readonly authorName: string;
   readonly authorEmail: string;
@@ -25,18 +25,18 @@ interface DirectEnv {
 
 function readDirectEnv(): DirectEnv | undefined {
   const dataDirectory = process.env.GITPM_DATA_DIR?.trim();
-  const remoteUrl = process.env.GITPM_REPOSITORY_PATH?.trim() ?? process.env.GITPM_REMOTE_URL?.trim();
-  if (!dataDirectory || !remoteUrl) return undefined;
+  const checkoutPath = process.env.GITPM_REPOSITORY_PATH?.trim();
+  if (!dataDirectory || !checkoutPath) return undefined;
   const defaultBranch = process.env.GITPM_DEFAULT_BRANCH?.trim() || "main";
   const authorName = process.env.GITPM_AGENT_AUTHOR_NAME?.trim() ?? "GitPM Agent";
   const authorEmail = process.env.GITPM_AGENT_AUTHOR_EMAIL?.trim() ?? "agent@users.noreply.gitlab.example.test";
   const askPassPath = process.env.GITPM_ASKPASS_PATH?.trim() || undefined;
-  const allowLocalRepository = process.env.GITPM_ALLOW_LOCAL_REPOSITORY === "1" || !remoteUrl.startsWith("https://");
+  const allowLocalRepository = process.env.GITPM_ALLOW_LOCAL_REPOSITORY === "1" || !checkoutPath.startsWith("https://");
   const allowLocalTestRemote = process.env.GITPM_ALLOW_LOCAL_TEST_REMOTE === "1";
   const pushAccessToken = process.env.GITPM_ACCESS_TOKEN?.trim() || undefined;
   return {
     dataDirectory,
-    remoteUrl,
+    checkoutPath,
     defaultBranch,
     authorName,
     authorEmail,

@@ -17,10 +17,13 @@ Candidate и release gate приняты. Разработка после baseli
 - `direct` стал режимом репозитория по умолчанию; `worktree` сохранил draft,
   writer-mode и Merge Request workflow;
 - runtime metadata разделено по режимам, direct workspace восстанавливается и
-  сверяется с каноническим managed checkout;
+  сверяется с выбранным checkout;
+- direct работает без второго clone и remote `source`: commit выполняется на
+  configured default branch, push — напрямую в `origin`; non-secret connection
+  fields доступны в Maintainer UI, OAuth token остаётся memory-only;
 - CLI получил `init`, schema discovery, генерацию ID, транзакционные
   `entity create`, `entity update` и атомарный CSV/YAML/JSONL import;
-- каждый managed checkout получает актуальные `AGENTS.md` и
+- каждый runtime checkout получает актуальные `AGENTS.md` и
   `.agents/skills/gitpm/SKILL.md`; runtime guidance исключено из business diff и commit;
 - web UI перешёл на project-centric workspace с адресуемыми Project, Stage, Task,
   Board, Timeline, Person и History routes;

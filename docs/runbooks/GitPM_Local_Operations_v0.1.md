@@ -101,6 +101,8 @@ The command generates a temporary deterministic portfolio with 30 Projects, 30 P
 - `DIRECT_MODE_DRAFT_OPERATION_UNAVAILABLE`: the requested create/writer/close/reopen/cleanup or
   revert-draft operation belongs to worktree mode; direct mode always uses its one internal
   `DRF-LOCAL` workspace.
+- `GIT_WRONG_BRANCH`: switch the selected checkout to the configured default
+  branch after preserving any local changes; GitPM never switches it implicitly.
 - `CLEANUP_CONFIRMATION_REQUIRED`: close the draft and repeat cleanup with the exact draft ID.
 - `VALIDATION_FAILED`: run `gitpm validate --changed` in direct mode or add
   `--draft <ID>` in worktree mode, then correct the first stable validation code.
