@@ -11,6 +11,7 @@ import { EditorDrawer } from "./editor-drawer.js";
 import { upsertEntity } from "./optimistic-ui.js";
 import { PersonLinks } from "./person-link.js";
 import { TaskComments } from "./task-comments-ui.js";
+import { DraftReadOnlyAlert, draftReadOnlyReason } from "./draft-read-only.js";
 
 const value = (document: GitPmDocument, key: string) => typeof document[key] === "string" ? document[key] as string : "";
 const values = (document: GitPmDocument, key: string): string[] => Array.isArray(document[key]) ? (document[key] as unknown[]).filter((item): item is string => typeof item === "string") : [];
@@ -74,7 +75,13 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
   const { highlights: localHighlights, mark: markLocal } = useExternalHighlights(500);
   const highlights = { ...externalHighlights, ...localHighlights };
   const reducedMotion = useReducedMotion();
-  const readOnly = draft.writer_mode !== "ui" || draft.state !== "open" || draft.changed_externally === true;
+  const readOnly = draftReadOnlyReason(draft) !== null;
+  const acknowledgeExternalChanges = () => {
+    setError(null);
+    void api.acknowledgeExternalChanges(draft.draft_id)
+      .then(async () => await onChanged())
+      .catch((caught: unknown) => setError(caught instanceof Error ? caught.message : String(caught)));
+  };
 
   const load = useCallback(async (preferredProject = projectId, externalUpdate = false) => {
     await loadRequest.run(async () => {
@@ -170,7 +177,7 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
 
   return <section className={`core-workspace core-${surface}-workspace${reducedMotion ? " reduced-motion" : ""}`} data-reduced-motion={reducedMotion} data-surface={surface}>
     {!(surface === "projects" && projectId === "") && <div className="section-heading"><div><span className="eyebrow draft-context-id">{draft.draft_id}</span><h2 aria-hidden="true">{pageHeading}</h2><p>{pageDescription}</p></div></div>}
-    {readOnly && <div className="alert warning">{t("core.readOnly")}</div>}{error !== null && <div className="alert error">{error}</div>}
+    <DraftReadOnlyAlert draft={draft} locale={locale} onAcknowledge={acknowledgeExternalChanges} />{error !== null && <div className="alert error">{error}</div>}
     {feedback !== null && <div aria-live="polite" className={`save-feedback ${feedback.kind}`} role="status"><span>{feedback.text}</span></div>}
     <AsyncBoundary state={loadRequest.state} loading={t("status.loading")} retry={() => { void load(); }} error={(loadError, retry) => <div className="alert error">{loadError}<button onClick={retry}>{t("status.retry")}</button></div>}>
     <>

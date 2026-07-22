@@ -10,6 +10,7 @@ import { upsertEntity } from "../../optimistic-ui.js";
 import type { DraftStatus, EntityResult, GitPmDocument, ProjectWorkspaceResult } from "../../types.js";
 import type { WorkspaceNavigate } from "../../workspace-navigation.js";
 import { PersonLinks } from "../../person-link.js";
+import { draftReadOnlyReason } from "../../draft-read-only.js";
 
 interface ConfigValue { readonly slug: string; readonly title: string; readonly active: boolean }
 const text = (document: GitPmDocument, key: string): string => typeof document[key] === "string" ? document[key] as string : "";
@@ -37,7 +38,7 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
   const [error, setError] = useState<string | null>(null);
   const [statusPending, setStatusPending] = useState<string | null>(null);
   const { highlights, mark } = useExternalHighlights(500);
-  const readOnly = draft.writer_mode !== "ui" || draft.state !== "open" || draft.changed_externally === true;
+  const readOnly = draftReadOnlyReason(draft) !== null;
 
   const load = useCallback(async () => {
     await loader.run(async () => {

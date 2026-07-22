@@ -100,6 +100,7 @@ class BrowserAcceptanceApi implements GitPmApi {
     return { draft: { ...draft, ...(this.externalFingerprint === undefined ? {} : { external_fingerprint: this.externalFingerprint, changed_externally: this.externalFingerprint !== draft.fingerprint }) }, changes: { changed_files_count: this.changedFiles.length + this.changedPaths.size }, validation: { valid: !localizationAcceptance, error_count: localizationAcceptance ? 2 : 0, warning_count: 0, document_count: 14 + this.entities.length }, ...(this.mr === undefined ? {} : { mergeRequest: this.mr }) };
   }
   async setWriterMode(draftId: string, writer_mode: WriterMode) { return this.replace(draftId, { writer_mode }); }
+  async acknowledgeExternalChanges(draftId: string) { return this.replace(draftId, { changed_externally: false, external_fingerprint: undefined }); }
   async closeDraft(draftId: string) { return this.replace(draftId, { state: "closed" }); }
   async reopenDraft(draftId: string) { return this.replace(draftId, { state: "open" }); }
   async cleanupDraft(draftId: string) { this.drafts = this.drafts.filter((draft) => draft.draft_id !== draftId); }

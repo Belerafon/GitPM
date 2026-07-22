@@ -8,6 +8,7 @@ import { EditorDrawer } from "./editor-drawer.js";
 import { useExternalHighlights, useReducedMotion } from "./external-updates.js";
 import { upsertEntity, useFlipList } from "./optimistic-ui.js";
 import { PersonLink, PersonLinks } from "./person-link.js";
+import { draftReadOnlyReason } from "./draft-read-only.js";
 
 type AdminSurface = "people" | "calendar" | "settings";
 type AdminCreateEditor = "calendar" | "person" | "team" | null;
@@ -31,7 +32,7 @@ export function AdminWorkspace({ api, draft, role, locale, surface, confirmActio
   const [createEditor, setCreateEditor] = useState<AdminCreateEditor>(null);
   const { highlights, mark } = useExternalHighlights(500);
   const loadRequest = useAsyncLoad();
-  const readOnly = role !== "Maintainer" || draft.writer_mode !== "ui" || draft.state !== "open" || draft.changed_externally === true;
+  const readOnly = role !== "Maintainer" || draftReadOnlyReason(draft) !== null;
 
   const load = useCallback(async () => {
     await loadRequest.run(async () => {

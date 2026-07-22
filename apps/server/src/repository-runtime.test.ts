@@ -64,7 +64,8 @@ describe("normal repository runtime", () => {
         expect.objectContaining({ document: expect.objectContaining({ schema: "gitpm/project@1", name: "Operations" }) }),
       ]));
       const draft = await app.inject({ method: "POST", url: "/api/drafts", payload: { draft_id: "DRF-REAL-REPOSITORY" } });
-      expect(draft.statusCode).toBe(201);
+      expect(draft.statusCode).toBe(409);
+      expect(draft.json()).toMatchObject({ error: { code: "DIRECT_MODE_DRAFT_OPERATION_UNAVAILABLE" } });
       await expect(stat(path.join(fixture.data, "source"))).rejects.toMatchObject({ code: "ENOENT" });
     } finally {
       await app.close();
@@ -117,6 +118,53 @@ describe("repository mode selection", () => {
       expect(commit.json()).toMatchObject({ branch: "main" });
       // HEAD of the managed checkout advanced onto main.
       expect(await git(path.join(fixture.data, "repository"), "log", "-1", "--format=%s")).toBe("direct server commit");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("switches from worktree to direct without reusing or deleting the old worktree metadata", async () => {
+    const fixture = await fixtureRepository();
+    vi.stubEnv("GITPM_REPOSITORY_PATH", fixture.repository);
+    vi.stubEnv("GITPM_DATA_DIR", fixture.data);
+    vi.stubEnv("GITPM_GITLAB_CLIENT_ID", "");
+    vi.stubEnv("GITPM_REPOSITORY_MODE", "worktree");
+    const worktreeApp = await buildRepositoryApp();
+    await worktreeApp.close();
+    const oldMetadata = JSON.parse(await readFile(path.join(fixture.data, "drafts", "DRF-LOCAL.json"), "utf8")) as { worktree_path: string };
+    expect(oldMetadata.worktree_path).toContain(`${path.sep}worktrees${path.sep}`);
+
+    vi.stubEnv("GITPM_REPOSITORY_MODE", "direct");
+    const directApp = await buildRepositoryApp();
+    try {
+      const draft = await directApp.inject({ method: "GET", url: "/api/drafts/DRF-LOCAL" });
+      expect(draft.json()).toMatchObject({ branch: "main", writer_mode: "ui", state: "open", changed_externally: false });
+      const directMetadata = JSON.parse(await readFile(path.join(fixture.data, "drafts", "direct", "DRF-LOCAL.json"), "utf8")) as { worktree_path: string };
+      expect(directMetadata.worktree_path).toBe(path.resolve(fixture.data, "repository"));
+      expect(JSON.parse(await readFile(path.join(fixture.data, "drafts", "DRF-LOCAL.json"), "utf8"))).toMatchObject(oldMetadata);
+    } finally {
+      await directApp.close();
+    }
+  });
+
+  it("lets a maintainer acknowledge external direct-checkout changes explicitly", async () => {
+    const fixture = await fixtureRepository();
+    vi.stubEnv("GITPM_REPOSITORY_PATH", fixture.repository);
+    vi.stubEnv("GITPM_DATA_DIR", fixture.data);
+    vi.stubEnv("GITPM_GITLAB_CLIENT_ID", "");
+    vi.stubEnv("GITPM_REPOSITORY_MODE", "direct");
+    const app = await buildRepositoryApp();
+    try {
+      const projectPath = path.join(fixture.data, "repository", "projects", "P-26-MGP84K", "project.yaml");
+      await writeFile(projectPath, (await readFile(projectPath, "utf8")).replace("name: GitPM launch", "name: External edit"), "utf8");
+      const changed = await app.inject({ method: "GET", url: "/api/drafts/DRF-LOCAL" });
+      expect(changed.json()).toMatchObject({ changed_externally: true });
+
+      const acknowledged = await app.inject({ method: "POST", url: "/api/drafts/DRF-LOCAL/acknowledge-external-changes" });
+      expect(acknowledged.statusCode).toBe(200);
+      const current = await app.inject({ method: "GET", url: "/api/drafts/DRF-LOCAL" });
+      expect(current.json()).toMatchObject({ changed_externally: false });
+      expect(await readFile(projectPath, "utf8")).toContain("name: External edit");
     } finally {
       await app.close();
     }

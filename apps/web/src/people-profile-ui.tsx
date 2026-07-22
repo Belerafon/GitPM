@@ -5,6 +5,7 @@ import { EditorDrawer } from "./editor-drawer.js";
 import { formatDateOnly, formatNumber, message, type Locale, type MessageKey } from "./i18n.js";
 import type { DraftStatus, EntityResult, GitPmDocument, GitPmRole } from "./types.js";
 import type { WorkspaceNavigate } from "./workspace-navigation.js";
+import { draftReadOnlyReason } from "./draft-read-only.js";
 
 const text = (document: GitPmDocument, key: string) => typeof document[key] === "string" ? document[key] as string : "";
 const number = (document: GitPmDocument, key: string) => typeof document[key] === "number" ? document[key] as number : 0;
@@ -39,7 +40,7 @@ export function PeopleProfileWorkspace({ api, confirmAction = () => true, draft,
     }, setData);
   }, [api, draft.draft_id, draft.external_fingerprint, loadRequest.run]);
   useEffect(() => { void load(); }, [load]);
-  const readOnly = role !== "Maintainer" || draft.writer_mode !== "ui" || draft.state !== "open" || draft.changed_externally === true;
+  const readOnly = role !== "Maintainer" || draftReadOnlyReason(draft) !== null;
   const person = data?.people.find((item) => item.document.id === personId);
   const updatePerson = async (document: GitPmDocument) => {
     if (person === undefined || readOnly) return false;

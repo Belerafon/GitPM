@@ -9,6 +9,7 @@ import { EntityCatalog } from "./entity-catalog.js";
 import { useExternalHighlights, useReducedMotion } from "./external-updates.js";
 import { upsertEntity, useFlipList } from "./optimistic-ui.js";
 import { PersonLinks } from "./person-link.js";
+import { DraftReadOnlyAlert, draftReadOnlyReason } from "./draft-read-only.js";
 
 interface ConfigValue { readonly slug: string; readonly title: string; readonly active: boolean }
 const text = (document: GitPmDocument, key: string) => typeof document[key] === "string" ? document[key] as string : "";
@@ -50,7 +51,7 @@ export function BoardWorkspace({ api, draft, locale, initialProjectId = "", init
   const reducedMotion = useReducedMotion();
   const columnsRef = useFlipList<HTMLDivElement>(reducedMotion);
   const loadRequest = useAsyncLoad();
-  const readOnly = draft.writer_mode !== "ui" || draft.state !== "open" || draft.changed_externally === true;
+  const readOnly = draftReadOnlyReason(draft) !== null;
 
   const load = useCallback(async (preferredProject = projectId) => {
     await loadRequest.run(async () => {
@@ -136,7 +137,12 @@ export function BoardWorkspace({ api, draft, locale, initialProjectId = "", init
 
   return <section className="board-workspace">
     <div className="section-heading"><span className="eyebrow draft-context-id">{draft.draft_id}</span><h2 aria-hidden="true">{t("board.heading")}</h2><p>{t("board.description")}</p></div>
-    {readOnly && <div className="alert warning">{t("board.readOnly")}</div>}{error !== null && <div className="alert error">{error}</div>}
+    <DraftReadOnlyAlert draft={draft} locale={locale} onAcknowledge={() => {
+      setError(null);
+      void api.acknowledgeExternalChanges(draft.draft_id)
+        .then(async () => await onChanged())
+        .catch((caught: unknown) => setError(caught instanceof Error ? caught.message : String(caught)));
+    }} />{error !== null && <div className="alert error">{error}</div>}
     <AsyncBoundary state={loadRequest.state} loading={t("status.loading")} retry={() => { void load(); }} error={(loadError, retry) => <div className="alert error">{loadError}<button onClick={retry}>{t("status.retry")}</button></div>}>
     <>
     <section className="card board-toolbar">

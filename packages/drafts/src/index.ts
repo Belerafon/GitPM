@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, readdir, realpath, rm, stat } from "node:fs/promises";
+import { mkdir, readFile, readdir, realpath, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import type { GitClient } from "@gitpm/git-client";
 import { atomicWriteDomainFile, resolveDomainPath } from "@gitpm/security";
@@ -88,6 +88,7 @@ export interface DraftManagerOptions {
 export class DraftManager {
   private readonly dataDirectory: string;
   private readonly metadataDirectory: string;
+  private readonly metadataRelativeDirectory: string;
   private readonly repositoryLock = new AsyncMutex();
   private readonly draftLocks = new Map<string, AsyncMutex>();
   private readonly backend: DraftBackend;
@@ -99,9 +100,10 @@ export class DraftManager {
     options: DraftManagerOptions = {},
   ) {
     this.dataDirectory = path.resolve(dataDirectory);
-    this.metadataDirectory = path.join(this.dataDirectory, "drafts");
     this.backend = options.backend ?? new WorktreeDraftBackend(git);
     this.pushStrategy = options.push ?? worktreePushStrategy(git);
+    this.metadataRelativeDirectory = this.backend.mode === "direct" ? "drafts/direct" : "drafts";
+    this.metadataDirectory = path.join(this.dataDirectory, ...this.metadataRelativeDirectory.split("/"));
   }
 
   get repositoryMode(): "direct" | "worktree" {
@@ -118,7 +120,13 @@ export class DraftManager {
   }
 
   private metadataRelativePath(draftId: string): string {
-    return `drafts/${safeComponent(draftId, "draft ID")}.json`;
+    return `${this.metadataRelativeDirectory}/${safeComponent(draftId, "draft ID")}.json`;
+  }
+
+  private parseMetadata(text: string, draftId: string): DraftMetadata {
+    const value = JSON.parse(text) as DraftMetadata;
+    if (value.version !== 1 || value.draft_id !== draftId) throw new Error("metadata identity mismatch");
+    return value;
   }
 
   private async persist(metadata: DraftMetadata): Promise<void> {
@@ -128,12 +136,44 @@ export class DraftManager {
   private async readMetadata(draftId: string): Promise<DraftMetadata> {
     const metadataPath = await resolveDomainPath(this.dataDirectory, this.metadataRelativePath(draftId));
     try {
-      const value = JSON.parse(await readFile(metadataPath, "utf8")) as DraftMetadata;
-      if (value.version !== 1 || value.draft_id !== draftId) throw new Error("metadata identity mismatch");
-      return value;
+      return this.parseMetadata(await readFile(metadataPath, "utf8"), draftId);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new DraftRuntimeError("DRAFT_NOT_FOUND", `Draft ${draftId} not found`);
       throw new DraftRuntimeError("DRAFT_METADATA_INVALID", error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  /**
+   * Direct metadata originally lived beside worktree draft metadata. Move only records that
+   * point at the canonical direct checkout; worktree records remain untouched and become
+   * available again if the repository is switched back to worktree mode.
+   */
+  private async migrateLegacyDirectMetadata(): Promise<void> {
+    const legacyDirectory = path.join(this.dataDirectory, "drafts");
+    const directDirectory = path.join(legacyDirectory, "direct");
+    await mkdir(legacyDirectory, { recursive: true, mode: 0o700 });
+    await mkdir(directDirectory, { recursive: true, mode: 0o700 });
+    for (const entry of await readdir(legacyDirectory, { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
+      const draftId = entry.name.slice(0, -5);
+      const sourceRelative = `drafts/${safeComponent(draftId, "draft ID")}.json`;
+      const source = await resolveDomainPath(this.dataDirectory, sourceRelative);
+      let metadata: DraftMetadata;
+      try {
+        metadata = this.parseMetadata(await readFile(source, "utf8"), draftId);
+      } catch (error) {
+        throw new DraftRuntimeError("DRAFT_METADATA_INVALID", error instanceof Error ? error.message : String(error));
+      }
+      if (path.resolve(metadata.worktree_path) !== path.resolve(this.dataDirectory, "repository")) continue;
+      const destination = path.join(directDirectory, entry.name);
+      try {
+        await stat(destination);
+        throw new DraftRuntimeError("DRAFT_METADATA_CONFLICT", `Direct metadata already exists for ${draftId}`);
+      } catch (error) {
+        if (error instanceof DraftRuntimeError) throw error;
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      }
+      await rename(source, destination);
     }
   }
 
@@ -156,6 +196,7 @@ export class DraftManager {
     const owner = safeComponent(ownerInput, "owner");
     await mkdir(this.dataDirectory, { recursive: true, mode: 0o700 });
     await mkdir(this.metadataDirectory, { recursive: true, mode: 0o700 });
+    await this.migrateLegacyDirectMetadata();
     return await this.repositoryLock.run(async () => {
       try {
         await this.readMetadata(draftId);
@@ -190,6 +231,7 @@ export class DraftManager {
   }
 
   async listDrafts(): Promise<readonly DraftMetadata[]> {
+    await this.migrateLegacyDirectMetadata();
     await mkdir(this.metadataDirectory, { recursive: true, mode: 0o700 });
     const drafts: DraftMetadata[] = [];
     for (const entry of await readdir(this.metadataDirectory)) {
@@ -197,6 +239,55 @@ export class DraftManager {
       drafts.push(await this.readMetadata(entry.slice(0, -5)));
     }
     return drafts.sort((left, right) => right.updated_at.localeCompare(left.updated_at));
+  }
+
+  /**
+   * Direct mode has one internal workspace, even though the shared domain services still use
+   * DraftMetadata. Reconcile it with the canonical checkout without deleting or modifying any
+   * worktree-mode metadata or working tree.
+   */
+  async ensureDirectWorkspace(draftIdInput: string, ownerInput: string): Promise<DraftMetadata> {
+    if (this.backend.mode !== "direct") {
+      throw new DraftRuntimeError("DIRECT_WORKSPACE_REQUIRED", "Direct workspace reconciliation requires direct repository mode");
+    }
+    const draftId = safeComponent(draftIdInput, "draft ID");
+    const owner = safeComponent(ownerInput, "owner");
+    await mkdir(this.dataDirectory, { recursive: true, mode: 0o700 });
+    await mkdir(this.metadataDirectory, { recursive: true, mode: 0o700 });
+    return await this.repositoryLock.run(async () => {
+      await this.backend.prepare();
+      await this.migrateLegacyDirectMetadata();
+      const provisioning = await this.backend.provision(draftId, owner);
+      await this.backend.provisionGuidance(provisioning.worktreePath, draftId);
+      const entries = (await readdir(this.metadataDirectory)).filter((entry) => entry.endsWith(".json"));
+      const existing = entries.includes(`${draftId}.json`) ? await this.readMetadata(draftId) : undefined;
+      for (const entry of entries) {
+        const candidate = await this.readMetadata(entry.slice(0, -5));
+        if (!(await this.backend.ownsWorktree(candidate.worktree_path))) {
+          throw new DraftRuntimeError("DRAFT_WORKSPACE_MODE_MISMATCH", `Direct metadata ${candidate.draft_id} does not belong to the direct checkout`);
+        }
+      }
+      const now = new Date().toISOString();
+      const metadata: DraftMetadata = {
+        version: 1,
+        draft_id: draftId,
+        owner_gitlab_user_id: owner,
+        branch: provisioning.branch,
+        base_commit: provisioning.baseCommit,
+        worktree_path: provisioning.worktreePath,
+        writer_mode: "ui",
+        state: "open",
+        fingerprint: await this.fingerprint(provisioning.worktreePath),
+        created_at: existing?.created_at ?? now,
+        updated_at: now,
+      };
+      await this.persist(metadata);
+      for (const entry of entries) {
+        if (entry === `${draftId}.json`) continue;
+        await rm(await resolveDomainPath(this.dataDirectory, `${this.metadataRelativeDirectory}/${entry}`));
+      }
+      return metadata;
+    });
   }
 
   async poll(draftId: string): Promise<{ metadata: DraftMetadata; currentFingerprint: string; changedExternally: boolean }> {
@@ -326,6 +417,23 @@ export class DraftManager {
     });
   }
 
+  async acknowledgeExternalChanges(draftId: string, owner: string): Promise<DraftMetadata> {
+    return await this.lock(safeComponent(draftId, "draft ID")).run(async () => {
+      const metadata = await this.getDraft(draftId);
+      this.assertOwnerAndOpen(metadata, owner);
+      if (metadata.writer_mode !== "ui") {
+        throw new DraftRuntimeError("DRAFT_READ_ONLY", "External changes can be acknowledged only in UI writer mode");
+      }
+      const next: DraftMetadata = {
+        ...metadata,
+        fingerprint: await this.fingerprint(metadata.worktree_path),
+        updated_at: new Date().toISOString(),
+      };
+      await this.persist(next);
+      return next;
+    });
+  }
+
   async markPublished(draftId: string, owner: string, mergeRequestIid: number): Promise<DraftMetadata> {
     if (!Number.isInteger(mergeRequestIid) || mergeRequestIid <= 0) throw new DraftRuntimeError("MR_IID_INVALID", "Merge Request IID is invalid");
     return await this.lock(safeComponent(draftId, "draft ID")).run(async () => {
@@ -343,6 +451,7 @@ export class DraftManager {
   }
 
   async recover(): Promise<RecoveryReport> {
+    await this.migrateLegacyDirectMetadata();
     await mkdir(this.metadataDirectory, { recursive: true, mode: 0o700 });
     const drafts: DraftMetadata[] = [];
     const missingWorktrees: string[] = [];
@@ -355,6 +464,9 @@ export class DraftManager {
       } catch {
         missingWorktrees.push(draftId);
         continue;
+      }
+      if (!(await this.backend.ownsWorktree(metadata.worktree_path))) {
+        throw new DraftRuntimeError("DRAFT_WORKSPACE_MODE_MISMATCH", `Draft ${draftId} does not belong to ${this.backend.mode} repository mode`);
       }
       const fingerprintBefore = await this.fingerprint(metadata.worktree_path);
       const guidanceChanged = await this.backend.provisionGuidance(metadata.worktree_path, draftId);

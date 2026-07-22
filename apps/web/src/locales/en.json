@@ -72,7 +72,7 @@
   "drafts.validationInvalid": "{count} errors",
   "drafts.mr": "Merge request",
   "drafts.noMr": "Not created",
-  "drafts.changedExternally": "The worktree changed outside GitPM. Refresh before editing.",
+  "drafts.changedExternally": "The working copy changed outside GitPM. Review and accept its current files before editing.",
   "drafts.externalWarning": "External writer mode is active. Editing actions are read-only.",
   "drafts.localWarning": "Changes stay in this working copy until commit and push.",
   "drafts.polling": "Status refreshes every 3 seconds.",
@@ -148,6 +148,10 @@
   ,"core.selectProject": "Select a project to manage its work."
   ,"core.safePreview": "Safe Markdown preview"
   ,"core.readOnly": "Core editing is read-only for this working copy."
+  ,"readOnly.notOpen": "Editing is unavailable because this working copy is not open ({state})."
+  ,"readOnly.externalWriter": "Editing is unavailable because external writer mode is active. Switch back to the UI writer after the external tool stops."
+  ,"readOnly.changedExternally": "Files changed outside GitPM. Review the current files, then acknowledge them to continue editing."
+  ,"readOnly.acknowledge": "Accept current files and continue"
   ,"core.openTasks": "Open tasks"
   ,"core.openBoard": "Open board"
   ,"core.openGantt": "Open Gantt"

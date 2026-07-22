@@ -28,6 +28,7 @@ interface DraftContextValue {
   select(draftId: string): Promise<void>;
   create(draftId: string): Promise<void>;
   setWriterMode(mode: WriterMode): Promise<void>;
+  acknowledgeExternalChanges(): Promise<void>;
   close(): Promise<void>;
   reopen(): Promise<void>;
   cleanup(): Promise<void>;
@@ -141,6 +142,7 @@ export function DraftProvider({ api, children }: { readonly api: GitPmApi; reado
   const value = useMemo<DraftContextValue>(() => ({
     session, drafts, snapshot, busy, error, refresh, select, create,
     setWriterMode: async (mode) => await mutateActive(async (id) => await api.setWriterMode(id, mode)),
+    acknowledgeExternalChanges: async () => await mutateActive(async (id) => await api.acknowledgeExternalChanges(id)),
     close: async () => await mutateActive(async (id) => await api.closeDraft(id)),
     reopen: async () => await mutateActive(async (id) => await api.reopenDraft(id)),
     cleanup, logout,

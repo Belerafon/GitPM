@@ -72,7 +72,12 @@ The command generates a temporary deterministic portfolio with 30 Projects, 30 P
 ## Troubleshooting
 
 - `GIT_TIMEOUT` or `GIT_OUTPUT_LIMIT`: inspect the repository size and system Git; do not raise limits before reviewing the input.
-- `DRAFT_CHANGED_EXTERNALLY`: reopen or refresh the draft after an external file edit; do not overwrite with a stale UI mutation.
+- `DRAFT_CHANGED_EXTERNALLY`: review the current files and use the UI acknowledgement action (or
+  `POST /api/drafts/:draftId/acknowledge-external-changes`) before editing; acknowledgement accepts
+  the current fingerprint but does not modify or validate files.
+- `DIRECT_MODE_DRAFT_OPERATION_UNAVAILABLE`: the requested create/writer/close/reopen/cleanup or
+  revert-draft operation belongs to worktree mode; direct mode always uses its one internal
+  `DRF-LOCAL` workspace.
 - `CLEANUP_CONFIRMATION_REQUIRED`: close the draft and repeat cleanup with the exact draft ID.
 - `VALIDATION_FAILED`: run `gitpm validate --changed --draft <ID>` and correct the first stable validation code.
 - Health endpoint unavailable: confirm the selected port is free and inspect structured server logs using the response correlation ID.

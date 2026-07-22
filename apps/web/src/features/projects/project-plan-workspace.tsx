@@ -11,6 +11,7 @@ import { upsertEntity, useFlipList } from "../../optimistic-ui.js";
 import type { DraftStatus, EntityResult, GitPmDocument, ProjectWorkspaceResult } from "../../types.js";
 import type { WorkspaceNavigate } from "../../workspace-navigation.js";
 import { PersonLinks } from "../../person-link.js";
+import { DraftReadOnlyAlert, draftReadOnlyReason } from "../../draft-read-only.js";
 
 type PlanEditor = { readonly kind: "project" | "new-stage" } | { readonly kind: "edit-stage"; readonly stageId: string } | { readonly kind: "task"; readonly stageId?: string } | null;
 type TaskField = "assignees" | "due" | "estimate" | "status";
@@ -81,7 +82,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   const { highlights: recentChanges, mark: markRecentChange } = useExternalHighlights(500);
   const reducedMotion = useReducedMotion();
   const animatedList = useFlipList(reducedMotion);
-  const readOnly = draft.writer_mode !== "ui" || draft.state !== "open" || draft.changed_externally === true;
+  const readOnly = draftReadOnlyReason(draft) !== null;
 
   const load = useCallback(async () => {
     await loader.run(async () => {
@@ -326,6 +327,12 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   };
 
   return <section className="project-plan-workspace">
+    <DraftReadOnlyAlert draft={draft} locale={locale} onAcknowledge={() => {
+      setError(null);
+      void api.acknowledgeExternalChanges(draft.draft_id)
+        .then(async () => await onChanged())
+        .catch((caught: unknown) => setError(caught instanceof Error ? caught.message : String(caught)));
+    }} />
     {error !== null && <div className="alert error">{error}</div>}
     <AsyncBoundary state={loader.state} loading={t("status.loading")} retry={() => { void load(); }} error={(loadError, retry) => <div className="alert error">{loadError}<button onClick={retry}>{t("status.retry")}</button></div>}>
       {workspace !== null && <div className={`project-plan-layout${selectedStage !== undefined || selectedTask !== undefined ? " with-inspector" : ""}`}>

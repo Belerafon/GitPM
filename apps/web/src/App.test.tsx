@@ -45,6 +45,7 @@ class FakeApi implements GitPmApi {
     return { draft: current, changes: { changed_files_count: 2 }, validation: { valid: true, error_count: 0, warning_count: 1, document_count: 14 } };
   }
   async setWriterMode(draftId: string, mode: WriterMode) { return this.replace(draftId, { writer_mode: mode }); }
+  async acknowledgeExternalChanges(draftId: string) { return this.replace(draftId, { changed_externally: false, external_fingerprint: undefined }); }
   async closeDraft(draftId: string) { return this.replace(draftId, { state: "closed" }); }
   async reopenDraft(draftId: string) { return this.replace(draftId, { state: "open" }); }
   async cleanupDraft(draftId: string) { this.drafts = this.drafts.filter((item) => item.draft_id !== draftId); }

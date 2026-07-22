@@ -77,11 +77,7 @@ export class DirectCliRuntime {
 
   async prepare(): Promise<void> {
     if (this.prepared) return;
-    await this.backend.prepare();
-    const recovery = await this.drafts.recover();
-    const existing = recovery.drafts.find((draft) => draft.worktree_path === this.checkoutPath)
-      ?? recovery.drafts[0];
-    const workspace = existing ?? await this.drafts.createDraft("DRF-LOCAL", "local-user");
+    const workspace = await this.drafts.ensureDirectWorkspace("DRF-LOCAL", "local-user");
     this.workspaceDraftId = workspace.draft_id;
     this.prepared = true;
   }

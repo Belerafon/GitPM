@@ -258,4 +258,59 @@ describe("direct mode draft manager", () => {
     const report = await manager.recover();
     expect(report.orphaned_worktrees).toEqual([]);
   });
+
+  it("keeps worktree metadata separate and restores each mode's canonical workspace", async () => {
+    const test = await fixture();
+    const worktreeRuntime = runtime(test.remote, test.data);
+    const worktreeDraft = await worktreeRuntime.manager.createDraft("DRF-LOCAL", "local-user");
+    expect(worktreeDraft.worktree_path).toContain(`${path.sep}worktrees${path.sep}`);
+
+    const direct = directRuntime(test.remote, test.data);
+    const directWorkspace = await direct.manager.ensureDirectWorkspace("DRF-LOCAL", "local-user");
+    expect(directWorkspace).toMatchObject({
+      worktree_path: path.resolve(test.data, "repository"),
+      branch: "main",
+      writer_mode: "ui",
+      state: "open",
+    });
+    expect(await readFile(path.join(test.data, "drafts", "DRF-LOCAL.json"), "utf8")).toContain(worktreeDraft.worktree_path.replaceAll("\\", "\\\\"));
+    expect(await readFile(path.join(test.data, "drafts", "direct", "DRF-LOCAL.json"), "utf8")).toContain(path.resolve(test.data, "repository").replaceAll("\\", "\\\\"));
+
+    const restoredWorktree = runtime(test.remote, test.data);
+    const recovery = await restoredWorktree.manager.recover();
+    expect(recovery.drafts).toEqual([expect.objectContaining({ worktree_path: worktreeDraft.worktree_path })]);
+  });
+
+  it("migrates legacy direct metadata and normalizes its hidden draft state", async () => {
+    const test = await fixture();
+    const first = directRuntime(test.remote, test.data);
+    const workspace = await first.manager.ensureDirectWorkspace("DRF-LOCAL", "local-user");
+    const directMetadata = path.join(test.data, "drafts", "direct", "DRF-LOCAL.json");
+    const legacyMetadata = path.join(test.data, "drafts", "DRF-LOCAL.json");
+    const legacy = { ...workspace, writer_mode: "external", state: "closed" };
+    await writeFile(legacyMetadata, `${JSON.stringify(legacy, null, 2)}\n`, "utf8");
+    await rm(directMetadata);
+
+    const restarted = directRuntime(test.remote, test.data);
+    const reconciled = await restarted.manager.ensureDirectWorkspace("DRF-LOCAL", "local-user");
+    expect(reconciled).toMatchObject({ writer_mode: "ui", state: "open", worktree_path: path.resolve(test.data, "repository") });
+    await expect(stat(legacyMetadata)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(stat(directMetadata)).resolves.toBeDefined();
+    expect((await restarted.manager.poll("DRF-LOCAL")).changedExternally).toBe(false);
+  });
+
+  it("acknowledges an external edit without changing repository content", async () => {
+    const test = await fixture();
+    const { manager } = directRuntime(test.remote, test.data);
+    const workspace = await manager.ensureDirectWorkspace("DRF-LOCAL", "local-user");
+    const absolute = path.join(workspace.worktree_path, ...projectFile.split("/"));
+    const edited = (await readFile(absolute, "utf8")).replace("name: GitPM launch", "name: Externally edited");
+    await writeFile(absolute, edited, "utf8");
+    expect((await manager.poll("DRF-LOCAL")).changedExternally).toBe(true);
+
+    await manager.acknowledgeExternalChanges("DRF-LOCAL", "local-user");
+
+    expect(await readFile(absolute, "utf8")).toBe(edited);
+    expect((await manager.poll("DRF-LOCAL")).changedExternally).toBe(false);
+  });
 });

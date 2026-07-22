@@ -16,6 +16,11 @@ non-empty values are rejected with a clear error. When nothing is set, GitPM use
 | Agent guidance | `direct`-mode `AGENTS.md` + skill at the checkout root | draft `AGENTS.md` + skill in each worktree |
 | UI | branch, changes, commit, push, sync state | drafts, writer mode, draft branch, Merge Request |
 
+Runtime metadata is mode-scoped. Worktree drafts remain in `<data-dir>/drafts/*.json`; the
+single internal direct workspace is stored in `<data-dir>/drafts/direct/DRF-LOCAL.json`.
+Switching modes therefore does not reinterpret, overwrite, or delete the other mode's metadata
+or working trees.
+
 ## `direct`
 
 GitPM owns a single ordinary Git repository with a working copy:
@@ -33,10 +38,26 @@ GitPM reads and writes files directly in this working copy, works on the
 configured default branch, commits onto it, and — on an explicit user action —
 pushes it to `origin/main`.
 
+The shared domain services use one internal `DRF-LOCAL` workspace, but direct mode has no public
+draft lifecycle. Creating another draft, changing writer mode, closing, reopening, cleaning up,
+or creating a revert draft through the HTTP draft API returns
+`DIRECT_MODE_DRAFT_OPERATION_UNAVAILABLE`. At startup GitPM reconciles `DRF-LOCAL` with the
+canonical `<data-dir>/repository` checkout and keeps it in `ui`/`open` state.
+
+If files change outside the running UI, optimistic writes remain blocked until the user reviews
+the current checkout and explicitly acknowledges it. The acknowledgement updates only the
+runtime fingerprint; it does not edit, discard, commit, or validate repository files. The next
+domain mutation still performs the normal full repository validation.
+
 When `<data-dir>/repository` is absent, GitPM performs an ordinary clone from the
 configured source (the local path in `repository`/`GITPM_REPOSITORY_PATH`, or
 `repositoryUrl`). When the directory already exists, GitPM reuses it and never
 destroys uncommitted changes, local commits, or user files.
+
+Legacy direct metadata from `<data-dir>/drafts/*.json` is migrated automatically into
+`<data-dir>/drafts/direct/`. Metadata whose path belongs to a worktree is left untouched. This
+makes `worktree -> direct -> worktree` switching reversible while both physical checkouts remain
+available.
 
 Push always performs a `fetch` first and only allows a safe fast-forward. GitPM
 never does rebase, merge commit, hard reset, stash, or force push. When the local

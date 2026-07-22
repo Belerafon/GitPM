@@ -25,6 +25,8 @@ export interface DraftBackend {
   provision(draftId: string, owner: string): Promise<DraftProvisioning>;
   /** Provision or refresh agent guidance inside the working tree. */
   provisionGuidance(worktreePath: string, draftId: string): Promise<boolean>;
+  /** Return whether a persisted working-tree path belongs to this backend mode. */
+  ownsWorktree(worktreePath: string): Promise<boolean>;
   /** Remove a draft's working tree (no-op in direct mode). */
   remove(worktreePath: string, branch: string, force: boolean): Promise<void>;
   /** List worktrees that have no corresponding draft metadata (empty in direct mode). */
@@ -59,6 +61,17 @@ export class WorktreeDraftBackend implements DraftBackend {
 
   provisionGuidance(worktreePath: string, draftId: string): Promise<boolean> {
     return provisionGitPmWorktreeGuidance(worktreePath, draftId);
+  }
+
+  async ownsWorktree(worktreePath: string): Promise<boolean> {
+    try {
+      const root = await this.git.checkoutRealPath(this.worktreesDirectory);
+      const candidate = await this.git.checkoutRealPath(worktreePath);
+      const relative = path.relative(root, candidate);
+      return relative !== "" && relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+    } catch {
+      return false;
+    }
   }
 
   async remove(worktreePath: string, branch: string, force: boolean): Promise<void> {
@@ -116,6 +129,14 @@ export class DirectDraftBackend implements DraftBackend {
     }
     const info: DirectGuidanceInfo = { checkoutPath: worktreePath, branch, ...(remoteUrl === undefined ? {} : { remoteUrl }) };
     return await provisionGitPmDirectGuidance(worktreePath, info);
+  }
+
+  async ownsWorktree(worktreePath: string): Promise<boolean> {
+    try {
+      return await this.git.checkoutRealPath(worktreePath) === await this.git.checkoutRealPath(this.checkoutPath);
+    } catch {
+      return false;
+    }
   }
 
   async remove(): Promise<void> {

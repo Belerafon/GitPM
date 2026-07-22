@@ -15,6 +15,7 @@ export interface GitPmApi {
   createDraft(draftId: string): Promise<DraftStatus>;
   snapshot(draftId: string): Promise<DraftSnapshot>;
   setWriterMode(draftId: string, mode: WriterMode): Promise<DraftStatus>;
+  acknowledgeExternalChanges(draftId: string): Promise<DraftStatus>;
   closeDraft(draftId: string): Promise<DraftStatus>;
   reopenDraft(draftId: string): Promise<DraftStatus>;
   cleanupDraft(draftId: string): Promise<void>;
@@ -101,6 +102,10 @@ export class HttpGitPmApi implements GitPmApi {
 
   async setWriterMode(draftId: string, writer_mode: WriterMode): Promise<DraftStatus> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/writer-mode`, { method: "PATCH", body: JSON.stringify({ writer_mode }) });
+  }
+
+  async acknowledgeExternalChanges(draftId: string): Promise<DraftStatus> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/acknowledge-external-changes`, { method: "POST" });
   }
   async closeDraft(draftId: string): Promise<DraftStatus> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/close`, { method: "POST" });

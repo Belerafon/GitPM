@@ -57,6 +57,12 @@ function requireMutationRole(actor: RequestActor): void {
   }
 }
 
+function requireWorktreeDraftOperation(manager: DraftManager): void {
+  if (manager.repositoryMode === "direct") {
+    throw new DraftRuntimeError("DIRECT_MODE_DRAFT_OPERATION_UNAVAILABLE", "Direct repository mode has one managed workspace and no draft lifecycle");
+  }
+}
+
 function asCommentActor(actor: RequestActor): CommentActor {
   return {
     userId: actor.userId,
@@ -157,6 +163,7 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
   app.post<{ Body: { draft_id: string } }>("/api/drafts", async (request, reply) => {
     const actor = await authenticate(request);
     requireMutationRole(actor);
+    requireWorktreeDraftOperation(manager);
     const metadata = await manager.createDraft(request.body.draft_id, actor.userId);
     await reply.code(201).send(publicMetadata(metadata));
   });
@@ -194,24 +201,34 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
   app.patch<{ Params: { draftId: string }; Body: { writer_mode: WriterMode } }>("/api/drafts/:draftId/writer-mode", async (request) => {
     const actor = await authenticate(request);
     requireMutationRole(actor);
+    requireWorktreeDraftOperation(manager);
     return publicMetadata(await manager.setWriterMode(request.params.draftId, actor.userId, request.body.writer_mode));
+  });
+
+  app.post<{ Params: { draftId: string } }>("/api/drafts/:draftId/acknowledge-external-changes", async (request) => {
+    const actor = await authenticate(request);
+    requireMutationRole(actor);
+    return publicMetadata(await manager.acknowledgeExternalChanges(request.params.draftId, actor.userId));
   });
 
   app.post<{ Params: { draftId: string } }>("/api/drafts/:draftId/close", async (request) => {
     const actor = await authenticate(request);
     requireMutationRole(actor);
+    requireWorktreeDraftOperation(manager);
     return publicMetadata(await manager.closeDraft(request.params.draftId, actor.userId));
   });
 
   app.post<{ Params: { draftId: string } }>("/api/drafts/:draftId/reopen", async (request) => {
     const actor = await authenticate(request);
     requireMutationRole(actor);
+    requireWorktreeDraftOperation(manager);
     return publicMetadata(await manager.reopenDraft(request.params.draftId, actor.userId));
   });
 
   app.delete<{ Params: { draftId: string }; Body: { confirmation: string } }>("/api/drafts/:draftId", async (request, reply) => {
     const actor = await authenticate(request);
     if (actor.role !== "Maintainer") throw new DraftRuntimeError("DRAFT_FORBIDDEN", "Cleanup requires Maintainer");
+    requireWorktreeDraftOperation(manager);
     await manager.cleanupDraft(request.params.draftId, request.body.confirmation);
     await reply.code(204).send();
   });
@@ -296,6 +313,7 @@ export function registerHistoryApi(
   app.post<{ Params: { draftId: string; commit: string }; Body: { draft_id: string } }>("/api/drafts/:draftId/history/:commit/revert", async (request, reply) => {
     const actor = await authenticate(request);
     requireMutationRole(actor);
+    requireWorktreeDraftOperation(manager);
     await requireDraftRead(manager, actor, request.params.draftId);
     const result = await history.createRevertDraft(request.params.draftId, request.params.commit, request.body.draft_id, actor.userId);
     await reply.code(201).send({ ...result, draft: publicMetadata(result.draft) });

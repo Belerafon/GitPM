@@ -125,12 +125,8 @@ async function buildWorktreeRuntime(configuration: RepositoryRuntimeConfiguratio
 
 async function buildDirectRuntime(configuration: RepositoryRuntimeConfiguration, gitClient: GitClient) {
   const backend = new DirectDraftBackend(gitClient, configuration.dataDirectory);
-  await backend.prepare();
   const draftManager = new DraftManager(gitClient, configuration.dataDirectory, { backend, push: directPushStrategy(gitClient) });
-  const recovery = await draftManager.recover();
-  if (recovery.drafts.length === 0) {
-    await draftManager.createDraft(DEFAULT_LOCAL_DRAFT_ID, LOCAL_USER_ID);
-  }
+  await draftManager.ensureDirectWorkspace(DEFAULT_LOCAL_DRAFT_ID, LOCAL_USER_ID);
   return { draftManager };
 }
 
