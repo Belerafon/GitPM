@@ -19,7 +19,7 @@ export type DraftPushStrategy = (
 
 export interface DraftBackend {
   readonly mode: RepositoryMode;
-  /** Initialize backend-wide resources (bare repository, managed checkout clone). */
+  /** Validate or initialize backend-wide Git resources. */
   prepare(): Promise<void>;
   /** Provision the working tree for one draft and return its coordinates. */
   provision(draftId: string, owner: string): Promise<DraftProvisioning>;
@@ -92,9 +92,8 @@ export class WorktreeDraftBackend implements DraftBackend {
 }
 
 /**
- * Direct backend: a single ordinary Git checkout at \`<data-dir>/repository\`. There is no
- * bare repository, no draft branch, and no \`git worktree\`. All drafts resolve to this one
- * checkout; creation is a metadata-only operation. Push fast-forwards the active branch.
+ * Direct backend: the selected ordinary Git checkout itself. There is no clone, bare repository,
+ * draft branch, or \`git worktree\`. All drafts resolve to this checkout; creation is metadata-only.
  */
 export class DirectDraftBackend implements DraftBackend {
   public readonly mode: RepositoryMode = "direct";
@@ -102,14 +101,15 @@ export class DirectDraftBackend implements DraftBackend {
 
   constructor(
     private readonly git: GitClient,
-    dataDirectory: string,
+    checkoutPath: string,
   ) {
-    this.checkoutPath = path.resolve(dataDirectory, "repository");
+    this.checkoutPath = path.resolve(checkoutPath);
   }
 
   async prepare(): Promise<void> {
-    await mkdir(path.dirname(this.checkoutPath), { recursive: true });
-    await this.git.cloneOrReuseCheckout(this.checkoutPath);
+    await this.git.checkoutRealPath(this.checkoutPath);
+    await this.git.checkoutCurrentBranch(this.checkoutPath);
+    await this.git.headCommit(this.checkoutPath);
   }
 
   async provision(): Promise<DraftProvisioning> {
@@ -140,7 +140,7 @@ export class DirectDraftBackend implements DraftBackend {
   }
 
   async remove(): Promise<void> {
-    // Direct mode never deletes the managed checkout. Local changes, local commits, and
+    // Direct mode never deletes the selected checkout. Local changes, local commits, and
     // user files must survive draft cleanup.
   }
 
@@ -158,7 +158,7 @@ export function worktreePushStrategy(git: GitClient): DraftPushStrategy {
 
 export function directPushStrategy(git: GitClient): DraftPushStrategy {
   return async (worktreePath, _branch, accessToken) => {
-    await git.fetchCheckoutRemote(worktreePath);
+    await git.fetchCheckoutRemote(worktreePath, accessToken);
     return await git.pushMainFastForward(worktreePath, accessToken);
   };
 }

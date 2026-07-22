@@ -164,7 +164,7 @@ export class GitClient {
   private readonly defaultBranch: string;
   private readonly allowLocalRepository: boolean;
   private readonly requirePushRemote: boolean;
-  private readonly pushRemoteUrl?: string;
+  private pushRemoteUrl?: string;
   private readonly askPassPath?: string;
   private readonly timeoutMs: number;
   private readonly onCommand?: (record: GitCommandRecord) => void;
@@ -178,7 +178,11 @@ export class GitClient {
     this.requirePushRemote = options.allowLocalRepository === true && options.allowLocalTestRemote !== true;
     this.askPassPath = options.askPassPath;
     this.remoteUrl = this.allowLocalRepository ? path.resolve(options.remoteUrl) : assertSafeRepositoryUrl(options.remoteUrl);
-    this.pushRemoteUrl = options.pushRemoteUrl === undefined ? undefined : assertSafeRepositoryUrl(options.pushRemoteUrl);
+    this.pushRemoteUrl = options.pushRemoteUrl === undefined
+      ? undefined
+      : options.allowLocalTestRemote === true
+        ? path.resolve(options.pushRemoteUrl)
+        : assertSafeRepositoryUrl(options.pushRemoteUrl);
     this.timeoutMs = options.timeoutMs ?? 30_000;
     this.onCommand = options.onCommand;
   }
@@ -221,6 +225,65 @@ export class GitClient {
       } catch (error) {
         if (!(error instanceof GitCommandError) || error.code !== "GIT_FAILED") throw error;
       }
+    }
+  }
+
+  /** Update the single controlled origin used for fetch and push. */
+  async configurePublishingRemote(pushRemoteUrl: string | undefined, checkoutPath?: string): Promise<void> {
+    this.pushRemoteUrl = pushRemoteUrl === undefined
+      ? undefined
+      : this.allowLocalRepository && !this.requirePushRemote
+        ? path.resolve(pushRemoteUrl)
+        : assertSafeRepositoryUrl(pushRemoteUrl);
+    if (checkoutPath !== undefined) {
+      await this.configureCheckoutPublishingRemote(checkoutPath);
+      return;
+    }
+
+    try {
+      const repositoryStat = await stat(this.bareRepository);
+      if (!repositoryStat.isDirectory()) return;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+      throw error;
+    }
+
+    if (this.pushRemoteUrl !== undefined) {
+      await this.git(["--git-dir", this.bareRepository, "remote", "set-url", "origin", this.pushRemoteUrl]);
+      try {
+        await this.git(["--git-dir", this.bareRepository, "config", "--unset-all", "remote.origin.pushurl"]);
+      } catch (error) {
+        if (!(error instanceof GitCommandError) || error.code !== "GIT_FAILED") throw error;
+      }
+    } else {
+      try {
+        await this.git(["--git-dir", this.bareRepository, "remote", "remove", "origin"]);
+      } catch (error) {
+        if (!(error instanceof GitCommandError) || error.code !== "GIT_FAILED") throw error;
+      }
+    }
+  }
+
+  /** Configure origin on the selected checkout used by direct mode. */
+  async configureCheckoutPublishingRemote(checkoutPath: string): Promise<void> {
+    const checkout = await realpath(checkoutPath);
+    const originUrl = async (): Promise<string | undefined> => {
+      try {
+        const result = await this.git(["-C", checkout, "remote", "get-url", "origin"]);
+        return result.stdout.trim() || undefined;
+      } catch (error) {
+        if (error instanceof GitCommandError && error.code === "GIT_FAILED") return undefined;
+        throw error;
+      }
+    };
+    if (this.pushRemoteUrl === undefined) {
+      if (await originUrl() !== undefined) await this.git(["-C", checkout, "remote", "remove", "origin"]);
+      return;
+    }
+    if (await originUrl() === undefined) {
+      await this.git(["-C", checkout, "remote", "add", "origin", this.pushRemoteUrl]);
+    } else {
+      await this.git(["-C", checkout, "remote", "set-url", "origin", this.pushRemoteUrl]);
     }
   }
 
@@ -526,65 +589,51 @@ export class GitClient {
     return this.pushRemoteUrl !== undefined;
   }
 
-  /**
-   * Direct mode: clone the configured remote into {@link checkoutPath} when it is
-   * absent, or reuse an existing checkout without touching uncommitted changes,
-   * local commits, or user files. Never performs rebase, merge, reset, or stash.
-   */
-  async cloneOrReuseCheckout(checkoutPath: string): Promise<string> {
-    const checkout = path.resolve(checkoutPath);
-    const remote = this.allowLocalRepository ? path.resolve(this.remoteUrl) : this.remoteUrl;
-    let existing: { toplevel: string; head: string } | undefined;
-    try {
-      const statResult = await stat(checkout);
-      if (!statResult.isDirectory()) {
-        throw new GitCommandError("GIT_CHECKOUT_INVALID", "Checkout path exists and is not a directory");
-      }
-      const toplevelResult = await this.git(["-C", checkout, "rev-parse", "--show-toplevel"]);
-      const toplevel = toplevelResult.stdout.trim();
-      await this.git(["-C", checkout, "rev-parse", "HEAD^{commit}"]);
-      const headResult = await this.git(["-C", checkout, "rev-parse", "HEAD^{commit}"]);
-      existing = { toplevel: path.resolve(toplevel), head: headResult.stdout.trim() };
-    } catch (error) {
-      if (!(error instanceof GitCommandError) || error.code !== "GIT_FAILED") {
-        if (error instanceof GitCommandError && error.code === "GIT_CHECKOUT_INVALID") throw error;
-        if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-          // fall through to clone
-        } else {
-          throw error;
-        }
-      }
-    }
-    if (existing !== undefined) {
-      if (existing.toplevel !== checkout) {
-        throw new GitCommandError("GIT_CHECKOUT_INVALID", `Existing checkout is not the repository root: ${existing.toplevel}`);
-      }
-      return await realpath(checkout);
-    }
-    const parent = path.dirname(checkout);
-    await mkdir(parent, { recursive: true });
-    const cloneArgs = [
+  /** Verify authenticated access to the configured upstream and resolve its default branch. */
+  async testPublishingRemote(accessToken: string): Promise<{ branch: string; commit: string }> {
+    if (this.pushRemoteUrl === undefined) throw new GitCommandError("GIT_PUSH_REMOTE_MISSING", "No publication remote is configured");
+    if (!this.askPassPath) throw new GitCommandError("GIT_ASKPASS_REQUIRED", "Controlled ASKPASS path is required for remote verification");
+    const environment = createGitProcessEnvironment({
+      askPassPath: this.askPassPath,
+      hooksPath: path.join(this.homeDirectory, "hooks"),
+      isolatedHome: this.homeDirectory,
+      token: accessToken,
+      baseEnvironment: process.env,
+    });
+    const result = await this.gitWithEnvironment([
       ...this.localProtocolArgs(),
-      "clone",
-      "--branch",
-      this.defaultBranch,
-      "--",
-      remote,
-      checkout,
-    ];
-    await this.git(cloneArgs);
-    return await realpath(checkout);
+      "ls-remote", "--heads", "--", this.pushRemoteUrl, `refs/heads/${this.defaultBranch}`,
+    ], environment);
+    const commit = result.stdout.trim().split(/\s+/u)[0] ?? "";
+    if (!/^[0-9a-f]{40,64}$/u.test(commit)) {
+      throw new GitCommandError("GIT_REMOTE_BRANCH_MISSING", `Remote branch ${this.defaultBranch} is unavailable`);
+    }
+    return { branch: this.defaultBranch, commit };
   }
 
   /** Direct mode: fetch the default branch reflect into refs/remotes/origin. */
-  async fetchCheckoutRemote(checkoutPath: string): Promise<void> {
+  async fetchCheckoutRemote(checkoutPath: string, accessToken?: string): Promise<void> {
     const checkout = await realpath(checkoutPath);
-    await this.git([
+    await this.assertCheckoutHasSafeOrigin(checkout);
+    const args = [
       ...this.localProtocolArgs(),
       "-C", checkout,
       "fetch", "--prune", "origin",
       `+refs/heads/${this.defaultBranch}:refs/remotes/origin/${this.defaultBranch}`,
-    ]);
+    ];
+    if (accessToken === undefined) {
+      await this.git(args);
+      return;
+    }
+    if (!this.askPassPath) throw new GitCommandError("GIT_ASKPASS_REQUIRED", "Controlled ASKPASS path is required for authenticated fetch");
+    const environment = createGitProcessEnvironment({
+      askPassPath: this.askPassPath,
+      hooksPath: path.join(this.homeDirectory, "hooks"),
+      isolatedHome: this.homeDirectory,
+      token: accessToken,
+      baseEnvironment: process.env,
+    });
+    await this.gitWithEnvironment(args, environment);
   }
 
   async checkoutCurrentBranch(checkoutPath: string): Promise<string> {
@@ -653,6 +702,7 @@ export class GitClient {
   async pushMainFastForward(checkoutPath: string, accessToken: string): Promise<{ branch: string; commit: string }> {
     if (!this.askPassPath) throw new GitCommandError("GIT_ASKPASS_REQUIRED", "Controlled ASKPASS path is required for push");
     const checkout = await realpath(checkoutPath);
+    await this.assertCheckoutHasSafeOrigin(checkout);
     const remoteCommit = await this.checkoutRemoteCommit(checkout);
     const localHead = await this.git(["-C", checkout, "rev-parse", "HEAD^{commit}"]);
     const head = localHead.stdout.trim();
@@ -680,6 +730,14 @@ export class GitClient {
       `refs/heads/${this.defaultBranch}:refs/heads/${this.defaultBranch}`,
     ], environment);
     return { branch: this.defaultBranch, commit: head };
+  }
+
+  private async assertCheckoutHasSafeOrigin(checkoutPath: string): Promise<void> {
+    if (!this.requirePushRemote || this.pushRemoteUrl !== undefined) return;
+    const origin = await this.checkoutOriginUrl(checkoutPath);
+    if (origin === undefined) throw new GitCommandError("GIT_PUSH_REMOTE_MISSING", "The selected repository has no origin");
+    try { assertSafeRepositoryUrl(origin); }
+    catch { throw new GitCommandError("GIT_PUSH_REMOTE_UNSUPPORTED", "Origin must be a credential-free HTTPS URL"); }
   }
 
   async hashObject(content: string): Promise<string> {

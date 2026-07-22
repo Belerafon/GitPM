@@ -21,6 +21,9 @@ class BrowserAcceptanceApi implements GitPmApi {
   async session() { return { ...session, role: this.role }; }
   async login() { return "#"; }
   async logout() { /* acceptance fixture keeps its session */ }
+  async repositoryConnection() { return { repository_path: "D:/portfolio", repository_mode: "worktree" as const, default_branch: "main", remote_source: "none" as const, remote_editable: true, gitlab_editable: true, gitlab: { configured: false } }; }
+  async updateRepositoryConnection() { return await this.repositoryConnection(); }
+  async testRepositoryConnection() { return { ok: true as const, branch: "main", commit: "a".repeat(40) }; }
   async listDrafts() { return this.drafts; }
   async createDraft(draftId: string) {
     const now = new Date().toISOString();

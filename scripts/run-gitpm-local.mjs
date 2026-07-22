@@ -138,9 +138,7 @@ try {
   console.error(`[GitPM] Не удалось настроить репозиторий: ${error instanceof Error ? error.message : String(error)}`);
   process.exit(1);
 }
-const managedCheckout = runtime.repositoryMode === "direct"
-  ? `${runtime.environment.GITPM_DATA_DIR ?? "<data-dir>"}/repository`
-  : runtime.configuration.repository;
+const managedCheckout = runtime.configuration.repository;
 console.log(`Repository mode: ${runtime.repositoryMode}`);
 console.log(`Repository path: ${managedCheckout}`);
 console.log(`Branch: ${runtime.defaultBranch}`);

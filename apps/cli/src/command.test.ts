@@ -25,7 +25,7 @@ async function git(cwd: string, ...args: string[]): Promise<string> {
   return stdout.trim();
 }
 
-async function directFixture(): Promise<{ root: string; remote: string; data: string; direct: DirectCliRuntime }> {
+async function directFixture(): Promise<{ root: string; checkout: string; remote: string; data: string; direct: DirectCliRuntime }> {
   const root = await mkdtemp(path.join(os.tmpdir(), "gitpm-cli-direct-"));
   roots.push(root);
   const source = path.join(root, "source");
@@ -40,15 +40,16 @@ async function directFixture(): Promise<{ root: string; remote: string; data: st
   await git(source, "push", "-u", "origin", "main");
   const direct = new DirectCliRuntime({
     dataDirectory: data,
-    remoteUrl: remote,
+    remoteUrl: source,
     defaultBranch: "main",
     authorName: "GitPM Direct CLI",
     authorEmail: "direct@example.test",
     allowLocalRepository: true,
+    allowLocalTestRemote: true,
     askPassPath: path.resolve("scripts", "git-askpass.mjs"),
     pushAccessToken: "unused-local-token",
   });
-  return { root, remote, data, direct };
+  return { root, checkout: source, remote, data, direct };
 }
 
 afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))));
@@ -198,7 +199,7 @@ describe("CLI init command", () => {
 
 describe("CLI direct mode", () => {
   it("generates Person identity, applies defaults and imports CSV atomically", async () => {
-    const { direct, data } = await directFixture();
+    const { direct, checkout } = await directFixture();
     const inputRoot = await mkdtemp(path.join(os.tmpdir(), "gitpm-cli-import-"));
     roots.push(inputRoot);
     const personFile = path.join(inputRoot, "person.yaml");
@@ -209,7 +210,7 @@ describe("CLI direct mode", () => {
     expect(createdPayload.document).toMatchObject({ schema: "gitpm/person@1", name: "Generated Person", calendar: "C-26-QD7FJ4", lifecycle: "active" });
     expect(createdPayload.document.id).toMatch(/^U-\d{2}-[0-9A-HJKMNP-TV-Z]{6}$/u);
 
-    const peopleDirectory = path.join(data, "repository", "people");
+    const peopleDirectory = path.join(checkout, "people");
     const baseline = (await readdir(peopleDirectory)).length;
     const dryFile = path.join(inputRoot, "dry.csv");
     await writeFile(dryFile, "name,email,weekly_capacity_hours\nDry One,dry1@example.test,40\nDry Two,dry2@example.test,32\n", "utf8");
@@ -239,20 +240,20 @@ describe("CLI direct mode", () => {
   });
 
   it("commit --all validates and commits onto main without --draft", async () => {
-    const { direct, data } = await directFixture();
+    const { direct, checkout } = await directFixture();
     await run(["status", "--json"], process.cwd(), { direct });
-    const projectFile = path.join(data, "repository", "projects", "P-26-MGP84K", "project.yaml");
+    const projectFile = path.join(checkout, "projects", "P-26-MGP84K", "project.yaml");
     await writeFile(projectFile, (await readFile(projectFile, "utf8")).replace("name: GitPM launch", "name: CLI direct"), "utf8");
     const result = await run(["commit", "--all", "-m", "cli direct commit", "--json"], process.cwd(), { direct });
     expect(result.exitCode).toBe(0);
     expect(JSON.parse(result.output)).toMatchObject({ ok: true, code: "OK", branch: "main" });
-    expect(await git(path.join(data, "repository"), "log", "-1", "--format=%s")).toBe("cli direct commit");
+    expect(await git(checkout, "log", "-1", "--format=%s")).toBe("cli direct commit");
   });
 
   it("push publishes main to origin without --draft and refuses force push", async () => {
-    const { direct, data, remote } = await directFixture();
+    const { direct, checkout, remote } = await directFixture();
     await run(["status", "--json"], process.cwd(), { direct });
-    const projectFile = path.join(data, "repository", "projects", "P-26-MGP84K", "project.yaml");
+    const projectFile = path.join(checkout, "projects", "P-26-MGP84K", "project.yaml");
     await writeFile(projectFile, (await readFile(projectFile, "utf8")).replace("name: GitPM launch", "name: Pushed"), "utf8");
     await run(["commit", "--all", "-m", "push me", "--json"], process.cwd(), { direct });
     const push = await run(["push", "--json"], process.cwd(), { direct });
@@ -262,7 +263,7 @@ describe("CLI direct mode", () => {
     expect(await git(remote, "rev-parse", "main")).toBe(payload.commit);
   });
 
-  it("format/validate/diff operate on the managed checkout by default without --draft", async () => {
+  it("format/validate/diff operate on the selected checkout by default without --draft", async () => {
     const { direct } = await directFixture();
     await run(["status", "--json"], process.cwd(), { direct });
     const format = await run(["format", "--json"], process.cwd(), { direct });
@@ -276,7 +277,7 @@ describe("CLI direct mode", () => {
   });
 
   it("creates an entity, reports its semantic diff and commits it without --draft", async () => {
-    const { direct, data } = await directFixture();
+    const { direct, checkout } = await directFixture();
     const inputRoot = await mkdtemp(path.join(os.tmpdir(), "gitpm-cli-direct-entity-"));
     roots.push(inputRoot);
     const entityFile = path.join(inputRoot, "task.yaml");
@@ -299,7 +300,7 @@ describe("CLI direct mode", () => {
       path: "projects/P-26-MGP84K/tasks/T-26-FM5Q4W.yaml",
       document: { id: "T-26-FM5Q4W", title: "Direct CLI task" },
     });
-    await expect(readFile(path.join(data, "repository", "projects", "P-26-MGP84K", "tasks", "T-26-FM5Q4W.yaml"), "utf8"))
+    await expect(readFile(path.join(checkout, "projects", "P-26-MGP84K", "tasks", "T-26-FM5Q4W.yaml"), "utf8"))
       .resolves.toContain("title: Direct CLI task");
 
     const diff = await run(["diff", "--semantic", "--project", "P-26-MGP84K", "--json"], process.cwd(), { direct });
@@ -313,12 +314,12 @@ describe("CLI direct mode", () => {
 
     const commit = await run(["commit", "--all", "-m", "direct entity", "--project", "P-26-MGP84K", "--json"], process.cwd(), { direct });
     expect(commit.exitCode).toBe(0);
-    expect(await git(path.join(data, "repository"), "log", "-1", "--format=%s")).toBe("direct entity");
+    expect(await git(checkout, "log", "-1", "--format=%s")).toBe("direct entity");
   });
 
   it("updates entity fields inline, preserves other fields and rolls back invalid patches", async () => {
-    const { direct, data } = await directFixture();
-    const personPath = path.join(data, "repository", "people", "U-26-5EBAE3.yaml");
+    const { direct, checkout } = await directFixture();
+    const personPath = path.join(checkout, "people", "U-26-5EBAE3.yaml");
     const updated = await run([
       "entity", "update", "--type", "person", "--id", "U-26-5EBAE3",
       "--set", "name=Анна Петрова", "--set", "email=anna.new@example.test", "--set", "weekly_capacity_hours=36", "--json",
@@ -347,7 +348,7 @@ describe("CLI direct mode", () => {
   });
 
   it("enforces Project scope and rolls back invalid direct entity creation", async () => {
-    const { direct, data } = await directFixture();
+    const { direct, checkout } = await directFixture();
     const inputRoot = await mkdtemp(path.join(os.tmpdir(), "gitpm-cli-direct-invalid-"));
     roots.push(inputRoot);
     const globalEntity = path.join(inputRoot, "person.yaml");
@@ -362,7 +363,7 @@ describe("CLI direct mode", () => {
     ].join("\n"), "utf8");
     const scoped = await run(["entity", "create", "--file", globalEntity, "--project", "P-26-MGP84K", "--json"], process.cwd(), { direct });
     expect(JSON.parse(scoped.output)).toMatchObject({ ok: false, code: "AGENT_SCOPE_VIOLATION" });
-    await expect(readFile(path.join(data, "repository", "people", "U-26-KB9RXB.yaml"), "utf8"))
+    await expect(readFile(path.join(checkout, "people", "U-26-KB9RXB.yaml"), "utf8"))
       .rejects.toMatchObject({ code: "ENOENT" });
 
     const invalidEntity = path.join(inputRoot, "invalid-task.yaml");
@@ -378,14 +379,13 @@ describe("CLI direct mode", () => {
     ].join("\n"), "utf8");
     const invalid = await run(["entity", "create", "--file", invalidEntity, "--project", "P-26-MGP84K", "--json"], process.cwd(), { direct });
     expect(JSON.parse(invalid.output)).toMatchObject({ ok: false, code: "VALIDATION_FAILED" });
-    await expect(readFile(path.join(data, "repository", "projects", "P-26-MGP84K", "tasks", "T-26-FM5Q4W.yaml"), "utf8"))
+    await expect(readFile(path.join(checkout, "projects", "P-26-MGP84K", "tasks", "T-26-FM5Q4W.yaml"), "utf8"))
       .rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("blocks out-of-scope changes and requires explicit deletion confirmation", async () => {
-    const { direct, data } = await directFixture();
+    const { direct, checkout } = await directFixture();
     await direct.prepare();
-    const checkout = path.join(data, "repository");
     const otherProject = path.join(checkout, "projects", "P-26-8S9HQQ", "project.yaml");
     const otherProjectOriginal = await readFile(otherProject, "utf8");
     await writeFile(otherProject, otherProjectOriginal.replace("name: Operations", "name: Outside scope"), "utf8");

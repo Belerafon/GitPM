@@ -13,6 +13,8 @@ import { HistoryError } from "@gitpm/history";
 import type { HistoryService } from "@gitpm/history";
 import { validateRepository } from "@gitpm/validation";
 import { WorktreeReadError } from "./worktree-api.js";
+import { RepositoryConnectionError } from "./repository-connection.js";
+import { SecurityBoundaryError } from "@gitpm/security";
 
 export type ProjectRole = "Reporter" | "Developer" | "Maintainer";
 
@@ -60,7 +62,7 @@ function requireMutationRole(actor: RequestActor): void {
 
 function requireWorktreeDraftOperation(manager: DraftManager): void {
   if (manager.repositoryMode === "direct") {
-    throw new DraftRuntimeError("DIRECT_MODE_DRAFT_OPERATION_UNAVAILABLE", "Direct repository mode has one managed workspace and no draft lifecycle");
+    throw new DraftRuntimeError("DIRECT_MODE_DRAFT_OPERATION_UNAVAILABLE", "Direct repository mode uses the selected checkout and has no draft lifecycle");
   }
 }
 
@@ -154,6 +156,10 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
       else if (error.code === "WORKTREE_FILE_TOO_LARGE") status = 413;
       else if (error.code === "WORKTREE_FILE_BINARY") status = 415;
       else status = 400;
+    } else if (error instanceof RepositoryConnectionError || error instanceof SecurityBoundaryError) {
+      code = error.code;
+      message = error.message;
+      status = error.code === "REPOSITORY_CONNECTION_MANAGED_EXTERNALLY" ? 409 : 400;
     } else if ((error as { code?: string }).code === "FST_ERR_CTP_BODY_TOO_LARGE") {
       status = 413;
       code = "REQUEST_TOO_LARGE";

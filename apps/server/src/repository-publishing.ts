@@ -1,7 +1,7 @@
 import type { DraftManager } from "@gitpm/drafts";
 import { DraftRuntimeError, GITPM_GUIDANCE_PATHS } from "@gitpm/drafts";
 import type { GitClient } from "@gitpm/git-client";
-import type { AuthService, GitLabMergeRequestProtocol, MergeRequestPayload } from "@gitpm/gitlab";
+import type { AuthService, GitLabMergeRequestProtocol, MergeRequestPayload, ProtectedOperation, PublicSession } from "@gitpm/gitlab";
 import { AuthError } from "@gitpm/gitlab";
 import { PublishingError } from "@gitpm/publishing";
 import { validateRepository } from "@gitpm/validation";
@@ -13,6 +13,11 @@ export interface RepositoryPublishingOptions {
   readonly defaultBranch: string;
   readonly auth?: AuthService;
   readonly mergeRequests?: GitLabMergeRequestProtocol;
+  readonly remote?: RepositoryRemotePublishing;
+}
+
+export interface RepositoryRemotePublishing extends GitLabMergeRequestProtocol {
+  authorize(sessionId: string, operation: ProtectedOperation): Promise<{ session: PublicSession; accessToken: string }>;
 }
 
 export class RepositoryPublishingService {
@@ -46,14 +51,15 @@ export class RepositoryPublishingService {
     const authorized = await this.requireGitLab().authorize(sessionId, "mr");
     const draft = await this.ownedDraft(draftId);
     if (!title.trim() || title.length > 255) throw new PublishingError("MR_TITLE_INVALID", "Merge Request title is invalid");
-    if (this.options.mergeRequests === undefined) throw new AuthError("GITLAB_NOT_CONFIGURED", "GitLab is not configured");
+    const mergeRequests = this.options.remote ?? this.options.mergeRequests;
+    if (mergeRequests === undefined) throw new AuthError("GITLAB_NOT_CONFIGURED", "GitLab is not configured");
     const payload: MergeRequestPayload = {
       source_branch: draft.branch,
       target_branch: this.options.defaultBranch,
       title,
       ...(description ? { description } : {}),
     };
-    const mergeRequest = await this.options.mergeRequests.createMergeRequest(authorized.accessToken, payload);
+    const mergeRequest = await mergeRequests.createMergeRequest(authorized.accessToken, payload);
     await this.drafts.markPublished(draftId, this.options.ownerId, mergeRequest.iid);
     return mergeRequest;
   }
@@ -62,13 +68,15 @@ export class RepositoryPublishingService {
     const authorized = await this.requireGitLab().authorize(sessionId, "read");
     const draft = await this.ownedDraft(draftId, false);
     if (!draft.merge_request_iid) throw new PublishingError("MR_NOT_CREATED", "Draft has no Merge Request");
-    if (this.options.mergeRequests === undefined) throw new AuthError("GITLAB_NOT_CONFIGURED", "GitLab is not configured");
-    return await this.options.mergeRequests.getMergeRequest(authorized.accessToken, draft.merge_request_iid);
+    const mergeRequests = this.options.remote ?? this.options.mergeRequests;
+    if (mergeRequests === undefined) throw new AuthError("GITLAB_NOT_CONFIGURED", "GitLab is not configured");
+    return await mergeRequests.getMergeRequest(authorized.accessToken, draft.merge_request_iid);
   }
 
-  private requireGitLab(): AuthService {
-    if (this.options.auth === undefined) throw new AuthError("GITLAB_NOT_CONFIGURED", "GitLab login is not configured for this repository");
-    return this.options.auth;
+  private requireGitLab(): Pick<AuthService, "authorize"> {
+    const auth = this.options.remote ?? this.options.auth;
+    if (auth === undefined) throw new AuthError("GITLAB_NOT_CONFIGURED", "GitLab login is not configured for this repository");
+    return auth;
   }
 
   private async ownedDraft(draftId: string, requireOpen = true) {

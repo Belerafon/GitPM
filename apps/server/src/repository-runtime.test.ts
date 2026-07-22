@@ -37,6 +37,7 @@ afterEach(async () => {
 describe("normal repository runtime", () => {
   it("requires a real selected repository instead of silently creating a fixture", async () => {
     vi.stubEnv("GITPM_REPOSITORY_PATH", "");
+    vi.stubEnv("GITPM_CONFIG_PATH", path.join(os.tmpdir(), `gitpm-missing-${Date.now()}.json`));
     await expect(loadRepositoryRuntimeConfiguration()).rejects.toThrow(/GITPM_REPOSITORY_PATH/u);
   });
 
@@ -74,7 +75,7 @@ describe("normal repository runtime", () => {
 });
 
 describe("repository mode selection", () => {
-  it("defaults to direct mode and clones a normal checkout with .git under the data directory", async () => {
+  it("defaults to direct mode and uses the selected checkout in place", async () => {
     const fixture = await fixtureRepository();
     vi.stubEnv("GITPM_REPOSITORY_PATH", fixture.repository);
     vi.stubEnv("GITPM_DATA_DIR", fixture.data);
@@ -88,8 +89,8 @@ describe("repository mode selection", () => {
         repository_mode: "direct",
         repository: expect.objectContaining({ branch: "main" }),
       });
-      // Direct mode produces a normal checkout, not a bare repository or worktrees.
-      const checkoutStat = await stat(path.join(fixture.data, "repository", ".git"));
+      // Direct mode uses the selected checkout and creates no second repository.
+      const checkoutStat = await stat(path.join(fixture.repository, ".git"));
       expect(checkoutStat.isDirectory() || checkoutStat.isFile()).toBe(true);
       await expect(stat(path.join(fixture.data, "repository.git"))).rejects.toMatchObject({ code: "ENOENT" });
       await expect(stat(path.join(fixture.data, "worktrees"))).rejects.toMatchObject({ code: "ENOENT" });
@@ -106,7 +107,7 @@ describe("repository mode selection", () => {
     vi.stubEnv("GITPM_REPOSITORY_MODE", "direct");
     const app = await buildRepositoryApp();
     try {
-      const projectPath = path.join(fixture.data, "repository", "projects", "P-26-MGP84K", "project.yaml");
+      const projectPath = path.join(fixture.repository, "projects", "P-26-MGP84K", "project.yaml");
       const original = await readFile(projectPath, "utf8");
       await writeFile(projectPath, original.replace("name: GitPM launch", "name: Direct launch"), "utf8");
       const commit = await app.inject({
@@ -116,8 +117,7 @@ describe("repository mode selection", () => {
       });
       expect(commit.statusCode).toBe(200);
       expect(commit.json()).toMatchObject({ branch: "main" });
-      // HEAD of the managed checkout advanced onto main.
-      expect(await git(path.join(fixture.data, "repository"), "log", "-1", "--format=%s")).toBe("direct server commit");
+      expect(await git(fixture.repository, "log", "-1", "--format=%s")).toBe("direct server commit");
     } finally {
       await app.close();
     }
@@ -140,7 +140,7 @@ describe("repository mode selection", () => {
       const draft = await directApp.inject({ method: "GET", url: "/api/drafts/DRF-LOCAL" });
       expect(draft.json()).toMatchObject({ branch: "main", writer_mode: "ui", state: "open", changed_externally: false });
       const directMetadata = JSON.parse(await readFile(path.join(fixture.data, "drafts", "direct", "DRF-LOCAL.json"), "utf8")) as { worktree_path: string };
-      expect(directMetadata.worktree_path).toBe(path.resolve(fixture.data, "repository"));
+      expect(directMetadata.worktree_path).toBe(path.resolve(fixture.repository));
       expect(JSON.parse(await readFile(path.join(fixture.data, "drafts", "DRF-LOCAL.json"), "utf8"))).toMatchObject(oldMetadata);
     } finally {
       await directApp.close();
@@ -155,7 +155,7 @@ describe("repository mode selection", () => {
     vi.stubEnv("GITPM_REPOSITORY_MODE", "direct");
     const app = await buildRepositoryApp();
     try {
-      const projectPath = path.join(fixture.data, "repository", "projects", "P-26-MGP84K", "project.yaml");
+      const projectPath = path.join(fixture.repository, "projects", "P-26-MGP84K", "project.yaml");
       await writeFile(projectPath, (await readFile(projectPath, "utf8")).replace("name: GitPM launch", "name: External edit"), "utf8");
       const changed = await app.inject({ method: "GET", url: "/api/drafts/DRF-LOCAL" });
       expect(changed.json()).toMatchObject({ changed_externally: true });

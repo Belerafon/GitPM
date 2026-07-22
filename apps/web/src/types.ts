@@ -103,6 +103,30 @@ export interface SemanticDiff {
 export interface CommitResult { readonly commit: string; readonly branch: string; readonly draft_fingerprint: string }
 export interface PushResult { readonly branch: string; readonly commit: string }
 
+export interface RepositoryConnectionStatus {
+  readonly repository_path: string;
+  readonly repository_mode: "direct" | "worktree";
+  readonly default_branch: string;
+  readonly repository_url?: string;
+  readonly remote_source: "environment" | "config" | "origin" | "none";
+  readonly remote_editable: boolean;
+  readonly gitlab_editable: boolean;
+  readonly gitlab: {
+    readonly configured: boolean;
+    readonly base_url?: string;
+    readonly project?: string;
+    readonly client_id?: string;
+  };
+}
+
+export interface RepositoryConnectionUpdate {
+  readonly repository_url?: string | null;
+  readonly gitlab?: { readonly base_url?: string | null; readonly project?: string | null; readonly client_id?: string | null } | null;
+  readonly confirmation?: string;
+}
+
+export interface RepositoryConnectionTest { readonly ok: true; readonly branch: string; readonly commit: string }
+
 export interface ValidationSummary {
   readonly valid: boolean;
   readonly error_count: number;

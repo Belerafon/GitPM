@@ -9,12 +9,13 @@ import { ChangesService } from "@gitpm/changes";
 import { DirectDraftBackend, directPushStrategy, DraftManager } from "@gitpm/drafts";
 import { CommentStore, EntityStore } from "@gitpm/domain";
 import { GitClient } from "@gitpm/git-client";
-import { AuthService, GitLabHttpProtocol } from "@gitpm/gitlab";
+import { assertSafeRepositoryUrl } from "@gitpm/security";
 import { HistoryService } from "@gitpm/history";
 import { resolveRepositoryMode, type RepositoryMode } from "@gitpm/shared";
 import { buildApp } from "./app.js";
 import { registerRepositoryAuthApi } from "./repository-auth-api.js";
 import { RepositoryPublishingService } from "./repository-publishing.js";
+import { RepositoryConnectionManager, type ConnectionValueSource, type GitLabConnectionConfiguration } from "./repository-connection.js";
 
 const execFileAsync = promisify(execFile);
 const LOCAL_USER_ID = "local-user";
@@ -40,7 +41,7 @@ function defaultDataDirectory(repository: string): string {
 }
 
 async function readConfigFile(): Promise<Record<string, unknown>> {
-  const configPath = process.env.GITPM_CONFIG_PATH?.trim() || path.join(WORKSPACE_ROOT, ".gitpm", "config.json");
+  const configPath = repositoryConfigPath();
   try {
     const parsed = JSON.parse(await readFile(configPath, "utf8"));
     return typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : {};
@@ -50,17 +51,25 @@ async function readConfigFile(): Promise<Record<string, unknown>> {
   }
 }
 
+function repositoryConfigPath(): string {
+  return path.resolve(process.env.GITPM_CONFIG_PATH?.trim() || path.join(WORKSPACE_ROOT, ".gitpm", "config.json"));
+}
+
 export interface RepositoryRuntimeConfiguration {
   readonly repository: string;
   readonly dataDirectory: string;
   readonly defaultBranch: string;
   readonly repositoryMode: RepositoryMode;
-  readonly repositoryUrl?: string;
+  readonly configPath: string;
+  readonly rawConfiguration: Record<string, unknown>;
   readonly pushRemoteUrl?: string;
+  readonly remoteSource: ConnectionValueSource;
+  readonly remoteEditable: boolean;
+  readonly gitlabEditable: boolean;
   readonly authorName: string;
   readonly authorEmail: string;
   readonly webUrl: string;
-  readonly gitlab?: { readonly baseUrl: string; readonly clientId: string; readonly project: string };
+  readonly gitlab?: GitLabConnectionConfiguration;
 }
 
 export async function loadRepositoryRuntimeConfiguration(): Promise<RepositoryRuntimeConfiguration> {
@@ -69,7 +78,8 @@ export async function loadRepositoryRuntimeConfiguration(): Promise<RepositoryRu
     configValue: config.repositoryMode,
     envValue: process.env.GITPM_REPOSITORY_MODE,
   });
-  const requested = process.env.GITPM_REPOSITORY_PATH?.trim();
+  const requested = process.env.GITPM_REPOSITORY_PATH?.trim()
+    || (typeof config.repository === "string" ? config.repository.trim() : "");
   if (!requested) throw new Error("GITPM_REPOSITORY_PATH is required. Run run-gitpm.bat and select a Git repository.");
   const repositoryStat = await stat(requested);
   if (!repositoryStat.isDirectory()) throw new Error(`Configured repository is not a directory: ${requested}`);
@@ -84,8 +94,19 @@ export async function loadRepositoryRuntimeConfiguration(): Promise<RepositoryRu
     || "main";
   const discoveredRemote = await optionalGit(repository, "remote", "get-url", "origin");
   const configuredUrl = typeof config.repositoryUrl === "string" && config.repositoryUrl.trim() !== "" ? config.repositoryUrl.trim() : undefined;
-  const pushRemoteUrl = process.env.GITPM_PUSH_REMOTE_URL?.trim() || configuredUrl || discoveredRemote;
-  const supportedRemote = pushRemoteUrl?.startsWith("https://") ? pushRemoteUrl : undefined;
+  const environmentUrl = process.env.GITPM_PUSH_REMOTE_URL?.trim() || undefined;
+  const remoteCandidate = environmentUrl || configuredUrl || discoveredRemote;
+  let supportedRemote: string | undefined;
+  if (remoteCandidate !== undefined) {
+    try { supportedRemote = assertSafeRepositoryUrl(remoteCandidate); }
+    catch (error) {
+      if (environmentUrl !== undefined || configuredUrl !== undefined) throw error;
+      supportedRemote = undefined;
+    }
+  }
+  const remoteSource: ConnectionValueSource = environmentUrl !== undefined ? "environment"
+    : configuredUrl !== undefined ? "config"
+      : supportedRemote !== undefined ? "origin" : "none";
   const authorName = process.env.GITPM_AUTHOR_NAME?.trim()
     || await optionalGit(repository, "config", "user.name")
     || "GitPM Local";
@@ -93,9 +114,13 @@ export async function loadRepositoryRuntimeConfiguration(): Promise<RepositoryRu
     || await optionalGit(repository, "config", "user.email")
     || "gitpm@localhost";
   const dataDirectory = path.resolve(process.env.GITPM_DATA_DIR?.trim() || defaultDataDirectory(repository));
-  const baseUrl = process.env.GITPM_GITLAB_URL?.trim();
-  const clientId = process.env.GITPM_GITLAB_CLIENT_ID?.trim();
-  const project = process.env.GITPM_GITLAB_PROJECT?.trim();
+  const fileGitLab = typeof config.gitlab === "object" && config.gitlab !== null ? config.gitlab as Record<string, unknown> : {};
+  const baseUrl = process.env.GITPM_GITLAB_URL?.trim()
+    || (typeof fileGitLab.baseUrl === "string" ? fileGitLab.baseUrl.trim() : "");
+  const clientId = process.env.GITPM_GITLAB_CLIENT_ID?.trim()
+    || (typeof fileGitLab.clientId === "string" ? fileGitLab.clientId.trim() : "");
+  const project = process.env.GITPM_GITLAB_PROJECT?.trim()
+    || (typeof fileGitLab.project === "string" ? fileGitLab.project.trim() : "");
   const gitlab = baseUrl && clientId && project ? { baseUrl, clientId, project } : undefined;
 
   return {
@@ -103,8 +128,14 @@ export async function loadRepositoryRuntimeConfiguration(): Promise<RepositoryRu
     dataDirectory,
     defaultBranch,
     repositoryMode,
-    ...(configuredUrl === undefined ? {} : { repositoryUrl: configuredUrl }),
+    configPath: repositoryConfigPath(),
+    rawConfiguration: config,
     ...(supportedRemote === undefined ? {} : { pushRemoteUrl: supportedRemote }),
+    remoteSource,
+    remoteEditable: environmentUrl === undefined,
+    gitlabEditable: !process.env.GITPM_GITLAB_URL?.trim()
+      && !process.env.GITPM_GITLAB_CLIENT_ID?.trim()
+      && !process.env.GITPM_GITLAB_PROJECT?.trim(),
     authorName,
     authorEmail,
     webUrl: process.env.GITPM_WEB_URL?.trim() || "http://127.0.0.1:5173",
@@ -124,7 +155,7 @@ async function buildWorktreeRuntime(configuration: RepositoryRuntimeConfiguratio
 }
 
 async function buildDirectRuntime(configuration: RepositoryRuntimeConfiguration, gitClient: GitClient) {
-  const backend = new DirectDraftBackend(gitClient, configuration.dataDirectory);
+  const backend = new DirectDraftBackend(gitClient, configuration.repository);
   const draftManager = new DraftManager(gitClient, configuration.dataDirectory, { backend, push: directPushStrategy(gitClient) });
   await draftManager.ensureDirectWorkspace(DEFAULT_LOCAL_DRAFT_ID, LOCAL_USER_ID);
   return { draftManager };
@@ -133,14 +164,19 @@ async function buildDirectRuntime(configuration: RepositoryRuntimeConfiguration,
 export async function buildRepositoryApp() {
   const configuration = await loadRepositoryRuntimeConfiguration();
   await mkdir(configuration.dataDirectory, { recursive: true });
+  const worktreeUsesHttpsOrigin = configuration.repositoryMode === "worktree" && configuration.pushRemoteUrl !== undefined;
   const gitClient = new GitClient({
     dataDirectory: configuration.dataDirectory,
-    remoteUrl: configuration.repository,
+    remoteUrl: worktreeUsesHttpsOrigin ? configuration.pushRemoteUrl! : configuration.repository,
     defaultBranch: configuration.defaultBranch,
-    allowLocalRepository: true,
+    allowLocalRepository: !worktreeUsesHttpsOrigin,
     ...(configuration.pushRemoteUrl === undefined ? {} : { pushRemoteUrl: configuration.pushRemoteUrl }),
     askPassPath: path.join(WORKSPACE_ROOT, "scripts", "git-askpass.mjs"),
   });
+
+  if (configuration.repositoryMode === "direct" && ["config", "environment"].includes(configuration.remoteSource) && configuration.pushRemoteUrl !== undefined) {
+    await gitClient.configurePublishingRemote(configuration.pushRemoteUrl, configuration.repository);
+  }
 
   const runtime = configuration.repositoryMode === "direct"
     ? await buildDirectRuntime(configuration, gitClient)
@@ -156,25 +192,28 @@ export async function buildRepositoryApp() {
     historyService: new HistoryService(draftManager, gitClient),
   });
 
-  let auth: AuthService | undefined;
-  let protocol: GitLabHttpProtocol | undefined;
-  if (configuration.gitlab !== undefined) {
-    protocol = new GitLabHttpProtocol(configuration.gitlab);
-    auth = new AuthService({
-      authorizeUrl: `${configuration.gitlab.baseUrl.replace(/\/$/u, "")}/oauth/authorize`,
-      clientId: configuration.gitlab.clientId,
-      redirectUri: process.env.GITPM_GITLAB_REDIRECT_URI?.trim()
-        || `http://127.0.0.1:${process.env.PORT?.trim() || "3000"}/api/auth/callback`,
-      protocol,
-    });
-  }
+  const connection = new RepositoryConnectionManager({
+    git: gitClient,
+    configPath: configuration.configPath,
+    configuration: configuration.rawConfiguration,
+    repositoryPath: configuration.repository,
+    repositoryMode: configuration.repositoryMode,
+    defaultBranch: configuration.defaultBranch,
+    ...(configuration.pushRemoteUrl === undefined ? {} : { repositoryUrl: configuration.pushRemoteUrl }),
+    remoteSource: configuration.remoteSource,
+    remoteEditable: configuration.remoteEditable,
+    ...(configuration.gitlab === undefined ? {} : { gitlab: configuration.gitlab }),
+    gitlabEditable: configuration.gitlabEditable,
+    redirectUri: process.env.GITPM_GITLAB_REDIRECT_URI?.trim()
+      || `http://127.0.0.1:${process.env.PORT?.trim() || "3000"}/api/auth/callback`,
+    ...(configuration.repositoryMode === "direct" ? { directCheckoutPath: configuration.repository } : {}),
+  });
   const publishing = new RepositoryPublishingService(draftManager, gitClient, {
     ownerId: LOCAL_USER_ID,
     authorName: configuration.authorName,
     authorEmail: configuration.authorEmail,
     defaultBranch: configuration.defaultBranch,
-    ...(auth === undefined ? {} : { auth }),
-    ...(protocol === undefined ? {} : { mergeRequests: protocol }),
+    remote: connection,
   });
   registerRepositoryAuthApi(app, {
     session_id: "repository-session",
@@ -189,7 +228,7 @@ export async function buildRepositoryApp() {
       ...(configuration.repositoryMode === "direct" ? { branch: configuration.defaultBranch } : {}),
     },
     expires_at: "9999-12-31T23:59:59.999Z",
-  }, publishing, auth, configuration.webUrl);
+  }, publishing, connection, configuration.webUrl, connection);
 
   return app;
 }

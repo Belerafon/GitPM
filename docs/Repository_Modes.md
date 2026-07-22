@@ -8,7 +8,7 @@ non-empty values are rejected with a clear error. When nothing is set, GitPM use
 
 | | `direct` (default) | `worktree` |
 | --- | --- | --- |
-| Working copy | one normal checkout at `<data-dir>/repository` | bare `<data-dir>/repository.git` plus one `git worktree` per draft |
+| Working copy | the normal checkout selected in `repository` | bare `<data-dir>/repository.git` plus one `git worktree` per draft |
 | Branch | the configured default branch (`main`) | one `gitpm/<owner>/<draft>` branch per draft |
 | Commit | straight onto `main` | onto the draft branch |
 | Push | fast-forward `main` to `origin/main` (no force, no rebase, no merge commit) | push the draft branch, then open a Merge Request |
@@ -23,10 +23,11 @@ or working trees.
 
 ## `direct`
 
-GitPM owns a single ordinary Git repository with a working copy:
+GitPM works directly in the ordinary Git checkout selected by `repository` or
+`GITPM_REPOSITORY_PATH`:
 
 ```text
-<data-dir>/repository/
+<repository>/
   .git/
   projects/
   people/
@@ -42,17 +43,17 @@ The shared domain services use one internal `DRF-LOCAL` workspace, but direct mo
 draft lifecycle. Creating another draft, changing writer mode, closing, reopening, cleaning up,
 or creating a revert draft through the HTTP draft API returns
 `DIRECT_MODE_DRAFT_OPERATION_UNAVAILABLE`. At startup GitPM reconciles `DRF-LOCAL` with the
-canonical `<data-dir>/repository` checkout and keeps it in `ui`/`open` state.
+selected checkout and keeps it in `ui`/`open` state.
 
 If files change outside the running UI, optimistic writes remain blocked until the user reviews
 the current checkout and explicitly acknowledges it. The acknowledgement updates only the
 runtime fingerprint; it does not edit, discard, commit, or validate repository files. The next
 domain mutation still performs the normal full repository validation.
 
-When `<data-dir>/repository` is absent, GitPM performs an ordinary clone from the
-configured source (the local path in `repository`/`GITPM_REPOSITORY_PATH`, or
-`repositoryUrl`). When the directory already exists, GitPM reuses it and never
-destroys uncommitted changes, local commits, or user files.
+The selected path must already be a Git checkout. GitPM does not create a second clone and does
+not add a separate `source` remote. Local-path and bare repositories are supported only by the
+development/test harness; a normal application installation works in the selected checkout and
+publishes through that checkout's single `origin`.
 
 Legacy direct metadata from `<data-dir>/drafts/*.json` is migrated automatically into
 `<data-dir>/drafts/direct/`. Metadata whose path belongs to a worktree is left untouched. This
@@ -115,15 +116,19 @@ GITPM_REPOSITORY_MODE=worktree
 | Field | Env var | Notes |
 | --- | --- | --- |
 | `repositoryMode` | `GITPM_REPOSITORY_MODE` | `direct` (default) or `worktree`. Env wins. |
-| `repository` | `GITPM_REPOSITORY_PATH` | Local source repository (clone source in direct mode). |
-| `repositoryUrl` | — | Optional HTTPS remote for the managed checkout. |
+| `repository` | `GITPM_REPOSITORY_PATH` | Existing checkout used directly by `direct` mode. |
+| `repositoryUrl` | `GITPM_PUSH_REMOTE_URL` | Credential-free HTTPS URL applied as the checkout's `origin`. |
 | `defaultBranch` | `GITPM_DEFAULT_BRANCH` | Default branch; `main` when unset. |
+
+Maintainers can edit `repositoryUrl` and the non-secret GitLab connection fields in the web
+settings page when those values are not supplied by environment variables. Replacing or removing
+an existing `origin` requires exact confirmation. GitPM verifies that the origin URL and GitLab
+project identify the same host and project path.
 
 ## Docker
 
-`compose.yaml` and `compose.server.yaml` default to `direct`. The managed
-checkout lives in the persistent `gitpm-data` volume at `/data/repository` and is
-reused across container restarts. Switch to the draft/MR workflow with
+`compose.yaml` and `compose.server.yaml` default to `direct`. The selected checkout is mounted at
+`/repository`; `gitpm-data` contains runtime metadata, not another checkout. Switch to the draft/MR workflow with
 `GITPM_REPOSITORY_MODE=worktree`.
 
 ```bash

@@ -33,6 +33,7 @@ export interface DirectCliRuntimeOptions {
   readonly authorName: string;
   readonly authorEmail: string;
   readonly allowLocalRepository?: boolean;
+  readonly allowLocalTestRemote?: boolean;
   readonly askPassPath?: string;
   readonly pushAccessToken?: string;
 }
@@ -56,9 +57,11 @@ export class DirectCliRuntime {
       remoteUrl: options.remoteUrl,
       defaultBranch: options.defaultBranch,
       ...(options.allowLocalRepository ? { allowLocalRepository: true } : {}),
+      ...(options.allowLocalTestRemote ? { allowLocalTestRemote: true } : {}),
       ...(options.askPassPath === undefined ? {} : { askPassPath: options.askPassPath }),
     });
-    this.backend = new DirectDraftBackend(this.git, options.dataDirectory);
+    if (!options.allowLocalRepository && !options.allowLocalTestRemote) throw new Error("Direct mode requires an existing local Git checkout");
+    this.backend = new DirectDraftBackend(this.git, options.remoteUrl);
     this.drafts = new DraftManager(this.git, options.dataDirectory, {
       backend: this.backend,
       push: directPushStrategy(this.git),

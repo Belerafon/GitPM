@@ -184,7 +184,13 @@ export async function prepareGitPmRuntime() {
   }
 
   const discoveredRemote = await git(repository, "remote", "get-url", "origin").catch(() => undefined);
-  const remoteUrl = credentialFreeHttpsRemote(discoveredRemote);
+  const configuredRemote = typeof configuration.repositoryUrl === "string" && configuration.repositoryUrl.trim() !== ""
+    ? credentialFreeHttpsRemote(configuration.repositoryUrl.trim())
+    : undefined;
+  if (typeof configuration.repositoryUrl === "string" && configuration.repositoryUrl.trim() !== "" && configuredRemote === undefined) {
+    throw new Error("repositoryUrl must be a credential-free HTTPS URL");
+  }
+  const remoteUrl = credentialFreeHttpsRemote(process.env.GITPM_PUSH_REMOTE_URL) ?? configuredRemote ?? credentialFreeHttpsRemote(discoveredRemote);
   const inferredGitLab = inferGitLabRemote(remoteUrl);
   const nextConfiguration = {
     ...configuration,
@@ -201,10 +207,6 @@ export async function prepareGitPmRuntime() {
     GITPM_DEFAULT_BRANCH: defaultBranch,
     ...(usesBundledDemo ? { GITPM_DATA_DIR: BUNDLED_DEMO_DATA_DIRECTORY } : {}),
     LOG_LEVEL: localServerLogLevel(),
-    ...(remoteUrl === undefined ? {} : { GITPM_PUSH_REMOTE_URL: remoteUrl }),
-    ...(gitlab?.baseUrl ? { GITPM_GITLAB_URL: String(gitlab.baseUrl) } : {}),
-    ...(gitlab?.project ? { GITPM_GITLAB_PROJECT: String(gitlab.project) } : {}),
-    ...(gitlab?.clientId ? { GITPM_GITLAB_CLIENT_ID: String(gitlab.clientId) } : {}),
   };
   return { configuration: nextConfiguration, environment, remoteUrl, repositoryMode, defaultBranch };
 }

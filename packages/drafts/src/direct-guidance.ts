@@ -35,7 +35,7 @@ async function writeGuidanceFile(root: string, relative: string, content: string
 export function gitPmDirectAgentFile(info: DirectGuidanceInfo): string {
   return `# GitPM direct-mode agent instructions
 
-This working copy is the GitPM managed checkout in \`direct\` repository mode. Read and
+This working copy is the repository selected for GitPM \`direct\` mode. Read and
 follow \`.agents/skills/gitpm/SKILL.md\` before doing any GitPM work. GitPM manages this
 file and the skill; do not edit or delete them.
 

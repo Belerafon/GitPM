@@ -57,6 +57,8 @@ export interface GitProcessEnvironmentOptions {
   readonly hooksPath: string;
   readonly isolatedHome: string;
   readonly token: string;
+  /** Git username returned by the controlled ASKPASS helper. OAuth uses `oauth2`. */
+  readonly username?: string;
   readonly baseEnvironment?: NodeJS.ProcessEnv;
 }
 
@@ -80,6 +82,7 @@ export function createGitProcessEnvironment(options: GitProcessEnvironmentOption
     GIT_CONFIG_VALUE_3: "never",
     GIT_TERMINAL_PROMPT: "0",
     GITPM_ASKPASS_TOKEN: options.token,
+    GITPM_ASKPASS_USERNAME: options.username ?? "oauth2",
     HOME: path.resolve(options.isolatedHome),
     XDG_CONFIG_HOME: path.resolve(options.isolatedHome),
   };

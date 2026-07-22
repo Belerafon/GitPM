@@ -19,6 +19,7 @@ interface DirectEnv {
   readonly authorEmail: string;
   readonly askPassPath?: string;
   readonly allowLocalRepository: boolean;
+  readonly allowLocalTestRemote: boolean;
   readonly pushAccessToken?: string;
 }
 
@@ -31,6 +32,7 @@ function readDirectEnv(): DirectEnv | undefined {
   const authorEmail = process.env.GITPM_AGENT_AUTHOR_EMAIL?.trim() ?? "agent@users.noreply.gitlab.example.test";
   const askPassPath = process.env.GITPM_ASKPASS_PATH?.trim() || undefined;
   const allowLocalRepository = process.env.GITPM_ALLOW_LOCAL_REPOSITORY === "1" || !remoteUrl.startsWith("https://");
+  const allowLocalTestRemote = process.env.GITPM_ALLOW_LOCAL_TEST_REMOTE === "1";
   const pushAccessToken = process.env.GITPM_ACCESS_TOKEN?.trim() || undefined;
   return {
     dataDirectory,
@@ -40,6 +42,7 @@ function readDirectEnv(): DirectEnv | undefined {
     authorEmail,
     ...(askPassPath === undefined ? {} : { askPassPath }),
     allowLocalRepository,
+    allowLocalTestRemote,
     ...(pushAccessToken === undefined ? {} : { pushAccessToken }),
   };
 }

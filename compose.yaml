@@ -5,8 +5,8 @@ services:
     image: gitpm-local
     restart: unless-stopped
     environment:
-      # GitPM repository mode: "direct" (default) works on a single managed
-      # checkout cloned into the persistent /data/repository volume; "worktree"
+      # GitPM repository mode: "direct" (default) works in the selected
+      # checkout mounted at /repository; "worktree"
       # uses a bare repository plus draft worktrees. Override with
       # GITPM_REPOSITORY_MODE=worktree to enable the draft/MR workflow.
       GITPM_REPOSITORY_MODE: ${GITPM_REPOSITORY_MODE:-direct}
@@ -16,9 +16,8 @@ services:
       - "3000:3000"
       - "5173:5173"
     volumes:
-      # /repository is the source repository GitPM clones from in direct mode,
-      # or the local remote in worktree mode. In direct mode the managed
-      # checkout lives in the persistent /data/repository volume below.
+      # /repository is the checkout GitPM edits, commits, and pushes in direct mode.
+      # A local path remote is used only by the isolated test/development workflow.
       - type: bind
         source: ${GITPM_REPOSITORY_PATH:?Set GITPM_REPOSITORY_PATH to the host Git repository directory}
         target: /repository

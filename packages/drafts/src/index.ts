@@ -149,6 +149,7 @@ export class DraftManager {
    * available again if the repository is switched back to worktree mode.
    */
   private async migrateLegacyDirectMetadata(): Promise<void> {
+    if (this.backend.mode !== "direct") return;
     const legacyDirectory = path.join(this.dataDirectory, "drafts");
     const directDirectory = path.join(legacyDirectory, "direct");
     await mkdir(legacyDirectory, { recursive: true, mode: 0o700 });
@@ -164,7 +165,7 @@ export class DraftManager {
       } catch (error) {
         throw new DraftRuntimeError("DRAFT_METADATA_INVALID", error instanceof Error ? error.message : String(error));
       }
-      if (path.resolve(metadata.worktree_path) !== path.resolve(this.dataDirectory, "repository")) continue;
+      if (!(await this.backend.ownsWorktree(metadata.worktree_path))) continue;
       const destination = path.join(directDirectory, entry.name);
       try {
         await stat(destination);

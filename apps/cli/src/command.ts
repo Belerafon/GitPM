@@ -603,7 +603,7 @@ export async function run(args: readonly string[], cwd = process.cwd(), dependen
   }
   const hasDraft = commandArgs.includes("--draft");
   const direct = dependencies.direct;
-  // In direct mode, format/validate/diff operate on the managed checkout by default.
+  // In direct mode, format/validate/diff operate on the selected checkout by default.
   const directRootArgs = (!hasDraft && direct !== undefined && !commandArgs.includes("--root"))
     ? ["--root", direct.checkoutPath]
     : [];

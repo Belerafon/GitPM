@@ -1,4 +1,4 @@
-import type { ChangesList, CommentResult, CommitHistoryDetail, CommitHistoryItem, CommitResult, DraftSnapshot, DraftStatus, EntityResult, GitPmDocument, MergeRequestStatus, NotificationsResult, ProjectWorkspaceResult, PublicSession, PushResult, RevertDraftResult, SemanticDiff, ValidationSummary, WriterMode, ChangesSummary, WorktreeDirectory, WorktreeFile } from "./types.js";
+import type { ChangesList, CommentResult, CommitHistoryDetail, CommitHistoryItem, CommitResult, DraftSnapshot, DraftStatus, EntityResult, GitPmDocument, MergeRequestStatus, NotificationsResult, ProjectWorkspaceResult, PublicSession, PushResult, RepositoryConnectionStatus, RepositoryConnectionTest, RepositoryConnectionUpdate, RevertDraftResult, SemanticDiff, ValidationSummary, WriterMode, ChangesSummary, WorktreeDirectory, WorktreeFile } from "./types.js";
 
 export class ApiError extends Error {
   constructor(public readonly code: string, message: string, public readonly details?: unknown) {
@@ -11,6 +11,9 @@ export interface GitPmApi {
   session(): Promise<PublicSession | null>;
   login(): Promise<string>;
   logout(): Promise<void>;
+  repositoryConnection(): Promise<RepositoryConnectionStatus>;
+  updateRepositoryConnection(update: RepositoryConnectionUpdate): Promise<RepositoryConnectionStatus>;
+  testRepositoryConnection(): Promise<RepositoryConnectionTest>;
   listDrafts(): Promise<readonly DraftStatus[]>;
   createDraft(draftId: string): Promise<DraftStatus>;
   snapshot(draftId: string): Promise<DraftSnapshot>;
@@ -82,6 +85,13 @@ export class HttpGitPmApi implements GitPmApi {
   }
 
   async logout(): Promise<void> { await this.request("/api/auth/logout", { method: "POST" }); }
+  async repositoryConnection(): Promise<RepositoryConnectionStatus> { return await this.request("/api/repository/connection"); }
+  async updateRepositoryConnection(update: RepositoryConnectionUpdate): Promise<RepositoryConnectionStatus> {
+    return await this.request("/api/repository/connection", { method: "PUT", body: JSON.stringify(update) });
+  }
+  async testRepositoryConnection(): Promise<RepositoryConnectionTest> {
+    return await this.request("/api/repository/connection/test", { method: "POST" });
+  }
   async listDrafts(): Promise<readonly DraftStatus[]> { return await this.request("/api/drafts"); }
   async createDraft(draftId: string): Promise<DraftStatus> {
     return await this.request("/api/drafts", { method: "POST", body: JSON.stringify({ draft_id: draftId }) });

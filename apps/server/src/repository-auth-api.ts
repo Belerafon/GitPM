@@ -1,9 +1,17 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import type { AuthService } from "@gitpm/gitlab";
 import { AuthError } from "@gitpm/gitlab";
+import type { ProtectedOperation, PublicSession } from "@gitpm/gitlab";
 import type { RepositoryPublishingService } from "./repository-publishing.js";
+import type { RepositoryConnectionManager, RepositoryConnectionUpdate } from "./repository-connection.js";
 
 const COOKIE_NAME = "gitpm_gitlab_session";
+
+interface RepositoryAuthentication {
+  startLogin(): { authorization_url: string; state: string };
+  completeLogin(state: string, code: string): Promise<PublicSession>;
+  authorize(sessionId: string, operation: ProtectedOperation): Promise<{ session: PublicSession; accessToken: string }>;
+  logout(sessionId: string): void;
+}
 
 function cookie(request: FastifyRequest): string | undefined {
   const header = request.headers.cookie;
@@ -40,20 +48,29 @@ export function registerRepositoryAuthApi(
   app: FastifyInstance,
   baseSession: Omit<RepositorySession, "gitlab">,
   publishing: RepositoryPublishingService,
-  auth: AuthService | undefined,
+  auth: RepositoryAuthentication | undefined,
   webUrl: string,
+  connection?: RepositoryConnectionManager,
 ): void {
   app.get("/api/auth/session", async (request): Promise<RepositorySession> => {
     const session = cookie(request);
     if (auth !== undefined && session !== undefined) {
       try {
         const authorized = await auth.authorize(session, "read");
-        return { ...baseSession, gitlab: { configured: true, user: authorized.session.user, role: authorized.session.role } };
+        const repository = connection === undefined ? baseSession.repository : {
+          ...baseSession.repository,
+          has_remote: connection.status().repository_url !== undefined,
+        };
+        return { ...baseSession, repository, gitlab: { configured: true, user: authorized.session.user, role: authorized.session.role } };
       } catch (error) {
         if (!(error instanceof AuthError) || error.code !== "SESSION_INVALID") throw error;
       }
     }
-    return { ...baseSession, gitlab: { configured: auth !== undefined } };
+    const repository = connection === undefined ? baseSession.repository : {
+      ...baseSession.repository,
+      has_remote: connection.status().repository_url !== undefined,
+    };
+    return { ...baseSession, repository, gitlab: { configured: auth !== undefined && (connection?.status().gitlab.configured ?? true) } };
   });
 
   app.get("/api/auth/login", async () => {
@@ -75,6 +92,12 @@ export function registerRepositoryAuthApi(
     reply.header("set-cookie", `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
     await reply.code(204).send();
   });
+
+  if (connection !== undefined) {
+    app.get("/api/repository/connection", async () => connection.status());
+    app.put<{ Body: RepositoryConnectionUpdate }>("/api/repository/connection", async (request) => await connection.update(request.body));
+    app.post("/api/repository/connection/test", async (request) => await connection.test(requiredSession(request)));
+  }
 
   app.post<{ Params: { draftId: string }; Body: { message: string } }>("/api/drafts/:draftId/commit", async (request) =>
     await publishing.commitAll(request.params.draftId, request.body.message));

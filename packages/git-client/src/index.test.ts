@@ -115,36 +115,37 @@ describe("controlled Git client", () => {
 });
 
 describe("direct-mode checkout", () => {
-  it("clones a normal checkout with .git when absent", async () => {
+  it("uses the selected checkout in place", async () => {
     const fixture = await remoteFixture();
     const client = new GitClient({
       dataDirectory: path.join(fixture.root, "data"),
-      remoteUrl: fixture.remote,
+      remoteUrl: fixture.source,
+      pushRemoteUrl: fixture.remote,
       defaultBranch: "main",
-      allowLocalRepository: true,
+      allowLocalTestRemote: true,
     });
-    const checkout = await client.cloneOrReuseCheckout(path.join(fixture.root, "checkout"));
+    const checkout = await client.checkoutRealPath(fixture.source);
     expect(await git(checkout, "rev-parse", "--is-inside-work-tree")).toBe("true");
     expect(await client.checkoutCurrentBranch(checkout)).toBe("main");
-    expect(await client.headCommit(checkout)).toBe(await git(fixture.source, "rev-parse", "HEAD"));
+    expect(checkout).toBe(path.resolve(fixture.source));
   });
 
-  it("reuses an existing checkout and preserves uncommitted changes and local commits", async () => {
+  it("preserves existing changes and local commits", async () => {
     const fixture = await remoteFixture();
     const client = new GitClient({
       dataDirectory: path.join(fixture.root, "data"),
-      remoteUrl: fixture.remote,
+      remoteUrl: fixture.source,
+      pushRemoteUrl: fixture.remote,
       defaultBranch: "main",
-      allowLocalRepository: true,
+      allowLocalTestRemote: true,
     });
-    const checkoutPath = path.join(fixture.root, "checkout");
-    const first = await client.cloneOrReuseCheckout(checkoutPath);
+    const first = await client.checkoutRealPath(fixture.source);
     await writeFile(path.join(first, "uncommitted.txt"), "local\n", "utf8");
     await git(first, "add", ".");
     await git(first, "-c", "user.name=Local", "-c", "user.email=local@example.test", "commit", "-m", "local commit");
     const localCommit = await git(first, "rev-parse", "HEAD");
 
-    const reused = await client.cloneOrReuseCheckout(checkoutPath);
+    const reused = await client.checkoutRealPath(fixture.source);
     expect(reused).toBe(first);
     expect(await readFile(path.join(reused, "uncommitted.txt"), "utf8")).toBe("local\n");
     expect(await client.headCommit(reused)).toBe(localCommit);
@@ -154,11 +155,12 @@ describe("direct-mode checkout", () => {
     const fixture = await remoteFixture();
     const client = new GitClient({
       dataDirectory: path.join(fixture.root, "data"),
-      remoteUrl: fixture.remote,
+      remoteUrl: fixture.source,
+      pushRemoteUrl: fixture.remote,
       defaultBranch: "main",
-      allowLocalRepository: true,
+      allowLocalTestRemote: true,
     });
-    const checkout = await client.cloneOrReuseCheckout(path.join(fixture.root, "checkout"));
+    const checkout = await client.checkoutRealPath(fixture.source);
     await writeFile(path.join(checkout, "extra.txt"), "x\n", "utf8");
     await git(checkout, "add", ".");
     await git(checkout, "-c", "user.name=Local", "-c", "user.email=local@example.test", "commit", "-m", "local extra");
@@ -171,12 +173,13 @@ describe("direct-mode checkout", () => {
     const fixture = await remoteFixture();
     const client = new GitClient({
       dataDirectory: path.join(fixture.root, "data"),
-      remoteUrl: fixture.remote,
+      remoteUrl: fixture.source,
+      pushRemoteUrl: fixture.remote,
       defaultBranch: "main",
-      allowLocalRepository: true,
+      allowLocalTestRemote: true,
       askPassPath: path.resolve("scripts", "git-askpass.mjs"),
     });
-    const checkout = await client.cloneOrReuseCheckout(path.join(fixture.root, "checkout"));
+    const checkout = await client.checkoutRealPath(fixture.source);
     await writeFile(path.join(checkout, "feature.txt"), "f\n", "utf8");
     await client.commitAll(checkout, "direct feature commit", "GitPM Direct", "direct@example.test", []);
     await client.fetchCheckoutRemote(checkout);
@@ -189,22 +192,50 @@ describe("direct-mode checkout", () => {
     const fixture = await remoteFixture();
     const client = new GitClient({
       dataDirectory: path.join(fixture.root, "data"),
-      remoteUrl: fixture.remote,
+      remoteUrl: fixture.source,
+      pushRemoteUrl: fixture.remote,
       defaultBranch: "main",
-      allowLocalRepository: true,
+      allowLocalTestRemote: true,
       askPassPath: path.resolve("scripts", "git-askpass.mjs"),
     });
-    const checkout = await client.cloneOrReuseCheckout(path.join(fixture.root, "checkout"));
+    const checkout = await client.checkoutRealPath(fixture.source);
 
     // Diverge the remote independently of the checkout.
-    await writeFile(path.join(fixture.source, "remote-only.txt"), "r\n", "utf8");
-    await git(fixture.source, "add", ".");
-    await git(fixture.source, "-c", "user.name=Remote", "-c", "user.email=remote@example.test", "commit", "-m", "remote only");
-    await git(fixture.source, "push", "origin", "main");
+    const other = path.join(fixture.root, "other");
+    await git(fixture.root, "clone", "--branch", "main", fixture.remote, other);
+    await writeFile(path.join(other, "remote-only.txt"), "r\n", "utf8");
+    await git(other, "add", ".");
+    await git(other, "-c", "user.name=Remote", "-c", "user.email=remote@example.test", "commit", "-m", "remote only");
+    await git(other, "push", "origin", "main");
 
     await writeFile(path.join(checkout, "local-only.txt"), "l\n", "utf8");
     await client.commitAll(checkout, "local only", "GitPM Direct", "direct@example.test", []);
     await client.fetchCheckoutRemote(checkout);
     await expect(client.pushMainFastForward(checkout, "unused-local-token")).rejects.toMatchObject({ code: "GIT_NON_FAST_FORWARD" });
+  });
+
+  it("reconfigures origin in place and publishes the selected checkout", async () => {
+    const fixture = await remoteFixture();
+    const upstream = path.join(fixture.root, "upstream.git");
+    await git(fixture.root, "clone", "--bare", fixture.remote, upstream);
+    const client = new GitClient({
+      dataDirectory: path.join(fixture.root, "data"),
+      remoteUrl: fixture.source,
+      pushRemoteUrl: upstream,
+      defaultBranch: "main",
+      allowLocalTestRemote: true,
+      askPassPath: path.resolve("scripts", "git-askpass.mjs"),
+    });
+    const checkout = await client.checkoutRealPath(fixture.source);
+    await client.configureCheckoutPublishingRemote(checkout);
+
+    expect(await git(checkout, "remote", "get-url", "origin")).toBe(path.resolve(upstream));
+    expect((await git(checkout, "remote")).split(/\r?\n/u)).toEqual(["origin"]);
+    await writeFile(path.join(checkout, "upstream-only.txt"), "published\n", "utf8");
+    await client.commitAll(checkout, "publish upstream", "GitPM Direct", "direct@example.test", []);
+    await client.fetchCheckoutRemote(checkout, "unused-local-token");
+    const result = await client.pushMainFastForward(checkout, "unused-local-token");
+
+    expect(await git(fixture.root, "--git-dir", upstream, "rev-parse", "main")).toBe(result.commit);
   });
 });

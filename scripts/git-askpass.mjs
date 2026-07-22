@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 const prompt = process.argv[2] ?? "";
 if (/username/i.test(prompt)) {
-  process.stdout.write("oauth2");
+  process.stdout.write(process.env.GITPM_ASKPASS_USERNAME || "oauth2");
 } else {
   const token = process.env.GITPM_ASKPASS_TOKEN;
   if (!token) {

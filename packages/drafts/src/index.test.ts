@@ -191,28 +191,29 @@ describe("draft manager", () => {
 });
 
 describe("direct mode draft manager", () => {
-  function directRuntime(remote: string, data: string): { gitClient: GitClient; manager: DraftManager } {
+  function directRuntime(checkout: string, remote: string, data: string): { gitClient: GitClient; manager: DraftManager } {
     const gitClient = new GitClient({
       dataDirectory: data,
-      remoteUrl: remote,
+      remoteUrl: checkout,
+      pushRemoteUrl: remote,
       defaultBranch: "main",
-      allowLocalRepository: true,
+      allowLocalTestRemote: true,
       askPassPath: path.resolve("scripts", "git-askpass.mjs"),
     });
     const manager = new DraftManager(gitClient, data, {
-      backend: new DirectDraftBackend(gitClient, data),
+      backend: new DirectDraftBackend(gitClient, checkout),
       push: directPushStrategy(gitClient),
     });
     return { gitClient, manager };
   }
 
-  it("clones a managed checkout once and commits straight onto main", async () => {
+  it("uses the selected checkout in place and commits straight onto main", async () => {
     const test = await fixture();
-    const { gitClient, manager } = directRuntime(test.remote, test.data);
+    const { gitClient, manager } = directRuntime(test.source, test.remote, test.data);
     const draft = await manager.createDraft("DRF-LOCAL", "local-user");
     expect(manager.repositoryMode).toBe("direct");
     expect(draft.branch).toBe("main");
-    expect(draft.worktree_path).toBe(path.resolve(test.data, "repository"));
+    expect(draft.worktree_path).toBe(path.resolve(test.source));
     expect(await git(draft.worktree_path, "rev-parse", "--abbrev-ref", "HEAD")).toBe("main");
     expect(await readFile(path.join(draft.worktree_path, "AGENTS.md"), "utf8"))
       .toContain("gitpm entity create --type <type> --file <temporary-yaml> [--project <project-id>] --json");
@@ -231,9 +232,9 @@ describe("direct mode draft manager", () => {
     expect(await git(draft.worktree_path, "log", "-1", "--format=%s")).toBe("direct edit");
   });
 
-  it("does not destroy the managed checkout on cleanup and preserves local commits", async () => {
+  it("does not destroy the selected checkout on cleanup and preserves local commits", async () => {
     const test = await fixture();
-    const { gitClient, manager } = directRuntime(test.remote, test.data);
+    const { gitClient, manager } = directRuntime(test.source, test.remote, test.data);
     const draft = await manager.createDraft("DRF-LOCAL", "local-user");
     await atomicWriteDomainFile(draft.worktree_path, "local.txt", "local\n");
     await gitClient.commitAll(draft.worktree_path, "local keep", "Direct", "direct@example.test", []);
@@ -241,14 +242,14 @@ describe("direct mode draft manager", () => {
 
     await manager.closeDraft("DRF-LOCAL", "local-user");
     await manager.cleanupDraft("DRF-LOCAL", "DRF-LOCAL");
-    // The managed checkout must survive cleanup in direct mode.
+    // The selected checkout must survive cleanup in direct mode.
     expect(await git(draft.worktree_path, "rev-parse", "HEAD")).toBe(localHead);
     expect(await readFile(path.join(draft.worktree_path, "local.txt"), "utf8")).toBe("local\n");
   });
 
   it("push fast-forwards main to origin/main", async () => {
     const test = await fixture();
-    const { gitClient, manager } = directRuntime(test.remote, test.data);
+    const { gitClient, manager } = directRuntime(test.source, test.remote, test.data);
     const draft = await manager.createDraft("DRF-LOCAL", "local-user");
     await atomicWriteDomainFile(draft.worktree_path, projectFile, (await readFile(path.join(draft.worktree_path, ...projectFile.split("/")), "utf8")).replace("name: GitPM launch", "name: Direct push"));
     await gitClient.commitAll(draft.worktree_path, "direct push commit", "Direct", "direct@example.test", []);
@@ -259,7 +260,7 @@ describe("direct mode draft manager", () => {
 
   it("reports no orphaned worktrees in direct mode", async () => {
     const test = await fixture();
-    const { manager } = directRuntime(test.remote, test.data);
+    const { manager } = directRuntime(test.source, test.remote, test.data);
     await manager.createDraft("DRF-LOCAL", "local-user");
     const report = await manager.recover();
     expect(report.orphaned_worktrees).toEqual([]);
@@ -271,16 +272,16 @@ describe("direct mode draft manager", () => {
     const worktreeDraft = await worktreeRuntime.manager.createDraft("DRF-LOCAL", "local-user");
     expect(worktreeDraft.worktree_path).toContain(`${path.sep}worktrees${path.sep}`);
 
-    const direct = directRuntime(test.remote, test.data);
+    const direct = directRuntime(test.source, test.remote, test.data);
     const directWorkspace = await direct.manager.ensureDirectWorkspace("DRF-LOCAL", "local-user");
     expect(directWorkspace).toMatchObject({
-      worktree_path: path.resolve(test.data, "repository"),
+      worktree_path: path.resolve(test.source),
       branch: "main",
       writer_mode: "ui",
       state: "open",
     });
     expect(await readFile(path.join(test.data, "drafts", "DRF-LOCAL.json"), "utf8")).toContain(worktreeDraft.worktree_path.replaceAll("\\", "\\\\"));
-    expect(await readFile(path.join(test.data, "drafts", "direct", "DRF-LOCAL.json"), "utf8")).toContain(path.resolve(test.data, "repository").replaceAll("\\", "\\\\"));
+    expect(await readFile(path.join(test.data, "drafts", "direct", "DRF-LOCAL.json"), "utf8")).toContain(path.resolve(test.source).replaceAll("\\", "\\\\"));
 
     const restoredWorktree = runtime(test.remote, test.data);
     const recovery = await restoredWorktree.manager.recover();
@@ -289,7 +290,7 @@ describe("direct mode draft manager", () => {
 
   it("migrates legacy direct metadata and normalizes its hidden draft state", async () => {
     const test = await fixture();
-    const first = directRuntime(test.remote, test.data);
+    const first = directRuntime(test.source, test.remote, test.data);
     const workspace = await first.manager.ensureDirectWorkspace("DRF-LOCAL", "local-user");
     const directMetadata = path.join(test.data, "drafts", "direct", "DRF-LOCAL.json");
     const legacyMetadata = path.join(test.data, "drafts", "DRF-LOCAL.json");
@@ -297,9 +298,9 @@ describe("direct mode draft manager", () => {
     await writeFile(legacyMetadata, `${JSON.stringify(legacy, null, 2)}\n`, "utf8");
     await rm(directMetadata);
 
-    const restarted = directRuntime(test.remote, test.data);
+    const restarted = directRuntime(test.source, test.remote, test.data);
     const reconciled = await restarted.manager.ensureDirectWorkspace("DRF-LOCAL", "local-user");
-    expect(reconciled).toMatchObject({ writer_mode: "ui", state: "open", worktree_path: path.resolve(test.data, "repository") });
+    expect(reconciled).toMatchObject({ writer_mode: "ui", state: "open", worktree_path: path.resolve(test.source) });
     await expect(stat(legacyMetadata)).rejects.toMatchObject({ code: "ENOENT" });
     await expect(stat(directMetadata)).resolves.toBeDefined();
     expect((await restarted.manager.poll("DRF-LOCAL")).changedExternally).toBe(false);
@@ -307,7 +308,7 @@ describe("direct mode draft manager", () => {
 
   it("acknowledges an external edit without changing repository content", async () => {
     const test = await fixture();
-    const { manager } = directRuntime(test.remote, test.data);
+    const { manager } = directRuntime(test.source, test.remote, test.data);
     const workspace = await manager.ensureDirectWorkspace("DRF-LOCAL", "local-user");
     const absolute = path.join(workspace.worktree_path, ...projectFile.split("/"));
     const edited = (await readFile(absolute, "utf8")).replace("name: GitPM launch", "name: Externally edited");
