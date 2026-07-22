@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title">
+  <title id="title">GitPM concept 4: repository folder and dependency tree</title>
+  <rect width="1024" height="1024" rx="224" fill="#C9D96F"/>
+  
+  <path d="M190 352c0-54 44-98 98-98h172l74 82h202c54 0 98 44 98 98v300c0 54-44 98-98 98H288c-54 0-98-44-98-98V352z"
+        fill="#18352A"/>
+  <path d="M266 472h492v254c0 28-22 50-50 50H316c-28 0-50-22-50-50V472z"
+        fill="#F4F5F2"/>
+  <path d="M360 552v86c0 45 37 82 82 82h142c45 0 82-37 82-82v-86"
+        fill="none" stroke="#49715D" stroke-width="34" stroke-linecap="round"/>
+  <path d="M360 594h104c39 0 70-31 70-70"
+        fill="none" stroke="#C9D96F" stroke-width="34" stroke-linecap="round"/>
+  <circle cx="360" cy="552" r="34" fill="#C9D96F"/>
+  <circle cx="360" cy="594" r="34" fill="#C9D96F"/>
+  <circle cx="534" cy="524" r="34" fill="#C9D96F"/>
+  <circle cx="666" cy="552" r="34" fill="#C9D96F"/>
+  <circle cx="584" cy="720" r="34" fill="#49715D"/>
+
+</svg>

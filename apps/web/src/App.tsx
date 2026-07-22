@@ -150,7 +150,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
   if (drafts.session === undefined) return <main className="center-card"><p>{t("status.loading")}</p></main>;
   if (drafts.session === null) return (
     <main className="center-card auth-card">
-      <div className="brand-mark">G</div><h1>{t("auth.heading")}</h1><p>{t("auth.description")}</p>
+      <img className="brand-mark" src="/gitpm-icon.svg" alt="" /><h1>{t("auth.heading")}</h1><p>{t("auth.description")}</p>
       <button className="primary" onClick={() => { void api.login().then(navigate); }}>{t("auth.login")}</button>
       <LocalePicker locale={locale} setLocale={setLocale} t={t} />
       {drafts.error !== null && <p className="alert error">{t("status.error", { message: drafts.error })}</p>}

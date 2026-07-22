@@ -69,7 +69,7 @@ export function AppShell({ activeView, banner, breadcrumbs, children, headerMeta
   return <div className={`app-shell${repositoryMode ? " repository-mode" : ""}`}>
     <button aria-label={t("nav.closeMenu")} className={`navigation-backdrop${navigationOpen ? " open" : ""}`} onClick={closeNavigation} tabIndex={navigationOpen ? 0 : -1} />
     <aside aria-label={t("nav.label")} className={`sidebar${navigationOpen ? " open" : ""}`} id="primary-navigation" ref={sidebarRef}>
-      <div className="sidebar-heading"><div className="brand"><span className="brand-mark">G</span><strong>{t("app.title")}</strong></div><button aria-label={t("nav.closeMenu")} className="navigation-close" onClick={closeNavigation} type="button">×</button></div>
+      <div className="sidebar-heading"><div className="brand"><img className="brand-mark" src="/gitpm-icon.svg" alt="" /><strong>{t("app.title")}</strong></div><button aria-label={t("nav.closeMenu")} className="navigation-close" onClick={closeNavigation} type="button">×</button></div>
       <nav className="navigation-groups">{navigationGroups.map((group) => <div className="navigation-group" key={group.label}>
         {group.items.length > 1 && <span className="navigation-group-label">{t(group.label)}</span>}
         <div className="navigation-group-items">{group.items.map((key) => <div className={`navigation-item${activeView === key ? " active" : ""}`} key={key}>
