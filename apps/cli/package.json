@@ -15,6 +15,7 @@
     "@gitpm/agent": "workspace:*",
     "@gitpm/changes": "workspace:*",
     "@gitpm/drafts": "workspace:*",
+    "@gitpm/domain": "workspace:*",
     "@gitpm/git-client": "workspace:*",
     "@gitpm/gitlab": "workspace:*",
     "@gitpm/repository-format": "workspace:*",

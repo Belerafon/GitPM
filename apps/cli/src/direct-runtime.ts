@@ -1,5 +1,9 @@
+import { assertAgentScope, type AgentScope, type AgentScopeReport } from "@gitpm/agent";
+import { ChangesService, type SemanticDiff } from "@gitpm/changes";
 import { GitClient, GitCommandError } from "@gitpm/git-client";
-import { DirectDraftBackend, directPushStrategy, GITPM_GUIDANCE_PATHS } from "@gitpm/drafts";
+import { DirectDraftBackend, directPushStrategy, DraftManager, GITPM_GUIDANCE_FILES, GITPM_GUIDANCE_PATHS } from "@gitpm/drafts";
+import { EntityStore, entityPathForDocument, type EntityResult } from "@gitpm/domain";
+import type { GitPmDocument } from "@gitpm/repository-format";
 import { validateRepository } from "@gitpm/validation";
 
 export interface DirectStatus {
@@ -37,11 +41,15 @@ export interface DirectCliRuntimeOptions {
 export class DirectCliRuntime {
   private readonly git: GitClient;
   private readonly backend: DirectDraftBackend;
+  private readonly drafts: DraftManager;
+  private readonly changes: ChangesService;
+  private readonly entities: EntityStore;
   private readonly pushStrategy: ReturnType<typeof directPushStrategy>;
   private readonly authorName: string;
   private readonly authorEmail: string;
   private readonly pushAccessToken?: string;
   private prepared = false;
+  private workspaceDraftId?: string;
 
   constructor(options: DirectCliRuntimeOptions) {
     this.git = new GitClient({
@@ -52,6 +60,12 @@ export class DirectCliRuntime {
       ...(options.askPassPath === undefined ? {} : { askPassPath: options.askPassPath }),
     });
     this.backend = new DirectDraftBackend(this.git, options.dataDirectory);
+    this.drafts = new DraftManager(this.git, options.dataDirectory, {
+      backend: this.backend,
+      push: directPushStrategy(this.git),
+    });
+    this.changes = new ChangesService(this.drafts, this.git);
+    this.entities = new EntityStore(this.drafts);
     this.pushStrategy = directPushStrategy(this.git);
     this.authorName = options.authorName;
     this.authorEmail = options.authorEmail;
@@ -65,7 +79,51 @@ export class DirectCliRuntime {
   async prepare(): Promise<void> {
     if (this.prepared) return;
     await this.backend.prepare();
+    const recovery = await this.drafts.recover();
+    const existing = recovery.drafts.find((draft) => draft.worktree_path === this.checkoutPath)
+      ?? recovery.drafts[0];
+    const workspace = existing ?? await this.drafts.createDraft("DRF-LOCAL", "local-user");
+    this.workspaceDraftId = workspace.draft_id;
     this.prepared = true;
+  }
+
+  private async draftId(): Promise<string> {
+    await this.prepare();
+    if (this.workspaceDraftId === undefined) throw new Error("Direct workspace is unavailable");
+    return this.workspaceDraftId;
+  }
+
+  async assertScope(scope: AgentScope = {}): Promise<AgentScopeReport> {
+    const report = await this.changes.list(await this.draftId());
+    return assertAgentScope(report, scope);
+  }
+
+  async createEntity(document: GitPmDocument, scope: AgentScope = {}): Promise<EntityResult> {
+    const draftId = await this.draftId();
+    await this.assertScope(scope);
+    const relative = entityPathForDocument(document);
+    const project = /^projects\/(P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6})\//u.exec(relative)?.[1];
+    assertAgentScope({
+      affected_projects: project === undefined ? [] : [project],
+      files: [{ path: relative, kind: "Added" }],
+    }, scope);
+    const metadata = await this.drafts.refreshFingerprint(draftId);
+    return await this.entities.create(
+      draftId,
+      metadata.owner_gitlab_user_id,
+      metadata.fingerprint,
+      document,
+    );
+  }
+
+  async semanticDiff(scope: AgentScope = {}): Promise<SemanticDiff> {
+    const draftId = await this.draftId();
+    await this.assertScope(scope);
+    const report = await this.changes.semantic(draftId);
+    return {
+      ...report,
+      unclassified_files: report.unclassified_files.filter((file) => !GITPM_GUIDANCE_FILES.has(file)),
+    };
   }
 
   async status(): Promise<DirectStatus> {
@@ -94,8 +152,9 @@ export class DirectCliRuntime {
     };
   }
 
-  async commitAll(message: string): Promise<DirectCommitResult> {
+  async commitAll(message: string, scope: AgentScope = {}): Promise<DirectCommitResult> {
     await this.prepare();
+    await this.assertScope(scope);
     const checkout = await this.git.checkoutRealPath(this.checkoutPath);
     const validation = await validateRepository(checkout);
     if (!validation.valid) {

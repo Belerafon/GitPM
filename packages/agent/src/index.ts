@@ -36,6 +36,30 @@ export interface AgentScopeReport {
 
 const projectPath = (value: string): string | undefined => /^projects\/(P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6})\//u.exec(value)?.[1];
 
+export function assertAgentScope(
+  report: {
+    readonly affected_projects: readonly string[];
+    readonly files: readonly { readonly path: string; readonly kind: "Added" | "Modified" | "Deleted" }[];
+  },
+  scope: AgentScope = {},
+): AgentScopeReport {
+  for (const file of report.files) {
+    if (GITPM_GUIDANCE_FILES.has(file.path)) continue;
+    if (scope.allowedProject !== undefined && projectPath(file.path) !== scope.allowedProject) {
+      throw new AgentWorkflowError("AGENT_SCOPE_VIOLATION", `Path ${file.path} is outside Project ${scope.allowedProject}`);
+    }
+    if (file.kind === "Deleted" && scope.allowDelete !== true) {
+      throw new AgentWorkflowError("AGENT_DELETE_CONFIRMATION_REQUIRED", `Deletion requires --allow-delete: ${file.path}`);
+    }
+  }
+  return {
+    affected_projects: report.affected_projects,
+    changed_files: report.files
+      .filter((file) => !GITPM_GUIDANCE_FILES.has(file.path))
+      .map(({ path: filePath, kind }) => ({ path: filePath, kind })),
+  };
+}
+
 async function repositoryDocuments(root: string): Promise<GitPmDocument[]> {
   const result: GitPmDocument[] = [];
   const walk = async (directory: string): Promise<void> => {
@@ -83,17 +107,8 @@ export class AgentWorkflow {
   async assertScope(draftId: string, scope: AgentScope = {}): Promise<AgentScopeReport> {
     const metadata = await this.externalDraft(draftId);
     const report = await this.changes.list(draftId);
-    for (const file of report.files) {
-      if (GITPM_GUIDANCE_FILES.has(file.path)) continue;
-      if (scope.allowedProject !== undefined && projectPath(file.path) !== scope.allowedProject) {
-        throw new AgentWorkflowError("AGENT_SCOPE_VIOLATION", `Path ${file.path} is outside Project ${scope.allowedProject}`);
-      }
-      if (file.kind === "Deleted" && scope.allowDelete !== true) {
-        throw new AgentWorkflowError("AGENT_DELETE_CONFIRMATION_REQUIRED", `Deletion requires --allow-delete: ${file.path}`);
-      }
-    }
     if (metadata.writer_mode !== "external") throw new AgentWorkflowError("AGENT_EXTERNAL_MODE_REQUIRED", "Agent workflow requires external writer mode");
-    return { affected_projects: report.affected_projects, changed_files: report.files.filter((file) => !GITPM_GUIDANCE_FILES.has(file.path)).map(({ path, kind }) => ({ path, kind })) };
+    return assertAgentScope(report, scope);
   }
 
   async semanticDiff(draftId: string, scope: AgentScope = {}): Promise<SemanticDiff> {

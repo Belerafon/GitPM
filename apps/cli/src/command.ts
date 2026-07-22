@@ -173,7 +173,7 @@ async function runDirectCommit(args: readonly string[], dependencies: CliDepende
   if (!args.includes("--all")) throw new RepositoryFormatError("CLI_USAGE", "commit requires --all");
   const direct = requireDirect(dependencies);
   const message = required(flagValue(args, "-m") ?? flagValue(args, "--message"), "-m");
-  const result = await direct.commitAll(message);
+  const result = await direct.commitAll(message, agentScope(args));
   return { exitCode: 0, output: render(args.includes("--json"), { ok: true, code: "OK", ...result }, `Committed all changes: ${result.commit} (${result.branch})`) };
 }
 
@@ -210,13 +210,16 @@ async function runCommit(args: readonly string[], dependencies: CliDependencies)
 
 async function runEntity(args: readonly string[], cwd: string, dependencies: CliDependencies): Promise<CliResult> {
   if (args[0] !== "create") throw new RepositoryFormatError("CLI_USAGE", "entity requires create");
-  const draftId = required(flagValue(args, "--draft"), "--draft");
+  const draftId = flagValue(args, "--draft");
+  const agent = args.includes("--draft") ? requireAgent(dependencies) : undefined;
+  if (agent !== undefined && agent.createEntity === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Entity creation is unavailable");
+  const direct = agent === undefined ? requireDirect(dependencies) : undefined;
   const file = required(flagValue(args, "--file"), "--file");
-  const agent = requireAgent(dependencies);
-  if (agent.createEntity === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Entity creation is unavailable");
   const source = path.resolve(cwd, file);
   const document = parseYamlDocument(await readFile(source, "utf8"), source);
-  const created = await agent.createEntity(draftId, document, agentScope(args));
+  const created = agent?.createEntity === undefined
+    ? await direct!.createEntity(document, agentScope(args))
+    : await agent.createEntity(required(draftId, "--draft"), document, agentScope(args));
   return {
     exitCode: 0,
     output: render(args.includes("--json"), { ok: true, code: "OK", ...created }, `Created ${created.path}`),
@@ -389,11 +392,17 @@ export async function run(args: readonly string[], cwd = process.cwd(), dependen
     if (command === "draft") return await runDraft(commandArgs, dependencies);
     if (command === "entity") return await runEntity(commandArgs, cwd, dependencies);
     if (command === "format" && hasDraft) { const context = await draftRoot(commandArgs, dependencies); return await runFormat([...commandArgs, "--root", context.root], cwd, context.scope); }
-    if (command === "format") return await runFormat([...directRootArgs, ...commandArgs], cwd);
+    if (command === "format" && direct !== undefined) {
+      const scope = await direct.assertScope(agentScope(commandArgs));
+      return await runFormat([...directRootArgs, ...commandArgs], cwd, flagValue(commandArgs, "--project") === undefined ? undefined : scope);
+    }
+    if (command === "format") return await runFormat(commandArgs, cwd);
     if (command === "validate" && hasDraft) { const context = await draftRoot(commandArgs, dependencies); return await runValidate([...commandArgs, "--root", context.root], cwd); }
-    if (command === "validate") return await runValidate([...directRootArgs, ...commandArgs], cwd);
+    if (command === "validate" && direct !== undefined) { await direct.assertScope(agentScope(commandArgs)); return await runValidate([...directRootArgs, ...commandArgs], cwd); }
+    if (command === "validate") return await runValidate(commandArgs, cwd);
     if (command === "diff" && hasDraft) { const agent = requireAgent(dependencies); const draftId = required(flagValue(commandArgs, "--draft"), "--draft"); const report = await agent.semanticDiff(draftId, agentScope(commandArgs)); return { exitCode: 0, output: render(commandArgs.includes("--json"), { ok: true, code: "OK", ...report }, `Semantic diff: ${report.counts.created + report.counts.updated + report.counts.archived + report.counts.deleted} changed entities`) }; }
-    if (command === "diff") return await runSemanticDiff([...directRootArgs, ...commandArgs], cwd);
+    if (command === "diff" && direct !== undefined) { const report = await direct.semanticDiff(agentScope(commandArgs)); return { exitCode: 0, output: render(commandArgs.includes("--json"), { ok: true, code: "OK", ...report }, `Semantic diff: ${report.counts.created + report.counts.updated + report.counts.archived + report.counts.deleted} changed entities`) }; }
+    if (command === "diff") return await runSemanticDiff(commandArgs, cwd);
     if (command === "commit") {
       if (hasDraft) return await runCommit(commandArgs, dependencies);
       return await runDirectCommit(commandArgs, dependencies);
@@ -403,6 +412,7 @@ export async function run(args: readonly string[], cwd = process.cwd(), dependen
       return await runDirectPush(commandArgs, dependencies);
     }
     if (command === "mr") return await runMr(commandArgs, dependencies);
+    if (command === "doctor" && direct !== undefined) { await direct.prepare(); return await runDoctor([...directRootArgs, ...commandArgs], cwd); }
     if (command === "doctor") return await runDoctor(commandArgs, cwd);
     if (command === "init") return await runInit(commandArgs, cwd);
     const json = args.includes("--json");

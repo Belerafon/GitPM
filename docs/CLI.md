@@ -7,17 +7,24 @@ CLI живёт в `apps/cli` и собирается в `apps/cli/dist/index.js`
 
 ```
 gitpm init [path]                    Создать skeleton схемы v1 в path (по умолчанию cwd)
+gitpm status [--draft <id>]
 gitpm draft create|open|status|set-writer --draft <id> [--owner <id>]
-gitpm entity create --draft <id> --file <file> [--project <id>]
+gitpm entity create [--draft <id>] --file <file> [--project <id>]
 gitpm format [--draft <id>] [--project <id>] [--check]
 gitpm validate [--draft <id>] [--project <id>] [--changed]
 gitpm diff --semantic [--draft <id>] [--project <id>]
-gitpm commit --all --draft <id> -m <message>
-gitpm push --draft <id>
+gitpm commit --all [--draft <id>] -m <message> [--project <id>]
+gitpm push [--draft <id>]
 gitpm mr create --draft <id> --owner <id> --title <title> [--description <text>]
 gitpm doctor
 gitpm --version
 ```
+
+В `direct` mode команды `status`, `entity create`, `format`, `validate`, `diff`, `commit` и
+`push` работают с managed checkout без `--draft`. В `worktree` mode для них требуется
+`--draft <id>`; `mr create` доступна только в `worktree` mode. `--project <id>` проверяет, что
+все текущие business changes принадлежат указанному Project, а физическое удаление требует
+явного `--allow-delete` при проверке diff/validation и commit.
 
 Каждая команда поддерживает `--json` для машинно-читаемого вывода.
 

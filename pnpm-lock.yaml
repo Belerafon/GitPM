@@ -44,6 +44,9 @@ importers:
       '@gitpm/changes':
         specifier: workspace:*
         version: link:../../packages/changes
+      '@gitpm/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@gitpm/drafts':
         specifier: workspace:*
         version: link:../../packages/drafts
