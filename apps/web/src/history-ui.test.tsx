@@ -36,7 +36,7 @@ describe("History workspace", () => {
     await waitFor(() => expect(onNavigate).toHaveBeenCalledWith("history", { commit }));
   });
 
-  it("shows commit and file history and creates a separate revert draft without a rebase action", async () => {
+  it("shows the selected file diff and file history and creates a separate revert draft without a rebase action", async () => {
     const createRevertDraft = vi.fn(async () => ({ draft: { ...draft, draft_id: "REVERT-AAAAAAAA", branch: "gitpm/42/REVERT-AAAAAAAA" }, reverted_commit: commit, conflicted: false, conflicted_files: [] }));
     const select = vi.fn(async () => undefined);
     const api = { history: async () => [item], commitDetail: async () => detail, fileHistory: async () => [item], createRevertDraft } as unknown as GitPmApi;
@@ -45,20 +45,35 @@ describe("History workspace", () => {
     expect(screen.queryByText(/rebase/iu)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /projects\/P-26-111111\/tasks\/T-26-111111.yaml/u }));
     expect(await screen.findByRole("heading", { name: "File history" })).toBeTruthy();
+    expect(screen.getByText("-old")).toBeTruthy();
+    expect(screen.getByText("+new")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Create revert working copy" }));
     await waitFor(() => expect(createRevertDraft).toHaveBeenCalledWith("DRF-HISTORY", commit, "REVERT-AAAAAAAA"));
     expect(select).toHaveBeenCalledWith("REVERT-AAAAAAAA");
   });
 
-  it("collapses long file lists and filters them on demand", async () => {
+  it("keeps long file lists in the file pane and filters them on demand", async () => {
     const files = Array.from({ length: 11 }, (_, index) => ({ path: `projects/P-26-111111/tasks/T-${String(index).padStart(2, "0")}.yaml`, additions: 1, deletions: 0 }));
     const api = { history: async () => [item], commitDetail: async () => ({ ...detail, files }) } as unknown as GitPmApi;
     render(<HistoryWorkspace api={api} draft={draft} locale="en" canRevert={false} onDraftCreated={vi.fn(async () => undefined)} />);
-    const summary = await screen.findByText("Changed files: 11");
-    expect((summary.closest("details") as HTMLDetailsElement).open).toBe(false);
-    fireEvent.click(summary);
+    expect(await screen.findByText("Changed files: 11")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Search changed files"), { target: { value: "T-07" } });
     expect(screen.getByRole("button", { name: /T-07\.yaml/u })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /T-06\.yaml/u })).toBeNull();
+  });
+
+  it("maps a multi-file commit patch to the file selected in the lower pane", async () => {
+    const firstPath = "projects/P-26-111111/project.yaml";
+    const secondPath = "projects/P-26-111111/tasks/T-26-222222.yaml";
+    const files = [{ path: firstPath, additions: 1, deletions: 1 }, { path: secondPath, additions: 1, deletions: 1 }];
+    const diff = `diff --git a/${firstPath} b/${firstPath}\n--- a/${firstPath}\n+++ b/${firstPath}\n@@ -1 +1 @@\n-old project\n+new project\ndiff --git a/${secondPath} b/${secondPath}\n--- a/${secondPath}\n+++ b/${secondPath}\n@@ -3 +3 @@\n-old task\n+new task\n`;
+    const api = { history: async () => [item], commitDetail: async () => ({ ...detail, files, diff }), fileHistory: async () => [] } as unknown as GitPmApi;
+    render(<HistoryWorkspace api={api} draft={draft} locale="en" canRevert={false} onDraftCreated={vi.fn(async () => undefined)} />);
+
+    expect(await screen.findByText("-old project")).toBeTruthy();
+    expect(screen.queryByText("-old task")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: new RegExp(secondPath.replaceAll("/", "\\/"), "u") }));
+    expect(await screen.findByText("-old task")).toBeTruthy();
+    expect(screen.queryByText("-old project")).toBeNull();
   });
 });
