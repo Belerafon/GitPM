@@ -174,6 +174,20 @@ start("сервер", serverCwd, isProduction ? ["dist/index.js"] : [tsxCli, "wa
   GITPM_WEB_URL: webUrl,
   ...runtime.environment,
 });
+if (isProduction) {
+  console.log("[GitPM] Сборка web-интерфейса для production...");
+  const webBuild = spawnSync(process.execPath, [viteCli, "build"], {
+    cwd: webCwd,
+    stdio: "inherit",
+    windowsHide: true,
+  });
+  if (webBuild.error !== undefined) throw webBuild.error;
+  if (webBuild.status !== 0) {
+    console.error(`[GitPM] Не удалось собрать web-интерфейс (код ${webBuild.status ?? 1}).`);
+    process.exit(webBuild.status ?? 1);
+  }
+}
+
 start("web-интерфейс", webCwd, [
   viteCli,
   ...(isProduction ? ["preview"] : []),
