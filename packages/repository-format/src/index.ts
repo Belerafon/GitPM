@@ -85,7 +85,7 @@ const fieldOrder: Record<string, readonly string[]> = {
   "gitpm/calendar@1": ["schema", "id", "name", "working_weekdays", "holidays", "lifecycle"],
   "gitpm/saved-view@1": ["schema", "id", "project", "name", "kind", "filters", "group_by", "lifecycle"],
   "gitpm/comment@1": ["schema", "id", "project", "task", "author", "created_at", "updated_at", "state", "body_markdown", "mentions", "deleted_at", "deleted_by"],
-  "gitpm/repository@1": ["schema", "default_branch", "default_calendar", "allowed_top_level_files", "ui_poll_interval_seconds"],
+  "gitpm/repository@1": ["schema", "default_branch", "default_calendar", "allowed_top_level_files", "allowed_top_level_directories", "ui_poll_interval_seconds"],
   "gitpm/statuses@1": ["schema", "statuses"],
   "gitpm/issue-types@1": ["schema", "issue_types"],
 };

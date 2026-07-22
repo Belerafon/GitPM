@@ -465,6 +465,9 @@ default_branch: main
 default_calendar: C-26-WRKDAY # calendar: Standard work week
 allowed_top_level_files:
   - README.md
+  - .gitignore
+allowed_top_level_directories:
+  - uploads
 ui_poll_interval_seconds: 5
 `;
 
@@ -516,6 +519,10 @@ to create projects, people, teams, calendars and tasks. See
 https://github.com/Belerafon/GitPM for details.
 `;
 
+const INIT_GITIGNORE = `# User-supplied artefacts that must not enter the GitPM history.
+/uploads/
+`;
+
 const INIT_KEEPERS = ["people", "teams", "projects"] as const;
 
 async function directoryIsEmpty(directory: string): Promise<boolean> {
@@ -540,6 +547,7 @@ async function runInit(args: readonly string[], cwd: string): Promise<CliResult>
   }
   await mkdir(path.join(target, ".gitpm"), { recursive: true });
   await mkdir(path.join(target, "calendars"), { recursive: true });
+  await mkdir(path.join(target, "uploads"), { recursive: true });
   for (const sub of INIT_KEEPERS) {
     const directory = path.join(target, sub);
     await mkdir(directory, { recursive: true });
@@ -550,6 +558,8 @@ async function runInit(args: readonly string[], cwd: string): Promise<CliResult>
   await writeFile(path.join(target, ".gitpm", "issue-types.yaml"), INIT_ISSUE_TYPES_YAML, "utf8");
   await writeFile(path.join(target, "calendars", "C-26-WRKDAY.yaml"), INIT_CALENDAR_YAML, "utf8");
   await writeFile(path.join(target, "README.md"), INIT_README_MD, "utf8");
+  await writeFile(path.join(target, ".gitignore"), INIT_GITIGNORE, "utf8");
+  await writeFile(path.join(target, "uploads", ".gitkeep"), "", "utf8");
 
   const gitEnv = { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null" };
   const branch = process.env.GITPM_INIT_BRANCH?.trim() || "main";

@@ -13,6 +13,11 @@
       "items": {"type": "string", "minLength": 1, "pattern": "^[^/\\\\]+$"},
       "uniqueItems": true
     },
+    "allowed_top_level_directories": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1, "pattern": "^[^/\\\\]+$"},
+      "uniqueItems": true
+    },
     "ui_poll_interval_seconds": {"type": "integer", "minimum": 2, "maximum": 10}
   }
 }

@@ -286,7 +286,19 @@ export async function validateRepository(repositoryRoot: string): Promise<Valida
   const statuses = new Set(((statusDocument?.value.statuses as Array<{ slug: string }> | undefined) ?? []).map((item) => item.slug));
   const issueTypes = new Set(((typeDocument?.value.issue_types as Array<{ slug: string }> | undefined) ?? []).map((item) => item.slug));
 
-  const allowedTop = new Set([".git", ".gitpm", ".agents", "AGENTS.md", "people", "teams", "calendars", "projects", ...values(repository?.value.allowed_top_level_files)]);
+  const allowedTop = new Set([
+    ".git",
+    ".gitpm",
+    ".agents",
+    "AGENTS.md",
+    ".gitignore",
+    "people",
+    "teams",
+    "calendars",
+    "projects",
+    ...values(repository?.value.allowed_top_level_files),
+    ...values(repository?.value.allowed_top_level_directories),
+  ]);
   for (const entry of await readdir(root)) {
     if (!allowedTop.has(entry)) add({ severity: "error", code: "REPOSITORY_TOP_LEVEL", path: entry, message: "Unknown top-level entry" });
   }
