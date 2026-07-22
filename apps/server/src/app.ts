@@ -12,7 +12,7 @@ import Fastify, { LogController, type FastifyBaseLogger } from "fastify";
 import { registerChangesApi, registerCommentApi, registerDraftApi, registerEntityApi, registerHistoryApi } from "./draft-api.js";
 import type { Authenticate } from "./draft-api.js";
 import { registerAuthAndPublishingApi } from "./auth-api.js";
-import { registerWorktreeApi } from "./worktree-api.js";
+import { registerWorktreeApi, type WorktreeApiOptions } from "./worktree-api.js";
 
 const MAX_CORRELATION_ID_LENGTH = 128;
 const REQUEST_BODY_LIMIT = 1_048_576;
@@ -43,6 +43,7 @@ export interface AppOptions {
   historyService?: HistoryService;
   logger?: FastifyBaseLogger;
   publishingService?: PublishingService;
+  worktreeApiOptions?: WorktreeApiOptions;
 }
 
 function requestId(request: IncomingMessage): string {
@@ -176,7 +177,7 @@ export function buildApp(options: AppOptions = {}) {
       throw new Error("Authentication adapter is not configured");
     });
     registerDraftApi(app, options.draftManager, authenticate);
-    registerWorktreeApi(app, options.draftManager, authenticate);
+    registerWorktreeApi(app, options.draftManager, authenticate, options.worktreeApiOptions);
     if (options.entityStore) registerEntityApi(app, options.draftManager, options.entityStore, authenticate);
     if (options.commentStore) registerCommentApi(app, options.draftManager, options.commentStore, authenticate);
     if (options.changesService) registerChangesApi(app, options.draftManager, options.changesService, authenticate);

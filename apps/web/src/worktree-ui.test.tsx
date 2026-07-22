@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GitPmApi } from "./api.js";
 import type { DraftStatus, WorktreeDirectory, WorktreeEntry, WorktreeFile } from "./types.js";
@@ -56,6 +56,32 @@ describe("working tree file manager", () => {
     fireEvent.click(screen.getByRole("button", { name: /docs/u }));
     expect(await screen.findByRole("button", { name: /guide\.txt/u })).toBeTruthy();
     expect(screen.getByText("docs")).toBeTruthy();
+  });
+
+  it("ignores a late directory response after navigating elsewhere", async () => {
+    const root = [dir("docs"), dir("uploads")];
+    let resolveDocs!: (value: WorktreeDirectory) => void;
+    const docsResponse = new Promise<WorktreeDirectory>((resolve) => { resolveDocs = resolve; });
+    const api = apiFor(root, {
+      listWorktree: vi.fn(async (_draftId: string, path?: string) => {
+        if (path === "docs") return await docsResponse;
+        return { path: "", entries: root };
+      }),
+    });
+    render(<WorktreeWorkspace api={api} draft={draft} role="Developer" locale="en" onChanged={noChanged} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /docs/u }));
+    await vi.waitFor(() => expect(api.listWorktree).toHaveBeenCalledWith("DRF-TREE", "docs"));
+    fireEvent.click(screen.getByRole("button", { name: "Root" }));
+    expect(await screen.findByRole("button", { name: /uploads/u })).toBeTruthy();
+
+    await act(async () => {
+      resolveDocs({ path: "docs", entries: [file("docs/late.txt", 4)] });
+      await docsResponse;
+    });
+
+    expect(screen.queryByRole("button", { name: /late\.txt/u })).toBeNull();
+    expect(screen.getByRole("button", { name: /uploads/u })).toBeTruthy();
   });
 
   it("creates a folder through the name dialog", async () => {

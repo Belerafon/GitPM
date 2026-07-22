@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type { DraftManager, DraftMetadata } from "@gitpm/drafts";
@@ -244,6 +244,36 @@ describe("working tree file mutations", () => {
     expect(response.statusCode).toBe(status);
     expect(response.json()).toMatchObject({ error: { code } });
     expect(response.body).not.toContain(root);
+  });
+
+  it.each([
+    ["delete", "DELETE", "/api/drafts/DRF-TREE/worktree/entry", { expected_fingerprint: fingerprint, path: "docs/guide.txt" }],
+    ["create directory", "POST", "/api/drafts/DRF-TREE/worktree/directory", { expected_fingerprint: fingerprint, path: "docs/created" }],
+    ["move", "POST", "/api/drafts/DRF-TREE/worktree/move", { expected_fingerprint: fingerprint, from: "docs/guide.txt", to: "moved-guide.txt" }],
+  ])("rejects a parent symlink swap before %s", async (_name, method, url, payload) => {
+    await app.close();
+    const docs = path.join(worktree(), "docs");
+    const originalDocs = path.join(worktree(), "docs-original");
+    const outside = path.join(root, "outside");
+    await writeFile(path.join(outside, "guide.txt"), "outside", "utf8");
+    app = buildApp({
+      authenticate: () => ({ userId: "42", role: "Developer" }),
+      draftManager: mutableManager(worktree()),
+      worktreeApiOptions: {
+        beforeGuardedMutationForTest: async () => {
+          await rename(docs, originalDocs);
+          await symlink(outside, docs, process.platform === "win32" ? "junction" : "dir");
+        },
+      },
+    });
+
+    const response = await app.inject({ method: method as "POST" | "DELETE", url, payload });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toMatchObject({ error: { code: "WORKTREE_PATH_FORBIDDEN" } });
+    await expect(readFile(path.join(outside, "guide.txt"), "utf8")).resolves.toBe("outside");
+    await expect(readFile(path.join(originalDocs, "guide.txt"), "utf8")).resolves.toBe("Guide");
+    await expect(stat(path.join(outside, "created"))).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("forbids mutations for read-only roles", async () => {

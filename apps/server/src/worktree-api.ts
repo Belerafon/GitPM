@@ -13,6 +13,17 @@ const UPLOAD_BODY_LIMIT = 15 * 1024 * 1024;
 
 type WorktreeEntryType = "directory" | "file" | "symlink" | "other";
 
+export interface WorktreeApiOptions {
+  readonly beforeGuardedMutationForTest?: () => Promise<void>;
+}
+
+interface ParentSnapshot {
+  readonly path: string;
+  readonly canonicalPath: string;
+  readonly device: number;
+  readonly inode: number;
+}
+
 export class WorktreeReadError extends Error {
   constructor(public readonly code: string, message: string) {
     super(message);
@@ -90,6 +101,61 @@ function requireMutationActor(actor: RequestActor): void {
   }
 }
 
+function parentChanged(): WorktreeReadError {
+  return new WorktreeReadError("WORKTREE_PATH_FORBIDDEN", "The target folder changed during the operation");
+}
+
+async function parentIdentity(parent: string): Promise<{ readonly device: number; readonly inode: number }> {
+  try {
+    const stat = await lstat(parent);
+    if (stat.isSymbolicLink() || !stat.isDirectory()) throw parentChanged();
+    return { device: stat.dev, inode: stat.ino };
+  } catch (error) {
+    if (error instanceof WorktreeReadError) throw error;
+    throw parentChanged();
+  }
+}
+
+function sameIdentity(left: { readonly device: number; readonly inode: number }, right: { readonly device: number; readonly inode: number }): boolean {
+  return left.device === right.device && left.inode === right.inode;
+}
+
+async function snapshotParents(targets: readonly string[]): Promise<readonly ParentSnapshot[]> {
+  const parents = [...new Set(targets.map((target) => path.dirname(target)))];
+  return await Promise.all(parents.map(async (parent) => {
+    const before = await parentIdentity(parent);
+    let canonicalPath: string;
+    try {
+      canonicalPath = await realpath(parent);
+    } catch {
+      throw parentChanged();
+    }
+    const after = await parentIdentity(parent);
+    if (!sameIdentity(before, after)) throw parentChanged();
+    return { path: parent, canonicalPath, device: after.device, inode: after.inode };
+  }));
+}
+
+async function assertParentsUnchanged(snapshots: readonly ParentSnapshot[]): Promise<void> {
+  for (const snapshot of snapshots) {
+    const before = await parentIdentity(snapshot.path);
+    let canonicalPath: string;
+    try {
+      canonicalPath = await realpath(snapshot.path);
+    } catch {
+      throw parentChanged();
+    }
+    const after = await parentIdentity(snapshot.path);
+    if (
+      canonicalPath !== snapshot.canonicalPath ||
+      !sameIdentity(before, after) ||
+      !sameIdentity(after, { device: snapshot.device, inode: snapshot.inode })
+    ) {
+      throw parentChanged();
+    }
+  }
+}
+
 async function atomicWriteBytes(target: string, bytes: Buffer): Promise<void> {
   const parent = path.dirname(target);
   const canonicalParent = await realpath(parent);
@@ -147,7 +213,7 @@ async function draftRoot(manager: DraftManager, authenticate: Authenticate, requ
   return draft.worktree_path;
 }
 
-export function registerWorktreeApi(app: FastifyInstance, manager: DraftManager, authenticate: Authenticate): void {
+export function registerWorktreeApi(app: FastifyInstance, manager: DraftManager, authenticate: Authenticate, options: WorktreeApiOptions = {}): void {
   app.get<{ Params: { draftId: string }; Querystring: { path?: string } }>("/api/drafts/:draftId/worktree", async (request) => {
     const root = await draftRoot(manager, authenticate, request, request.params.draftId);
     const relativePath = requestedPath(request.query.path, true);
@@ -227,6 +293,9 @@ export function registerWorktreeApi(app: FastifyInstance, manager: DraftManager,
       const outcome = await manager.withUiMutation(request.params.draftId, actor.userId, request.body.expected_fingerprint, async (metadata) => {
         const target = await safeTarget(metadata.worktree_path, relativePath);
         await assertExists(target);
+        const parents = await snapshotParents([target]);
+        await options.beforeGuardedMutationForTest?.();
+        await assertParentsUnchanged(parents);
         await rm(target, { recursive: true, force: false });
         return { path: relativePath };
       });
@@ -242,6 +311,10 @@ export function registerWorktreeApi(app: FastifyInstance, manager: DraftManager,
       const relativePath = requestedPath(request.body.path, false);
       const outcome = await manager.withUiMutation(request.params.draftId, actor.userId, request.body.expected_fingerprint, async (metadata) => {
         const target = await safeTarget(metadata.worktree_path, relativePath);
+        await assertAbsent(target);
+        const parents = await snapshotParents([target]);
+        await options.beforeGuardedMutationForTest?.();
+        await assertParentsUnchanged(parents);
         await assertAbsent(target);
         await mkdir(target, { mode: 0o755 });
         return { path: relativePath };
@@ -283,6 +356,11 @@ export function registerWorktreeApi(app: FastifyInstance, manager: DraftManager,
         if (relative === "" || !relative.startsWith("..")) {
           throw new WorktreeReadError("WORKTREE_MOVE_INVALID", "Cannot move an entry into itself or one of its descendants");
         }
+        const parents = await snapshotParents([from, to]);
+        await options.beforeGuardedMutationForTest?.();
+        await assertParentsUnchanged(parents);
+        await assertExists(from);
+        await assertAbsent(to);
         await rename(from, to);
         return { from: fromPath, to: toPath };
       });

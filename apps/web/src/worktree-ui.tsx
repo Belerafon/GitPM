@@ -168,15 +168,17 @@ export function WorktreeWorkspace({ api, draft, role, locale, onChanged, confirm
   const [actionError, setActionError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<DialogState>(null);
   const [nameValue, setNameValue] = useState("");
+  const treeRequest = useRef(0);
   const fileRequest = useRef(0);
   const fileInput = useRef<HTMLInputElement | null>(null);
 
   const load = (path: string) => {
+    const request = ++treeRequest.current;
     setEntries(null);
     setTreeError(null);
     void api.listWorktree(draft.draft_id, path)
-      .then((result) => setEntries(result.entries))
-      .catch((reason: unknown) => setTreeError(errorMessage(locale, reason)));
+      .then((result) => { if (request === treeRequest.current) setEntries(result.entries); })
+      .catch((reason: unknown) => { if (request === treeRequest.current) setTreeError(errorMessage(locale, reason)); });
   };
 
   useEffect(() => {
