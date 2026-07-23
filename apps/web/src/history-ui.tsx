@@ -153,7 +153,7 @@ export function HistoryWorkspace({ api, draft, locale, canRevert, initialCommit 
             <aside className="history-file-pane">
               <header><strong>{t("history.changedFiles", { count: detail.files.length })}</strong><code>{detail.commit.slice(0, 8)}</code></header>
               <label><span>{t("history.searchFiles")}</span><input type="search" value={fileQuery} onChange={(event) => setFileQuery(event.target.value)} /></label>
-              <div className="history-files">{visibleFiles.map((file) => <button key={file.path} className={selectedPath === file.path ? "selected" : ""} aria-pressed={selectedPath === file.path} onClick={() => { void selectFile(file.path); }}><span className="history-file-icon" aria-hidden="true">{file.additions === 0 ? "D" : file.deletions === 0 ? "A" : "M"}</span><code>{file.path}</code><span>+{file.additions ?? "—"} −{file.deletions ?? "—"}</span></button>)}</div>
+              <div className="history-files">{visibleFiles.map((file) => <button key={file.path} className={selectedPath === file.path ? "selected" : ""} aria-pressed={selectedPath === file.path} onClick={() => { void selectFile(file.path); }}><span className="history-file-icon" aria-hidden="true">{file.status[0]}</span><code>{file.path}</code><span>+{file.additions ?? "—"} −{file.deletions ?? "—"}</span></button>)}</div>
               {filePath !== null && <div className="file-history"><h3>{t("history.fileHistory")}</h3><code title={filePath}>{filePath}</code>{fileItems.map((item) => <button key={item.commit} onClick={() => { void select(item); }}><span>{item.subject}</span><code>{item.commit.slice(0, 8)}</code></button>)}</div>}
             </aside>
             <section className="history-diff-pane" aria-label={t("history.diff")}>

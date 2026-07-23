@@ -26,7 +26,7 @@ gitpm config show --kind statuses|issue-types
 gitpm config update --kind statuses|issue-types [--file <yaml>] [--set <field>=<yaml-value>]... [--unset <field>]
 gitpm schema list
 gitpm schema show <type> [--example]
-gitpm format [--draft <id>] [--project <id>] [--check]
+gitpm format [--draft <id>] [--project <id>] [--check] [--allow-delete]
 gitpm validate [--draft <id>] [--project <id>] [--changed] [--allow-delete]
 gitpm diff --semantic [--draft <id>] [--project <id>] [--allow-delete]
 gitpm commit --all [--draft <id>] -m <message> [--project <id>] [--allow-delete]
@@ -93,7 +93,7 @@ soft-delete (tombstone остаётся в Git history). Доступно в dir
 `push` работают с выбранным checkout без `--draft`. В `worktree` mode для них требуется
 `--draft <id>`; `mr create` доступна только в `worktree` mode. `--project <id>` проверяет, что
 все текущие business changes принадлежат указанному Project, а физическое удаление требует
-явного `--allow-delete` при проверке diff/validation и commit.
+явного `--allow-delete` при format/validation/diff и commit, пока удалённые пути остаются в checkout.
 
 Каждая команда поддерживает `--json` для машинно-читаемого вывода.
 
@@ -133,6 +133,8 @@ draft/publish-командам дополнительно нужен remote runt
 | `GITPM_DEFAULT_BRANCH` | Основная ветка direct checkout и target MR (по умолчанию `main`). |
 | `GITPM_ASKPASS_PATH` | Скрипт git askpass для авторизации при push. По умолчанию `scripts/git-askpass.mjs`. |
 | `GITPM_ACCESS_TOKEN` | Токен GitLab API. В логи/commits не попадает, передаётся только в in-memory calls. |
+| `GITPM_GITLAB_URL` | HTTPS base URL GitLab-инстанса для `mr create`. |
+| `GITPM_GITLAB_PROJECT` | GitLab project path (`group/project`) для `mr create`. |
 | `GITPM_AGENT_AUTHOR_NAME` | `user.name` для коммитов от лица агента (по умолчанию `GitPM Agent`). |
 | `GITPM_AGENT_AUTHOR_EMAIL` | `user.email` для коммитов от лица агента. |
 | `GITPM_BUILD_COMMIT` | Optional commit identifier в `gitpm --version --json`. |

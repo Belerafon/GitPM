@@ -23,19 +23,18 @@ export interface RevertDraftResult {
   readonly conflicted_files: readonly string[];
 }
 
-function summarizePaths(paths: readonly string[], statuses?: readonly string[]): HistorySemanticSummary {
+function summarizeFiles(files: readonly { readonly path: string; readonly status: "Added" | "Modified" | "Deleted" }[]): HistorySemanticSummary {
   let created = 0;
   let updated = 0;
   let deleted = 0;
   const projects = new Set<string>();
-  paths.forEach((path, index) => {
-    const project = /^projects\/([^/]+)\//u.exec(path)?.[1];
+  for (const file of files) {
+    const project = /^projects\/([^/]+)\//u.exec(file.path)?.[1];
     if (project !== undefined) projects.add(project);
-    const status = statuses?.[index] ?? "M";
-    if (status.startsWith("A")) created += 1;
-    else if (status.startsWith("D")) deleted += 1;
+    if (file.status === "Added") created += 1;
+    else if (file.status === "Deleted") deleted += 1;
     else updated += 1;
-  });
+  }
   return { created, updated, deleted, affected_projects: [...projects].sort() };
 }
 
@@ -47,14 +46,17 @@ export class HistoryService {
 
   async list(draftId: string, limit = 50): Promise<readonly CommitHistoryItem[]> {
     const draft = await this.drafts.getDraft(draftId);
-    const entries = await this.git.history(draft.worktree_path, limit);
-    return entries.map((entry) => ({ ...entry, semantic_summary: summarizePaths([]) }));
+    const [entries, statuses] = await Promise.all([
+      this.git.history(draft.worktree_path, limit),
+      this.git.historyFileStatuses(draft.worktree_path, limit),
+    ]);
+    return entries.map((entry) => ({ ...entry, semantic_summary: summarizeFiles(statuses.get(entry.commit) ?? []) }));
   }
 
   async detail(draftId: string, commit: string): Promise<CommitHistoryDetail> {
     const draft = await this.drafts.getDraft(draftId);
     const detail = await this.git.commitDetail(draft.worktree_path, commit);
-    return { ...detail, semantic_summary: summarizePaths(detail.files.map((file) => file.path)) };
+    return { ...detail, semantic_summary: summarizeFiles(detail.files) };
   }
 
   async fileHistory(draftId: string, relativePath: string, limit = 50): Promise<readonly GitHistoryEntry[]> {

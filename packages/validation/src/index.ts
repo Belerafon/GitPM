@@ -1,4 +1,4 @@
-import { readdir, readFile, realpath, stat } from "node:fs/promises";
+import { lstat, readdir, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Ajv2020 } from "ajv/dist/2020.js";
@@ -70,14 +70,67 @@ const schemaIds = new Map([
 
 const normalize = (value: string) => value.split(path.sep).join("/");
 
-async function filesUnder(directory: string): Promise<string[]> {
+const DOMAIN_DIRECTORIES = [".gitpm", "people", "teams", "calendars", "projects"] as const;
+const REQUIRED_DOCUMENTS = [
+  ".gitpm/repository.yaml",
+  ".gitpm/statuses.yaml",
+  ".gitpm/issue-types.yaml",
+] as const;
+
+export interface RepositoryFileDiscovery {
+  readonly files: readonly string[];
+  readonly issues: readonly ValidationIssue[];
+}
+
+async function filesUnder(
+  root: string,
+  directory: string,
+  issues: ValidationIssue[],
+): Promise<string[]> {
   const entries = await readdir(directory, { withFileTypes: true });
   const nested = await Promise.all(entries.map(async (entry) => {
     const absolute = path.join(directory, entry.name);
-    if (entry.isDirectory()) return await filesUnder(absolute);
-    return entry.name.endsWith(".yaml") ? [absolute] : [];
+    const relative = normalize(path.relative(root, absolute));
+    if (entry.isSymbolicLink()) {
+      issues.push({ severity: "error", code: "FS_SYMLINK", path: relative, message: "Repository domain paths must not contain symlinks" });
+      return [];
+    }
+    if (entry.isDirectory()) return await filesUnder(root, absolute, issues);
+    return entry.isFile() && entry.name.endsWith(".yaml") ? [absolute] : [];
   }));
-  return nested.flat().sort();
+  return nested.flat();
+}
+
+export async function discoverRepositoryFiles(repositoryRoot: string): Promise<RepositoryFileDiscovery> {
+  const root = await realpath(repositoryRoot);
+  const issues: ValidationIssue[] = [];
+  const files: string[] = [];
+
+  for (const directory of DOMAIN_DIRECTORIES) {
+    const absolute = path.join(root, directory);
+    try {
+      const metadata = await lstat(absolute);
+      if (metadata.isSymbolicLink()) {
+        issues.push({ severity: "error", code: "FS_SYMLINK", path: directory, message: "Required repository directory must not be a symlink" });
+      } else if (!metadata.isDirectory()) {
+        issues.push({ severity: "error", code: "REPOSITORY_DIRECTORY_REQUIRED", path: directory, message: "Required repository path must be a directory" });
+      } else {
+        files.push(...await filesUnder(root, absolute, issues));
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      issues.push({ severity: "error", code: "REPOSITORY_DIRECTORY_REQUIRED", path: directory, message: "Required repository directory is missing" });
+    }
+  }
+
+  const relativeFiles = new Set(files.map((absolute) => normalize(path.relative(root, absolute))));
+  for (const required of REQUIRED_DOCUMENTS) {
+    if (!relativeFiles.has(required)) {
+      issues.push({ severity: "error", code: "REPOSITORY_DOCUMENT_REQUIRED", path: required, message: "Required repository configuration document is missing" });
+    }
+  }
+
+  return { files: files.sort(), issues };
 }
 
 let validatorsPromise: Promise<Map<string, ValidateFunction>> | undefined;
@@ -190,10 +243,12 @@ export async function validateRepository(repositoryRoot: string): Promise<Valida
   const add = (issue: ValidationIssue) => issues.push(issue);
   const documents: LoadedDocument[] = [];
   const structurallyValid = new Set<string>();
+  const discovery = await discoverRepositoryFiles(root);
+  for (const issue of discovery.issues) add(issue);
 
   const previousCache = documentCache.get(root) ?? new Map<string, CachedDocument>();
   const nextCache = new Map<string, CachedDocument>();
-  const loaded = await Promise.all((await filesUnder(root)).map(async (absolute): Promise<CachedDocument> => {
+  const loaded = await Promise.all(discovery.files.map(async (absolute): Promise<CachedDocument> => {
     const relative = normalize(path.relative(root, absolute));
     const metadata = await stat(absolute, { bigint: true });
     const cacheKey = `${metadata.size}:${metadata.mtimeNs}`;
@@ -299,8 +354,13 @@ export async function validateRepository(repositoryRoot: string): Promise<Valida
     ...values(repository?.value.allowed_top_level_files),
     ...values(repository?.value.allowed_top_level_directories),
   ]);
-  for (const entry of await readdir(root)) {
-    if (!allowedTop.has(entry)) add({ severity: "error", code: "REPOSITORY_TOP_LEVEL", path: entry, message: "Unknown top-level entry" });
+  const discoveryIssueKeys = new Set(discovery.issues.map((issue) => `${issue.code}:${issue.path}`));
+  for (const entry of await readdir(root, { withFileTypes: true })) {
+    if (entry.isSymbolicLink() && !discoveryIssueKeys.has(`FS_SYMLINK:${entry.name}`)) {
+      add({ severity: "error", code: "FS_SYMLINK", path: entry.name, message: "Repository top-level paths must not be symlinks" });
+    } else if (!allowedTop.has(entry.name)) {
+      add({ severity: "error", code: "REPOSITORY_TOP_LEVEL", path: entry.name, message: "Unknown top-level entry" });
+    }
   }
 
   const reference = (id: unknown, schema: string, owner: LoadedDocument): LoadedDocument | undefined => {
@@ -399,7 +459,8 @@ export async function validateRepository(repositoryRoot: string): Promise<Valida
 export async function validateDelete(repositoryRoot: string, entityId: string): Promise<readonly ValidationIssue[]> {
   const root = await realpath(repositoryRoot);
   const issues: ValidationIssue[] = [];
-  for (const absolute of await filesUnder(root)) {
+  const discovery = await discoverRepositoryFiles(root);
+  for (const absolute of discovery.files) {
     const relative = normalize(path.relative(root, absolute));
     try {
       const document = parseYamlDocument(await readFile(absolute, "utf8"), relative);

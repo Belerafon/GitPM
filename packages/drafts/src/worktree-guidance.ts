@@ -164,9 +164,10 @@ Move a task with
 \`gitpm entity move --draft ${draftId} --type task --id <entity-id> --to-project <id> [--to-milestone <id>] --allow-delete --json\`.
 
 Then run \`format\`, \`validate --changed\`, and \`diff --semantic\` with
-\`--draft ${draftId}\`, \`--json\`, and \`--project\` when scoped. Commit only with
-\`gitpm commit --all\`. Use \`gitpm push\` and \`gitpm mr create\` only when publication was
-requested. The full command reference and decision rules are in the skill.
+\`--draft ${draftId}\`, \`--json\`, and \`--project\` when scoped. Repeat
+\`--allow-delete\` on every verification and commit command while a physical deletion is present.
+Commit only with \`gitpm commit --all\`. Use \`gitpm push\` and \`gitpm mr create\` only when
+publication was requested. The full command reference and decision rules are in the skill.
 
 ## Errors, ambiguity, and product feedback
 
@@ -299,12 +300,12 @@ All commands accept \`--json\`; use it for automation.
   [--to-milestone <id>] [--allow-delete] [--project <id>]\` relocates a task and its comments
   to another Project.
 - \`gitpm schema list|show <type> [--example]\` exposes the installed schema contract.
-- \`gitpm format [--draft <id>] [--project <id>] [--check]\` applies or checks canonical YAML.
-- \`gitpm validate [--draft <id>] [--project <id>] [--changed]\` validates repository structure,
+- \`gitpm format [--draft <id>] [--project <id>] [--check] [--allow-delete]\` applies or checks canonical YAML.
+- \`gitpm validate [--draft <id>] [--project <id>] [--changed] [--allow-delete]\` validates repository structure,
   schemas, identities, references, dates, and scope closure.
-- \`gitpm diff --semantic [--draft <id>] [--project <id>]\` reports created, updated, archived,
+- \`gitpm diff --semantic [--draft <id>] [--project <id>] [--allow-delete]\` reports created, updated, archived,
   and deleted entities.
-- \`gitpm commit --all --draft <id> -m <message> [--project <id>]\` validates and commits the
+- \`gitpm commit --all --draft <id> -m <message> [--project <id>] [--allow-delete]\` validates and commits the
   complete draft. Partial staging is unsupported.
 - \`gitpm push --draft <id>\` publishes a clean committed branch.
 - \`gitpm mr create --draft <id> --owner <id> --title <title> [--description <text>]\` opens a
@@ -332,7 +333,8 @@ must not be treated as permission to widen scope. Ask the user if the requested 
 requires global changes.
 
 Physical deletion is distinct from archive. \`gitpm entity delete\` removes the entity file and
-requires \`--allow-delete\`; use \`--dry-run\` first to preview reference restrictions.
+requires \`--allow-delete\`; use \`--dry-run\` first to preview reference restrictions. Repeat
+\`--allow-delete\` for format, validation, semantic diff, and commit while the deletion is present.
 \`gitpm entity archive\` sets lifecycle to archived without removing the file. Reference and
 repository validation still apply to both.
 
@@ -340,11 +342,11 @@ repository validation still apply to both.
 
 Run, in order:
 
-\`gitpm format --draft <draft-id> [--project <project-id>] --json\`
+\`gitpm format --draft <draft-id> [--project <project-id>] [--allow-delete] --json\`
 
-\`gitpm validate --changed --draft <draft-id> [--project <project-id>] --json\`
+\`gitpm validate --changed --draft <draft-id> [--project <project-id>] [--allow-delete] --json\`
 
-\`gitpm diff --semantic --draft <draft-id> [--project <project-id>] --json\`
+\`gitpm diff --semantic --draft <draft-id> [--project <project-id>] [--allow-delete] --json\`
 
 Check the process exit code, \`ok\`, stable \`code\`, affected Projects, entity counts, fields,
 and unclassified files. Stop on any unexpected path, scope, deletion, warning requiring user
@@ -355,7 +357,7 @@ or retrying with broader scope.
 
 Commit only after the semantic result matches the user's intent:
 
-\`gitpm commit --all --draft <draft-id> -m <message> [--project <project-id>] --json\`
+\`gitpm commit --all --draft <draft-id> -m <message> [--project <project-id>] [--allow-delete] --json\`
 
 This intentionally stages all validated draft changes; partial staging is not supported. Do not
 substitute raw Git commands.

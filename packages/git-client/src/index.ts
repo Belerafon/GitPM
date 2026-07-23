@@ -57,6 +57,7 @@ export interface GitHistoryEntry {
 
 export interface GitCommitFile {
   readonly path: string;
+  readonly status: "Added" | "Modified" | "Deleted";
   readonly additions: number | null;
   readonly deletions: number | null;
 }
@@ -87,6 +88,13 @@ function parseHistoryRecord(record: string): GitHistoryEntry {
     authored_at: authoredAt,
     subject,
   };
+}
+
+function commitFileStatus(value: string): GitCommitFile["status"] {
+  const normalized = value.trim();
+  if (normalized.startsWith("A")) return "Added";
+  if (normalized.startsWith("D")) return "Deleted";
+  return "Modified";
 }
 
 function safeEnvironment(home: string): NodeJS.ProcessEnv {
@@ -485,6 +493,26 @@ export class GitClient {
     return result.stdout.split("\x1e").map((value) => value.trim()).filter(Boolean).map(parseHistoryRecord);
   }
 
+  async historyFileStatuses(worktree: string, limit = 50): Promise<ReadonlyMap<string, readonly Pick<GitCommitFile, "path" | "status">[]>> {
+    if (!Number.isInteger(limit) || limit < 1 || limit > 200) throw new GitCommandError("GIT_HISTORY_LIMIT_INVALID", "History limit must be between 1 and 200");
+    const result = await this.git([
+      "-C", await realpath(worktree), "log", `--max-count=${limit}`,
+      "--format=%x1e%H", "-z", "--name-status", "--no-renames",
+    ]);
+    const statuses = new Map<string, readonly Pick<GitCommitFile, "path" | "status">[]>();
+    for (const record of result.stdout.split("\x1e").filter(Boolean)) {
+      const [commit = "", ...fields] = record.split("\0").filter(Boolean);
+      const files: Array<Pick<GitCommitFile, "path" | "status">> = [];
+      for (let index = 0; index < fields.length; index += 2) {
+        const status = fields[index];
+        const filePath = fields[index + 1];
+        if (status !== undefined && filePath !== undefined) files.push({ path: filePath, status: commitFileStatus(status) });
+      }
+      statuses.set(assertCommitId(commit), files);
+    }
+    return statuses;
+  }
+
   async fileHistory(worktree: string, relativePath: string, limit = 50): Promise<readonly GitHistoryEntry[]> {
     if (!Number.isInteger(limit) || limit < 1 || limit > 200) throw new GitCommandError("GIT_HISTORY_LIMIT_INVALID", "History limit must be between 1 and 200");
     const result = await this.git([
@@ -505,10 +533,20 @@ export class GitClient {
     const fields = metadata.stdout.trim().split("\x1f");
     const entry = parseHistoryRecord(fields.slice(0, 6).join("\x1f"));
     const stats = await this.git(["-C", canonical, "show", "--format=", "--numstat", "--no-renames", commit]);
+    const statusResult = await this.git(["-C", canonical, "show", "--format=", "--name-status", "-z", "--no-renames", commit]);
+    const statusFields = statusResult.stdout.split("\0").filter(Boolean);
+    const statuses = new Map<string, GitCommitFile["status"]>();
+    for (let index = 0; index < statusFields.length; index += 2) {
+      const status = statusFields[index];
+      const filePath = statusFields[index + 1];
+      if (status !== undefined && filePath !== undefined) statuses.set(filePath, commitFileStatus(status));
+    }
     const files = stats.stdout.split(/\r?\n/u).filter(Boolean).map((line): GitCommitFile => {
       const [added = "-", deleted = "-", ...pathParts] = line.split("\t");
+      const filePath = pathParts.join("\t");
       return {
-        path: pathParts.join("\t"),
+        path: filePath,
+        status: statuses.get(filePath) ?? "Modified",
         additions: added === "-" ? null : Number.parseInt(added, 10),
         deletions: deleted === "-" ? null : Number.parseInt(deleted, 10),
       };

@@ -7,7 +7,7 @@ import type { CommitHistoryDetail, CommitHistoryItem, DraftStatus } from "./type
 
 const commit = "a".repeat(40);
 const item: CommitHistoryItem = { commit, parents: ["b".repeat(40)], author_name: "QA", author_email: "qa@example.test", authored_at: "2026-07-10T12:00:00.000Z", subject: "Merged task update", semantic_summary: { created: 0, updated: 1, deleted: 0, affected_projects: ["P-26-111111"] } };
-const detail: CommitHistoryDetail = { ...item, body: "Accepted change", files: [{ path: "projects/P-26-111111/tasks/T-26-111111.yaml", additions: 1, deletions: 1 }], diff: "@@ -1 +1 @@\n-old\n+new\n" };
+const detail: CommitHistoryDetail = { ...item, body: "Accepted change", files: [{ path: "projects/P-26-111111/tasks/T-26-111111.yaml", status: "Modified", additions: 1, deletions: 1 }], diff: "@@ -1 +1 @@\n-old\n+new\n" };
 const draft: DraftStatus = { draft_id: "DRF-HISTORY", owner_gitlab_user_id: "42", branch: "gitpm/42/DRF-HISTORY", base_commit: commit, writer_mode: "ui", state: "open", fingerprint: "f".repeat(64), created_at: "2026-07-10T12:00:00.000Z", updated_at: "2026-07-10T12:00:00.000Z" };
 
 afterEach(cleanup);
@@ -53,7 +53,7 @@ describe("History workspace", () => {
   });
 
   it("keeps long file lists in the file pane and filters them on demand", async () => {
-    const files = Array.from({ length: 11 }, (_, index) => ({ path: `projects/P-26-111111/tasks/T-${String(index).padStart(2, "0")}.yaml`, additions: 1, deletions: 0 }));
+    const files = Array.from({ length: 11 }, (_, index) => ({ path: `projects/P-26-111111/tasks/T-${String(index).padStart(2, "0")}.yaml`, status: "Added" as const, additions: 1, deletions: 0 }));
     const api = { history: async () => [item], commitDetail: async () => ({ ...detail, files }) } as unknown as GitPmApi;
     render(<HistoryWorkspace api={api} draft={draft} locale="en" canRevert={false} onDraftCreated={vi.fn(async () => undefined)} />);
     expect(await screen.findByText("Changed files: 11")).toBeTruthy();
@@ -65,7 +65,7 @@ describe("History workspace", () => {
   it("maps a multi-file commit patch to the file selected in the lower pane", async () => {
     const firstPath = "projects/P-26-111111/project.yaml";
     const secondPath = "projects/P-26-111111/tasks/T-26-222222.yaml";
-    const files = [{ path: firstPath, additions: 1, deletions: 1 }, { path: secondPath, additions: 1, deletions: 1 }];
+    const files = [{ path: firstPath, status: "Modified" as const, additions: 1, deletions: 1 }, { path: secondPath, status: "Modified" as const, additions: 1, deletions: 1 }];
     const diff = `diff --git a/${firstPath} b/${firstPath}\n--- a/${firstPath}\n+++ b/${firstPath}\n@@ -1 +1 @@\n-old project\n+new project\ndiff --git a/${secondPath} b/${secondPath}\n--- a/${secondPath}\n+++ b/${secondPath}\n@@ -3 +3 @@\n-old task\n+new task\n`;
     const api = { history: async () => [item], commitDetail: async () => ({ ...detail, files, diff }), fileHistory: async () => [] } as unknown as GitPmApi;
     render(<HistoryWorkspace api={api} draft={draft} locale="en" canRevert={false} onDraftCreated={vi.fn(async () => undefined)} />);
