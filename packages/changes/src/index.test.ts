@@ -94,6 +94,19 @@ describe("changes and restore service", () => {
     expect(parseUnifiedDiff(diff)).toEqual([expect.objectContaining({ old_start: 1, new_start: 1, old_count: 2, new_count: 2 })]);
   });
 
+  it("marks an oversized change instead of failing the changes view", async () => {
+    const { draft, service } = await runtime();
+    const absolute = path.join(draft.worktree_path, ...projectFile.split("/"));
+    const block = `${Array.from({ length: 38000 }, (_, index) => `line-${index}-${"x".repeat(20)}`).join("\n")}\n`;
+    await writeFile(absolute, block, "utf8");
+
+    const listed = await service.list("DRF-CHANGES");
+    const change = listed.files.find((file) => file.path === projectFile)!;
+    expect(change).toMatchObject({ kind: "Modified", oversized: true });
+    expect(change.hunks).toEqual([]);
+    expect(listed.changed_files_count).toBeGreaterThanOrEqual(1);
+  });
+
   it("describes created, updated, archived and deleted domain documents", async () => {
     const { draft, service } = await runtime();
     const projectAbsolute = path.join(draft.worktree_path, ...projectFile.split("/"));

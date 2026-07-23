@@ -42,6 +42,10 @@ interface CommandResult {
   readonly stderr: string;
 }
 
+function gitCommandLabel(args: readonly string[]): string {
+  return args.find((arg) => /^[a-z][a-z-]*$/u.test(arg)) ?? "command";
+}
+
 export interface GitHistoryEntry {
   readonly commit: string;
   readonly parents: readonly string[];
@@ -145,7 +149,7 @@ async function executeGit(
       const code = exitCode ?? -1;
       onCommand?.({ args, durationMs: performance.now() - started, exitCode: code });
       if (timedOut) reject(new GitCommandError("GIT_TIMEOUT", "Git command timed out", code));
-      else if (outputLimited) reject(new GitCommandError("GIT_OUTPUT_LIMIT", "Git command exceeded output limit", code));
+      else if (outputLimited) reject(new GitCommandError("GIT_OUTPUT_LIMIT", `Git "${gitCommandLabel(args)}" output exceeded the ${MAX_OUTPUT_BYTES}-byte limit`, code));
       else {
         const result = { stdout: Buffer.concat(stdout).toString("utf8"), stderr: Buffer.concat(stderr).toString("utf8") };
         if (code === 0) resolve(result);
@@ -362,19 +366,39 @@ export class GitClient {
     if (relativePaths.some((value) => !/^[A-Za-z0-9._/-]+$/u.test(value))) {
       throw new GitCommandError("GIT_PATH_INVALID", "Batched Git paths must use the repository path allowlist");
     }
-    const result = await this.git([
-      "-C", await realpath(worktree), "diff", "--no-color", "--no-ext-diff", "--no-textconv", "--no-renames",
-      `--unified=${contextLines}`, "--", ...relativePaths,
-    ]);
-    const requested = new Set(relativePaths);
-    const patches = result.stdout.split(/(?=^diff --git )/mu).filter(Boolean);
-    const mapped = new Map<string, string>();
+    const canonical = await realpath(worktree);
+    const result = new Map<string, string>();
+    const chunkSize = 32;
+    for (let index = 0; index < relativePaths.length; index += chunkSize) {
+      const slice = relativePaths.slice(index, index + chunkSize);
+      try {
+        const stdout = (await this.git([
+          "-C", canonical, "diff", "--no-color", "--no-ext-diff", "--no-textconv", "--no-renames",
+          `--unified=${contextLines}`, "--", ...slice,
+        ])).stdout;
+        this.assignDiffPatches(result, stdout, slice);
+      } catch (error) {
+        if (!(error instanceof GitCommandError) || error.code !== "GIT_OUTPUT_LIMIT") throw error;
+        for (const relativePath of slice) {
+          try { result.set(relativePath, await this.diffFile(worktree, relativePath, contextLines)); }
+          catch (innerError) {
+            if (innerError instanceof GitCommandError && innerError.code === "GIT_OUTPUT_LIMIT") continue;
+            throw innerError;
+          }
+        }
+      }
+    }
+    return result;
+  }
+
+  private assignDiffPatches(target: Map<string, string>, stdout: string, requested: readonly string[]): void {
+    const wanted = new Set(requested);
+    const patches = stdout.split(/(?=^diff --git )/mu).filter(Boolean);
     for (const patch of patches) {
       const header = patch.slice(0, patch.indexOf("\n"));
       const match = /^diff --git a\/([A-Za-z0-9._/-]+) b\/\1$/u.exec(header);
-      if (match?.[1] && requested.has(match[1])) mapped.set(match[1], patch);
+      if (match?.[1] && wanted.has(match[1])) target.set(match[1], patch);
     }
-    return mapped;
   }
 
   async showHeadFile(worktree: string, relativePath: string): Promise<string> {
@@ -386,6 +410,28 @@ export class GitClient {
     if (relativePaths.length === 0) return new Map();
     if (relativePaths.some((value) => /[\r\n\0]/u.test(value))) throw new GitCommandError("GIT_PATH_INVALID", "Git path is invalid");
     const canonical = await realpath(worktree);
+    const result = new Map<string, string>();
+    const chunkSize = 32;
+    for (let index = 0; index < relativePaths.length; index += chunkSize) {
+      const slice = relativePaths.slice(index, index + chunkSize);
+      try {
+        const batch = await this.showHeadBatch(canonical, slice);
+        for (const [key, value] of batch) result.set(key, value);
+      } catch (error) {
+        if (!(error instanceof GitCommandError) || error.code !== "GIT_OUTPUT_LIMIT") throw error;
+        for (const relativePath of slice) {
+          try { result.set(relativePath, await this.showHeadFile(worktree, relativePath)); }
+          catch (innerError) {
+            if (innerError instanceof GitCommandError && innerError.code === "GIT_OUTPUT_LIMIT") continue;
+            throw innerError;
+          }
+        }
+      }
+    }
+    return result;
+  }
+
+  private async showHeadBatch(canonical: string, relativePaths: readonly string[]): Promise<Map<string, string>> {
     const args = ["-C", canonical, "cat-file", "--batch"];
     const output = await new Promise<Buffer>((resolve, reject) => {
       const child = spawn("git", args, { env: safeEnvironment(this.homeDirectory), shell: false, windowsHide: true });
@@ -406,7 +452,7 @@ export class GitClient {
         const code = exitCode ?? -1;
         this.onCommand?.({ args, durationMs: 0, exitCode: code });
         if (timedOut) reject(new GitCommandError("GIT_TIMEOUT", "Git command timed out", code));
-        else if (outputLimited) reject(new GitCommandError("GIT_OUTPUT_LIMIT", "Git command exceeded output limit", code));
+        else if (outputLimited) reject(new GitCommandError("GIT_OUTPUT_LIMIT", `Git "${gitCommandLabel(args)}" output exceeded the ${MAX_OUTPUT_BYTES}-byte limit`, code));
         else if (code !== 0) reject(new GitCommandError("GIT_FAILED", "git cat-file failed", code));
         else resolve(Buffer.concat(chunks));
       });

@@ -40,19 +40,23 @@ function DiffViewer({ file, canRestore, busy, restoreFile, restoreHunk, labels }
   readonly busy: boolean;
   readonly restoreFile: () => void;
   readonly restoreHunk: (index: number) => void;
-  readonly labels: { restoreFile: string; restoreHunk: string; kind: string };
+  readonly labels: { restoreFile: string; restoreHunk: string; kind: string; tooLarge: string };
 }) {
   return <div className="diff-viewer">
     <div className="diff-heading"><div><span className={`change-kind kind-${file.kind.toLowerCase()}`}>{labels.kind}</span><code>{file.path}</code></div>
       {canRestore && file.kind !== "Added" && <button disabled={busy} onClick={restoreFile}>{labels.restoreFile}</button>}
     </div>
-    {file.hunks.map((hunk, hunkIndex) => <section className="diff-hunk" key={`${file.diff_token}-${hunkIndex}`}>
-      <div className="hunk-heading"><code>@@ -{hunk.old_start},{hunk.old_count} +{hunk.new_start},{hunk.new_count} @@</code>
-        {canRestore && file.kind === "Modified" && <button disabled={busy} onClick={() => restoreHunk(hunkIndex)}>{labels.restoreHunk}</button>}
-      </div>
-      <pre>{hunk.lines.map((line, index) => <span className={line.startsWith("+") ? "diff-add" : line.startsWith("-") ? "diff-delete" : "diff-context"} key={index}>{line || " "}</span>)}</pre>
-    </section>)}
-    {file.hunks.length === 0 && <pre className="diff-raw">{file.diff}</pre>}
+    {file.oversized
+      ? <p className="diff-oversized">{labels.tooLarge}</p>
+      : <>
+        {file.hunks.map((hunk, hunkIndex) => <section className="diff-hunk" key={`${file.diff_token}-${hunkIndex}`}>
+          <div className="hunk-heading"><code>@@ -{hunk.old_start},{hunk.old_count} +{hunk.new_start},{hunk.new_count} @@</code>
+            {canRestore && file.kind === "Modified" && <button disabled={busy} onClick={() => restoreHunk(hunkIndex)}>{labels.restoreHunk}</button>}
+          </div>
+          <pre>{hunk.lines.map((line, index) => <span className={line.startsWith("+") ? "diff-add" : line.startsWith("-") ? "diff-delete" : "diff-context"} key={index}>{line || " "}</span>)}</pre>
+        </section>)}
+        {file.hunks.length === 0 && <pre className="diff-raw">{file.diff}</pre>}
+      </>}
   </div>;
 }
 
@@ -146,7 +150,7 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
       <aside className="card change-files"><div className="change-files-heading"><h3>{t("changes.fileChanges")}</h3>{changes.files.length > 0 && canMutate && <button className="danger subtle" disabled={busy} onClick={() => { if (confirmAction(t("changes.discardConfirm"))) void run(() => api.discardAll(draft.draft_id, draft.fingerprint)); }}>{t("changes.discardAll")}</button>}</div>
         {changes.files.length === 0 ? <p>{t("changes.clean")}</p> : changes.files.map((file) => <button className={selected?.path === file.path ? "change-file selected" : "change-file"} key={file.path} onClick={() => setSelectedPath(file.path)}><span className={`change-dot kind-${file.kind.toLowerCase()}`} /><span><strong>{t(`changes.kind${file.kind}`)}</strong><code>{file.path}</code></span></button>)}
       </aside>
-      <div className="card change-detail">{selected === undefined ? <div className="empty-change"><strong>{t("changes.clean")}</strong><span>{t("changes.cleanHint")}</span></div> : <DiffViewer file={selected} canRestore={canMutate} busy={busy} restoreFile={() => void run(() => api.restoreFile(draft.draft_id, draft.fingerprint, selected.path))} restoreHunk={(index) => void run(() => api.restoreHunk(draft.draft_id, draft.fingerprint, selected.path, selected.diff_token, index))} labels={{ restoreFile: t("changes.restoreFile"), restoreHunk: t("changes.restoreHunk"), kind: t(`changes.kind${selected.kind}`) }} />}</div>
+      <div className="card change-detail">{selected === undefined ? <div className="empty-change"><strong>{t("changes.clean")}</strong><span>{t("changes.cleanHint")}</span></div> : <DiffViewer file={selected} canRestore={canMutate} busy={busy} restoreFile={() => void run(() => api.restoreFile(draft.draft_id, draft.fingerprint, selected.path))} restoreHunk={(index) => void run(() => api.restoreHunk(draft.draft_id, draft.fingerprint, selected.path, selected.diff_token, index))} labels={{ restoreFile: t("changes.restoreFile"), restoreHunk: t("changes.restoreHunk"), kind: t(`changes.kind${selected.kind}`), tooLarge: t("changes.diffTooLarge") }} />}</div>
     </div>
     <div className="card semantic-diff"><div className="semantic-heading"><div><span className="eyebrow">{t("changes.semanticEyebrow")}</span><h3>{t("changes.semanticHeading")}</h3></div><span>{t("changes.projects", { count: semantic.affected_projects.length })}</span></div>
       <div className="semantic-grid"><SemanticGroup title={t("changes.created")} items={semantic.created} empty={t("changes.emptyValue")} /><SemanticGroup title={t("changes.updated")} items={semantic.updated} empty={t("changes.emptyValue")} /><SemanticGroup title={t("changes.archived")} items={semantic.archived} empty={t("changes.emptyValue")} /><SemanticGroup title={t("changes.deleted")} items={semantic.deleted} empty={t("changes.emptyValue")} /></div>

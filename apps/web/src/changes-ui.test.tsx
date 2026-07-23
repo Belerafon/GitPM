@@ -52,6 +52,17 @@ describe("Changes workspace", () => {
     await waitFor(() => expect(fixture.restoreHunk).toHaveBeenCalledWith("DRF-CHANGES", draft.fingerprint, "projects/P-26-111111/project.yaml", "one", 0));
   });
 
+  it("shows a localized notice instead of the diff for an oversized change", async () => {
+    const fixture = new ChangesApi();
+    fixture.changes = { changed_files_count: 1, affected_projects: [], files: [
+      { path: "projects/P-26-111111/project.yaml", kind: "Modified", diff_token: "big", diff: "diff --git\n", hunks: [], oversized: true },
+    ] };
+    render(<ChangesWorkspace api={fixture as unknown as GitPmApi} draft={draft} role="Developer" locale="en" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} />);
+    await screen.findAllByText("projects/P-26-111111/project.yaml");
+    expect(screen.getByText(/This change is too large to display/u)).toBeTruthy();
+    expect(screen.queryByText("-old")).toBeNull();
+  });
+
   it("commits every file without staging selection, then pushes and creates a merge request", async () => {
     const fixture = new ChangesApi();
     render(<ChangesWorkspace api={fixture as unknown as GitPmApi} draft={draft} role="Developer" locale="en" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} />);

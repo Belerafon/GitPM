@@ -316,6 +316,7 @@
   ,"changes.kindDeleted": "Удалён"
   ,"changes.restoreFile": "Восстановить файл"
   ,"changes.restoreHunk": "Отменить фрагмент"
+  ,"changes.diffTooLarge": "Изменение слишком велико для отображения. Восстановите файл или закоммитьте и смотрите дифф в истории."
   ,"changes.semanticEyebrow": "Предметная область"
   ,"changes.semanticHeading": "Семантический diff"
   ,"changes.projects": "Затронуто проектов: {count}"
