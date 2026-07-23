@@ -1,0 +1,3 @@
+# Keep uploads searchable by ripgrep-based agent tools even though Git ignores them.
+!uploads/
+!uploads/**

@@ -715,6 +715,7 @@ default_calendar: ${calendarId} # calendar: Standard work week
 allowed_top_level_files:
   - README.md
   - .gitignore
+  - .ignore
 allowed_top_level_directories:
   - uploads
 ui_poll_interval_seconds: 5
@@ -776,6 +777,11 @@ const INIT_GITIGNORE = `# User-supplied artefacts are local inputs, not GitPM bu
 !/uploads/.gitkeep
 `;
 
+const INIT_IGNORE = `# Keep uploads searchable by ripgrep-based agent tools even though Git ignores them.
+!uploads/
+!uploads/**
+`;
+
 const INIT_KEEPERS = ["people", "teams", "projects"] as const;
 
 async function directoryIsEmpty(directory: string): Promise<boolean> {
@@ -817,6 +823,7 @@ async function runInit(args: readonly string[], cwd: string, dependencies: NonNu
   await writeFile(path.join(target, "calendars", `${calendarId}.yaml`), initCalendarYaml(calendarId), "utf8");
   await writeFile(path.join(target, "README.md"), INIT_README_MD, "utf8");
   await writeFile(path.join(target, ".gitignore"), INIT_GITIGNORE, "utf8");
+  await writeFile(path.join(target, ".ignore"), INIT_IGNORE, "utf8");
   await writeFile(path.join(target, "uploads", ".gitkeep"), "", "utf8");
 
   const gitEnv = { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null" };

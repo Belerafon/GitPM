@@ -94,7 +94,10 @@ Work conservatively:
 The \`uploads/\` directory at the repository root is a working area for incoming
 documents (for example, \`.docx\`, \`.xlsx\`, \`.pdf\` reports) that you read but never
 import verbatim into the GitPM data store. \`uploads/\` is listed in
-\`allowed_top_level_directories\` and ignored by the root \`.gitignore\`, so:
+\`allowed_top_level_directories\` and ignored by the root \`.gitignore\`, so Git
+never tracks incoming files. The companion root \`.ignore\` un-ignores
+\`uploads/\` for ripgrep-based tools (including OpenCode), so you can still
+discover and read these files while Git ignores them:
 
 - read, parse, and convert these files freely;
 - never copy their bytes into \`projects/\`, \`people/\`, \`teams/\`, \`calendars/\`,

@@ -164,9 +164,14 @@ JSON Schema 2020-12 лежат в `schemas/v1`. Канонический YAML и
 LF и два пробела; duplicate keys, aliases, custom tags, неизвестные схемы и
 нарушения ссылок отклоняются. Полный контракт: [repository format v1](docs/GitPM_Repository_Format_v1.md).
 
-`gitpm init` также создаёт `.gitignore` и `uploads/.gitkeep`. В `uploads/` можно
-положить исходные PDF/DOCX/XLSX для разбора агентом; их содержимое игнорируется
-Git и не входит в GitPM validation, semantic diff или публикацию.
+`gitpm init` также создаёт `.gitignore`, `.ignore` и `uploads/.gitkeep`. В
+`uploads/` можно положить исходные PDF/DOCX/XLSX для разбора агентом; их
+содержимое игнорируется Git и не входит в GitPM validation, semantic diff или
+публикацию. `.gitignore` убирает `uploads/` из Git, а корневой `.ignore`
+возвращает `uploads/` в область поиска инструментов на базе `ripgrep` (включая
+OpenCode) — агент может читать эти файлы, но не должен коммитить их как
+бизнес-данные GitPM. Ни один из этих файлов не является механизмом контроля
+доступа.
 
 ## Архитектура репозитория исходного кода
 

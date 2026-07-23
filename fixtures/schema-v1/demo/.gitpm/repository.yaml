@@ -4,6 +4,7 @@ default_calendar: C-26-QD7FJ4 # calendar: Standard work week
 allowed_top_level_files:
   - README.md
   - .gitignore
+  - .ignore
 allowed_top_level_directories:
   - uploads
 ui_poll_interval_seconds: 5
