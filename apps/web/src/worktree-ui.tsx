@@ -1,10 +1,36 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { GitPmApi } from "./api.js";
 import type { Locale, MessageKey } from "./i18n.js";
 import { message } from "./i18n.js";
 import type { DraftStatus, GitPmRole, WorktreeEntry, WorktreeFile } from "./types.js";
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const PANE_STORAGE_KEY = "gitpm.worktree.browserPaneShare";
+const DEFAULT_BROWSER_PANE_SHARE = 58;
+const MIN_BROWSER_PANE_SHARE = 30;
+const MAX_BROWSER_PANE_SHARE = 72;
+
+interface PaneResize {
+  readonly pointerId: number;
+  readonly startX: number;
+  readonly startWidth: number;
+  readonly layoutWidth: number;
+}
+
+function clampBrowserPaneShare(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_BROWSER_PANE_SHARE;
+  return Math.min(MAX_BROWSER_PANE_SHARE, Math.max(MIN_BROWSER_PANE_SHARE, Math.round(value)));
+}
+
+function readBrowserPaneShare(): number {
+  if (typeof localStorage === "undefined") return DEFAULT_BROWSER_PANE_SHARE;
+  try {
+    const value = Number(localStorage.getItem(PANE_STORAGE_KEY));
+    return value === 0 ? DEFAULT_BROWSER_PANE_SHARE : clampBrowserPaneShare(value);
+  } catch {
+    return DEFAULT_BROWSER_PANE_SHARE;
+  }
+}
 
 function formatBytes(locale: Locale, bytes: number): string {
   if (bytes < 1024) return `${new Intl.NumberFormat(locale).format(bytes)} B`;
@@ -168,10 +194,14 @@ export function WorktreeWorkspace({ api, draft, role, locale, onChanged, confirm
   const [actionError, setActionError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<DialogState>(null);
   const [nameValue, setNameValue] = useState("");
-  const [selectedEntry, setSelectedEntry] = useState<WorktreeEntry | null>(null);
+  const [actionMenuPath, setActionMenuPath] = useState<string | null>(null);
+  const [browserPaneShare, setBrowserPaneShare] = useState(readBrowserPaneShare);
+  const [paneResize, setPaneResize] = useState<PaneResize | null>(null);
   const treeRequest = useRef(0);
   const fileRequest = useRef(0);
   const fileInput = useRef<HTMLInputElement | null>(null);
+  const layoutRef = useRef<HTMLElement | null>(null);
+  const browserPaneRef = useRef<HTMLDivElement | null>(null);
 
   const load = (path: string) => {
     const request = ++treeRequest.current;
@@ -186,7 +216,7 @@ export function WorktreeWorkspace({ api, draft, role, locale, onChanged, confirm
     setCurrentPath("");
     setSelectedPath(undefined);
     setSelected(null);
-    setSelectedEntry(null);
+    setActionMenuPath(null);
     setFileError(null);
     setActionError(null);
     load("");
@@ -194,21 +224,38 @@ export function WorktreeWorkspace({ api, draft, role, locale, onChanged, confirm
   }, [api, draft.draft_id]);
 
   useEffect(() => {
-    if (selectedEntry !== null && entries !== null && !entries.some((entry) => entry.path === selectedEntry.path)) setSelectedEntry(null);
-  }, [entries, selectedEntry]);
+    try { localStorage.setItem(PANE_STORAGE_KEY, String(browserPaneShare)); } catch { /* storage unavailable */ }
+  }, [browserPaneShare]);
+
+  useEffect(() => {
+    if (actionMenuPath === null) return;
+    const closeOnOutside = (event: Event) => {
+      if (event.target instanceof Element && event.target.closest(".fm-row-menu") === null) setActionMenuPath(null);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setActionMenuPath(null);
+    };
+    document.addEventListener("pointerdown", closeOnOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [actionMenuPath]);
 
   const navigate = (path: string) => {
     if (busy) return;
     setCurrentPath(path);
     setSelectedPath(undefined);
     setSelected(null);
-    setSelectedEntry(null);
+    setActionMenuPath(null);
     setFileError(null);
     load(path);
   };
 
   const selectFile = (path: string) => {
     const request = ++fileRequest.current;
+    setActionMenuPath(null);
     setSelectedPath(path);
     setSelected(null);
     setFileError(null);
@@ -225,7 +272,7 @@ export function WorktreeWorkspace({ api, draft, role, locale, onChanged, confirm
     try {
       await operation();
       await onChanged();
-      setSelectedEntry(null);
+      setActionMenuPath(null);
       if (!keepSelection) { setSelectedPath(undefined); setSelected(null); setFileError(null); }
       load(currentPath);
     } catch (reason) {
@@ -236,8 +283,8 @@ export function WorktreeWorkspace({ api, draft, role, locale, onChanged, confirm
   };
 
   const openNewFolder = () => { if (!busy) { setNameValue(""); setDialog({ kind: "newFolder" }); } };
-  const openRename = (entry: WorktreeEntry) => { if (!busy) { setNameValue(entry.name); setDialog({ kind: "rename", entry }); } };
-  const openMove = (entry: WorktreeEntry) => { if (!busy) setDialog({ kind: "move", entry }); };
+  const openRename = (entry: WorktreeEntry) => { if (!busy) { setActionMenuPath(null); setNameValue(entry.name); setDialog({ kind: "rename", entry }); } };
+  const openMove = (entry: WorktreeEntry) => { if (!busy) { setActionMenuPath(null); setDialog({ kind: "move", entry }); } };
 
   const submitName = () => {
     if (dialog?.kind !== "newFolder" && dialog?.kind !== "rename") return;
@@ -258,6 +305,7 @@ export function WorktreeWorkspace({ api, draft, role, locale, onChanged, confirm
 
   const removeEntry = (entry: WorktreeEntry) => {
     if (busy || !confirmAction(message(locale, "worktree.deleteConfirm", { name: entry.name }))) return;
+    setActionMenuPath(null);
     void run(async () => { await api.deleteWorktreeEntry(draft.draft_id, draft.fingerprint, entry.path); }, selectedPath !== entry.path);
   };
 
@@ -265,6 +313,52 @@ export function WorktreeWorkspace({ api, draft, role, locale, onChanged, confirm
     const to = joinPath(destination, entry.name);
     setDialog(null);
     void run(async () => { await api.moveWorktreeEntry(draft.draft_id, draft.fingerprint, entry.path, to); }, selectedPath !== entry.path);
+  };
+
+  const beginPaneResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    const layout = layoutRef.current;
+    const browserPane = browserPaneRef.current;
+    if (layout === null || browserPane === null) return;
+    const layoutWidth = layout.getBoundingClientRect().width;
+    if (layoutWidth <= 0) return;
+    event.preventDefault();
+    try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* pointer capture unavailable */ }
+    setPaneResize({
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startWidth: browserPane.getBoundingClientRect().width,
+      layoutWidth,
+    });
+  };
+
+  const movePaneResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (paneResize === null || event.pointerId !== paneResize.pointerId) return;
+    const width = paneResize.startWidth + event.clientX - paneResize.startX;
+    setBrowserPaneShare(clampBrowserPaneShare(width / paneResize.layoutWidth * 100));
+  };
+
+  const endPaneResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (paneResize === null || event.pointerId !== paneResize.pointerId) return;
+    try { event.currentTarget.releasePointerCapture(event.pointerId); } catch { /* pointer capture unavailable */ }
+    setPaneResize(null);
+  };
+
+  const resizePaneByKey = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+      event.preventDefault();
+      const step = event.shiftKey ? 5 : 2;
+      setBrowserPaneShare((current) => clampBrowserPaneShare(current + (event.key === "ArrowRight" ? step : -step)));
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      setBrowserPaneShare(MIN_BROWSER_PANE_SHARE);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      setBrowserPaneShare(MAX_BROWSER_PANE_SHARE);
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      setBrowserPaneShare(DEFAULT_BROWSER_PANE_SHARE);
+    }
   };
 
   const onFilesSelected = async (files: FileList | null) => {
@@ -301,9 +395,14 @@ export function WorktreeWorkspace({ api, draft, role, locale, onChanged, confirm
       { key: "other", label: message(locale, "worktree.otherEntries"), entries: other },
     ].filter((group) => group.entries.length > 0);
   }, [entries, locale]);
+  const previewEntry = selectedPath === undefined ? undefined : entries?.find((entry) => entry.path === selectedPath);
 
-  return <section className={`fm-layout${selectedPath === undefined ? "" : " with-preview"}`}>
-    <div className="fm-browser card">
+  return <section
+    className={`fm-layout${paneResize === null ? "" : " resizing"}`}
+    ref={layoutRef}
+    style={{ "--fm-browser-share": `${browserPaneShare}%` } as CSSProperties}
+  >
+    <div className="fm-browser card" id="fm-browser-pane" ref={browserPaneRef}>
       <header className="fm-toolbar">
         <div className="fm-title">
           <div><h2>{t("worktree.heading")}</h2><p className="workspace-description">{t("worktree.description")}</p></div>
@@ -321,15 +420,6 @@ export function WorktreeWorkspace({ api, draft, role, locale, onChanged, confirm
           </nav>
           <span className="fm-entry-count">{entries?.length ?? 0}</span>
         </div>
-        {selectedEntry !== null && <div className="fm-selectionbar" role="region" aria-label={message(locale, "worktree.selectedEntry", { name: selectedEntry.name })}>
-          <div className="fm-selection-info">{entryIcon(selectedEntry)}<span>{selectedEntry.name}</span></div>
-          <div className="fm-selection-actions">
-            <button type="button" onClick={() => openRename(selectedEntry)} disabled={!canMutate || busy}>{t("worktree.rename")}</button>
-            <button type="button" onClick={() => openMove(selectedEntry)} disabled={!canMutate || busy}>{t("worktree.move")}</button>
-            <button type="button" className="danger" onClick={() => removeEntry(selectedEntry)} disabled={!canMutate || busy}>{t("worktree.delete")}</button>
-            <button type="button" className="fm-selection-clear" aria-label={t("worktree.clearSelection")} onClick={() => setSelectedEntry(null)}>×</button>
-          </div>
-        </div>}
         {!canMutate && <div className="alert warning">{t("worktree.readOnly")}</div>}
         {actionError !== null && <div className="alert error">{actionError}</div>}
       </header>
@@ -339,10 +429,10 @@ export function WorktreeWorkspace({ api, draft, role, locale, onChanged, confirm
         {entries !== null && entries.length === 0 && <span className="fm-empty">{t("worktree.empty")}</span>}
         {entries !== null && entries.length > 0 && <div className="fm-table">
           <div className="fm-header" aria-hidden="true">
-            <span />
             <span>{t("worktree.column.name")}</span>
             <span>{t("worktree.column.type")}</span>
             <span>{t("worktree.column.size")}</span>
+            <span />
           </div>
           {entryGroups.map((group) => <section className="fm-group" key={group.key} aria-labelledby={`fm-group-${group.key}`}>
             <h3 id={`fm-group-${group.key}`}>{group.label}<span>{group.entries.length}</span></h3>
@@ -351,29 +441,74 @@ export function WorktreeWorkspace({ api, draft, role, locale, onChanged, confirm
               const isDir = entry.type === "directory";
               const unavailable = !isFile && !isDir;
               const typeLabel = isDir ? t("worktree.type.folder") : isFile ? t("worktree.type.file") : entry.type;
-              const checked = selectedEntry?.path === entry.path;
-              return <div className={`fm-row${checked ? " selected" : ""}${selectedPath === entry.path ? " previewing" : ""}`} key={entry.path}>
-                <label className="fm-row-select">
-                  <input type="checkbox" checked={checked} disabled={unavailable} aria-label={message(locale, "worktree.selectEntry", { name: entry.name })} onChange={() => setSelectedEntry(checked ? null : entry)} />
-                  <span aria-hidden="true" />
-                </label>
+              const menuOpen = actionMenuPath === entry.path;
+              return <div className={`fm-row${selectedPath === entry.path ? " previewing" : ""}`} key={entry.path}>
                 {unavailable
                   ? <span className="fm-row-open unavailable" title={t(entry.type === "symlink" ? "worktree.symlinkUnavailable" : "worktree.entryUnavailable")}>{entryIcon(entry)}<span className="fm-row-name">{entry.name}</span></span>
                   : <button type="button" className="fm-row-open" onClick={() => (isDir ? navigate(entry.path) : selectFile(entry.path))} title={entry.path}>{entryIcon(entry)}<span className="fm-row-name">{entry.name}</span></button>}
                 <span className="fm-row-type">{typeLabel}</span>
                 <span className="fm-row-size">{entry.size !== undefined ? formatBytes(locale, entry.size) : "—"}</span>
+                {!unavailable
+                  ? <div className="fm-row-menu">
+                    {menuOpen && <div className="fm-row-menu-popover" role="menu">
+                      <button type="button" role="menuitem" onClick={() => openRename(entry)} disabled={!canMutate || busy}>{t("worktree.rename")}</button>
+                      <button type="button" role="menuitem" onClick={() => openMove(entry)} disabled={!canMutate || busy}>{t("worktree.move")}</button>
+                      <button type="button" role="menuitem" className="danger" onClick={() => removeEntry(entry)} disabled={!canMutate || busy}>{t("worktree.delete")}</button>
+                    </div>}
+                    <button
+                      type="button"
+                      className="fm-more-button"
+                      aria-expanded={menuOpen}
+                      aria-haspopup="menu"
+                      aria-label={message(locale, "worktree.moreActions", { name: entry.name })}
+                      onClick={() => setActionMenuPath(menuOpen ? null : entry.path)}
+                      title={message(locale, "worktree.moreActions", { name: entry.name })}
+                    >•••</button>
+                  </div>
+                  : <span />}
               </div>;
             })}
           </section>)}
         </div>}
       </div>
     </div>
-    {selectedPath !== undefined && <div className="fm-preview card">
-      <header><div><span className="eyebrow">{t("worktree.previewHeading")}</span><h2>{baseName(selectedPath)}</h2><code>{selectedPath}</code></div>{selected !== null && <span>{formatBytes(locale, selected.size)}</span>}</header>
-      {fileLoading && <p>{t("status.loading")}</p>}
-      {fileError !== null && <div className="alert error">{fileError}</div>}
-      {selected !== null && <pre tabIndex={0}><code>{selected.content}</code></pre>}
-    </div>}
+    <div
+      aria-controls="fm-browser-pane fm-preview-pane"
+      aria-label={t("worktree.resizePanes")}
+      aria-orientation="vertical"
+      aria-valuemax={MAX_BROWSER_PANE_SHARE}
+      aria-valuemin={MIN_BROWSER_PANE_SHARE}
+      aria-valuenow={browserPaneShare}
+      className="fm-pane-resizer"
+      onKeyDown={resizePaneByKey}
+      onPointerCancel={endPaneResize}
+      onPointerDown={beginPaneResize}
+      onPointerMove={movePaneResize}
+      onPointerUp={endPaneResize}
+      role="separator"
+      tabIndex={0}
+      title={t("worktree.resizePanes")}
+    />
+    <div className="fm-preview card" id="fm-preview-pane">
+      {selectedPath === undefined
+        ? <div className="worktree-placeholder"><h2>{t("worktree.previewHeading")}</h2><p>{t("worktree.selectFile")}</p></div>
+        : <>
+          <header>
+            <div><span className="eyebrow">{t("worktree.previewHeading")}</span><h2>{baseName(selectedPath)}</h2><code>{selectedPath}</code></div>
+            <div className="fm-preview-tools">
+              {selected !== null && <span>{formatBytes(locale, selected.size)}</span>}
+              {previewEntry !== undefined && <div className="fm-preview-actions">
+                <button type="button" onClick={() => openRename(previewEntry)} disabled={!canMutate || busy}>{t("worktree.rename")}</button>
+                <button type="button" onClick={() => openMove(previewEntry)} disabled={!canMutate || busy}>{t("worktree.move")}</button>
+                <button type="button" className="danger" onClick={() => removeEntry(previewEntry)} disabled={!canMutate || busy}>{t("worktree.delete")}</button>
+              </div>}
+            </div>
+          </header>
+          {fileLoading && <p>{t("status.loading")}</p>}
+          {fileError !== null && <div className="alert error">{fileError}</div>}
+          {selected !== null && <pre tabIndex={0}><code>{selected.content}</code></pre>}
+        </>}
+    </div>
     {dialog !== null && dialog.kind !== "move" && <div className="modal-backdrop" role="presentation">
       <section className="fm-dialog" role="dialog" aria-modal="true" aria-labelledby="fm-name-heading">
         <h3 id="fm-name-heading">{dialog.kind === "newFolder" ? t("worktree.newFolderHeading") : message(locale, "worktree.renameHeading", { name: dialog.entry?.name ?? "" })}</h3>

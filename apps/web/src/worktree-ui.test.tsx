@@ -35,7 +35,7 @@ function apiFor(entries: readonly WorktreeEntry[], overrides: Partial<GitPmApi> 
 
 const noChanged = vi.fn(async () => undefined);
 
-afterEach(() => { cleanup(); });
+afterEach(() => { cleanup(); localStorage.clear(); });
 
 describe("working tree file manager", () => {
   it("lists the root folder, navigates into folders, and renders repository text as inert content", async () => {
@@ -97,8 +97,8 @@ describe("working tree file manager", () => {
   it("renames an entry via move", async () => {
     const api = apiFor([file("notes.txt", 3)]);
     render(<WorktreeWorkspace api={api} draft={draft} role="Developer" locale="en" onChanged={noChanged} />);
-    fireEvent.click(await screen.findByRole("checkbox", { name: "Select notes.txt" }));
-    fireEvent.click(await screen.findByRole("button", { name: /Rename/u }));
+    fireEvent.click(await screen.findByRole("button", { name: "notes.txt" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Rename" }));
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "readme.txt" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await vi.waitFor(() => expect(api.moveWorktreeEntry).toHaveBeenCalledWith("DRF-TREE", draft.fingerprint, "notes.txt", "readme.txt"));
@@ -107,16 +107,16 @@ describe("working tree file manager", () => {
   it("deletes an entry after confirmation", async () => {
     const api = apiFor([file("draft.md", 8)]);
     render(<WorktreeWorkspace api={api} draft={draft} role="Developer" locale="en" onChanged={noChanged} confirmAction={() => true} />);
-    fireEvent.click(await screen.findByRole("checkbox", { name: "Select draft.md" }));
-    fireEvent.click(await screen.findByRole("button", { name: /Delete/u }));
+    fireEvent.click(await screen.findByRole("button", { name: "draft.md" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
     await vi.waitFor(() => expect(api.deleteWorktreeEntry).toHaveBeenCalledWith("DRF-TREE", draft.fingerprint, "draft.md"));
   });
 
   it("blocks deletion when confirmation is denied", async () => {
     const api = apiFor([file("draft.md", 8)]);
     render(<WorktreeWorkspace api={api} draft={draft} role="Developer" locale="en" onChanged={noChanged} confirmAction={() => false} />);
-    fireEvent.click(await screen.findByRole("checkbox", { name: "Select draft.md" }));
-    fireEvent.click(await screen.findByRole("button", { name: /Delete/u }));
+    fireEvent.click(await screen.findByRole("button", { name: "draft.md" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
     expect(api.deleteWorktreeEntry).not.toHaveBeenCalled();
   });
 
@@ -147,7 +147,7 @@ describe("working tree file manager", () => {
     expect(live).toHaveLength(0);
   });
 
-  it("groups folders and files in a fixed responsive list without column resizers", async () => {
+  it("groups folders and files and always renders the preview with a pane resizer", async () => {
     const api = apiFor([file("notes.txt", 4), dir("docs")]);
     const { container } = render(<WorktreeWorkspace api={api} draft={draft} role="Developer" locale="en" onChanged={noChanged} />);
     await screen.findByRole("button", { name: "notes.txt" });
@@ -155,20 +155,25 @@ describe("working tree file manager", () => {
     expect(screen.getByRole("heading", { name: "Files1" })).toBeTruthy();
     expect(screen.getByText("Name")).toBeTruthy();
     expect(screen.getByText("Size")).toBeTruthy();
-    expect(screen.queryByRole("separator")).toBeNull();
+    expect(screen.getByRole("heading", { name: "File preview" })).toBeTruthy();
+    expect(screen.getByText("Select a text file to view its contents.")).toBeTruthy();
+    expect(screen.getByRole("separator", { name: "Resize file list and preview" })).toBeTruthy();
     expect(container.querySelector(".fm-table")).toBeTruthy();
   });
 
-  it("shows file actions in the selection toolbar and can clear the selection", async () => {
-    const api = apiFor([file("notes.txt", 4)]);
+  it("shows file actions in the preview header and folder actions in a compact row menu", async () => {
+    const api = apiFor([file("notes.txt", 4), dir("docs")]);
     render(<WorktreeWorkspace api={api} draft={draft} role="Developer" locale="en" onChanged={noChanged} />);
-    fireEvent.click(await screen.findByRole("checkbox", { name: "Select notes.txt" }));
-    expect(screen.getByRole("region", { name: "Selected: notes.txt" })).toBeTruthy();
+    fireEvent.click(await screen.findByRole("button", { name: "notes.txt" }));
     expect(screen.getByRole("button", { name: "Rename" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Move" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Delete" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Clear selection" }));
-    expect(screen.queryByRole("button", { name: "Rename" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "More actions for docs" }));
+    expect(screen.getByRole("menu")).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: "Rename" })).toBeTruthy();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("menu")).toBeNull();
   });
 
   it("hides mutation controls for read-only roles", async () => {
@@ -176,8 +181,22 @@ describe("working tree file manager", () => {
     render(<WorktreeWorkspace api={api} draft={draft} role="Reporter" locale="en" onChanged={noChanged} />);
     expect(await screen.findByText(/read-only/iu)).toBeTruthy();
     expect((screen.getByRole("button", { name: "New folder" }) as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.click(screen.getByRole("checkbox", { name: "Select readme.md" }));
+    fireEvent.click(screen.getByRole("button", { name: "readme.md" }));
     expect((screen.getByRole("button", { name: "Rename" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("changes and remembers the pane width from the accessible separator", async () => {
+    const api = apiFor([file("notes.txt", 4)]);
+    const first = render(<WorktreeWorkspace api={api} draft={draft} role="Developer" locale="en" onChanged={noChanged} />);
+    const separator = screen.getByRole("separator", { name: "Resize file list and preview" });
+    expect(separator.getAttribute("aria-valuenow")).toBe("58");
+    fireEvent.keyDown(separator, { key: "ArrowLeft" });
+    expect(separator.getAttribute("aria-valuenow")).toBe("56");
+    await vi.waitFor(() => expect(localStorage.getItem("gitpm.worktree.browserPaneShare")).toBe("56"));
+
+    first.unmount();
+    render(<WorktreeWorkspace api={api} draft={draft} role="Developer" locale="en" onChanged={noChanged} />);
+    expect(screen.getByRole("separator", { name: "Resize file list and preview" }).getAttribute("aria-valuenow")).toBe("56");
   });
 
   it("shows preview errors without dropping the file selection", async () => {
