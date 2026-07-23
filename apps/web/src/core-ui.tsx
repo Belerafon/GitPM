@@ -67,7 +67,7 @@ function groupOptionValue(group: string, groups: readonly string[]): string {
   return index < 0 ? "" : `group:${index}`;
 }
 
-function projectGroupFromForm(data: FormData, groups: readonly string[]): { readonly valid: boolean; readonly group: string; readonly duplicate: boolean } {
+export function projectGroupFromForm(data: FormData, groups: readonly string[]): { readonly valid: boolean; readonly group: string; readonly duplicate: boolean } {
   const selected = String(data.get("group") ?? "");
   if (selected === "") return { valid: true, group: "", duplicate: false };
   if (selected === NEW_PROJECT_GROUP) {
@@ -81,7 +81,7 @@ function projectGroupFromForm(data: FormData, groups: readonly string[]): { read
   return group === undefined ? { valid: false, group: "", duplicate: false } : { valid: true, group, duplicate: false };
 }
 
-function ProjectGroupField({ currentGroup = "", disabled, groups, t }: {
+export function ProjectGroupField({ currentGroup = "", disabled, groups, t }: {
   readonly currentGroup?: string;
   readonly disabled: boolean;
   readonly groups: readonly string[];
