@@ -8,6 +8,7 @@
 
 - [`../README.md`](../README.md) — возможности, быстрый запуск и карта исходников;
 - [`CLI.md`](CLI.md) — команды, флаги, environment и deployment-сценарии;
+- [`Deployment.md`](Deployment.md) — сборка образов, профили деплоя и механизм версии сборки;
 - [`Repository_Modes.md`](Repository_Modes.md) — `direct` и `worktree`;
 - [`GitPM_Agent_Workflow_v1.md`](GitPM_Agent_Workflow_v1.md) — CLI-only работа агента;
 - [`runbooks/GitPM_Local_Operations_v0.1.md`](runbooks/GitPM_Local_Operations_v0.1.md) — эксплуатация и диагностика.

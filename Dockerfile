@@ -10,6 +10,11 @@ WORKDIR /app
 
 COPY . .
 
+# Capture the build version from Git into build-version.json. This is mandatory:
+# the step fails if .git is absent, so the version is never silently faked.
+# .git is removed right away so it never ships in the final image.
+RUN node scripts/generate-build-version.mjs && rm -rf .git
+
 RUN corepack enable \
     && corepack pnpm install --frozen-lockfile \
     && corepack pnpm build \

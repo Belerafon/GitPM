@@ -1,0 +1,43 @@
+# GitPM + OpenCode server deployment profile.
+# See docs/Deployment.md for prerequisites, data-safety notes and the
+# version-capture mechanism.
+#
+# Variables (place in a .env file next to this compose file, or export them):
+#   GITPM_DEPLOY_ROOT   Host root holding repository/, data/, secrets/, ...
+#                       (default /srv/gitpm).
+#   GITPM_BIND_IP       LAN IP to publish ports on (default 10.0.0.1).
+#   GITPM_WEB_PORT      GitPM web (Caddy, basicauth) host port (default 86).
+#   GITPM_OPENCODE_PORT opencode web host port (default 85).
+#
+# Build and run (from the repository root):
+#   docker compose -f deploy/with-opencode/compose.yaml up -d --build
+
+services:
+  gitpm:
+    build:
+      context: ../..
+      dockerfile: deploy/with-opencode/Dockerfile
+    image: gitpm-local:with-opencode
+    container_name: gitpm
+    restart: unless-stopped
+    ports:
+      - "${GITPM_BIND_IP:-10.0.0.1}:${GITPM_WEB_PORT:-86}:80"
+      - "${GITPM_BIND_IP:-10.0.0.1}:${GITPM_OPENCODE_PORT:-85}:4096"
+    env_file:
+      - ${GITPM_DEPLOY_ROOT:-/srv/gitpm}/secrets/opencode-web.env
+      - ${GITPM_DEPLOY_ROOT:-/srv/gitpm}/secrets/gitpm-web.env
+    environment:
+      GITPM_RUNTIME_MODE: production
+      GITPM_BIND_HOST: 0.0.0.0
+      GITPM_NO_BROWSER: "1"
+      GITPM_REPOSITORY_PATH: /repository
+      GITPM_DATA_DIR: /data
+    volumes:
+      # Durable user data lives on the host; rebuilding the image never touches it.
+      - ${GITPM_DEPLOY_ROOT:-/srv/gitpm}/repository:/repository
+      - ${GITPM_DEPLOY_ROOT:-/srv/gitpm}/data:/data
+      - ${GITPM_DEPLOY_ROOT:-/srv/gitpm}/gitpm-config:/app/.gitpm
+      - ${GITPM_DEPLOY_ROOT:-/srv/gitpm}/opencode-config:/root/.config/opencode
+      - ${GITPM_DEPLOY_ROOT:-/srv/gitpm}/opencode-data:/root/.local/share/opencode
+      - ${GITPM_DEPLOY_ROOT:-/srv/gitpm}/state:/root/.local/state/opencode
+      - ${GITPM_DEPLOY_ROOT:-/srv/gitpm}/cache:/root/.cache/opencode

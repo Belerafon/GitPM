@@ -129,6 +129,12 @@ docker compose -f compose.yaml -f compose.server.yaml up -d --build
 доступа нужен отдельный TLS/reverse proxy и deployment review; встроенная GitLab
 авторизация защищает remote-операции, а не заменяет perimeter authentication.
 
+Версия сборки (штамп даты коммита, например `2026.07.23 1045`) захватывается из
+`.git` единственный раз при сборке образа в `build-version.json` и показывается в
+подвале сайдбара; без неё отображается прочерк `—`. Профиль в одной сборке с
+OpenCode (Caddy + basic-auth) и полный порядок сборки/обновления описаны в
+[docs/Deployment.md](docs/Deployment.md).
+
 ## Формат данных
 
 ```text

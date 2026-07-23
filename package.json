@@ -19,7 +19,7 @@
     "clean": "corepack pnpm -r --if-present clean",
     "dev:server": "corepack pnpm --filter @gitpm/server dev",
     "demo:verify": "node scripts/verify-schema-v1.mjs demo/portfolio",
-    "docker:build": "node scripts/generate-build-version.mjs && docker compose build",
+    "docker:build": "docker compose build",
     "e2e": "playwright test",
     "e2e:install": "playwright install chromium",
     "lint": "eslint apps packages scripts e2e playwright.config.ts --max-warnings 0",
