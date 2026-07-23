@@ -112,6 +112,21 @@ describe("controlled Git client", () => {
     expect(actual.get("second.txt")).toBe(await client.hashObject(await readFile(path.join(fixture.source, "second.txt"), "utf8")));
     expect(batchCommands).toEqual([expect.arrayContaining(["hash-object", "--stdin-paths"])]);
   });
+
+  it("skips paths absent from HEAD when reading HEAD files in batch", async () => {
+    const fixture = await remoteFixture();
+    const client = new GitClient({
+      dataDirectory: path.join(fixture.root, "data"),
+      remoteUrl: fixture.remote,
+      defaultBranch: "main",
+      allowLocalTestRemote: true,
+    });
+    await client.initialize();
+
+    const headFiles = await client.showHeadFiles(fixture.source, ["README.md", "never-committed.yaml"]);
+    expect(headFiles.get("README.md")).toBe("first\n");
+    expect(headFiles.has("never-committed.yaml")).toBe(false);
+  });
 });
 
 describe("direct-mode checkout", () => {

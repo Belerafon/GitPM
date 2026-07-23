@@ -472,7 +472,19 @@ export class GitClient {
       if (headerEnd < 0) throw new GitCommandError("GIT_OUTPUT_INVALID", "git cat-file header is incomplete");
       const header = output.subarray(offset, headerEnd).toString("utf8");
       const match = /^[0-9a-f]{40,64} blob (\d+)$/u.exec(header);
-      if (!match?.[1]) throw new GitCommandError("GIT_OUTPUT_INVALID", `git cat-file rejected ${relativePath}`);
+      if (!match?.[1]) {
+        // `git cat-file --batch` answers "<input> missing" for paths that are
+        // absent from HEAD (for example a file whose change kind was classified
+        // against a HEAD that has since moved, or a legacy repo predating a
+        // scaffold file). Skip it instead of aborting the whole batch: callers
+        // already treat a missing HEAD version as unavailable. Only a genuinely
+        // malformed header remains a hard error.
+        if (header.endsWith(" missing")) {
+          offset = headerEnd + 1;
+          continue;
+        }
+        throw new GitCommandError("GIT_OUTPUT_INVALID", `git cat-file produced an unexpected header for ${relativePath}`);
+      }
       const size = Number.parseInt(match[1], 10);
       const contentStart = headerEnd + 1;
       const contentEnd = contentStart + size;
