@@ -117,6 +117,7 @@
   ,"worktree.column.size": "Размер"
   ,"worktree.column.type": "Тип"
   ,"worktree.column.actions": "Действия"
+  ,"worktree.resizeColumn": "Изменить ширину столбца «{name}»"
   ,"worktree.type.folder": "Папка"
   ,"worktree.type.file": "Файл"
   ,"core.heading": "Работа портфеля"

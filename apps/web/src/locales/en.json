@@ -117,6 +117,7 @@
   ,"worktree.column.size": "Size"
   ,"worktree.column.type": "Type"
   ,"worktree.column.actions": "Actions"
+  ,"worktree.resizeColumn": "Resize {name} column"
   ,"worktree.type.folder": "Folder"
   ,"worktree.type.file": "File"
   ,"core.heading": "Portfolio work"
