@@ -17,6 +17,8 @@
   "scripts": {
     "build": "corepack pnpm -r --if-present build",
     "clean": "corepack pnpm -r --if-present clean",
+    "contracts:generate": "node scripts/generate-contract-document-schemas.mjs",
+    "contracts:verify": "node scripts/generate-contract-document-schemas.mjs --check",
     "dev:server": "corepack pnpm --filter @gitpm/server dev",
     "demo:verify": "node scripts/verify-schema-v1.mjs demo/portfolio",
     "docker:build": "docker compose build",
@@ -28,7 +30,7 @@
     "planning:verify": "corepack pnpm planning:check && corepack pnpm planning:test",
     "performance:p13b": "corepack pnpm build && node scripts/p13b-performance-smoke.mjs",
     "operations:p13b": "corepack pnpm build && node scripts/p13b-operations-smoke.mjs",
-    "schema:verify": "node scripts/verify-schema-v1.mjs",
+    "schema:verify": "corepack pnpm contracts:verify && node scripts/verify-schema-v1.mjs",
     "security:p13a": "corepack pnpm build && vitest run apps/server/src/app.test.ts apps/web/src/core-ui.test.tsx apps/web/src/changes-ui.test.tsx apps/web/src/hostile-content.test.tsx packages/git-client/src/malicious-repository.test.ts packages/gitlab/src/index.test.ts packages/publishing/src/index.test.ts && corepack pnpm audit --prod --audit-level high",
     "security:verify": "corepack pnpm --filter @gitpm/security build && vitest run packages/security/src/security-boundary.test.ts && node scripts/security-spike-report.mjs",
     "smoke": "node scripts/smoke-health.mjs",

@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
 import { lstat, readdir, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import type { ValidateFunction } from "ajv";
 import { CalendarError, parseDateOnly, validateCalendar } from "@gitpm/calendar";
 import { parseYamlDocument, RepositoryFormatError } from "@gitpm/repository-format";
 import type { GitPmDocument } from "@gitpm/repository-format";
+import { DOCUMENT_SCHEMA_DEFINITIONS, DOCUMENT_SCHEMA_IDS } from "@gitpm/contracts";
 
 export interface ValidationIssue {
   readonly severity: "error" | "warning";
@@ -55,20 +55,6 @@ interface CachedDocument {
 
 const MAX_CACHED_REPOSITORIES = 32;
 const documentCache = new Map<string, Map<string, CachedDocument>>();
-
-const schemaIds = new Map([
-  ["gitpm/project@1", "https://gitpm.dev/schemas/v1/project.schema.json"],
-  ["gitpm/task@1", "https://gitpm.dev/schemas/v1/task.schema.json"],
-  ["gitpm/milestone@1", "https://gitpm.dev/schemas/v1/milestone.schema.json"],
-  ["gitpm/person@1", "https://gitpm.dev/schemas/v1/person.schema.json"],
-  ["gitpm/team@1", "https://gitpm.dev/schemas/v1/team.schema.json"],
-  ["gitpm/calendar@1", "https://gitpm.dev/schemas/v1/calendar.schema.json"],
-  ["gitpm/saved-view@1", "https://gitpm.dev/schemas/v1/saved-view.schema.json"],
-  ["gitpm/comment@1", "https://gitpm.dev/schemas/v1/comment.schema.json"],
-  ["gitpm/repository@1", "https://gitpm.dev/schemas/v1/repository.schema.json"],
-  ["gitpm/statuses@1", "https://gitpm.dev/schemas/v1/statuses.schema.json"],
-  ["gitpm/issue-types@1", "https://gitpm.dev/schemas/v1/issue-types.schema.json"],
-]);
 
 const normalize = (value: string) => value.split(path.sep).join("/");
 
@@ -192,16 +178,10 @@ export async function discoverRepositoryFiles(repositoryRoot: string): Promise<R
 let validatorsPromise: Promise<Map<string, ValidateFunction>> | undefined;
 
 async function loadSchemaValidators(): Promise<Map<string, ValidateFunction>> {
-  const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
-  const schemaDirectory = path.resolve(moduleDirectory, "../../../schemas/v1");
   const ajv = new Ajv2020({ allErrors: true, strict: true });
-  for (const entry of await readdir(schemaDirectory)) {
-    if (entry.endsWith(".schema.json")) {
-      ajv.addSchema(JSON.parse(await readFile(path.join(schemaDirectory, entry), "utf8")));
-    }
-  }
+  for (const schema of DOCUMENT_SCHEMA_DEFINITIONS) ajv.addSchema(schema);
   const result = new Map<string, ValidateFunction>();
-  for (const [schema, id] of schemaIds) {
+  for (const [schema, id] of Object.entries(DOCUMENT_SCHEMA_IDS)) {
     const validator = ajv.getSchema(id);
     if (!validator) throw new Error(`Schema validator unavailable: ${id}`);
     result.set(schema, validator);

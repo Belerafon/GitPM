@@ -44,6 +44,9 @@ importers:
       '@gitpm/changes':
         specifier: workspace:*
         version: link:../../packages/changes
+      '@gitpm/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@gitpm/domain':
         specifier: workspace:*
         version: link:../../packages/domain
@@ -202,10 +205,20 @@ importers:
         specifier: workspace:*
         version: link:../validation
 
-  packages/contracts: {}
+  packages/contracts:
+    dependencies:
+      ajv:
+        specifier: 8.18.0
+        version: 8.18.0
+      json-schema-to-ts:
+        specifier: 3.1.1
+        version: 3.1.1
 
   packages/domain:
     dependencies:
+      '@gitpm/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       '@gitpm/drafts':
         specifier: workspace:*
         version: link:../drafts
@@ -295,6 +308,9 @@ importers:
       '@gitpm/calendar':
         specifier: workspace:*
         version: link:../calendar
+      '@gitpm/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       '@gitpm/repository-format':
         specifier: workspace:*
         version: link:../repository-format
@@ -1234,6 +1250,10 @@ packages:
   json-schema-ref-resolver@3.0.0:
     resolution: {integrity: sha512-hOrZIVL5jyYFjzk7+y7n5JDzGlU8rfWDuYyHwGa2WA8/pcmMHezp2xsVwxrebD/Q9t8Nc5DboieySDpCp4WG4A==}
 
+  json-schema-to-ts@3.1.1:
+    resolution: {integrity: sha512-+DWg8jCJG2TEnpy7kOm/7/AxaYoaRbjVB4LFZLySZlWn8exGs3A4OLJR966cVvU26N7X9TWxl+Jsw7dzAqKT6g==}
+    engines: {node: '>=16'}
+
   json-schema-traverse@0.4.1:
     resolution: {integrity: sha512-xbbCH5dCYU5T8LcEhhuh7HJ88HXuW3qsI3Y0zOZFKfZEHcpWiHU/Jxzk629Brsab/mMiHQti9wMP+845RPe3Vg==}
 
@@ -1600,6 +1620,9 @@ packages:
   tr46@6.0.0:
     resolution: {integrity: sha512-bLVMLPtstlZ4iMQHpFHTR7GAGj2jxi8Dg0s2h2MafAE4uSWF98FC/3MomU51iQAMf8/qDUbKWf5GxuvvVcXEhw==}
     engines: {node: '>=20'}
+
+  ts-algebra@2.0.0:
+    resolution: {integrity: sha512-FPAhNPFMrkwz76P7cdjdmiShwMynZYN6SgOujD1urY4oNm80Ou9oMdmbR45LotcKOXoy7wSmHkRFE6Mxbrhefw==}
 
   ts-api-utils@2.5.0:
     resolution: {integrity: sha512-OJ/ibxhPlqrMM0UiNHJ/0CKQkoKF243/AEmplt3qpRgkW8VG7IfOS41h7V8TjITqdByHzrjcS/2si+y4lIh8NA==}
@@ -2677,6 +2700,11 @@ snapshots:
     dependencies:
       dequal: 2.0.3
 
+  json-schema-to-ts@3.1.1:
+    dependencies:
+      '@babel/runtime': 7.29.7
+      ts-algebra: 2.0.0
+
   json-schema-traverse@0.4.1: {}
 
   json-schema-traverse@1.0.0: {}
@@ -2988,6 +3016,8 @@ snapshots:
   tr46@6.0.0:
     dependencies:
       punycode: 2.3.1
+
+  ts-algebra@2.0.0: {}
 
   ts-api-utils@2.5.0(typescript@5.9.3):
     dependencies:

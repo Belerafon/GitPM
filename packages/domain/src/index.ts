@@ -6,8 +6,12 @@ import type { GitPmDocument } from "@gitpm/repository-format";
 import { atomicWriteDomainFile, resolveDomainPath } from "@gitpm/security";
 import { ENTITY_ID_PREFIX, isEntityId, newUniqueEntityId, type EntityIdPrefix } from "@gitpm/shared";
 import { discoverRepositoryFiles, validateDelete, validateRepository } from "@gitpm/validation";
+import { ENTITY_TYPE_SCHEMAS } from "@gitpm/contracts";
 
 export * from "./comments.js";
+export { ENTITY_TYPE_SCHEMAS } from "@gitpm/contracts";
+
+const entityTypeSchemas: Readonly<Record<string, string>> = ENTITY_TYPE_SCHEMAS;
 
 export class DomainOperationError extends Error {
   constructor(
@@ -51,16 +55,6 @@ interface RepositoryIndex {
   readonly entities: readonly IndexedEntity[];
   readonly bySchemaAndId: ReadonlyMap<string, IndexedEntity>;
 }
-
-export const ENTITY_TYPE_SCHEMAS: Readonly<Record<string, string>> = {
-  projects: "gitpm/project@1",
-  tasks: "gitpm/task@1",
-  milestones: "gitpm/milestone@1",
-  people: "gitpm/person@1",
-  teams: "gitpm/team@1",
-  calendars: "gitpm/calendar@1",
-  views: "gitpm/saved-view@1",
-};
 
 const entityTypeAliases: Readonly<Record<string, string>> = {
   project: "projects",
@@ -118,7 +112,7 @@ export interface DeletePlan {
 
 export function canonicalEntityType(value: string): string {
   const normalized = entityTypeAliases[value] ?? value;
-  if (ENTITY_TYPE_SCHEMAS[normalized] === undefined) {
+  if (entityTypeSchemas[normalized] === undefined) {
     throw new DomainOperationError("ENTITY_TYPE_INVALID", `Unknown entity type ${value}`);
   }
   return normalized;
@@ -131,7 +125,7 @@ function entityTypeForInputs(inputs: readonly Readonly<Record<string, unknown>>[
     throw new DomainOperationError("ENTITY_TYPE_REQUIRED", "--type is required when input schema is absent or mixed");
   }
   const schema = [...schemas][0]!;
-  const found = Object.entries(ENTITY_TYPE_SCHEMAS).find(([, candidate]) => candidate === schema)?.[0];
+  const found = Object.entries(entityTypeSchemas).find(([, candidate]) => candidate === schema)?.[0];
   if (found === undefined) throw new DomainOperationError("ENTITY_TYPE_INVALID", `Unsupported entity schema ${schema}`);
   return found;
 }
@@ -143,7 +137,7 @@ export function planEntityCreation(
 ): readonly EntityCreatePlanItem[] {
   if (inputs.length === 0) throw new DomainOperationError("IMPORT_EMPTY", "Entity input is empty");
   const entityType = entityTypeForInputs(inputs, requestedType);
-  const schema = ENTITY_TYPE_SCHEMAS[entityType]!;
+  const schema = entityTypeSchemas[entityType]!;
   const prefix = schemaIdPrefixes[schema as keyof typeof schemaIdPrefixes] as EntityIdPrefix | undefined;
   if (prefix === undefined) throw new DomainOperationError("ENTITY_TYPE_INVALID", `Unsupported entity schema ${schema}`);
   const reservedIds = new Set(existingDocuments.flatMap((document) => typeof document.id === "string" ? [document.id] : []));
@@ -201,7 +195,7 @@ export function planEntityUpdate(
   requestedId: string,
 ): EntityUpdatePlan {
   const entityType = canonicalEntityType(requestedType);
-  const schema = ENTITY_TYPE_SCHEMAS[entityType]!;
+  const schema = entityTypeSchemas[entityType]!;
   const prefix = schemaIdPrefixes[schema as keyof typeof schemaIdPrefixes];
   if (prefix === undefined || !isEntityId(requestedId, prefix)) {
     throw new DomainOperationError("ENTITY_ID_INVALID", `Entity ID ${requestedId} is invalid for ${entityType}`);
@@ -230,7 +224,7 @@ export function planEntityUpdate(
 }
 
 export function assertEntityType(entityType: string, document: GitPmDocument): void {
-  const schema = ENTITY_TYPE_SCHEMAS[entityType];
+  const schema = entityTypeSchemas[entityType];
   if (!schema || schema !== document.schema) {
     throw new DomainOperationError("ENTITY_TYPE_INVALID", `Entity type ${entityType} does not match ${document.schema}`);
   }
@@ -417,7 +411,7 @@ export class EntityStore {
 
   async list(draftId: string, entityType: string, project?: string): Promise<readonly EntityResult[]> {
     const metadata = await this.drafts.getWorkspace(draftId);
-    const schema = ENTITY_TYPE_SCHEMAS[canonicalEntityType(entityType)];
+    const schema = entityTypeSchemas[canonicalEntityType(entityType)];
     if (!schema) throw new DomainOperationError("ENTITY_TYPE_INVALID", `Unknown entity type ${entityType}`);
     const matching = (await this.index(draftId, metadata)).entities
       .filter((entity) => entity.document.schema === schema && (project === undefined || entity.document.project === project));
@@ -426,7 +420,7 @@ export class EntityStore {
   }
 
   private async find(draftId: string, metadata: RepositoryWorkspace, entityType: string, id: string): Promise<IndexedEntity> {
-    const schema = ENTITY_TYPE_SCHEMAS[canonicalEntityType(entityType)];
+    const schema = entityTypeSchemas[canonicalEntityType(entityType)];
     if (!schema) throw new DomainOperationError("ENTITY_TYPE_INVALID", `Unknown entity type ${entityType}`);
     const found = (await this.index(draftId, metadata)).bySchemaAndId.get(`${schema}:${id}`);
     if (found !== undefined) return found;

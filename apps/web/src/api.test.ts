@@ -6,8 +6,20 @@ import type { EntityResult } from "./types.js";
 describe("HttpGitPmApi request bodies", () => {
   afterEach(() => vi.unstubAllGlobals());
 
+  const draftStatus = {
+    draft_id: "DRF-1",
+    owner_gitlab_user_id: "42",
+    branch: "gitpm/42/DRF-1",
+    base_commit: "a".repeat(40),
+    writer_mode: "ui",
+    state: "open",
+    fingerprint: "b".repeat(64),
+    created_at: "2026-07-23T00:00:00.000Z",
+    updated_at: "2026-07-23T00:00:00.000Z",
+  };
+
   it("does not declare JSON for a request without a body", async () => {
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ draft_id: "DRF-1" }), {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify(draftStatus), {
       status: 200,
       headers: { "content-type": "application/json" },
     }));
@@ -21,7 +33,7 @@ describe("HttpGitPmApi request bodies", () => {
   });
 
   it("declares JSON when a request has a JSON body", async () => {
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ draft_id: "DRF-1" }), {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify(draftStatus), {
       status: 201,
       headers: { "content-type": "application/json" },
     }));
@@ -62,7 +74,7 @@ describe("HttpGitPmApi request bodies", () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
       document: {
         schema: "gitpm/statuses@1",
-        statuses: [{ slug: "backlog", title: "Backlog", active: true }],
+        statuses: [{ slug: "backlog", title: "Backlog", color: "gray", active: true }],
       },
       path: ".gitpm/statuses.yaml",
       blob_id: "a".repeat(40),
@@ -73,7 +85,7 @@ describe("HttpGitPmApi request bodies", () => {
 
     expect(result.document).toEqual({
       schema: "gitpm/statuses@1",
-      statuses: [{ slug: "backlog", title: "Backlog", active: true }],
+      statuses: [{ slug: "backlog", title: "Backlog", color: "gray", active: true }],
     });
   });
 

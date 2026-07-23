@@ -3,6 +3,7 @@ import { AuthError } from "@gitpm/gitlab";
 import type { ProtectedOperation, PublicSession } from "@gitpm/gitlab";
 import type { RepositoryPublishingService } from "./repository-publishing.js";
 import type { RepositoryConnectionManager, RepositoryConnectionUpdate } from "./repository-connection.js";
+import { HTTP_REQUEST_BODY_SCHEMAS } from "@gitpm/contracts";
 
 const COOKIE_NAME = "gitpm_gitlab_session";
 
@@ -57,7 +58,15 @@ export function registerRepositoryAuthApi(
   webUrl: string,
   connection?: RepositoryConnectionManager,
 ): void {
-  app.get("/api/auth/session", async (request): Promise<RepositorySession> => {
+  app.get("/api/auth/session", async (request): Promise<Omit<RepositorySession, "session_id">> => {
+    const publicBaseSession: Omit<RepositorySession, "session_id" | "gitlab"> = {
+      user: baseSession.user,
+      role: baseSession.role,
+      mode: baseSession.mode,
+      ...(baseSession.repository_mode === undefined ? {} : { repository_mode: baseSession.repository_mode }),
+      repository: baseSession.repository,
+      expires_at: baseSession.expires_at,
+    };
     const session = cookie(request);
     if (auth !== undefined && session !== undefined) {
       try {
@@ -66,7 +75,7 @@ export function registerRepositoryAuthApi(
           ...baseSession.repository,
           has_remote: connection.status().repository_url !== undefined,
         };
-        return { ...baseSession, repository, gitlab: { configured: true, user: authorized.session.user, role: authorized.session.role } };
+        return { ...publicBaseSession, repository, gitlab: { configured: true, user: authorized.session.user, role: authorized.session.role } };
       } catch (error) {
         if (!(error instanceof AuthError) || error.code !== "SESSION_INVALID") throw error;
       }
@@ -75,7 +84,7 @@ export function registerRepositoryAuthApi(
       ...baseSession.repository,
       has_remote: connection.status().repository_url !== undefined,
     };
-    return { ...baseSession, repository, gitlab: { configured: auth !== undefined && (connection?.status().gitlab.configured ?? true) } };
+    return { ...publicBaseSession, repository, gitlab: { configured: auth !== undefined && (connection?.status().gitlab.configured ?? true) } };
   });
 
   app.get("/api/auth/login", async () => {
@@ -100,15 +109,15 @@ export function registerRepositoryAuthApi(
 
   if (connection !== undefined) {
     app.get("/api/repository/connection", async () => connection.status());
-    app.put<{ Body: RepositoryConnectionUpdate }>("/api/repository/connection", async (request) => await connection.update(request.body));
+    app.put<{ Body: RepositoryConnectionUpdate }>("/api/repository/connection", { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.repositoryConnectionUpdate } }, async (request) => await connection.update(request.body));
     app.post("/api/repository/connection/test", async (request) => await connection.test(requiredSession(request)));
   }
 
-  app.post<{ Params: { draftId: string }; Body: { message: string } }>("/api/drafts/:draftId/commit", async (request) =>
+  app.post<{ Params: { draftId: string }; Body: { message: string } }>("/api/drafts/:draftId/commit", { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.commit } }, async (request) =>
     await publishing.commitAll(request.params.draftId, request.body.message));
   app.post<{ Params: { draftId: string } }>("/api/drafts/:draftId/push", async (request) =>
     await publishing.push(requiredSession(request), request.params.draftId));
-  app.post<{ Params: { draftId: string }; Body: { title: string; description?: string } }>("/api/drafts/:draftId/merge-request", async (request) =>
+  app.post<{ Params: { draftId: string }; Body: { title: string; description?: string } }>("/api/drafts/:draftId/merge-request", { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.mergeRequest } }, async (request) =>
     await publishing.createMergeRequest(requiredSession(request), request.params.draftId, request.body.title, request.body.description));
   app.get<{ Params: { draftId: string } }>("/api/drafts/:draftId/merge-request", async (request) =>
     await publishing.pollMergeRequest(requiredSession(request), request.params.draftId));

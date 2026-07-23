@@ -4,7 +4,14 @@ import type { DraftManager, DraftMetadata, WriterMode } from "@gitpm/drafts";
 import { GitCommandError } from "@gitpm/git-client";
 import { assertEntityType, CommentOperationError, DomainOperationError } from "@gitpm/domain";
 import type { CommentActor, CommentStore, EntityStore } from "@gitpm/domain";
-import type { ConfigurationDocument, GitPmDocument } from "@gitpm/contracts";
+import {
+  HTTP_REQUEST_BODY_SCHEMAS,
+  ApiContractError,
+  decodeConfigurationDocument,
+  decodeEntityDocument,
+  type ConfigurationDocument,
+  type HttpDocument as GitPmDocument,
+} from "@gitpm/contracts";
 import { ChangesError } from "@gitpm/changes";
 import type { ChangesService } from "@gitpm/changes";
 import { AuthError } from "@gitpm/gitlab";
@@ -15,6 +22,7 @@ import { validateRepository } from "@gitpm/validation";
 import { WorktreeReadError } from "./worktree-api.js";
 import { RepositoryConnectionError } from "./repository-connection.js";
 import { SecurityBoundaryError } from "@gitpm/security";
+import type { GitPmDocument as RepositoryDocument } from "@gitpm/repository-format";
 
 export type ProjectRole = "Reporter" | "Developer" | "Maintainer";
 
@@ -52,6 +60,14 @@ function publicMetadata(metadata: DraftMetadata) {
     created_at: metadata.created_at,
     updated_at: metadata.updated_at,
   };
+}
+
+function repositoryDocument(document: GitPmDocument | ConfigurationDocument): RepositoryDocument {
+  return document as unknown as RepositoryDocument;
+}
+
+function repositoryInput(document: GitPmDocument): Readonly<Record<string, unknown>> {
+  return document as unknown as Readonly<Record<string, unknown>>;
 }
 
 function requireMutationRole(actor: RequestActor): void {
@@ -165,6 +181,11 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
       code = error.code;
       message = error.message;
       status = error.code === "REPOSITORY_CONNECTION_MANAGED_EXTERNALLY" ? 409 : 400;
+    } else if (error instanceof ApiContractError || (error as { code?: string }).code === "FST_ERR_VALIDATION") {
+      status = 400;
+      code = "REQUEST_CONTRACT_INVALID";
+      message = "Request body does not match the shared HTTP contract";
+      details = error instanceof ApiContractError ? error.details : (error as { validation?: unknown }).validation;
     } else if ((error as { code?: string }).code === "FST_ERR_CTP_BODY_TOO_LARGE") {
       status = 413;
       code = "REQUEST_TOO_LARGE";
@@ -174,7 +195,7 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
     await reply.code(status).send(payload);
   });
 
-  app.post<{ Body: { draft_id: string } }>("/api/drafts", async (request, reply) => {
+  app.post<{ Body: { draft_id: string } }>("/api/drafts", { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.createDraft } }, async (request, reply) => {
     const actor = await authenticate(request);
     requireMutationRole(actor);
     requireWorktreeDraftOperation(manager);
@@ -212,7 +233,7 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
     };
   });
 
-  app.patch<{ Params: { draftId: string }; Body: { writer_mode: WriterMode } }>("/api/drafts/:draftId/writer-mode", async (request) => {
+  app.patch<{ Params: { draftId: string }; Body: { writer_mode: WriterMode } }>("/api/drafts/:draftId/writer-mode", { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.writerMode } }, async (request) => {
     const actor = await authenticate(request);
     requireMutationRole(actor);
     requireWorktreeDraftOperation(manager);
@@ -239,7 +260,7 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
     return publicMetadata(await manager.reopenDraft(request.params.draftId, actor.userId));
   });
 
-  app.delete<{ Params: { draftId: string }; Body: { confirmation: string } }>("/api/drafts/:draftId", async (request, reply) => {
+  app.delete<{ Params: { draftId: string }; Body: { confirmation: string } }>("/api/drafts/:draftId", { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.cleanupDraft } }, async (request, reply) => {
     const actor = await authenticate(request);
     if (actor.role !== "Maintainer") throw new DraftRuntimeError("DRAFT_FORBIDDEN", "Cleanup requires Maintainer");
     requireWorktreeDraftOperation(manager);
@@ -265,6 +286,7 @@ export function registerCommentApi(
 
   app.post<{ Params: { draftId: string; projectId: string; taskId: string }; Body: { expected_fingerprint: string; body_markdown: string } }>(
     "/api/drafts/:draftId/projects/:projectId/tasks/:taskId/comments",
+    { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.createComment } },
     async (request, reply) => {
       const actor = await authenticate(request);
       requireMutationRole(actor);
@@ -275,6 +297,7 @@ export function registerCommentApi(
 
   app.patch<{ Params: { draftId: string; projectId: string; taskId: string; commentId: string }; Body: { expected_fingerprint: string; expected_blob_id: string; body_markdown: string } }>(
     "/api/drafts/:draftId/projects/:projectId/tasks/:taskId/comments/:commentId",
+    { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.updateComment } },
     async (request) => {
       const actor = await authenticate(request);
       requireMutationRole(actor);
@@ -284,6 +307,7 @@ export function registerCommentApi(
 
   app.delete<{ Params: { draftId: string; projectId: string; taskId: string; commentId: string }; Body: { expected_fingerprint: string; expected_blob_id: string } }>(
     "/api/drafts/:draftId/projects/:projectId/tasks/:taskId/comments/:commentId",
+    { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.deleteComment } },
     async (request) => {
       const actor = await authenticate(request);
       requireMutationRole(actor);
@@ -330,7 +354,7 @@ export function registerHistoryApi(
     return await history.fileHistory(request.params.draftId, request.query.path, limit);
   });
 
-  app.post<{ Params: { draftId: string; commit: string }; Body: { draft_id: string } }>("/api/drafts/:draftId/history/:commit/revert", async (request, reply) => {
+  app.post<{ Params: { draftId: string; commit: string }; Body: { draft_id: string } }>("/api/drafts/:draftId/history/:commit/revert", { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.revertDraft } }, async (request, reply) => {
     const actor = await authenticate(request);
     requireMutationRole(actor);
     requireWorktreeDraftOperation(manager);
@@ -360,6 +384,7 @@ export function registerChangesApi(
 
   app.post<{ Params: { draftId: string }; Body: { expected_fingerprint: string; path: string } }>(
     "/api/drafts/:draftId/changes/restore-file",
+    { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.expectedFingerprintPath } },
     async (request) => {
       const actor = await authenticate(request);
       requireMutationRole(actor);
@@ -369,6 +394,7 @@ export function registerChangesApi(
 
   app.post<{ Params: { draftId: string }; Body: { expected_fingerprint: string; path: string; diff_token: string; hunk_index: number } }>(
     "/api/drafts/:draftId/changes/restore-hunk",
+    { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.restoreHunk } },
     async (request) => {
       const actor = await authenticate(request);
       requireMutationRole(actor);
@@ -385,6 +411,7 @@ export function registerChangesApi(
 
   app.post<{ Params: { draftId: string }; Body: { expected_fingerprint: string } }>(
     "/api/drafts/:draftId/changes/discard-all",
+    { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.expectedFingerprint } },
     async (request) => {
       const actor = await authenticate(request);
       requireMutationRole(actor);
@@ -428,17 +455,25 @@ export function registerEntityApi(
 
   app.post<{ Params: { draftId: string; entityType: string }; Body: { expected_fingerprint: string; document: GitPmDocument } }>(
     "/api/drafts/:draftId/entities/:entityType",
+    {
+      schema: { body: HTTP_REQUEST_BODY_SCHEMAS.createEntity },
+      preValidation: async (request) => { decodeEntityDocument(request.body.document); },
+    },
     async (request, reply) => {
       const actor = await authenticate(request);
       requireEntityMutationRole(actor, request.params.entityType);
-      assertEntityType(request.params.entityType, request.body.document);
-      const result = await store.create(request.params.draftId, actor.userId, request.body.expected_fingerprint, request.body.document, request.params.entityType);
+      assertEntityType(request.params.entityType, repositoryDocument(request.body.document));
+      const result = await store.create(request.params.draftId, actor.userId, request.body.expected_fingerprint, repositoryInput(request.body.document), request.params.entityType);
       await reply.code(201).send(result);
     },
   );
 
   app.put<{ Params: { draftId: string; entityType: string; id: string }; Body: { expected_fingerprint: string; expected_blob_id: string; document: GitPmDocument } }>(
     "/api/drafts/:draftId/entities/:entityType/:id",
+    {
+      schema: { body: HTTP_REQUEST_BODY_SCHEMAS.updateEntity },
+      preValidation: async (request) => { decodeEntityDocument(request.body.document); },
+    },
     async (request) => {
       const actor = await authenticate(request);
       requireEntityMutationRole(actor, request.params.entityType);
@@ -449,13 +484,14 @@ export function registerEntityApi(
         request.params.id,
         request.body.expected_fingerprint,
         request.body.expected_blob_id,
-        request.body.document,
+        repositoryDocument(request.body.document),
       );
     },
   );
 
   app.post<{ Params: { draftId: string; entityType: string; id: string }; Body: { expected_fingerprint: string; expected_blob_id: string } }>(
     "/api/drafts/:draftId/entities/:entityType/:id/archive",
+    { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.entityFingerprint } },
     async (request) => {
       const actor = await authenticate(request);
       requireEntityMutationRole(actor, request.params.entityType);
@@ -472,6 +508,7 @@ export function registerEntityApi(
 
   app.post<{ Params: { draftId: string; id: string }; Body: { expected_fingerprint: string; expected_blob_id: string; target_project: string; target_milestone?: string } }>(
     "/api/drafts/:draftId/entities/tasks/:id/move",
+    { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.moveTask } },
     async (request) => {
       const actor = await authenticate(request);
       requireEntityMutationRole(actor, "tasks");
@@ -489,6 +526,7 @@ export function registerEntityApi(
 
   app.delete<{ Params: { draftId: string; entityType: string; id: string }; Body: { expected_fingerprint: string; expected_blob_id: string; unlink_references?: boolean } }>(
     "/api/drafts/:draftId/entities/:entityType/:id",
+    { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.deleteEntity } },
     async (request) => {
       const actor = await authenticate(request);
       requireEntityMutationRole(actor, request.params.entityType);
@@ -515,6 +553,10 @@ export function registerEntityApi(
 
   app.put<{ Params: { draftId: string; kind: "statuses" | "issue-types" }; Body: { expected_fingerprint: string; expected_blob_id: string; document: ConfigurationDocument } }>(
     "/api/drafts/:draftId/config/:kind",
+    {
+      schema: { body: HTTP_REQUEST_BODY_SCHEMAS.updateConfiguration },
+      preValidation: async (request) => { decodeConfigurationDocument(request.body.document); },
+    },
     async (request) => {
       const actor = await authenticate(request);
       if (actor.role !== "Maintainer") throw new DraftRuntimeError("DRAFT_FORBIDDEN", "Configuration mutation requires Maintainer");
@@ -524,7 +566,7 @@ export function registerEntityApi(
         request.params.kind,
         request.body.expected_fingerprint,
         request.body.expected_blob_id,
-        request.body.document,
+        repositoryDocument(request.body.document),
       );
     },
   );

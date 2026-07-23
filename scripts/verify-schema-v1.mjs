@@ -43,6 +43,8 @@ async function loadSchemas() {
   const ajv = new Ajv2020({ allErrors: true, strict: true });
   for (const schema of schemas) {
     ajv.addSchema(schema);
+    const discriminator = schema?.properties?.schema?.const;
+    if (typeof discriminator === "string" && typeof schema.$id === "string") schemaIds.set(discriminator, schema.$id);
   }
   return ajv;
 }
@@ -58,19 +60,7 @@ async function loadDocuments(root) {
   return documents;
 }
 
-const schemaIds = new Map([
-  ["gitpm/project@1", "https://gitpm.dev/schemas/v1/project.schema.json"],
-  ["gitpm/task@1", "https://gitpm.dev/schemas/v1/task.schema.json"],
-  ["gitpm/milestone@1", "https://gitpm.dev/schemas/v1/milestone.schema.json"],
-  ["gitpm/person@1", "https://gitpm.dev/schemas/v1/person.schema.json"],
-  ["gitpm/team@1", "https://gitpm.dev/schemas/v1/team.schema.json"],
-  ["gitpm/calendar@1", "https://gitpm.dev/schemas/v1/calendar.schema.json"],
-  ["gitpm/saved-view@1", "https://gitpm.dev/schemas/v1/saved-view.schema.json"],
-  ["gitpm/comment@1", "https://gitpm.dev/schemas/v1/comment.schema.json"],
-  ["gitpm/repository@1", "https://gitpm.dev/schemas/v1/repository.schema.json"],
-  ["gitpm/statuses@1", "https://gitpm.dev/schemas/v1/statuses.schema.json"],
-  ["gitpm/issue-types@1", "https://gitpm.dev/schemas/v1/issue-types.schema.json"],
-]);
+const schemaIds = new Map();
 
 function expectedPath(document) {
   switch (document.schema) {

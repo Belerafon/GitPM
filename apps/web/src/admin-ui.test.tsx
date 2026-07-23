@@ -61,14 +61,14 @@ describe("administration UI", () => {
     const statusesCard = (await screen.findByRole("heading", { name: "Statuses" })).closest<HTMLElement>(".config-editor")!;
     fireEvent.click(within(statusesCard).getByRole("button", { name: "Edit" }));
     const statusTitle = await screen.findByLabelText("Statuses backlog"); fireEvent.change(statusTitle, { target: { value: "Queue" } }); fireEvent.submit(statusTitle.closest("form")!);
-    await waitFor(() => expect((admin.configurations.get("statuses")!.document.statuses as Array<{ title: string }>)[0]?.title).toBe("Queue"));
+    await waitFor(() => expect((admin.configurations.get("statuses")!.document.statuses as readonly { title: string }[])[0]?.title).toBe("Queue"));
     fireEvent.click(within(statusesCard).getByRole("button", { name: "Edit" }));
     fireEvent.click(screen.getByRole("button", { name: "Move Queue down" }));
     expect(screen.getByLabelText("Statuses backlog").closest(".config-row")?.classList.contains("is-saving")).toBe(true);
     expect(screen.getByLabelText("Statuses done").closest(".config-row")?.classList.contains("is-saving")).toBe(true);
     await waitFor(() => expect(screen.getByLabelText("Statuses backlog").closest(".config-row")?.classList.contains("recently-changed")).toBe(true));
     expect(screen.getByLabelText("Statuses done").closest(".config-row")?.classList.contains("recently-changed")).toBe(true);
-    await waitFor(() => expect((admin.configurations.get("statuses")!.document.statuses as Array<{ slug: string }>)[0]?.slug).toBe("done"));
+    await waitFor(() => expect((admin.configurations.get("statuses")!.document.statuses as readonly { slug: string }[])[0]?.slug).toBe("done"));
     expect(changed).toHaveBeenCalled();
   });
 

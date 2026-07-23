@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { AuthError } from "@gitpm/gitlab";
 import type { AuthService } from "@gitpm/gitlab";
 import type { PublishingService } from "@gitpm/publishing";
+import { HTTP_REQUEST_BODY_SCHEMAS } from "@gitpm/contracts";
 
 const COOKIE_SECURE = process.env.GITPM_COOKIE_SECURE?.trim().toLowerCase() !== "false";
 
@@ -34,7 +35,11 @@ export function registerAuthAndPublishingApi(
 
   app.get("/api/auth/session", async (request) => {
     const authorization = await auth.authorize(sessionId(request), "read");
-    return authorization.session;
+    return {
+      user: authorization.session.user,
+      role: authorization.session.role,
+      expires_at: authorization.session.expires_at,
+    };
   });
 
   app.get<{ Querystring: { state: string; code: string } }>("/api/auth/callback", async (request, reply) => {
@@ -55,11 +60,11 @@ export function registerAuthAndPublishingApi(
   });
 
   if (!publishing) return;
-  app.post<{ Params: { draftId: string }; Body: { message: string } }>("/api/drafts/:draftId/commit", async (request) =>
+  app.post<{ Params: { draftId: string }; Body: { message: string } }>("/api/drafts/:draftId/commit", { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.commit } }, async (request) =>
     await publishing.commitAll(sessionId(request), request.params.draftId, request.body.message));
   app.post<{ Params: { draftId: string } }>("/api/drafts/:draftId/push", async (request) =>
     await publishing.push(sessionId(request), request.params.draftId));
-  app.post<{ Params: { draftId: string }; Body: { title: string; description?: string } }>("/api/drafts/:draftId/merge-request", async (request) =>
+  app.post<{ Params: { draftId: string }; Body: { title: string; description?: string } }>("/api/drafts/:draftId/merge-request", { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.mergeRequest } }, async (request) =>
     await publishing.createMergeRequest(sessionId(request), request.params.draftId, request.body.title, request.body.description));
   app.get<{ Params: { draftId: string } }>("/api/drafts/:draftId/merge-request", async (request) =>
     await publishing.pollMergeRequest(sessionId(request), request.params.draftId));
