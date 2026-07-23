@@ -5,6 +5,7 @@ import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import type { DraftManager } from "@gitpm/drafts";
 import { resolveDomainPath, SecurityBoundaryError } from "@gitpm/security";
+import { HTTP_REQUEST_BODY_SCHEMAS } from "@gitpm/contracts";
 import type { Authenticate, RequestActor } from "./draft-api.js";
 
 const MAX_TEXT_FILE_BYTES = 1_048_576;
@@ -286,6 +287,7 @@ export function registerWorktreeApi(app: FastifyInstance, manager: DraftManager,
 
   app.delete<{ Params: { draftId: string }; Body: { expected_fingerprint: string; path: string } }>(
     "/api/drafts/:draftId/worktree/entry",
+    { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.expectedFingerprintPath } },
     async (request) => {
       const actor = await authenticate(request);
       requireMutationActor(actor);
@@ -305,6 +307,7 @@ export function registerWorktreeApi(app: FastifyInstance, manager: DraftManager,
 
   app.post<{ Params: { draftId: string }; Body: { expected_fingerprint: string; path: string } }>(
     "/api/drafts/:draftId/worktree/directory",
+    { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.expectedFingerprintPath } },
     async (request, reply) => {
       const actor = await authenticate(request);
       requireMutationActor(actor);
@@ -325,7 +328,7 @@ export function registerWorktreeApi(app: FastifyInstance, manager: DraftManager,
 
   app.post<{ Params: { draftId: string }; Body: { expected_fingerprint: string; path: string; content_base64: string } }>(
     "/api/drafts/:draftId/worktree/file",
-    { bodyLimit: UPLOAD_BODY_LIMIT },
+    { bodyLimit: UPLOAD_BODY_LIMIT, schema: { body: HTTP_REQUEST_BODY_SCHEMAS.uploadWorktreeFile } },
     async (request, reply) => {
       const actor = await authenticate(request);
       requireMutationActor(actor);
@@ -342,6 +345,7 @@ export function registerWorktreeApi(app: FastifyInstance, manager: DraftManager,
 
   app.post<{ Params: { draftId: string }; Body: { expected_fingerprint: string; from: string; to: string } }>(
     "/api/drafts/:draftId/worktree/move",
+    { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.moveWorktreeEntry } },
     async (request) => {
       const actor = await authenticate(request);
       requireMutationActor(actor);

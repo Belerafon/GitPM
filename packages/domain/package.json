@@ -17,6 +17,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@gitpm/contracts": "workspace:*",
     "@gitpm/drafts": "workspace:*",
     "@gitpm/repository-format": "workspace:*",
     "@gitpm/security": "workspace:*",

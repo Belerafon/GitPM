@@ -3,6 +3,7 @@ import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { RepositoryMode } from "@gitpm/shared";
 import type { GitClient } from "@gitpm/git-client";
+import type { RepositoryConnectionStatus, RepositoryConnectionUpdate } from "@gitpm/contracts";
 import { assertSafeRepositoryUrl } from "@gitpm/security";
 import {
   AuthError,
@@ -15,38 +16,12 @@ import {
 } from "@gitpm/gitlab";
 
 export type ConnectionValueSource = "environment" | "config" | "origin" | "none";
+export type { RepositoryConnectionStatus, RepositoryConnectionUpdate } from "@gitpm/contracts";
 
 export interface GitLabConnectionConfiguration {
   readonly baseUrl: string;
   readonly project: string;
   readonly clientId: string;
-}
-
-export interface RepositoryConnectionStatus {
-  readonly repository_path: string;
-  readonly repository_mode: RepositoryMode;
-  readonly default_branch: string;
-  readonly repository_url?: string;
-  readonly remote_source: ConnectionValueSource;
-  readonly remote_editable: boolean;
-  readonly gitlab_editable: boolean;
-  readonly gitlab: {
-    readonly configured: boolean;
-    readonly base_url?: string;
-    readonly project?: string;
-    readonly client_id?: string;
-  };
-}
-
-export interface RepositoryConnectionUpdate {
-  readonly repository_url?: string | null;
-  readonly gitlab?: {
-    readonly base_url?: string | null;
-    readonly project?: string | null;
-    readonly client_id?: string | null;
-  } | null;
-  /** Exact new URL, or REMOVE_REMOTE when clearing an existing remote. */
-  readonly confirmation?: string;
 }
 
 export interface RepositoryConnectionManagerOptions {

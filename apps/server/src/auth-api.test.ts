@@ -103,6 +103,7 @@ describe("optional GitLab repository session", () => {
     const session = await app.inject({ method: "GET", url: "/api/auth/session" });
     expect(session.statusCode).toBe(200);
     expect(session.json()).toMatchObject({ mode: "repository", gitlab: { configured: false } });
+    expect(session.json()).not.toHaveProperty("session_id");
 
     const committed = await app.inject({ method: "POST", url: "/api/drafts/DRF-LOCAL/commit", payload: { message: "Local commit" } });
     expect(committed.statusCode).toBe(200);

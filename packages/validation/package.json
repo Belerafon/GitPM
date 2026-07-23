@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@gitpm/calendar": "workspace:*",
+    "@gitpm/contracts": "workspace:*",
     "@gitpm/repository-format": "workspace:*",
     "ajv": "8.18.0"
   }

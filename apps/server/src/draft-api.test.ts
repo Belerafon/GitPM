@@ -148,7 +148,7 @@ describe("entity API contract", () => {
   it("creates an entity through the domain store", async () => {
     const entityStore = {
       create: vi.fn(async () => ({
-        document: { schema: "gitpm/project@1", id: "P-26-MGP84K" },
+        document: { schema: "gitpm/project@1", id: "P-26-MGP84K", name: "Project", status: "active", lifecycle: "active" },
         path: "projects/P-26-MGP84K/project.yaml",
         blob_id: "a".repeat(40),
         draft_fingerprint: "b".repeat(64),
@@ -165,11 +165,32 @@ describe("entity API contract", () => {
       url: "/api/drafts/DRF-API/entities/projects",
       payload: {
         expected_fingerprint: metadata.fingerprint,
-        document: { schema: "gitpm/project@1", id: "P-26-MGP84K" },
+        document: { schema: "gitpm/project@1", id: "P-26-MGP84K", name: "Project", status: "active", lifecycle: "active" },
       },
     });
     expect(response.statusCode).toBe(201);
     expect(response.json()).toMatchObject({ path: "projects/P-26-MGP84K/project.yaml" });
+  });
+
+  it("rejects malformed entity bodies before calling the domain store", async () => {
+    const create = vi.fn();
+    const app = buildApp({
+      authenticate: () => ({ userId: "42", role: "Developer" }),
+      draftManager: manager(),
+      entityStore: { create } as unknown as EntityStore,
+    });
+    apps.push(app);
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/drafts/DRF-API/entities/projects",
+      payload: {
+        expected_fingerprint: metadata.fingerprint,
+        document: { schema: "gitpm/project@1", id: "P-26-MGP84K" },
+      },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ error: { code: "REQUEST_CONTRACT_INVALID" } });
+    expect(create).not.toHaveBeenCalled();
   });
 
   it("maps delete restrict to a stable conflict response", async () => {
@@ -222,7 +243,7 @@ describe("entity API contract", () => {
       payload: {
         expected_fingerprint: metadata.fingerprint,
         expected_blob_id: "a".repeat(40),
-        document: { schema: "gitpm/statuses@1", statuses: [] },
+        document: { schema: "gitpm/statuses@1", statuses: [{ slug: "backlog", title: "Backlog", color: "gray", active: true }] },
       },
     });
     expect(response.statusCode).toBe(403);

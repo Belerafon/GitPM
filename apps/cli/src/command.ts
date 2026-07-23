@@ -4,6 +4,7 @@ import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { DOCUMENT_SCHEMA_FILES, ENTITY_TYPE_SCHEMAS } from "@gitpm/contracts";
 import { ENTITY_ID_PREFIX, GITPM_VERSION, newEntityId } from "@gitpm/shared";
 import { formatYamlText, parseYamlDocument, parseYamlValue, referenceLabelsForDocuments, RepositoryFormatError } from "@gitpm/repository-format";
 import { discoverRepositoryFiles, validateRepository } from "@gitpm/validation";
@@ -256,8 +257,7 @@ function assertKnownArguments(command: string | undefined, args: readonly string
 function requestedEntityType(args: readonly string[]): string | undefined {
   const value = flagValue(args, "--type") ?? flagValue(args, "--schema");
   if (value === undefined) return undefined;
-  const match = /^gitpm\/(project|task|milestone|person|team|calendar|saved-view)@1$/u.exec(value);
-  return match?.[1] ?? value;
+  return Object.entries(ENTITY_TYPE_SCHEMAS).find(([, schema]) => schema === value)?.[0] ?? value;
 }
 
 async function versionPayload(): Promise<Record<string, unknown>> {
@@ -299,7 +299,7 @@ const schemaExamples: Readonly<Record<string, string>> = {
 async function runSchema(args: readonly string[]): Promise<CliResult> {
   const json = args.includes("--json");
   const action = args[0];
-  const available = ["project", "task", "milestone", "person", "team", "calendar", "saved-view", "comment", "repository", "statuses", "issue-types"];
+  const available = Object.keys(DOCUMENT_SCHEMA_FILES);
   if (action === "list") {
     return { exitCode: 0, output: render(json, { ok: true, code: "OK", schemas: available }, available.join("\n")) };
   }
