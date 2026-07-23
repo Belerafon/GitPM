@@ -2,7 +2,7 @@ import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import type { GitPmApi } from "../../api.js";
 import { AsyncBoundary, useAsyncLoad } from "../../async-data.js";
-import { AssigneeChecks, TaskPanel, type ConfigValue } from "../../core-ui.js";
+import { AssigneeChecks, existingProjectGroups, projectGroupFromForm, ProjectGroupField, TaskPanel, type ConfigValue } from "../../core-ui.js";
 import { EditorDrawer } from "../../editor-drawer.js";
 import { EntityCatalog } from "../../entity-catalog.js";
 import { useExternalHighlights, useReducedMotion } from "../../external-updates.js";
@@ -69,6 +69,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   const loader = useAsyncLoad();
   const [workspace, setWorkspace] = useState<ProjectWorkspaceResult | null>(null);
   const [projects, setProjects] = useState<readonly EntityResult[]>([]);
+  const [availableProjectGroups, setAvailableProjectGroups] = useState<readonly string[]>([]);
   const [people, setPeople] = useState<readonly EntityResult[]>([]);
   const [statuses, setStatuses] = useState<readonly ConfigValue[]>([]);
   const [types, setTypes] = useState<readonly ConfigValue[]>([]);
@@ -97,11 +98,12 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     }, ({ nextWorkspace, nextProjects, nextPeople, statusConfig, typeConfig }) => {
       setWorkspace(nextWorkspace);
       setProjects(nextProjects.filter((item) => item.document.lifecycle === "active"));
+      setAvailableProjectGroups(existingProjectGroups(nextProjects, locale));
       setPeople(nextPeople.filter((item) => item.document.lifecycle === "active"));
       setStatuses(configValues(statusConfig.document, "statuses"));
       setTypes(configValues(typeConfig.document, "issue_types"));
     });
-  }, [api, draft.draft_id, draft.fingerprint, loader.run, projectId]);
+  }, [api, draft.draft_id, draft.fingerprint, loader.run, locale, projectId]);
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { setStatusFilter(initialStatusFilter); setMilestoneFilter(initialMilestoneFilter); }, [initialMilestoneFilter, initialStatusFilter]);
@@ -251,6 +253,11 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     if (workspace === null) return;
     const data = new FormData(event.currentTarget);
     const owner = String(data.get("owner")); const start = String(data.get("start")); const due = String(data.get("due"));
+    const selectedGroup = projectGroupFromForm(data, availableProjectGroups);
+    if (!selectedGroup.valid) {
+      if (selectedGroup.duplicate) setError(t("core.groupAlreadyExists"));
+      return;
+    }
     const document = {
       ...workspace.project.document,
       name: String(data.get("name")).trim(),
@@ -260,6 +267,8 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
       start: start || undefined,
       due: due || undefined,
     } as GitPmDocument;
+    if (selectedGroup.group === "") delete (document as Record<string, unknown>).group;
+    else (document as Record<string, unknown>).group = selectedGroup.group;
     void mutate(async () => await api.updateEntity(draft.draft_id, "projects", workspace.project, workspace.draft_fingerprint, document));
   };
 
@@ -342,6 +351,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
             <div className="project-plan-actions"><button disabled={readOnly} onClick={() => setEditor({ kind: "project" })}>{t("core.edit")}</button><button disabled={readOnly} onClick={() => setEditor({ kind: "new-stage" })}>+ {t("stages.new")}</button><button className="primary" disabled={readOnly} onClick={() => setEditor({ kind: "task" })}>+ {t("core.createTaskAction")}</button></div>
             <dl className="project-plan-meta">
               <div><dt>{t("core.status")}</dt><dd><span className="state open">{statusTitle(text(workspace.project.document, "status"))}</span></dd></div>
+              {text(workspace.project.document, "group").trim() !== "" && <div><dt>{t("core.group")}</dt><dd>{text(workspace.project.document, "group").trim()}</dd></div>}
               <div><dt>{t("core.owner")}</dt><dd><PersonLinks empty={t("core.unassigned")} onOpen={(personId) => onNavigate("people", { personId })} people={people} personIds={text(workspace.project.document, "owner") ? [text(workspace.project.document, "owner")] : []} /></dd></div>
               <div><dt>{t("projectPlan.start")}</dt><dd>{dateLabel(text(workspace.project.document, "start"))}</dd></div>
               <div><dt>{t("core.due")}</dt><dd>{dateLabel(text(workspace.project.document, "due"))}</dd></div>
@@ -418,6 +428,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
       <form className="editor-drawer-form" onSubmit={updateProject}>
         <label>{t("core.name")}<input defaultValue={text(workspace.project.document, "name")} disabled={readOnly} name="name" required /></label>
         <label>{t("core.status")}<select defaultValue={text(workspace.project.document, "status")} disabled={readOnly} name="status">{statuses.map((item) => <option key={item.slug} value={item.slug}>{item.title}</option>)}</select></label>
+        <ProjectGroupField currentGroup={text(workspace.project.document, "group")} disabled={readOnly} groups={availableProjectGroups} key={editor?.kind === "project" ? "open" : "closed"} t={t} />
         <label>{t("core.owner")}<select defaultValue={text(workspace.project.document, "owner")} disabled={readOnly} name="owner"><option value="">{t("core.unassigned")}</option>{people.map((person) => <option key={person.document.id} value={person.document.id}>{text(person.document, "name")}</option>)}</select></label>
         <label>{t("projectPlan.start")}<input defaultValue={text(workspace.project.document, "start")} disabled={readOnly} name="start" type="date" /></label>
         <label>{t("core.due")}<input defaultValue={text(workspace.project.document, "due")} disabled={readOnly} name="due" type="date" /></label>

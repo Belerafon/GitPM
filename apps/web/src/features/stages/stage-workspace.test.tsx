@@ -11,6 +11,7 @@ const draft: DraftStatus = { draft_id: "DRF-STAGES", owner_gitlab_user_id: "42",
 const result = (document: GitPmDocument): EntityResult => ({ document, path: `${document.id}.yaml`, blob_id: "a".repeat(40), draft_fingerprint: fingerprint });
 
 const project = result({ schema: "gitpm/project@1", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
+const archivedProject = result({ schema: "gitpm/project@1", id: "P-26-999999", name: "Archived", status: "backlog", lifecycle: "archived", group: "Research" });
 const person = result({ schema: "gitpm/person@1", id: "U-26-888888", name: "Ada", weekly_capacity_hours: 40, calendar: "C-26-999999", lifecycle: "active" });
 const stage = result({ schema: "gitpm/milestone@1", id: "M-26-222222", project: project.document.id, name: "Launch", lifecycle: "active", due: "2026-08-01" });
 const laterStage = result({ schema: "gitpm/milestone@1", id: "M-26-777777", project: project.document.id, name: "Follow-up", lifecycle: "active", due: "2026-09-01" });
@@ -36,7 +37,7 @@ function api() {
     getConfiguration: vi.fn(async (_draftId: string, kind: "statuses" | "issue-types") => result(kind === "statuses"
       ? { schema: "gitpm/statuses@1", id: "CONFIG-STATUSES", lifecycle: "active", statuses: [{ slug: "backlog", title: "Backlog", active: true }, { slug: "done", title: "Done", active: true }] }
       : { schema: "gitpm/issue-types@1", id: "CONFIG-TYPES", lifecycle: "active", issue_types: [{ slug: "task", title: "Task", active: true }] })),
-    listEntities: vi.fn(async (_draftId: string, type: string) => type === "people" ? [person] : type === "projects" ? [currentProject] : []),
+    listEntities: vi.fn(async (_draftId: string, type: string) => type === "people" ? [person] : type === "projects" ? [currentProject, archivedProject] : []),
     createEntity,
     updateEntity,
   } as unknown as GitPmApi & { createEntity: typeof createEntity; updateEntity: typeof updateEntity };
@@ -45,6 +46,34 @@ function api() {
 afterEach(() => { cleanup(); localStorage.clear(); });
 
 describe("project plan and stage workspace", () => {
+  it("edits and removes the Project group from the active project route", async () => {
+    const client = api();
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} />);
+
+    await screen.findByRole("heading", { name: "Alpha" });
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    let dialog = screen.getByRole("dialog", { name: "Edit: Alpha" });
+    expect(within(dialog).getByRole("option", { name: "Research" })).toBeTruthy();
+    fireEvent.change(within(dialog).getByLabelText("Group"), { target: { value: "__new__" } });
+    fireEvent.change(within(dialog).getByLabelText("New group name"), { target: { value: "  Operations  " } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(client.updateEntity).toHaveBeenCalledWith(
+      draft.draft_id,
+      "projects",
+      project,
+      fingerprint,
+      expect.objectContaining({ group: "Operations" }),
+    ));
+    expect(await screen.findByText("Operations")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    dialog = screen.getByRole("dialog", { name: "Edit: Alpha" });
+    fireEvent.change(within(dialog).getByLabelText("Group"), { target: { value: "" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(client.updateEntity.mock.calls.at(-1)?.[4]).not.toHaveProperty("group"));
+  });
+
   it("shows every task inside the project plan and opens a stage as a first-class route", async () => {
     const client = api(); const onNavigate = vi.fn();
     render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={onNavigate} projectId={project.document.id} />);
