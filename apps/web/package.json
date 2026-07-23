@@ -10,6 +10,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@gitpm/contracts": "workspace:*",
     "@gitpm/shared": "workspace:*",
     "@gitpm/workload": "workspace:*",
     "react": "19.2.0",

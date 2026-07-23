@@ -8,7 +8,7 @@ import { EntityCatalog } from "../../entity-catalog.js";
 import { useExternalHighlights, useReducedMotion } from "../../external-updates.js";
 import { formatDateOnly, formatDurationHours, message, type Locale, type MessageKey } from "../../i18n.js";
 import { upsertEntity, useFlipList } from "../../optimistic-ui.js";
-import type { DraftStatus, EntityResult, GitPmDocument, ProjectWorkspaceResult } from "../../types.js";
+import type { DraftStatus, EntityDocument, EntityResult, GitPmDocument, ProjectWorkspaceResult } from "../../types.js";
 import type { WorkspaceNavigate } from "../../workspace-navigation.js";
 import { PersonLinks } from "../../person-link.js";
 import { DraftReadOnlyAlert, draftReadOnlyReason } from "../../draft-read-only.js";
@@ -27,10 +27,10 @@ const readTaskFields = (): TaskFieldVisibility => {
 };
 const writeTaskFields = (fields: TaskFieldVisibility) => { try { localStorage.setItem(TASK_FIELDS_STORAGE_KEY, JSON.stringify(fields)); } catch { /* Browser storage may be unavailable. */ } };
 
-const text = (document: GitPmDocument, key: string): string => typeof document[key] === "string" ? document[key] as string : "";
-const number = (document: GitPmDocument, key: string): number | undefined => typeof document[key] === "number" ? document[key] as number : undefined;
-const strings = (document: GitPmDocument, key: string): string[] => Array.isArray(document[key]) ? (document[key] as unknown[]).filter((item): item is string => typeof item === "string") : [];
-const configValues = (document: GitPmDocument, key: "statuses" | "issue_types"): ConfigValue[] => Array.isArray(document[key])
+const text = (document: Readonly<Record<string, unknown>>, key: string): string => typeof document[key] === "string" ? document[key] as string : "";
+const number = (document: Readonly<Record<string, unknown>>, key: string): number | undefined => typeof document[key] === "number" ? document[key] as number : undefined;
+const strings = (document: Readonly<Record<string, unknown>>, key: string): string[] => Array.isArray(document[key]) ? (document[key] as unknown[]).filter((item): item is string => typeof item === "string") : [];
+const configValues = (document: Readonly<Record<string, unknown>>, key: "statuses" | "issue_types"): ConfigValue[] => Array.isArray(document[key])
   ? (document[key] as unknown[]).filter((item): item is ConfigValue => typeof item === "object" && item !== null && typeof (item as ConfigValue).slug === "string" && typeof (item as ConfigValue).title === "string" && (item as ConfigValue).active === true)
   : [];
 const compareOrder = (order: readonly string[], leftId: string, rightId: string) => {
@@ -213,7 +213,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     if (milestoneOrder === null) return;
     const swappedStageId = stageIds[stageIds.indexOf(stageId) + offset]!;
     const previous = workspace;
-    const document = { ...workspace.project.document, milestone_order: milestoneOrder } as GitPmDocument;
+    const document = { ...workspace.project.document, milestone_order: milestoneOrder } as EntityDocument;
     setOrderPending([stageId, swappedStageId]);
     setWorkspace({ ...workspace, project: { ...workspace.project, document } });
     void mutate(async () => { const result = await api.updateEntity(draft.draft_id, "projects", previous.project, previous.draft_fingerprint, document); setOrderPending(null); return result; }, [stageId, swappedStageId])
@@ -228,7 +228,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     if (taskOrder === null) return;
     const swappedTaskId = taskIds[taskIds.indexOf(taskId) + offset]!;
     const previous = workspace;
-    const document = { ...stage.document, task_order: taskOrder } as GitPmDocument;
+    const document = { ...stage.document, task_order: taskOrder } as EntityDocument;
     setOrderPending([taskId, swappedTaskId]);
     setWorkspace({ ...workspace, milestones: workspace.milestones.map((item) => item.document.id === stage.document.id ? { ...item, document } : item) });
     void mutate(async () => { const result = await api.updateEntity(draft.draft_id, "milestones", stage, previous.draft_fingerprint, document); setOrderPending(null); return result; }, [taskId, swappedTaskId])
@@ -238,7 +238,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   const changeTaskStatus = (task: EntityResult, status: string) => {
     if (workspace === null || orderPending !== null || statusPending !== null || text(task.document, "status") === status) return;
     const previous = workspace;
-    const document = { ...task.document, status } as GitPmDocument;
+    const document = { ...task.document, status } as EntityDocument;
     setStatusPending(task.document.id);
     setWorkspace({ ...workspace, tasks: workspace.tasks.map((item) => item.document.id === task.document.id ? { ...item, document } : item) });
     void mutate(async () => { const result = await api.updateEntity(draft.draft_id, "tasks", task, previous.draft_fingerprint, document); setStatusPending(null); return result; }, task.document.id)
@@ -259,7 +259,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
       owner: owner || undefined,
       start: start || undefined,
       due: due || undefined,
-    } as GitPmDocument;
+    } as EntityDocument;
     void mutate(async () => await api.updateEntity(draft.draft_id, "projects", workspace.project, workspace.draft_fingerprint, document));
   };
 
@@ -268,7 +268,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     if (workspace === null) return;
     const data = new FormData(event.currentTarget);
     const id = newUniqueEntityId(ENTITY_ID_PREFIX.milestone, new Set(workspace.milestones.map((item) => item.document.id)));
-    const document = { schema: "gitpm/milestone@1", id, project: projectId, name: String(data.get("name")).trim(), lifecycle: "active", description_markdown: String(data.get("description")), ...(data.get("due") ? { due: String(data.get("due")) } : {}) } as GitPmDocument;
+    const document = { schema: "gitpm/milestone@1", id, project: projectId, name: String(data.get("name")).trim(), lifecycle: "active", description_markdown: String(data.get("description")), ...(data.get("due") ? { due: String(data.get("due")) } : {}) } as EntityDocument;
     void mutate(async () => await api.createEntity(draft.draft_id, "milestones", workspace.draft_fingerprint, document));
   };
 
@@ -279,7 +279,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     if (stage === undefined) return;
     const data = new FormData(event.currentTarget);
     const due = String(data.get("due"));
-    const document = { ...stage.document, name: String(data.get("name")).trim(), description_markdown: String(data.get("description")), ...(due ? { due } : { due: undefined }) } as GitPmDocument;
+    const document = { ...stage.document, name: String(data.get("name")).trim(), description_markdown: String(data.get("description")), ...(due ? { due } : { due: undefined }) } as EntityDocument;
     void mutate(async () => await api.updateEntity(draft.draft_id, "milestones", stage, workspace.draft_fingerprint, document));
   };
 
@@ -304,7 +304,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
       ...(start ? { start } : {}),
       ...(due ? { due } : {}),
       ...(estimate ? { estimate_hours: Number(estimate) } : {}),
-    } as GitPmDocument;
+    } as EntityDocument;
     void mutate(async () => await api.createEntity(draft.draft_id, "tasks", workspace.draft_fingerprint, document));
   };
 

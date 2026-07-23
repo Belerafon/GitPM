@@ -1,11 +1,11 @@
-import { lstat, mkdir, readFile, readdir, rm, rmdir } from "node:fs/promises";
+import { lstat, mkdir, readFile, rm, rmdir } from "node:fs/promises";
 import path from "node:path";
-import type { DraftManager, DraftMetadata } from "@gitpm/drafts";
+import type { DraftManager, RepositoryMutationMode, RepositoryWorkspace } from "@gitpm/drafts";
 import { formatYamlDocument, parseYamlDocument, referenceLabelForDocument, referenceLabelsForDocuments } from "@gitpm/repository-format";
 import type { GitPmDocument } from "@gitpm/repository-format";
 import { atomicWriteDomainFile, resolveDomainPath } from "@gitpm/security";
 import { ENTITY_ID_PREFIX, isEntityId, newUniqueEntityId, type EntityIdPrefix } from "@gitpm/shared";
-import { validateDelete, validateRepository } from "@gitpm/validation";
+import { discoverRepositoryFiles, validateDelete, validateRepository } from "@gitpm/validation";
 
 export * from "./comments.js";
 
@@ -264,17 +264,6 @@ export function entityPathForDocument(document: GitPmDocument): string {
   }
 }
 
-async function yamlFiles(directory: string): Promise<string[]> {
-  const result: string[] = [];
-  for (const entry of await readdir(directory, { withFileTypes: true })) {
-    if (entry.name === ".git") continue;
-    const absolute = path.join(directory, entry.name);
-    if (entry.isDirectory()) result.push(...await yamlFiles(absolute));
-    else if (entry.name.endsWith(".yaml")) result.push(absolute);
-  }
-  return result.sort();
-}
-
 async function exists(file: string): Promise<boolean> {
   try { await lstat(file); return true; } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
@@ -333,9 +322,12 @@ export class EntityStore {
   private readonly pendingIndexes = new Map<string, { readonly fingerprint: string; readonly promise: Promise<RepositoryIndex> }>();
   private readonly pendingFingerprints = new Map<string, { readonly baseline: string; readonly promise: Promise<string> }>();
 
-  constructor(private readonly drafts: DraftManager) {}
+  constructor(
+    private readonly drafts: DraftManager,
+    private readonly mutationMode: RepositoryMutationMode = "ui",
+  ) {}
 
-  private async contentFingerprint(draftId: string, metadata: DraftMetadata): Promise<string> {
+  private async contentFingerprint(draftId: string, metadata: RepositoryWorkspace): Promise<string> {
     const pending = this.pendingFingerprints.get(draftId);
     if (pending?.baseline === metadata.fingerprint) return await pending.promise;
     const promise = this.drafts.poll(draftId).then((result) => result.currentFingerprint);
@@ -346,14 +338,19 @@ export class EntityStore {
     }
   }
 
-  private async index(draftId: string, metadata: DraftMetadata): Promise<RepositoryIndex> {
+  private async index(draftId: string, metadata: RepositoryWorkspace): Promise<RepositoryIndex> {
     const fingerprint = await this.contentFingerprint(draftId, metadata);
     const cached = this.indexes.get(draftId);
     if (cached?.fingerprint === fingerprint) return cached;
     const pending = this.pendingIndexes.get(draftId);
     if (pending?.fingerprint === fingerprint) return await pending.promise;
     const promise = (async () => {
-      const entities = await Promise.all((await yamlFiles(metadata.worktree_path)).map(async (absolute): Promise<IndexedEntity> => {
+      const discovery = await discoverRepositoryFiles(metadata.worktree_path);
+      if (discovery.issues.length > 0) {
+        const issue = discovery.issues[0]!;
+        throw new DomainOperationError(issue.code, issue.message, discovery.issues);
+      }
+      const entities = await Promise.all(discovery.files.map(async (absolute): Promise<IndexedEntity> => {
         const relative = path.relative(metadata.worktree_path, absolute).split(path.sep).join("/");
         return { absolute, relative, document: parseYamlDocument(await readFile(absolute, "utf8"), relative) };
       }));
@@ -374,11 +371,11 @@ export class EntityStore {
     }
   }
 
-  private async result(draftId: string, metadata: DraftMetadata, entity: IndexedEntity): Promise<EntityResult> {
+  private async result(draftId: string, metadata: RepositoryWorkspace, entity: IndexedEntity): Promise<EntityResult> {
     return (await this.results(draftId, metadata, [entity]))[0]!;
   }
 
-  private async results(draftId: string, metadata: DraftMetadata, entities: readonly IndexedEntity[]): Promise<readonly EntityResult[]> {
+  private async results(draftId: string, metadata: RepositoryWorkspace, entities: readonly IndexedEntity[]): Promise<readonly EntityResult[]> {
     const blobIds = await this.drafts.fileBlobIds(draftId, entities.map((entity) => entity.relative));
     return entities.map((entity) => ({
       document: entity.document,
@@ -402,7 +399,7 @@ export class EntityStore {
     inputs: readonly Readonly<Record<string, unknown>>[],
     requestedType?: string,
   ): Promise<readonly EntityCreatePlanItem[]> {
-    const metadata = await this.drafts.getDraft(draftId);
+    const metadata = await this.drafts.getWorkspace(draftId);
     const repository = await this.index(draftId, metadata);
     return planEntityCreation(inputs, repository.entities.map((entity) => entity.document), requestedType);
   }
@@ -413,13 +410,13 @@ export class EntityStore {
     requestedType: string,
     requestedId: string,
   ): Promise<EntityUpdatePlan> {
-    const metadata = await this.drafts.getDraft(draftId);
+    const metadata = await this.drafts.getWorkspace(draftId);
     const repository = await this.index(draftId, metadata);
     return planEntityUpdate(patch, repository.entities.map((entity) => entity.document), requestedType, requestedId);
   }
 
   async list(draftId: string, entityType: string, project?: string): Promise<readonly EntityResult[]> {
-    const metadata = await this.drafts.getDraft(draftId);
+    const metadata = await this.drafts.getWorkspace(draftId);
     const schema = ENTITY_TYPE_SCHEMAS[canonicalEntityType(entityType)];
     if (!schema) throw new DomainOperationError("ENTITY_TYPE_INVALID", `Unknown entity type ${entityType}`);
     const matching = (await this.index(draftId, metadata)).entities
@@ -428,7 +425,7 @@ export class EntityStore {
     return [...result].sort((left, right) => String(left.document.id).localeCompare(String(right.document.id)));
   }
 
-  private async find(draftId: string, metadata: DraftMetadata, entityType: string, id: string): Promise<IndexedEntity> {
+  private async find(draftId: string, metadata: RepositoryWorkspace, entityType: string, id: string): Promise<IndexedEntity> {
     const schema = ENTITY_TYPE_SCHEMAS[canonicalEntityType(entityType)];
     if (!schema) throw new DomainOperationError("ENTITY_TYPE_INVALID", `Unknown entity type ${entityType}`);
     const found = (await this.index(draftId, metadata)).bySchemaAndId.get(`${schema}:${id}`);
@@ -437,13 +434,13 @@ export class EntityStore {
   }
 
   async get(draftId: string, entityType: string, id: string): Promise<EntityResult> {
-    const metadata = await this.drafts.getDraft(draftId);
+    const metadata = await this.drafts.getWorkspace(draftId);
     const found = await this.find(draftId, metadata, entityType, id);
     return await this.result(draftId, metadata, found);
   }
 
   async projectWorkspace(draftId: string, projectId: string): Promise<ProjectWorkspaceResult> {
-    const metadata = await this.drafts.getDraft(draftId);
+    const metadata = await this.drafts.getWorkspace(draftId);
     const repository = await this.index(draftId, metadata);
     const indexedProject = repository.bySchemaAndId.get(`gitpm/project@1:${projectId}`);
     if (indexedProject === undefined) throw new DomainOperationError("ENTITY_NOT_FOUND", `projects/${projectId} not found`);
@@ -457,7 +454,7 @@ export class EntityStore {
   }
 
   async getConfiguration(draftId: string, kind: "statuses" | "issue-types"): Promise<EntityResult> {
-    const metadata = await this.drafts.getDraft(draftId);
+    const metadata = await this.drafts.getWorkspace(draftId);
     const relative = kind === "statuses" ? ".gitpm/statuses.yaml" : ".gitpm/issue-types.yaml";
     const absolute = await resolveDomainPath(metadata.worktree_path, relative);
     const document = parseYamlDocument(await readFile(absolute, "utf8"), relative);
@@ -480,7 +477,7 @@ export class EntityStore {
     const relative = kind === "statuses" ? ".gitpm/statuses.yaml" : ".gitpm/issue-types.yaml";
     const expectedSchema = kind === "statuses" ? "gitpm/statuses@1" : "gitpm/issue-types@1";
     if (document.schema !== expectedSchema) throw new DomainOperationError("ENTITY_IDENTITY_IMMUTABLE", "Configuration schema is immutable");
-    const mutation = await this.drafts.withUiMutation(draftId, owner, expectedFingerprint, async (metadata) => {
+    const mutation = await this.drafts.withRepositoryMutation(draftId, owner, expectedFingerprint, this.mutationMode, async (metadata) => {
       const referenceLabels = this.labels(await this.index(draftId, metadata));
       await this.drafts.assertFileBlobId(draftId, relative, expectedBlobId);
       const absolute = await resolveDomainPath(metadata.worktree_path, relative);
@@ -508,7 +505,7 @@ export class EntityStore {
       ? input as GitPmDocument
       : (await this.planCreate(draftId, [input], requestedType))[0]!.document;
     const relative = entityPathForDocument(document);
-    const mutation = await this.drafts.withUiMutation(draftId, owner, expectedFingerprint, async (metadata) => {
+    const mutation = await this.drafts.withRepositoryMutation(draftId, owner, expectedFingerprint, this.mutationMode, async (metadata) => {
       const referenceLabels = this.labels(await this.index(draftId, metadata), document);
       const absolute = path.join(metadata.worktree_path, ...relative.split("/"));
       if (await exists(absolute)) throw new DomainOperationError("ENTITY_EXISTS", `${relative} already exists`);
@@ -541,7 +538,7 @@ export class EntityStore {
       if (paths.has(item.path)) throw new DomainOperationError("ENTITY_EXISTS", `Duplicate batch path ${item.path}`);
       paths.add(item.path);
     }
-    const mutation = await this.drafts.withUiMutation(draftId, owner, expectedFingerprint, async (metadata) => {
+    const mutation = await this.drafts.withRepositoryMutation(draftId, owner, expectedFingerprint, this.mutationMode, async (metadata) => {
       const repository = await this.index(draftId, metadata);
       const referenceLabels = referenceLabelsForDocuments([
         ...repository.entities.map((entity) => entity.document),
@@ -603,7 +600,7 @@ export class EntityStore {
     document: GitPmDocument,
     assertChangedPaths?: (paths: readonly string[]) => void,
   ): Promise<EntityResult> {
-    const mutation = await this.drafts.withUiMutation(draftId, owner, expectedFingerprint, async (metadata) => {
+    const mutation = await this.drafts.withRepositoryMutation(draftId, owner, expectedFingerprint, this.mutationMode, async (metadata) => {
       const found = await this.find(draftId, metadata, entityType, id);
       if (document.id !== id || document.schema !== found.document.schema || entityPathForDocument(document) !== found.relative) {
         throw new DomainOperationError("ENTITY_IDENTITY_IMMUTABLE", "Entity ID, schema and owning project are immutable");
@@ -664,7 +661,7 @@ export class EntityStore {
     if (!isEntityId(targetProject, ENTITY_ID_PREFIX.project)) throw new DomainOperationError("ENTITY_PROJECT_INVALID", "Target Project ID is invalid");
     if (targetMilestone !== undefined && !isEntityId(targetMilestone, ENTITY_ID_PREFIX.milestone)) throw new DomainOperationError("ENTITY_ID_INVALID", "Target Milestone ID is invalid");
     let movedDocument: GitPmDocument | undefined;
-    const mutation = await this.drafts.withUiMutation(draftId, owner, expectedFingerprint, async (metadata) => {
+    const mutation = await this.drafts.withRepositoryMutation(draftId, owner, expectedFingerprint, this.mutationMode, async (metadata) => {
       const found = await this.find(draftId, metadata, "tasks", id);
       await this.drafts.assertFileBlobId(draftId, found.relative, expectedBlobId);
       if (found.document.project === targetProject) throw new DomainOperationError("TASK_ALREADY_IN_PROJECT", `${id} already belongs to ${targetProject}`);
@@ -708,7 +705,7 @@ export class EntityStore {
   }
 
   async planDelete(draftId: string, entityType: string, id: string): Promise<DeletePlan> {
-    const metadata = await this.drafts.getDraft(draftId);
+    const metadata = await this.drafts.getWorkspace(draftId);
     const found = await this.find(draftId, metadata, entityType, id);
     const repository = await this.index(draftId, metadata);
     const cascadedComments = found.document.schema === "gitpm/task@1"
@@ -761,7 +758,7 @@ export class EntityStore {
     expectedBlobId: string,
     unlinkReferences = false,
   ): Promise<{ deleted: true; path: string; unlinked_paths: readonly string[]; draft_fingerprint: string }> {
-    const mutation = await this.drafts.withUiMutation(draftId, owner, expectedFingerprint, async (metadata) => {
+    const mutation = await this.drafts.withRepositoryMutation(draftId, owner, expectedFingerprint, this.mutationMode, async (metadata) => {
       const found = await this.find(draftId, metadata, entityType, id);
       await this.drafts.assertFileBlobId(draftId, found.relative, expectedBlobId);
       const repository = await this.index(draftId, metadata);

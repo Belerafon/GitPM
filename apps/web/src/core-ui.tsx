@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormE
 import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
 import type { GitPmApi } from "./api.js";
 import { formatDateOnly, message, type Locale, type MessageKey } from "./i18n.js";
-import type { DraftStatus, EntityResult, GitPmDocument } from "./types.js";
+import type { DraftStatus, EntityDocument, EntityResult, GitPmDocument } from "./types.js";
 import { changedEntityFields, useExternalHighlights, useReducedMotion } from "./external-updates.js";
 import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
 import type { WorkspaceNavigate } from "./workspace-navigation.js";
@@ -178,7 +178,7 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
             : await Promise.all([api.listEntities(draft.draft_id, "milestones"), api.listEntities(draft.draft_id, "tasks", nextProject)]);
       return { nextProjects, nextPeople, nextProject, nextMilestones, nextTasks, statusConfig, typeConfig };
     }, ({ nextProjects, nextPeople, nextProject, nextMilestones, nextTasks, statusConfig, typeConfig }) => {
-      const nextEntities = [...nextProjects, ...nextPeople, ...nextMilestones, ...nextTasks, statusConfig, typeConfig];
+      const nextEntities = [...nextProjects, ...nextPeople, ...nextMilestones, ...nextTasks];
       if (externalUpdate) markExternal(changedEntityFields(previousEntities.current, nextEntities));
       previousEntities.current = nextEntities;
       setProjects(nextProjects); setPeople(nextPeople); setProjectId(nextProject); setMilestones(nextMilestones); setTasks(nextTasks);
@@ -214,7 +214,7 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
   const changeTaskStatus = (task: EntityResult, status: string) => {
     if (statusPending !== null || value(task.document, "status") === status) return;
     const previous = tasks;
-    const document = { ...task.document, status } as GitPmDocument;
+    const document = { ...task.document, status } as EntityDocument;
     setStatusPending(task.document.id);
     setTasks(upsertEntity(tasks, { ...task, document }));
     void mutate(async () => { const result = await api.updateEntity(draft.draft_id, "tasks", task, fingerprint, document); setStatusPending(null); return result; })
@@ -263,17 +263,17 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
       if (selectedGroup.duplicate) setError(t("core.groupAlreadyExists"));
       return;
     }
-    const document = { schema: "gitpm/project@1", id, name: String(data.get("name")), status: statusOptions[0]?.slug ?? "backlog", lifecycle: "active", ...(selectedGroup.group === "" ? {} : { group: selectedGroup.group }), description_markdown: String(data.get("description")) } as GitPmDocument;
+    const document = { schema: "gitpm/project@1", id, name: String(data.get("name")), status: statusOptions[0]?.slug ?? "backlog", lifecycle: "active", ...(selectedGroup.group === "" ? {} : { group: selectedGroup.group }), description_markdown: String(data.get("description")) } as EntityDocument;
     void mutate(async () => await api.createEntity(draft.draft_id, "projects", fingerprint, document), id).then((result) => { if (result !== null) { setCreateEditor(null); onNavigate("projects", { projectId: id }); } });
   };
   const createMilestone = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); const data = new FormData(event.currentTarget);
-    const document = { schema: "gitpm/milestone@1", id: newUniqueEntityId(ENTITY_ID_PREFIX.milestone, new Set(milestones.map((item) => item.document.id))), project: projectId, name: String(data.get("name")), lifecycle: "active", description_markdown: String(data.get("description")), ...(data.get("due") ? { due: String(data.get("due")) } : {}) } as GitPmDocument;
+    const document = { schema: "gitpm/milestone@1", id: newUniqueEntityId(ENTITY_ID_PREFIX.milestone, new Set(milestones.map((item) => item.document.id))), project: projectId, name: String(data.get("name")), lifecycle: "active", description_markdown: String(data.get("description")), ...(data.get("due") ? { due: String(data.get("due")) } : {}) } as EntityDocument;
     void mutate(async () => await api.createEntity(draft.draft_id, "milestones", fingerprint, document)).then((result) => { if (result !== null) setCreateEditor(null); });
   };
   const createTask = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); const data = new FormData(event.currentTarget); const milestone = String(data.get("milestone")); const start = String(data.get("start")); const due = String(data.get("due")); const estimate = String(data.get("estimate"));
-    const document = { schema: "gitpm/task@1", id: newUniqueEntityId(ENTITY_ID_PREFIX.task, new Set(tasks.map((item) => item.document.id))), project: projectId, title: String(data.get("title")), type: typeOptions[0]?.slug ?? "task", status: String(data.get("status")), lifecycle: "active", description_markdown: String(data.get("description")), assignees: data.getAll("assignees").map(String), ...(milestone ? { milestone } : {}), ...(start ? { start } : {}), ...(due ? { due } : {}), ...(estimate ? { estimate_hours: Number(estimate) } : {}) } as GitPmDocument;
+    const document = { schema: "gitpm/task@1", id: newUniqueEntityId(ENTITY_ID_PREFIX.task, new Set(tasks.map((item) => item.document.id))), project: projectId, title: String(data.get("title")), type: typeOptions[0]?.slug ?? "task", status: String(data.get("status")), lifecycle: "active", description_markdown: String(data.get("description")), assignees: data.getAll("assignees").map(String), ...(milestone ? { milestone } : {}), ...(start ? { start } : {}), ...(due ? { due } : {}), ...(estimate ? { estimate_hours: Number(estimate) } : {}) } as EntityDocument;
     void mutate(async () => await api.createEntity(draft.draft_id, "tasks", fingerprint, document)).then((result) => { if (result !== null) setCreateEditor(null); });
   };
 
@@ -333,7 +333,7 @@ function EntityEditor({ api, entity, entityType, draft, existingGroups = [], fin
     event.preventDefault();
     const data = new FormData(event.currentTarget);
     const due = String(data.get("due") ?? "");
-    const document = { ...entity.document, name: String(data.get("name")), description_markdown: String(data.get("description")), ...(entityType === "milestones" ? (due ? { due } : { due: undefined }) : {}) } as GitPmDocument;
+    const document = { ...entity.document, name: String(data.get("name")), description_markdown: String(data.get("description")), ...(entityType === "milestones" ? (due ? { due } : { due: undefined }) : {}) } as EntityDocument;
     if (entityType === "projects") {
       const selectedGroup = projectGroupFromForm(data, existingGroups);
       if (!selectedGroup.valid) return;

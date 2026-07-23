@@ -45,7 +45,7 @@ export class HistoryService {
   ) {}
 
   async list(draftId: string, limit = 50): Promise<readonly CommitHistoryItem[]> {
-    const draft = await this.drafts.getDraft(draftId);
+    const draft = await this.drafts.getWorkspace(draftId);
     const [entries, statuses] = await Promise.all([
       this.git.history(draft.worktree_path, limit),
       this.git.historyFileStatuses(draft.worktree_path, limit),
@@ -54,7 +54,7 @@ export class HistoryService {
   }
 
   async detail(draftId: string, commit: string): Promise<CommitHistoryDetail> {
-    const draft = await this.drafts.getDraft(draftId);
+    const draft = await this.drafts.getWorkspace(draftId);
     const detail = await this.git.commitDetail(draft.worktree_path, commit);
     return { ...detail, semantic_summary: summarizeFiles(detail.files) };
   }
@@ -63,12 +63,12 @@ export class HistoryService {
     if (relativePath.includes("\\") || relativePath.startsWith("/") || relativePath.split("/").some((part) => part === "" || part === "." || part === "..")) {
       throw new HistoryError("HISTORY_PATH_INVALID", "History path must be a normalized repository-relative path");
     }
-    const draft = await this.drafts.getDraft(draftId);
+    const draft = await this.drafts.getWorkspace(draftId);
     return await this.git.fileHistory(draft.worktree_path, relativePath, limit);
   }
 
   async createRevertDraft(sourceDraftId: string, commit: string, newDraftId: string, owner: string): Promise<RevertDraftResult> {
-    const source = await this.drafts.getDraft(sourceDraftId);
+    const source = await this.drafts.getWorkspace(sourceDraftId);
     await this.git.commitDetail(source.worktree_path, commit);
     await this.git.assertCommitOnRemoteDefault(commit);
     const draft = await this.drafts.createDraft(newDraftId, owner);

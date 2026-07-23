@@ -6,7 +6,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { ChangesService } from "@gitpm/changes";
-import { DirectDraftBackend, directPushStrategy, DraftManager } from "@gitpm/drafts";
+import { DirectRepositoryBackend, directPushStrategy, DraftManager } from "@gitpm/drafts";
 import { CommentStore, EntityStore } from "@gitpm/domain";
 import { GitClient } from "@gitpm/git-client";
 import { assertSafeRepositoryUrl } from "@gitpm/security";
@@ -155,7 +155,7 @@ async function buildWorktreeRuntime(configuration: RepositoryRuntimeConfiguratio
 }
 
 async function buildDirectRuntime(configuration: RepositoryRuntimeConfiguration, gitClient: GitClient) {
-  const backend = new DirectDraftBackend(gitClient, configuration.repository);
+  const backend = new DirectRepositoryBackend(gitClient, configuration.repository);
   const draftManager = new DraftManager(gitClient, configuration.dataDirectory, { backend, push: directPushStrategy(gitClient) });
   await draftManager.ensureDirectWorkspace(DEFAULT_LOCAL_DRAFT_ID, LOCAL_USER_ID);
   return { draftManager };

@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@gitpm/changes": "workspace:*",
+    "@gitpm/contracts": "workspace:*",
     "@gitpm/drafts": "workspace:*",
     "@gitpm/domain": "workspace:*",
     "@gitpm/git-client": "workspace:*",

@@ -4,7 +4,7 @@ import type { DraftManager, DraftMetadata, WriterMode } from "@gitpm/drafts";
 import { GitCommandError } from "@gitpm/git-client";
 import { assertEntityType, CommentOperationError, DomainOperationError } from "@gitpm/domain";
 import type { CommentActor, CommentStore, EntityStore } from "@gitpm/domain";
-import type { GitPmDocument } from "@gitpm/repository-format";
+import type { ConfigurationDocument, GitPmDocument } from "@gitpm/contracts";
 import { ChangesError } from "@gitpm/changes";
 import type { ChangesService } from "@gitpm/changes";
 import { AuthError } from "@gitpm/gitlab";
@@ -507,7 +507,7 @@ export function registerEntityApi(
     },
   );
 
-  app.put<{ Params: { draftId: string; kind: "statuses" | "issue-types" }; Body: { expected_fingerprint: string; expected_blob_id: string; document: GitPmDocument } }>(
+  app.put<{ Params: { draftId: string; kind: "statuses" | "issue-types" }; Body: { expected_fingerprint: string; expected_blob_id: string; document: ConfigurationDocument } }>(
     "/api/drafts/:draftId/config/:kind",
     async (request) => {
       const actor = await authenticate(request);

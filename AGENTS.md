@@ -37,6 +37,7 @@ Preserve these principles when changing the product:
 - `packages/agent` — external-agent draft workflow and generated worktree guidance.
 - `packages/drafts` — draft metadata, writer modes, worktrees, fingerprints, and recovery.
 - `packages/domain` — entity and comment operations.
+- `packages/contracts` — shared HTTP DTOs and browser-side runtime response decoders.
 - `packages/repository-format` — strict YAML parsing and canonical formatting.
 - `packages/validation` — schemas, paths, identities, references, dates, and repository rules.
 - `packages/git-client`, `packages/gitlab`, `packages/security`, `packages/changes`, and
@@ -72,6 +73,21 @@ corepack pnpm verify
 Use the narrowest relevant build and Vitest files while iterating, then widen verification in
 proportion to risk. Build workspace dependencies before tests when package imports resolve from
 `dist`.
+
+## Required local quality gate
+
+This repository intentionally has no hosted GitHub Actions workflow. Local verification is
+therefore a required delivery contract, not an optional reminder. Before declaring source work
+complete, an agent must run:
+
+```bash
+corepack pnpm verify:local
+```
+
+This command first proves that the lockfile installs unchanged with
+`pnpm install --frozen-lockfile`, then runs the complete `pnpm verify` suite. If the full gate
+cannot run, do not describe the work as verified: report the exact failing or skipped command and
+the reason. Narrow tests are useful while iterating but never replace this final gate.
 
 ## Change rules
 

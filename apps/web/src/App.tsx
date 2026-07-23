@@ -90,9 +90,6 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
     if (`${window.location.pathname}${window.location.search}` !== nextUrl) window.history[replace ? "replaceState" : "pushState"]({}, "", nextUrl);
     setActiveRoute(nextRoute);
   };
-  useEffect(() => {
-    if (repositoryMode && activeRoute === null) navigateToRoute(routeForDestination("projects"), true);
-  }, [repositoryMode, activeRoute]);
   const openWorkspace = (destination: WorkspaceDestination, selection: WorkspaceSelection = {}) => {
     navigateToRoute(routeForDestination(destination, selection));
   };

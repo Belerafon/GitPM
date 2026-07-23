@@ -1,26 +1,16 @@
-import { lstat, mkdir, readFile, rm, rmdir } from "node:fs/promises";
-import path from "node:path";
 import type { ChangesService, SemanticDiff } from "@gitpm/changes";
 import { GITPM_GUIDANCE_FILES, GITPM_GUIDANCE_PATHS, provisionGitPmWorktreeGuidance } from "@gitpm/drafts";
 import type { DraftManager, DraftMetadata, WriterMode } from "@gitpm/drafts";
 import {
-  canonicalEntityType,
-  containsEntityReference,
-  ENTITY_TYPE_SCHEMAS,
-  entityDisplayLabel,
+  EntityStore,
   entityPathForDocument,
-  planEntityCreation,
-  planEntityUpdate,
-  unlinkPersonReference,
   type DeletePlan,
-  type DeleteRestriction,
   type EntityCreateBatchResult,
 } from "@gitpm/domain";
 import type { GitClient } from "@gitpm/git-client";
 import type { GitLabMergeRequestProtocol, MergeRequestPayload, MergeRequestState } from "@gitpm/gitlab";
-import { formatYamlDocument, parseYamlDocument, referenceLabelForDocument, referenceLabelsForDocuments, type GitPmDocument } from "@gitpm/repository-format";
-import { atomicWriteDomainFile } from "@gitpm/security";
-import { discoverRepositoryFiles, validateDelete, validateRepository } from "@gitpm/validation";
+import type { GitPmDocument } from "@gitpm/repository-format";
+import { validateRepository } from "@gitpm/validation";
 
 export class AgentWorkflowError extends Error {
   constructor(public readonly code: string, message: string, public readonly details?: unknown) {
@@ -72,40 +62,17 @@ export function assertAgentScope(
   };
 }
 
-interface RepositoryEntry {
-  readonly absolute: string;
-  readonly relative: string;
-  readonly document: GitPmDocument;
-}
-
-async function repositoryEntries(root: string): Promise<RepositoryEntry[]> {
-  const discovery = await discoverRepositoryFiles(root);
-  if (discovery.issues.length > 0) {
-    const issue = discovery.issues[0]!;
-    throw new AgentWorkflowError(issue.code, issue.message, discovery.issues);
-  }
-  return await Promise.all(discovery.files.map(async (absolute): Promise<RepositoryEntry> => {
-    const relative = path.relative(root, absolute).split(path.sep).join("/");
-    return { absolute, relative, document: parseYamlDocument(await readFile(absolute, "utf8"), relative) };
-  }));
-}
-
-async function repositoryDocuments(root: string): Promise<GitPmDocument[]> {
-  return (await repositoryEntries(root)).map((entry) => entry.document);
-}
-
-async function pathExists(absolute: string): Promise<boolean> {
-  try { await lstat(absolute); return true; }
-  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return false; throw error; }
-}
-
 export class AgentWorkflow {
+  private readonly entities: EntityStore;
+
   constructor(
     private readonly drafts: DraftManager,
     private readonly git: GitClient,
     private readonly changes: ChangesService,
     private readonly options: AgentWorkflowOptions,
-  ) {}
+  ) {
+    this.entities = new EntityStore(drafts, "external");
+  }
 
   async createDraft(draftId: string, owner: string): Promise<DraftMetadata> {
     await this.drafts.createDraft(draftId, owner);
@@ -143,9 +110,10 @@ export class AgentWorkflow {
   }
 
   async createEntity(draftId: string, document: Readonly<Record<string, unknown>>, scope: AgentScope = {}, requestedType?: string) {
-    const batch = await this.createEntities(draftId, [document], requestedType, scope, false);
-    const item = batch.items[0]!;
-    return { path: item.path, draft_fingerprint: batch.draft_fingerprint, document: item.document };
+    const draft = await this.beginExternalMutation(draftId, scope);
+    const plan = (await this.entities.planCreate(draftId, [document], requestedType))[0]!;
+    this.assertPlannedPaths([{ path: plan.path, kind: "Added" }], scope);
+    return await this.entities.create(draftId, draft.owner_gitlab_user_id, draft.fingerprint, plan.document);
   }
 
   async updateEntity(
@@ -155,41 +123,20 @@ export class AgentWorkflow {
     requestedId: string,
     scope: AgentScope = {},
   ) {
-    await this.assertScope(draftId, scope);
-    const draft = await this.externalDraft(draftId);
-    const entries = await repositoryEntries(draft.worktree_path);
-    const plan = planEntityUpdate(patch, entries.map((entry) => entry.document), requestedType, requestedId);
-    assertAgentScope({
-      affected_projects: projectPath(plan.path) === undefined ? [] : [projectPath(plan.path)!],
-      files: [{ path: plan.path, kind: "Modified" }],
-    }, scope);
-    const target = entries.find((entry) => entry.relative === plan.path)!;
-    const referenceLabels = referenceLabelsForDocuments(entries.map((entry) => entry.relative === plan.path ? plan.document : entry.document));
-    const originals = new Map<string, string>();
-    try {
-      const original = await readFile(target.absolute, "utf8");
-      originals.set(target.relative, original);
-      await atomicWriteDomainFile(draft.worktree_path, target.relative, formatYamlDocument(plan.document, referenceLabels));
-      if (referenceLabelForDocument(plan.before) !== referenceLabelForDocument(plan.document)) {
-        for (const entry of entries) {
-          if (entry.relative === target.relative || !containsEntityReference(entry.document, plan.id)) continue;
-          const relatedOriginal = await readFile(entry.absolute, "utf8");
-          const relatedFormatted = formatYamlDocument(entry.document, referenceLabels);
-          if (relatedFormatted === relatedOriginal) continue;
-          originals.set(entry.relative, relatedOriginal);
-          await atomicWriteDomainFile(draft.worktree_path, entry.relative, relatedFormatted);
-        }
-      }
-      await this.assertScope(draftId, scope);
-      const validation = await validateRepository(draft.worktree_path);
-      if (!validation.valid) throw new AgentWorkflowError("VALIDATION_FAILED", "Updated entity makes the repository invalid", validation.errors);
-      const metadata = await this.drafts.refreshFingerprint(draftId);
-      return { path: plan.path, draft_fingerprint: metadata.fingerprint, document: plan.document };
-    } catch (error) {
-      for (const [relative, original] of originals) await atomicWriteDomainFile(draft.worktree_path, relative, original);
-      await this.drafts.refreshFingerprint(draftId);
-      throw error;
-    }
+    const draft = await this.beginExternalMutation(draftId, scope);
+    const plan = await this.entities.planUpdate(draftId, patch, requestedType, requestedId);
+    this.assertPlannedPaths([{ path: plan.path, kind: "Modified" }], scope);
+    const current = await this.entities.get(draftId, requestedType, requestedId);
+    return await this.entities.update(
+      draftId,
+      draft.owner_gitlab_user_id,
+      requestedType,
+      requestedId,
+      draft.fingerprint,
+      current.blob_id,
+      plan.document,
+      (paths) => this.assertPlannedPaths(paths.map((changedPath) => ({ path: changedPath, kind: "Modified" })), scope),
+    );
   }
 
   async createEntities(
@@ -199,277 +146,102 @@ export class AgentWorkflow {
     scope: AgentScope = {},
     dryRun = false,
   ): Promise<EntityCreateBatchResult> {
-    await this.assertScope(draftId, scope);
-    const draft = await this.externalDraft(draftId);
-    const existing = await repositoryDocuments(draft.worktree_path);
-    const plan = planEntityCreation(documents, existing, requestedType);
-    const referenceLabels = referenceLabelsForDocuments([...existing, ...plan.map((item) => item.document)]);
-    const written: string[] = [];
-    const createdParents = new Set<string>();
-    const cleanup = async (): Promise<void> => {
-      for (const relative of written.reverse()) await rm(path.join(draft.worktree_path, ...relative.split("/")), { force: true });
-      for (const relative of [...createdParents].sort((left, right) => right.length - left.length)) {
-        try { await rmdir(path.join(draft.worktree_path, ...relative.split("/"))); }
-        catch (error) { if (!["ENOENT", "ENOTEMPTY"].includes((error as NodeJS.ErrnoException).code ?? "")) throw error; }
-      }
-    };
-    try {
-      for (const item of plan) {
-        const absolute = path.join(draft.worktree_path, ...item.path.split("/"));
-        try {
-          await lstat(absolute);
-          throw new AgentWorkflowError("ENTITY_EXISTS", `${item.path} already exists`);
-        } catch (error) {
-          if (error instanceof AgentWorkflowError) throw error;
-          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-        }
-        let parent = path.posix.dirname(item.path);
-        while (parent !== "." && !(await pathExists(path.join(draft.worktree_path, ...parent.split("/"))))) {
-          createdParents.add(parent);
-          parent = path.posix.dirname(parent);
-        }
-        await mkdir(path.dirname(absolute), { recursive: true, mode: 0o700 });
-        await atomicWriteDomainFile(draft.worktree_path, item.path, formatYamlDocument(item.document, referenceLabels));
-        written.push(item.path);
-      }
-      await this.assertScope(draftId, scope);
-      const validation = await validateRepository(draft.worktree_path);
-      if (!validation.valid) throw new AgentWorkflowError("VALIDATION_FAILED", "Imported entities make the repository invalid", validation.errors);
-      if (dryRun) await cleanup();
-      const metadata = await this.drafts.refreshFingerprint(draftId);
-      return {
-        items: plan.map((item) => ({ document: item.document, path: item.path, source_index: item.source_index })),
-        draft_fingerprint: metadata.fingerprint,
-        dry_run: dryRun,
-      };
-    } catch (error) {
-      await cleanup();
-      await this.drafts.refreshFingerprint(draftId);
-      if (error instanceof AgentWorkflowError && error.code === "VALIDATION_FAILED" && Array.isArray(error.details)) {
-        const sources = new Map(plan.map((item) => [item.path, item.source_index]));
-        throw new AgentWorkflowError(error.code, error.message, error.details.map((issue) => {
-          if (issue === null || typeof issue !== "object" || !("path" in issue) || typeof issue.path !== "string") return issue;
-          const sourceIndex = sources.get(issue.path);
-          return sourceIndex === undefined ? issue : { ...issue, source_index: sourceIndex };
-        }));
-      }
-      throw error;
-    }
+    const draft = await this.beginExternalMutation(draftId, scope);
+    const plan = await this.entities.planCreate(draftId, documents, requestedType);
+    this.assertPlannedPaths(plan.map((item) => ({ path: item.path, kind: "Added" as const })), scope);
+    return await this.entities.createMany(draftId, draft.owner_gitlab_user_id, draft.fingerprint, plan, dryRun);
   }
 
   async listEntities(draftId: string, entityType: string, project?: string): Promise<{ items: readonly { readonly document: GitPmDocument; readonly path: string }[]; readonly draft_fingerprint: string }> {
     const draft = await this.externalDraft(draftId);
-    const type = canonicalEntityType(entityType);
-    const schema = ENTITY_TYPE_SCHEMAS[type]!;
-    const entries = await repositoryEntries(draft.worktree_path);
-    const items = entries
-      .filter((entry) => entry.document.schema === schema && (project === undefined || entry.document.project === project))
-      .map((entry) => ({ document: entry.document, path: entry.relative }))
-      .sort((left, right) => String(left.document.id).localeCompare(String(right.document.id)));
+    const items = (await this.entities.list(draftId, entityType, project))
+      .map(({ document, path: itemPath }) => ({ document, path: itemPath }));
     return { items, draft_fingerprint: draft.fingerprint };
   }
 
   async getEntity(draftId: string, entityType: string, id: string): Promise<{ document: GitPmDocument; path: string; draft_fingerprint: string }> {
-    const draft = await this.externalDraft(draftId);
-    const type = canonicalEntityType(entityType);
-    const schema = ENTITY_TYPE_SCHEMAS[type]!;
-    const entries = await repositoryEntries(draft.worktree_path);
-    const found = entries.find((entry) => entry.document.schema === schema && entry.document.id === id);
-    if (found === undefined) throw new AgentWorkflowError("ENTITY_NOT_FOUND", `${type}/${id} not found`);
-    return { document: found.document, path: found.relative, draft_fingerprint: draft.fingerprint };
+    await this.externalDraft(draftId);
+    const found = await this.entities.get(draftId, entityType, id);
+    return { document: found.document, path: found.path, draft_fingerprint: found.draft_fingerprint };
   }
 
   async planDelete(draftId: string, entityType: string, id: string): Promise<DeletePlan> {
-    const draft = await this.externalDraft(draftId);
-    const type = canonicalEntityType(entityType);
-    const schema = ENTITY_TYPE_SCHEMAS[type]!;
-    const entries = await repositoryEntries(draft.worktree_path);
-    const found = entries.find((entry) => entry.document.schema === schema && entry.document.id === id);
-    if (found === undefined) throw new AgentWorkflowError("ENTITY_NOT_FOUND", `${type}/${id} not found`);
-    const cascadedComments = schema === "gitpm/task@1"
-      ? entries.filter((entry) => entry.document.schema === "gitpm/comment@1" && entry.document.task === id)
-      : [];
-    const commentPaths = new Set(cascadedComments.map((comment) => comment.relative));
-    const entitiesByPath = new Map(entries.map((entry) => [entry.relative, entry.document]));
-    const restrictions = (await validateDelete(draft.worktree_path, id))
-      .filter((issue) => !commentPaths.has(issue.path))
-      .map((issue): DeleteRestriction => {
-        const document = entitiesByPath.get(issue.path);
-        return document === undefined ? { path: issue.path } : {
-          path: issue.path,
-          entity_id: typeof document.id === "string" ? document.id : undefined,
-          schema: document.schema,
-          label: entityDisplayLabel(document),
-        };
-      });
-    const supportsUnlink = schema === "gitpm/person@1";
-    const wouldUnlink: DeleteRestriction[] = supportsUnlink
-      ? entries.flatMap((entry) => {
-        if (entry.relative === found.relative) return [];
-        const rewritten = unlinkPersonReference(entry.document, id);
-        return rewritten === undefined ? [] : [{
-          path: entry.relative,
-          entity_id: typeof entry.document.id === "string" ? entry.document.id : undefined,
-          schema: entry.document.schema,
-          label: entityDisplayLabel(entry.document),
-        }];
-      })
-      : [];
-    return {
-      entityType: type,
-      id,
-      schema,
-      path: found.relative,
-      supports_unlink: supportsUnlink,
-      cascaded_comments: cascadedComments.map((comment) => ({ path: comment.relative, id: String(comment.document.id) })),
-      restrictions,
-      would_unlink: wouldUnlink,
-    };
+    await this.externalDraft(draftId);
+    return await this.entities.planDelete(draftId, entityType, id);
   }
 
   async deleteEntity(draftId: string, entityType: string, id: string, unlinkReferences = false, scope: AgentScope = {}): Promise<{ deleted: true; path: string; unlinked_paths: readonly string[]; draft_fingerprint: string }> {
-    await this.assertScope(draftId, scope);
-    const draft = await this.externalDraft(draftId);
-    const type = canonicalEntityType(entityType);
-    const schema = ENTITY_TYPE_SCHEMAS[type]!;
-    const entries = await repositoryEntries(draft.worktree_path);
-    const found = entries.find((entry) => entry.document.schema === schema && entry.document.id === id);
-    if (found === undefined) throw new AgentWorkflowError("ENTITY_NOT_FOUND", `${type}/${id} not found`);
-    if (unlinkReferences && schema !== "gitpm/person@1") {
-      throw new AgentWorkflowError("DELETE_UNLINK_UNSUPPORTED", "Automatic reference removal is supported only for people");
-    }
-    const cascadedComments = schema === "gitpm/task@1"
-      ? entries.filter((entry) => entry.document.schema === "gitpm/comment@1" && entry.document.task === id)
-      : [];
-    const commentPaths = new Set(cascadedComments.map((comment) => comment.relative));
-    const entitiesByPath = new Map(entries.map((entry) => [entry.relative, entry.document]));
-    const restrictions = (await validateDelete(draft.worktree_path, id)).filter((issue) => !commentPaths.has(issue.path));
-    if (restrictions.length > 0 && !unlinkReferences) {
-      throw new AgentWorkflowError("DELETE_RESTRICTED", `${id} is referenced`, restrictions.map((issue) => {
-        const document = entitiesByPath.get(issue.path);
-        return document === undefined ? { path: issue.path } : {
-          path: issue.path,
-          entity_id: typeof document.id === "string" ? document.id : undefined,
-          schema: document.schema,
-          label: entityDisplayLabel(document),
-        };
-      }));
-    }
-    const updates = unlinkReferences
-      ? entries.flatMap((entry) => {
-        if (entry.relative === found.relative) return [];
-        const rewritten = unlinkPersonReference(entry.document, id);
-        return rewritten === undefined ? [] : [{ entry, document: rewritten }];
-      })
-      : [];
-    const removed = [found, ...cascadedComments];
-    const referenceLabels = referenceLabelsForDocuments(entries.filter((entry) => !removed.includes(entry)).map((entry) => {
-      const update = updates.find((item) => item.entry === entry);
-      return update === undefined ? entry.document : update.document;
-    }));
-    const originals = new Map<string, string>();
-    try {
-      for (const update of updates) {
-        originals.set(update.entry.relative, await readFile(update.entry.absolute, "utf8"));
-        await atomicWriteDomainFile(draft.worktree_path, update.entry.relative, formatYamlDocument(update.document, referenceLabels));
-      }
-      for (const entity of removed) {
-        originals.set(entity.relative, await readFile(entity.absolute, "utf8"));
-        await rm(entity.absolute);
-      }
-      await this.assertScope(draftId, scope);
-      const validation = await validateRepository(draft.worktree_path);
-      if (!validation.valid) throw new AgentWorkflowError("VALIDATION_FAILED", "Deleted entity leaves the repository invalid", validation.errors);
-    } catch (error) {
-      for (const [relative, original] of originals) await atomicWriteDomainFile(draft.worktree_path, relative, original);
-      await this.drafts.refreshFingerprint(draftId);
-      throw error;
-    }
-    const metadata = await this.drafts.refreshFingerprint(draftId);
-    return { deleted: true, path: found.relative, unlinked_paths: updates.map((update) => update.entry.relative), draft_fingerprint: metadata.fingerprint };
+    const draft = await this.beginExternalMutation(draftId, scope);
+    const plan = await this.entities.planDelete(draftId, entityType, id);
+    this.assertPlannedPaths([
+      { path: plan.path, kind: "Deleted" },
+      ...plan.cascaded_comments.map((item) => ({ path: item.path, kind: "Deleted" as const })),
+      ...(unlinkReferences ? plan.would_unlink.map((item) => ({ path: item.path, kind: "Modified" as const })) : []),
+    ], scope);
+    const current = await this.entities.get(draftId, entityType, id);
+    return await this.entities.delete(
+      draftId,
+      draft.owner_gitlab_user_id,
+      entityType,
+      id,
+      draft.fingerprint,
+      current.blob_id,
+      unlinkReferences,
+    );
   }
 
   async archiveEntity(draftId: string, entityType: string, id: string, scope: AgentScope = {}): Promise<{ path: string; draft_fingerprint: string; document: GitPmDocument }> {
-    const draft = await this.externalDraft(draftId);
-    const entries = await repositoryEntries(draft.worktree_path);
-    const plan = planEntityUpdate({ lifecycle: "archived" }, entries.map((entry) => entry.document), entityType, id);
-    assertAgentScope({
-      affected_projects: projectPath(plan.path) === undefined ? [] : [projectPath(plan.path)!],
-      files: [{ path: plan.path, kind: "Modified" }],
-    }, scope);
-    const target = entries.find((entry) => entry.relative === plan.path)!;
-    const referenceLabels = referenceLabelsForDocuments(entries.map((entry) => entry.relative === plan.path ? plan.document : entry.document));
-    const original = await readFile(target.absolute, "utf8");
-    try {
-      await atomicWriteDomainFile(draft.worktree_path, target.relative, formatYamlDocument(plan.document, referenceLabels));
-      await this.assertScope(draftId, scope);
-      const validation = await validateRepository(draft.worktree_path);
-      if (!validation.valid) throw new AgentWorkflowError("VALIDATION_FAILED", "Archived entity makes the repository invalid", validation.errors);
-      const metadata = await this.drafts.refreshFingerprint(draftId);
-      return { path: plan.path, draft_fingerprint: metadata.fingerprint, document: plan.document };
-    } catch (error) {
-      await atomicWriteDomainFile(draft.worktree_path, target.relative, original);
-      await this.drafts.refreshFingerprint(draftId);
-      throw error;
-    }
+    const draft = await this.beginExternalMutation(draftId, scope);
+    const current = await this.entities.get(draftId, entityType, id);
+    this.assertPlannedPaths([{ path: current.path, kind: "Modified" }], scope);
+    return await this.entities.archive(
+      draftId,
+      draft.owner_gitlab_user_id,
+      entityType,
+      id,
+      draft.fingerprint,
+      current.blob_id,
+    );
   }
 
   async moveTask(draftId: string, id: string, targetProject: string, targetMilestone: string | undefined, scope: AgentScope = {}): Promise<{ path: string; draft_fingerprint: string; document: GitPmDocument }> {
-    await this.assertScope(draftId, scope);
-    const draft = await this.externalDraft(draftId);
-    const entries = await repositoryEntries(draft.worktree_path);
-    const found = entries.find((entry) => entry.document.schema === "gitpm/task@1" && entry.document.id === id);
-    if (found === undefined) throw new AgentWorkflowError("ENTITY_NOT_FOUND", `tasks/${id} not found`);
-    if (found.document.project === targetProject) throw new AgentWorkflowError("TASK_ALREADY_IN_PROJECT", `${id} already belongs to ${targetProject}`);
-    const movedDocument = { ...found.document, project: targetProject, milestone: targetMilestone } as GitPmDocument;
+    const draft = await this.beginExternalMutation(draftId, scope);
+    const current = await this.entities.get(draftId, "tasks", id);
+    const movedDocument = { ...current.document, project: targetProject, milestone: targetMilestone } as GitPmDocument;
     const targetRelative = entityPathForDocument(movedDocument);
-    const movedComments = entries
-      .filter((entry) => entry.document.schema === "gitpm/comment@1" && entry.document.task === id)
-      .map((entry) => ({ source: entry, document: { ...entry.document, project: targetProject } as GitPmDocument }));
-    const targets = [{ source: found, document: movedDocument }, ...movedComments].map((item) => ({
-      ...item,
-      relative: entityPathForDocument(item.document),
-    }));
+    this.assertPlannedPaths([
+      { path: current.path, kind: "Deleted" },
+      { path: targetRelative, kind: "Added" },
+    ], scope);
+    return await this.entities.moveTask(
+      draftId,
+      draft.owner_gitlab_user_id,
+      id,
+      draft.fingerprint,
+      current.blob_id,
+      targetProject,
+      targetMilestone,
+    );
+  }
+
+  private assertPlannedPaths(
+    files: readonly { readonly path: string; readonly kind: "Added" | "Modified" | "Deleted" }[],
+    scope: AgentScope,
+  ): void {
     assertAgentScope({
-      affected_projects: [...new Set(targets.flatMap((item) => {
-        const project = projectPath(item.relative);
+      affected_projects: [...new Set(files.flatMap((file) => {
+        const project = projectPath(file.path);
         return project === undefined ? [] : [project];
       }))],
-      files: targets.map((item) => ({ path: item.relative, kind: "Added" as const })),
+      files,
     }, scope);
-    for (const target of targets) {
-      if (await pathExists(path.join(draft.worktree_path, ...target.relative.split("/")))) {
-        throw new AgentWorkflowError("ENTITY_EXISTS", `${target.relative} already exists`);
-      }
-    }
-    const referenceLabels = referenceLabelsForDocuments([
-      ...entries.filter((entry) => entry.relative !== found.relative && !movedComments.some((item) => item.source === entry)).map((entry) => entry.document),
-      movedDocument,
-    ]);
-    const originals = new Map<string, string>();
-    try {
-      for (const target of targets) {
-        originals.set(target.source.relative, await readFile(target.source.absolute, "utf8"));
-        const absolute = path.join(draft.worktree_path, ...target.relative.split("/"));
-        await mkdir(path.dirname(absolute), { recursive: true, mode: 0o700 });
-        await atomicWriteDomainFile(draft.worktree_path, target.relative, formatYamlDocument(target.document, referenceLabels));
-      }
-      for (const target of targets) await rm(target.source.absolute);
-      await this.assertScope(draftId, scope);
-      const validation = await validateRepository(draft.worktree_path);
-      if (!validation.valid) throw new AgentWorkflowError("VALIDATION_FAILED", "Moved task makes the repository invalid", validation.errors);
-      const metadata = await this.drafts.refreshFingerprint(draftId);
-      return { path: targetRelative, draft_fingerprint: metadata.fingerprint, document: movedDocument };
-    } catch (error) {
-      for (const target of targets) await rm(path.join(draft.worktree_path, ...target.relative.split("/")), { force: true });
-      for (const [sourceRelative, original] of originals) {
-        const absolute = path.join(draft.worktree_path, ...sourceRelative.split("/"));
-        await mkdir(path.dirname(absolute), { recursive: true, mode: 0o700 });
-        await atomicWriteDomainFile(draft.worktree_path, sourceRelative, original);
-      }
-      await this.drafts.refreshFingerprint(draftId);
-      throw error;
-    }
+  }
+
+  private async beginExternalMutation(draftId: string, scope: AgentScope): Promise<DraftMetadata> {
+    await this.assertScope(draftId, scope);
+    // External writer mode intentionally permits files to be edited before the CLI operation.
+    // Capture that authorized baseline, then let the shared mutation path reject any later race.
+    return await this.drafts.refreshFingerprint(draftId);
   }
 
   async commitAll(draftId: string, message: string, scope: AgentScope = {}) {

@@ -7,7 +7,7 @@ import { EditorDrawer } from "../../editor-drawer.js";
 import { useExternalHighlights } from "../../external-updates.js";
 import { formatDateOnly, formatDurationHours, message, type Locale, type MessageKey } from "../../i18n.js";
 import { upsertEntity } from "../../optimistic-ui.js";
-import type { DraftStatus, EntityResult, GitPmDocument, ProjectWorkspaceResult } from "../../types.js";
+import type { DraftStatus, EntityDocument, EntityResult, GitPmDocument, ProjectWorkspaceResult } from "../../types.js";
 import type { WorkspaceNavigate } from "../../workspace-navigation.js";
 import { PersonLinks } from "../../person-link.js";
 import { draftReadOnlyReason } from "../../draft-read-only.js";
@@ -92,7 +92,7 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
     if (workspace === null || selectedStage === undefined) return;
     const data = new FormData(event.currentTarget);
     const due = String(data.get("due"));
-    const document = { ...selectedStage.document, name: String(data.get("name")).trim(), description_markdown: String(data.get("description")), ...(due ? { due } : { due: undefined }) } as GitPmDocument;
+    const document = { ...selectedStage.document, name: String(data.get("name")).trim(), description_markdown: String(data.get("description")), ...(due ? { due } : { due: undefined }) } as EntityDocument;
     void mutate(async () => await api.updateEntity(draft.draft_id, "milestones", selectedStage, workspace.draft_fingerprint, document));
   };
 
@@ -102,7 +102,7 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
     const data = new FormData(event.currentTarget);
     const id = newUniqueEntityId(ENTITY_ID_PREFIX.task, new Set(workspace.tasks.map((item) => item.document.id)));
     const start = String(data.get("start")); const due = String(data.get("due")); const estimate = String(data.get("estimate"));
-    const document = { schema: "gitpm/task@1", id, project: projectId, milestone: selectedStage.document.id, title: String(data.get("title")).trim(), type: String(data.get("type")), status: String(data.get("status")), lifecycle: "active", description_markdown: String(data.get("description")), assignees: data.getAll("assignees").map(String), ...(start ? { start } : {}), ...(due ? { due } : {}), ...(estimate ? { estimate_hours: Number(estimate) } : {}) } as GitPmDocument;
+    const document = { schema: "gitpm/task@1", id, project: projectId, milestone: selectedStage.document.id, title: String(data.get("title")).trim(), type: String(data.get("type")), status: String(data.get("status")), lifecycle: "active", description_markdown: String(data.get("description")), assignees: data.getAll("assignees").map(String), ...(start ? { start } : {}), ...(due ? { due } : {}), ...(estimate ? { estimate_hours: Number(estimate) } : {}) } as EntityDocument;
     void mutate(async () => await api.createEntity(draft.draft_id, "tasks", workspace.draft_fingerprint, document));
   };
 
@@ -113,7 +113,7 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
   const changeTaskStatus = (task: EntityResult, status: string) => {
     if (workspace === null || statusPending !== null || text(task.document, "status") === status) return;
     const previous = workspace;
-    const document = { ...task.document, status } as GitPmDocument;
+    const document = { ...task.document, status } as EntityDocument;
     setStatusPending(task.document.id);
     setWorkspace({ ...workspace, tasks: workspace.tasks.map((item) => item.document.id === task.document.id ? { ...item, document } : item) });
     void mutate(async () => { const result = await api.updateEntity(draft.draft_id, "tasks", task, previous.draft_fingerprint, document); setStatusPending(null); return result; })

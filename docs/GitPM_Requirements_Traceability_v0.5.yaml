@@ -429,7 +429,7 @@ requirements:
   description: Новый draft создается только после успешного fetch от current remote main
   source:
     document: GitPM_Implementation_Plan_v0.7.md
-    section: 8. Git clone, fetch и main synchronization
+    section: 8. Git repository, fetch и main synchronization
   owner: BE
   stage: P03
   release_gate: alpha

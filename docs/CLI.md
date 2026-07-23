@@ -117,6 +117,13 @@ soft-delete (tombstone остаётся в Git history). Доступно в dir
 `uploads/.gitkeep`. Входные файлы под `uploads/` игнорируются Git; каталог
 разрешён через `allowed_top_level_directories` и не является domain storage.
 
+`gitpm init` генерирует ID календаря через общий генератор entity ID с текущим UTC-годом,
+использует его и в `calendars/<id>.yaml`, и в `.gitpm/repository.yaml/default_calendar`.
+
+`gitpm diff --semantic` требует настроенный direct runtime либо `--draft` с agent runtime.
+Без runtime команда завершается ошибкой `CLI_DIRECT_CONFIGURATION_REQUIRED` и никогда не
+подменяет отсутствующий Git baseline пустым semantic diff.
+
 ### Agent workflow (drafts, push, MR)
 
 Нужный набор зависит от repository mode. В `direct` mode CLI может построить

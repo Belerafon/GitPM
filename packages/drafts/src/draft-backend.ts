@@ -95,7 +95,7 @@ export class WorktreeDraftBackend implements DraftBackend {
  * Direct backend: the selected ordinary Git checkout itself. There is no clone, bare repository,
  * draft branch, or \`git worktree\`. All drafts resolve to this checkout; creation is metadata-only.
  */
-export class DirectDraftBackend implements DraftBackend {
+export class DirectRepositoryBackend implements DraftBackend {
   public readonly mode: RepositoryMode = "direct";
   public readonly checkoutPath: string;
 
@@ -148,6 +148,9 @@ export class DirectDraftBackend implements DraftBackend {
     return [];
   }
 }
+
+/** @deprecated Use DirectRepositoryBackend; retained for source compatibility. */
+export class DirectDraftBackend extends DirectRepositoryBackend {}
 
 export function worktreePushStrategy(git: GitClient): DraftPushStrategy {
   return async (worktreePath, branch, accessToken) => {

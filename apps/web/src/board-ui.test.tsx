@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GitPmApi } from "./api.js";
 import { BoardWorkspace } from "./board-ui.js";
-import type { DraftStatus, EntityResult, GitPmDocument } from "./types.js";
+import type { ConfigurationDocument, ConfigurationResult, DraftStatus, EntityDocument, EntityResult } from "./types.js";
 
 const draft: DraftStatus = { draft_id: "DRF-BOARD", owner_gitlab_user_id: "42", branch: "gitpm/42/DRF-BOARD", base_commit: "a".repeat(40), writer_mode: "ui", state: "open", fingerprint: "b".repeat(64), created_at: "2026-07-11T00:00:00.000Z", updated_at: "2026-07-11T00:00:00.000Z" };
 const projectId = "P-26-111111";
@@ -19,11 +19,11 @@ class BoardApi {
     this.result({ schema: "gitpm/milestone@1", id: milestoneId, project: projectId, name: "Beta", lifecycle: "active" }),
     this.result({ schema: "gitpm/task@1", id: taskId, project: projectId, milestone: milestoneId, title: "Drag me", type: "task", status: "backlog", lifecycle: "active", assignees: [personId] }),
   ];
-  private result(document: GitPmDocument): EntityResult { this.revision += 1; const project = String(document.project ?? ""); const path = document.schema === "gitpm/project@1" ? `projects/${document.id}/project.yaml` : document.schema === "gitpm/task@1" ? `projects/${project}/tasks/${document.id}.yaml` : `projects/${project}/views/${document.id}.yaml`; return { document, path, blob_id: String(this.revision).padStart(40, "a"), draft_fingerprint: String(this.revision).padStart(64, "b") }; }
+  private result(document: EntityDocument): EntityResult { this.revision += 1; const project = String(document.project ?? ""); const path = document.schema === "gitpm/project@1" ? `projects/${document.id}/project.yaml` : document.schema === "gitpm/task@1" ? `projects/${project}/tasks/${document.id}.yaml` : `projects/${project}/views/${document.id}.yaml`; return { document, path, blob_id: String(this.revision).padStart(40, "a"), draft_fingerprint: String(this.revision).padStart(64, "b") }; }
   async listEntities(_draftId: string, type: string, project?: string) { const schemas: Record<string, string> = { projects: "gitpm/project@1", people: "gitpm/person@1", tasks: "gitpm/task@1", milestones: "gitpm/milestone@1", views: "gitpm/saved-view@1" }; return this.entities.filter((item) => item.document.schema === schemas[type] && (project === undefined || item.document.project === project)); }
-  async createEntity(_draftId: string, _type: string, _fingerprint: string, document: GitPmDocument) { const result = this.result(document); this.entities.push(result); return result; }
-  async updateEntity(_draftId: string, _type: string, entity: EntityResult, _fingerprint: string, document: GitPmDocument) { const result = this.result(document); this.entities = this.entities.map((item) => item.document.id === entity.document.id ? result : item); return result; }
-  async getConfiguration(_draftId: string, kind: "statuses" | "issue-types"): Promise<EntityResult> { const document = (kind === "statuses" ? { schema: "gitpm/statuses@1", id: "CONFIG-STATUSES", lifecycle: "active", statuses: [{ slug: "backlog", title: "Backlog", active: true }, { slug: "done", title: "Done", active: true }] } : { schema: "gitpm/issue-types@1", id: "CONFIG-TYPES", lifecycle: "active", issue_types: [{ slug: "task", title: "Task", active: true }, { slug: "bug", title: "Bug", active: true }] }) as GitPmDocument; return this.result(document); }
+  async createEntity(_draftId: string, _type: string, _fingerprint: string, document: EntityDocument) { const result = this.result(document); this.entities.push(result); return result; }
+  async updateEntity(_draftId: string, _type: string, entity: EntityResult, _fingerprint: string, document: EntityDocument) { const result = this.result(document); this.entities = this.entities.map((item) => item.document.id === entity.document.id ? result : item); return result; }
+  async getConfiguration(_draftId: string, kind: "statuses" | "issue-types"): Promise<ConfigurationResult> { const document = (kind === "statuses" ? { schema: "gitpm/statuses@1", statuses: [{ slug: "backlog", title: "Backlog", active: true }, { slug: "done", title: "Done", active: true }] } : { schema: "gitpm/issue-types@1", issue_types: [{ slug: "task", title: "Task", active: true }, { slug: "bug", title: "Bug", active: true }] }) as ConfigurationDocument; return { document, path: kind, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) }; }
 }
 
 afterEach(cleanup);

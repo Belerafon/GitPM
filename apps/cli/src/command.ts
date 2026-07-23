@@ -4,7 +4,7 @@ import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { GITPM_VERSION } from "@gitpm/shared";
+import { ENTITY_ID_PREFIX, GITPM_VERSION, newEntityId } from "@gitpm/shared";
 import { formatYamlText, parseYamlDocument, parseYamlValue, referenceLabelsForDocuments, RepositoryFormatError } from "@gitpm/repository-format";
 import { discoverRepositoryFiles, validateRepository } from "@gitpm/validation";
 import { atomicWriteDomainFile } from "@gitpm/security";
@@ -29,6 +29,10 @@ type CliAgent = Pick<AgentWorkflow, "assertScope" | "commitAll" | "createDraft" 
 export interface CliDependencies {
   readonly agent?: CliAgent;
   readonly direct?: DirectCliRuntime;
+  readonly init?: {
+    readonly now?: () => Date;
+    readonly randomIndex?: () => number;
+  };
 }
 
 function flagValue(args: readonly string[], name: string): string | undefined {
@@ -298,27 +302,6 @@ async function runValidate(args: readonly string[], cwd: string): Promise<CliRes
       ? `Repository is valid (${report.documentCount} documents, ${report.warnings.length} warnings)`
       : `Repository is invalid (${report.errors.length} errors, ${report.warnings.length} warnings)`),
   };
-}
-
-async function runSemanticDiff(args: readonly string[], cwd: string): Promise<CliResult> {
-  const parsed = options(args, cwd);
-  if (!parsed.rest.includes("--semantic")) {
-    return { exitCode: 2, output: render(parsed.json, { ok: false, code: "CLI_USAGE" }, "diff requires --semantic") };
-  }
-  const report = await validateRepository(parsed.root);
-  const payload = {
-    ok: report.valid,
-    code: report.valid ? "OK" : "VALIDATION_FAILED",
-    created: [],
-    updated: [],
-    archived: [],
-    deleted: [],
-    changed_files_count: 0,
-    affected_projects: [],
-    validation: report,
-    note: "Git before/after population is introduced with draft Git integration",
-  };
-  return { exitCode: report.valid ? 0 : 1, output: render(parsed.json, payload, "Semantic diff: 0 changed files") };
 }
 
 function required(value: string | undefined, name: string): string {
@@ -640,9 +623,9 @@ async function runDoctor(args: readonly string[], cwd: string): Promise<CliResul
 
 const execFileAsync = promisify(execFile);
 
-const INIT_REPOSITORY_YAML = `schema: gitpm/repository@1
+const initRepositoryYaml = (calendarId: string) => `schema: gitpm/repository@1
 default_branch: main
-default_calendar: C-26-WRKDAY # calendar: Standard work week
+default_calendar: ${calendarId} # calendar: Standard work week
 allowed_top_level_files:
   - README.md
   - .gitignore
@@ -679,8 +662,8 @@ issue_types:
     active: true
 `;
 
-const INIT_CALENDAR_YAML = `schema: gitpm/calendar@1
-id: C-26-WRKDAY # calendar: Standard work week
+const initCalendarYaml = (calendarId: string) => `schema: gitpm/calendar@1
+id: ${calendarId} # calendar: Standard work week
 name: Standard work week
 working_weekdays:
   - 1
@@ -722,9 +705,14 @@ async function directoryIsEmpty(directory: string): Promise<boolean> {
   }
 }
 
-async function runInit(args: readonly string[], cwd: string): Promise<CliResult> {
+async function runInit(args: readonly string[], cwd: string, dependencies: NonNullable<CliDependencies["init"]> = {}): Promise<CliResult> {
   const parsed = options(args, cwd);
   const target = parsed.rest[0] !== undefined ? path.resolve(cwd, parsed.rest[0]) : path.resolve(cwd);
+  const calendarId = newEntityId(
+    ENTITY_ID_PREFIX.calendar,
+    dependencies.randomIndex,
+    dependencies.now?.() ?? new Date(),
+  );
   await mkdir(target, { recursive: true });
   if (!(await directoryIsEmpty(target))) {
     throw new RepositoryFormatError("INIT_TARGET_NOT_EMPTY", `Target directory is not empty (excluding .git): ${target}`);
@@ -737,10 +725,10 @@ async function runInit(args: readonly string[], cwd: string): Promise<CliResult>
     await mkdir(directory, { recursive: true });
     await writeFile(path.join(directory, ".gitkeep"), "", "utf8");
   }
-  await writeFile(path.join(target, ".gitpm", "repository.yaml"), INIT_REPOSITORY_YAML, "utf8");
+  await writeFile(path.join(target, ".gitpm", "repository.yaml"), initRepositoryYaml(calendarId), "utf8");
   await writeFile(path.join(target, ".gitpm", "statuses.yaml"), INIT_STATUSES_YAML, "utf8");
   await writeFile(path.join(target, ".gitpm", "issue-types.yaml"), INIT_ISSUE_TYPES_YAML, "utf8");
-  await writeFile(path.join(target, "calendars", "C-26-WRKDAY.yaml"), INIT_CALENDAR_YAML, "utf8");
+  await writeFile(path.join(target, "calendars", `${calendarId}.yaml`), initCalendarYaml(calendarId), "utf8");
   await writeFile(path.join(target, "README.md"), INIT_README_MD, "utf8");
   await writeFile(path.join(target, ".gitignore"), INIT_GITIGNORE, "utf8");
   await writeFile(path.join(target, "uploads", ".gitkeep"), "", "utf8");
@@ -811,7 +799,12 @@ export async function run(args: readonly string[], cwd = process.cwd(), dependen
     if (command === "validate") return await runValidate(commandArgs, cwd);
     if (command === "diff" && hasDraft) { const agent = requireAgent(dependencies); const draftId = required(flagValue(commandArgs, "--draft"), "--draft"); const report = await agent.semanticDiff(draftId, agentScope(commandArgs)); return { exitCode: 0, output: render(commandArgs.includes("--json"), { ok: true, code: "OK", ...report }, `Semantic diff: ${report.counts.created + report.counts.updated + report.counts.archived + report.counts.deleted} changed entities`) }; }
     if (command === "diff" && direct !== undefined) { const report = await direct.semanticDiff(agentScope(commandArgs)); return { exitCode: 0, output: render(commandArgs.includes("--json"), { ok: true, code: "OK", ...report }, `Semantic diff: ${report.counts.created + report.counts.updated + report.counts.archived + report.counts.deleted} changed entities`) }; }
-    if (command === "diff") return await runSemanticDiff(commandArgs, cwd);
+    if (command === "diff") {
+      if (!commandArgs.includes("--semantic")) {
+        return { exitCode: 2, output: render(commandArgs.includes("--json"), { ok: false, code: "CLI_USAGE" }, "diff requires --semantic") };
+      }
+      requireDirect(dependencies);
+    }
     if (command === "commit") {
       if (hasDraft) return await runCommit(commandArgs, dependencies);
       return await runDirectCommit(commandArgs, dependencies);
@@ -825,7 +818,7 @@ export async function run(args: readonly string[], cwd = process.cwd(), dependen
     if (command === "config") return await runConfig(commandArgs, cwd, dependencies);
     if (command === "doctor" && direct !== undefined) { await direct.prepare(); return await runDoctor([...directRootArgs, ...commandArgs], cwd); }
     if (command === "doctor") return await runDoctor(commandArgs, cwd);
-    if (command === "init") return await runInit(commandArgs, cwd);
+    if (command === "init") return await runInit(commandArgs, cwd, dependencies.init);
     const json = args.includes("--json");
     return {
       exitCode: 2,

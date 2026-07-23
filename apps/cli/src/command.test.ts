@@ -111,9 +111,13 @@ describe("CLI P02 commands", () => {
     expect(JSON.parse((await run(["validate", "--json", "--root", root])).output)).toMatchObject({ ok: true, code: "OK" });
   });
 
-  it("provides semantic diff skeleton and doctor output", async () => {
-    const diff = await run(["diff", "--semantic", "--json", "--root", demo]);
-    expect(JSON.parse(diff.output)).toMatchObject({ ok: true, changed_files_count: 0, affected_projects: [] });
+  it("rejects semantic diff without a configured runtime and provides doctor output", async () => {
+    const root = await fixture();
+    const project = path.join(root, "projects", "P-26-MGP84K", "project.yaml");
+    await writeFile(project, (await readFile(project, "utf8")).replace("name: GitPM launch", "name: Changed without runtime"), "utf8");
+    const diff = await run(["diff", "--semantic", "--json", "--root", root]);
+    expect(diff.exitCode).toBe(1);
+    expect(JSON.parse(diff.output)).toMatchObject({ ok: false, code: "CLI_DIRECT_CONFIGURATION_REQUIRED" });
     const doctor = await run(["doctor", "--json", "--root", demo]);
     expect(JSON.parse(doctor.output)).toMatchObject({ ok: true, checks: { node_20: true, repository_valid: true, schemas_loaded: true } });
   });
@@ -175,7 +179,9 @@ describe("CLI init command", () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "gitpm-init-"));
     roots.push(root);
     const target = path.join(root, "portfolio");
-    const init = await run(["init", target, "--json"], root);
+    const init = await run(["init", target, "--json"], root, {
+      init: { now: () => new Date("2027-01-02T03:04:05Z"), randomIndex: () => 19 },
+    });
     expect(init.exitCode).toBe(0);
     const initPayload = JSON.parse(init.output);
     expect(initPayload).toMatchObject({ ok: true, code: "OK" });
@@ -192,6 +198,9 @@ describe("CLI init command", () => {
     expect(await readFile(path.join(target, "uploads", ".gitkeep"), "utf8")).toBe("");
     expect((await git(target, "ls-files")).split(/\r?\n/u)).toEqual(expect.arrayContaining([".gitignore", "uploads/.gitkeep"]));
     expect(await git(target, "check-ignore", "uploads/incoming-report.pdf")).toBe("uploads/incoming-report.pdf");
+    expect(await readFile(path.join(target, ".gitpm", "repository.yaml"), "utf8")).toContain("default_calendar: C-27-KKKKKK");
+    expect(await readFile(path.join(target, "calendars", "C-27-KKKKKK.yaml"), "utf8")).toContain("id: C-27-KKKKKK");
+    await expect(readFile(path.join(target, "calendars", "C-26-WRKDAY.yaml"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("rejects a non-empty target directory", async () => {

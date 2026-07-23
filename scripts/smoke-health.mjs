@@ -1,4 +1,7 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { cp, mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
 const host = "127.0.0.1";
@@ -6,9 +9,24 @@ const port = 32100 + Math.floor(Math.random() * 1000);
 const baseUrl = `http://${host}:${port}`;
 const correlationId = "p00-smoke-correlation";
 const logs = [];
+const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "gitpm-smoke-"));
+const repository = path.join(temporaryRoot, "source");
+const runtimeData = path.join(temporaryRoot, "data");
+await cp(path.join(process.cwd(), "fixtures", "schema-v1", "demo"), repository, { recursive: true });
+for (const args of [["init", "-b", "main"], ["add", "."], ["-c", "user.name=GitPM Smoke", "-c", "user.email=smoke@localhost", "commit", "-m", "Initialize smoke fixture"]]) {
+  const result = spawnSync("git", args, { cwd: repository, encoding: "utf8", windowsHide: true });
+  if (result.status !== 0) throw new Error(`Unable to prepare smoke repository: ${result.stderr}`);
+}
 const server = spawn(process.execPath, ["apps/server/dist/index.js"], {
   cwd: process.cwd(),
-  env: { ...process.env, HOST: host, LOG_LEVEL: "info", PORT: String(port) },
+  env: {
+    ...process.env,
+    GITPM_DATA_DIR: runtimeData,
+    GITPM_REPOSITORY_PATH: repository,
+    HOST: host,
+    LOG_LEVEL: "info",
+    PORT: String(port),
+  },
   stdio: ["ignore", "pipe", "pipe"],
 });
 
@@ -67,5 +85,10 @@ try {
 
   process.stdout.write(`${JSON.stringify({ live, ready, sanitized_log: correlated })}\n`);
 } finally {
-  server.kill("SIGTERM");
+  if (server.exitCode === null) {
+    const exited = new Promise((resolve) => server.once("exit", resolve));
+    server.kill("SIGTERM");
+    await Promise.race([exited, delay(5_000)]);
+  }
+  await rm(temporaryRoot, { recursive: true, force: true });
 }

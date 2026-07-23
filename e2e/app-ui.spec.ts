@@ -20,8 +20,6 @@ test.describe("GitPM browser UI", () => {
 
     await expect(page.getByRole("heading", { name: "Проекты", exact: true })).toBeVisible();
     await expect(page.getByText("Локальный режим · Роль: Maintainer", { exact: true })).toBeVisible();
-    await page.locator(".repository-card summary").click();
-    await expect(page.locator(".repository-card code")).toBeVisible();
     await expect(page.getByRole("button", { name: "Репозиторий", exact: true })).toBeVisible();
     await expect(page.getByRole("combobox", { name: "Текущая рабочая копия", exact: true })).toHaveValue("DRF-UI-WORKSPACE");
     await expect(page.getByRole("heading", { name: "Проекты", exact: true })).toBeVisible();
@@ -160,11 +158,11 @@ test.describe("GitPM browser UI", () => {
     await page.getByRole("button", { name: /Approve schema v1/u }).click();
     await expect(page).toHaveURL(new RegExp(`/projects/${FIXTURE_PROJECT_ID}/tasks/[^/?]+(?:\\?.*)?$`, "u"));
     const taskUrl = page.url();
-    await expect(page.getByRole("heading", { name: "Task details", exact: true })).toBeVisible();
+    await expect(page.getByRole("complementary", { name: "Task details", exact: true })).toBeVisible();
 
     await page.reload();
     expect(page.url()).toBe(taskUrl);
-    await expect(page.getByRole("heading", { name: "Task details", exact: true })).toBeVisible();
+    await expect(page.getByRole("complementary", { name: "Task details", exact: true })).toBeVisible();
 
     await page.getByRole("button", { name: "Plan", exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/projects/${FIXTURE_PROJECT_ID}(?:\\?.*)?$`, "u"));

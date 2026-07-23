@@ -9,7 +9,7 @@ import { EntityCatalog } from "./entity-catalog.js";
 
 const text = (document: GitPmDocument, key: string) => typeof document[key] === "string" ? document[key] as string : undefined;
 const number = (document: GitPmDocument, key: string) => typeof document[key] === "number" ? document[key] as number : undefined;
-const strings = (document: GitPmDocument, key: string) => Array.isArray(document[key]) ? (document[key] as unknown[]).filter((item): item is string => typeof item === "string") : [];
+const strings = (document: Readonly<Record<string, unknown>>, key: string) => Array.isArray(document[key]) ? (document[key] as unknown[]).filter((item): item is string => typeof item === "string") : [];
 const numbers = (document: GitPmDocument, key: string) => Array.isArray(document[key]) ? (document[key] as unknown[]).filter((item): item is number => typeof item === "number") : [];
 
 function task(entity: EntityResult): WorkloadTask {
