@@ -157,6 +157,10 @@ Mode differences live behind a single seam: `DraftBackend`
 GitPM (domain, changes, history, publishing, UI) is mode-agnostic and reuses the
 same `RepositoryWorkspace` and repository-mutation surface; direct mutations use
 `repository` mode while worktree UI and agents explicitly use `ui` and `external`.
-Both UI and agent CRUD delegate to `EntityStore`, so validation, reference rewrites,
-rollback, and scope planning have one implementation. The server runtime picks the
-backend from the resolved mode.
+Both UI and CLI CRUD delegate to `EntityStore`, so validation, reference rewrites and
+rollback have one implementation. CLI use cases shared by `DirectCliRuntime` and
+`AgentWorkflow` additionally delegate to the mode-neutral `RepositoryWorkflow`: scope
+checks, entity create/import/update/list/show/delete/archive/move, semantic diff, commit
+and push are implemented once. The two adapters retain only mode-specific preparation,
+draft lifecycle, status, credentials, comments/configuration and Merge Request behavior.
+The server runtime picks the backend from the resolved mode.
