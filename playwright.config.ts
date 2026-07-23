@@ -7,7 +7,7 @@ export default defineConfig({
   testDir: "./e2e",
   testMatch: /.*\.spec\.(?:ts|mjs)$/u,
   fullyParallel: false,
-  workers: 1,
+  workers: 2,
   retries: process.env.CI ? 1 : 0,
   forbidOnly: Boolean(process.env.CI),
   timeout: 60_000,

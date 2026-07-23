@@ -9,8 +9,8 @@ import {
 } from "./helpers.js";
 
 test.describe("GitPM API through the Vite proxy", () => {
-  test.beforeEach(async ({ request }) => await cleanupDrafts(request));
-  test.afterEach(async ({ request }) => await cleanupDrafts(request));
+  test.beforeEach(async ({ request }) => await cleanupDrafts(request, "DRF-API-"));
+  test.afterEach(async ({ request }) => await cleanupDrafts(request, "DRF-API-"));
 
   test("returns the isolated repository session and security headers", async ({ request }) => {
     const response = await request.get("/api/auth/session");

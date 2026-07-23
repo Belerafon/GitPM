@@ -205,6 +205,15 @@ corepack pnpm planning:verify
 `corepack pnpm verify` запускает полный набор, включая E2E и smoke; для локальной
 итерации лучше начинать с узкого package/test target.
 
+После `build` полный verify повторно проверяет типы только для web и E2E: Node workspace-пакеты
+уже прошли тот же `tsc` во время сборки. Самостоятельная команда `corepack pnpm typecheck`
+по-прежнему проверяет все workspace-пакеты и E2E с нуля.
+
+Интеграционные Vitest-тесты сохраняют реальные Git-команды, но готовят неизменяемый эталонный
+remote один раз на test file и выдают каждому тесту отдельную копию. Playwright запускает test
+files двумя workers; параллельные наборы обязаны использовать собственные префиксы draft ID и
+удалять только свои draft. Browser UI, proxy, restart и readiness сценарии остаются E2E-проверками.
+
 Низкоуровневые проверки завершённого planning/evidence set доступны отдельно:
 
 ```bash

@@ -1,32 +1,48 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { GitClient, GitCommandError } from "./index.js";
 
 const execFileAsync = promisify(execFile);
 const roots: string[] = [];
+let templateRoot: string;
+let templateSource: string;
+let templateRemote: string;
 
 async function git(cwd: string, ...args: string[]): Promise<string> {
   const result = await execFileAsync("git", args, { cwd, encoding: "utf8", windowsHide: true });
   return result.stdout.trim();
 }
 
+beforeAll(async () => {
+  templateRoot = await mkdtemp(path.join(os.tmpdir(), "gitpm-git-client-template-"));
+  templateSource = path.join(templateRoot, "source");
+  templateRemote = path.join(templateRoot, "remote.git");
+  await mkdir(templateSource);
+  await git(templateSource, "init", "-b", "main");
+  await writeFile(path.join(templateSource, "README.md"), "first\n", "utf8");
+  await git(templateSource, "add", ".");
+  await git(templateSource, "-c", "user.name=GitPM Test", "-c", "user.email=gitpm@example.test", "commit", "-m", "first");
+  await git(templateRoot, "init", "--bare", templateRemote);
+  await git(templateSource, "remote", "add", "origin", templateRemote);
+  await git(templateSource, "push", "-u", "origin", "main");
+});
+
+afterAll(async () => rm(templateRoot, { recursive: true, force: true }));
+
 async function remoteFixture(): Promise<{ root: string; source: string; remote: string }> {
   const root = await mkdtemp(path.join(os.tmpdir(), "gitpm-git-client-"));
   roots.push(root);
   const source = path.join(root, "source");
   const remote = path.join(root, "remote.git");
-  await mkdir(source);
-  await git(source, "init", "-b", "main");
-  await writeFile(path.join(source, "README.md"), "first\n", "utf8");
-  await git(source, "add", ".");
-  await git(source, "-c", "user.name=GitPM Test", "-c", "user.email=gitpm@example.test", "commit", "-m", "first");
-  await git(root, "init", "--bare", remote);
-  await git(source, "remote", "add", "origin", remote);
-  await git(source, "push", "-u", "origin", "main");
+  await Promise.all([
+    cp(templateSource, source, { recursive: true }),
+    cp(templateRemote, remote, { recursive: true }),
+  ]);
+  await git(source, "remote", "set-url", "origin", remote);
   return { root, source, remote };
 }
 

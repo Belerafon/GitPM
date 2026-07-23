@@ -5,6 +5,7 @@ export default defineConfig({
     hookTimeout: 30_000,
     testTimeout: 60_000,
     maxWorkers: 4,
+    maxConcurrency: 2,
     coverage: {
       enabled: false,
     },

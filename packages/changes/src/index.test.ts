@@ -3,7 +3,7 @@ import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { DraftManager } from "@gitpm/drafts";
 import { GitClient } from "@gitpm/git-client";
 import { atomicWriteDomainFile } from "@gitpm/security";
@@ -14,25 +14,35 @@ const roots: string[] = [];
 const demo = path.join(process.cwd(), "fixtures", "schema-v1", "demo");
 const projectFile = "projects/P-26-MGP84K/project.yaml";
 const deletedTask = "projects/P-26-MGP84K/tasks/T-26-RHBNH8.yaml";
+let templateRoot: string;
+let templateRemote: string;
 
 async function git(cwd: string, ...args: string[]): Promise<void> {
   await execFileAsync("git", args, { cwd, windowsHide: true });
 }
 
-async function runtime() {
-  const root = await mkdtemp(path.join(os.tmpdir(), "gitpm-changes-"));
-  roots.push(root);
-  const source = path.join(root, "source");
-  const remote = path.join(root, "remote.git");
-  const data = path.join(root, "data");
+beforeAll(async () => {
+  templateRoot = await mkdtemp(path.join(os.tmpdir(), "gitpm-changes-template-"));
+  const source = path.join(templateRoot, "source");
+  templateRemote = path.join(templateRoot, "remote.git");
   await mkdir(source);
   await cp(demo, source, { recursive: true });
   await git(source, "init", "-b", "main");
   await git(source, "add", ".");
   await git(source, "-c", "user.name=GitPM Test", "-c", "user.email=gitpm@example.test", "commit", "-m", "fixture");
-  await git(root, "init", "--bare", remote);
-  await git(source, "remote", "add", "origin", remote);
+  await git(templateRoot, "init", "--bare", templateRemote);
+  await git(source, "remote", "add", "origin", templateRemote);
   await git(source, "push", "origin", "main");
+});
+
+afterAll(async () => rm(templateRoot, { recursive: true, force: true }));
+
+async function runtime() {
+  const root = await mkdtemp(path.join(os.tmpdir(), "gitpm-changes-"));
+  roots.push(root);
+  const remote = path.join(root, "remote.git");
+  const data = path.join(root, "data");
+  await cp(templateRemote, remote, { recursive: true });
   const client = new GitClient({ dataDirectory: data, remoteUrl: remote, defaultBranch: "main", allowLocalTestRemote: true });
   const manager = new DraftManager(client, data);
   const draft = await manager.createDraft("DRF-CHANGES", "42");

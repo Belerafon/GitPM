@@ -33,11 +33,12 @@ export async function createDraft(request: APIRequestContext, draftId: string): 
   return await response.json() as DraftStatus;
 }
 
-export async function cleanupDrafts(request: APIRequestContext): Promise<void> {
+export async function cleanupDrafts(request: APIRequestContext, draftPrefix: string): Promise<void> {
   const listed = await request.get("/api/drafts");
   if (!listed.ok()) return;
   const drafts = await listed.json() as readonly DraftStatus[];
   for (const draft of drafts) {
+    if (!draft.draft_id.startsWith(draftPrefix)) continue;
     if (draft.state === "open") {
       const closed = await request.post(`/api/drafts/${encodeURIComponent(draft.draft_id)}/close`);
       if (!closed.ok()) throw new Error(`Could not close ${draft.draft_id}: ${await closed.text()}`);

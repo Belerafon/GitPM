@@ -3,19 +3,22 @@ import { execFile } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it, onTestFinished } from "vitest";
 import { run } from "./command.js";
 import { DirectCliRuntime } from "./direct-runtime.js";
 import type { AgentWorkflow } from "@gitpm/agent";
 import type { GitPmDocument } from "@gitpm/repository-format";
 
 const execFileAsync = promisify(execFile);
-const roots: string[] = [];
 const demo = path.join(process.cwd(), "fixtures", "schema-v1", "demo");
+
+function removeAfterTest(root: string): void {
+  onTestFinished(async () => rm(root, { recursive: true, force: true }));
+}
 
 async function fixture(): Promise<string> {
   const root = await mkdtemp(path.join(os.tmpdir(), "gitpm-cli-"));
-  roots.push(root);
+  removeAfterTest(root);
   await cp(demo, root, { recursive: true });
   return root;
 }
@@ -25,9 +28,15 @@ async function git(cwd: string, ...args: string[]): Promise<string> {
   return stdout.trim();
 }
 
-async function directFixture(): Promise<{ root: string; checkout: string; remote: string; data: string; direct: DirectCliRuntime }> {
+async function directFixture(options: { withRemote?: boolean } = {}): Promise<{
+  root: string;
+  checkout: string;
+  remote?: string;
+  data: string;
+  direct: DirectCliRuntime;
+}> {
   const root = await mkdtemp(path.join(os.tmpdir(), "gitpm-cli-direct-"));
-  roots.push(root);
+  removeAfterTest(root);
   const source = path.join(root, "source");
   const remote = path.join(root, "remote.git");
   const data = path.join(root, "data");
@@ -35,9 +44,11 @@ async function directFixture(): Promise<{ root: string; checkout: string; remote
   await git(source, "init", "-b", "main");
   await git(source, "add", ".");
   await git(source, "-c", "user.name=GitPM Test", "-c", "user.email=gitpm@example.test", "commit", "-m", "initial portfolio");
-  await git(root, "init", "--bare", remote);
-  await git(source, "remote", "add", "origin", remote);
-  await git(source, "push", "-u", "origin", "main");
+  if (options.withRemote === true) {
+    await git(root, "init", "--bare", remote);
+    await git(source, "remote", "add", "origin", remote);
+    await git(source, "push", "-u", "origin", "main");
+  }
   const direct = new DirectCliRuntime({
     dataDirectory: data,
     checkoutPath: source,
@@ -49,10 +60,14 @@ async function directFixture(): Promise<{ root: string; checkout: string; remote
     askPassPath: path.resolve("scripts", "git-askpass.mjs"),
     pushAccessToken: "unused-local-token",
   });
-  return { root, checkout: source, remote, data, direct };
+  return {
+    root,
+    checkout: source,
+    ...(options.withRemote === true ? { remote } : {}),
+    data,
+    direct,
+  };
 }
-
-afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))));
 
 describe("CLI P02 commands", () => {
   it("prints a stable version", async () => {
@@ -167,7 +182,7 @@ describe("CLI P12 agent commands", () => {
       createMergeRequest: async () => ({ iid: 7, state: "opened" as const, source_branch: metadata.branch, target_branch: "main", web_url: "https://gitlab.example.test/mr/7" }),
     } as unknown as AgentWorkflow;
     const inputRoot = await mkdtemp(path.join(os.tmpdir(), "gitpm-cli-entity-"));
-    roots.push(inputRoot);
+    removeAfterTest(inputRoot);
     const entityFile = path.join(inputRoot, "person.yaml");
     await writeFile(entityFile, [
       "schema: gitpm/person@1",
@@ -207,7 +222,7 @@ describe("CLI P12 agent commands", () => {
 describe("CLI init command", () => {
   it("creates a valid schema v1 skeleton in an empty directory", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "gitpm-init-"));
-    roots.push(root);
+    removeAfterTest(root);
     const target = path.join(root, "portfolio");
     const init = await run(["init", target, "--json"], root, {
       init: { now: () => new Date("2027-01-02T03:04:05Z"), randomIndex: () => 19 },
@@ -241,7 +256,7 @@ describe("CLI init command", () => {
 
   it("lets ripgrep discover uploads/ via .ignore when rg is available", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "gitpm-init-rg-"));
-    roots.push(root);
+    removeAfterTest(root);
     const target = path.join(root, "portfolio");
     const init = await run(["init", target, "--json"], root, {
       init: { now: () => new Date("2027-01-02T03:04:05Z"), randomIndex: () => 19 },
@@ -262,7 +277,7 @@ describe("CLI init command", () => {
 
   it("rejects a non-empty target directory", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "gitpm-init-busy-"));
-    roots.push(root);
+    removeAfterTest(root);
     await writeFile(path.join(root, "leftover.txt"), "noise", "utf8");
     const result = await run(["init", root, "--json"], root);
     expect(result.exitCode).toBe(1);
@@ -270,15 +285,15 @@ describe("CLI init command", () => {
   });
 });
 
-describe("CLI direct mode", () => {
-  it("generates Person identity, applies defaults and imports CSV atomically", async () => {
+describe.concurrent("CLI direct mode", () => {
+  it.sequential("generates Person identity, applies defaults and imports CSV atomically", async () => {
     const { direct, checkout } = await directFixture();
     const inputRoot = await mkdtemp(path.join(os.tmpdir(), "gitpm-cli-import-"));
-    roots.push(inputRoot);
+    removeAfterTest(inputRoot);
     const personFile = path.join(inputRoot, "person.yaml");
     await writeFile(personFile, "name: Generated Person\nweekly_capacity_hours: 35\nemail: generated@example.test\n", "utf8");
     const created = await run(["entity", "create", "--type", "person", "--file", personFile, "--json"], process.cwd(), { direct });
-    expect(created.exitCode).toBe(0);
+    expect(created.exitCode, created.output).toBe(0);
     const createdPayload = JSON.parse(created.output);
     expect(createdPayload.document).toMatchObject({ schema: "gitpm/person@1", name: "Generated Person", calendar: "C-26-QD7FJ4", lifecycle: "active" });
     expect(createdPayload.document.id).toMatch(/^U-\d{2}-[0-9A-HJKMNP-TV-Z]{6}$/u);
@@ -352,7 +367,8 @@ describe("CLI direct mode", () => {
   });
 
   it("push publishes main to origin without --draft and refuses force push", async () => {
-    const { direct, checkout, remote } = await directFixture();
+    const { direct, checkout, remote } = await directFixture({ withRemote: true });
+    if (remote === undefined) throw new Error("remote fixture was not created");
     await run(["status", "--json"], process.cwd(), { direct });
     const projectFile = path.join(checkout, "projects", "P-26-MGP84K", "project.yaml");
     await writeFile(projectFile, (await readFile(projectFile, "utf8")).replace("name: GitPM launch", "name: Pushed"), "utf8");
@@ -380,7 +396,7 @@ describe("CLI direct mode", () => {
   it("creates an entity, reports its semantic diff and commits it without --draft", async () => {
     const { direct, checkout } = await directFixture();
     const inputRoot = await mkdtemp(path.join(os.tmpdir(), "gitpm-cli-direct-entity-"));
-    roots.push(inputRoot);
+    removeAfterTest(inputRoot);
     const entityFile = path.join(inputRoot, "task.yaml");
     await writeFile(entityFile, [
       "schema: gitpm/task@1",
@@ -451,7 +467,7 @@ describe("CLI direct mode", () => {
   it("enforces Project scope and rolls back invalid direct entity creation", async () => {
     const { direct, checkout } = await directFixture();
     const inputRoot = await mkdtemp(path.join(os.tmpdir(), "gitpm-cli-direct-invalid-"));
-    roots.push(inputRoot);
+    removeAfterTest(inputRoot);
     const globalEntity = path.join(inputRoot, "person.yaml");
     await writeFile(globalEntity, [
       "schema: gitpm/person@1",

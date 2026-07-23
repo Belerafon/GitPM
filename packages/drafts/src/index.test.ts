@@ -3,7 +3,7 @@ import { cp, mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promi
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { GitClient } from "@gitpm/git-client";
 import { atomicWriteDomainFile } from "@gitpm/security";
 import { DraftManager, DraftRuntimeError } from "./index.js";
@@ -13,11 +13,30 @@ const execFileAsync = promisify(execFile);
 const roots: string[] = [];
 const demo = path.join(process.cwd(), "fixtures", "schema-v1", "demo");
 const projectFile = "projects/P-26-MGP84K/project.yaml";
+let templateRoot: string;
+let templateSource: string;
+let templateRemote: string;
 
 async function git(cwd: string, ...args: string[]): Promise<string> {
   const result = await execFileAsync("git", args, { cwd, encoding: "utf8", windowsHide: true });
   return result.stdout.trim();
 }
+
+beforeAll(async () => {
+  templateRoot = await mkdtemp(path.join(os.tmpdir(), "gitpm-drafts-template-"));
+  templateSource = path.join(templateRoot, "source");
+  templateRemote = path.join(templateRoot, "remote.git");
+  await mkdir(templateSource);
+  await cp(demo, templateSource, { recursive: true });
+  await git(templateSource, "init", "-b", "main");
+  await git(templateSource, "add", ".");
+  await git(templateSource, "-c", "user.name=GitPM Test", "-c", "user.email=gitpm@example.test", "commit", "-m", "initial portfolio");
+  await git(templateRoot, "init", "--bare", templateRemote);
+  await git(templateSource, "remote", "add", "origin", templateRemote);
+  await git(templateSource, "push", "-u", "origin", "main");
+});
+
+afterAll(async () => rm(templateRoot, { recursive: true, force: true }));
 
 async function fixture(): Promise<{ root: string; source: string; remote: string; data: string }> {
   const root = await mkdtemp(path.join(os.tmpdir(), "gitpm-drafts-"));
@@ -25,14 +44,11 @@ async function fixture(): Promise<{ root: string; source: string; remote: string
   const source = path.join(root, "source");
   const remote = path.join(root, "remote.git");
   const data = path.join(root, "data");
-  await mkdir(source);
-  await cp(demo, source, { recursive: true });
-  await git(source, "init", "-b", "main");
-  await git(source, "add", ".");
-  await git(source, "-c", "user.name=GitPM Test", "-c", "user.email=gitpm@example.test", "commit", "-m", "initial portfolio");
-  await git(root, "init", "--bare", remote);
-  await git(source, "remote", "add", "origin", remote);
-  await git(source, "push", "-u", "origin", "main");
+  await Promise.all([
+    cp(templateSource, source, { recursive: true }),
+    cp(templateRemote, remote, { recursive: true }),
+  ]);
+  await git(source, "remote", "set-url", "origin", remote);
   return { root, source, remote, data };
 }
 

@@ -3,7 +3,7 @@ import { cp, mkdtemp, mkdir, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { ChangesService } from "@gitpm/changes";
 import { DraftManager } from "@gitpm/drafts";
 import { GitClient } from "@gitpm/git-client";
@@ -19,20 +19,42 @@ const projectId = "P-26-MGP84K";
 const projectFile = `projects/${projectId}/project.yaml`;
 const personFile = "people/U-26-5EBAE3.yaml";
 const taskFile = `projects/${projectId}/tasks/T-26-RHBNH8.yaml`;
+let templateRoot: string;
+let templateRemote: string;
 
 async function git(cwd: string, ...args: string[]): Promise<string> {
   return (await execFileAsync("git", args, { cwd, windowsHide: true, encoding: "utf8" })).stdout.trim();
 }
 
+beforeAll(async () => {
+  templateRoot = await mkdtemp(path.join(os.tmpdir(), "gitpm-agent-template-"));
+  const source = path.join(templateRoot, "source");
+  templateRemote = path.join(templateRoot, "remote.git");
+  await mkdir(source);
+  await cp(demo, source, { recursive: true });
+  await git(source, "init", "-b", "main");
+  await git(source, "add", ".");
+  await git(source, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-m", "fixture");
+  await git(templateRoot, "init", "--bare", templateRemote);
+  await git(source, "remote", "add", "origin", templateRemote);
+  await git(source, "push", "origin", "main");
+});
+
+afterAll(async () => rm(templateRoot, { recursive: true, force: true }));
 afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))));
+
+async function workflowFixture(prefix: string): Promise<{ root: string; remote: string; data: string }> {
+  const root = await mkdtemp(path.join(os.tmpdir(), prefix));
+  roots.push(root);
+  const remote = path.join(root, "remote.git");
+  const data = path.join(root, "data");
+  await cp(templateRemote, remote, { recursive: true });
+  return { root, remote, data };
+}
 
 describe("agent file and CLI workflow core", () => {
   it("enforces external mode, Project scope and explicit delete before commit-all, push and MR", async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), "gitpm-agent-")); roots.push(root);
-    const source = path.join(root, "source"); const remote = path.join(root, "remote.git"); const data = path.join(root, "data");
-    await mkdir(source); await cp(demo, source, { recursive: true }); await git(source, "init", "-b", "main"); await git(source, "add", ".");
-    await git(source, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-m", "fixture");
-    await git(root, "init", "--bare", remote); await git(source, "remote", "add", "origin", remote); await git(source, "push", "origin", "main");
+    const { root, remote, data } = await workflowFixture("gitpm-agent-");
     const client = new GitClient({ dataDirectory: data, remoteUrl: remote, defaultBranch: "main", allowLocalTestRemote: true, askPassPath: path.join(process.cwd(), "scripts", "git-askpass.mjs") });
     const drafts = new DraftManager(client, data); const changes = new ChangesService(drafts, client); const gitlab = new GitLabProtocolTestDouble();
     const workflow = new AgentWorkflow(drafts, client, changes, { accessToken: "agent-memory-token", authorName: "agent-42", authorEmail: "42@users.noreply.gitlab.example.test", defaultBranch: "main", mergeRequests: gitlab });
@@ -82,11 +104,7 @@ describe("agent file and CLI workflow core", () => {
   });
 
   it("updates existing entities transactionally through the external workflow", async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), "gitpm-agent-update-")); roots.push(root);
-    const source = path.join(root, "source"); const remote = path.join(root, "remote.git"); const data = path.join(root, "data");
-    await mkdir(source); await cp(demo, source, { recursive: true }); await git(source, "init", "-b", "main"); await git(source, "add", ".");
-    await git(source, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-m", "fixture");
-    await git(root, "init", "--bare", remote); await git(source, "remote", "add", "origin", remote); await git(source, "push", "origin", "main");
+    const { remote, data } = await workflowFixture("gitpm-agent-update-");
     const client = new GitClient({ dataDirectory: data, remoteUrl: remote, defaultBranch: "main", allowLocalTestRemote: true, askPassPath: path.join(process.cwd(), "scripts", "git-askpass.mjs") });
     const drafts = new DraftManager(client, data); const changes = new ChangesService(drafts, client);
     const workflow = new AgentWorkflow(drafts, client, changes, { authorName: "agent-42", authorEmail: "42@example.test", defaultBranch: "main" });
@@ -107,11 +125,7 @@ describe("agent file and CLI workflow core", () => {
   }, 60_000);
 
   it("lists, shows, plans delete, deletes, archives and moves entities through the external workflow", async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), "gitpm-agent-entity-")); roots.push(root);
-    const source = path.join(root, "source"); const remote = path.join(root, "remote.git"); const data = path.join(root, "data");
-    await mkdir(source); await cp(demo, source, { recursive: true }); await git(source, "init", "-b", "main"); await git(source, "add", ".");
-    await git(source, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-m", "fixture");
-    await git(root, "init", "--bare", remote); await git(source, "remote", "add", "origin", remote); await git(source, "push", "origin", "main");
+    const { remote, data } = await workflowFixture("gitpm-agent-entity-");
     const client = new GitClient({ dataDirectory: data, remoteUrl: remote, defaultBranch: "main", allowLocalTestRemote: true, askPassPath: path.join(process.cwd(), "scripts", "git-askpass.mjs") });
     const drafts = new DraftManager(client, data); const changes = new ChangesService(drafts, client);
     const workflow = new AgentWorkflow(drafts, client, changes, { authorName: "agent-42", authorEmail: "42@example.test", defaultBranch: "main" });

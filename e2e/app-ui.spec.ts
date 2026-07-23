@@ -1,14 +1,33 @@
-import { expect, test } from "@playwright/test";
+import { expect, request as createRequestContext, test, type APIRequestContext } from "@playwright/test";
 import { FIXTURE_PROJECT_ID, cleanupDrafts, createDraft } from "./helpers.js";
 
+const activeDraftStorageKey = "gitpm.activeWorkingCopy";
+const e2eDraftInitializedKey = "gitpm.e2e.activeWorkingCopyInitialized";
+const uiDraftId = "DRF-UI-WORKSPACE";
+
 test.describe("GitPM browser UI", () => {
-  test.beforeEach(async ({ request }) => {
-    await cleanupDrafts(request);
-    await createDraft(request, "DRF-UI-WORKSPACE");
+  let sharedRequest: APIRequestContext;
+
+  test.beforeAll(async () => {
+    sharedRequest = await createRequestContext.newContext({ baseURL: "http://127.0.0.1:5174" });
+    await cleanupDrafts(sharedRequest, "DRF-UI-");
+    await createDraft(sharedRequest, uiDraftId);
   });
-  test.afterEach(async ({ page, request }) => {
-    await page.close();
-    await cleanupDrafts(request);
+
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(
+      ([activeKey, initializedKey, draftId]) => {
+        if (window.sessionStorage.getItem(initializedKey) !== null) return;
+        window.localStorage.setItem(activeKey, draftId);
+        window.sessionStorage.setItem(initializedKey, "true");
+      },
+      [activeDraftStorageKey, e2eDraftInitializedKey, uiDraftId] as const,
+    );
+  });
+
+  test.afterAll(async () => {
+    await cleanupDrafts(sharedRequest, "DRF-UI-");
+    await sharedRequest.dispose();
   });
 
   test("loads the authenticated workspace instead of hanging on Loading", async ({ page }) => {
@@ -61,12 +80,13 @@ test.describe("GitPM browser UI", () => {
   });
 
   test("shows a person's project responsibilities and daily availability calendar", async ({ page }) => {
+    await page.goto("/people/U-26-5EBAE3");
+    await page.locator(".interface-settings > summary").click();
+    await page.locator(".locale-picker select").selectOption("en");
+    await page.locator(".interface-settings > summary").click();
+
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: 900 });
-      await page.goto("/people/U-26-5EBAE3");
-      await page.locator(".interface-settings > summary").click();
-      await page.locator(".locale-picker select").selectOption("en");
-      await page.locator(".interface-settings > summary").click();
 
       await expect(page.getByRole("heading", { name: "Anna Petrova", exact: true })).toBeVisible();
       await expect(page.getByRole("heading", { name: "Schedule", exact: true })).toBeVisible();
@@ -93,12 +113,13 @@ test.describe("GitPM browser UI", () => {
   test("keeps every section reachable and restores focus without page overflow at UX00 viewports", async ({ page }) => {
     test.setTimeout(120_000);
     const destinations = ["Repository", "Team", "Projects", "Statuses and task types"] as const;
+    await page.goto("/");
+    await page.locator(".interface-settings > summary").click();
+    await page.locator(".locale-picker select").selectOption("en");
+    await page.locator(".interface-settings > summary").click();
+
     for (const width of [320, 390, 800, 1280, 1920]) {
       await page.setViewportSize({ width, height: 844 });
-      await page.goto("/");
-      await page.locator(".interface-settings > summary").click();
-      await page.locator(".locale-picker select").selectOption("en");
-      await page.locator(".interface-settings > summary").click();
 
       for (const destination of destinations) {
         if (width <= 880) {
