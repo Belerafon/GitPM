@@ -216,6 +216,54 @@ describe("domain entity store", () => {
     expect(updatedComment).not.toContain(personId);
   }, 60_000);
 
+  it("plans a delete impact preview with restrictions, cascade and unlink without writing", async () => {
+    const { manager, store, comments } = await runtime();
+    const draft = await manager.createDraft("DRF-PLAN-DELETE", "42");
+    let fingerprint = draft.fingerprint;
+    const cleanCalendar = await store.create("DRF-PLAN-DELETE", "42", fingerprint, { schema: "gitpm/calendar@1", id: "C-26-ABCDEF", name: "Unreferenced calendar", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
+    fingerprint = cleanCalendar.draft_fingerprint;
+    const personId = "U-26-15QJP8";
+    const comment = await comments.create(
+      "DRF-PLAN-DELETE",
+      "P-26-MGP84K",
+      "T-26-P9G3P8",
+      fingerprint,
+      "Heads up @[Boris Sokolov](person:U-26-15QJP8)",
+      { userId: "42", role: "Developer", identity: { provider: "git", subject: "author@example.test", display_name: "Author" } },
+    );
+
+    const personPlan = await store.planDelete("DRF-PLAN-DELETE", "people", personId);
+    expect(personPlan).toMatchObject({ entityType: "people", id: personId, schema: "gitpm/person@1", supports_unlink: true });
+    expect(personPlan.path).toBe(`people/${personId}.yaml`);
+    expect(personPlan.restrictions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: "teams/G-26-XB86WT.yaml", label: "Core team" }),
+      expect.objectContaining({ path: "projects/P-26-8S9HQQ/project.yaml", label: "Operations" }),
+      expect.objectContaining({ path: "projects/P-26-MGP84K/tasks/T-26-RHBNH8.yaml", label: "Implement parser" }),
+      expect.objectContaining({ path: comment.path }),
+    ]));
+    expect(personPlan.would_unlink.map((item) => item.path)).toEqual(expect.arrayContaining([
+      "teams/G-26-XB86WT.yaml",
+      "projects/P-26-8S9HQQ/project.yaml",
+      "projects/P-26-MGP84K/tasks/T-26-RHBNH8.yaml",
+      comment.path,
+    ]));
+    expect(personPlan.cascaded_comments).toEqual([]);
+
+    const taskPlan = await store.planDelete("DRF-PLAN-DELETE", "tasks", "T-26-P9G3P8");
+    expect(taskPlan.schema).toBe("gitpm/task@1");
+    expect(taskPlan.cascaded_comments.map((item) => item.id)).toEqual(expect.arrayContaining([String(comment.document.id)]));
+    expect(taskPlan.supports_unlink).toBe(false);
+    expect(taskPlan.would_unlink).toEqual([]);
+
+    const cleanPlan = await store.planDelete("DRF-PLAN-DELETE", "calendars", "C-26-ABCDEF");
+    expect(cleanPlan.restrictions).toEqual([]);
+    expect(cleanPlan.would_unlink).toEqual([]);
+
+    await expect(store.get("DRF-PLAN-DELETE", "people", personId)).resolves.toBeDefined();
+    const commentFile = path.join(draft.worktree_path, ...comment.path.split("/"));
+    expect(await readFile(commentFile, "utf8")).toContain(personId);
+  });
+
   it("creates all editable entity types, updates, archives and deletes with restrict", async () => {
     const { manager, store } = await runtime();
     const draft = await manager.createDraft("DRF-DOMAIN", "42");

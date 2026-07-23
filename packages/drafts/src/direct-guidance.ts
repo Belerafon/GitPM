@@ -124,9 +124,25 @@ remove an optional field:
 
 \`gitpm entity update --type <type> --id <entity-id> --set <field>=<yaml-value> [--set ...] [--unset <field>] [--project <project-id>] --json\`
 
-Inspect fields with \`gitpm schema show <type> --json\`. For bulk creation, use \`gitpm entity
+Inspect fields with \`gitpm schema show <type> --json\`. Inspect existing data with
+\`gitpm entity list --type <type> [--project <id>] --json\` and
+\`gitpm entity show --type <type> --id <entity-id> --json\`.
+
+For bulk creation, use \`gitpm entity
 import --type <type> --format <csv|yaml|jsonl> --file <file>\`, first with \`--dry-run\` and then
 without it.
+
+Before removing an entity, preview the impact with
+\`gitpm entity delete --type <type> --id <entity-id> --dry-run --json\`.
+Restrictions, cascade, and unlink paths are reported without writing. Then delete with
+\`--allow-delete\`; add \`--unlink-references\` for a person to remove references first.
+Archive a reversible lifecycle state with
+\`gitpm entity archive --type <type> --id <entity-id> --json\`.
+Move a task with
+\`gitpm entity move --type task --id <entity-id> --to-project <id> [--to-milestone <id>] --allow-delete --json\`.
+
+Manage task comments with \`gitpm comment list|create|update|delete\` and repository
+configuration with \`gitpm config show|update --kind statuses|issue-types\`.
 
 Then run \`format\`, \`validate --changed\`, and \`diff --semantic\` with \`--json\` and
 \`--project\` when scoped. Commit with \`gitpm commit --all\`. Use \`gitpm push\` only when
@@ -226,6 +242,27 @@ All commands accept \`--json\`; use it for automation. Direct-mode commands do n
   an optional field. Identity, schema, and owning Project are immutable.
 - \`gitpm entity import --type <type> --format <csv|yaml|jsonl> --file <file> [--dry-run]\`
   atomically validates and creates a batch.
+- \`gitpm entity list --type <type> [--project <id>]\` lists entities of a type, optionally
+  filtered by Project.
+- \`gitpm entity show --type <type> --id <entity-id>\` returns a single entity document.
+- \`gitpm entity delete --type <type> --id <entity-id> [--unlink-references] [--dry-run]
+  [--allow-delete] [--project <id>]\` removes an entity file. Task deletion cascades to that
+  task's comments. \`--dry-run\` previews the reference impact without writing.
+  \`--unlink-references\` removes references to a person before deleting (people only).
+  \`--allow-delete\` authorizes the physical deletion scope.
+- \`gitpm entity archive --type <type> --id <entity-id> [--project <id>]\` sets lifecycle to
+  archived (reversible; the file stays and references remain valid).
+- \`gitpm entity move --type task --id <entity-id> --to-project <id> [--to-milestone <id>]
+  [--allow-delete] [--project <id>]\` relocates a task and its comments to another Project.
+- \`gitpm comment list --project <id> --task <id>\` lists task comments.
+- \`gitpm comment create --project <id> --task <id> (--body <text> | --file <path>)\` adds a
+  Markdown comment with optional \`@[Name](person:U-...)\` mentions.
+- \`gitpm comment update --project <id> --task <id> --id <comment-id> (--body <text> | --file <path>)\`
+  edits a comment body.
+- \`gitpm comment delete --project <id> --task <id> --id <comment-id>\` soft-deletes a comment.
+- \`gitpm config show --kind statuses|issue-types\` reads repository configuration.
+- \`gitpm config update --kind statuses|issue-types [--file <yaml>] [--set <field>=<yaml-value>]...
+  [--unset <field>]\` updates repository configuration.
 - \`gitpm schema list|show <type> [--example]\` exposes the installed schema contract.
 - \`gitpm format [--project <id>] [--check]\` applies or checks canonical YAML.
 - \`gitpm validate [--project <id>] [--changed]\` validates repository structure, schemas,
@@ -238,10 +275,10 @@ All commands accept \`--json\`; use it for automation. Direct-mode commands do n
 - \`gitpm doctor\` checks runtime and repository readiness.
 - \`gitpm --version\` reports the CLI version.
 
-There is no \`mr\` command in direct mode. The current CLI exposes entity creation and general
-entity update, but not archive, physical delete, move, configuration update, or comment-specific commands. When the
-request needs one of these, report the capability gap and recommend adding the corresponding CLI
-operation. Do not invent syntax and do not fall back to editing YAML.
+There is no \`mr\` command in direct mode. The current CLI exposes entity create, update,
+import, list, show, delete (with dry-run and reference unlink), archive, move, comment CRUD,
+and configuration update. When the request needs an operation the CLI does not provide, report
+the capability gap. Do not invent syntax and do not fall back to editing YAML.
 
 For entity creation, keep the temporary input outside the checkout, inspect fields with
 \`gitpm schema show\`, and never guess a reference or configuration slug. Omit \`id\` to let GitPM
@@ -257,9 +294,10 @@ to global configuration, People, Teams, Calendars, guidance files, or another Pr
 treated as permission to widen scope. Ask the user if the requested outcome truly requires global
 changes.
 
-Physical deletion is distinct from archive. Even if a future CLI mutation creates a deletion,
-verification and commit require explicit user intent plus \`--allow-delete\`; reference and repository
-validation still apply.
+Physical deletion is distinct from archive. \`gitpm entity delete\` removes the entity file and
+requires \`--allow-delete\`; use \`--dry-run\` first to preview reference restrictions.
+\`gitpm entity archive\` sets lifecycle to archived without removing the file. Reference and
+repository validation still apply to both.
 
 ## Verify every supported mutation
 

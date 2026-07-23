@@ -2,7 +2,8 @@ import { assertAgentScope, type AgentScope, type AgentScopeReport } from "@gitpm
 import { ChangesService, type SemanticDiff } from "@gitpm/changes";
 import { GitClient, GitCommandError } from "@gitpm/git-client";
 import { DirectDraftBackend, directPushStrategy, DraftManager, GITPM_GUIDANCE_FILES, GITPM_GUIDANCE_PATHS } from "@gitpm/drafts";
-import { EntityStore, entityPathForDocument, type EntityCreateBatchResult, type EntityResult } from "@gitpm/domain";
+import { CommentStore, EntityStore, entityPathForDocument, type CommentActor, type CommentResult, type DeletePlan, type EntityCreateBatchResult, type EntityResult } from "@gitpm/domain";
+import type { GitPmDocument } from "@gitpm/repository-format";
 import { validateRepository } from "@gitpm/validation";
 
 export interface DirectStatus {
@@ -44,6 +45,7 @@ export class DirectCliRuntime {
   private readonly drafts: DraftManager;
   private readonly changes: ChangesService;
   private readonly entities: EntityStore;
+  private readonly comments: CommentStore;
   private readonly pushStrategy: ReturnType<typeof directPushStrategy>;
   private readonly authorName: string;
   private readonly authorEmail: string;
@@ -68,10 +70,15 @@ export class DirectCliRuntime {
     });
     this.changes = new ChangesService(this.drafts, this.git);
     this.entities = new EntityStore(this.drafts);
+    this.comments = new CommentStore(this.drafts);
     this.pushStrategy = directPushStrategy(this.git);
     this.authorName = options.authorName;
     this.authorEmail = options.authorEmail;
     this.pushAccessToken = options.pushAccessToken;
+  }
+
+  private directActor(): CommentActor {
+    return { userId: "local-user", role: "Maintainer", identity: { provider: "git", subject: this.authorEmail, display_name: this.authorName } };
   }
 
   get checkoutPath(): string {
@@ -173,6 +180,118 @@ export class DirectCliRuntime {
       plan.document,
       assertPaths,
     );
+  }
+
+  async listEntities(entityType: string, project?: string): Promise<{ items: readonly { readonly document: GitPmDocument; readonly path: string }[]; readonly draft_fingerprint: string }> {
+    const draftId = await this.draftId();
+    const results = await this.entities.list(draftId, entityType, project);
+    const metadata = await this.drafts.getDraft(draftId);
+    return { items: results.map((result) => ({ document: result.document, path: result.path })), draft_fingerprint: metadata.fingerprint };
+  }
+
+  async getEntity(entityType: string, id: string): Promise<EntityResult> {
+    const draftId = await this.draftId();
+    return await this.entities.get(draftId, entityType, id);
+  }
+
+  async planDelete(entityType: string, id: string): Promise<DeletePlan> {
+    const draftId = await this.draftId();
+    return await this.entities.planDelete(draftId, entityType, id);
+  }
+
+  async deleteEntity(entityType: string, id: string, unlinkReferences: boolean, scope: AgentScope = {}): Promise<{ deleted: true; path: string; unlinked_paths: readonly string[]; draft_fingerprint: string }> {
+    const draftId = await this.draftId();
+    await this.assertScope(scope);
+    const plan = await this.entities.planDelete(draftId, entityType, id);
+    const deletedPaths = [plan.path, ...plan.cascaded_comments.map((comment) => comment.path)];
+    const modifiedPaths = unlinkReferences ? plan.would_unlink.map((item) => item.path) : [];
+    const affectedProjects = [...new Set([...deletedPaths, ...modifiedPaths].flatMap((relative) => {
+      const project = /^projects\/(P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6})\//u.exec(relative)?.[1];
+      return project === undefined ? [] : [project];
+    }))];
+    assertAgentScope({
+      affected_projects: affectedProjects,
+      files: [
+        ...deletedPaths.map((relative) => ({ path: relative, kind: "Deleted" as const })),
+        ...modifiedPaths.map((relative) => ({ path: relative, kind: "Modified" as const })),
+      ],
+    }, scope);
+    const metadata = await this.drafts.refreshFingerprint(draftId);
+    const current = await this.entities.get(draftId, entityType, id);
+    return await this.entities.delete(draftId, metadata.owner_gitlab_user_id, entityType, id, metadata.fingerprint, current.blob_id, unlinkReferences);
+  }
+
+  async archiveEntity(entityType: string, id: string, scope: AgentScope = {}): Promise<EntityResult> {
+    const draftId = await this.draftId();
+    await this.assertScope(scope);
+    const plan = await this.entities.planUpdate(draftId, { lifecycle: "archived" }, entityType, id);
+    const affectedProject = /^projects\/(P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6})\//u.exec(plan.path)?.[1];
+    assertAgentScope({
+      affected_projects: affectedProject === undefined ? [] : [affectedProject],
+      files: [{ path: plan.path, kind: "Modified" }],
+    }, scope);
+    const metadata = await this.drafts.refreshFingerprint(draftId);
+    const current = await this.entities.get(draftId, plan.entityType, plan.id);
+    return await this.entities.archive(draftId, metadata.owner_gitlab_user_id, plan.entityType, plan.id, metadata.fingerprint, current.blob_id);
+  }
+
+  async moveTask(id: string, targetProject: string, targetMilestone: string | undefined, scope: AgentScope = {}): Promise<EntityResult> {
+    const draftId = await this.draftId();
+    await this.assertScope(scope);
+    const current = await this.entities.get(draftId, "tasks", id);
+    const sourceRelative = current.path;
+    const sourceProject = /^projects\/(P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6})\//u.exec(sourceRelative)?.[1];
+    const movedDocument = { ...current.document, project: targetProject, milestone: targetMilestone };
+    const targetRelative = entityPathForDocument(movedDocument);
+    const affectedProjects = [...new Set([sourceProject, targetProject].filter((value): value is string => value !== undefined))];
+    assertAgentScope({
+      affected_projects: affectedProjects,
+      files: [{ path: sourceRelative, kind: "Deleted" }, { path: targetRelative, kind: "Added" }],
+    }, scope);
+    const metadata = await this.drafts.refreshFingerprint(draftId);
+    return await this.entities.moveTask(draftId, metadata.owner_gitlab_user_id, id, metadata.fingerprint, current.blob_id, targetProject, targetMilestone);
+  }
+
+  async getConfiguration(kind: "statuses" | "issue-types"): Promise<EntityResult> {
+    const draftId = await this.draftId();
+    return await this.entities.getConfiguration(draftId, kind);
+  }
+
+  async updateConfiguration(kind: "statuses" | "issue-types", document: Record<string, unknown>, scope: AgentScope = {}): Promise<EntityResult> {
+    const draftId = await this.draftId();
+    await this.assertScope(scope);
+    const relative = kind === "statuses" ? ".gitpm/statuses.yaml" : ".gitpm/issue-types.yaml";
+    assertAgentScope({ affected_projects: [], files: [{ path: relative, kind: "Modified" }] }, scope);
+    const metadata = await this.drafts.refreshFingerprint(draftId);
+    const current = await this.entities.getConfiguration(draftId, kind);
+    return await this.entities.updateConfiguration(draftId, metadata.owner_gitlab_user_id, kind, metadata.fingerprint, current.blob_id, document as GitPmDocument);
+  }
+
+  async listComments(projectId: string, taskId: string): Promise<readonly CommentResult[]> {
+    const draftId = await this.draftId();
+    return await this.comments.list(draftId, projectId, taskId, this.directActor());
+  }
+
+  async createComment(projectId: string, taskId: string, body: string): Promise<CommentResult> {
+    const draftId = await this.draftId();
+    const metadata = await this.drafts.refreshFingerprint(draftId);
+    return await this.comments.create(draftId, projectId, taskId, metadata.fingerprint, body, this.directActor());
+  }
+
+  async updateComment(projectId: string, taskId: string, commentId: string, body: string): Promise<CommentResult> {
+    const draftId = await this.draftId();
+    const metadata = await this.drafts.refreshFingerprint(draftId);
+    const relative = `projects/${projectId}/comments/${taskId}/${commentId}.yaml`;
+    const blob_id = await this.drafts.fileBlobId(draftId, relative);
+    return await this.comments.update(draftId, projectId, taskId, commentId, metadata.fingerprint, blob_id, body, this.directActor());
+  }
+
+  async deleteComment(projectId: string, taskId: string, commentId: string): Promise<CommentResult> {
+    const draftId = await this.draftId();
+    const metadata = await this.drafts.refreshFingerprint(draftId);
+    const relative = `projects/${projectId}/comments/${taskId}/${commentId}.yaml`;
+    const blob_id = await this.drafts.fileBlobId(draftId, relative);
+    return await this.comments.delete(draftId, projectId, taskId, commentId, metadata.fingerprint, blob_id, this.directActor());
   }
 
   async semanticDiff(scope: AgentScope = {}): Promise<SemanticDiff> {

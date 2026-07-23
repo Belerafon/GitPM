@@ -105,4 +105,62 @@ describe("agent file and CLI workflow core", () => {
       .rejects.toMatchObject({ code: "AGENT_SCOPE_VIOLATION" });
     expect(await readFile(personPath, "utf8")).toBe(beforeInvalid);
   }, 60_000);
+
+  it("lists, shows, plans delete, deletes, archives and moves entities through the external workflow", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "gitpm-agent-entity-")); roots.push(root);
+    const source = path.join(root, "source"); const remote = path.join(root, "remote.git"); const data = path.join(root, "data");
+    await mkdir(source); await cp(demo, source, { recursive: true }); await git(source, "init", "-b", "main"); await git(source, "add", ".");
+    await git(source, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-m", "fixture");
+    await git(root, "init", "--bare", remote); await git(source, "remote", "add", "origin", remote); await git(source, "push", "origin", "main");
+    const client = new GitClient({ dataDirectory: data, remoteUrl: remote, defaultBranch: "main", allowLocalTestRemote: true, askPassPath: path.join(process.cwd(), "scripts", "git-askpass.mjs") });
+    const drafts = new DraftManager(client, data); const changes = new ChangesService(drafts, client);
+    const workflow = new AgentWorkflow(drafts, client, changes, { authorName: "agent-42", authorEmail: "42@example.test", defaultBranch: "main" });
+    const draft = await workflow.createDraft("DRF-ENTITY", "42");
+    const worktree = draft.worktree_path;
+
+    const people = await workflow.listEntities("DRF-ENTITY", "people");
+    expect(people.items.map((item) => item.path)).toEqual(expect.arrayContaining(["people/U-26-15QJP8.yaml", "people/U-26-5EBAE3.yaml"]));
+    const projectTasks = await workflow.listEntities("DRF-ENTITY", "tasks", projectId);
+    expect(projectTasks.items.every((item) => item.document.project === projectId)).toBe(true);
+    expect(projectTasks.items.length).toBeGreaterThan(0);
+
+    const shown = await workflow.getEntity("DRF-ENTITY", "people", "U-26-5EBAE3");
+    expect(shown.document).toMatchObject({ name: "Anna Petrova" });
+    expect(shown.path).toBe("people/U-26-5EBAE3.yaml");
+
+    const plan = await workflow.planDelete("DRF-ENTITY", "people", "U-26-15QJP8");
+    expect(plan).toMatchObject({ supports_unlink: true });
+    expect(plan.restrictions.length).toBeGreaterThan(0);
+    expect(plan.would_unlink.length).toBeGreaterThan(0);
+    await expect(readFile(path.join(worktree, "people", "U-26-15QJP8.yaml"), "utf8")).resolves.toBeDefined();
+
+    await expect(workflow.deleteEntity("DRF-ENTITY", "people", "U-26-15QJP8", false, { allowDelete: true }))
+      .rejects.toMatchObject({ code: "DELETE_RESTRICTED" });
+
+    const deleted = await workflow.deleteEntity("DRF-ENTITY", "people", "U-26-15QJP8", true, { allowDelete: true });
+    expect(deleted.deleted).toBe(true);
+    expect(deleted.unlinked_paths.length).toBeGreaterThan(0);
+    await expect(readFile(path.join(worktree, "people", "U-26-15QJP8.yaml"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    const teamFile = await readFile(path.join(worktree, "teams", "G-26-XB86WT.yaml"), "utf8");
+    expect(teamFile).not.toContain("U-26-15QJP8");
+
+    await expect(workflow.deleteEntity("DRF-ENTITY", "people", "U-26-15QJP8", false, { allowDelete: true }))
+      .rejects.toMatchObject({ code: "ENTITY_NOT_FOUND" });
+
+    await workflow.commitAll("DRF-ENTITY", "Delete person with unlink", { allowDelete: true });
+
+    const milestoneBefore = await workflow.getEntity("DRF-ENTITY", "milestones", "M-26-461GDJ");
+    const archived = await workflow.archiveEntity("DRF-ENTITY", "milestones", "M-26-461GDJ");
+    expect(archived.document.lifecycle).toBe("archived");
+    expect(await readFile(path.join(worktree, ...milestoneBefore.path.split("/")), "utf8")).toContain("lifecycle: archived");
+    await workflow.commitAll("DRF-ENTITY", "Archive milestone");
+
+    const moved = await workflow.moveTask("DRF-ENTITY", "T-26-G2TG9R", "P-26-MGP84K", undefined, { allowDelete: true });
+    expect(moved.document.project).toBe("P-26-MGP84K");
+    expect(moved.path).toBe("projects/P-26-MGP84K/tasks/T-26-G2TG9R.yaml");
+    await expect(readFile(path.join(worktree, ...moved.path.split("/")), "utf8")).resolves.toContain("Prepare operations");
+    await expect(readFile(path.join(worktree, "projects", "P-26-8S9HQQ", "tasks", "T-26-G2TG9R.yaml"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+
+    expect(await validateRepository(worktree)).toMatchObject({ valid: true });
+  }, 120_000);
 });

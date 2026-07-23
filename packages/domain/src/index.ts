@@ -98,6 +98,24 @@ export interface EntityUpdatePlan {
   readonly path: string;
 }
 
+export interface DeleteRestriction {
+  readonly path: string;
+  readonly entity_id?: string;
+  readonly schema?: string;
+  readonly label?: string;
+}
+
+export interface DeletePlan {
+  readonly entityType: string;
+  readonly id: string;
+  readonly schema: string;
+  readonly path: string;
+  readonly supports_unlink: boolean;
+  readonly cascaded_comments: readonly { readonly path: string; readonly id: string }[];
+  readonly restrictions: readonly DeleteRestriction[];
+  readonly would_unlink: readonly DeleteRestriction[];
+}
+
 export function canonicalEntityType(value: string): string {
   const normalized = entityTypeAliases[value] ?? value;
   if (ENTITY_TYPE_SCHEMAS[normalized] === undefined) {
@@ -271,14 +289,14 @@ export function containsEntityReference(value: unknown, id: string): boolean {
   return false;
 }
 
-function entityDisplayLabel(document: GitPmDocument): string | undefined {
+export function entityDisplayLabel(document: GitPmDocument): string | undefined {
   if (typeof document.name === "string" && document.name.trim() !== "") return document.name;
   if (typeof document.title === "string" && document.title.trim() !== "") return document.title;
   if (typeof document.id === "string") return document.id;
   return undefined;
 }
 
-function unlinkPersonReference(document: GitPmDocument, personId: string): GitPmDocument | undefined {
+export function unlinkPersonReference(document: GitPmDocument, personId: string): GitPmDocument | undefined {
   if (document.schema === "gitpm/project@1" && document.owner === personId) {
     const project: Record<string, unknown> = { ...document };
     delete project.owner;
@@ -402,7 +420,7 @@ export class EntityStore {
 
   async list(draftId: string, entityType: string, project?: string): Promise<readonly EntityResult[]> {
     const metadata = await this.drafts.getDraft(draftId);
-    const schema = ENTITY_TYPE_SCHEMAS[entityType];
+    const schema = ENTITY_TYPE_SCHEMAS[canonicalEntityType(entityType)];
     if (!schema) throw new DomainOperationError("ENTITY_TYPE_INVALID", `Unknown entity type ${entityType}`);
     const matching = (await this.index(draftId, metadata)).entities
       .filter((entity) => entity.document.schema === schema && (project === undefined || entity.document.project === project));
@@ -411,7 +429,7 @@ export class EntityStore {
   }
 
   private async find(draftId: string, metadata: DraftMetadata, entityType: string, id: string): Promise<IndexedEntity> {
-    const schema = ENTITY_TYPE_SCHEMAS[entityType];
+    const schema = ENTITY_TYPE_SCHEMAS[canonicalEntityType(entityType)];
     if (!schema) throw new DomainOperationError("ENTITY_TYPE_INVALID", `Unknown entity type ${entityType}`);
     const found = (await this.index(draftId, metadata)).bySchemaAndId.get(`${schema}:${id}`);
     if (found !== undefined) return found;
@@ -687,6 +705,51 @@ export class EntityStore {
     });
     if (movedDocument === undefined) throw new DomainOperationError("ENTITY_NOT_FOUND", `tasks/${id} not found`);
     return await this.getWithFingerprint(draftId, movedDocument, mutation.result, mutation.metadata.fingerprint);
+  }
+
+  async planDelete(draftId: string, entityType: string, id: string): Promise<DeletePlan> {
+    const metadata = await this.drafts.getDraft(draftId);
+    const found = await this.find(draftId, metadata, entityType, id);
+    const repository = await this.index(draftId, metadata);
+    const cascadedComments = found.document.schema === "gitpm/task@1"
+      ? repository.entities.filter((entity) => entity.document.schema === "gitpm/comment@1" && entity.document.task === id)
+      : [];
+    const commentPaths = new Set(cascadedComments.map((comment) => comment.relative));
+    const entitiesByPath = new Map(repository.entities.map((entity) => [entity.relative, entity.document]));
+    const restrictions = (await validateDelete(metadata.worktree_path, id))
+      .filter((restriction) => !commentPaths.has(restriction.path))
+      .map((restriction): DeleteRestriction => {
+        const document = entitiesByPath.get(restriction.path);
+        return document === undefined ? { path: restriction.path } : {
+          path: restriction.path,
+          entity_id: typeof document.id === "string" ? document.id : undefined,
+          schema: document.schema,
+          label: entityDisplayLabel(document),
+        };
+      });
+    const supportsUnlink = found.document.schema === "gitpm/person@1";
+    const wouldUnlink: DeleteRestriction[] = supportsUnlink
+      ? repository.entities.flatMap((entity) => {
+        if (entity.relative === found.relative) return [];
+        const document = unlinkPersonReference(entity.document, id);
+        return document === undefined ? [] : [{
+          path: entity.relative,
+          entity_id: typeof entity.document.id === "string" ? entity.document.id : undefined,
+          schema: entity.document.schema,
+          label: entityDisplayLabel(entity.document),
+        }];
+      })
+      : [];
+    return {
+      entityType,
+      id,
+      schema: found.document.schema,
+      path: found.relative,
+      supports_unlink: supportsUnlink,
+      cascaded_comments: cascadedComments.map((comment) => ({ path: comment.relative, id: String(comment.document.id) })),
+      restrictions,
+      would_unlink: wouldUnlink,
+    };
   }
 
   async delete(

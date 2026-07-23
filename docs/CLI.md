@@ -13,6 +13,17 @@ gitpm draft set-writer ui|external --draft <id> [--owner <id>]
 gitpm entity create [--draft <id>] --file <file> [--type <type>] [--project <id>]
 gitpm entity update [--draft <id>] --type <type> --id <entity-id> [--file <yaml-patch>] [--set <field>=<yaml-value>]... [--unset <field>]... [--project <id>]
 gitpm entity import [--draft <id>] --type <type> --format csv|yaml|jsonl (--file <file>|--path <file>) [--dry-run]
+gitpm entity list [--draft <id>] --type <type> [--project <id>]
+gitpm entity show [--draft <id>] --type <type> --id <entity-id>
+gitpm entity delete [--draft <id>] --type <type> --id <entity-id> [--unlink-references] [--dry-run] [--allow-delete] [--project <id>]
+gitpm entity archive [--draft <id>] --type <type> --id <entity-id> [--project <id>]
+gitpm entity move [--draft <id>] --type task --id <entity-id> --to-project <id> [--to-milestone <id>] [--allow-delete] [--project <id>]
+gitpm comment list --project <id> --task <id>
+gitpm comment create --project <id> --task <id> (--body <text> | --file <path>)
+gitpm comment update --project <id> --task <id> --id <comment-id> (--body <text> | --file <path>)
+gitpm comment delete --project <id> --task <id> --id <comment-id>
+gitpm config show --kind statuses|issue-types
+gitpm config update --kind statuses|issue-types [--file <yaml>] [--set <field>=<yaml-value>]... [--unset <field>]
 gitpm schema list
 gitpm schema show <type> [--example]
 gitpm format [--draft <id>] [--project <id>] [--check]
@@ -54,7 +65,31 @@ domain schemas (включая `comment`) и три repository configuration sch
 возвращает digest набора схем и optional build commit из `GITPM_BUILD_COMMIT`, что позволяет
 обнаруживать устаревшую установленную сборку.
 
-В `direct` mode команды `status`, `entity create`, `entity update`, `entity import`, `format`, `validate`, `diff`, `commit` и
+`entity list` возвращает все сущности указанного типа (`--type`), опционально отфильтрованные
+по Project (`--project`). `entity show` возвращает одну сущность по `--type` и `--id`.
+
+`entity delete` физически удаляет файл сущности. При удалении Task автоматически каскадно
+удаляются комментарии этой задачи. `--dry-run` выполняет превью без записи: возвращает
+список ссылающихся документов (`restrictions`), каскадных комментариев (`cascaded_comments`)
+и документов, которые будут отвязаны (`would_unlink`, только для Person). `--unlink-references`
+удаляет ссылки на Person перед удалением (поддерживается только для `person`; другие типы
+вызывают `DELETE_UNLINK_UNSUPPORTED`). Если сущность имеет ссылки и `--unlink-references`
+не указан, возникает `DELETE_RESTRICTED` со структурированным списком затронутых файлов.
+
+`entity archive` устанавливает `lifecycle: archived` (обратимо); файл остаётся, ссылки
+остаются валидными.
+
+`entity move` перемещает Task (и её комментарии) в другой Project и опционально другой
+Milestone. Cross-project ссылки (`depends_on`, `parent`) блокируются validation.
+
+`comment` управляет комментариями к Task: Markdown с упоминаниями `@[Name](person:U-...)`,
+soft-delete (tombstone остаётся в Git history). Доступно в direct mode.
+
+`config show/update` читает и обновляет конфигурацию репозитория (`.gitpm/statuses.yaml`,
+`.gitpm/issue-types.yaml`). Доступно в direct mode.
+
+В `direct` mode команды `status`, `entity create`, `entity update`, `entity import`, `entity list`,
+`entity show`, `entity delete`, `entity archive`, `entity move`, `comment`, `config`, `format`, `validate`, `diff`, `commit` и
 `push` работают с выбранным checkout без `--draft`. В `worktree` mode для них требуется
 `--draft <id>`; `mr create` доступна только в `worktree` mode. `--project <id>` проверяет, что
 все текущие business changes принадлежат указанному Project, а физическое удаление требует

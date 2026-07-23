@@ -419,4 +419,110 @@ describe("CLI direct mode", () => {
     expect(JSON.parse((await run(["commit", "--all", "-m", "x", "--json"])).output)).toMatchObject({ code: "CLI_DIRECT_CONFIGURATION_REQUIRED" });
     expect(JSON.parse((await run(["push", "--json"])).output)).toMatchObject({ code: "CLI_DIRECT_CONFIGURATION_REQUIRED" });
   });
+
+  it("lists and shows entities without --draft", async () => {
+    const { direct } = await directFixture();
+    const people = await run(["entity", "list", "--type", "person", "--json"], process.cwd(), { direct });
+    expect(people.exitCode).toBe(0);
+    const peoplePayload = JSON.parse(people.output);
+    expect(peoplePayload.items.map((item: { id: string }) => item.id)).toEqual(expect.arrayContaining(["U-26-15QJP8", "U-26-5EBAE3"]));
+
+    const tasks = await run(["entity", "list", "--type", "task", "--project", "P-26-MGP84K", "--json"], process.cwd(), { direct });
+    expect(tasks.exitCode).toBe(0);
+    const tasksPayload = JSON.parse(tasks.output);
+    expect(tasksPayload.items.every((item: { path: string }) => item.path.startsWith("projects/P-26-MGP84K/"))).toBe(true);
+    expect(tasksPayload.items.length).toBeGreaterThan(0);
+
+    const shown = await run(["entity", "show", "--type", "person", "--id", "U-26-15QJP8", "--json"], process.cwd(), { direct });
+    expect(shown.exitCode).toBe(0);
+    expect(JSON.parse(shown.output)).toMatchObject({ ok: true, document: { id: "U-26-15QJP8", name: "Boris Sokolov" }, path: "people/U-26-15QJP8.yaml" });
+
+    const missing = await run(["entity", "show", "--type", "person", "--id", "U-99-ZZZZZZ", "--json"], process.cwd(), { direct });
+    expect(JSON.parse(missing.output)).toMatchObject({ ok: false, code: "ENTITY_NOT_FOUND" });
+  });
+
+  it("previews delete impact with --dry-run without writing", async () => {
+    const { direct, checkout } = await directFixture();
+    const preview = await run(["entity", "delete", "--type", "person", "--id", "U-26-15QJP8", "--dry-run", "--json"], process.cwd(), { direct });
+    expect(preview.exitCode).toBe(0);
+    const payload = JSON.parse(preview.output);
+    expect(payload).toMatchObject({ ok: true, dry_run: true, supports_unlink: true, would_be_restricted: true });
+    expect(payload.restrictions.length).toBeGreaterThan(0);
+    expect(payload.would_unlink.length).toBeGreaterThan(0);
+    expect(payload.restrictions).toEqual(expect.arrayContaining([expect.objectContaining({ label: "Core team" })]));
+    await expect(readFile(path.join(checkout, "people", "U-26-15QJP8.yaml"), "utf8")).resolves.toBeDefined();
+  });
+
+  it("delete requires --allow-delete, reports DELETE_RESTRICTED, then unlinks references on confirm", async () => {
+    const { direct, checkout } = await directFixture();
+    const withoutAllowDelete = await run(["entity", "delete", "--type", "person", "--id", "U-26-15QJP8", "--unlink-references", "--json"], process.cwd(), { direct });
+    expect(JSON.parse(withoutAllowDelete.output)).toMatchObject({ ok: false, code: "AGENT_DELETE_CONFIRMATION_REQUIRED" });
+
+    const restricted = await run(["entity", "delete", "--type", "person", "--id", "U-26-15QJP8", "--allow-delete", "--json"], process.cwd(), { direct });
+    expect(JSON.parse(restricted.output)).toMatchObject({ ok: false, code: "DELETE_RESTRICTED" });
+    expect(JSON.parse(restricted.output).details.length).toBeGreaterThan(0);
+
+    const deleted = await run(["entity", "delete", "--type", "person", "--id", "U-26-15QJP8", "--unlink-references", "--allow-delete", "--json"], process.cwd(), { direct });
+    expect(deleted.exitCode).toBe(0);
+    const payload = JSON.parse(deleted.output);
+    expect(payload).toMatchObject({ ok: true, code: "OK", deleted: true, path: "people/U-26-15QJP8.yaml" });
+    expect(payload.unlinked_paths.length).toBeGreaterThan(0);
+    await expect(readFile(path.join(checkout, "people", "U-26-15QJP8.yaml"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    const teamFile = await readFile(path.join(checkout, "teams", "G-26-XB86WT.yaml"), "utf8");
+    expect(teamFile).not.toContain("U-26-15QJP8");
+  });
+
+  it("archives an entity and moves a task between projects", async () => {
+    const { direct, checkout } = await directFixture();
+    const archived = await run(["entity", "archive", "--type", "milestone", "--id", "M-26-461GDJ", "--json"], process.cwd(), { direct });
+    expect(archived.exitCode).toBe(0);
+    expect(JSON.parse(archived.output)).toMatchObject({ ok: true, code: "OK", document: { lifecycle: "archived" } });
+    await expect(readFile(path.join(checkout, "projects", "P-26-MGP84K", "milestones", "M-26-461GDJ.yaml"), "utf8")).resolves.toContain("lifecycle: archived");
+
+    const moved = await run(["entity", "move", "--type", "task", "--id", "T-26-G2TG9R", "--to-project", "P-26-MGP84K", "--allow-delete", "--json"], process.cwd(), { direct });
+    expect(moved.exitCode).toBe(0);
+    const movePayload = JSON.parse(moved.output);
+    expect(movePayload).toMatchObject({ ok: true, path: "projects/P-26-MGP84K/tasks/T-26-G2TG9R.yaml", document: { project: "P-26-MGP84K" } });
+    await expect(readFile(path.join(checkout, "projects", "P-26-MGP84K", "tasks", "T-26-G2TG9R.yaml"), "utf8")).resolves.toContain("Prepare operations");
+    await expect(readFile(path.join(checkout, "projects", "P-26-8S9HQQ", "tasks", "T-26-G2TG9R.yaml"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("creates, lists, updates and deletes comments", async () => {
+    const { direct, checkout } = await directFixture();
+    const created = await run(["comment", "create", "--project", "P-26-MGP84K", "--task", "T-26-P9G3P8", "--body", "Please review @[Anna Petrova](person:U-26-5EBAE3)", "--json"], process.cwd(), { direct });
+    expect(created.exitCode).toBe(0);
+    const createdPayload = JSON.parse(created.output);
+    expect(createdPayload.document.state).toBe("active");
+    expect(createdPayload.document.mentions).toEqual(expect.arrayContaining([expect.objectContaining({ person: "U-26-5EBAE3" })]));
+
+    const listed = await run(["comment", "list", "--project", "P-26-MGP84K", "--task", "T-26-P9G3P8", "--json"], process.cwd(), { direct });
+    expect(JSON.parse(listed.output).items).toHaveLength(1);
+
+    const commentId = createdPayload.document.id;
+    const updated = await run(["comment", "update", "--project", "P-26-MGP84K", "--task", "T-26-P9G3P8", "--id", commentId, "--body", "Updated text", "--json"], process.cwd(), { direct });
+    expect(updated.exitCode).toBe(0);
+    expect(JSON.parse(updated.output).document.body_markdown).toBe("Updated text");
+
+    const deleted = await run(["comment", "delete", "--project", "P-26-MGP84K", "--task", "T-26-P9G3P8", "--id", commentId, "--json"], process.cwd(), { direct });
+    expect(deleted.exitCode).toBe(0);
+    expect(JSON.parse(deleted.output)).toMatchObject({ ok: true });
+    expect(JSON.parse(deleted.output).document.state).toBe("deleted");
+    expect(JSON.parse(deleted.output).document.body_markdown).toBeUndefined();
+
+    const commentPath = path.join(checkout, ...createdPayload.path.split("/"));
+    expect(await readFile(commentPath, "utf8")).toContain("state: deleted");
+  });
+
+  it("shows and updates repository configuration", async () => {
+    const { direct, checkout } = await directFixture();
+    const shown = await run(["config", "show", "--kind", "statuses", "--json"], process.cwd(), { direct });
+    expect(shown.exitCode).toBe(0);
+    expect(JSON.parse(shown.output)).toMatchObject({ ok: true, document: { schema: "gitpm/statuses@1" } });
+
+    const updated = await run(["config", "update", "--kind", "issue-types", "--set", "issue_types=[{slug: task, title: Task, color: blue, active: true}, {slug: bug, title: Defect, color: red, active: true}]", "--json"], process.cwd(), { direct });
+    expect(updated.exitCode).toBe(0);
+    const configPath = path.join(checkout, ".gitpm", "issue-types.yaml");
+    const content = await readFile(configPath, "utf8");
+    expect(content).toContain("title: Defect");
+  });
 });

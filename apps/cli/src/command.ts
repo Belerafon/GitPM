@@ -24,7 +24,7 @@ interface CommonOptions {
 }
 
 type CliAgent = Pick<AgentWorkflow, "assertScope" | "commitAll" | "createDraft" | "createMergeRequest" | "openDraft" | "push" | "semanticDiff" | "setWriterMode" | "status">
-  & Partial<Pick<AgentWorkflow, "createEntity" | "createEntities" | "updateEntity">>;
+  & Partial<Pick<AgentWorkflow, "createEntity" | "createEntities" | "updateEntity" | "listEntities" | "getEntity" | "planDelete" | "deleteEntity" | "archiveEntity" | "moveTask">>;
 
 export interface CliDependencies {
   readonly agent?: CliAgent;
@@ -106,7 +106,7 @@ function render(json: boolean, payload: Record<string, unknown>, human: string):
 }
 
 const SCHEMA_DIRECTORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../schemas/v1");
-const ROOT_USAGE = "Usage: gitpm <init|status|draft|entity create|entity update|entity import|schema|format|validate|diff --semantic|commit --all|push|mr create|doctor> [options]";
+const ROOT_USAGE = "Usage: gitpm <init|status|draft|entity create|entity update|entity import|entity list|entity show|entity delete|entity archive|entity move|comment|config|schema|format|validate|diff --semantic|commit --all|push|mr create|doctor> [options]";
 
 const commandHelp: Readonly<Record<string, string>> = {
   root: [
@@ -119,12 +119,25 @@ const commandHelp: Readonly<Record<string, string>> = {
     "  gitpm entity create [--draft <id>] --file <yaml> [--type <type>] [--project <id>] [--json]",
     "  gitpm entity update [--draft <id>] --type <type> --id <entity-id> [--file <yaml-patch>] [--set <field>=<yaml-value>]... [--unset <field>]... [--project <id>] [--json]",
     "  gitpm entity import [--draft <id>] --type <type> --format <csv|yaml|jsonl> (--file <path>|--path <path>) [--dry-run] [--json]",
+    "  gitpm entity list [--draft <id>] --type <type> [--project <id>] [--json]",
+    "  gitpm entity show [--draft <id>] --type <type> --id <entity-id> [--json]",
+    "  gitpm entity delete [--draft <id>] --type <type> --id <entity-id> [--unlink-references] [--dry-run] [--allow-delete] [--project <id>] [--json]",
+    "  gitpm entity archive [--draft <id>] --type <type> --id <entity-id> [--project <id>] [--json]",
+    "  gitpm entity move [--draft <id>] --type task --id <entity-id> --to-project <id> [--to-milestone <id>] [--allow-delete] [--project <id>] [--json]",
     "",
     "create accepts a YAML mapping. schema, id and lifecycle may be omitted when --type is supplied.",
     "Person calendar may be omitted and is materialized from repository default_calendar.",
     "A supplied valid ID is preserved; otherwise GitPM generates <prefix>-<UTC YY>-<6 Crockford Base32>.",
     "update applies a YAML field patch from --file and/or repeatable --set/--unset options. Entity ID, schema and owning Project are immutable.",
     "import is atomic: the complete batch is validated once and rolled back on any error.",
+    "list returns every entity of a type (optionally filtered by --project).",
+    "show returns a single entity document with its canonical path.",
+    "delete removes the entity file. Task deletion cascades to that task's comments.",
+    "  --dry-run returns the reference impact (restrictions, cascade and unlink preview) without writing.",
+    "  --unlink-references removes references to a person before deleting (people only; other types raise DELETE_UNLINK_UNSUPPORTED).",
+    "  Restricted references raise DELETE_RESTRICTED with structured details listing every affected item.",
+    "archive sets lifecycle to archived (reversible); the entity file stays and references remain valid.",
+    "move relocates a task (and its comments) to another project and optional milestone.",
   ].join("\n"),
   schema: [
     "Usage:",
@@ -141,6 +154,23 @@ const commandHelp: Readonly<Record<string, string>> = {
   mr: "Usage: gitpm mr create --draft <id> --owner <id> --title <title> [--description <text>] [--json]",
   init: "Usage: gitpm init [path] [--json]",
   doctor: "Usage: gitpm doctor [--json]",
+  comment: [
+    "Usage:",
+    "  gitpm comment list --project <id> --task <id> [--json]",
+    "  gitpm comment create --project <id> --task <id> (--body <text> | --file <path>) [--json]",
+    "  gitpm comment update --project <id> --task <id> --id <comment-id> (--body <text> | --file <path>) [--json]",
+    "  gitpm comment delete --project <id> --task <id> --id <comment-id> [--json]",
+    "",
+    "Comments support Markdown with @[Name](person:U-...) mentions.",
+    "Delete is a soft-delete (tombstone remains in Git history). Available in direct mode.",
+  ].join("\n"),
+  config: [
+    "Usage:",
+    "  gitpm config show --kind statuses|issue-types [--json]",
+    "  gitpm config update --kind statuses|issue-types [--file <yaml>] [--set <field>=<yaml-value>]... [--unset <field>] [--json]",
+    "",
+    "Reads or updates repository configuration documents in .gitpm/. Available in direct mode.",
+  ].join("\n"),
 };
 
 function requestedEntityType(args: readonly string[]): string | undefined {
@@ -365,16 +395,116 @@ async function runCommit(args: readonly string[], dependencies: CliDependencies)
   return { exitCode: 0, output: render(args.includes("--json"), { ok: true, code: "OK", ...result }, `Committed all changes: ${result.commit}`) };
 }
 
+function entitySummary(document: Readonly<Record<string, unknown>>): Record<string, unknown> {
+  const summary: Record<string, unknown> = {
+    id: typeof document.id === "string" ? document.id : undefined,
+    schema: typeof document.schema === "string" ? document.schema : undefined,
+    lifecycle: typeof document.lifecycle === "string" ? document.lifecycle : undefined,
+  };
+  if (typeof document.name === "string") summary.name = document.name;
+  if (typeof document.title === "string") summary.title = document.title;
+  return summary;
+}
+
 async function runEntity(args: readonly string[], cwd: string, dependencies: CliDependencies): Promise<CliResult> {
   const action = args[0] === "bulk-import" ? "import" : args[0];
-  if (action !== "create" && action !== "update" && action !== "import") throw new RepositoryFormatError("CLI_USAGE", "entity requires create, update or import");
+  const validActions = ["create", "update", "import", "list", "show", "delete", "archive", "move"];
+  if (typeof action !== "string" || !validActions.includes(action)) throw new RepositoryFormatError("CLI_USAGE", "entity requires create, update, import, list, show, delete, archive or move");
   const draftId = flagValue(args, "--draft");
   const agent = args.includes("--draft") ? requireAgent(dependencies) : undefined;
   if (agent !== undefined && action === "create" && agent.createEntity === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Entity creation is unavailable");
   if (agent !== undefined && action === "import" && agent.createEntities === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Atomic entity import is unavailable");
   if (agent !== undefined && action === "update" && agent.updateEntity === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Entity update is unavailable");
+  if (agent !== undefined && action === "list" && agent.listEntities === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Entity list is unavailable");
+  if (agent !== undefined && action === "show" && agent.getEntity === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Entity show is unavailable");
+  if (agent !== undefined && action === "delete" && !args.includes("--dry-run") && agent.deleteEntity === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Entity delete is unavailable");
+  if (agent !== undefined && (action === "delete" && args.includes("--dry-run")) && agent.planDelete === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Entity delete preview is unavailable");
+  if (agent !== undefined && action === "archive" && agent.archiveEntity === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Entity archive is unavailable");
+  if (agent !== undefined && action === "move" && agent.moveTask === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Entity move is unavailable");
   const direct = agent === undefined ? requireDirect(dependencies) : undefined;
   const entityType = requestedEntityType(args);
+  const json = args.includes("--json");
+
+  if (action === "list") {
+    const requestedType = required(entityType, "--type");
+    const project = flagValue(args, "--project");
+    const result = agent?.listEntities === undefined
+      ? await direct!.listEntities(requestedType, project === undefined ? undefined : project)
+      : await agent.listEntities(required(draftId, "--draft"), requestedType, project === undefined ? undefined : project);
+    const items = result.items.map((item) => ({ ...entitySummary(item.document), path: item.path }));
+    return {
+      exitCode: 0,
+      output: render(json, { ok: true, code: "OK", items, draft_fingerprint: result.draft_fingerprint }, `${items.length} ${requestedType} entit${items.length === 1 ? "y" : "ies"}`),
+    };
+  }
+
+  if (action === "show") {
+    const requestedType = required(entityType, "--type");
+    const requestedId = required(flagValue(args, "--id"), "--id");
+    const result = agent?.getEntity === undefined
+      ? await direct!.getEntity(requestedType, requestedId)
+      : await agent.getEntity(required(draftId, "--draft"), requestedType, requestedId);
+    return {
+      exitCode: 0,
+      output: render(json, { ok: true, code: "OK", document: result.document, path: result.path, draft_fingerprint: result.draft_fingerprint }, `${result.path}`),
+    };
+  }
+
+  if (action === "delete") {
+    const requestedType = required(entityType, "--type");
+    const requestedId = required(flagValue(args, "--id"), "--id");
+    const dryRun = args.includes("--dry-run");
+    if (dryRun) {
+      const plan = agent?.planDelete === undefined
+        ? await direct!.planDelete(requestedType, requestedId)
+        : await agent.planDelete(required(draftId, "--draft"), requestedType, requestedId);
+      const restricted = plan.restrictions.length > 0 && !args.includes("--unlink-references");
+      const human = restricted
+        ? `Would be blocked by DELETE_RESTRICTED: ${plan.restrictions.length} reference(s)`
+        : `Would delete ${plan.path}${plan.cascaded_comments.length > 0 ? ` and ${plan.cascaded_comments.length} comment(s)` : ""}${plan.supports_unlink && args.includes("--unlink-references") ? `, unlinking ${plan.would_unlink.length} reference(s)` : ""}`;
+      return {
+        exitCode: restricted ? 0 : 0,
+        output: render(json, { ok: true, code: "OK", dry_run: true, ...plan, ...(restricted ? { would_be_restricted: true } : {}) }, human),
+      };
+    }
+    const unlink = args.includes("--unlink-references");
+    const deleted = agent?.deleteEntity === undefined
+      ? await direct!.deleteEntity(requestedType, requestedId, unlink, agentScope(args))
+      : await agent.deleteEntity(required(draftId, "--draft"), requestedType, requestedId, unlink, agentScope(args));
+    const unlinked = deleted.unlinked_paths.length > 0 ? `, unlinked ${deleted.unlinked_paths.length} reference(s)` : "";
+    return {
+      exitCode: 0,
+      output: render(json, { ok: true, code: "OK", ...deleted }, `Deleted ${deleted.path}${unlinked}`),
+    };
+  }
+
+  if (action === "archive") {
+    const requestedType = required(entityType, "--type");
+    const requestedId = required(flagValue(args, "--id"), "--id");
+    const archived = agent?.archiveEntity === undefined
+      ? await direct!.archiveEntity(requestedType, requestedId, agentScope(args))
+      : await agent.archiveEntity(required(draftId, "--draft"), requestedType, requestedId, agentScope(args));
+    return {
+      exitCode: 0,
+      output: render(json, { ok: true, code: "OK", path: archived.path, draft_fingerprint: archived.draft_fingerprint, document: archived.document }, `Archived ${archived.path}`),
+    };
+  }
+
+  if (action === "move") {
+    const requestedType = required(entityType, "--type");
+    if (requestedType !== "tasks" && requestedType !== "task") throw new RepositoryFormatError("CLI_USAGE", "entity move supports tasks only");
+    const requestedId = required(flagValue(args, "--id"), "--id");
+    const targetProject = required(flagValue(args, "--to-project"), "--to-project");
+    const targetMilestone = flagValue(args, "--to-milestone");
+    const moved = agent?.moveTask === undefined
+      ? await direct!.moveTask(requestedId, targetProject, targetMilestone === undefined ? undefined : targetMilestone, agentScope(args))
+      : await agent.moveTask(required(draftId, "--draft"), requestedId, targetProject, targetMilestone === undefined ? undefined : targetMilestone, agentScope(args));
+    return {
+      exitCode: 0,
+      output: render(json, { ok: true, code: "OK", path: moved.path, draft_fingerprint: moved.draft_fingerprint, document: moved.document }, `Moved to ${moved.path}`),
+    };
+  }
+
   if (action === "update") {
     const requestedType = required(entityType, "--type");
     const requestedId = required(flagValue(args, "--id"), "--id");
@@ -384,7 +514,7 @@ async function runEntity(args: readonly string[], cwd: string, dependencies: Cli
       : await agent.updateEntity(required(draftId, "--draft"), patch, requestedType, requestedId, agentScope(args));
     return {
       exitCode: 0,
-      output: render(args.includes("--json"), { ok: true, code: "OK", ...updated }, `Updated ${updated.path}`),
+      output: render(json, { ok: true, code: "OK", ...updated }, `Updated ${updated.path}`),
     };
   }
   const file = required(flagValue(args, "--file") ?? flagValue(args, "--path"), "--file or --path");
@@ -417,7 +547,7 @@ async function runEntity(args: readonly string[], cwd: string, dependencies: Cli
     const items = imported.items.map((item) => ({ ...item, row: item.source_index + rowOffset }));
     return {
       exitCode: 0,
-      output: render(args.includes("--json"), { ok: true, code: "OK", ...imported, items }, `${dryRun ? "Validated" : "Imported"} ${items.length} entities`),
+      output: render(json, { ok: true, code: "OK", ...imported, items }, `${dryRun ? "Validated" : "Imported"} ${items.length} entities`),
     };
   }
   const document = parseEntityMapping(text, source);
@@ -426,7 +556,7 @@ async function runEntity(args: readonly string[], cwd: string, dependencies: Cli
     : await agent.createEntity(required(draftId, "--draft"), document, agentScope(args), entityType);
   return {
     exitCode: 0,
-    output: render(args.includes("--json"), { ok: true, code: "OK", ...created }, `Created ${created.path}`),
+    output: render(json, { ok: true, code: "OK", ...created }, `Created ${created.path}`),
   };
 }
 
@@ -440,6 +570,60 @@ async function runMr(args: readonly string[], dependencies: CliDependencies): Pr
   const draftId = required(flagValue(args, "--draft"), "--draft"); const owner = required(flagValue(args, "--owner"), "--owner"); const title = required(flagValue(args, "--title"), "--title");
   const result = await requireAgent(dependencies).createMergeRequest(draftId, owner, title, flagValue(args, "--description"));
   return { exitCode: 0, output: render(args.includes("--json"), { ok: true, code: "OK", merge_request: result }, `Created Merge Request !${result.iid}: ${result.web_url}`) };
+}
+
+async function runComment(args: readonly string[], cwd: string, dependencies: CliDependencies): Promise<CliResult> {
+  const action = args[0];
+  const validActions = ["list", "create", "update", "delete"];
+  if (typeof action !== "string" || !validActions.includes(action)) throw new RepositoryFormatError("CLI_USAGE", "comment requires list, create, update or delete");
+  const direct = requireDirect(dependencies);
+  const projectId = required(flagValue(args, "--project"), "--project");
+  const taskId = required(flagValue(args, "--task"), "--task");
+  const json = args.includes("--json");
+  if (action === "list") {
+    const result = await direct.listComments(projectId, taskId);
+    const items = result.map((item) => ({ id: String(item.document.id), state: item.document.state, author: item.document.author.display_name, ...(typeof item.document.body_markdown === "string" ? { excerpt: item.document.body_markdown.slice(0, 120) } : {}), path: item.path }));
+    return { exitCode: 0, output: render(json, { ok: true, code: "OK", items }, `${items.length} comment(s)`) };
+  }
+  if (action === "delete") {
+    const commentId = required(flagValue(args, "--id"), "--id");
+    const deleted = await direct.deleteComment(projectId, taskId, commentId);
+    return { exitCode: 0, output: render(json, { ok: true, code: "OK", document: deleted.document, path: deleted.path }, `Deleted ${deleted.path}`) };
+  }
+  const commentId = action === "create" ? undefined : required(flagValue(args, "--id"), "--id");
+  const bodyFile = flagValue(args, "--file") ?? flagValue(args, "--path");
+  const bodyInline = flagValue(args, "--body");
+  const body = bodyInline ?? (bodyFile === undefined ? undefined : await readFile(path.resolve(cwd, bodyFile), "utf8"));
+  if (body === undefined) throw new RepositoryFormatError("CLI_USAGE", "comment requires --body or --file");
+  if (action === "create") {
+    const created = await direct.createComment(projectId, taskId, body);
+    return { exitCode: 0, output: render(json, { ok: true, code: "OK", document: created.document, path: created.path }, `Created ${created.path}`) };
+  }
+  const updated = await direct.updateComment(projectId, taskId, commentId!, body);
+  return { exitCode: 0, output: render(json, { ok: true, code: "OK", document: updated.document, path: updated.path }, `Updated ${updated.path}`) };
+}
+
+async function runConfig(args: readonly string[], cwd: string, dependencies: CliDependencies): Promise<CliResult> {
+  const action = args[0];
+  if (action !== "show" && action !== "update") throw new RepositoryFormatError("CLI_USAGE", "config requires show or update");
+  const direct = requireDirect(dependencies);
+  const kind = required(flagValue(args, "--kind"), "--kind");
+  if (kind !== "statuses" && kind !== "issue-types") throw new RepositoryFormatError("CLI_USAGE", "--kind must be statuses or issue-types");
+  const json = args.includes("--json");
+  if (action === "show") {
+    const result = await direct.getConfiguration(kind);
+    return { exitCode: 0, output: render(json, { ok: true, code: "OK", document: result.document, path: result.path }, result.path) };
+  }
+  const current = await direct.getConfiguration(kind);
+  const patch = await entityUpdatePatch(args, cwd);
+  const next: Record<string, unknown> = { ...current.document };
+  for (const [field, value] of Object.entries(patch)) {
+    if (value === null) delete next[field];
+    else next[field] = value;
+  }
+  next.schema = current.document.schema;
+  const updated = await direct.updateConfiguration(kind, next);
+  return { exitCode: 0, output: render(json, { ok: true, code: "OK", document: updated.document, path: updated.path }, `Updated ${updated.path}`) };
 }
 
 async function runDoctor(args: readonly string[], cwd: string): Promise<CliResult> {
@@ -641,6 +825,8 @@ export async function run(args: readonly string[], cwd = process.cwd(), dependen
       return await runDirectPush(commandArgs, dependencies);
     }
     if (command === "mr") return await runMr(commandArgs, dependencies);
+    if (command === "comment") return await runComment(commandArgs, cwd, dependencies);
+    if (command === "config") return await runConfig(commandArgs, cwd, dependencies);
     if (command === "doctor" && direct !== undefined) { await direct.prepare(); return await runDoctor([...directRootArgs, ...commandArgs], cwd); }
     if (command === "doctor") return await runDoctor(commandArgs, cwd);
     if (command === "init") return await runInit(commandArgs, cwd);
