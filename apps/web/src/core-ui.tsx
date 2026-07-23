@@ -19,6 +19,90 @@ export interface ConfigValue { readonly slug: string; readonly title: string; re
 interface MutationFeedback { readonly kind: "saving" | "saved" | "undone"; readonly text: string }
 type CoreCreateEditor = "project" | "milestone" | "task" | null;
 const configValues = (document: GitPmDocument, key: "statuses" | "issue_types"): ConfigValue[] => Array.isArray(document[key]) ? (document[key] as unknown[]).filter((item): item is ConfigValue => typeof item === "object" && item !== null && typeof (item as ConfigValue).slug === "string" && typeof (item as ConfigValue).title === "string" && (item as ConfigValue).active === true) : [];
+const NEW_PROJECT_GROUP = "__new__";
+
+export interface ProjectGroupSection {
+  readonly key: string;
+  readonly title: string;
+  readonly projects: readonly EntityResult[];
+  readonly isUngrouped: boolean;
+}
+
+export function existingProjectGroups(projects: readonly EntityResult[], locale: Locale): string[] {
+  return [...new Set(projects.map((project) => value(project.document, "group").trim()).filter(Boolean))]
+    .sort((left, right) => left.localeCompare(right, locale));
+}
+
+export function groupProjects(projects: readonly EntityResult[], locale: Locale, ungroupedTitle: string): ProjectGroupSection[] {
+  const named = new Map<string, EntityResult[]>();
+  const ungrouped: EntityResult[] = [];
+  for (const project of projects) {
+    const group = value(project.document, "group").trim();
+    if (group === "") ungrouped.push(project);
+    else named.set(group, [...(named.get(group) ?? []), project]);
+  }
+  const byName = (left: EntityResult, right: EntityResult) =>
+    value(left.document, "name").localeCompare(value(right.document, "name"), locale);
+  const sections = [...named.entries()]
+    .sort(([left], [right]) => left.localeCompare(right, locale))
+    .map(([title, items]) => ({
+      key: `group:${title}`,
+      title,
+      projects: [...items].sort(byName),
+      isUngrouped: false,
+    }));
+  if (ungrouped.length > 0) {
+    sections.push({
+      key: "ungrouped",
+      title: ungroupedTitle,
+      projects: [...ungrouped].sort(byName),
+      isUngrouped: true,
+    });
+  }
+  return sections;
+}
+
+function groupOptionValue(group: string, groups: readonly string[]): string {
+  const index = groups.indexOf(group.trim());
+  return index < 0 ? "" : `group:${index}`;
+}
+
+function projectGroupFromForm(data: FormData, groups: readonly string[]): { readonly valid: boolean; readonly group: string; readonly duplicate: boolean } {
+  const selected = String(data.get("group") ?? "");
+  if (selected === "") return { valid: true, group: "", duplicate: false };
+  if (selected === NEW_PROJECT_GROUP) {
+    const group = String(data.get("newGroup") ?? "").trim();
+    if (group === "" || [...group].length > 100) return { valid: false, group, duplicate: false };
+    const duplicate = groups.includes(group);
+    return { valid: !duplicate, group, duplicate };
+  }
+  const match = /^group:(\d+)$/u.exec(selected);
+  const group = match === null ? undefined : groups[Number(match[1])];
+  return group === undefined ? { valid: false, group: "", duplicate: false } : { valid: true, group, duplicate: false };
+}
+
+function ProjectGroupField({ currentGroup = "", disabled, groups, t }: {
+  readonly currentGroup?: string;
+  readonly disabled: boolean;
+  readonly groups: readonly string[];
+  readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string;
+}) {
+  const [selected, setSelected] = useState(groupOptionValue(currentGroup, groups));
+  const [newGroup, setNewGroup] = useState("");
+  useEffect(() => {
+    setSelected(groupOptionValue(currentGroup, groups));
+    setNewGroup("");
+  }, [currentGroup, groups]);
+  const duplicate = selected === NEW_PROJECT_GROUP && groups.includes(newGroup.trim());
+  return <>
+    <label>{t("core.group")}<select disabled={disabled} name="group" onChange={(event) => setSelected(event.target.value)} value={selected}>
+      <option value="">{t("core.noGroup")}</option>
+      {groups.map((group, index) => <option key={group} value={`group:${index}`}>{group}</option>)}
+      <option value={NEW_PROJECT_GROUP}>{t("core.createNewGroup")}</option>
+    </select></label>
+    {selected === NEW_PROJECT_GROUP && <label>{t("core.newGroupName")}<input disabled={disabled} maxLength={100} name="newGroup" onChange={(event) => setNewGroup(event.target.value)} pattern=".*\S.*" required value={newGroup} />{duplicate && <small className="field-error" role="alert">{t("core.groupAlreadyExists")}</small>}</label>}
+  </>;
+}
 
 export { newEntityId } from "@gitpm/shared";
 
@@ -141,6 +225,11 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
   const activeProjects = projects.filter((item) => item.document.lifecycle === "active");
   const activeMilestones = milestones.filter((item) => item.document.lifecycle === "active");
   const activeTasks = tasks.filter((item) => item.document.lifecycle === "active");
+  const existingGroups = useMemo(() => existingProjectGroups(projects, locale), [projects, locale]);
+  const projectGroupSections = useMemo(
+    () => groupProjects(projects.filter((item) => item.document.lifecycle === "active"), locale, message(locale, "core.ungroupedProjects")),
+    [projects, locale],
+  );
   const statuses = useMemo(() => [...new Set([...statusOptions.map((item) => item.slug), ...activeTasks.map((item) => value(item.document, "status"))])], [activeTasks, statusOptions]);
   const statusTitle = (slug: string) => statusOptions.find((item) => item.slug === slug)?.title ?? slug;
   const confirmDelete = (name: string) => confirmAction(t("core.deleteConfirm", { name }));
@@ -154,6 +243,14 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
   const openPerson = (personId: string) => onNavigate("people", { personId });
   const taskQuery = (status = filter, milestone = milestoneFilter) => ({ ...(status === "" ? {} : { status: [status] }), ...(milestone === "" ? {} : { milestone: [milestone] }) });
   const projectRisk = (project: EntityResult) => { const due = value(project.document, "due"); if (!/^\d{4}-\d{2}-\d{2}$/u.test(due)) return "unknown" as const; const days = Math.ceil((Date.parse(`${due}T00:00:00Z`) - Date.now()) / 86_400_000); return days < 0 ? "overdue" as const : days <= 14 ? "near" as const : "onTrack" as const; };
+  const renderProjectRegisterHeader = () => <div className="project-register-head"><span>{t("core.projects")}</span><span>{t("core.status")}</span><span>{t("core.owner")}</span><span>{t("core.tasks")}</span><span>{t("core.milestones")}</span><span>{t("core.due")}</span><span>{t("core.risk")}</span></div>;
+  const renderProjectRow = (project: EntityResult) => {
+    const projectTasks = activeTasks.filter((item) => item.document.project === project.document.id).length;
+    const projectMilestones = activeMilestones.filter((item) => item.document.project === project.document.id).length;
+    const due = value(project.document, "due");
+    const risk = projectRisk(project);
+    return <button className="project-register-row" key={project.document.id} onClick={() => onNavigate("projects", { projectId: project.document.id })}><span><strong>{value(project.document, "name")}</strong><code>{project.document.id}</code><small>{value(project.document, "description_markdown") || t("core.noDescription")}</small></span><span><span className="state open">{statusTitle(value(project.document, "status"))}</span></span><span><PersonLinks empty={t("core.unassigned")} onOpen={openPerson} people={people} personIds={value(project.document, "owner") ? [value(project.document, "owner")] : []} /></span><span>{projectTasks}</span><span>{projectMilestones}</span><span>{due === "" ? "—" : formatDateOnly(locale, due)}</span><span className={`project-risk ${risk}`}>{t(`core.risk${risk === "onTrack" ? "OnTrack" : risk === "near" ? "Near" : risk === "overdue" ? "Overdue" : "Unknown"}` as MessageKey)}</span></button>;
+  };
   const headingKey: MessageKey = surface === "portfolio" ? "core.portfolioHeading" : surface === "tasks" ? "core.tasksHeading" : "core.projectsHeading";
   const descriptionKey: MessageKey = surface === "portfolio" ? "core.portfolioDescription" : surface === "tasks" ? "core.tasksDescription" : "core.projectsDescription";
   const pageHeading = task !== undefined ? value(task.document, "title") : surface === "projects" && selectedProject !== undefined ? selectedProjectName : t(headingKey);
@@ -161,7 +258,12 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
 
   const createProject = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); const data = new FormData(event.currentTarget); const id = newUniqueEntityId(ENTITY_ID_PREFIX.project, new Set(projects.map((item) => item.document.id)));
-    const document = { schema: "gitpm/project@1", id, name: String(data.get("name")), status: statusOptions[0]?.slug ?? "backlog", lifecycle: "active", description_markdown: String(data.get("description")) } as GitPmDocument;
+    const selectedGroup = projectGroupFromForm(data, existingGroups);
+    if (!selectedGroup.valid) {
+      if (selectedGroup.duplicate) setError(t("core.groupAlreadyExists"));
+      return;
+    }
+    const document = { schema: "gitpm/project@1", id, name: String(data.get("name")), status: statusOptions[0]?.slug ?? "backlog", lifecycle: "active", ...(selectedGroup.group === "" ? {} : { group: selectedGroup.group }), description_markdown: String(data.get("description")) } as GitPmDocument;
     void mutate(async () => await api.createEntity(draft.draft_id, "projects", fingerprint, document), id).then((result) => { if (result !== null) { setCreateEditor(null); onNavigate("projects", { projectId: id }); } });
   };
   const createMilestone = (event: FormEvent<HTMLFormElement>) => {
@@ -197,11 +299,11 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
         })}</div>}
       </section>
     </>}
-    {surface === "projects" && (projectId === "" ? <section className="project-directory"><div className="card-heading"><div><h3>{t("core.projectList")}</h3><p>{t("core.portfolioDescription")}</p></div><button className="primary" disabled={readOnly} onClick={() => setCreateEditor("project")} type="button">+ {t("core.createProjectAction")}</button><EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setCreateEditor(null)} open={createEditor === "project"} title={t("core.createProjectAction")}><form className="editor-drawer-form" onSubmit={createProject}><label>{t("core.name")}<input disabled={readOnly} name="name" required /></label><label>{t("core.description")}<textarea disabled={readOnly} name="description" /></label><div className="editor-drawer-actions"><button onClick={() => setCreateEditor(null)} type="button">{t("core.cancel")}</button><button className="primary" disabled={readOnly}>{t("core.createProject")}</button></div></form></EditorDrawer></div>
+    {surface === "projects" && (projectId === "" ? <section className="project-directory"><div className="card-heading"><div><h3>{t("core.projectList")}</h3><p>{t("core.portfolioDescription")}</p></div><button className="primary" disabled={readOnly} onClick={() => { setError(null); setCreateEditor("project"); }} type="button">+ {t("core.createProjectAction")}</button><EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setCreateEditor(null)} open={createEditor === "project"} title={t("core.createProjectAction")}><form className="editor-drawer-form" onSubmit={createProject}><label>{t("core.name")}<input disabled={readOnly} name="name" required /></label><ProjectGroupField currentGroup="" disabled={readOnly} groups={existingGroups} key={createEditor === "project" ? "open" : "closed"} t={t} /><label>{t("core.description")}<textarea disabled={readOnly} name="description" /></label><div className="editor-drawer-actions"><button onClick={() => setCreateEditor(null)} type="button">{t("core.cancel")}</button><button className="primary" disabled={readOnly}>{t("core.createProject")}</button></div></form></EditorDrawer></div>
       <dl className="project-register-summary"><div><dt>{t("core.projectsTotal")}</dt><dd>{activeProjects.length}</dd></div><div><dt>{t("core.tasksTotal")}</dt><dd>{activeTasks.length}</dd></div><div><dt>{t("core.milestonesTotal")}</dt><dd>{activeMilestones.length}</dd></div><div><dt>{t("core.completedTasks")}</dt><dd>{completedTasks}</dd></div></dl>
-      {activeProjects.length === 0 ? <p>{t("core.empty")}</p> : <div className="project-register" aria-label={t("core.projects")}><div className="project-register-head"><span>{t("core.projects")}</span><span>{t("core.status")}</span><span>{t("core.owner")}</span><span>{t("core.tasks")}</span><span>{t("core.milestones")}</span><span>{t("core.due")}</span><span>{t("core.risk")}</span></div>{activeProjects.map((project) => { const projectTasks = activeTasks.filter((item) => item.document.project === project.document.id).length; const projectMilestones = activeMilestones.filter((item) => item.document.project === project.document.id).length; const due = value(project.document, "due"); const risk = projectRisk(project); return <button className="project-register-row" key={project.document.id} onClick={() => onNavigate("projects", { projectId: project.document.id })}><span><strong>{value(project.document, "name")}</strong><code>{project.document.id}</code><small>{value(project.document, "description_markdown") || t("core.noDescription")}</small></span><span><span className="state open">{statusTitle(value(project.document, "status"))}</span></span><span><PersonLinks empty={t("core.unassigned")} onOpen={openPerson} people={people} personIds={value(project.document, "owner") ? [value(project.document, "owner")] : []} /></span><span>{projectTasks}</span><span>{projectMilestones}</span><span>{due === "" ? "—" : formatDateOnly(locale, due)}</span><span className={`project-risk ${risk}`}>{t(`core.risk${risk === "onTrack" ? "OnTrack" : risk === "near" ? "Near" : risk === "overdue" ? "Overdue" : "Unknown"}` as MessageKey)}</span></button>; })}</div>}
+      {activeProjects.length === 0 ? <p>{t("core.empty")}</p> : <div className="project-groups">{projectGroupSections.map((group) => <section className="project-group" data-ungrouped={group.isUngrouped || undefined} key={group.key}><header className="project-group-heading"><h4>{group.title}</h4><span>{t("core.projectsCount", { count: group.projects.length })}</span></header><div className="project-register" aria-label={group.title}>{renderProjectRegisterHeader()}{group.projects.map(renderProjectRow)}</div></section>)}</div>}
     </section> : selectedProject === undefined ? <div className="card empty-workspace">{t("core.projectNotFound")}</div> : <div className="project-detail-layout">
-      <EntityEditor api={api} confirmDelete={confirmDelete} detail entity={selectedProject} entityType="projects" draft={draft} fingerprint={fingerprint} readOnly={readOnly} externalFields={highlights[selectedProject.document.id]} t={t} statusLabel={statusTitle(value(selectedProject.document, "status"))} openTasks={() => onNavigate("tasks", { projectId })} openBoard={() => onNavigate("board", { projectId })} openGantt={() => onNavigate("gantt", { projectId })} save={mutate} remove={remove} />
+      <EntityEditor api={api} confirmDelete={confirmDelete} detail entity={selectedProject} entityType="projects" draft={draft} existingGroups={existingGroups} fingerprint={fingerprint} readOnly={readOnly} externalFields={highlights[selectedProject.document.id]} t={t} statusLabel={statusTitle(value(selectedProject.document, "status"))} openTasks={() => onNavigate("tasks", { projectId })} openBoard={() => onNavigate("board", { projectId })} openGantt={() => onNavigate("gantt", { projectId })} save={mutate} remove={remove} />
       <section className="card entity-column"><h3>{t("core.milestonesFor", { project: selectedProjectName })}</h3>
         <button className="primary editor-trigger" disabled={readOnly} onClick={() => setCreateEditor("milestone")} type="button">+ {t("core.createMilestoneAction")}</button><EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setCreateEditor(null)} open={createEditor === "milestone"} title={t("core.createMilestoneAction")}><form className="editor-drawer-form" onSubmit={createMilestone}><label>{t("core.name")}<input disabled={readOnly} name="name" required /></label><label>{t("core.due")}<input disabled={readOnly} name="due" type="date" /></label><label>{t("core.description")}<textarea disabled={readOnly} name="description" /></label><div className="editor-drawer-actions"><button onClick={() => setCreateEditor(null)} type="button">{t("core.cancel")}</button><button className="primary" disabled={readOnly}>{t("core.createMilestone")}</button></div></form></EditorDrawer>
         <div className="entity-list">{activeMilestones.length === 0 ? <p>{t("core.noMilestones")}</p> : activeMilestones.map((milestone) => { const milestoneTasks = activeTasks.filter((item) => item.document.milestone === milestone.document.id); const completed = milestoneTasks.filter((item) => value(item.document, "status") === "done").length; return <EntityEditor api={api} confirmArchive={() => confirmAction(t("core.archiveMilestoneConfirm", { name: value(milestone.document, "name"), count: milestoneTasks.length }))} confirmDelete={confirmDelete} key={milestone.document.id} entity={milestone} entityType="milestones" draft={draft} fingerprint={fingerprint} readOnly={readOnly} externalFields={highlights[milestone.document.id]} t={t} milestoneTaskCount={milestoneTasks.length} milestoneCompletedCount={completed} openMilestoneTasks={() => onNavigate("stages", { projectId, stageId: milestone.document.id })} save={mutate} remove={remove} />; })}</div>
@@ -216,8 +318,9 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
   </section>;
 }
 
-function EntityEditor({ api, entity, entityType, draft, fingerprint, readOnly, externalFields, t, selected = false, detail = false, statusLabel, select, openTasks, openBoard, openGantt, milestoneTaskCount, milestoneCompletedCount, openMilestoneTasks, confirmArchive, confirmDelete, save, remove }: {
+function EntityEditor({ api, entity, entityType, draft, existingGroups = [], fingerprint, readOnly, externalFields, t, selected = false, detail = false, statusLabel, select, openTasks, openBoard, openGantt, milestoneTaskCount, milestoneCompletedCount, openMilestoneTasks, confirmArchive, confirmDelete, save, remove }: {
   readonly api: GitPmApi; readonly entity: EntityResult; readonly entityType: "projects" | "milestones"; readonly draft: DraftStatus; readonly fingerprint: string; readonly readOnly: boolean; readonly externalFields?: readonly string[]; readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string; readonly selected?: boolean; readonly select?: () => void;
+  readonly existingGroups?: readonly string[];
   readonly detail?: boolean; readonly statusLabel?: string;
   readonly openTasks?: () => void; readonly openBoard?: () => void; readonly openGantt?: () => void;
   readonly milestoneTaskCount?: number; readonly milestoneCompletedCount?: number; readonly openMilestoneTasks?: () => void;
@@ -226,17 +329,31 @@ function EntityEditor({ api, entity, entityType, draft, fingerprint, readOnly, e
   readonly save: (operation: () => Promise<EntityResult>, preferredProject?: string) => Promise<EntityResult | null>; readonly remove: (operation: () => Promise<void>) => Promise<boolean>;
 }) {
   const [editorOpen, setEditorOpen] = useState(false);
-  const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); const data = new FormData(event.currentTarget); const due = String(data.get("due") ?? ""); const document = { ...entity.document, name: String(data.get("name")), description_markdown: String(data.get("description")), ...(entityType === "milestones" ? (due ? { due } : { due: undefined }) : {}) }; void save(async () => await api.updateEntity(draft.draft_id, entityType, entity, fingerprint, document), entityType === "projects" ? entity.document.id : undefined).then((result) => { if (result !== null) setEditorOpen(false); }); };
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const due = String(data.get("due") ?? "");
+    const document = { ...entity.document, name: String(data.get("name")), description_markdown: String(data.get("description")), ...(entityType === "milestones" ? (due ? { due } : { due: undefined }) : {}) } as GitPmDocument;
+    if (entityType === "projects") {
+      const selectedGroup = projectGroupFromForm(data, existingGroups);
+      if (!selectedGroup.valid) return;
+      if (selectedGroup.group === "") delete (document as Record<string, unknown>).group;
+      else (document as Record<string, unknown>).group = selectedGroup.group;
+    }
+    void save(async () => await api.updateEntity(draft.draft_id, entityType, entity, fingerprint, document), entityType === "projects" ? entity.document.id : undefined).then((result) => { if (result !== null) setEditorOpen(false); });
+  };
   const name = value(entity.document, "name");
   return <article className={`entity-card${detail ? " entity-detail-card card" : ""}${selected ? " selected" : ""}${externalFields?.includes("$local") ? " recently-changed" : externalFields ? " external-update" : ""}`} data-external-fields={externalFields?.join(",")}>
     <div className="entity-title-row">{select !== undefined ? <button type="button" className="entity-select entity-title" onClick={select}><strong>{name}</strong><code>{entity.document.id}</code></button> : entityType === "milestones" && openMilestoneTasks !== undefined ? <button type="button" className="entity-select entity-title" onClick={openMilestoneTasks}><strong>{name}</strong><code>{entity.document.id}</code></button> : <div className="entity-title"><strong>{name}</strong><code>{entity.document.id}</code></div>}{statusLabel !== undefined && <span className="state open">{statusLabel}</span>}</div>
     {entityType === "milestones" && value(entity.document, "due") !== "" && <span className="entity-meta">{t("core.due")}: {value(entity.document, "due")}</span>}
+    {entityType === "projects" && value(entity.document, "group").trim() !== "" && <span className="entity-meta">{t("core.group")}: {value(entity.document, "group").trim()}</span>}
     {entityType === "milestones" && milestoneTaskCount !== undefined && <button type="button" className="text-link milestone-task-summary" onClick={openMilestoneTasks}>{t("core.milestoneTaskProgress", { completed: milestoneCompletedCount ?? 0, count: milestoneTaskCount })}</button>}
     {value(entity.document, "description_markdown") !== "" && <p className="entity-summary">{value(entity.document, "description_markdown")}</p>}
     {entityType === "projects" && <div className="entity-links"><button type="button" className="text-link" onClick={openTasks}>{t("core.openTasks")}</button><button type="button" className="text-link" onClick={openBoard}>{t("core.openBoard")}</button><button type="button" className="text-link" onClick={openGantt}>{t("core.openGantt")}</button></div>}
     <button className="editor-trigger" onClick={() => setEditorOpen(true)} type="button">{t("core.edit")}</button>
     <EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setEditorOpen(false)} open={editorOpen} title={`${t("core.edit")}: ${name}`}><form className="editor-drawer-form" onSubmit={submit}>
       <label>{t("core.name")}<input disabled={readOnly} name="name" aria-label={`${t("core.name")} ${name}`} defaultValue={name} required /></label>
+      {entityType === "projects" && <ProjectGroupField currentGroup={value(entity.document, "group")} disabled={readOnly} groups={existingGroups} key={editorOpen ? "open" : "closed"} t={t} />}
       {entityType === "milestones" && <label>{t("core.due")}<input disabled={readOnly} name="due" type="date" aria-label={`${t("core.due")} ${name}`} defaultValue={value(entity.document, "due")} /></label>}
       <label>{t("core.description")}<textarea disabled={readOnly} name="description" aria-label={`${t("core.description")} ${name}`} defaultValue={value(entity.document, "description_markdown")} /></label>
       <div className="editor-drawer-actions"><details className="more-actions"><summary>{t("core.moreActions")}</summary><div><button type="button" disabled={readOnly} onClick={() => { if (confirmArchive?.() ?? true) void save(async () => await api.archiveEntity(draft.draft_id, entityType, entity, fingerprint), entityType === "projects" ? "" : undefined).then((result) => { if (result !== null) setEditorOpen(false); }); }}>{t("core.archive")}</button><button type="button" className="danger" disabled={readOnly} onClick={() => { if (confirmDelete(name)) void remove(async () => await api.deleteEntity(draft.draft_id, entityType, entity, fingerprint)).then((success) => { if (success) setEditorOpen(false); }); }}>{t("core.delete")}</button></div></details><button onClick={() => setEditorOpen(false)} type="button">{t("core.cancel")}</button><button className="primary" disabled={readOnly}>{t("core.save")}</button></div>

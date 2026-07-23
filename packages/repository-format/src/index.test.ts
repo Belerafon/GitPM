@@ -85,4 +85,30 @@ describe("safe YAML profile", () => {
     expect(formatYamlText(formatted, "task.yaml", labels)).toBe(formatted);
     expect(parseYamlDocument(formatted)).toEqual(task);
   });
+
+  it("places an optional Project group after lifecycle and preserves it idempotently", () => {
+    const grouped = {
+      schema: "gitpm/project@1",
+      id: "P-26-111111",
+      name: "Payments",
+      status: "backlog",
+      lifecycle: "active",
+      group: "Internal Platform",
+      description_markdown: "Payment services",
+    };
+    const formatted = formatYamlDocument(grouped);
+
+    expect(formatted).toBe([
+      "schema: gitpm/project@1",
+      "id: P-26-111111",
+      "name: Payments",
+      "status: backlog",
+      "lifecycle: active",
+      "group: Internal Platform",
+      "description_markdown: Payment services",
+      "",
+    ].join("\n"));
+    expect(formatYamlText(formatted)).toBe(formatted);
+    expect(formatYamlDocument({ ...grouped, group: undefined })).not.toContain("group:");
+  });
 });

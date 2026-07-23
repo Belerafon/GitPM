@@ -77,7 +77,7 @@ export function parseYamlDocument(text: string, source?: string): GitPmDocument 
 }
 
 const fieldOrder: Record<string, readonly string[]> = {
-  "gitpm/project@1": ["schema", "id", "name", "status", "lifecycle", "description_markdown", "owner", "start", "due", "milestone_order", "labels"],
+  "gitpm/project@1": ["schema", "id", "name", "status", "lifecycle", "group", "description_markdown", "owner", "start", "due", "milestone_order", "labels"],
   "gitpm/task@1": ["schema", "id", "project", "title", "type", "status", "lifecycle", "description_markdown", "acceptance_criteria_markdown", "parent", "milestone", "assignees", "estimate_hours", "start", "due", "depends_on", "labels"],
   "gitpm/milestone@1": ["schema", "id", "project", "name", "lifecycle", "description_markdown", "due", "task_order"],
   "gitpm/person@1": ["schema", "id", "name", "weekly_capacity_hours", "calendar", "lifecycle", "email"],

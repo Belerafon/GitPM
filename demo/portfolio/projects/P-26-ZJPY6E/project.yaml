@@ -3,6 +3,7 @@ id: P-26-ZJPY6E # project: Мобильный банк 2.0
 name: Мобильный банк 2.0
 status: in-progress
 lifecycle: active
+group: Клиентские продукты
 description_markdown: "Обновление мобильного банка: единая витрина продуктов, биометрический вход и новая система уведомлений."
 owner: U-26-2SRX95 # person: Анна Волкова
 start: 2026-07-20

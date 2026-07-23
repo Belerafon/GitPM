@@ -32,6 +32,26 @@ describe("repository validation", () => {
     expect(report).toMatchObject({ valid: true, documentCount: 14, errors: [], warnings: [] });
   });
 
+  it("accepts an optional non-empty Project group and rejects invalid group values", async () => {
+    const valid = await fixture();
+    await replace(valid, `projects/${project}/project.yaml`, "lifecycle: active", "lifecycle: active\ngroup: Внутренняя платформа");
+    expect(await validateRepository(valid)).toMatchObject({ valid: true, errors: [] });
+
+    const invalidGroups = [
+      "group: 42",
+      'group: ""',
+      'group: "   "',
+      `group: ${"x".repeat(101)}`,
+    ];
+    for (const invalidGroup of invalidGroups) {
+      const root = await fixture();
+      await replace(root, `projects/${project}/project.yaml`, "lifecycle: active", `lifecycle: active\n${invalidGroup}`);
+      expect((await validateRepository(root)).errors).toEqual(expect.arrayContaining([
+        expect.objectContaining({ code: "SCHEMA_INVALID", field: "group" }),
+      ]));
+    }
+  });
+
   it("accepts reserved agent guidance paths", async () => {
     const root = await fixture();
     await mkdir(path.join(root, ".agents", "skills", "gitpm"), { recursive: true });

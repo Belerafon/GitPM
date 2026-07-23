@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GitPmApi } from "./api.js";
-import { AssigneeChecks, CoreWorkspace, newEntityId, SafeMarkdown } from "./core-ui.js";
+import { AssigneeChecks, CoreWorkspace, existingProjectGroups, groupProjects, newEntityId, SafeMarkdown } from "./core-ui.js";
 import { message } from "./i18n.js";
 import type { DraftStatus, EntityResult, GitPmDocument } from "./types.js";
 
@@ -76,6 +76,82 @@ describe("core UI", () => {
     expect(container.querySelector("strong")?.textContent).toBe("Safe");
     expect(container.querySelector("img")).toBeNull();
     expect(container.textContent).toContain("<img src=x");
+  });
+
+  it("derives exact group options and sorts named groups, projects, and the ungrouped section", async () => {
+    const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
+    const projects = [
+      await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-111111", name: "Zulu project", status: "backlog", lifecycle: "active", group: "Delivery" }),
+      await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-222222", name: "Alpha project", status: "backlog", lifecycle: "active", group: "Delivery" }),
+      await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-333333", name: "Research project", status: "backlog", lifecycle: "active", group: "Research" }),
+      await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-444444", name: "Loose project", status: "backlog", lifecycle: "active" }),
+      await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-555555", name: "Archived project", status: "backlog", lifecycle: "archived", group: "Archive only" }),
+    ];
+    expect(existingProjectGroups(projects, "en")).toEqual(["Archive only", "Delivery", "Research"]);
+    expect(groupProjects(projects.slice(0, 4), "en", "Ungrouped").map((section) => [section.title, section.projects.map((project) => project.document.name)]))
+      .toEqual([
+        ["Delivery", ["Alpha project", "Zulu project"]],
+        ["Research", ["Research project"]],
+        ["Ungrouped", ["Loose project"]],
+      ]);
+
+    const onNavigate = vi.fn();
+    const { container } = render(<CoreWorkspace api={api} draft={draft} locale="en" surface="projects" onNavigate={onNavigate} onChanged={vi.fn(async () => undefined)} />);
+    await screen.findByRole("heading", { name: "Delivery" });
+    const sections = Array.from(container.querySelectorAll<HTMLElement>(".project-group"));
+    expect(sections.map((section) => section.querySelector("h4")?.textContent)).toEqual(["Delivery", "Research", "Ungrouped"]);
+    expect(Array.from(sections[0]!.querySelectorAll(".project-register-row strong")).map((item) => item.textContent)).toEqual(["Alpha project", "Zulu project"]);
+    expect(within(sections[0]!).getByText("2 projects")).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Archive only" })).toBeNull();
+    fireEvent.click(within(sections[1]!).getByRole("button", { name: /Research project/u }));
+    expect(onNavigate).toHaveBeenCalledWith("projects", { projectId: "P-26-333333" });
+  });
+
+  it("creates, changes, and removes a Project group while validating new group names", async () => {
+    const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
+    await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-111111", name: "Existing", status: "backlog", lifecycle: "active", group: "Platform" });
+    await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-222222", name: "Archived", status: "backlog", lifecycle: "archived", group: "Research" });
+    const onChanged = vi.fn(async () => undefined);
+    const rendered = render(<CoreWorkspace api={api} draft={draft} locale="en" surface="projects" onChanged={onChanged} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /New project/u }));
+    let dialog = screen.getByRole("dialog", { name: "New project" });
+    expect((within(dialog).getByLabelText("Group") as HTMLSelectElement).value).toBe("");
+    expect(within(dialog).getByRole("option", { name: "Platform" })).toBeTruthy();
+    expect(within(dialog).getByRole("option", { name: "Research" })).toBeTruthy();
+    const platformOptionValue = (within(dialog).getByRole("option", { name: "Platform" }) as HTMLOptionElement).value;
+    fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "Grouped project" } });
+    fireEvent.change(within(dialog).getByLabelText("Group"), { target: { value: platformOptionValue } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create project" }));
+    await waitFor(() => expect(entityApi.entities.find((item) => item.document.name === "Grouped project")?.document.group).toBe("Platform"));
+
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    dialog = screen.getByRole("dialog", { name: "Edit: Grouped project" });
+    expect((within(dialog).getByLabelText("Group") as HTMLSelectElement).value).toBe(platformOptionValue);
+    fireEvent.change(within(dialog).getByLabelText("Group"), { target: { value: "__new__" } });
+    fireEvent.change(within(dialog).getByLabelText("New group name"), { target: { value: "  Operations  " } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(entityApi.entities.find((item) => item.document.name === "Grouped project")?.document.group).toBe("Operations"));
+    expect(await screen.findByText("Group: Operations")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    dialog = screen.getByRole("dialog", { name: "Edit: Grouped project" });
+    fireEvent.change(within(dialog).getByLabelText("Group"), { target: { value: "" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(entityApi.entities.find((item) => item.document.name === "Grouped project")?.document).not.toHaveProperty("group"));
+
+    rendered.unmount();
+    render(<CoreWorkspace api={api} draft={draft} locale="en" surface="projects" onChanged={onChanged} />);
+    fireEvent.click(await screen.findByRole("button", { name: /New project/u }));
+    dialog = screen.getByRole("dialog", { name: "New project" });
+    fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "Invalid group project" } });
+    fireEvent.change(within(dialog).getByLabelText("Group"), { target: { value: "__new__" } });
+    fireEvent.submit(within(dialog).getByRole("button", { name: "Create project" }).closest("form")!);
+    expect(entityApi.entities.some((item) => item.document.name === "Invalid group project")).toBe(false);
+    fireEvent.change(within(dialog).getByLabelText("New group name"), { target: { value: "Platform" } });
+    expect(within(dialog).getByRole("alert").textContent).toContain("already exists");
+    fireEvent.submit(within(dialog).getByRole("button", { name: "Create project" }).closest("form")!);
+    expect(entityApi.entities.some((item) => item.document.name === "Invalid group project")).toBe(false);
   });
 
   it("creates Project, Milestone and Task, then edits and archives the Task in the drawer", async () => {

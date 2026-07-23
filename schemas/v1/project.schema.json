@@ -10,6 +10,12 @@
     "name": {"type": "string", "minLength": 1},
     "status": {"$ref": "common.schema.json#/$defs/slug"},
     "lifecycle": {"$ref": "common.schema.json#/$defs/lifecycle"},
+    "group": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "pattern": ".*\\S.*"
+    },
     "description_markdown": {"type": "string"},
     "owner": {"$ref": "common.schema.json#/$defs/personId"},
     "start": {"$ref": "common.schema.json#/$defs/date"},

@@ -141,6 +141,12 @@ input { min-width: 0; width: 100%; border: 1px solid #c9cbc5; border-radius: 8px
 .project-register-summary div { display: flex; gap: .45rem; align-items: baseline; }
 .project-register-summary dt { color: #68706b; font-size: .75rem; }
 .project-register-summary dd { margin: 0; color: #244c3b; font-size: 1.05rem; font-weight: 700; }
+.project-groups { display: grid; gap: 1.5rem; }
+.project-group { display: grid; gap: .5rem; }
+.project-group-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+.project-group-heading h4 { margin: 0; font-size: 1rem; }
+.project-group-heading span { color: #68706b; font-size: .75rem; }
+.field-error { color: #8b2d28; }
 .project-register { display: grid; width: 100%; min-width: 0; max-width: 100%; overflow: hidden; border: 1px solid #dedfd9; border-radius: 10px; background: #fff; }
 .project-register-head, .project-register-row { display: grid; grid-template-columns: minmax(240px, 2.2fr) minmax(100px, .8fr) minmax(130px, 1fr) 70px 70px minmax(100px, .8fr) minmax(90px, .8fr); gap: .75rem; align-items: center; }
 .project-register-head { background: #f3f5f2; padding: .55rem .75rem; color: #68706b; font-size: .72rem; font-weight: 700; }
