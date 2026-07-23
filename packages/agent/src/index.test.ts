@@ -10,7 +10,7 @@ import { GitClient } from "@gitpm/git-client";
 import { GitLabProtocolTestDouble } from "@gitpm/gitlab";
 import { atomicWriteDomainFile } from "@gitpm/security";
 import { validateRepository } from "@gitpm/validation";
-import { AgentWorkflow, AgentWorkflowError } from "./index.js";
+import { AgentWorkflow, AgentWorkflowError, assertAgentScope } from "./index.js";
 
 const execFileAsync = promisify(execFile);
 const roots: string[] = [];
@@ -101,6 +101,10 @@ describe("agent file and CLI workflow core", () => {
   it("rejects agent mutations unless the draft is external", async () => {
     const error = new AgentWorkflowError("AGENT_EXTERNAL_MODE_REQUIRED", "required");
     expect(error.code).toBe("AGENT_EXTERNAL_MODE_REQUIRED");
+    expect(() => assertAgentScope({
+      affected_projects: [],
+      files: [{ path: personFile, kind: "Modified" }],
+    }, { allowedProject: projectId })).toThrow(AgentWorkflowError);
   });
 
   it("updates existing entities transactionally through the external workflow", async () => {

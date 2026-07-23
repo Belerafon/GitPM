@@ -205,13 +205,14 @@ export class CommentStore {
     const directory = path.join(metadata.worktree_path, "projects", projectId, "comments", taskId);
     const files = await yamlFiles(directory);
     const parsed = await documents(files, metadata.worktree_path);
-    const comments = parsed.filter((document): document is CommentDocument => document.schema === "gitpm/comment@1");
-    const relativePaths = files.map((absolute) => path.relative(metadata.worktree_path, absolute).split(path.sep).join("/"));
-    const blobIds = await this.drafts.fileBlobIds(draftId, relativePaths);
-    return comments.map((document, index) => ({
+    const comments = parsed.flatMap((document, index) => document.schema === "gitpm/comment@1"
+      ? [{ document: document as CommentDocument, relative: path.relative(metadata.worktree_path, files[index]!).split(path.sep).join("/") }]
+      : []);
+    const blobIds = await this.drafts.fileBlobIds(draftId, comments.map((comment) => comment.relative));
+    return comments.map(({ document, relative }) => ({
       document,
-      path: relativePaths[index]!,
-      blob_id: blobIds.get(relativePaths[index]!)!,
+      path: relative,
+      blob_id: blobIds.get(relative)!,
       draft_fingerprint: metadata.fingerprint,
       ...this.permissions(document, actor),
     })).sort((left, right) => left.document.created_at.localeCompare(right.document.created_at) || left.document.id.localeCompare(right.document.id));

@@ -5,13 +5,10 @@ import type { HealthPayload } from "@gitpm/shared";
 import type { DraftManager } from "@gitpm/drafts";
 import type { CommentStore, EntityStore } from "@gitpm/domain";
 import type { ChangesService } from "@gitpm/changes";
-import type { AuthService } from "@gitpm/gitlab";
-import type { PublishingService } from "@gitpm/publishing";
 import type { HistoryService } from "@gitpm/history";
 import Fastify, { LogController, type FastifyBaseLogger } from "fastify";
 import { registerChangesApi, registerCommentApi, registerDraftApi, registerEntityApi, registerHistoryApi } from "./draft-api.js";
 import type { Authenticate } from "./draft-api.js";
-import { registerAuthAndPublishingApi } from "./auth-api.js";
 import { registerWorktreeApi, type WorktreeApiOptions } from "./worktree-api.js";
 
 const MAX_CORRELATION_ID_LENGTH = 128;
@@ -34,7 +31,6 @@ const CONTENT_SECURITY_POLICY = [
 
 export interface AppOptions {
   authenticate?: Authenticate;
-  authService?: AuthService;
   changesService?: ChangesService;
   commentStore?: CommentStore;
   draftManager?: DraftManager;
@@ -42,7 +38,6 @@ export interface AppOptions {
   isReady?: () => boolean | Promise<boolean>;
   historyService?: HistoryService;
   logger?: FastifyBaseLogger;
-  publishingService?: PublishingService;
   worktreeApiOptions?: WorktreeApiOptions;
 }
 
@@ -183,7 +178,5 @@ export function buildApp(options: AppOptions = {}) {
     if (options.changesService) registerChangesApi(app, options.draftManager, options.changesService, authenticate);
     if (options.historyService) registerHistoryApi(app, options.draftManager, options.historyService, authenticate);
   }
-  if (options.authService) registerAuthAndPublishingApi(app, options.authService, options.publishingService);
-
   return app;
 }

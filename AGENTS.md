@@ -34,7 +34,7 @@ Preserve these principles when changing the product:
 - `apps/cli` — the `gitpm` command surface and process entrypoint.
 - `apps/server` — HTTP API, runtime wiring, auth, and repository publication.
 - `apps/web` — React UI and locale packs.
-- `packages/agent` — external-agent draft workflow and generated worktree guidance.
+- `packages/agent` — shared direct/external CLI workflow, external-draft adapter, and generated worktree guidance.
 - `packages/drafts` — draft metadata, writer modes, worktrees, fingerprints, and recovery.
 - `packages/domain` — entity and comment operations.
 - `packages/contracts` — shared HTTP DTOs and browser-side runtime response decoders.

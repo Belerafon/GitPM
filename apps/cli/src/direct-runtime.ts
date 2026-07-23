@@ -1,10 +1,15 @@
-import { assertAgentScope, type AgentScope, type AgentScopeReport } from "@gitpm/agent";
+import {
+  RepositoryWorkflow,
+  type AgentScope,
+  type AgentScopeReport,
+} from "@gitpm/agent";
 import { ChangesService, type SemanticDiff } from "@gitpm/changes";
 import { GitClient, GitCommandError } from "@gitpm/git-client";
-import { DirectRepositoryBackend, directPushStrategy, DraftManager, GITPM_GUIDANCE_FILES, GITPM_GUIDANCE_PATHS } from "@gitpm/drafts";
-import { CommentStore, EntityStore, entityPathForDocument, type CommentActor, type CommentResult, type DeletePlan, type EntityCreateBatchResult, type EntityResult } from "@gitpm/domain";
+import { DirectRepositoryBackend, directPushStrategy, DraftManager, GITPM_GUIDANCE_PATHS } from "@gitpm/drafts";
+import { CommentStore, type CommentActor, type CommentResult, type DeletePlan, type EntityCreateBatchResult, type EntityResult } from "@gitpm/domain";
 import type { GitPmDocument } from "@gitpm/repository-format";
-import { validateRepository } from "@gitpm/validation";
+
+const DIRECT_WORKSPACE_ID = "DRF-LOCAL";
 
 export interface DirectStatus {
   readonly mode: "direct";
@@ -43,10 +48,8 @@ export class DirectCliRuntime {
   private readonly git: GitClient;
   private readonly backend: DirectRepositoryBackend;
   private readonly drafts: DraftManager;
-  private readonly changes: ChangesService;
-  private readonly entities: EntityStore;
   private readonly comments: CommentStore;
-  private readonly pushStrategy: ReturnType<typeof directPushStrategy>;
+  private readonly repository: RepositoryWorkflow;
   private readonly authorName: string;
   private readonly authorEmail: string;
   private readonly pushAccessToken?: string;
@@ -68,13 +71,18 @@ export class DirectCliRuntime {
       backend: this.backend,
       push: directPushStrategy(this.git),
     });
-    this.changes = new ChangesService(this.drafts, this.git);
-    this.entities = new EntityStore(this.drafts, "repository");
+    const changes = new ChangesService(this.drafts, this.git);
     this.comments = new CommentStore(this.drafts, () => new Date(), "repository");
-    this.pushStrategy = directPushStrategy(this.git);
     this.authorName = options.authorName;
     this.authorEmail = options.authorEmail;
     this.pushAccessToken = options.pushAccessToken;
+    this.repository = new RepositoryWorkflow(this.drafts, this.git, changes, {
+      mutationMode: "repository",
+      authorName: options.authorName,
+      authorEmail: options.authorEmail,
+      defaultBranch: options.defaultBranch,
+      prepareWorkspace: async () => { await this.prepare(); },
+    });
   }
 
   private directActor(): CommentActor {
@@ -88,7 +96,7 @@ export class DirectCliRuntime {
   async prepare(): Promise<void> {
     await this.backend.prepare();
     if (this.prepared) return;
-    const workspace = await this.drafts.ensureDirectWorkspace("DRF-LOCAL", "local-user");
+    const workspace = await this.drafts.ensureDirectWorkspace(DIRECT_WORKSPACE_ID, "local-user");
     this.workspaceDraftId = workspace.draft_id;
     this.prepared = true;
   }
@@ -100,27 +108,11 @@ export class DirectCliRuntime {
   }
 
   async assertScope(scope: AgentScope = {}): Promise<AgentScopeReport> {
-    const report = await this.changes.list(await this.draftId());
-    return assertAgentScope(report, scope);
+    return await this.repository.assertScope(DIRECT_WORKSPACE_ID, scope);
   }
 
   async createEntity(document: Readonly<Record<string, unknown>>, scope: AgentScope = {}, requestedType?: string): Promise<EntityResult> {
-    const draftId = await this.draftId();
-    await this.assertScope(scope);
-    const planned = (await this.entities.planCreate(draftId, [document], requestedType))[0]!;
-    const relative = entityPathForDocument(planned.document);
-    const project = /^projects\/(P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6})\//u.exec(relative)?.[1];
-    assertAgentScope({
-      affected_projects: project === undefined ? [] : [project],
-      files: [{ path: relative, kind: "Added" }],
-    }, scope);
-    const metadata = await this.drafts.refreshWorkspaceFingerprint(draftId);
-    return await this.entities.create(
-      draftId,
-      metadata.owner_id,
-      metadata.fingerprint,
-      planned.document,
-    );
+    return await this.repository.createEntity(DIRECT_WORKSPACE_ID, document, scope, requestedType);
   }
 
   async createEntities(
@@ -129,19 +121,13 @@ export class DirectCliRuntime {
     scope: AgentScope = {},
     dryRun = false,
   ): Promise<EntityCreateBatchResult> {
-    const draftId = await this.draftId();
-    await this.assertScope(scope);
-    const plan = await this.entities.planCreate(draftId, documents, requestedType);
-    const affectedProjects = [...new Set(plan.flatMap((item) => {
-      const project = /^projects\/(P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6})\//u.exec(item.path)?.[1];
-      return project === undefined ? [] : [project];
-    }))];
-    assertAgentScope({
-      affected_projects: affectedProjects,
-      files: plan.map((item) => ({ path: item.path, kind: "Added" as const })),
-    }, scope);
-    const metadata = await this.drafts.refreshWorkspaceFingerprint(draftId);
-    return await this.entities.createMany(draftId, metadata.owner_id, metadata.fingerprint, plan, dryRun);
+    return await this.repository.createEntities(
+      DIRECT_WORKSPACE_ID,
+      documents,
+      requestedType,
+      scope,
+      dryRun,
+    );
   }
 
   async updateEntity(
@@ -150,121 +136,62 @@ export class DirectCliRuntime {
     requestedId: string,
     scope: AgentScope = {},
   ): Promise<EntityResult> {
-    const draftId = await this.draftId();
-    await this.assertScope(scope);
-    const plan = await this.entities.planUpdate(draftId, patch, requestedType, requestedId);
-    const affectedProject = /^projects\/(P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6})\//u.exec(plan.path)?.[1];
-    const assertPaths = (paths: readonly string[]): void => {
-      const affectedProjects = [...new Set(paths.flatMap((relative) => {
-        const project = /^projects\/(P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6})\//u.exec(relative)?.[1];
-        return project === undefined ? [] : [project];
-      }))];
-      assertAgentScope({
-        affected_projects: affectedProjects,
-        files: paths.map((relative) => ({ path: relative, kind: "Modified" as const })),
-      }, scope);
-    };
-    assertAgentScope({
-      affected_projects: affectedProject === undefined ? [] : [affectedProject],
-      files: [{ path: plan.path, kind: "Modified" }],
-    }, scope);
-    const metadata = await this.drafts.refreshWorkspaceFingerprint(draftId);
-    const current = await this.entities.get(draftId, plan.entityType, plan.id);
-    return await this.entities.update(
-      draftId,
-      metadata.owner_id,
-      plan.entityType,
-      plan.id,
-      metadata.fingerprint,
-      current.blob_id,
-      plan.document,
-      assertPaths,
+    return await this.repository.updateEntity(
+      DIRECT_WORKSPACE_ID,
+      patch,
+      requestedType,
+      requestedId,
+      scope,
     );
   }
 
   async listEntities(entityType: string, project?: string): Promise<{ items: readonly { readonly document: GitPmDocument; readonly path: string }[]; readonly draft_fingerprint: string }> {
-    const draftId = await this.draftId();
-    const results = await this.entities.list(draftId, entityType, project);
-    const metadata = await this.drafts.getWorkspace(draftId);
-    return { items: results.map((result) => ({ document: result.document, path: result.path })), draft_fingerprint: metadata.fingerprint };
+    return await this.repository.listEntities(DIRECT_WORKSPACE_ID, entityType, project);
   }
 
   async getEntity(entityType: string, id: string): Promise<EntityResult> {
-    const draftId = await this.draftId();
-    return await this.entities.get(draftId, entityType, id);
+    return await this.repository.getEntity(DIRECT_WORKSPACE_ID, entityType, id);
   }
 
   async planDelete(entityType: string, id: string): Promise<DeletePlan> {
-    const draftId = await this.draftId();
-    return await this.entities.planDelete(draftId, entityType, id);
+    return await this.repository.planDelete(DIRECT_WORKSPACE_ID, entityType, id);
   }
 
   async deleteEntity(entityType: string, id: string, unlinkReferences: boolean, scope: AgentScope = {}): Promise<{ deleted: true; path: string; unlinked_paths: readonly string[]; draft_fingerprint: string }> {
-    const draftId = await this.draftId();
-    await this.assertScope(scope);
-    const plan = await this.entities.planDelete(draftId, entityType, id);
-    const deletedPaths = [plan.path, ...plan.cascaded_comments.map((comment) => comment.path)];
-    const modifiedPaths = unlinkReferences ? plan.would_unlink.map((item) => item.path) : [];
-    const affectedProjects = [...new Set([...deletedPaths, ...modifiedPaths].flatMap((relative) => {
-      const project = /^projects\/(P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6})\//u.exec(relative)?.[1];
-      return project === undefined ? [] : [project];
-    }))];
-    assertAgentScope({
-      affected_projects: affectedProjects,
-      files: [
-        ...deletedPaths.map((relative) => ({ path: relative, kind: "Deleted" as const })),
-        ...modifiedPaths.map((relative) => ({ path: relative, kind: "Modified" as const })),
-      ],
-    }, scope);
-    const metadata = await this.drafts.refreshWorkspaceFingerprint(draftId);
-    const current = await this.entities.get(draftId, entityType, id);
-    return await this.entities.delete(draftId, metadata.owner_id, entityType, id, metadata.fingerprint, current.blob_id, unlinkReferences);
+    return await this.repository.deleteEntity(
+      DIRECT_WORKSPACE_ID,
+      entityType,
+      id,
+      unlinkReferences,
+      scope,
+    );
   }
 
   async archiveEntity(entityType: string, id: string, scope: AgentScope = {}): Promise<EntityResult> {
-    const draftId = await this.draftId();
-    await this.assertScope(scope);
-    const plan = await this.entities.planUpdate(draftId, { lifecycle: "archived" }, entityType, id);
-    const affectedProject = /^projects\/(P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6})\//u.exec(plan.path)?.[1];
-    assertAgentScope({
-      affected_projects: affectedProject === undefined ? [] : [affectedProject],
-      files: [{ path: plan.path, kind: "Modified" }],
-    }, scope);
-    const metadata = await this.drafts.refreshWorkspaceFingerprint(draftId);
-    const current = await this.entities.get(draftId, plan.entityType, plan.id);
-    return await this.entities.archive(draftId, metadata.owner_id, plan.entityType, plan.id, metadata.fingerprint, current.blob_id);
+    return await this.repository.archiveEntity(DIRECT_WORKSPACE_ID, entityType, id, scope);
   }
 
   async moveTask(id: string, targetProject: string, targetMilestone: string | undefined, scope: AgentScope = {}): Promise<EntityResult> {
-    const draftId = await this.draftId();
-    await this.assertScope(scope);
-    const current = await this.entities.get(draftId, "tasks", id);
-    const sourceRelative = current.path;
-    const sourceProject = /^projects\/(P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6})\//u.exec(sourceRelative)?.[1];
-    const movedDocument = { ...current.document, project: targetProject, milestone: targetMilestone };
-    const targetRelative = entityPathForDocument(movedDocument);
-    const affectedProjects = [...new Set([sourceProject, targetProject].filter((value): value is string => value !== undefined))];
-    assertAgentScope({
-      affected_projects: affectedProjects,
-      files: [{ path: sourceRelative, kind: "Deleted" }, { path: targetRelative, kind: "Added" }],
-    }, scope);
-    const metadata = await this.drafts.refreshWorkspaceFingerprint(draftId);
-    return await this.entities.moveTask(draftId, metadata.owner_id, id, metadata.fingerprint, current.blob_id, targetProject, targetMilestone);
+    return await this.repository.moveTask(
+      DIRECT_WORKSPACE_ID,
+      id,
+      targetProject,
+      targetMilestone,
+      scope,
+    );
   }
 
   async getConfiguration(kind: "statuses" | "issue-types"): Promise<EntityResult> {
-    const draftId = await this.draftId();
-    return await this.entities.getConfiguration(draftId, kind);
+    return await this.repository.getConfiguration(DIRECT_WORKSPACE_ID, kind);
   }
 
   async updateConfiguration(kind: "statuses" | "issue-types", document: Record<string, unknown>, scope: AgentScope = {}): Promise<EntityResult> {
-    const draftId = await this.draftId();
-    await this.assertScope(scope);
-    const relative = kind === "statuses" ? ".gitpm/statuses.yaml" : ".gitpm/issue-types.yaml";
-    assertAgentScope({ affected_projects: [], files: [{ path: relative, kind: "Modified" }] }, scope);
-    const metadata = await this.drafts.refreshWorkspaceFingerprint(draftId);
-    const current = await this.entities.getConfiguration(draftId, kind);
-    return await this.entities.updateConfiguration(draftId, metadata.owner_id, kind, metadata.fingerprint, current.blob_id, document as GitPmDocument);
+    return await this.repository.updateConfiguration(
+      DIRECT_WORKSPACE_ID,
+      kind,
+      document,
+      scope,
+    );
   }
 
   async listComments(projectId: string, taskId: string): Promise<readonly CommentResult[]> {
@@ -295,13 +222,7 @@ export class DirectCliRuntime {
   }
 
   async semanticDiff(scope: AgentScope = {}): Promise<SemanticDiff> {
-    const draftId = await this.draftId();
-    await this.assertScope(scope);
-    const report = await this.changes.semantic(draftId);
-    return {
-      ...report,
-      unclassified_files: report.unclassified_files.filter((file) => !GITPM_GUIDANCE_FILES.has(file)),
-    };
+    return await this.repository.semanticDiff(DIRECT_WORKSPACE_ID, scope);
   }
 
   async status(): Promise<DirectStatus> {
@@ -331,42 +252,15 @@ export class DirectCliRuntime {
   }
 
   async commitAll(message: string, scope: AgentScope = {}): Promise<DirectCommitResult> {
-    await this.prepare();
-    await this.assertScope(scope);
-    const checkout = await this.git.checkoutRealPath(this.checkoutPath);
-    const validation = await validateRepository(checkout);
-    if (!validation.valid) {
-      const error = new Error("Commit is blocked by repository validation") as Error & { code: string; details?: unknown };
-      error.code = "VALIDATION_FAILED";
-      error.details = validation.errors;
-      throw error;
-    }
-    const porcelain = await this.git.statusPorcelain(checkout, GITPM_GUIDANCE_PATHS);
-    if (porcelain.trim() === "") {
-      const error = new Error("Working copy has no changes") as Error & { code: string };
-      error.code = "NOTHING_TO_COMMIT";
-      throw error;
-    }
-    const commit = await this.git.commitAll(checkout, message, this.authorName, this.authorEmail, GITPM_GUIDANCE_PATHS);
-    const branch = await this.git.checkoutCurrentBranch(checkout);
+    const { commit, branch } = await this.repository.commitAll(DIRECT_WORKSPACE_ID, message, scope);
     return { commit, branch };
   }
 
   async push(): Promise<DirectPushResult> {
-    await this.prepare();
-    const checkout = await this.git.checkoutRealPath(this.checkoutPath);
-    const porcelain = await this.git.statusPorcelain(checkout, GITPM_GUIDANCE_PATHS);
-    if (porcelain.trim() !== "") {
-      const error = new Error("Push requires a clean committed working copy") as Error & { code: string };
-      error.code = "UNCOMMITTED_CHANGES";
-      throw error;
-    }
-    if (this.pushAccessToken === undefined) {
-      const error = new Error("Push requires a configured remote and access token") as Error & { code: string };
-      error.code = "GIT_PUSH_REMOTE_MISSING";
-      throw error;
-    }
-    return await this.pushStrategy(checkout, await this.git.checkoutCurrentBranch(checkout), this.pushAccessToken);
+    return await this.repository.push(DIRECT_WORKSPACE_ID, this.pushAccessToken, {
+      code: "GIT_PUSH_REMOTE_MISSING",
+      message: "Push requires a configured remote and access token",
+    });
   }
 
   isGitError(error: unknown): error is GitCommandError {

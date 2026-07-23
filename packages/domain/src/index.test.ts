@@ -143,6 +143,26 @@ describe("domain entity store", () => {
     expect((await comments.notifications("DRF-COMMENTS", anna)).items).toHaveLength(0);
   });
 
+  it("keeps comment paths and blob IDs paired when an external YAML has another schema", async () => {
+    const { manager, comments } = await runtime();
+    const draft = await manager.createDraft("DRF-COMMENT-PATHS", "42");
+    const author: CommentActor = { userId: "42", role: "Developer", identity: { provider: "git", subject: "boris@example.test", display_name: "Boris" } };
+    const project = "P-26-MGP84K";
+    const task = "T-26-P9G3P8";
+    const created = await comments.create("DRF-COMMENT-PATHS", project, task, draft.fingerprint, "Path pairing", author);
+    const commentAbsolute = path.join(draft.worktree_path, ...created.path.split("/"));
+    await writeFile(path.join(path.dirname(commentAbsolute), "A-external.yaml"), "schema: gitpm/person@1\n", "utf8");
+
+    const listed = await comments.list("DRF-COMMENT-PATHS", project, task, author);
+
+    expect(listed).toHaveLength(1);
+    expect(listed[0]).toMatchObject({
+      document: { id: created.document.id },
+      path: created.path,
+      blob_id: created.blob_id,
+    });
+  });
+
   it("returns a project-scoped workspace snapshot", async () => {
     const { manager, store } = await runtime();
     await manager.createDraft("DRF-WORKSPACE", "42");

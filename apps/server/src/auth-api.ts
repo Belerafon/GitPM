@@ -1,71 +1,139 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import { AuthError } from "@gitpm/gitlab";
-import type { AuthService } from "@gitpm/gitlab";
-import type { PublishingService } from "@gitpm/publishing";
 import { HTTP_REQUEST_BODY_SCHEMAS } from "@gitpm/contracts";
+import { AuthError } from "@gitpm/gitlab";
+import type { ProtectedOperation, PublicSession } from "@gitpm/gitlab";
+import type { CommitPublicationContext, PublicationService, RemotePublicationContext } from "@gitpm/publishing";
+import type { RepositoryConnectionManager, RepositoryConnectionUpdate } from "./repository-connection.js";
 
-const COOKIE_SECURE = process.env.GITPM_COOKIE_SECURE?.trim().toLowerCase() !== "false";
+const COOKIE_NAME = "gitpm_gitlab_session";
 
 function sessionCookieFlags(): string {
-  return `Path=/; HttpOnly;${COOKIE_SECURE ? " Secure;" : ""} SameSite=Strict`;
+  const secure = process.env.GITPM_COOKIE_SECURE?.trim().toLowerCase() !== "false";
+  return `Path=/; HttpOnly;${secure ? " Secure;" : ""} SameSite=Lax`;
 }
 
-function cookie(request: FastifyRequest, name: string): string | undefined {
+interface RepositoryAuthentication {
+  startLogin(): { authorization_url: string; state: string };
+  completeLogin(state: string, code: string): Promise<PublicSession>;
+  authorize(sessionId: string, operation: ProtectedOperation): Promise<{ session: PublicSession; accessToken: string }>;
+  logout(sessionId: string): void;
+}
+
+function cookie(request: FastifyRequest): string | undefined {
   const header = request.headers.cookie;
   if (!header) return undefined;
   for (const part of header.split(";")) {
     const [key, ...value] = part.trim().split("=");
-    if (key === name) return decodeURIComponent(value.join("="));
+    if (key === COOKIE_NAME) return decodeURIComponent(value.join("="));
   }
   return undefined;
 }
 
-function sessionId(request: FastifyRequest): string {
-  const session = cookie(request, "gitpm_session");
-  if (!session) throw new AuthError("SESSION_INVALID", "Session cookie is missing");
+function requiredSession(request: FastifyRequest): string {
+  const session = cookie(request);
+  if (!session) throw new AuthError("SESSION_INVALID", "Sign in to GitLab before using the remote");
   return session;
 }
 
-export function registerAuthAndPublishingApi(
-  app: FastifyInstance,
-  auth: AuthService,
-  publishing?: PublishingService,
-): void {
-  app.get("/api/auth/login", async () => auth.startLogin());
+export interface RepositorySession {
+  readonly session_id: "repository-session";
+  readonly user: { readonly id: string; readonly username: string };
+  readonly role: "Maintainer";
+  readonly mode: "repository";
+  readonly repository_mode?: "direct" | "worktree";
+  readonly repository: { readonly name: string; readonly path: string; readonly has_remote: boolean; readonly branch?: string };
+  readonly gitlab: {
+    readonly configured: boolean;
+    readonly user?: { readonly id: string; readonly username: string };
+    readonly role?: "Reporter" | "Developer" | "Maintainer";
+  };
+  readonly expires_at: string;
+}
 
-  app.get("/api/auth/session", async (request) => {
-    const authorization = await auth.authorize(sessionId(request), "read");
-    return {
-      user: authorization.session.user,
-      role: authorization.session.role,
-      expires_at: authorization.session.expires_at,
+export function registerAuthApi(
+  app: FastifyInstance,
+  baseSession: Omit<RepositorySession, "gitlab">,
+  publishing: PublicationService,
+  localContext: CommitPublicationContext,
+  auth: RepositoryAuthentication | undefined,
+  webUrl: string,
+  connection?: RepositoryConnectionManager,
+): void {
+  const publicBaseSession: Omit<RepositorySession, "session_id" | "gitlab"> = {
+    user: baseSession.user,
+    role: baseSession.role,
+    mode: baseSession.mode,
+    ...(baseSession.repository_mode === undefined ? {} : { repository_mode: baseSession.repository_mode }),
+    repository: baseSession.repository,
+    expires_at: baseSession.expires_at,
+  };
+  const remoteContext = async (
+    request: FastifyRequest,
+    operation: ProtectedOperation,
+  ): Promise<RemotePublicationContext> => {
+    const session = requiredSession(request);
+    if (auth === undefined) throw new AuthError("GITLAB_NOT_CONFIGURED", "GitLab is not configured for this repository");
+    const authorized = await auth.authorize(session, operation);
+    return { ownerId: localContext.ownerId, accessToken: () => authorized.accessToken };
+  };
+
+  app.get("/api/auth/session", async (request): Promise<Omit<RepositorySession, "session_id">> => {
+    const session = cookie(request);
+    if (auth !== undefined && session !== undefined) {
+      try {
+        const authorized = await auth.authorize(session, "read");
+        const repository = connection === undefined ? baseSession.repository : {
+          ...baseSession.repository,
+          has_remote: connection.status().repository_url !== undefined,
+        };
+        return { ...publicBaseSession, repository, gitlab: { configured: true, user: authorized.session.user, role: authorized.session.role } };
+      } catch (error) {
+        if (!(error instanceof AuthError) || error.code !== "SESSION_INVALID") throw error;
+      }
+    }
+    const repository = connection === undefined ? baseSession.repository : {
+      ...baseSession.repository,
+      has_remote: connection.status().repository_url !== undefined,
     };
+    return { ...publicBaseSession, repository, gitlab: { configured: auth !== undefined && (connection?.status().gitlab.configured ?? true) } };
+  });
+
+  app.get("/api/auth/login", async () => {
+    if (auth === undefined) throw new AuthError("GITLAB_NOT_CONFIGURED", "GitLab login is not configured for this repository");
+    return auth.startLogin();
   });
 
   app.get<{ Querystring: { state: string; code: string } }>("/api/auth/callback", async (request, reply) => {
+    if (auth === undefined) throw new AuthError("GITLAB_NOT_CONFIGURED", "GitLab login is not configured for this repository");
     const session = await auth.completeLogin(request.query.state, request.query.code);
     const maxAge = Math.max(0, Math.floor((Date.parse(session.expires_at) - Date.now()) / 1000));
-    reply.header(
-      "set-cookie",
-      `gitpm_session=${encodeURIComponent(session.session_id)}; ${sessionCookieFlags()}; Max-Age=${maxAge}`,
-    );
-    return session;
+    reply.header("set-cookie", `${COOKIE_NAME}=${encodeURIComponent(session.session_id)}; ${sessionCookieFlags()}; Max-Age=${maxAge}`);
+    return await reply.redirect(webUrl);
   });
 
   app.post("/api/auth/logout", async (request, reply) => {
-    const session = cookie(request, "gitpm_session");
-    if (session) auth.logout(session);
-    reply.header("set-cookie", `gitpm_session=; ${sessionCookieFlags()}; Max-Age=0`);
+    const session = cookie(request);
+    if (auth !== undefined && session !== undefined) auth.logout(session);
+    reply.header("set-cookie", `${COOKIE_NAME}=; ${sessionCookieFlags()}; Max-Age=0`);
     await reply.code(204).send();
   });
 
-  if (!publishing) return;
+  if (connection !== undefined) {
+    app.get("/api/repository/connection", async () => connection.status());
+    app.put<{ Body: RepositoryConnectionUpdate }>("/api/repository/connection", { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.repositoryConnectionUpdate } }, async (request) => await connection.update(request.body));
+    app.post("/api/repository/connection/test", async (request) => await connection.test(requiredSession(request)));
+  }
+
   app.post<{ Params: { draftId: string }; Body: { message: string } }>("/api/drafts/:draftId/commit", { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.commit } }, async (request) =>
-    await publishing.commitAll(sessionId(request), request.params.draftId, request.body.message));
+    await publishing.commit(localContext, { draftId: request.params.draftId }, request.body.message));
   app.post<{ Params: { draftId: string } }>("/api/drafts/:draftId/push", async (request) =>
-    await publishing.push(sessionId(request), request.params.draftId));
+    await publishing.push(await remoteContext(request, "push"), { draftId: request.params.draftId }));
   app.post<{ Params: { draftId: string }; Body: { title: string; description?: string } }>("/api/drafts/:draftId/merge-request", { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.mergeRequest } }, async (request) =>
-    await publishing.createMergeRequest(sessionId(request), request.params.draftId, request.body.title, request.body.description));
+    await publishing.createMergeRequest(
+      await remoteContext(request, "mr"),
+      { draftId: request.params.draftId },
+      { title: request.body.title, ...(request.body.description === undefined ? {} : { description: request.body.description }) },
+    ));
   app.get<{ Params: { draftId: string } }>("/api/drafts/:draftId/merge-request", async (request) =>
-    await publishing.pollMergeRequest(sessionId(request), request.params.draftId));
+    await publishing.pollMergeRequest(await remoteContext(request, "read"), { draftId: request.params.draftId }));
 }
