@@ -35,7 +35,7 @@ function apiFor(entries: readonly WorktreeEntry[], overrides: Partial<GitPmApi> 
 
 const noChanged = vi.fn(async () => undefined);
 
-afterEach(() => { cleanup(); localStorage.removeItem("gitpm.worktree.columns"); });
+afterEach(() => { cleanup(); });
 
 describe("working tree file manager", () => {
   it("lists the root folder, navigates into folders, and renders repository text as inert content", async () => {
@@ -46,15 +46,15 @@ describe("working tree file manager", () => {
     });
     render(<WorktreeWorkspace api={api} draft={draft} role="Developer" locale="en" onChanged={noChanged} />);
 
-    expect(await screen.findByRole("button", { name: /docs/u })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /README\.md/u })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "docs" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "README.md" })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: /README\.md/u }));
+    fireEvent.click(screen.getByRole("button", { name: "README.md" }));
     expect(await screen.findByText("<img src=x onerror=alert(1)>")).toBeTruthy();
     expect(document.querySelector("img")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: /docs/u }));
-    expect(await screen.findByRole("button", { name: /guide\.txt/u })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "docs" }));
+    expect(await screen.findByRole("button", { name: "guide.txt" })).toBeTruthy();
     expect(screen.getByText("docs")).toBeTruthy();
   });
 
@@ -70,18 +70,18 @@ describe("working tree file manager", () => {
     });
     render(<WorktreeWorkspace api={api} draft={draft} role="Developer" locale="en" onChanged={noChanged} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /docs/u }));
+    fireEvent.click(await screen.findByRole("button", { name: "docs" }));
     await vi.waitFor(() => expect(api.listWorktree).toHaveBeenCalledWith("DRF-TREE", "docs"));
     fireEvent.click(screen.getByRole("button", { name: "Root" }));
-    expect(await screen.findByRole("button", { name: /uploads/u })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "uploads" })).toBeTruthy();
 
     await act(async () => {
       resolveDocs({ path: "docs", entries: [file("docs/late.txt", 4)] });
       await docsResponse;
     });
 
-    expect(screen.queryByRole("button", { name: /late\.txt/u })).toBeNull();
-    expect(screen.getByRole("button", { name: /uploads/u })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "late.txt" })).toBeNull();
+    expect(screen.getByRole("button", { name: "uploads" })).toBeTruthy();
   });
 
   it("creates a folder through the name dialog", async () => {
@@ -97,6 +97,7 @@ describe("working tree file manager", () => {
   it("renames an entry via move", async () => {
     const api = apiFor([file("notes.txt", 3)]);
     render(<WorktreeWorkspace api={api} draft={draft} role="Developer" locale="en" onChanged={noChanged} />);
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Select notes.txt" }));
     fireEvent.click(await screen.findByRole("button", { name: /Rename/u }));
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "readme.txt" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -106,6 +107,7 @@ describe("working tree file manager", () => {
   it("deletes an entry after confirmation", async () => {
     const api = apiFor([file("draft.md", 8)]);
     render(<WorktreeWorkspace api={api} draft={draft} role="Developer" locale="en" onChanged={noChanged} confirmAction={() => true} />);
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Select draft.md" }));
     fireEvent.click(await screen.findByRole("button", { name: /Delete/u }));
     await vi.waitFor(() => expect(api.deleteWorktreeEntry).toHaveBeenCalledWith("DRF-TREE", draft.fingerprint, "draft.md"));
   });
@@ -113,8 +115,8 @@ describe("working tree file manager", () => {
   it("blocks deletion when confirmation is denied", async () => {
     const api = apiFor([file("draft.md", 8)]);
     render(<WorktreeWorkspace api={api} draft={draft} role="Developer" locale="en" onChanged={noChanged} confirmAction={() => false} />);
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Select draft.md" }));
     fireEvent.click(await screen.findByRole("button", { name: /Delete/u }));
-    await vi.waitFor(() => expect(screen.getByRole("button", { name: /Delete/u })).toBeTruthy());
     expect(api.deleteWorktreeEntry).not.toHaveBeenCalled();
   });
 
@@ -145,46 +147,28 @@ describe("working tree file manager", () => {
     expect(live).toHaveLength(0);
   });
 
-  it("renders a resizable column header and restores saved column widths", async () => {
-    localStorage.setItem("gitpm.worktree.columns", JSON.stringify({ name: 240, type: 90, size: 80 }));
-    const api = apiFor([file("notes.txt", 4)]);
+  it("groups folders and files in a fixed responsive list without column resizers", async () => {
+    const api = apiFor([file("notes.txt", 4), dir("docs")]);
     const { container } = render(<WorktreeWorkspace api={api} draft={draft} role="Developer" locale="en" onChanged={noChanged} />);
-    await screen.findByRole("button", { name: /notes\.txt/u });
-    const table = container.querySelector(".fm-table") as HTMLElement;
-    expect(table.className).toContain("fm-fixed");
-    expect(table.style.getPropertyValue("--fm-cols")).toBe("22px 240px 90px 80px");
+    await screen.findByRole("button", { name: "notes.txt" });
+    expect(screen.getByRole("heading", { name: "Folders1" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Files1" })).toBeTruthy();
     expect(screen.getByText("Name")).toBeTruthy();
     expect(screen.getByText("Size")).toBeTruthy();
-    expect(screen.getByLabelText("Resize Name column")).toBeTruthy();
+    expect(screen.queryByRole("separator")).toBeNull();
+    expect(container.querySelector(".fm-table")).toBeTruthy();
   });
 
-  it("resizes a column by dragging its header handle and persists the width", async () => {
-    localStorage.removeItem("gitpm.worktree.columns");
+  it("shows file actions in the selection toolbar and can clear the selection", async () => {
     const api = apiFor([file("notes.txt", 4)]);
-    const { container } = render(<WorktreeWorkspace api={api} draft={draft} role="Developer" locale="en" onChanged={noChanged} />);
-    await screen.findByRole("button", { name: /notes\.txt/u });
-    const nameCell = container.querySelector('.fm-header-cell[data-col="name"]') as HTMLElement;
-    const resizer = nameCell.querySelector(".fm-resizer") as HTMLElement;
-    vi.spyOn(nameCell, "getBoundingClientRect").mockReturnValue({ width: 120, height: 24, top: 0, left: 0, right: 120, bottom: 24, x: 0, y: 0, toJSON: () => ({}) } as DOMRect);
-    fireEvent.pointerDown(resizer, { clientX: 100, pointerId: 1 });
-    fireEvent.pointerMove(resizer, { clientX: 180, pointerId: 1 });
-    fireEvent.pointerUp(resizer, { clientX: 180, pointerId: 1 });
-    const table = container.querySelector(".fm-table") as HTMLElement;
-    expect(table.style.getPropertyValue("--fm-cols")).toBe("22px 200px auto auto");
-    expect(JSON.parse(localStorage.getItem("gitpm.worktree.columns") ?? "{}")).toEqual({ name: 200, type: null, size: null });
-  });
-
-  it("resizes a column with the keyboard and clamps to the minimum", async () => {
-    localStorage.removeItem("gitpm.worktree.columns");
-    const api = apiFor([file("notes.txt", 4)]);
-    const { container } = render(<WorktreeWorkspace api={api} draft={draft} role="Developer" locale="en" onChanged={noChanged} />);
-    await screen.findByRole("button", { name: /notes\.txt/u });
-    const resizer = (container.querySelector('.fm-header-cell[data-col="name"] .fm-resizer') as HTMLElement);
-    fireEvent.keyDown(resizer, { key: "ArrowLeft" });
-    fireEvent.keyDown(resizer, { key: "ArrowLeft" });
-    const table = container.querySelector(".fm-table") as HTMLElement;
-    expect(table.style.getPropertyValue("--fm-cols")).toBe("22px 48px auto auto");
-    expect(JSON.parse(localStorage.getItem("gitpm.worktree.columns") ?? "{}")).toEqual({ name: 48, type: null, size: null });
+    render(<WorktreeWorkspace api={api} draft={draft} role="Developer" locale="en" onChanged={noChanged} />);
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Select notes.txt" }));
+    expect(screen.getByRole("region", { name: "Selected: notes.txt" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Rename" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Move" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Delete" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Clear selection" }));
+    expect(screen.queryByRole("button", { name: "Rename" })).toBeNull();
   });
 
   it("hides mutation controls for read-only roles", async () => {
@@ -192,13 +176,14 @@ describe("working tree file manager", () => {
     render(<WorktreeWorkspace api={api} draft={draft} role="Reporter" locale="en" onChanged={noChanged} />);
     expect(await screen.findByText(/read-only/iu)).toBeTruthy();
     expect((screen.getByRole("button", { name: "New folder" }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole("button", { name: /Rename/u }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select readme.md" }));
+    expect((screen.getByRole("button", { name: "Rename" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("shows preview errors without dropping the file selection", async () => {
     const api = apiFor([file("binary.bin", 4)], { readWorktreeFile: async () => { throw new Error("Binary files cannot be previewed as text"); } });
     render(<WorktreeWorkspace api={api} draft={draft} role="Developer" locale="en" onChanged={noChanged} />);
-    fireEvent.click(await screen.findByRole("button", { name: /binary\.bin/u }));
+    fireEvent.click(await screen.findByRole("button", { name: "binary.bin" }));
     expect(await screen.findByText("Binary files cannot be previewed as text")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "binary.bin" })).toBeTruthy();
   });
