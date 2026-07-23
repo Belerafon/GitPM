@@ -11,13 +11,19 @@ describe("history API", () => {
     const commit = "a".repeat(40);
     const history = {
       list: vi.fn(async () => []),
-      detail: vi.fn(async () => ({ commit, parents: [], author_name: "QA", author_email: "qa@example.test", authored_at: "2026-07-10T12:00:00.000Z", subject: "Change", body: "", files: [], diff: "", semantic_summary: { created: 0, updated: 0, deleted: 0, affected_projects: [] } })),
+      detail: vi.fn(async () => ({ commit, parents: [], author_name: "QA", author_email: "qa@example.test", authored_at: "2026-07-10T12:00:00.000Z", subject: "Change", body: "", files: [], semantic_summary: { created: 0, updated: 0, deleted: 0, affected_projects: [] } })),
+      fileDiff: vi.fn(async () => ({ diff: "@@ -1 +1 @@\n-old\n+new\n", oversized: false })),
       fileHistory: vi.fn(async () => []),
       createRevertDraft: vi.fn(async () => ({ draft: { ...metadata, draft_id: "DRF-REVERT", branch: "gitpm/42/DRF-REVERT" }, reverted_commit: commit, conflicted: false, conflicted_files: [] })),
     } as unknown as HistoryService;
     const app = buildApp({ draftManager: manager, historyService: history, authenticate: () => ({ userId: "42", role: "Developer" }) });
     const detail = await app.inject({ method: "GET", url: `/api/drafts/DRF-HISTORY/history/${commit}` });
     expect(detail.statusCode).toBe(200);
+    expect(detail.body).not.toContain("\"diff\"");
+    const fileDiff = await app.inject({ method: "GET", url: `/api/drafts/DRF-HISTORY/history/${commit}/file-diff?path=${encodeURIComponent("projects/P-26-AAA/project.yaml")}` });
+    expect(fileDiff.statusCode).toBe(200);
+    expect(await fileDiff.json()).toMatchObject({ diff: expect.stringContaining("+new"), oversized: false });
+    expect(history.fileDiff).toHaveBeenCalledWith("DRF-HISTORY", commit, "projects/P-26-AAA/project.yaml");
     const reverted = await app.inject({ method: "POST", url: `/api/drafts/DRF-HISTORY/history/${commit}/revert`, payload: { draft_id: "DRF-REVERT" } });
     expect(reverted.statusCode).toBe(201);
     expect(reverted.body).not.toContain("worktree_path");

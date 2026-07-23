@@ -1,4 +1,4 @@
-import type { ChangesList, CommentResult, CommitHistoryDetail, CommitHistoryItem, CommitResult, DraftSnapshot, DraftStatus, EntityResult, GitPmDocument, MergeRequestStatus, NotificationsResult, ProjectWorkspaceResult, PublicSession, PushResult, RepositoryConnectionStatus, RepositoryConnectionTest, RepositoryConnectionUpdate, RevertDraftResult, SemanticDiff, ValidationSummary, WriterMode, ChangesSummary, WorktreeDirectory, WorktreeFile } from "./types.js";
+import type { ChangesList, CommentResult, CommitFileDiff, CommitHistoryDetail, CommitHistoryItem, CommitResult, DraftSnapshot, DraftStatus, EntityResult, GitPmDocument, MergeRequestStatus, NotificationsResult, ProjectWorkspaceResult, PublicSession, PushResult, RepositoryConnectionStatus, RepositoryConnectionTest, RepositoryConnectionUpdate, RevertDraftResult, SemanticDiff, ValidationSummary, WriterMode, ChangesSummary, WorktreeDirectory, WorktreeFile } from "./types.js";
 
 export class ApiError extends Error {
   constructor(public readonly code: string, message: string, public readonly details?: unknown) {
@@ -48,6 +48,7 @@ export interface GitPmApi {
   pollMergeRequest(draftId: string): Promise<MergeRequestStatus>;
   history(draftId: string): Promise<readonly CommitHistoryItem[]>;
   commitDetail(draftId: string, commit: string): Promise<CommitHistoryDetail>;
+  commitFileDiff(draftId: string, commit: string, path: string): Promise<CommitFileDiff>;
   fileHistory(draftId: string, path: string): Promise<readonly CommitHistoryItem[]>;
   createRevertDraft(draftId: string, commit: string, newDraftId: string): Promise<RevertDraftResult>;
   listComments(draftId: string, projectId: string, taskId: string): Promise<readonly CommentResult[]>;
@@ -210,6 +211,9 @@ export class HttpGitPmApi implements GitPmApi {
   }
   async commitDetail(draftId: string, commit: string): Promise<CommitHistoryDetail> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/history/${encodeURIComponent(commit)}`);
+  }
+  async commitFileDiff(draftId: string, commit: string, path: string): Promise<CommitFileDiff> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/history/${encodeURIComponent(commit)}/file-diff?path=${encodeURIComponent(path)}`);
   }
   async fileHistory(draftId: string, path: string): Promise<readonly CommitHistoryItem[]> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/file-history?path=${encodeURIComponent(path)}`);

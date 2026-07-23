@@ -5,7 +5,7 @@ import { App } from "./App.js";
 import type { GitPmApi } from "./api.js";
 import { POLL_INTERVAL_MS } from "./draft-context.js";
 import { assertLocalePacks, formatDateOnly, formatDurationHours, formatNumber, localeRegistry, LOCALE_STORAGE_KEY, message, pluralCategory, registerLocale, selectLocale } from "./i18n.js";
-import type { ChangesList, CommitHistoryDetail, CommitResult, DraftSnapshot, DraftStatus, EntityResult, GitPmDocument, MergeRequestStatus, PublicSession, PushResult, RevertDraftResult, SemanticDiff, WriterMode, WorktreeDirectory, WorktreeFile } from "./types.js";
+import type { ChangesList, CommitFileDiff, CommitHistoryDetail, CommitResult, DraftSnapshot, DraftStatus, EntityResult, GitPmDocument, MergeRequestStatus, PublicSession, PushResult, RevertDraftResult, SemanticDiff, WriterMode, WorktreeDirectory, WorktreeFile } from "./types.js";
 
 const session: PublicSession = {
   user: { id: "42", username: "developer" },
@@ -90,6 +90,7 @@ class FakeApi implements GitPmApi {
   async pollMergeRequest(): Promise<MergeRequestStatus> { throw new Error("not used"); }
   async history() { return []; }
   async commitDetail(): Promise<CommitHistoryDetail> { throw new Error("not used"); }
+  async commitFileDiff(): Promise<CommitFileDiff> { throw new Error("not used"); }
   async fileHistory() { return []; }
   async createRevertDraft(): Promise<RevertDraftResult> { throw new Error("not used"); }
   async listComments() { return []; }

@@ -5,7 +5,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 import { DraftManager } from "@gitpm/drafts";
-import { GitClient } from "@gitpm/git-client";
+import { GitClient, GitCommandError } from "@gitpm/git-client";
 import { HistoryService } from "./index.js";
 
 const execFileAsync = promisify(execFile);
@@ -39,6 +39,11 @@ describe("history and revert drafts", () => {
     ]);
     const detail = await service.detail("DRF-SOURCE", revertedCommit);
     expect(detail).toMatchObject({ commit: revertedCommit, files: [{ path: "projects/P-26-H1ST0R/project.yaml", status: "Modified", additions: 1, deletions: 1 }], semantic_summary: { updated: 1, affected_projects: ["P-26-H1ST0R"] } });
+    expect("diff" in detail).toBe(false);
+    const fileDiff = await service.fileDiff("DRF-SOURCE", revertedCommit, "projects/P-26-H1ST0R/project.yaml");
+    expect(fileDiff.oversized).toBe(false);
+    expect(fileDiff.diff).toContain("-name: Before");
+    expect(fileDiff.diff).toContain("+name: After");
     await expect(service.detail("DRF-SOURCE", history[1]!.commit)).resolves.toMatchObject({
       files: [{ path: "projects/P-26-H1ST0R/project.yaml", status: "Added" }],
       semantic_summary: { created: 1, updated: 0, deleted: 0, affected_projects: ["P-26-H1ST0R"] },
@@ -55,5 +60,16 @@ describe("history and revert drafts", () => {
   it("rejects traversal in file history", async () => {
     const service = new HistoryService({} as DraftManager, {} as GitClient);
     await expect(service.fileHistory("DRF", "../secret")).rejects.toMatchObject({ code: "HISTORY_PATH_INVALID" });
+  });
+
+  it("returns an oversized marker instead of failing when a single-file diff exceeds the output limit", async () => {
+    const drafts = { getDraft: async () => ({ worktree_path: "C:/private/worktree" }) } as unknown as DraftManager;
+    const git = {
+      commitFileDiff: async () => { throw new GitCommandError("GIT_OUTPUT_LIMIT", "too big"); },
+    } as unknown as GitClient;
+    const service = new HistoryService(drafts, git);
+    await expect(service.fileDiff("DRF", "a".repeat(40), "../escape")).rejects.toMatchObject({ code: "HISTORY_PATH_INVALID" });
+    const oversized = await service.fileDiff("DRF", "a".repeat(40), "projects/P-26-BIG/project.yaml");
+    expect(oversized).toMatchObject({ diff: "", oversized: true });
   });
 });

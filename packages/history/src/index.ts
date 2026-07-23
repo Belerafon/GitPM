@@ -1,4 +1,5 @@
 import type { DraftManager, DraftMetadata } from "@gitpm/drafts";
+import { GitCommandError } from "@gitpm/git-client";
 import type { GitClient, GitCommitDetail, GitHistoryEntry } from "@gitpm/git-client";
 
 export interface HistorySemanticSummary {
@@ -16,11 +17,23 @@ export interface CommitHistoryDetail extends GitCommitDetail {
   readonly semantic_summary: HistorySemanticSummary;
 }
 
+export interface CommitFileDiff {
+  readonly diff: string;
+  readonly oversized: boolean;
+}
+
 export interface RevertDraftResult {
   readonly draft: DraftMetadata;
   readonly reverted_commit: string;
   readonly conflicted: boolean;
   readonly conflicted_files: readonly string[];
+}
+
+function assertRepositoryRelativePath(relativePath: string): string {
+  if (relativePath.includes("\\") || relativePath.startsWith("/") || relativePath.split("/").some((part) => part === "" || part === "." || part === "..")) {
+    throw new HistoryError("HISTORY_PATH_INVALID", "History path must be a normalized repository-relative path");
+  }
+  return relativePath;
 }
 
 function summarizeFiles(files: readonly { readonly path: string; readonly status: "Added" | "Modified" | "Deleted" }[]): HistorySemanticSummary {
@@ -59,10 +72,20 @@ export class HistoryService {
     return { ...detail, semantic_summary: summarizeFiles(detail.files) };
   }
 
-  async fileHistory(draftId: string, relativePath: string, limit = 50): Promise<readonly GitHistoryEntry[]> {
-    if (relativePath.includes("\\") || relativePath.startsWith("/") || relativePath.split("/").some((part) => part === "" || part === "." || part === "..")) {
-      throw new HistoryError("HISTORY_PATH_INVALID", "History path must be a normalized repository-relative path");
+  async fileDiff(draftId: string, commit: string, relativePath: string): Promise<CommitFileDiff> {
+    assertRepositoryRelativePath(relativePath);
+    const draft = await this.drafts.getDraft(draftId);
+    try {
+      const diff = await this.git.commitFileDiff(draft.worktree_path, commit, relativePath);
+      return { diff, oversized: false };
+    } catch (error) {
+      if (error instanceof GitCommandError && error.code === "GIT_OUTPUT_LIMIT") return { diff: "", oversized: true };
+      throw error;
     }
+  }
+
+  async fileHistory(draftId: string, relativePath: string, limit = 50): Promise<readonly GitHistoryEntry[]> {
+    assertRepositoryRelativePath(relativePath);
     const draft = await this.drafts.getDraft(draftId);
     return await this.git.fileHistory(draft.worktree_path, relativePath, limit);
   }

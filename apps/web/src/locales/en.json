@@ -379,6 +379,8 @@
   ,"history.message": "Message"
   ,"history.selectFile": "Select a file to view its diff"
   ,"history.noTextDiff": "This file has no textual diff."
+  ,"history.diffTooLarge": "This file's diff is too large to display. Inspect the commit in your Git client."
+  ,"history.diffLoading": "Loading diff\u2026"
   ,"history.revertActions": "Revert this commit"
   ,"board.heading": "Board"
   ,"board.description": "Move Tasks between status columns and preserve reusable filtered views."

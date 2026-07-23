@@ -168,7 +168,11 @@ export interface CommitHistoryItem {
 export interface CommitHistoryDetail extends CommitHistoryItem {
   readonly body: string;
   readonly files: readonly { readonly path: string; readonly status: "Added" | "Modified" | "Deleted"; readonly additions: number | null; readonly deletions: number | null }[];
+}
+
+export interface CommitFileDiff {
   readonly diff: string;
+  readonly oversized: boolean;
 }
 
 export interface RevertDraftResult {

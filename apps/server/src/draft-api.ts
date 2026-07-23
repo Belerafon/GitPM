@@ -317,6 +317,12 @@ export function registerHistoryApi(
     return await history.detail(request.params.draftId, request.params.commit);
   });
 
+  app.get<{ Params: { draftId: string; commit: string }; Querystring: { path: string } }>("/api/drafts/:draftId/history/:commit/file-diff", async (request) => {
+    const actor = await authenticate(request);
+    await requireDraftRead(manager, actor, request.params.draftId);
+    return await history.fileDiff(request.params.draftId, request.params.commit, request.query.path);
+  });
+
   app.get<{ Params: { draftId: string }; Querystring: { path: string; limit?: string } }>("/api/drafts/:draftId/file-history", async (request) => {
     const actor = await authenticate(request);
     await requireDraftRead(manager, actor, request.params.draftId);

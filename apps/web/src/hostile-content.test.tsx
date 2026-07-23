@@ -21,7 +21,6 @@ const detail: CommitHistoryDetail = {
   ...item,
   body: payload,
   files: [{ path: `projects/P-26-H0ST1E/${payload}.yaml`, status: "Modified", additions: 1, deletions: 1 }],
-  diff: `+${payload}\n`,
 };
 const draft: DraftStatus = {
   draft_id: "DRF-HOSTILE",
@@ -50,6 +49,7 @@ describe("P13A hostile browser content", () => {
     const api = {
       history: vi.fn(async () => [item]),
       commitDetail: vi.fn(async () => detail),
+      commitFileDiff: vi.fn(async () => ({ diff: `+${payload}\n`, oversized: false })),
       fileHistory: vi.fn(async () => [item]),
     } as unknown as GitPmApi;
     const history = render(<HistoryWorkspace api={api} draft={draft} locale="en" canRevert={false} onDraftCreated={vi.fn(async () => undefined)} />);

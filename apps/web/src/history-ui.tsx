@@ -12,14 +12,6 @@ interface DiffLine {
   readonly text: string;
 }
 
-export function splitCommitDiff(diff: string, paths: readonly string[]): ReadonlyMap<string, string> {
-  if (paths.length === 0) return new Map();
-  const starts = [...diff.matchAll(/^diff --git /gmu)].map((match) => match.index);
-  if (starts.length === 0) return new Map([[paths[0]!, diff]]);
-  const sections = starts.map((start, index) => diff.slice(start, starts[index + 1] ?? diff.length));
-  return new Map(paths.map((path, index) => [path, sections[index] ?? ""]));
-}
-
 function renderDiffLines(diff: string): readonly DiffLine[] {
   let oldNumber: number | undefined;
   let newNumber: number | undefined;
@@ -38,7 +30,9 @@ function renderDiffLines(diff: string): readonly DiffLine[] {
   });
 }
 
-function FileDiff({ diff, emptyLabel }: { readonly diff: string; readonly emptyLabel: string }) {
+function FileDiff({ diff, oversized, loading, emptyLabel, tooLargeLabel, loadingLabel }: { readonly diff: string; readonly oversized: boolean; readonly loading: boolean; readonly emptyLabel: string; readonly tooLargeLabel: string; readonly loadingLabel: string }) {
+  if (oversized) return <p className="diff-oversized">{tooLargeLabel}</p>;
+  if (loading) return <div className="history-diff-empty">{loadingLabel}</div>;
   if (diff.trim() === "") return <div className="history-diff-empty">{emptyLabel}</div>;
   return <div className="history-diff-code" role="region" aria-live="polite">
     {renderDiffLines(diff).map((line, index) => <div className={`history-diff-line diff-line-${line.kind}`} key={`${index}:${line.text}`}>
@@ -66,6 +60,9 @@ export function HistoryWorkspace({ api, draft, locale, canRevert, initialCommit 
   const [dateFilter, setDateFilter] = useState("");
   const [detail, setDetail] = useState<CommitHistoryDetail | null>(null);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const [fileDiffText, setFileDiffText] = useState<string>("");
+  const [fileDiffOversized, setFileDiffOversized] = useState(false);
+  const [fileDiffLoading, setFileDiffLoading] = useState(false);
   const [fileItems, setFileItems] = useState<readonly CommitHistoryItem[]>([]);
   const [filePath, setFilePath] = useState<string | null>(null);
   const [fileQuery, setFileQuery] = useState("");
@@ -90,6 +87,19 @@ export function HistoryWorkspace({ api, draft, locale, canRevert, initialCommit 
     applyDetail(null); setHistoryQuery(""); setAuthorFilter(""); setProjectFilter(""); setDateFilter(""); setFileItems([]); setFilePath(null); setFileQuery(""); setConflicts([]);
     void load();
   }, [api, draft.draft_id]);
+
+  useEffect(() => {
+    if (detail === null || selectedPath === null) { setFileDiffText(""); setFileDiffOversized(false); setFileDiffLoading(false); return; }
+    let cancelled = false;
+    const commit = detail.commit;
+    const path = selectedPath;
+    setFileDiffLoading(true); setFileDiffText(""); setFileDiffOversized(false); setError(null);
+    void api.commitFileDiff(draft.draft_id, commit, path)
+      .then((result) => { if (!cancelled) { setFileDiffText(result.diff); setFileDiffOversized(result.oversized); } })
+      .catch((caught) => { if (!cancelled) report(caught); })
+      .finally(() => { if (!cancelled) setFileDiffLoading(false); });
+    return () => { cancelled = true; };
+  }, [detail?.commit, selectedPath]);
 
   const report = (caught: unknown) => setError(caught instanceof Error ? caught.message : String(caught));
   const select = async (item: CommitHistoryItem) => {
@@ -119,7 +129,6 @@ export function HistoryWorkspace({ api, draft, locale, canRevert, initialCommit 
   const projects = [...new Set(items.flatMap((item) => item.semantic_summary.affected_projects))].sort((left, right) => left.localeCompare(right, locale));
   const visibleItems = items.filter((item) => (normalizedHistoryQuery === "" || `${item.subject} ${item.author_name} ${item.commit}`.toLocaleLowerCase(locale).includes(normalizedHistoryQuery)) && (authorFilter === "" || item.author_name === authorFilter) && (projectFilter === "" || item.semantic_summary.affected_projects.includes(projectFilter)) && (dateFilter === "" || item.authored_at.slice(0, 10) === dateFilter));
   const selectedFile = detail?.files.find((file) => file.path === selectedPath);
-  const selectedDiff = detail === null || selectedPath === null ? "" : splitCommitDiff(detail.diff, detail.files.map((file) => file.path)).get(selectedPath) ?? "";
 
   return <section className="history-workspace">
     <div className="section-heading"><span className="eyebrow">Git</span><h2 aria-hidden="true">{t("history.heading")}</h2><p>{t("history.description")}</p></div>
@@ -158,7 +167,7 @@ export function HistoryWorkspace({ api, draft, locale, canRevert, initialCommit 
             </aside>
             <section className="history-diff-pane" aria-label={t("history.diff")}>
               <header><div><span className="eyebrow">{t("history.diff")}</span><h3>{selectedPath ?? t("history.selectFile")}</h3></div>{selectedFile !== undefined && <span className="history-diff-stats"><b>+{selectedFile.additions ?? "—"}</b><b>−{selectedFile.deletions ?? "—"}</b></span>}</header>
-              <FileDiff diff={selectedDiff} emptyLabel={t(selectedPath === null ? "history.selectFile" : "history.noTextDiff")} />
+              <FileDiff diff={fileDiffText} oversized={fileDiffOversized} loading={fileDiffLoading} emptyLabel={t(selectedPath === null ? "history.selectFile" : "history.noTextDiff")} tooLargeLabel={t("history.diffTooLarge")} loadingLabel={t("status.loading")} />
             </section>
           </div>
           {canRevert && <details className="history-actions"><summary>{t("history.revertActions")}</summary><form className="revert-form" onSubmit={submitRevert}><label>{t("history.revertDraft")}<input value={newDraftId} onChange={(event) => setNewDraftId(event.target.value)} pattern="[A-Za-z0-9][A-Za-z0-9-]{0,127}" required /></label><button className="primary" disabled={busy}>{t("history.createRevert")}</button></form></details>}

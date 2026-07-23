@@ -65,7 +65,6 @@ export interface GitCommitFile {
 export interface GitCommitDetail extends GitHistoryEntry {
   readonly body: string;
   readonly files: readonly GitCommitFile[];
-  readonly diff: string;
 }
 
 export interface GitRevertResult {
@@ -551,8 +550,17 @@ export class GitClient {
         deletions: deleted === "-" ? null : Number.parseInt(deleted, 10),
       };
     });
-    const diff = await this.git(["-C", canonical, "show", "--format=", "--no-color", "--no-ext-diff", "--no-textconv", "--no-renames", "--unified=3", commit]);
-    return { ...entry, body: fields.slice(6).join("\x1f").trim(), files, diff: diff.stdout };
+    return { ...entry, body: fields.slice(6).join("\x1f").trim(), files };
+  }
+
+  async commitFileDiff(worktree: string, commitInput: string, relativePath: string): Promise<string> {
+    const commit = assertCommitId(commitInput);
+    const canonical = await realpath(worktree);
+    await this.assertCommitReachable(canonical, commit);
+    const diff = await this.git([
+      "-C", canonical, "show", "--format=", "--no-color", "--no-ext-diff", "--no-textconv", "--no-renames", "--unified=3", commit, "--", relativePath,
+    ]);
+    return diff.stdout;
   }
 
   async revertNoCommit(worktree: string, commitInput: string): Promise<GitRevertResult> {

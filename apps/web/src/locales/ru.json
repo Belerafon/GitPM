@@ -379,6 +379,8 @@
   ,"history.message": "Сообщение"
   ,"history.selectFile": "Выберите файл, чтобы посмотреть его diff"
   ,"history.noTextDiff": "Для этого файла нет текстового diff."
+  ,"history.diffTooLarge": "Diff этого файла слишком велик для показа. Посмотрите коммит в вашем Git-клиенте."
+  ,"history.diffLoading": "Загрузка diff\u2026"
   ,"history.revertActions": "Откатить этот коммит"
   ,"board.heading": "Доска"
   ,"board.description": "Перемещайте задачи между колонками статусов и сохраняйте представления с фильтрами."
