@@ -24,6 +24,7 @@ describe("scripted agent CLI", () => {
     const client = new GitClient({ dataDirectory: data, remoteUrl: remote, defaultBranch: "main", allowLocalTestRemote: true, askPassPath: path.join(process.cwd(), "scripts", "git-askpass.mjs") }); const drafts = new DraftManager(client, data); const gitlab = new GitLabProtocolTestDouble(); const agent = new AgentWorkflow(drafts, client, new ChangesService(drafts, client), { accessToken: "agent-cli-token", authorName: "agent-42", authorEmail: "42@users.noreply.gitlab.example.test", defaultBranch: "main", mergeRequests: gitlab });
     const invoke = async (args: string[]) => JSON.parse((await run([...args, "--json"], root, { agent })).output) as Record<string, unknown>;
     const created = await invoke(["draft", "create", "--draft", "DRF-CLI", "--owner", "42"]); expect(created).toMatchObject({ ok: true, draft: { writer_mode: "external" } }); const draft = await agent.status("DRF-CLI");
+    await writeFile(path.join(draft.worktree_path, "uploads", "source.yaml"), "customer: Acme\n", "utf8");
     const entityFile = path.join(root, "new-task.yaml");
     await writeFile(entityFile, (await readFile(path.join(draft.worktree_path, ...taskFile.split("/")), "utf8"))
       .replace("id: T-26-RHBNH8", "id: T-26-VP4MHE")

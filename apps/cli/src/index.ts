@@ -8,6 +8,7 @@ import { resolveRepositoryMode } from "@gitpm/shared";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { DirectCliRuntime } from "./direct-runtime.js";
+import { mergeRequestProtocolFromEnvironment } from "./runtime.js";
 
 const WORKSPACE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -61,11 +62,13 @@ async function environmentAgent() {
   const drafts = new DraftManager(git, dataDirectory);
   await git.initialize();
   await drafts.recover();
+  const mergeRequests = mergeRequestProtocolFromEnvironment(process.env);
   return new AgentWorkflow(drafts, git, new ChangesService(drafts, git), {
     accessToken: process.env.GITPM_ACCESS_TOKEN,
     authorName: process.env.GITPM_AGENT_AUTHOR_NAME ?? "GitPM Agent",
     authorEmail: process.env.GITPM_AGENT_AUTHOR_EMAIL ?? "agent@users.noreply.gitlab.example.test",
     defaultBranch,
+    ...(mergeRequests === undefined ? {} : { mergeRequests }),
   });
 }
 

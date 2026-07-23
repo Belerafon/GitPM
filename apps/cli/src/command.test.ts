@@ -64,6 +64,10 @@ describe("CLI P02 commands", () => {
     const help = await run(["entity", "create", "--help", "--json"]);
     expect(help.exitCode).toBe(0);
     expect(JSON.parse(help.output)).toMatchObject({ ok: true, command: "entity", help: expect.stringContaining("default_calendar") });
+    for (const command of ["format", "validate", "diff", "commit"]) {
+      const commandHelp = JSON.parse((await run([command, "--help", "--json"])).output) as { help: string };
+      expect(commandHelp.help).toContain("--allow-delete");
+    }
     const schema = await run(["schema", "show", "person", "--json"]);
     expect(JSON.parse(schema.output)).toMatchObject({ ok: true, name: "person", required: expect.arrayContaining(["calendar", "weekly_capacity_hours"]), optional: expect.arrayContaining(["email"]) });
     expect((await run(["schema", "show", "person", "--example"])).output).toContain("schema: gitpm/person@1");
@@ -72,13 +76,16 @@ describe("CLI P02 commands", () => {
   it("checks and applies canonical formatting", async () => {
     const root = await fixture();
     const file = path.join(root, ".gitpm", "repository.yaml");
+    const source = path.join(root, "uploads", "source.yaml");
     await writeFile(file, `# comment\n${await readFile(file, "utf8")}`, "utf8");
+    await writeFile(source, "customer:  Acme\n", "utf8");
     const check = await run(["format", "--check", "--json", "--root", root]);
     expect(check.exitCode).toBe(1);
     expect(JSON.parse(check.output)).toMatchObject({ code: "FORMAT_REQUIRED", changed_files: [".gitpm/repository.yaml"] });
     expect((await run(["format", "--root", root])).exitCode).toBe(0);
     expect((await run(["format", "--check", "--root", root])).exitCode).toBe(0);
     expect(await readFile(file, "utf8")).not.toContain("# comment");
+    expect(await readFile(source, "utf8")).toBe("customer:  Acme\n");
   });
 
   it("returns a neutral JSON validation report with stable codes", async () => {

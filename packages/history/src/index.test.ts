@@ -33,8 +33,16 @@ describe("history and revert drafts", () => {
     await drafts.createDraft("DRF-SOURCE", "42");
     const history = await service.list("DRF-SOURCE");
     expect(history.map((item) => item.subject)).toEqual(["Merged project update", "Initial project"]);
+    expect(history.map((item) => item.semantic_summary)).toEqual([
+      { created: 0, updated: 1, deleted: 0, affected_projects: ["P-26-H1ST0R"] },
+      { created: 1, updated: 0, deleted: 0, affected_projects: ["P-26-H1ST0R"] },
+    ]);
     const detail = await service.detail("DRF-SOURCE", revertedCommit);
-    expect(detail).toMatchObject({ commit: revertedCommit, files: [{ path: "projects/P-26-H1ST0R/project.yaml", additions: 1, deletions: 1 }], semantic_summary: { updated: 1, affected_projects: ["P-26-H1ST0R"] } });
+    expect(detail).toMatchObject({ commit: revertedCommit, files: [{ path: "projects/P-26-H1ST0R/project.yaml", status: "Modified", additions: 1, deletions: 1 }], semantic_summary: { updated: 1, affected_projects: ["P-26-H1ST0R"] } });
+    await expect(service.detail("DRF-SOURCE", history[1]!.commit)).resolves.toMatchObject({
+      files: [{ path: "projects/P-26-H1ST0R/project.yaml", status: "Added" }],
+      semantic_summary: { created: 1, updated: 0, deleted: 0, affected_projects: ["P-26-H1ST0R"] },
+    });
     const result = await service.createRevertDraft("DRF-SOURCE", revertedCommit, "DRF-REVERT", "42");
     expect(result).toMatchObject({ reverted_commit: revertedCommit, conflicted: false, draft: { base_commit: revertedCommit, branch: "gitpm/42/DRF-REVERT" } });
     expect(await readFile(path.join(result.draft.worktree_path, "projects", "P-26-H1ST0R", "project.yaml"), "utf8")).toContain("name: Before");

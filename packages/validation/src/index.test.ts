@@ -1,4 +1,4 @@
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -32,6 +32,20 @@ describe("repository validation", () => {
     expect(report).toMatchObject({ valid: true, documentCount: 14, errors: [], warnings: [] });
   });
 
+  it("rejects an empty directory and missing required repository layout", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "gitpm-validation-empty-"));
+    roots.push(root);
+    const report = await validateRepository(root);
+    expect(report.valid).toBe(false);
+    expect(report.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "REPOSITORY_DIRECTORY_REQUIRED", path: ".gitpm" }),
+      expect.objectContaining({ code: "REPOSITORY_DIRECTORY_REQUIRED", path: "projects" }),
+      expect.objectContaining({ code: "REPOSITORY_DOCUMENT_REQUIRED", path: ".gitpm/repository.yaml" }),
+      expect.objectContaining({ code: "REPOSITORY_DOCUMENT_REQUIRED", path: ".gitpm/statuses.yaml" }),
+      expect.objectContaining({ code: "REPOSITORY_DOCUMENT_REQUIRED", path: ".gitpm/issue-types.yaml" }),
+    ]));
+  });
+
   it("accepts an optional non-empty Project group and rejects invalid group values", async () => {
     const valid = await fixture();
     await replace(valid, `projects/${project}/project.yaml`, "lifecycle: active", "lifecycle: active\ngroup: Внутренняя платформа");
@@ -63,7 +77,21 @@ describe("repository validation", () => {
   it("accepts ignored input files in an allowed non-domain directory", async () => {
     const root = await fixture();
     await writeFile(path.join(root, "uploads", "incoming-report.pdf"), "opaque user input", "utf8");
+    await writeFile(path.join(root, "uploads", "source.yaml"), "customer: Acme\n", "utf8");
     expect(await validateRepository(root)).toMatchObject({ valid: true, errors: [] });
+  });
+
+  it("rejects symlinks inside domain directories without following them", async () => {
+    const root = await fixture();
+    const outside = await mkdtemp(path.join(os.tmpdir(), "gitpm-validation-outside-"));
+    roots.push(outside);
+    await writeFile(path.join(outside, "external.yaml"), "schema: gitpm/project@1\n", "utf8");
+    await symlink(outside, path.join(root, "projects", "linked"), process.platform === "win32" ? "junction" : "dir");
+    const report = await validateRepository(root);
+    expect(report.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "FS_SYMLINK", path: "projects/linked" }),
+    ]));
+    expect(report.documentCount).toBe(14);
   });
 
   it("accepts saved milestone and task order", async () => {

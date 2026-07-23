@@ -145,8 +145,9 @@ Manage task comments with \`gitpm comment list|create|update|delete\` and reposi
 configuration with \`gitpm config show|update --kind statuses|issue-types\`.
 
 Then run \`format\`, \`validate --changed\`, and \`diff --semantic\` with \`--json\` and
-\`--project\` when scoped. Commit with \`gitpm commit --all\`. Use \`gitpm push\` only when
-publication was requested. There is no \`mr\` command in direct mode.
+\`--project\` when scoped. Repeat \`--allow-delete\` on every verification and commit command
+while a physical deletion is present. Commit with \`gitpm commit --all\`. Use \`gitpm push\`
+only when publication was requested. There is no \`mr\` command in direct mode.
 
 ## Errors, ambiguity, and product feedback
 
@@ -264,12 +265,12 @@ All commands accept \`--json\`; use it for automation. Direct-mode commands do n
 - \`gitpm config update --kind statuses|issue-types [--file <yaml>] [--set <field>=<yaml-value>]...
   [--unset <field>]\` updates repository configuration.
 - \`gitpm schema list|show <type> [--example]\` exposes the installed schema contract.
-- \`gitpm format [--project <id>] [--check]\` applies or checks canonical YAML.
-- \`gitpm validate [--project <id>] [--changed]\` validates repository structure, schemas,
+- \`gitpm format [--project <id>] [--check] [--allow-delete]\` applies or checks canonical YAML.
+- \`gitpm validate [--project <id>] [--changed] [--allow-delete]\` validates repository structure, schemas,
   identities, references, dates, and scope closure.
-- \`gitpm diff --semantic [--project <id>]\` reports created, updated, archived, and deleted
+- \`gitpm diff --semantic [--project <id>] [--allow-delete]\` reports created, updated, archived, and deleted
   entities.
-- \`gitpm commit --all -m <message> [--project <id>]\` validates and commits every change onto the
+- \`gitpm commit --all -m <message> [--project <id>] [--allow-delete]\` validates and commits every change onto the
   active branch.
 - \`gitpm push\` fast-forward publishes the active branch to \`origin\`.
 - \`gitpm doctor\` checks runtime and repository readiness.
@@ -295,7 +296,8 @@ treated as permission to widen scope. Ask the user if the requested outcome trul
 changes.
 
 Physical deletion is distinct from archive. \`gitpm entity delete\` removes the entity file and
-requires \`--allow-delete\`; use \`--dry-run\` first to preview reference restrictions.
+requires \`--allow-delete\`; use \`--dry-run\` first to preview reference restrictions. Repeat
+\`--allow-delete\` for format, validation, semantic diff, and commit while the deletion is present.
 \`gitpm entity archive\` sets lifecycle to archived without removing the file. Reference and
 repository validation still apply to both.
 
@@ -303,11 +305,11 @@ repository validation still apply to both.
 
 Run, in order:
 
-\`gitpm format [--project <project-id>] --json\`
+\`gitpm format [--project <project-id>] [--allow-delete] --json\`
 
-\`gitpm validate --changed [--project <project-id>] --json\`
+\`gitpm validate --changed [--project <project-id>] [--allow-delete] --json\`
 
-\`gitpm diff --semantic [--project <project-id>] --json\`
+\`gitpm diff --semantic [--project <project-id>] [--allow-delete] --json\`
 
 Check the process exit code, \`ok\`, stable \`code\`, affected Projects, entity counts, fields, and
 unclassified files. Stop on any unexpected path, scope, deletion, warning requiring user judgment, or
@@ -318,7 +320,7 @@ broader scope.
 
 Commit only after the semantic result matches the user's intent:
 
-\`gitpm commit --all -m <message> [--project <project-id>] --json\`
+\`gitpm commit --all -m <message> [--project <project-id>] [--allow-delete] --json\`
 
 This intentionally stages all validated changes onto the active branch; partial staging is not
 supported. Do not substitute raw Git commands.

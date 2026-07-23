@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { GITPM_VERSION } from "@gitpm/shared";
 import { formatYamlText, parseYamlDocument, parseYamlValue, referenceLabelsForDocuments, RepositoryFormatError } from "@gitpm/repository-format";
-import { validateRepository } from "@gitpm/validation";
+import { discoverRepositoryFiles, validateRepository } from "@gitpm/validation";
 import { atomicWriteDomainFile } from "@gitpm/security";
 import type { AgentScope, AgentScopeReport, AgentWorkflow } from "@gitpm/agent";
 import type { DirectCliRuntime } from "./direct-runtime.js";
@@ -144,10 +144,10 @@ const commandHelp: Readonly<Record<string, string>> = {
     "  gitpm schema list [--json]",
     "  gitpm schema show <type> [--example] [--json]",
   ].join("\n"),
-  validate: "Usage: gitpm validate [--draft <id>] [--project <id>] [--changed] [--json]",
-  format: "Usage: gitpm format [--draft <id>] [--project <id>] [--check] [--json]",
-  diff: "Usage: gitpm diff --semantic [--draft <id>] [--project <id>] [--json]",
-  commit: "Usage: gitpm commit --all [--draft <id>] -m <message> [--project <id>] [--json]",
+  validate: "Usage: gitpm validate [--draft <id>] [--project <id>] [--changed] [--allow-delete] [--json]",
+  format: "Usage: gitpm format [--draft <id>] [--project <id>] [--check] [--allow-delete] [--json]",
+  diff: "Usage: gitpm diff --semantic [--draft <id>] [--project <id>] [--allow-delete] [--json]",
+  commit: "Usage: gitpm commit --all [--draft <id>] -m <message> [--project <id>] [--allow-delete] [--json]",
   status: "Usage: gitpm status [--draft <id>] [--json]",
   draft: "Usage: gitpm draft create|open|status|set-writer --draft <id> [--owner <id>] [ui|external] [--json]",
   push: "Usage: gitpm push [--draft <id>] [--json]",
@@ -246,16 +246,12 @@ async function runSchema(args: readonly string[]): Promise<CliResult> {
 }
 
 async function yamlFiles(root: string): Promise<string[]> {
-  const result: string[] = [];
-  const walk = async (directory: string): Promise<void> => {
-    for (const entry of await readdir(directory, { withFileTypes: true })) {
-      const absolute = path.join(directory, entry.name);
-      if (entry.isDirectory()) await walk(absolute);
-      else if (entry.name.endsWith(".yaml")) result.push(absolute);
-    }
-  };
-  await walk(root);
-  return result.sort();
+  const discovery = await discoverRepositoryFiles(root);
+  if (discovery.issues.length > 0) {
+    const issue = discovery.issues[0]!;
+    throw new RepositoryFormatError(issue.code, issue.message);
+  }
+  return [...discovery.files];
 }
 
 async function runFormat(args: readonly string[], cwd: string, scoped?: AgentScopeReport): Promise<CliResult> {

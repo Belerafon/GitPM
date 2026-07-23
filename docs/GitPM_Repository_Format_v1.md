@@ -34,6 +34,10 @@ JSON Schema 2020-12. Этот документ фиксирует правила
 - `.gitpm/statuses.yaml` — `gitpm/statuses@1`;
 - `.gitpm/issue-types.yaml` — `gitpm/issue-types@1`.
 
+Validation возвращает `REPOSITORY_DIRECTORY_REQUIRED`, если обязательный каталог
+отсутствует или не является каталогом, `REPOSITORY_DOCUMENT_REQUIRED`, если отсутствует
+фиксированный конфигурационный документ, и `FS_SYMLINK` для symlink в repository/domain path.
+
 Person, Team и Calendar хранятся соответственно в `people`, `teams` и
 `calendars`; имя файла равно ID плюс `.yaml`. Project является единственным
 исключением: его ID равен имени каталога `projects/<project-id>`, а сущность

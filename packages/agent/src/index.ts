@@ -1,4 +1,4 @@
-import { lstat, mkdir, readFile, readdir, rm, rmdir } from "node:fs/promises";
+import { lstat, mkdir, readFile, rm, rmdir } from "node:fs/promises";
 import path from "node:path";
 import type { ChangesService, SemanticDiff } from "@gitpm/changes";
 import { GITPM_GUIDANCE_FILES, GITPM_GUIDANCE_PATHS, provisionGitPmWorktreeGuidance } from "@gitpm/drafts";
@@ -20,7 +20,7 @@ import type { GitClient } from "@gitpm/git-client";
 import type { GitLabMergeRequestProtocol, MergeRequestPayload, MergeRequestState } from "@gitpm/gitlab";
 import { formatYamlDocument, parseYamlDocument, referenceLabelForDocument, referenceLabelsForDocuments, type GitPmDocument } from "@gitpm/repository-format";
 import { atomicWriteDomainFile } from "@gitpm/security";
-import { validateDelete, validateRepository } from "@gitpm/validation";
+import { discoverRepositoryFiles, validateDelete, validateRepository } from "@gitpm/validation";
 
 export class AgentWorkflowError extends Error {
   constructor(public readonly code: string, message: string, public readonly details?: unknown) {
@@ -79,20 +79,15 @@ interface RepositoryEntry {
 }
 
 async function repositoryEntries(root: string): Promise<RepositoryEntry[]> {
-  const result: RepositoryEntry[] = [];
-  const walk = async (directory: string): Promise<void> => {
-    for (const entry of await readdir(directory, { withFileTypes: true })) {
-      if (entry.name === ".git") continue;
-      const absolute = path.join(directory, entry.name);
-      if (entry.isDirectory()) await walk(absolute);
-      else if (entry.name.endsWith(".yaml")) {
-        const relative = path.relative(root, absolute).split(path.sep).join("/");
-        result.push({ absolute, relative, document: parseYamlDocument(await readFile(absolute, "utf8"), relative) });
-      }
-    }
-  };
-  await walk(root);
-  return result;
+  const discovery = await discoverRepositoryFiles(root);
+  if (discovery.issues.length > 0) {
+    const issue = discovery.issues[0]!;
+    throw new AgentWorkflowError(issue.code, issue.message, discovery.issues);
+  }
+  return await Promise.all(discovery.files.map(async (absolute): Promise<RepositoryEntry> => {
+    const relative = path.relative(root, absolute).split(path.sep).join("/");
+    return { absolute, relative, document: parseYamlDocument(await readFile(absolute, "utf8"), relative) };
+  }));
 }
 
 async function repositoryDocuments(root: string): Promise<GitPmDocument[]> {
