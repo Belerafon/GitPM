@@ -1,10 +1,43 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { GitPmApi } from "./api.js";
 import type { Locale, MessageKey } from "./i18n.js";
 import { message } from "./i18n.js";
 import type { DraftStatus, GitPmRole, WorktreeEntry, WorktreeFile } from "./types.js";
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+
+type ColumnKey = "name" | "type" | "size";
+type ColumnWidths = Record<ColumnKey, number | null>;
+interface ColumnResize { readonly column: ColumnKey; readonly pointerId: number; readonly startX: number; readonly startWidth: number; }
+
+const COLUMN_STORAGE_KEY = "gitpm.worktree.columns";
+const DEFAULT_COLUMN_WIDTHS: ColumnWidths = { name: null, type: null, size: null };
+const MIN_COLUMN_WIDTH = 48;
+const MAX_COLUMN_WIDTH = 720;
+const COLUMN_ORDER: readonly ColumnKey[] = ["name", "type", "size"];
+
+function clampColumnWidth(value: number): number {
+  if (!Number.isFinite(value)) return MIN_COLUMN_WIDTH;
+  return Math.min(MAX_COLUMN_WIDTH, Math.max(MIN_COLUMN_WIDTH, Math.round(value)));
+}
+
+function readColumnWidths(): ColumnWidths {
+  if (typeof localStorage === "undefined") return DEFAULT_COLUMN_WIDTHS;
+  try {
+    const raw = localStorage.getItem(COLUMN_STORAGE_KEY);
+    if (raw === null) return DEFAULT_COLUMN_WIDTHS;
+    const parsed = JSON.parse(raw) as Partial<Record<string, unknown>> | null;
+    if (parsed === null || typeof parsed !== "object") return DEFAULT_COLUMN_WIDTHS;
+    const coerced: ColumnWidths = { ...DEFAULT_COLUMN_WIDTHS };
+    for (const key of COLUMN_ORDER) {
+      const value = parsed[key];
+      if (typeof value === "number" && Number.isFinite(value)) coerced[key] = clampColumnWidth(value);
+    }
+    return coerced;
+  } catch {
+    return DEFAULT_COLUMN_WIDTHS;
+  }
+}
 
 function formatBytes(locale: Locale, bytes: number): string {
   if (bytes < 1024) return `${new Intl.NumberFormat(locale).format(bytes)} B`;
@@ -171,6 +204,9 @@ export function WorktreeWorkspace({ api, draft, role, locale, onChanged, confirm
   const treeRequest = useRef(0);
   const fileRequest = useRef(0);
   const fileInput = useRef<HTMLInputElement | null>(null);
+  const [columnWidths, setColumnWidths] = useState<ColumnWidths>(readColumnWidths);
+  const [columnDrag, setColumnDrag] = useState<ColumnResize | null>(null);
+  const headerCells = useRef<Record<ColumnKey, HTMLSpanElement | null>>({ name: null, type: null, size: null });
 
   const load = (path: string) => {
     const request = ++treeRequest.current;
@@ -190,6 +226,10 @@ export function WorktreeWorkspace({ api, draft, role, locale, onChanged, confirm
     load("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api, draft.draft_id]);
+
+  useEffect(() => {
+    try { localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify(columnWidths)); } catch { /* storage unavailable */ }
+  }, [columnWidths]);
 
   const navigate = (path: string) => {
     if (busy) return;
@@ -259,14 +299,51 @@ export function WorktreeWorkspace({ api, draft, role, locale, onChanged, confirm
     void run(async () => { await api.moveWorktreeEntry(draft.draft_id, draft.fingerprint, entry.path, to); }, selectedPath !== entry.path);
   };
 
+  const beginColumnResize = (event: ReactPointerEvent<HTMLSpanElement>, column: ColumnKey) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    const cell = headerCells.current[column];
+    if (cell === null) return;
+    event.preventDefault();
+    const startWidth = cell.getBoundingClientRect().width || columnWidths[column] || MIN_COLUMN_WIDTH;
+    try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* pointer capture unavailable */ }
+    setColumnDrag({ column, pointerId: event.pointerId, startX: event.clientX, startWidth });
+  };
+
+  const moveColumnResize = (event: ReactPointerEvent<HTMLSpanElement>) => {
+    if (columnDrag === null || event.pointerId !== columnDrag.pointerId) return;
+    const next = clampColumnWidth(columnDrag.startWidth + (event.clientX - columnDrag.startX));
+    setColumnWidths((prev) => ({ ...prev, [columnDrag.column]: next }));
+  };
+
+  const endColumnResize = (event: ReactPointerEvent<HTMLSpanElement>) => {
+    if (columnDrag === null || event.pointerId !== columnDrag.pointerId) return;
+    try { event.currentTarget.releasePointerCapture(event.pointerId); } catch { /* pointer capture unavailable */ }
+    setColumnDrag(null);
+  };
+
+  const resizeColumnByKey = (event: ReactKeyboardEvent<HTMLSpanElement>, column: ColumnKey) => {
+    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+      event.preventDefault();
+      const cell = headerCells.current[column];
+      const current = cell?.getBoundingClientRect().width ?? columnWidths[column] ?? MIN_COLUMN_WIDTH;
+      const step = event.shiftKey ? 32 : 8;
+      const delta = event.key === "ArrowRight" ? step : -step;
+      setColumnWidths((prev) => ({ ...prev, [column]: clampColumnWidth(current + delta) }));
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      setColumnWidths((prev) => ({ ...prev, [column]: null }));
+    }
+  };
+
   const onFilesSelected = async (files: FileList | null) => {
+    const selected = files === null ? [] : Array.from(files);
     if (fileInput.current) fileInput.current.value = "";
-    if (!canMutate || busy || files === null || files.length === 0) return;
+    if (!canMutate || busy || selected.length === 0) return;
     setBusy(true);
     setActionError(null);
     try {
       let fingerprint = draft.fingerprint;
-      for (const file of Array.from(files)) {
+      for (const file of selected) {
         if (file.size > MAX_UPLOAD_BYTES) { setActionError(message(locale, "worktree.uploadTooLarge", { name: file.name })); return; }
         const base64 = await readAsBase64(file);
         fingerprint = await api.uploadWorktreeFile(draft.draft_id, fingerprint, joinPath(currentPath, file.name), base64);
@@ -281,6 +358,8 @@ export function WorktreeWorkspace({ api, draft, role, locale, onChanged, confirm
   };
 
   const breadcrumb = useMemo(() => crumbs(currentPath), [currentPath]);
+  const columnTemplate = `22px ${columnWidths.name === null ? "minmax(5rem, 1fr)" : `${columnWidths.name}px`} ${columnWidths.type === null ? "auto" : `${columnWidths.type}px`} ${columnWidths.size === null ? "auto" : `${columnWidths.size}px`}`;
+  const columnsCustomized = columnWidths.name !== null || columnWidths.type !== null || columnWidths.size !== null;
 
   return <section className="fm-layout">
     <div className="fm-browser card">
@@ -305,27 +384,51 @@ export function WorktreeWorkspace({ api, draft, role, locale, onChanged, confirm
       <div className="fm-list" role="region" aria-label={t("worktree.heading")}>
         {entries === null && treeError === null && <span className="fm-empty">{t("status.loading")}</span>}
         {treeError !== null && <span className="fm-empty error">{treeError}</span>}
-        {entries !== null && entries.length === 0 && <span className="fm-empty">{t("worktree.empty")}</span>}
-        {entries?.map((entry) => {
-          const isFile = entry.type === "file";
-          const isDir = entry.type === "directory";
-          const unavailable = !isFile && !isDir;
-          const main = unavailable
-            ? <span className="fm-row-main unavailable" title={t(entry.type === "symlink" ? "worktree.symlinkUnavailable" : "worktree.entryUnavailable")}>{entryIcon(entry)}<span className="fm-row-name">{entry.name}</span></span>
-            : <button type="button" className={`fm-row-main${selectedPath === entry.path ? " selected" : ""}`} onClick={() => (isDir ? navigate(entry.path) : selectFile(entry.path))} title={entry.path}>
-              {entryIcon(entry)}<span className="fm-row-name">{entry.name}</span>
-              <span className="fm-row-type">{isDir ? t("worktree.type.folder") : isFile ? t("worktree.type.file") : ""}</span>
-              <span className="fm-row-size">{entry.size !== undefined ? formatBytes(locale, entry.size) : ""}</span>
-            </button>;
-          return <div className="fm-row" key={entry.path}>
-            {main}
-            {!unavailable && <div className="fm-row-actions">
-              <button type="button" onClick={() => openRename(entry)} disabled={!canMutate || busy}>{t("worktree.rename")}</button>
-              <button type="button" onClick={() => openMove(entry)} disabled={!canMutate || busy}>{t("worktree.move")}</button>
-              <button type="button" className="danger" onClick={() => removeEntry(entry)} disabled={!canMutate || busy}>{t("worktree.delete")}</button>
-            </div>}
-          </div>;
-        })}
+        {entries !== null && (
+          <div className={`fm-table${columnsCustomized ? " fm-fixed" : ""}`} style={{ "--fm-cols": columnTemplate } as CSSProperties}>
+            <div className="fm-header" role="row">
+              <span className="fm-header-spacer" aria-hidden="true" />
+              {COLUMN_ORDER.map((column) => (
+                <span className="fm-header-cell" key={column} ref={(el) => { headerCells.current[column] = el; }} data-col={column}>
+                  <span className="fm-header-label">{t(`worktree.column.${column}` as MessageKey)}</span>
+                  <span
+                    className="fm-resizer"
+                    role="separator"
+                    aria-orientation="vertical"
+                    tabIndex={0}
+                    aria-label={message(locale, "worktree.resizeColumn", { name: t(`worktree.column.${column}` as MessageKey) })}
+                    title={message(locale, "worktree.resizeColumn", { name: t(`worktree.column.${column}` as MessageKey) })}
+                    onPointerDown={(event) => beginColumnResize(event, column)}
+                    onPointerMove={moveColumnResize}
+                    onPointerUp={endColumnResize}
+                    onKeyDown={(event) => resizeColumnByKey(event, column)}
+                  />
+                </span>
+              ))}
+            </div>
+            {entries.length === 0 && <span className="fm-empty">{t("worktree.empty")}</span>}
+            {entries.map((entry) => {
+              const isFile = entry.type === "file";
+              const isDir = entry.type === "directory";
+              const unavailable = !isFile && !isDir;
+              const main = unavailable
+                ? <span className="fm-row-main unavailable" title={t(entry.type === "symlink" ? "worktree.symlinkUnavailable" : "worktree.entryUnavailable")}>{entryIcon(entry)}<span className="fm-row-name">{entry.name}</span></span>
+                : <button type="button" className={`fm-row-main${selectedPath === entry.path ? " selected" : ""}`} onClick={() => (isDir ? navigate(entry.path) : selectFile(entry.path))} title={entry.path}>
+                  {entryIcon(entry)}<span className="fm-row-name" title={entry.name}>{entry.name}</span>
+                  <span className="fm-row-type">{isDir ? t("worktree.type.folder") : isFile ? t("worktree.type.file") : ""}</span>
+                  <span className="fm-row-size">{entry.size !== undefined ? formatBytes(locale, entry.size) : ""}</span>
+                </button>;
+              return <div className="fm-row" key={entry.path}>
+                {main}
+                {!unavailable && <div className="fm-row-actions">
+                  <button type="button" onClick={() => openRename(entry)} disabled={!canMutate || busy}>{t("worktree.rename")}</button>
+                  <button type="button" onClick={() => openMove(entry)} disabled={!canMutate || busy}>{t("worktree.move")}</button>
+                  <button type="button" className="danger" onClick={() => removeEntry(entry)} disabled={!canMutate || busy}>{t("worktree.delete")}</button>
+                </div>}
+              </div>;
+            })}
+          </div>
+        )}
       </div>
     </div>
     <div className="fm-preview card">

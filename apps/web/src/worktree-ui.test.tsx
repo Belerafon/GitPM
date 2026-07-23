@@ -35,7 +35,7 @@ function apiFor(entries: readonly WorktreeEntry[], overrides: Partial<GitPmApi> 
 
 const noChanged = vi.fn(async () => undefined);
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); localStorage.removeItem("gitpm.worktree.columns"); });
 
 describe("working tree file manager", () => {
   it("lists the root folder, navigates into folders, and renders repository text as inert content", async () => {
@@ -128,6 +128,63 @@ describe("working tree file manager", () => {
     await vi.waitFor(() => expect(api.uploadWorktreeFile).toHaveBeenCalledTimes(2));
     expect(api.uploadWorktreeFile).toHaveBeenNthCalledWith(1, "DRF-TREE", draft.fingerprint, "a.txt", expect.any(String));
     expect(api.uploadWorktreeFile).toHaveBeenNthCalledWith(2, "DRF-TREE", "c".repeat(64), "b.txt", expect.any(String));
+  });
+
+  it("uploads files even when resetting the input clears the live FileList (browser parity)", async () => {
+    const api = apiFor([]);
+    render(<WorktreeWorkspace api={api} draft={draft} role="Developer" locale="en" onChanged={noChanged} />);
+    const input = (await screen.findByRole("button", { name: "Upload" })).parentElement?.querySelector("input[type=file]") as HTMLInputElement;
+    const fileA = new File(["aaa"], "a.txt");
+    const fileB = new File(["bb"], "b.txt");
+    let live: File[] = [fileA, fileB];
+    Object.defineProperty(input, "files", { configurable: true, get: () => live });
+    Object.defineProperty(input, "value", { configurable: true, get: () => (live.length ? live[0]!.name : ""), set: (next: string) => { if (next === "") live = []; } });
+    fireEvent.change(input);
+    await vi.waitFor(() => expect(api.uploadWorktreeFile).toHaveBeenCalledTimes(2));
+    expect(api.uploadWorktreeFile).toHaveBeenNthCalledWith(1, "DRF-TREE", draft.fingerprint, "a.txt", expect.any(String));
+    expect(live).toHaveLength(0);
+  });
+
+  it("renders a resizable column header and restores saved column widths", async () => {
+    localStorage.setItem("gitpm.worktree.columns", JSON.stringify({ name: 240, type: 90, size: 80 }));
+    const api = apiFor([file("notes.txt", 4)]);
+    const { container } = render(<WorktreeWorkspace api={api} draft={draft} role="Developer" locale="en" onChanged={noChanged} />);
+    await screen.findByRole("button", { name: /notes\.txt/u });
+    const table = container.querySelector(".fm-table") as HTMLElement;
+    expect(table.className).toContain("fm-fixed");
+    expect(table.style.getPropertyValue("--fm-cols")).toBe("22px 240px 90px 80px");
+    expect(screen.getByText("Name")).toBeTruthy();
+    expect(screen.getByText("Size")).toBeTruthy();
+    expect(screen.getByLabelText("Resize Name column")).toBeTruthy();
+  });
+
+  it("resizes a column by dragging its header handle and persists the width", async () => {
+    localStorage.removeItem("gitpm.worktree.columns");
+    const api = apiFor([file("notes.txt", 4)]);
+    const { container } = render(<WorktreeWorkspace api={api} draft={draft} role="Developer" locale="en" onChanged={noChanged} />);
+    await screen.findByRole("button", { name: /notes\.txt/u });
+    const nameCell = container.querySelector('.fm-header-cell[data-col="name"]') as HTMLElement;
+    const resizer = nameCell.querySelector(".fm-resizer") as HTMLElement;
+    vi.spyOn(nameCell, "getBoundingClientRect").mockReturnValue({ width: 120, height: 24, top: 0, left: 0, right: 120, bottom: 24, x: 0, y: 0, toJSON: () => ({}) } as DOMRect);
+    fireEvent.pointerDown(resizer, { clientX: 100, pointerId: 1 });
+    fireEvent.pointerMove(resizer, { clientX: 180, pointerId: 1 });
+    fireEvent.pointerUp(resizer, { clientX: 180, pointerId: 1 });
+    const table = container.querySelector(".fm-table") as HTMLElement;
+    expect(table.style.getPropertyValue("--fm-cols")).toBe("22px 200px auto auto");
+    expect(JSON.parse(localStorage.getItem("gitpm.worktree.columns") ?? "{}")).toEqual({ name: 200, type: null, size: null });
+  });
+
+  it("resizes a column with the keyboard and clamps to the minimum", async () => {
+    localStorage.removeItem("gitpm.worktree.columns");
+    const api = apiFor([file("notes.txt", 4)]);
+    const { container } = render(<WorktreeWorkspace api={api} draft={draft} role="Developer" locale="en" onChanged={noChanged} />);
+    await screen.findByRole("button", { name: /notes\.txt/u });
+    const resizer = (container.querySelector('.fm-header-cell[data-col="name"] .fm-resizer') as HTMLElement);
+    fireEvent.keyDown(resizer, { key: "ArrowLeft" });
+    fireEvent.keyDown(resizer, { key: "ArrowLeft" });
+    const table = container.querySelector(".fm-table") as HTMLElement;
+    expect(table.style.getPropertyValue("--fm-cols")).toBe("22px 48px auto auto");
+    expect(JSON.parse(localStorage.getItem("gitpm.worktree.columns") ?? "{}")).toEqual({ name: 48, type: null, size: null });
   });
 
   it("hides mutation controls for read-only roles", async () => {

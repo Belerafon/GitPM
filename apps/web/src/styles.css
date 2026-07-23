@@ -371,9 +371,17 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .fm-actions button { font-size: .74rem; }
 .fm-file-input { display: none; }
 .fm-list { margin-top: .8rem; border: 1px solid #e0e3de; border-radius: 8px; background: #fbfcfa; overflow: auto; max-height: 64vh; }
+.fm-table { display: block; min-width: 100%; }
+.fm-table.fm-fixed { min-width: max-content; }
+.fm-header { display: grid; grid-template-columns: var(--fm-cols, 22px minmax(5rem, 1fr) auto auto); align-items: center; gap: .55rem; padding: .4rem .6rem; border-bottom: 1px solid #dfe2dd; background: #f3f6f2; position: sticky; top: 0; z-index: 1; }
+.fm-header-spacer { width: 22px; }
+.fm-header-cell { position: relative; min-width: 0; display: flex; align-items: center; }
+.fm-header-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .64rem; letter-spacing: .05em; text-transform: uppercase; color: #6b736d; }
+.fm-resizer { position: absolute; top: 0; right: -4px; bottom: 0; width: 9px; cursor: col-resize; touch-action: none; user-select: none; border-radius: 3px; }
+.fm-resizer:hover, .fm-resizer:focus-visible, .fm-resizer:active { background: rgba(48, 110, 76, .22); }
 .fm-row { display: flex; align-items: center; gap: .25rem; border-bottom: 1px solid #eef0ec; }
 .fm-row:last-child { border-bottom: 0; }
-.fm-row-main { flex: 1; min-width: 0; display: grid; grid-template-columns: 22px minmax(5rem, 1fr) auto auto; align-items: center; gap: .55rem; min-height: 40px; background: transparent; border: 0; padding: .3rem .6rem; text-align: left; cursor: pointer; font: inherit; font-size: .8rem; color: #333a35; }
+.fm-row-main { flex: 1; min-width: 0; display: grid; grid-template-columns: var(--fm-cols, 22px minmax(5rem, 1fr) auto auto); align-items: center; gap: .55rem; min-height: 40px; background: transparent; border: 0; padding: .3rem .6rem; text-align: left; cursor: pointer; font: inherit; font-size: .8rem; color: #333a35; }
 .fm-row-main:hover { background: #edf3ee; }
 .fm-row-main.selected { background: #dfece4; color: #245541; font-weight: 650; }
 .fm-row-main.unavailable { color: #8a908b; cursor: not-allowed; }
