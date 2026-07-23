@@ -315,6 +315,7 @@
   ,"changes.kindDeleted": "Deleted"
   ,"changes.restoreFile": "Restore file"
   ,"changes.restoreHunk": "Restore hunk"
+  ,"changes.diffTooLarge": "This change is too large to display. Restore the file or commit and review it in the history."
   ,"changes.semanticEyebrow": "Domain view"
   ,"changes.semanticHeading": "Semantic diff"
   ,"changes.projects": "Affected projects: {count}"

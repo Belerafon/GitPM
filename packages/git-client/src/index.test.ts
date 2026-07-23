@@ -260,4 +260,52 @@ describe("direct-mode checkout", () => {
 
     expect(await git(fixture.root, "--git-dir", upstream, "rev-parse", "main")).toBe(result.commit);
   });
+
+  it("diffFiles falls back to per-file diffs when the combined batch exceeds the output limit", async () => {
+    const fixture = await remoteFixture();
+    const client = new GitClient({
+      dataDirectory: path.join(fixture.root, "data"),
+      remoteUrl: fixture.remote,
+      defaultBranch: "main",
+      allowLocalTestRemote: true,
+    });
+    const block = (count: number) => `${Array.from({ length: count }, (_, index) => `line-${index}-${"x".repeat(20)}`).join("\n")}\n`;
+    const targets = ["big-a.txt", "big-b.txt", "big-c.txt"];
+    for (const target of targets) await writeFile(path.join(fixture.source, target), "base\n", "utf8");
+    await git(fixture.source, "add", ".");
+    await git(fixture.source, "-c", "user.name=GitPM Test", "-c", "user.email=gitpm@example.test", "commit", "-m", "big bases");
+    await git(fixture.source, "push", "origin", "main");
+
+    await client.initialize();
+    const fetched = await client.fetch();
+    const worktree = await client.addWorktree("gitpm/42/DRF-BIG", "DRF-BIG", fetched);
+    for (const target of targets) await writeFile(path.join(worktree, target), block(15000), "utf8");
+
+    const diffs = await client.diffFiles(worktree, targets, 1);
+    expect(diffs.size).toBe(targets.length);
+    for (const target of targets) expect(diffs.get(target)?.startsWith(`diff --git a/${target} b/${target}`)).toBe(true);
+  });
+
+  it("diffFiles omits a single file whose diff exceeds the output limit", async () => {
+    const fixture = await remoteFixture();
+    const client = new GitClient({
+      dataDirectory: path.join(fixture.root, "data"),
+      remoteUrl: fixture.remote,
+      defaultBranch: "main",
+      allowLocalTestRemote: true,
+    });
+    const block = (count: number) => `${Array.from({ length: count }, (_, index) => `line-${index}-${"x".repeat(20)}`).join("\n")}\n`;
+    await writeFile(path.join(fixture.source, "huge.txt"), "base\n", "utf8");
+    await git(fixture.source, "add", ".");
+    await git(fixture.source, "-c", "user.name=GitPM Test", "-c", "user.email=gitpm@example.test", "commit", "-m", "huge base");
+    await git(fixture.source, "push", "origin", "main");
+
+    await client.initialize();
+    const fetched = await client.fetch();
+    const worktree = await client.addWorktree("gitpm/42/DRF-HUGE", "DRF-HUGE", fetched);
+    await writeFile(path.join(worktree, "huge.txt"), block(38000), "utf8");
+
+    const diffs = await client.diffFiles(worktree, ["huge.txt"], 1);
+    expect(diffs.size).toBe(0);
+  });
 });

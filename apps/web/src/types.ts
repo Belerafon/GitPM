@@ -69,6 +69,7 @@ export interface FileChange {
   readonly diff: string;
   readonly diff_token: string;
   readonly hunks: readonly DiffHunk[];
+  readonly oversized?: boolean;
 }
 
 export interface ChangesList extends ChangesSummary {

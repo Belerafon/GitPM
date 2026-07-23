@@ -3,7 +3,7 @@ import { readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { GITPM_GUIDANCE_FILES } from "@gitpm/drafts";
 import type { DraftManager } from "@gitpm/drafts";
-import type { GitClient } from "@gitpm/git-client";
+import { GitCommandError, type GitClient } from "@gitpm/git-client";
 import { parseYamlDocument, type GitPmDocument } from "@gitpm/repository-format";
 import { atomicWriteDomainFile, resolveDomainPath } from "@gitpm/security";
 import { validateRepository } from "@gitpm/validation";
@@ -16,6 +16,7 @@ export interface FileChange {
   readonly diff: string;
   readonly diff_token: string;
   readonly hunks: readonly DiffHunk[];
+  readonly oversized?: boolean;
 }
 
 export interface DiffHunk {
@@ -91,6 +92,10 @@ function addedFileDiff(relativePath: string, content: string): string {
   const lines = normalized.endsWith("\n") ? normalized.slice(0, -1).split("\n") : normalized.split("\n");
   if (lines.length === 1 && lines[0] === "") return `diff --git a/${relativePath} b/${relativePath}\nnew file mode 100644\n--- /dev/null\n+++ b/${relativePath}\n`;
   return `diff --git a/${relativePath} b/${relativePath}\nnew file mode 100644\n--- /dev/null\n+++ b/${relativePath}\n@@ -0,0 +1,${lines.length} @@\n${lines.map((line) => `+${line}`).join("\n")}\n`;
+}
+
+function oversizedDiffPlaceholder(relativePath: string): string {
+  return `diff --git a/${relativePath} b/${relativePath}\n--- a/${relativePath}\n+++ b/${relativePath}\n`;
 }
 
 function documentIdentity(document: GitPmDocument): { id: string; schema: string; project?: string } | undefined {
@@ -202,14 +207,27 @@ export class ChangesService {
     const metadata = await this.drafts.getDraft(draftId);
     const status = parseStatus(await this.git.statusPorcelainZ(metadata.worktree_path))
       .filter((change) => !GITPM_GUIDANCE_FILES.has(change.path));
-    const batchPaths = status.filter((change) => change.kind !== "Added" && /^[A-Za-z0-9._/-]+$/u.test(change.path)).map((change) => change.path);
-    const batchDiffs = await this.git.diffFiles(metadata.worktree_path, batchPaths, 1);
+    const batchPaths = new Set(status.filter((change) => change.kind !== "Added" && /^[A-Za-z0-9._/-]+$/u.test(change.path)).map((change) => change.path));
+    const batchDiffs = await this.git.diffFiles(metadata.worktree_path, [...batchPaths], 1);
     const files = await mapConcurrent(status, 16, async (change): Promise<FileChange> => {
       const relative = safeRelativePath(change.path);
-      const diff = change.kind === "Added"
-        ? addedFileDiff(relative, await readFile(await resolveDomainPath(metadata.worktree_path, relative), "utf8"))
-        : batchDiffs.get(relative) ?? await this.git.diffFile(metadata.worktree_path, relative, 1);
-      return { path: relative, kind: change.kind, diff, diff_token: token(diff), hunks: parseUnifiedDiff(diff) };
+      let diff: string;
+      let oversized = false;
+      if (change.kind === "Added") {
+        diff = addedFileDiff(relative, await readFile(await resolveDomainPath(metadata.worktree_path, relative), "utf8"));
+      } else if (batchPaths.has(relative)) {
+        const fromBatch = batchDiffs.get(relative);
+        if (fromBatch === undefined) { diff = oversizedDiffPlaceholder(relative); oversized = true; }
+        else diff = fromBatch;
+      } else {
+        try {
+          diff = await this.git.diffFile(metadata.worktree_path, relative, 1);
+        } catch (error) {
+          if (error instanceof GitCommandError && error.code === "GIT_OUTPUT_LIMIT") { diff = oversizedDiffPlaceholder(relative); oversized = true; }
+          else throw error;
+        }
+      }
+      return { path: relative, kind: change.kind, diff, diff_token: token(diff), hunks: parseUnifiedDiff(diff), ...(oversized ? { oversized: true } : {}) };
     });
     const affected = new Set<string>();
     for (const file of files) {
