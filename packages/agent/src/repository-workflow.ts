@@ -1,7 +1,6 @@
 import type { ChangesService, SemanticDiff } from "@gitpm/changes";
 import {
   GITPM_GUIDANCE_FILES,
-  GITPM_GUIDANCE_PATHS,
   type DraftManager,
   type RepositoryMutationMode,
   type RepositoryWorkspace,
@@ -14,8 +13,13 @@ import {
   type EntityResult,
 } from "@gitpm/domain";
 import type { GitClient } from "@gitpm/git-client";
+import type { GitLabMergeRequestProtocol, MergeRequestState } from "@gitpm/gitlab";
+import {
+  PublicationService,
+  validateMergeRequestData,
+  type MergeRequestData,
+} from "@gitpm/publishing";
 import type { GitPmDocument } from "@gitpm/repository-format";
-import { validateRepository } from "@gitpm/validation";
 
 export interface AgentScope {
   readonly allowedProject?: string;
@@ -40,10 +44,10 @@ export interface RepositoryWorkflowOptions {
   readonly mutationMode: RepositoryMutationMode;
   readonly authorEmail: string;
   readonly authorName: string;
+  readonly defaultBranch: string;
+  readonly mergeRequests?: GitLabMergeRequestProtocol;
   readonly prepareWorkspace: (workspaceId: string) => Promise<void>;
   readonly createError?: WorkflowErrorFactory;
-  readonly emptyCommitMessage?: string;
-  readonly dirtyPushMessage?: string;
 }
 
 const projectPath = (value: string): string | undefined =>
@@ -80,16 +84,21 @@ export function assertAgentScope(
 export class RepositoryWorkflow {
   private readonly entities: EntityStore;
   private readonly createError: WorkflowErrorFactory;
+  private readonly publication: PublicationService;
 
   constructor(
     private readonly drafts: DraftManager,
-    private readonly git: GitClient,
+    git: GitClient,
     private readonly changes: ChangesService,
     private readonly options: RepositoryWorkflowOptions,
   ) {
     this.entities = new EntityStore(drafts, options.mutationMode);
     this.createError = options.createError ?? ((code, message, details) =>
       new RepositoryWorkflowError(code, message, details));
+    this.publication = new PublicationService(drafts, git, {
+      defaultBranch: options.defaultBranch,
+      ...(options.mergeRequests === undefined ? {} : { mergeRequests: options.mergeRequests }),
+    });
   }
 
   async assertScope(workspaceId: string, scope: AgentScope = {}): Promise<AgentScopeReport> {
@@ -302,30 +311,12 @@ export class RepositoryWorkflow {
 
   async commitAll(workspaceId: string, message: string, scope: AgentScope = {}) {
     const workspace = await this.workspace(workspaceId);
-    const scoped = await this.assertScope(workspaceId, scope);
-    const validation = await validateRepository(workspace.worktree_path);
-    if (!validation.valid) {
-      throw this.createError(
-        "VALIDATION_FAILED",
-        "Commit is blocked by repository validation",
-        validation.errors,
-      );
-    }
-    if (scoped.changed_files.length === 0) {
-      throw this.createError(
-        "NOTHING_TO_COMMIT",
-        this.options.emptyCommitMessage ?? "Working copy has no business changes",
-      );
-    }
-    const commit = await this.git.commitAll(
-      workspace.worktree_path,
-      message,
-      this.options.authorName,
-      this.options.authorEmail,
-      GITPM_GUIDANCE_PATHS,
-    );
-    const metadata = await this.drafts.refreshWorkspaceFingerprint(workspaceId);
-    return { commit, branch: metadata.branch, draft_fingerprint: metadata.fingerprint };
+    await this.assertScope(workspaceId, scope);
+    return await this.publication.commit({
+      ownerId: workspace.owner_id,
+      authorName: this.options.authorName,
+      authorEmail: this.options.authorEmail,
+    }, { draftId: workspaceId }, message);
   }
 
   async push(
@@ -333,16 +324,32 @@ export class RepositoryWorkflow {
     accessToken: string | undefined,
     missingToken: { readonly code: string; readonly message: string },
   ): Promise<{ branch: string; commit: string }> {
+    const workspace = await this.workspace(workspaceId);
+    return await this.publication.push({
+      ownerId: workspace.owner_id,
+      accessToken: () => {
+        if (accessToken === undefined) throw this.createError(missingToken.code, missingToken.message);
+        return accessToken;
+      },
+    }, { draftId: workspaceId });
+  }
+
+  async createMergeRequest(
+    workspaceId: string,
+    ownerId: string,
+    accessToken: string | undefined,
+    data: MergeRequestData,
+    missingConfiguration: { readonly code: string; readonly message: string },
+  ): Promise<MergeRequestState> {
     await this.workspace(workspaceId);
-    const changes = await this.changes.list(workspaceId);
-    if (changes.files.length > 0) {
-      throw this.createError(
-        "UNCOMMITTED_CHANGES",
-        this.options.dirtyPushMessage ?? "Push requires a clean committed working copy",
-      );
+    validateMergeRequestData(data);
+    if (accessToken === undefined || this.options.mergeRequests === undefined) {
+      throw this.createError(missingConfiguration.code, missingConfiguration.message);
     }
-    if (accessToken === undefined) throw this.createError(missingToken.code, missingToken.message);
-    return await this.drafts.push(workspaceId, accessToken);
+    return await this.publication.createMergeRequest({
+      ownerId,
+      accessToken: () => accessToken,
+    }, { draftId: workspaceId }, data);
   }
 
   private async workspace(workspaceId: string): Promise<RepositoryWorkspace> {

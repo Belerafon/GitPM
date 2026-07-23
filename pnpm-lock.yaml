@@ -172,6 +172,9 @@ importers:
       '@gitpm/gitlab':
         specifier: workspace:*
         version: link:../gitlab
+      '@gitpm/publishing':
+        specifier: workspace:*
+        version: link:../publishing
       '@gitpm/repository-format':
         specifier: workspace:*
         version: link:../repository-format

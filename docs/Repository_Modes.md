@@ -160,7 +160,13 @@ same `RepositoryWorkspace` and repository-mutation surface; direct mutations use
 Both UI and CLI CRUD delegate to `EntityStore`, so validation, reference rewrites and
 rollback have one implementation. CLI use cases shared by `DirectCliRuntime` and
 `AgentWorkflow` additionally delegate to the mode-neutral `RepositoryWorkflow`: scope
-checks, entity create/import/update/list/show/delete/archive/move, semantic diff, commit
-and push are implemented once. The two adapters retain only mode-specific preparation,
-draft lifecycle, status, credentials, comments/configuration and Merge Request behavior.
-The server runtime picks the backend from the resolved mode.
+checks, entity create/import/update/list/show/delete/archive/move and semantic diff are
+implemented once. `RepositoryWorkflow` delegates commit, push and Merge Request
+orchestration to the same `PublicationService` used by the server.
+`PublicationService` is the single application service for commit, push, and Merge
+Request orchestration. The server OAuth route and CLI runtimes only adapt local
+author identity, in-memory credentials, and agent scope/writer-mode preconditions
+before calling that service.
+The CLI adapters retain only mode-specific preparation, draft lifecycle, status,
+credentials, comments and configuration. The server runtime picks the backend from
+the resolved mode.

@@ -8,7 +8,7 @@ import type { ConfigurationDocument, GitPmDocument } from "@gitpm/contracts";
 import { ChangesError } from "@gitpm/changes";
 import type { ChangesService } from "@gitpm/changes";
 import { AuthError } from "@gitpm/gitlab";
-import { PublishingError } from "@gitpm/publishing";
+import { PublicationError } from "@gitpm/publishing";
 import { HistoryError } from "@gitpm/history";
 import type { HistoryService } from "@gitpm/history";
 import { validateRepository } from "@gitpm/validation";
@@ -144,7 +144,7 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
       code = error.code;
       message = error.message;
       status = error.code === "ROLE_READ_ONLY" || error.code === "PROJECT_MEMBERSHIP_REQUIRED" ? 403 : 401;
-    } else if (error instanceof PublishingError) {
+    } else if (error instanceof PublicationError) {
       code = error.code;
       message = error.message;
       status = error.code === "VALIDATION_FAILED" ? 422 : 409;

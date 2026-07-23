@@ -80,9 +80,8 @@ export class DirectCliRuntime {
       mutationMode: "repository",
       authorName: options.authorName,
       authorEmail: options.authorEmail,
+      defaultBranch: options.defaultBranch,
       prepareWorkspace: async () => { await this.prepare(); },
-      emptyCommitMessage: "Working copy has no changes",
-      dirtyPushMessage: "Push requires a clean committed working copy",
     });
   }
 

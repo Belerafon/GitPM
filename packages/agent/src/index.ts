@@ -2,7 +2,7 @@ import type { ChangesService } from "@gitpm/changes";
 import { provisionGitPmWorktreeGuidance } from "@gitpm/drafts";
 import type { DraftManager, DraftMetadata, WriterMode } from "@gitpm/drafts";
 import type { GitClient } from "@gitpm/git-client";
-import type { GitLabMergeRequestProtocol, MergeRequestPayload, MergeRequestState } from "@gitpm/gitlab";
+import type { GitLabMergeRequestProtocol, MergeRequestState } from "@gitpm/gitlab";
 import {
   RepositoryWorkflow,
   RepositoryWorkflowError,
@@ -64,10 +64,10 @@ export class AgentWorkflow {
       mutationMode: "external",
       authorName: options.authorName,
       authorEmail: options.authorEmail,
+      defaultBranch: options.defaultBranch,
+      ...(options.mergeRequests === undefined ? {} : { mergeRequests: options.mergeRequests }),
       prepareWorkspace: async (draftId) => { await this.externalDraft(draftId); },
       createError: (code, message, details) => new AgentWorkflowError(code, message, details),
-      emptyCommitMessage: "Draft has no business changes",
-      dirtyPushMessage: "Push requires a clean committed draft",
     });
   }
 
@@ -187,25 +187,16 @@ export class AgentWorkflow {
     title: string,
     description?: string,
   ): Promise<MergeRequestState> {
-    const draft = await this.externalDraft(draftId);
-    if (!title.trim() || title.length > 255) {
-      throw new AgentWorkflowError("MR_TITLE_INVALID", "Merge Request title is invalid");
-    }
-    if (!this.options.accessToken || !this.options.mergeRequests) {
-      throw new AgentWorkflowError(
-        "AGENT_MR_CONFIGURATION_REQUIRED",
-        "Merge Request configuration is unavailable",
-      );
-    }
-    const payload: MergeRequestPayload = {
-      source_branch: draft.branch,
-      target_branch: this.options.defaultBranch,
-      title,
-      ...(description?.trim() ? { description } : {}),
-    };
-    const result = await this.options.mergeRequests.createMergeRequest(this.options.accessToken, payload);
-    await this.drafts.markPublished(draftId, owner, result.iid);
-    return result;
+    return await this.repository.createMergeRequest(
+      draftId,
+      owner,
+      this.options.accessToken,
+      { title, ...(description === undefined ? {} : { description }) },
+      {
+        code: "AGENT_MR_CONFIGURATION_REQUIRED",
+        message: "Merge Request configuration is unavailable",
+      },
+    );
   }
 
   private async externalDraft(draftId: string): Promise<DraftMetadata> {

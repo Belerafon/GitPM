@@ -6,9 +6,9 @@ import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 import { DraftManager } from "@gitpm/drafts";
 import { GitClient } from "@gitpm/git-client";
-import { AuthService, GitLabProtocolTestDouble } from "@gitpm/gitlab";
+import { GitLabProtocolTestDouble } from "@gitpm/gitlab";
 import { atomicWriteDomainFile } from "@gitpm/security";
-import { PublishingService } from "./index.js";
+import { PublicationService } from "./index.js";
 
 const execFileAsync = promisify(execFile);
 const roots: string[] = [];
@@ -33,7 +33,7 @@ async function filesContain(directory: string, needle: string): Promise<boolean>
 afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))));
 
 describe("commit, push and Merge Request contract", () => {
-  it("commits all, pushes through ASKPASS env, creates and polls MR with refreshed role", async () => {
+  it("commits all, pushes through ASKPASS env, and creates and polls an MR", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "gitpm-publish-"));
     roots.push(root);
     const source = path.join(root, "source");
@@ -68,28 +68,27 @@ describe("commit, push and Merge Request contract", () => {
     await drafts.setWriterMode("DRF-PUBLISH", "42", "ui");
 
     const gitlab = new GitLabProtocolTestDouble();
-    const auth = new AuthService({
-      authorizeUrl: "https://gitlab.example.test/oauth/authorize",
-      clientId: "gitpm",
-      redirectUri: "https://gitpm.example.test/auth/callback",
-      protocol: gitlab,
-    });
-    const login = auth.startLogin();
-    const session = await auth.completeLogin(login.state, "code");
-    const publishing = new PublishingService(auth, drafts, client, gitlab, "main");
+    const publishing = new PublicationService(drafts, client, { defaultBranch: "main", mergeRequests: gitlab });
+    const workspace = { draftId: "DRF-PUBLISH" };
+    const local = { ownerId: "42", authorName: "maintainer", authorEmail: "42@users.noreply.gitlab.example.test" };
+    const remoteContext = { ownerId: "42", accessToken: () => "gitlab-test-double-access-token" };
 
-    const committed = await publishing.commitAll(session.session_id, "DRF-PUBLISH", "Update project");
+    const committed = await publishing.commit(local, workspace, "Update project");
     expect(committed.commit).toMatch(/^[0-9a-f]{40}$/u);
-    const pushed = await publishing.push(session.session_id, "DRF-PUBLISH");
+    expect(await git(draft.worktree_path, "log", "-1", "--format=%an <%ae>"))
+      .toBe("maintainer <42@users.noreply.gitlab.example.test>");
+    const pushed = await publishing.push(remoteContext, workspace);
     expect(await git(root, "--git-dir", remote, "rev-parse", "refs/heads/gitpm/42/DRF-PUBLISH")).toBe(pushed.commit);
-    const mergeRequest = await publishing.createMergeRequest(session.session_id, "DRF-PUBLISH", "Update project", "Automated test");
+    const mergeRequest = await publishing.createMergeRequest(remoteContext, workspace, {
+      title: "Update project",
+      description: "Automated test",
+    });
     expect(mergeRequest).toMatchObject({ iid: 1, state: "opened", source_branch: "gitpm/42/DRF-PUBLISH", target_branch: "main" });
-    expect(await publishing.pollMergeRequest(session.session_id, "DRF-PUBLISH")).toEqual(mergeRequest);
+    expect(await publishing.pollMergeRequest(remoteContext, workspace)).toEqual(mergeRequest);
 
     const captures = JSON.stringify(gitlab.captures);
     expect(captures).toContain('"operation":"create-mr"');
     expect(captures).not.toContain("gitlab-test-double-access-token");
-    expect(gitlab.captures.filter((capture) => capture.operation === "project-role")).toHaveLength(4);
     expect(JSON.stringify(commands)).not.toContain("gitlab-test-double-access-token");
     expect(await filesContain(data, "gitlab-test-double-access-token")).toBe(false);
   }, 60_000);

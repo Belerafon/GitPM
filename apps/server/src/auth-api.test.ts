@@ -1,61 +1,141 @@
 import type { DraftManager } from "@gitpm/drafts";
-import { AuthService, GitLabProtocolTestDouble } from "@gitpm/gitlab";
-import type { PublishingService } from "@gitpm/publishing";
+import type { PublicationService } from "@gitpm/publishing";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildApp } from "./app.js";
+import { registerAuthApi } from "./auth-api.js";
 
 const apps: ReturnType<typeof buildApp>[] = [];
+const originalCookieSecure = process.env.GITPM_COOKIE_SECURE;
 
-afterEach(async () => Promise.all(apps.splice(0).map(async (app) => app.close())));
+afterEach(async () => {
+  if (originalCookieSecure === undefined) delete process.env.GITPM_COOKIE_SECURE;
+  else process.env.GITPM_COOKIE_SECURE = originalCookieSecure;
+  await Promise.all(apps.splice(0).map(async (app) => app.close()));
+});
 
-describe("OAuth and publishing HTTP contract", () => {
-  it("sets a secure memory-session cookie and forwards it to publishing", async () => {
-    const gitlab = new GitLabProtocolTestDouble();
-    const auth = new AuthService({
-      authorizeUrl: "https://gitlab.example.test/oauth/authorize",
-      clientId: "gitpm",
-      redirectUri: "https://gitpm.example.test/auth/callback",
-      protocol: gitlab,
-    });
-    const publishing = {
-      commitAll: vi.fn(async () => ({ commit: "a".repeat(40), branch: "gitpm/42/DRF-API" })),
-    } as unknown as PublishingService;
-    const app = buildApp({
-      authService: auth,
-      draftManager: {} as DraftManager,
-      publishingService: publishing,
-    });
+function repositoryAuth() {
+  const session = {
+    session_id: "session-id",
+    user: { id: "42", username: "maintainer" },
+    role: "Maintainer" as const,
+    expires_at: new Date(Date.now() + 60_000).toISOString(),
+  };
+  return {
+    startLogin: () => ({ authorization_url: "https://gitlab.example/oauth/authorize", state: "state" }),
+    completeLogin: vi.fn(async () => session),
+    authorize: vi.fn(async () => ({ session, accessToken: "token" })),
+    logout: vi.fn(),
+  };
+}
+
+function baseRepositorySession() {
+  return {
+    session_id: "repository-session" as const,
+    user: { id: "local-user", username: "local" },
+    role: "Maintainer" as const,
+    mode: "repository" as const,
+    repository: { name: "portfolio", path: "D:/portfolio", has_remote: true },
+    expires_at: "9999-12-31T23:59:59.999Z",
+  };
+}
+
+const localContext = {
+  ownerId: "local-user",
+  authorName: "Local User",
+  authorEmail: "local@example.test",
+};
+
+describe("optional GitLab repository session", () => {
+  it("sets Secure on the OAuth session cookie by default", async () => {
+    delete process.env.GITPM_COOKIE_SECURE;
+    const app = buildApp({ draftManager: {} as DraftManager, authenticate: () => ({ userId: "local-user", role: "Maintainer" }) });
     apps.push(app);
+    registerAuthApi(
+      app,
+      baseRepositorySession(),
+      {} as PublicationService,
+      localContext,
+      repositoryAuth(),
+      "http://127.0.0.1:5173",
+    );
 
-    const login = await app.inject({ method: "GET", url: "/api/auth/login" });
-    const started = login.json<{ state: string; authorization_url: string }>();
-    expect(new URL(started.authorization_url).searchParams.get("code_challenge_method")).toBe("S256");
-    const callback = await app.inject({
-      method: "GET",
-      url: `/api/auth/callback?state=${encodeURIComponent(started.state)}&code=authorization-code`,
-    });
-    expect(callback.statusCode).toBe(200);
-    const setCookie = String(callback.headers["set-cookie"]);
-    expect(setCookie).toContain("HttpOnly");
-    expect(setCookie).toContain("Secure");
-    expect(setCookie).toContain("SameSite=Strict");
-    const sessionCookie = setCookie.split(";")[0]!;
+    const response = await app.inject({ method: "GET", url: "/api/auth/callback?state=state&code=code" });
+    expect(response.statusCode).toBe(302);
+    expect(response.headers.location).toBe("http://127.0.0.1:5173");
+    expect(response.headers["set-cookie"]).toMatch(/^gitpm_gitlab_session=/u);
+    expect(response.headers["set-cookie"]).toContain("; Secure; SameSite=Lax;");
+  });
 
-    const currentSession = await app.inject({
-      headers: { cookie: sessionCookie },
-      method: "GET",
-      url: "/api/auth/session",
-    });
-    expect(currentSession.statusCode).toBe(200);
-    expect(currentSession.json()).toMatchObject({ user: { id: "42" }, role: "Developer" });
+  it("allows Secure to be disabled for an explicitly configured plain-HTTP deployment", async () => {
+    process.env.GITPM_COOKIE_SECURE = "false";
+    const app = buildApp({ draftManager: {} as DraftManager, authenticate: () => ({ userId: "local-user", role: "Maintainer" }) });
+    apps.push(app);
+    registerAuthApi(
+      app,
+      baseRepositorySession(),
+      {} as PublicationService,
+      localContext,
+      repositoryAuth(),
+      "http://127.0.0.1:5173",
+    );
 
-    const committed = await app.inject({
-      headers: { cookie: sessionCookie },
-      method: "POST",
-      url: "/api/drafts/DRF-API/commit",
-      payload: { message: "Commit all" },
-    });
+    const response = await app.inject({ method: "GET", url: "/api/auth/callback?state=state&code=code" });
+    expect(response.headers["set-cookie"]).toContain("; HttpOnly; SameSite=Lax;");
+    expect(response.headers["set-cookie"]).not.toContain("; Secure;");
+  });
+
+  it("keeps local access and commit available without a GitLab cookie", async () => {
+    const publishing = {
+      commit: vi.fn(async () => ({ commit: "a".repeat(40), branch: "gitpm/local/DRF-LOCAL" })),
+      push: vi.fn(),
+    } as unknown as PublicationService;
+    const app = buildApp({ draftManager: {} as DraftManager, authenticate: () => ({ userId: "local-user", role: "Maintainer" }) });
+    apps.push(app);
+    registerAuthApi(app, {
+      session_id: "repository-session",
+      user: { id: "local-user", username: "local" },
+      role: "Maintainer",
+      mode: "repository",
+      repository: { name: "portfolio", path: "D:/portfolio", has_remote: false },
+      expires_at: "9999-12-31T23:59:59.999Z",
+    }, publishing, localContext, undefined, "http://127.0.0.1:5173");
+
+    const session = await app.inject({ method: "GET", url: "/api/auth/session" });
+    expect(session.statusCode).toBe(200);
+    expect(session.json()).toMatchObject({ mode: "repository", gitlab: { configured: false } });
+
+    const committed = await app.inject({ method: "POST", url: "/api/drafts/DRF-LOCAL/commit", payload: { message: "Local commit" } });
     expect(committed.statusCode).toBe(200);
-    expect(publishing.commitAll).toHaveBeenCalledWith(expect.any(String), "DRF-API", "Commit all");
+    expect(publishing.commit).toHaveBeenCalledWith(localContext, { draftId: "DRF-LOCAL" }, "Local commit");
+
+    const push = await app.inject({ method: "POST", url: "/api/drafts/DRF-LOCAL/push" });
+    expect(push.statusCode).toBe(401);
+    expect(push.json()).toMatchObject({ error: { code: "SESSION_INVALID" } });
+    expect(publishing.push).not.toHaveBeenCalled();
+  });
+
+  it("adapts the GitLab session to an in-memory publication context", async () => {
+    const auth = repositoryAuth();
+    const publishing = {
+      push: vi.fn(async () => ({ branch: "gitpm/local/DRF-LOCAL", commit: "a".repeat(40) })),
+    } as unknown as PublicationService;
+    const app = buildApp({ draftManager: {} as DraftManager, authenticate: () => ({ userId: "local-user", role: "Maintainer" }) });
+    apps.push(app);
+    registerAuthApi(app, baseRepositorySession(), publishing, localContext, auth, "http://127.0.0.1:5173");
+
+    const response = await app.inject({
+      headers: { cookie: "gitpm_gitlab_session=session-id" },
+      method: "POST",
+      url: "/api/drafts/DRF-LOCAL/push",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(auth.authorize).toHaveBeenCalledWith("session-id", "push");
+    expect(publishing.push).toHaveBeenCalledWith(
+      { ownerId: "local-user", accessToken: expect.any(Function) },
+      { draftId: "DRF-LOCAL" },
+    );
+    const context = vi.mocked(publishing.push).mock.calls[0]![0];
+    expect(context.accessToken()).toBe("token");
   });
 });
