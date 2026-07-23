@@ -256,7 +256,7 @@ describe("CLI init command", () => {
     }
     const marker = "gitpmrgmarker9f3c7a";
     await writeFile(path.join(target, "uploads", "example.txt"), `${marker}\n`, "utf8");
-    const { stdout } = await execFileAsync("rg", ["-F", marker], { cwd: target, encoding: "utf8" });
+    const { stdout } = await execFileAsync("rg", ["-F", marker, "."], { cwd: target, encoding: "utf8" });
     expect(stdout).toContain(marker);
   });
 
