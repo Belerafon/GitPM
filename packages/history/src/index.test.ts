@@ -63,7 +63,7 @@ describe("history and revert drafts", () => {
   });
 
   it("returns an oversized marker instead of failing when a single-file diff exceeds the output limit", async () => {
-    const drafts = { getDraft: async () => ({ worktree_path: "C:/private/worktree" }) } as unknown as DraftManager;
+    const drafts = { getWorkspace: async () => ({ worktree_path: "C:/private/worktree" }) } as unknown as DraftManager;
     const git = {
       commitFileDiff: async () => { throw new GitCommandError("GIT_OUTPUT_LIMIT", "too big"); },
     } as unknown as GitClient;

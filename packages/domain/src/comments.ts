@@ -1,6 +1,6 @@
 import { mkdir, readFile, readdir, rm } from "node:fs/promises";
 import path from "node:path";
-import type { DraftManager, DraftMetadata } from "@gitpm/drafts";
+import type { DraftManager, RepositoryMutationMode, RepositoryWorkspace } from "@gitpm/drafts";
 import { formatYamlDocument, parseYamlDocument, referenceLabelsForDocuments, type GitPmDocument } from "@gitpm/repository-format";
 import { atomicWriteDomainFile, resolveDomainPath } from "@gitpm/security";
 import { ENTITY_ID_PREFIX, isEntityId, newUniqueEntityId } from "@gitpm/shared";
@@ -127,9 +127,13 @@ async function documents(files: readonly string[], root: string): Promise<GitPmD
 }
 
 export class CommentStore {
-  constructor(private readonly drafts: DraftManager, private readonly now: () => Date = () => new Date()) {}
+  constructor(
+    private readonly drafts: DraftManager,
+    private readonly now: () => Date = () => new Date(),
+    private readonly mutationMode: RepositoryMutationMode = "ui",
+  ) {}
 
-  private async task(metadata: DraftMetadata, projectId: string, taskId: string): Promise<GitPmDocument> {
+  private async task(metadata: RepositoryWorkspace, projectId: string, taskId: string): Promise<GitPmDocument> {
     const relative = `projects/${projectId}/tasks/${taskId}.yaml`;
     const absolute = await resolveDomainPath(metadata.worktree_path, relative);
     let document: GitPmDocument;
@@ -142,12 +146,12 @@ export class CommentStore {
     return document;
   }
 
-  private async people(metadata: DraftMetadata): Promise<GitPmDocument[]> {
+  private async people(metadata: RepositoryWorkspace): Promise<GitPmDocument[]> {
     return (await documents(await yamlFiles(path.join(metadata.worktree_path, "people")), metadata.worktree_path))
       .filter((document) => document.schema === "gitpm/person@1");
   }
 
-  private async referenceLabels(metadata: DraftMetadata, task: GitPmDocument, people?: readonly GitPmDocument[]) {
+  private async referenceLabels(metadata: RepositoryWorkspace, task: GitPmDocument, people?: readonly GitPmDocument[]) {
     return referenceLabelsForDocuments([task, ...(people ?? await this.people(metadata))]);
   }
 
@@ -162,7 +166,7 @@ export class CommentStore {
     });
   }
 
-  private async allCommentIds(metadata: DraftMetadata): Promise<Set<string>> {
+  private async allCommentIds(metadata: RepositoryWorkspace): Promise<Set<string>> {
     const files = await yamlFiles(path.join(metadata.worktree_path, "projects"));
     return new Set(files.map((absolute) => path.basename(absolute, ".yaml")).filter((id) => isEntityId(id, ENTITY_ID_PREFIX.comment)));
   }
@@ -172,7 +176,7 @@ export class CommentStore {
     return { can_edit: document.state === "active" && author, can_delete: document.state === "active" && (author || actor.role === "Maintainer") };
   }
 
-  private async result(draftId: string, metadata: DraftMetadata, relative: string, document: CommentDocument, actor: CommentActor): Promise<CommentResult> {
+  private async result(draftId: string, metadata: RepositoryWorkspace, relative: string, document: CommentDocument, actor: CommentActor): Promise<CommentResult> {
     return {
       document,
       path: relative,
@@ -182,7 +186,7 @@ export class CommentStore {
     };
   }
 
-  private async readComment(metadata: DraftMetadata, projectId: string, taskId: string, commentId: string): Promise<{ relative: string; absolute: string; document: CommentDocument }> {
+  private async readComment(metadata: RepositoryWorkspace, projectId: string, taskId: string, commentId: string): Promise<{ relative: string; absolute: string; document: CommentDocument }> {
     const relative = commentPath(projectId, taskId, commentId);
     const absolute = await resolveDomainPath(metadata.worktree_path, relative);
     let document: GitPmDocument;
@@ -196,7 +200,7 @@ export class CommentStore {
   }
 
   async list(draftId: string, projectId: string, taskId: string, actor: CommentActor): Promise<readonly CommentResult[]> {
-    const metadata = await this.drafts.getDraft(draftId);
+    const metadata = await this.drafts.getWorkspace(draftId);
     await this.task(metadata, projectId, taskId);
     const directory = path.join(metadata.worktree_path, "projects", projectId, "comments", taskId);
     const files = await yamlFiles(directory);
@@ -217,7 +221,7 @@ export class CommentStore {
     const body = requiredBody(bodyValue);
     let created: CommentDocument | undefined;
     let relative = "";
-    const mutation = await this.drafts.withUiMutation(draftId, actor.userId, expectedFingerprint, async (metadata) => {
+    const mutation = await this.drafts.withRepositoryMutation(draftId, actor.userId, expectedFingerprint, this.mutationMode, async (metadata) => {
       const task = await this.task(metadata, projectId, taskId);
       const people = await this.people(metadata);
       const timestamp = this.now().toISOString();
@@ -239,7 +243,7 @@ export class CommentStore {
     const body = requiredBody(bodyValue);
     let updated: CommentDocument | undefined;
     let relative = "";
-    const mutation = await this.drafts.withUiMutation(draftId, actor.userId, expectedFingerprint, async (metadata) => {
+    const mutation = await this.drafts.withRepositoryMutation(draftId, actor.userId, expectedFingerprint, this.mutationMode, async (metadata) => {
       const task = await this.task(metadata, projectId, taskId);
       const current = await this.readComment(metadata, projectId, taskId, commentId);
       if (current.document.state !== "active") throw new CommentOperationError("COMMENT_DELETED", "Deleted comment cannot be edited");
@@ -261,7 +265,7 @@ export class CommentStore {
   async delete(draftId: string, projectId: string, taskId: string, commentId: string, expectedFingerprint: string, expectedBlobId: string, actor: CommentActor): Promise<CommentResult> {
     let deleted: CommentDocument | undefined;
     let relative = "";
-    const mutation = await this.drafts.withUiMutation(draftId, actor.userId, expectedFingerprint, async (metadata) => {
+    const mutation = await this.drafts.withRepositoryMutation(draftId, actor.userId, expectedFingerprint, this.mutationMode, async (metadata) => {
       const task = await this.task(metadata, projectId, taskId);
       const current = await this.readComment(metadata, projectId, taskId, commentId);
       if (current.document.state !== "active") throw new CommentOperationError("COMMENT_DELETED", "Comment is already deleted");
@@ -282,7 +286,7 @@ export class CommentStore {
   }
 
   async notifications(draftId: string, actor: CommentActor): Promise<NotificationsResult> {
-    const metadata = await this.drafts.getDraft(draftId);
+    const metadata = await this.drafts.getWorkspace(draftId);
     const people = await this.people(metadata);
     const normalizedEmail = actor.email?.trim().toLocaleLowerCase();
     const recipient = actor.personId === undefined

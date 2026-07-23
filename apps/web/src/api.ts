@@ -1,3 +1,4 @@
+import { decodeConfigurationResult, decodeDto, decodeEntityResult, decodeEntityResults, type ConfigurationDocument, type ConfigurationResult, type Decoder } from "@gitpm/contracts";
 import type { ChangesList, CommentResult, CommitFileDiff, CommitHistoryDetail, CommitHistoryItem, CommitResult, DraftSnapshot, DraftStatus, EntityResult, GitPmDocument, MergeRequestStatus, NotificationsResult, ProjectWorkspaceResult, PublicSession, PushResult, RepositoryConnectionStatus, RepositoryConnectionTest, RepositoryConnectionUpdate, RevertDraftResult, SemanticDiff, ValidationSummary, WriterMode, ChangesSummary, WorktreeDirectory, WorktreeFile } from "./types.js";
 
 export class ApiError extends Error {
@@ -29,8 +30,8 @@ export interface GitPmApi {
   moveTask(draftId: string, entity: EntityResult, fingerprint: string, targetProject: string, targetMilestone?: string): Promise<EntityResult>;
   archiveEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string): Promise<EntityResult>;
   deleteEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string, unlinkReferences?: boolean): Promise<void>;
-  getConfiguration(draftId: string, kind: "statuses" | "issue-types"): Promise<EntityResult>;
-  updateConfiguration(draftId: string, kind: "statuses" | "issue-types", entity: EntityResult, fingerprint: string, document: GitPmDocument): Promise<EntityResult>;
+  getConfiguration(draftId: string, kind: "statuses" | "issue-types"): Promise<ConfigurationResult>;
+  updateConfiguration(draftId: string, kind: "statuses" | "issue-types", entity: ConfigurationResult, fingerprint: string, document: ConfigurationDocument): Promise<ConfigurationResult>;
   listChanges(draftId: string): Promise<ChangesList>;
   listWorktree(draftId: string, path?: string): Promise<WorktreeDirectory>;
   readWorktreeFile(draftId: string, path: string): Promise<WorktreeFile>;
@@ -63,7 +64,7 @@ interface ErrorBody { readonly error?: { readonly code?: string; readonly messag
 export class HttpGitPmApi implements GitPmApi {
   constructor(private readonly baseUrl = "") {}
 
-  private async request<T>(path: string, init?: RequestInit): Promise<T> {
+  private async request<T>(path: string, init?: RequestInit, decoder: Decoder<T> = decodeDto<T>(path)): Promise<T> {
     const headers = new Headers(init?.headers);
     if (init?.body !== undefined && !headers.has("content-type")) headers.set("content-type", "application/json");
     const response = await fetch(`${this.baseUrl}${path}`, {
@@ -77,7 +78,7 @@ export class HttpGitPmApi implements GitPmApi {
       throw new ApiError(body.error?.code ?? `HTTP_${response.status}`, body.error?.message ?? response.statusText, body.error?.details);
     }
     if (response.status === 204) return undefined as T;
-    return await response.json() as T;
+    return decoder(await response.json());
   }
 
   async session(): Promise<PublicSession | null> {
@@ -134,31 +135,31 @@ export class HttpGitPmApi implements GitPmApi {
 
   async listEntities(draftId: string, entityType: string, project?: string): Promise<readonly EntityResult[]> {
     const query = project === undefined ? "" : `?project=${encodeURIComponent(project)}`;
-    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/entities/${encodeURIComponent(entityType)}${query}`);
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/entities/${encodeURIComponent(entityType)}${query}`, undefined, decodeEntityResults);
   }
   async projectWorkspace(draftId: string, projectId: string): Promise<ProjectWorkspaceResult> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/projects/${encodeURIComponent(projectId)}/workspace`);
   }
   async createEntity(draftId: string, entityType: string, expected_fingerprint: string, document: GitPmDocument): Promise<EntityResult> {
-    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/entities/${encodeURIComponent(entityType)}`, { method: "POST", body: JSON.stringify({ expected_fingerprint, document }) });
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/entities/${encodeURIComponent(entityType)}`, { method: "POST", body: JSON.stringify({ expected_fingerprint, document }) }, decodeEntityResult);
   }
   async updateEntity(draftId: string, entityType: string, entity: EntityResult, expected_fingerprint: string, document: GitPmDocument): Promise<EntityResult> {
-    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entity.document.id)}`, { method: "PUT", body: JSON.stringify({ expected_fingerprint, expected_blob_id: entity.blob_id, document }) });
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entity.document.id)}`, { method: "PUT", body: JSON.stringify({ expected_fingerprint, expected_blob_id: entity.blob_id, document }) }, decodeEntityResult);
   }
   async moveTask(draftId: string, entity: EntityResult, expected_fingerprint: string, target_project: string, target_milestone?: string): Promise<EntityResult> {
-    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/entities/tasks/${encodeURIComponent(entity.document.id)}/move`, { method: "POST", body: JSON.stringify({ expected_fingerprint, expected_blob_id: entity.blob_id, target_project, target_milestone }) });
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/entities/tasks/${encodeURIComponent(entity.document.id)}/move`, { method: "POST", body: JSON.stringify({ expected_fingerprint, expected_blob_id: entity.blob_id, target_project, target_milestone }) }, decodeEntityResult);
   }
   async archiveEntity(draftId: string, entityType: string, entity: EntityResult, expected_fingerprint: string): Promise<EntityResult> {
-    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entity.document.id)}/archive`, { method: "POST", body: JSON.stringify({ expected_fingerprint, expected_blob_id: entity.blob_id }) });
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entity.document.id)}/archive`, { method: "POST", body: JSON.stringify({ expected_fingerprint, expected_blob_id: entity.blob_id }) }, decodeEntityResult);
   }
   async deleteEntity(draftId: string, entityType: string, entity: EntityResult, expected_fingerprint: string, unlinkReferences = false): Promise<void> {
     await this.request(`/api/drafts/${encodeURIComponent(draftId)}/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entity.document.id)}`, { method: "DELETE", body: JSON.stringify({ expected_fingerprint, expected_blob_id: entity.blob_id, ...(unlinkReferences ? { unlink_references: true } : {}) }) });
   }
-  async getConfiguration(draftId: string, kind: "statuses" | "issue-types"): Promise<EntityResult> {
-    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/config/${kind}`);
+  async getConfiguration(draftId: string, kind: "statuses" | "issue-types"): Promise<ConfigurationResult> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/config/${kind}`, undefined, decodeConfigurationResult);
   }
-  async updateConfiguration(draftId: string, kind: "statuses" | "issue-types", entity: EntityResult, expected_fingerprint: string, document: GitPmDocument): Promise<EntityResult> {
-    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/config/${kind}`, { method: "PUT", body: JSON.stringify({ expected_fingerprint, expected_blob_id: entity.blob_id, document }) });
+  async updateConfiguration(draftId: string, kind: "statuses" | "issue-types", entity: ConfigurationResult, expected_fingerprint: string, document: ConfigurationDocument): Promise<ConfigurationResult> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/config/${kind}`, { method: "PUT", body: JSON.stringify({ expected_fingerprint, expected_blob_id: entity.blob_id, document }) }, decodeConfigurationResult);
   }
   async listChanges(draftId: string): Promise<ChangesList> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/changes`);

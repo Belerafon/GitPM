@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { HttpGitPmApi } from "./api.js";
+import { ApiContractError } from "@gitpm/contracts";
 import type { EntityResult } from "./types.js";
 
 describe("HttpGitPmApi request bodies", () => {
@@ -55,5 +56,35 @@ describe("HttpGitPmApi request bodies", () => {
     await api.deleteEntity("DRF-1", "people", entity, entity.draft_fingerprint, true);
 
     expect(JSON.parse(String(fetchMock.mock.calls[1]![1]?.body))).toMatchObject({ unlink_references: true });
+  });
+
+  it("accepts configuration documents without entity identity fields", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      document: {
+        schema: "gitpm/statuses@1",
+        statuses: [{ slug: "backlog", title: "Backlog", active: true }],
+      },
+      path: ".gitpm/statuses.yaml",
+      blob_id: "a".repeat(40),
+      draft_fingerprint: "b".repeat(64),
+    }), { status: 200, headers: { "content-type": "application/json" } })));
+
+    const result = await new HttpGitPmApi().getConfiguration("DRF-1", "statuses");
+
+    expect(result.document).toEqual({
+      schema: "gitpm/statuses@1",
+      statuses: [{ slug: "backlog", title: "Backlog", active: true }],
+    });
+  });
+
+  it("rejects entity responses that violate the shared runtime contract", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify([{
+      document: { schema: "gitpm/statuses@1", statuses: [] },
+      path: ".gitpm/statuses.yaml",
+      blob_id: "a".repeat(40),
+      draft_fingerprint: "b".repeat(64),
+    }]), { status: 200, headers: { "content-type": "application/json" } })));
+
+    await expect(new HttpGitPmApi().listEntities("DRF-1", "people")).rejects.toBeInstanceOf(ApiContractError);
   });
 });

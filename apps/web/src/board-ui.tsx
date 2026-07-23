@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type DragEvent, type FormEve
 import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
 import type { GitPmApi } from "./api.js";
 import { message, type Locale, type MessageKey } from "./i18n.js";
-import type { DraftStatus, EntityResult, GitPmDocument } from "./types.js";
+import type { DraftStatus, EntityDocument, EntityResult, GitPmDocument } from "./types.js";
 import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
 import type { WorkspaceNavigate } from "./workspace-navigation.js";
 import { EntityCatalog } from "./entity-catalog.js";
@@ -104,7 +104,7 @@ export function BoardWorkspace({ api, draft, locale, initialProjectId = "", init
     setDraggedTaskId(null);
     if (readOnly || task === undefined || text(task.document, "status") === status) return;
     const previous = tasks;
-    const document = { ...task.document, status } as GitPmDocument;
+    const document = { ...task.document, status } as EntityDocument;
     setSavingTaskId(task.document.id);
     setTasks(upsertEntity(tasks, { ...task, document }));
     void mutate(async () => { const result = await api.updateEntity(draft.draft_id, "tasks", task, fingerprint, document); setSavingTaskId(null); return result; }).then((result) => { if (result === null) setTasks(previous); }).finally(() => setSavingTaskId(null));
@@ -119,7 +119,7 @@ export function BoardWorkspace({ api, draft, locale, initialProjectId = "", init
     const document = {
       schema: "gitpm/saved-view@1", id: newUniqueEntityId(ENTITY_ID_PREFIX.view, new Set(views.map((item) => item.document.id))), project: projectId, name: String(data.get("name")), kind: "board",
       filters: { statuses: statusFilter === "" ? [] : [statusFilter], types: typeFilter === "" ? [] : [typeFilter], milestones: milestoneFilter === "" ? [] : [milestoneFilter] }, group_by: "status", lifecycle: "active",
-    } as GitPmDocument;
+    } as EntityDocument;
     void mutate(async () => await api.createEntity(draft.draft_id, "views", fingerprint, document));
     event.currentTarget.reset();
   };

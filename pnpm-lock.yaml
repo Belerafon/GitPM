@@ -74,6 +74,9 @@ importers:
       '@gitpm/changes':
         specifier: workspace:*
         version: link:../../packages/changes
+      '@gitpm/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@gitpm/domain':
         specifier: workspace:*
         version: link:../../packages/domain
@@ -120,6 +123,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@gitpm/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@gitpm/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -195,6 +201,8 @@ importers:
       '@gitpm/validation':
         specifier: workspace:*
         version: link:../validation
+
+  packages/contracts: {}
 
   packages/domain:
     dependencies:

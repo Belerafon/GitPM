@@ -2,13 +2,14 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GitPmApi } from "../../api.js";
-import type { DraftStatus, EntityResult, GitPmDocument } from "../../types.js";
+import type { ConfigurationDocument, ConfigurationResult, DraftStatus, EntityDocument, EntityResult } from "../../types.js";
 import { ProjectPlanWorkspace } from "../projects/project-plan-workspace.js";
 import { StageWorkspace } from "./stage-workspace.js";
 
 const fingerprint = "b".repeat(64);
 const draft: DraftStatus = { draft_id: "DRF-STAGES", owner_gitlab_user_id: "42", branch: "gitpm/42/DRF-STAGES", base_commit: "a".repeat(40), writer_mode: "ui", state: "open", fingerprint, created_at: "2026-07-10T00:00:00.000Z", updated_at: "2026-07-10T00:00:00.000Z" };
-const result = (document: GitPmDocument): EntityResult => ({ document, path: `${document.id}.yaml`, blob_id: "a".repeat(40), draft_fingerprint: fingerprint });
+const result = (document: EntityDocument): EntityResult => ({ document, path: `${document.id}.yaml`, blob_id: "a".repeat(40), draft_fingerprint: fingerprint });
+const configuration = (document: ConfigurationDocument): ConfigurationResult => ({ document, path: document.schema, blob_id: "a".repeat(40), draft_fingerprint: fingerprint });
 
 const project = result({ schema: "gitpm/project@1", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
 const archivedProject = result({ schema: "gitpm/project@1", id: "P-26-999999", name: "Archived", status: "backlog", lifecycle: "archived", group: "Research" });
@@ -24,8 +25,8 @@ function api() {
   let currentProject = project;
   let currentStages = [stage, laterStage];
   let currentTasks = [linked, other, large, urgent];
-  const createEntity = vi.fn(async (_draftId: string, _type: string, _fingerprint: string, document: GitPmDocument) => result(document));
-  const updateEntity = vi.fn(async (_draftId: string, type: string, _entity: EntityResult, _fingerprint: string, document: GitPmDocument) => {
+  const createEntity = vi.fn(async (_draftId: string, _type: string, _fingerprint: string, document: EntityDocument) => result(document));
+  const updateEntity = vi.fn(async (_draftId: string, type: string, _entity: EntityResult, _fingerprint: string, document: EntityDocument) => {
     const updated = result(document);
     if (type === "projects") currentProject = updated;
     if (type === "milestones") currentStages = currentStages.map((item) => item.document.id === document.id ? updated : item);
@@ -34,9 +35,9 @@ function api() {
   });
   return {
     projectWorkspace: vi.fn(async () => ({ project: currentProject, milestones: currentStages, tasks: currentTasks, draft_fingerprint: fingerprint })),
-    getConfiguration: vi.fn(async (_draftId: string, kind: "statuses" | "issue-types") => result(kind === "statuses"
-      ? { schema: "gitpm/statuses@1", id: "CONFIG-STATUSES", lifecycle: "active", statuses: [{ slug: "backlog", title: "Backlog", active: true }, { slug: "done", title: "Done", active: true }] }
-      : { schema: "gitpm/issue-types@1", id: "CONFIG-TYPES", lifecycle: "active", issue_types: [{ slug: "task", title: "Task", active: true }] })),
+    getConfiguration: vi.fn(async (_draftId: string, kind: "statuses" | "issue-types") => configuration(kind === "statuses"
+      ? { schema: "gitpm/statuses@1", statuses: [{ slug: "backlog", title: "Backlog", active: true }, { slug: "done", title: "Done", active: true }] }
+      : { schema: "gitpm/issue-types@1", issue_types: [{ slug: "task", title: "Task", active: true }] })),
     listEntities: vi.fn(async (_draftId: string, type: string) => type === "people" ? [person] : type === "projects" ? [currentProject, archivedProject] : []),
     createEntity,
     updateEntity,

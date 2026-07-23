@@ -1,7 +1,7 @@
 import { assertAgentScope, type AgentScope, type AgentScopeReport } from "@gitpm/agent";
 import { ChangesService, type SemanticDiff } from "@gitpm/changes";
 import { GitClient, GitCommandError } from "@gitpm/git-client";
-import { DirectDraftBackend, directPushStrategy, DraftManager, GITPM_GUIDANCE_FILES, GITPM_GUIDANCE_PATHS } from "@gitpm/drafts";
+import { DirectRepositoryBackend, directPushStrategy, DraftManager, GITPM_GUIDANCE_FILES, GITPM_GUIDANCE_PATHS } from "@gitpm/drafts";
 import { CommentStore, EntityStore, entityPathForDocument, type CommentActor, type CommentResult, type DeletePlan, type EntityCreateBatchResult, type EntityResult } from "@gitpm/domain";
 import type { GitPmDocument } from "@gitpm/repository-format";
 import { validateRepository } from "@gitpm/validation";
@@ -41,7 +41,7 @@ export interface DirectCliRuntimeOptions {
 
 export class DirectCliRuntime {
   private readonly git: GitClient;
-  private readonly backend: DirectDraftBackend;
+  private readonly backend: DirectRepositoryBackend;
   private readonly drafts: DraftManager;
   private readonly changes: ChangesService;
   private readonly entities: EntityStore;
@@ -63,14 +63,14 @@ export class DirectCliRuntime {
       ...(options.askPassPath === undefined ? {} : { askPassPath: options.askPassPath }),
     });
     if (!options.allowLocalRepository && !options.allowLocalTestRemote) throw new Error("Direct mode requires an existing local Git checkout");
-    this.backend = new DirectDraftBackend(this.git, options.checkoutPath);
+    this.backend = new DirectRepositoryBackend(this.git, options.checkoutPath);
     this.drafts = new DraftManager(this.git, options.dataDirectory, {
       backend: this.backend,
       push: directPushStrategy(this.git),
     });
     this.changes = new ChangesService(this.drafts, this.git);
-    this.entities = new EntityStore(this.drafts);
-    this.comments = new CommentStore(this.drafts);
+    this.entities = new EntityStore(this.drafts, "repository");
+    this.comments = new CommentStore(this.drafts, () => new Date(), "repository");
     this.pushStrategy = directPushStrategy(this.git);
     this.authorName = options.authorName;
     this.authorEmail = options.authorEmail;
@@ -114,10 +114,10 @@ export class DirectCliRuntime {
       affected_projects: project === undefined ? [] : [project],
       files: [{ path: relative, kind: "Added" }],
     }, scope);
-    const metadata = await this.drafts.refreshFingerprint(draftId);
+    const metadata = await this.drafts.refreshWorkspaceFingerprint(draftId);
     return await this.entities.create(
       draftId,
-      metadata.owner_gitlab_user_id,
+      metadata.owner_id,
       metadata.fingerprint,
       planned.document,
     );
@@ -140,8 +140,8 @@ export class DirectCliRuntime {
       affected_projects: affectedProjects,
       files: plan.map((item) => ({ path: item.path, kind: "Added" as const })),
     }, scope);
-    const metadata = await this.drafts.refreshFingerprint(draftId);
-    return await this.entities.createMany(draftId, metadata.owner_gitlab_user_id, metadata.fingerprint, plan, dryRun);
+    const metadata = await this.drafts.refreshWorkspaceFingerprint(draftId);
+    return await this.entities.createMany(draftId, metadata.owner_id, metadata.fingerprint, plan, dryRun);
   }
 
   async updateEntity(
@@ -168,11 +168,11 @@ export class DirectCliRuntime {
       affected_projects: affectedProject === undefined ? [] : [affectedProject],
       files: [{ path: plan.path, kind: "Modified" }],
     }, scope);
-    const metadata = await this.drafts.refreshFingerprint(draftId);
+    const metadata = await this.drafts.refreshWorkspaceFingerprint(draftId);
     const current = await this.entities.get(draftId, plan.entityType, plan.id);
     return await this.entities.update(
       draftId,
-      metadata.owner_gitlab_user_id,
+      metadata.owner_id,
       plan.entityType,
       plan.id,
       metadata.fingerprint,
@@ -185,7 +185,7 @@ export class DirectCliRuntime {
   async listEntities(entityType: string, project?: string): Promise<{ items: readonly { readonly document: GitPmDocument; readonly path: string }[]; readonly draft_fingerprint: string }> {
     const draftId = await this.draftId();
     const results = await this.entities.list(draftId, entityType, project);
-    const metadata = await this.drafts.getDraft(draftId);
+    const metadata = await this.drafts.getWorkspace(draftId);
     return { items: results.map((result) => ({ document: result.document, path: result.path })), draft_fingerprint: metadata.fingerprint };
   }
 
@@ -216,9 +216,9 @@ export class DirectCliRuntime {
         ...modifiedPaths.map((relative) => ({ path: relative, kind: "Modified" as const })),
       ],
     }, scope);
-    const metadata = await this.drafts.refreshFingerprint(draftId);
+    const metadata = await this.drafts.refreshWorkspaceFingerprint(draftId);
     const current = await this.entities.get(draftId, entityType, id);
-    return await this.entities.delete(draftId, metadata.owner_gitlab_user_id, entityType, id, metadata.fingerprint, current.blob_id, unlinkReferences);
+    return await this.entities.delete(draftId, metadata.owner_id, entityType, id, metadata.fingerprint, current.blob_id, unlinkReferences);
   }
 
   async archiveEntity(entityType: string, id: string, scope: AgentScope = {}): Promise<EntityResult> {
@@ -230,9 +230,9 @@ export class DirectCliRuntime {
       affected_projects: affectedProject === undefined ? [] : [affectedProject],
       files: [{ path: plan.path, kind: "Modified" }],
     }, scope);
-    const metadata = await this.drafts.refreshFingerprint(draftId);
+    const metadata = await this.drafts.refreshWorkspaceFingerprint(draftId);
     const current = await this.entities.get(draftId, plan.entityType, plan.id);
-    return await this.entities.archive(draftId, metadata.owner_gitlab_user_id, plan.entityType, plan.id, metadata.fingerprint, current.blob_id);
+    return await this.entities.archive(draftId, metadata.owner_id, plan.entityType, plan.id, metadata.fingerprint, current.blob_id);
   }
 
   async moveTask(id: string, targetProject: string, targetMilestone: string | undefined, scope: AgentScope = {}): Promise<EntityResult> {
@@ -248,8 +248,8 @@ export class DirectCliRuntime {
       affected_projects: affectedProjects,
       files: [{ path: sourceRelative, kind: "Deleted" }, { path: targetRelative, kind: "Added" }],
     }, scope);
-    const metadata = await this.drafts.refreshFingerprint(draftId);
-    return await this.entities.moveTask(draftId, metadata.owner_gitlab_user_id, id, metadata.fingerprint, current.blob_id, targetProject, targetMilestone);
+    const metadata = await this.drafts.refreshWorkspaceFingerprint(draftId);
+    return await this.entities.moveTask(draftId, metadata.owner_id, id, metadata.fingerprint, current.blob_id, targetProject, targetMilestone);
   }
 
   async getConfiguration(kind: "statuses" | "issue-types"): Promise<EntityResult> {
@@ -262,9 +262,9 @@ export class DirectCliRuntime {
     await this.assertScope(scope);
     const relative = kind === "statuses" ? ".gitpm/statuses.yaml" : ".gitpm/issue-types.yaml";
     assertAgentScope({ affected_projects: [], files: [{ path: relative, kind: "Modified" }] }, scope);
-    const metadata = await this.drafts.refreshFingerprint(draftId);
+    const metadata = await this.drafts.refreshWorkspaceFingerprint(draftId);
     const current = await this.entities.getConfiguration(draftId, kind);
-    return await this.entities.updateConfiguration(draftId, metadata.owner_gitlab_user_id, kind, metadata.fingerprint, current.blob_id, document as GitPmDocument);
+    return await this.entities.updateConfiguration(draftId, metadata.owner_id, kind, metadata.fingerprint, current.blob_id, document as GitPmDocument);
   }
 
   async listComments(projectId: string, taskId: string): Promise<readonly CommentResult[]> {
@@ -274,13 +274,13 @@ export class DirectCliRuntime {
 
   async createComment(projectId: string, taskId: string, body: string): Promise<CommentResult> {
     const draftId = await this.draftId();
-    const metadata = await this.drafts.refreshFingerprint(draftId);
+    const metadata = await this.drafts.refreshWorkspaceFingerprint(draftId);
     return await this.comments.create(draftId, projectId, taskId, metadata.fingerprint, body, this.directActor());
   }
 
   async updateComment(projectId: string, taskId: string, commentId: string, body: string): Promise<CommentResult> {
     const draftId = await this.draftId();
-    const metadata = await this.drafts.refreshFingerprint(draftId);
+    const metadata = await this.drafts.refreshWorkspaceFingerprint(draftId);
     const relative = `projects/${projectId}/comments/${taskId}/${commentId}.yaml`;
     const blob_id = await this.drafts.fileBlobId(draftId, relative);
     return await this.comments.update(draftId, projectId, taskId, commentId, metadata.fingerprint, blob_id, body, this.directActor());
@@ -288,7 +288,7 @@ export class DirectCliRuntime {
 
   async deleteComment(projectId: string, taskId: string, commentId: string): Promise<CommentResult> {
     const draftId = await this.draftId();
-    const metadata = await this.drafts.refreshFingerprint(draftId);
+    const metadata = await this.drafts.refreshWorkspaceFingerprint(draftId);
     const relative = `projects/${projectId}/comments/${taskId}/${commentId}.yaml`;
     const blob_id = await this.drafts.fileBlobId(draftId, relative);
     return await this.comments.delete(draftId, projectId, taskId, commentId, metadata.fingerprint, blob_id, this.directActor());

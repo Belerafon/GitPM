@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
 import type { GitPmApi } from "./api.js";
 import { formatDateOnly, message, type Locale, type MessageKey } from "./i18n.js";
-import type { DraftStatus, EntityResult, GitPmDocument, GitPmRole } from "./types.js";
+import type { ConfigurationResult, DraftStatus, EntityResult, GitPmDocument, GitPmRole } from "./types.js";
 import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
 import { EditorDrawer } from "./editor-drawer.js";
 import { useExternalHighlights, useReducedMotion } from "./external-updates.js";
@@ -23,8 +23,8 @@ export function AdminWorkspace({ api, draft, role, locale, surface, confirmActio
   const [calendars, setCalendars] = useState<readonly EntityResult[]>([]);
   const [people, setPeople] = useState<readonly EntityResult[]>([]);
   const [teams, setTeams] = useState<readonly EntityResult[]>([]);
-  const [statuses, setStatuses] = useState<EntityResult | null>(null);
-  const [issueTypes, setIssueTypes] = useState<EntityResult | null>(null);
+  const [statuses, setStatuses] = useState<ConfigurationResult | null>(null);
+  const [issueTypes, setIssueTypes] = useState<ConfigurationResult | null>(null);
   const [fingerprint, setFingerprint] = useState(draft.fingerprint);
   const [error, setError] = useState<string | null>(null);
   const [peopleQuery, setPeopleQuery] = useState("");
@@ -47,14 +47,14 @@ export function AdminWorkspace({ api, draft, role, locale, surface, confirmActio
   }, [api, draft.draft_id, draft.external_fingerprint, loadRequest.run]);
   useEffect(() => { void load(); }, [load]);
 
-  const mutate = async (operation: () => Promise<EntityResult>) => { setError(null); try {
+  const mutate = async <Result extends EntityResult | ConfigurationResult>(operation: () => Promise<Result>): Promise<Result | null> => { setError(null); try {
     const result = await operation(); setFingerprint(result.draft_fingerprint);
-    if (result.document.schema === "gitpm/calendar@1") setCalendars((current) => upsertEntity(current, result));
-    if (result.document.schema === "gitpm/person@1") setPeople((current) => upsertEntity(current, result));
-    if (result.document.schema === "gitpm/team@1") setTeams((current) => upsertEntity(current, result));
-    if (result.document.schema === "gitpm/statuses@1") setStatuses(result);
-    if (result.document.schema === "gitpm/issue-types@1") setIssueTypes(result);
-    mark({ [result.document.id]: ["$local"] }); await onChanged(); await load(); return result;
+    if (result.document.schema === "gitpm/calendar@1") setCalendars((current) => upsertEntity(current, result as EntityResult));
+    if (result.document.schema === "gitpm/person@1") setPeople((current) => upsertEntity(current, result as EntityResult));
+    if (result.document.schema === "gitpm/team@1") setTeams((current) => upsertEntity(current, result as EntityResult));
+    if (result.document.schema === "gitpm/statuses@1") setStatuses(result as ConfigurationResult);
+    if (result.document.schema === "gitpm/issue-types@1") setIssueTypes(result as ConfigurationResult);
+    if ("id" in result.document && typeof result.document.id === "string") mark({ [result.document.id]: ["$local"] }); await onChanged(); await load(); return result;
   } catch (caught) { setError(caught instanceof Error ? caught.message : String(caught)); return null; } };
   const remove = async (operation: () => Promise<void>) => { setError(null); try { await operation(); await load(); await onChanged(); return true; } catch (caught) { setError(caught instanceof Error ? caught.message : String(caught)); return false; } };
   const activeCalendars = calendars.filter((item) => item.document.lifecycle === "active");
@@ -109,7 +109,7 @@ function TeamEditor(props: EditorProps & { people: readonly EntityResult[]; read
 }
 
 interface ConfigValue { readonly slug: string; readonly title: string; readonly color: string; readonly active: boolean }
-function ConfigEditor({ api, draft, entity, kind, listKey, title, readOnly, t, mutate }: { readonly api: GitPmApi; readonly draft: DraftStatus; readonly entity: EntityResult; readonly kind: "statuses" | "issue-types"; readonly listKey: "statuses" | "issue_types"; readonly title: string; readonly readOnly: boolean; readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string; readonly mutate: (operation: () => Promise<EntityResult>) => Promise<EntityResult | null> }) {
+function ConfigEditor({ api, draft, entity, kind, listKey, title, readOnly, t, mutate }: { readonly api: GitPmApi; readonly draft: DraftStatus; readonly entity: ConfigurationResult; readonly kind: "statuses" | "issue-types"; readonly listKey: "statuses" | "issue_types"; readonly title: string; readonly readOnly: boolean; readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string; readonly mutate: <Result extends EntityResult | ConfigurationResult>(operation: () => Promise<Result>) => Promise<Result | null> }) {
   const [open, setOpen] = useState(false);
   const entityValues = Array.isArray(entity.document[listKey]) ? entity.document[listKey] as ConfigValue[] : [];
   const [values, setValues] = useState(entityValues);

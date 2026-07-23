@@ -1,4 +1,7 @@
+import type { EntityResult } from "@gitpm/contracts";
+
 export type GitPmRole = "Reporter" | "Developer" | "Maintainer";
+export type { ConfigurationDocument, ConfigurationResult, EntityDocument, EntityResult, GitPmDocument } from "@gitpm/contracts";
 export type WriterMode = "ui" | "external";
 export type DraftState = "open" | "closed" | "published" | "abandoned";
 
@@ -180,15 +183,6 @@ export interface RevertDraftResult {
   readonly reverted_commit: string;
   readonly conflicted: boolean;
   readonly conflicted_files: readonly string[];
-}
-
-export type GitPmDocument = Readonly<Record<string, unknown>> & { readonly schema: string; readonly id: string; readonly lifecycle: "active" | "archived" };
-
-export interface EntityResult {
-  readonly document: GitPmDocument;
-  readonly path: string;
-  readonly blob_id: string;
-  readonly draft_fingerprint: string;
 }
 
 export interface ProjectWorkspaceResult {

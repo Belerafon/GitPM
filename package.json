@@ -34,6 +34,7 @@
     "smoke": "node scripts/smoke-health.mjs",
     "test": "vitest run",
     "typecheck": "corepack pnpm -r --if-present typecheck && tsc -p e2e/tsconfig.json --noEmit",
+    "verify:local": "corepack pnpm install --frozen-lockfile && corepack pnpm verify",
     "verify": "corepack pnpm clean && corepack pnpm build && corepack pnpm lint && corepack pnpm typecheck && corepack pnpm test && corepack pnpm e2e && corepack pnpm smoke && corepack pnpm schema:verify && node scripts/security-spike-report.mjs && corepack pnpm planning:verify",
     "version:capture": "node scripts/generate-build-version.mjs"
   },

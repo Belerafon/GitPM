@@ -2,9 +2,9 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { changedEntityFields, useExternalHighlights } from "./external-updates.js";
-import type { EntityResult, GitPmDocument } from "./types.js";
+import type { EntityDocument, EntityResult } from "./types.js";
 
-const entity = (document: GitPmDocument): EntityResult => ({ document, path: `${document.id}.yaml`, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) });
+const entity = (document: EntityDocument): EntityResult => ({ document, path: `${document.id}.yaml`, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) });
 const before = entity({ schema: "gitpm/task@1", id: "T-26-111111", lifecycle: "active", title: "Before", status: "backlog" });
 afterEach(() => vi.useRealTimers());
 

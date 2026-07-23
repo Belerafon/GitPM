@@ -111,8 +111,11 @@ describe("CLI P02 commands", () => {
     expect(JSON.parse((await run(["validate", "--json", "--root", root])).output)).toMatchObject({ ok: true, code: "OK" });
   });
 
-  it("requires a configured runtime for semantic diff and provides doctor output", async () => {
-    const diff = await run(["diff", "--semantic", "--json", "--root", demo]);
+  it("rejects semantic diff without a configured runtime and provides doctor output", async () => {
+    const root = await fixture();
+    const project = path.join(root, "projects", "P-26-MGP84K", "project.yaml");
+    await writeFile(project, (await readFile(project, "utf8")).replace("name: GitPM launch", "name: Changed without runtime"), "utf8");
+    const diff = await run(["diff", "--semantic", "--json", "--root", root]);
     expect(diff.exitCode).toBe(1);
     expect(JSON.parse(diff.output)).toMatchObject({ ok: false, code: "CLI_DIRECT_CONFIGURATION_REQUIRED" });
     const doctor = await run(["doctor", "--json", "--root", demo]);
@@ -222,12 +225,39 @@ describe("CLI init command", () => {
     expect(JSON.parse(doctor.output)).toMatchObject({ ok: true, checks: { repository_valid: true, schemas_loaded: true } });
 
     expect(await readFile(path.join(target, ".gitignore"), "utf8")).toContain("/uploads/*");
+    expect(await readFile(path.join(target, ".ignore"), "utf8")).toBe(
+      ["# Keep uploads searchable by ripgrep-based agent tools even though Git ignores them.", "!uploads/", "!uploads/**", ""].join("\n"),
+    );
     expect(await readFile(path.join(target, "uploads", ".gitkeep"), "utf8")).toBe("");
-    expect((await git(target, "ls-files")).split(/\r?\n/u)).toEqual(expect.arrayContaining([".gitignore", "uploads/.gitkeep"]));
+    const trackedFiles = (await git(target, "ls-files")).split(/\r?\n/u);
+    expect(trackedFiles).toEqual(expect.arrayContaining([".gitignore", ".ignore", "uploads/.gitkeep"]));
     expect(await git(target, "check-ignore", "uploads/incoming-report.pdf")).toBe("uploads/incoming-report.pdf");
+    expect(await git(target, "status", "--porcelain")).toBe("");
+    expect(await readFile(path.join(target, ".gitpm", "repository.yaml"), "utf8")).toContain("- .ignore");
     expect(await readFile(path.join(target, ".gitpm", "repository.yaml"), "utf8")).toContain("default_calendar: C-27-KKKKKK");
     expect(await readFile(path.join(target, "calendars", "C-27-KKKKKK.yaml"), "utf8")).toContain("id: C-27-KKKKKK");
     await expect(readFile(path.join(target, "calendars", "C-26-WRKDAY.yaml"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("lets ripgrep discover uploads/ via .ignore when rg is available", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "gitpm-init-rg-"));
+    roots.push(root);
+    const target = path.join(root, "portfolio");
+    const init = await run(["init", target, "--json"], root, {
+      init: { now: () => new Date("2027-01-02T03:04:05Z"), randomIndex: () => 19 },
+    });
+    expect(init.exitCode).toBe(0);
+    try {
+      await execFileAsync("rg", ["--version"]);
+    } catch {
+      // ripgrep is not guaranteed in every CI image; the .ignore content is
+      // asserted exactly in the skeleton test above.
+      return;
+    }
+    const marker = "gitpmrgmarker9f3c7a";
+    await writeFile(path.join(target, "uploads", "example.txt"), `${marker}\n`, "utf8");
+    const { stdout } = await execFileAsync("rg", ["-F", marker], { cwd: target, encoding: "utf8" });
+    expect(stdout).toContain(marker);
   });
 
   it("rejects a non-empty target directory", async () => {

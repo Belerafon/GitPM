@@ -4,29 +4,29 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GitPmApi } from "./api.js";
 import { AssigneeChecks, CoreWorkspace, existingProjectGroups, groupProjects, newEntityId, SafeMarkdown } from "./core-ui.js";
 import { message } from "./i18n.js";
-import type { DraftStatus, EntityResult, GitPmDocument } from "./types.js";
+import type { ConfigurationDocument, ConfigurationResult, DraftStatus, EntityDocument, EntityResult } from "./types.js";
 
 const draft: DraftStatus = { draft_id: "DRF-CORE", owner_gitlab_user_id: "42", branch: "gitpm/42/DRF-CORE", base_commit: "a".repeat(40), writer_mode: "ui", state: "open", fingerprint: "b".repeat(64), created_at: "2026-07-10T00:00:00.000Z", updated_at: "2026-07-10T00:00:00.000Z" };
 
 class EntityApi {
   entities: EntityResult[] = [];
   revision = 0;
-  private result(document: GitPmDocument): EntityResult { this.revision += 1; return { document, path: `${document.id}.yaml`, blob_id: String(this.revision).padStart(40, "a"), draft_fingerprint: String(this.revision).padStart(64, "b") }; }
+  private result(document: EntityDocument): EntityResult { this.revision += 1; return { document, path: `${document.id}.yaml`, blob_id: String(this.revision).padStart(40, "a"), draft_fingerprint: String(this.revision).padStart(64, "b") }; }
   async listEntities(_draftId: string, type: string, project?: string) { const schemaName = type === "people" ? "person" : type.slice(0, -1); return this.entities.filter((item) => item.document.schema === `gitpm/${schemaName}@1` && (project === undefined || item.document.project === project)); }
-  async createEntity(_draftId: string, _type: string, _fingerprint: string, document: GitPmDocument) { const next = this.result(document); this.entities.push(next); return next; }
-  async updateEntity(_draftId: string, _type: string, entity: EntityResult, _fingerprint: string, document: GitPmDocument) { const next = this.result(document); this.entities = this.entities.map((item) => item === entity ? next : item); return next; }
+  async createEntity(_draftId: string, _type: string, _fingerprint: string, document: EntityDocument) { const next = this.result(document); this.entities.push(next); return next; }
+  async updateEntity(_draftId: string, _type: string, entity: EntityResult, _fingerprint: string, document: EntityDocument) { const next = this.result(document); this.entities = this.entities.map((item) => item === entity ? next : item); return next; }
   async moveTask(_draftId: string, entity: EntityResult, _fingerprint: string, targetProject: string, targetMilestone?: string) { return await this.updateEntity(_draftId, "tasks", entity, _fingerprint, { ...entity.document, project: targetProject, milestone: targetMilestone }); }
   async archiveEntity(_draftId: string, type: string, entity: EntityResult, fingerprint: string) { return await this.updateEntity(_draftId, type, entity, fingerprint, { ...entity.document, lifecycle: "archived" }); }
   async deleteEntity(_draftId: string, _type: string, entity: EntityResult) { this.entities = this.entities.filter((item) => item !== entity); }
-  async getConfiguration(_draftId: string, kind: "statuses" | "issue-types"): Promise<EntityResult> { const document = (kind === "statuses" ? { schema: "gitpm/statuses@1", id: "CONFIG-STATUSES", lifecycle: "active", statuses: [{ slug: "backlog", title: "Backlog", active: true }, { slug: "done", title: "Done", active: true }] } : { schema: "gitpm/issue-types@1", id: "CONFIG-TYPES", lifecycle: "active", issue_types: [{ slug: "task", title: "Task", active: true }] }) as GitPmDocument; return { document, path: kind, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) }; }
-  async updateConfiguration(): Promise<EntityResult> { throw new Error("not used"); }
+  async getConfiguration(_draftId: string, kind: "statuses" | "issue-types"): Promise<ConfigurationResult> { const document = (kind === "statuses" ? { schema: "gitpm/statuses@1", statuses: [{ slug: "backlog", title: "Backlog", active: true }, { slug: "done", title: "Done", active: true }] } : { schema: "gitpm/issue-types@1", issue_types: [{ slug: "task", title: "Task", active: true }] }) as ConfigurationDocument; return { document, path: kind, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) }; }
+  async updateConfiguration(): Promise<ConfigurationResult> { throw new Error("not used"); }
 }
 
 afterEach(cleanup);
 
 describe("core UI", () => {
   it("keeps the form compact and opens the full people directory as a filterable list", () => {
-    const people = Array.from({ length: 1_000 }, (_, index) => ({ document: { schema: "gitpm/person@1", id: `U-26-${String(index).padStart(6, "0")}`, name: `Person ${index}`, lifecycle: "active" } as GitPmDocument, path: `${index}.yaml`, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) }));
+    const people = Array.from({ length: 1_000 }, (_, index) => ({ document: { schema: "gitpm/person@1", id: `U-26-${String(index).padStart(6, "0")}`, name: `Person ${index}`, lifecycle: "active" } as EntityDocument, path: `${index}.yaml`, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) }));
     render(<form><AssigneeChecks disabled={false} people={people} selected={[people[0]!.document.id, people[999]!.document.id]} t={(key) => message("en", key)} /></form>);
 
     expect(screen.getByText("Person 0")).toBeTruthy();

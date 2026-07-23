@@ -43,9 +43,10 @@ The checkout must already be on the configured default branch. GitPM does not
 switch branches implicitly: a different branch is rejected as
 `GIT_WRONG_BRANCH`, and detached HEAD is rejected as `GIT_DETACHED_HEAD`.
 
-The shared domain services use one internal `DRF-LOCAL` workspace, but direct mode has no public
-draft lifecycle. Creating another draft, changing writer mode, closing, reopening, cleaning up,
-or creating a revert draft through the HTTP draft API returns
+The shared domain services consume the mode-neutral `RepositoryWorkspace` contract. Direct mode
+keeps one compatibility metadata record under the internal key `DRF-LOCAL`, but draft lifecycle
+and writer mode are not part of the domain mutation boundary. Creating another draft, changing
+writer mode, closing, reopening, cleaning up, or creating a revert draft through the HTTP draft API returns
 `DIRECT_MODE_DRAFT_OPERATION_UNAVAILABLE`. At startup GitPM reconciles `DRF-LOCAL` with the
 selected checkout and keeps it in `ui`/`open` state.
 
@@ -151,7 +152,11 @@ GITPM_REPOSITORY_MODE=worktree docker compose -f compose.yaml -f compose.server.
 
 Mode differences live behind a single seam: `DraftBackend`
 (`packages/drafts/src/draft-backend.ts`) with `WorktreeDraftBackend` and
-`DirectDraftBackend` implementations, plus matching push strategies. The rest of
+`DirectRepositoryBackend` implementations, plus matching push strategies. The deprecated
+`DirectDraftBackend` name remains only as a source-compatibility alias. The rest of
 GitPM (domain, changes, history, publishing, UI) is mode-agnostic and reuses the
-same single-workspace API surface; the server runtime picks the backend from the
-resolved mode.
+same `RepositoryWorkspace` and repository-mutation surface; direct mutations use
+`repository` mode while worktree UI and agents explicitly use `ui` and `external`.
+Both UI and agent CRUD delegate to `EntityStore`, so validation, reference rewrites,
+rollback, and scope planning have one implementation. The server runtime picks the
+backend from the resolved mode.

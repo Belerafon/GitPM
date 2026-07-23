@@ -204,7 +204,7 @@ export class ChangesService {
   ) {}
 
   async list(draftId: string): Promise<{ files: readonly FileChange[]; changed_files_count: number; affected_projects: readonly string[] }> {
-    const metadata = await this.drafts.getDraft(draftId);
+    const metadata = await this.drafts.getWorkspace(draftId);
     const status = parseStatus(await this.git.statusPorcelainZ(metadata.worktree_path))
       .filter((change) => !GITPM_GUIDANCE_FILES.has(change.path));
     const batchPaths = new Set(status.filter((change) => change.kind !== "Added" && /^[A-Za-z0-9._/-]+$/u.test(change.path)).map((change) => change.path));
@@ -238,7 +238,7 @@ export class ChangesService {
   }
 
   async semantic(draftId: string): Promise<SemanticDiff> {
-    const metadata = await this.drafts.getDraft(draftId);
+    const metadata = await this.drafts.getWorkspace(draftId);
     const changes = await this.list(draftId);
     const result: { created: SemanticChange[]; updated: SemanticChange[]; archived: SemanticChange[]; deleted: SemanticChange[] } = {
       created: [], updated: [], archived: [], deleted: [],

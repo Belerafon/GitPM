@@ -3,11 +3,11 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GitPmApi } from "./api.js";
 import { buildGanttModel, dependencyPath, GanttWorkspace } from "./gantt-ui.js";
-import type { DraftStatus, EntityResult, GitPmDocument } from "./types.js";
+import type { DraftStatus, EntityDocument, EntityResult } from "./types.js";
 
 const projectId = "P-26-111111";
 const draft: DraftStatus = { draft_id: "DRF-GANTT", owner_gitlab_user_id: "42", branch: "gitpm/42/DRF-GANTT", base_commit: "a".repeat(40), writer_mode: "ui", state: "open", fingerprint: "b".repeat(64), created_at: "2026-07-11T00:00:00.000Z", updated_at: "2026-07-11T00:00:00.000Z" };
-const result = (document: GitPmDocument): EntityResult => ({ document, path: `${document.id}.yaml`, blob_id: "c".repeat(40), draft_fingerprint: "d".repeat(64) });
+const result = (document: EntityDocument): EntityResult => ({ document, path: `${document.id}.yaml`, blob_id: "c".repeat(40), draft_fingerprint: "d".repeat(64) });
 const task = (suffix: string, title: string, start?: string, due?: string, extra: Record<string, unknown> = {}) => result({ schema: "gitpm/task@1", id: `T-26-${suffix.repeat(6)}`, project: projectId, title, type: "task", status: "backlog", lifecycle: "active", ...(start === undefined ? {} : { start }), ...(due === undefined ? {} : { due }), ...extra });
 
 const parent = task("2", "Plan release", "2026-07-01", "2026-07-05");

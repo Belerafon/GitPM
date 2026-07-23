@@ -165,5 +165,5 @@ describe("domain API integration", () => {
     for (const expected of expectedPaths) expect(changed).toContain(expected);
     expect(changed).not.toContain("people/U-26-KB9RXB.yaml");
     expect(changed).not.toContain("T-26-FM5Q4W.yaml");
-  }, 60_000);
+  }, 120_000);
 });

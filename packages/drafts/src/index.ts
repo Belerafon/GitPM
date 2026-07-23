@@ -9,7 +9,7 @@ import { WorktreeDraftBackend, worktreePushStrategy } from "./draft-backend.js";
 export { GITPM_AGENT_FILE, GITPM_GUIDANCE_FILES, GITPM_GUIDANCE_PATHS, GITPM_SKILL_FILE, GITPM_SKILL_FILE_CONTENT, gitPmAgentFile, provisionGitPmWorktreeGuidance, WorktreeGuidanceError } from "./worktree-guidance.js";
 export { provisionGitPmDirectGuidance, gitPmDirectAgentFile, GITPM_DIRECT_SKILL_FILE_CONTENT, type DirectGuidanceInfo } from "./direct-guidance.js";
 export type { DraftBackend, DraftProvisioning, DraftPushStrategy } from "./draft-backend.js";
-export { DirectDraftBackend, WorktreeDraftBackend, directPushStrategy, worktreePushStrategy } from "./draft-backend.js";
+export { DirectDraftBackend, DirectRepositoryBackend, WorktreeDraftBackend, directPushStrategy, worktreePushStrategy } from "./draft-backend.js";
 
 export type WriterMode = "ui" | "external";
 export type DraftState = "open" | "closed" | "published" | "abandoned";
@@ -28,6 +28,23 @@ export interface DraftMetadata {
   readonly created_at: string;
   readonly updated_at: string;
 }
+
+/**
+ * Mode-neutral coordinates used by repository/domain services. Draft lifecycle and writer
+ * ownership stay on DraftMetadata and are consumed only by worktree workflow adapters.
+ */
+export interface RepositoryWorkspace {
+  readonly workspace_id: string;
+  readonly owner_id: string;
+  readonly branch: string;
+  readonly base_commit: string;
+  readonly worktree_path: string;
+  readonly fingerprint: string;
+  readonly created_at: string;
+  readonly updated_at: string;
+}
+
+export type RepositoryMutationMode = "repository" | WriterMode;
 
 export interface RecoveryReport {
   readonly drafts: readonly DraftMetadata[];
@@ -231,6 +248,10 @@ export class DraftManager {
     return await this.readMetadata(safeComponent(draftId, "draft ID"));
   }
 
+  async getWorkspace(workspaceId: string): Promise<RepositoryWorkspace> {
+    return this.repositoryWorkspace(await this.getDraft(workspaceId));
+  }
+
   async listDrafts(): Promise<readonly DraftMetadata[]> {
     await this.migrateLegacyDirectMetadata();
     await mkdir(this.metadataDirectory, { recursive: true, mode: 0o700 });
@@ -357,10 +378,47 @@ export class DraftManager {
     expectedFingerprint: string,
     mutation: (metadata: DraftMetadata) => Promise<T>,
   ): Promise<{ result: T; metadata: DraftMetadata }> {
+    return await this.withDraftMutation(draftId, owner, expectedFingerprint, "ui", mutation);
+  }
+
+  async withRepositoryMutation<T>(
+    workspaceId: string,
+    owner: string,
+    expectedFingerprint: string,
+    mode: RepositoryMutationMode,
+    mutation: (workspace: RepositoryWorkspace) => Promise<T>,
+  ): Promise<{ result: T; metadata: RepositoryWorkspace }> {
+    const result = await this.withDraftMutation(
+      workspaceId,
+      owner,
+      expectedFingerprint,
+      mode,
+      async (metadata) => await mutation(this.repositoryWorkspace(metadata)),
+    );
+    return { result: result.result, metadata: this.repositoryWorkspace(result.metadata) };
+  }
+
+  private async withDraftMutation<T>(
+    draftId: string,
+    owner: string,
+    expectedFingerprint: string,
+    mode: RepositoryMutationMode,
+    mutation: (metadata: DraftMetadata) => Promise<T>,
+  ): Promise<{ result: T; metadata: DraftMetadata }> {
     return await this.lock(safeComponent(draftId, "draft ID")).run(async () => {
       const metadata = await this.getDraft(draftId);
-      this.assertOwnerAndOpen(metadata, owner);
-      if (metadata.writer_mode !== "ui") throw new DraftRuntimeError("DRAFT_READ_ONLY", "UI is read-only in external writer mode");
+      if (mode === "repository") {
+        if (this.backend.mode !== "direct") throw new DraftRuntimeError("DIRECT_WORKSPACE_REQUIRED", "Repository mutation mode requires direct repository mode");
+        if (metadata.owner_gitlab_user_id !== owner) throw new DraftRuntimeError("DRAFT_FORBIDDEN", "Repository workspace owner mismatch");
+      } else {
+        this.assertOwnerAndOpen(metadata, owner);
+        if (metadata.writer_mode !== mode) {
+          throw new DraftRuntimeError(
+            mode === "ui" ? "DRAFT_READ_ONLY" : "AGENT_EXTERNAL_MODE_REQUIRED",
+            mode === "ui" ? "UI is read-only in external writer mode" : "Agent workflow requires external writer mode",
+          );
+        }
+      }
       const current = await this.fingerprint(metadata.worktree_path);
       if (current !== metadata.fingerprint || current !== expectedFingerprint) {
         throw new DraftRuntimeError("DRAFT_CHANGED_EXTERNALLY", "Draft worktree changed outside the UI runtime");
@@ -416,6 +474,10 @@ export class DraftManager {
       await this.persist(next);
       return next;
     });
+  }
+
+  async refreshWorkspaceFingerprint(workspaceId: string): Promise<RepositoryWorkspace> {
+    return this.repositoryWorkspace(await this.refreshFingerprint(workspaceId));
   }
 
   async acknowledgeExternalChanges(draftId: string, owner: string): Promise<DraftMetadata> {
@@ -491,6 +553,19 @@ export class DraftManager {
   private assertOwnerAndOpen(metadata: DraftMetadata, owner: string): void {
     if (metadata.owner_gitlab_user_id !== owner) throw new DraftRuntimeError("DRAFT_FORBIDDEN", "Draft owner mismatch");
     if (metadata.state !== "open") throw new DraftRuntimeError("DRAFT_NOT_OPEN", "Draft is not open");
+  }
+
+  private repositoryWorkspace(metadata: DraftMetadata): RepositoryWorkspace {
+    return {
+      workspace_id: metadata.draft_id,
+      owner_id: metadata.owner_gitlab_user_id,
+      branch: metadata.branch,
+      base_commit: metadata.base_commit,
+      worktree_path: metadata.worktree_path,
+      fingerprint: metadata.fingerprint,
+      created_at: metadata.created_at,
+      updated_at: metadata.updated_at,
+    };
   }
 
   private async transitionState(draftId: string, owner: string, state: DraftState): Promise<DraftMetadata> {

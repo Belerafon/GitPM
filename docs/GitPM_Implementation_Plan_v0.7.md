@@ -360,10 +360,11 @@ Fetch и операции, меняющие общий bare repository, сери
 
 ## 10. Per-draft runtime model
 
-Каждый открытый worktree draft имеет отдельную in-memory model. В `direct` mode
-общие сервисы используют один internal workspace `DRF-LOCAL`, но не публикуют
-draft lifecycle: runtime сверяет его с выбранным checkout и хранит
-metadata отдельно от worktree drafts.
+Каждый открытый worktree draft имеет отдельную in-memory model. Общие domain,
+changes и history services зависят от нейтрального `RepositoryWorkspace`, а не
+от draft lifecycle. В `direct` mode compatibility metadata использует внутренний
+ключ `DRF-LOCAL`, но runtime не передаёт writer mode или draft state в mutation
+boundary; metadata хранится отдельно от worktree drafts.
 
 Server не использует filesystem watcher в v0.1. Browser polling выполняется каждые 3 секунды. Перед read, mutation, validation и commit server сравнивает worktree revision fingerprint:
 

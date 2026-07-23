@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { EntityCatalog } from "./entity-catalog.js";
-import type { EntityResult, GitPmDocument } from "./types.js";
+import type { EntityDocument, EntityResult } from "./types.js";
 
-const entity = (document: GitPmDocument): EntityResult => ({ document, path: "", blob_id: "blob", draft_fingerprint: "fingerprint" });
+const entity = (document: EntityDocument): EntityResult => ({ document, path: "", blob_id: "blob", draft_fingerprint: "fingerprint" });
 
 describe("EntityCatalog", () => {
   it("resolves task references and preserves archived milestones", () => {

@@ -390,7 +390,6 @@ async function runSemanticDiff(args: readonly string[], cwd: string): Promise<Cl
     `Semantic diff requires a configured direct checkout or worktree draft; standalone root ${parsed.root} supports format and validate only`,
   );
 }
-
 function required(value: string | undefined, name: string): string {
   if (!value) throw new RepositoryFormatError("CLI_USAGE", `${name} is required`); return value;
 }
