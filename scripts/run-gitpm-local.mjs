@@ -3,6 +3,10 @@ import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { isTcpPortAvailable, waitForGitPmServices } from "./gitpm-readiness.mjs";
 import { prepareGitPmRuntime } from "./configure-gitpm-runtime.mjs";
+import { generateBuildVersion } from "./generate-build-version.mjs";
+
+const buildVersion = generateBuildVersion();
+if (buildVersion) console.log(`[GitPM] Версия сборки: ${buildVersion.version}`);
 
 const isWindows = process.platform === "win32";
 const isProduction = process.env.GITPM_RUNTIME_MODE === "production";

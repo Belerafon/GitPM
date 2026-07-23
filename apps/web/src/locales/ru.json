@@ -2,7 +2,6 @@
   "app.title": "GitPM",
   "app.repository": "Репозиторий портфеля",
   "app.version": "Версия {version}",
-  "app.buildInfo": "Сборка {date} · {commit}",
   "auth.heading": "Вход в GitPM",
   "auth.description": "Для продолжения используйте доступ к проекту GitLab.",
   "auth.login": "Войти через GitLab",

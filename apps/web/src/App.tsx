@@ -180,7 +180,6 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
       breadcrumbs={breadcrumbs}
         headerMeta={<><strong>{repository?.name ?? t("app.repository")}</strong>{directMode && repository?.branch !== undefined && <span className="runtime-context"><code>{repository.branch}</code></span>}<span className="runtime-context">{t("auth.localMode")} · {t("auth.role", { role: drafts.session.role })}</span></>}
       headerTitle={pageTitle}
-      locale={locale}
       navigationGroups={navigationGroups}
       onNavigate={selectNavigationView}
       onOpenRepositoryStatus={openRepositoryStatus}

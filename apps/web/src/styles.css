@@ -29,7 +29,6 @@ nav button.active, nav button:hover { background: #2b4c3e; color: #fff; }
 .navigation-group-items .navigation-repository-status:hover { background: #e0ec94; color: #18352a; }
 .sidebar-footer { display: grid; gap: .2rem; margin-top: auto; border: 1px solid #426153; border-radius: 10px; padding: .7rem .8rem; }
 .sidebar-footer-line { color: #dbe5de; font-size: .76rem; font-weight: 600; overflow-wrap: anywhere; }
-.sidebar-footer-meta { color: #aebfb5; font-size: .68rem; line-height: 1.35; overflow-wrap: anywhere; }
 .workspace { min-width: 0; padding: 0 2rem 2rem; }
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 96px; border-bottom: 1px solid #dbddd7; }
 .navigation-toggle, .navigation-backdrop { display: none; }

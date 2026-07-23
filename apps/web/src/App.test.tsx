@@ -327,7 +327,7 @@ describe("frontend draft lifecycle", () => {
     render(<App api={api} browserLanguages={["en"]} />);
     expect(await screen.findByText("Local mode · Role: Maintainer")).toBeTruthy();
     expect(screen.getByText("portfolio")).toBeTruthy();
-    expect(screen.getByTestId("sidebar-version").textContent).toContain("Version dev");
+    expect(screen.getByTestId("sidebar-version").textContent).toContain("Version —");
     expect(await screen.findByRole("heading", { name: "Projects" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Repository" })).toBeTruthy();
     expect((screen.getByRole("combobox", { name: "Current working copy" }) as HTMLSelectElement).value).toBe("DRF-LOCAL");
