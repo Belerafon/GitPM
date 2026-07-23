@@ -18,6 +18,7 @@
     "@gitpm/domain": "workspace:*",
     "@gitpm/git-client": "workspace:*",
     "@gitpm/gitlab": "workspace:*",
+    "@gitpm/publishing": "workspace:*",
     "@gitpm/repository-format": "workspace:*",
     "@gitpm/security": "workspace:*",
     "@gitpm/shared": "workspace:*",

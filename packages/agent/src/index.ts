@@ -1,5 +1,5 @@
 import type { ChangesService, SemanticDiff } from "@gitpm/changes";
-import { GITPM_GUIDANCE_FILES, GITPM_GUIDANCE_PATHS, provisionGitPmWorktreeGuidance } from "@gitpm/drafts";
+import { GITPM_GUIDANCE_FILES, provisionGitPmWorktreeGuidance } from "@gitpm/drafts";
 import type { DraftManager, DraftMetadata, WriterMode } from "@gitpm/drafts";
 import {
   EntityStore,
@@ -8,9 +8,9 @@ import {
   type EntityCreateBatchResult,
 } from "@gitpm/domain";
 import type { GitClient } from "@gitpm/git-client";
-import type { GitLabMergeRequestProtocol, MergeRequestPayload, MergeRequestState } from "@gitpm/gitlab";
+import type { GitLabMergeRequestProtocol, MergeRequestState } from "@gitpm/gitlab";
+import { PublicationService, validateMergeRequestData } from "@gitpm/publishing";
 import type { GitPmDocument } from "@gitpm/repository-format";
-import { validateRepository } from "@gitpm/validation";
 
 export class AgentWorkflowError extends Error {
   constructor(public readonly code: string, message: string, public readonly details?: unknown) {
@@ -64,14 +64,19 @@ export function assertAgentScope(
 
 export class AgentWorkflow {
   private readonly entities: EntityStore;
+  private readonly publication: PublicationService;
 
   constructor(
     private readonly drafts: DraftManager,
-    private readonly git: GitClient,
+    git: GitClient,
     private readonly changes: ChangesService,
     private readonly options: AgentWorkflowOptions,
   ) {
     this.entities = new EntityStore(drafts, "external");
+    this.publication = new PublicationService(drafts, git, {
+      defaultBranch: options.defaultBranch,
+      ...(options.mergeRequests === undefined ? {} : { mergeRequests: options.mergeRequests }),
+    });
   }
 
   async createDraft(draftId: string, owner: string): Promise<DraftMetadata> {
@@ -246,32 +251,34 @@ export class AgentWorkflow {
 
   async commitAll(draftId: string, message: string, scope: AgentScope = {}) {
     const draft = await this.externalDraft(draftId);
-    const scoped = await this.assertScope(draftId, scope);
-    const validation = await validateRepository(draft.worktree_path);
-    if (!validation.valid) throw new AgentWorkflowError("VALIDATION_FAILED", "Commit is blocked by repository validation", validation.errors);
-    if (scoped.changed_files.length === 0) throw new AgentWorkflowError("NOTHING_TO_COMMIT", "Draft has no business changes");
-    const commit = await this.git.commitAll(draft.worktree_path, message, this.options.authorName, this.options.authorEmail, GITPM_GUIDANCE_PATHS);
-    const metadata = await this.drafts.refreshFingerprint(draftId);
-    return { commit, branch: metadata.branch, draft_fingerprint: metadata.fingerprint };
+    await this.assertScope(draftId, scope);
+    return await this.publication.commit({
+      ownerId: draft.owner_gitlab_user_id,
+      authorName: this.options.authorName,
+      authorEmail: this.options.authorEmail,
+    }, { draftId }, message);
   }
 
   async push(draftId: string) {
-    await this.externalDraft(draftId);
-    const changes = await this.changes.list(draftId);
-    if (changes.files.some((file) => !GITPM_GUIDANCE_FILES.has(file.path))) throw new AgentWorkflowError("UNCOMMITTED_CHANGES", "Push requires a clean committed draft");
-    if (!this.options.accessToken) throw new AgentWorkflowError("AGENT_TOKEN_REQUIRED", "Push requires an in-memory access token");
-    const result = await this.drafts.push(draftId, this.options.accessToken);
-    return { branch: result.branch, commit: result.commit };
+    const draft = await this.externalDraft(draftId);
+    return await this.publication.push({
+      ownerId: draft.owner_gitlab_user_id,
+      accessToken: () => {
+        if (!this.options.accessToken) throw new AgentWorkflowError("AGENT_TOKEN_REQUIRED", "Push requires an in-memory access token");
+        return this.options.accessToken;
+      },
+    }, { draftId });
   }
 
   async createMergeRequest(draftId: string, owner: string, title: string, description?: string): Promise<MergeRequestState> {
-    const draft = await this.externalDraft(draftId);
-    if (!title.trim() || title.length > 255) throw new AgentWorkflowError("MR_TITLE_INVALID", "Merge Request title is invalid");
-    if (!this.options.accessToken || !this.options.mergeRequests) throw new AgentWorkflowError("AGENT_MR_CONFIGURATION_REQUIRED", "Merge Request configuration is unavailable");
-    const payload: MergeRequestPayload = { source_branch: draft.branch, target_branch: this.options.defaultBranch, title, ...(description?.trim() ? { description } : {}) };
-    const result = await this.options.mergeRequests.createMergeRequest(this.options.accessToken, payload);
-    await this.drafts.markPublished(draftId, owner, result.iid);
-    return result;
+    await this.externalDraft(draftId);
+    validateMergeRequestData({ title, ...(description === undefined ? {} : { description }) });
+    const accessToken = this.options.accessToken;
+    if (!accessToken || !this.options.mergeRequests) throw new AgentWorkflowError("AGENT_MR_CONFIGURATION_REQUIRED", "Merge Request configuration is unavailable");
+    return await this.publication.createMergeRequest({
+      ownerId: owner,
+      accessToken: () => accessToken,
+    }, { draftId }, { title, ...(description === undefined ? {} : { description }) });
   }
 
   private async externalDraft(draftId: string): Promise<DraftMetadata> {

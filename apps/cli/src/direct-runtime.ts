@@ -3,8 +3,8 @@ import { ChangesService, type SemanticDiff } from "@gitpm/changes";
 import { GitClient, GitCommandError } from "@gitpm/git-client";
 import { DirectRepositoryBackend, directPushStrategy, DraftManager, GITPM_GUIDANCE_FILES, GITPM_GUIDANCE_PATHS } from "@gitpm/drafts";
 import { CommentStore, EntityStore, entityPathForDocument, type CommentActor, type CommentResult, type DeletePlan, type EntityCreateBatchResult, type EntityResult } from "@gitpm/domain";
+import { PublicationService } from "@gitpm/publishing";
 import type { GitPmDocument } from "@gitpm/repository-format";
-import { validateRepository } from "@gitpm/validation";
 
 export interface DirectStatus {
   readonly mode: "direct";
@@ -46,7 +46,7 @@ export class DirectCliRuntime {
   private readonly changes: ChangesService;
   private readonly entities: EntityStore;
   private readonly comments: CommentStore;
-  private readonly pushStrategy: ReturnType<typeof directPushStrategy>;
+  private readonly publication: PublicationService;
   private readonly authorName: string;
   private readonly authorEmail: string;
   private readonly pushAccessToken?: string;
@@ -71,7 +71,7 @@ export class DirectCliRuntime {
     this.changes = new ChangesService(this.drafts, this.git);
     this.entities = new EntityStore(this.drafts, "repository");
     this.comments = new CommentStore(this.drafts, () => new Date(), "repository");
-    this.pushStrategy = directPushStrategy(this.git);
+    this.publication = new PublicationService(this.drafts, this.git, { defaultBranch: options.defaultBranch });
     this.authorName = options.authorName;
     this.authorEmail = options.authorEmail;
     this.pushAccessToken = options.pushAccessToken;
@@ -331,42 +331,28 @@ export class DirectCliRuntime {
   }
 
   async commitAll(message: string, scope: AgentScope = {}): Promise<DirectCommitResult> {
-    await this.prepare();
+    const draftId = await this.draftId();
     await this.assertScope(scope);
-    const checkout = await this.git.checkoutRealPath(this.checkoutPath);
-    const validation = await validateRepository(checkout);
-    if (!validation.valid) {
-      const error = new Error("Commit is blocked by repository validation") as Error & { code: string; details?: unknown };
-      error.code = "VALIDATION_FAILED";
-      error.details = validation.errors;
-      throw error;
-    }
-    const porcelain = await this.git.statusPorcelain(checkout, GITPM_GUIDANCE_PATHS);
-    if (porcelain.trim() === "") {
-      const error = new Error("Working copy has no changes") as Error & { code: string };
-      error.code = "NOTHING_TO_COMMIT";
-      throw error;
-    }
-    const commit = await this.git.commitAll(checkout, message, this.authorName, this.authorEmail, GITPM_GUIDANCE_PATHS);
-    const branch = await this.git.checkoutCurrentBranch(checkout);
-    return { commit, branch };
+    return await this.publication.commit({
+      ownerId: "local-user",
+      authorName: this.authorName,
+      authorEmail: this.authorEmail,
+    }, { draftId }, message);
   }
 
   async push(): Promise<DirectPushResult> {
-    await this.prepare();
-    const checkout = await this.git.checkoutRealPath(this.checkoutPath);
-    const porcelain = await this.git.statusPorcelain(checkout, GITPM_GUIDANCE_PATHS);
-    if (porcelain.trim() !== "") {
-      const error = new Error("Push requires a clean committed working copy") as Error & { code: string };
-      error.code = "UNCOMMITTED_CHANGES";
-      throw error;
-    }
-    if (this.pushAccessToken === undefined) {
-      const error = new Error("Push requires a configured remote and access token") as Error & { code: string };
-      error.code = "GIT_PUSH_REMOTE_MISSING";
-      throw error;
-    }
-    return await this.pushStrategy(checkout, await this.git.checkoutCurrentBranch(checkout), this.pushAccessToken);
+    const draftId = await this.draftId();
+    return await this.publication.push({
+      ownerId: "local-user",
+      accessToken: () => {
+        if (this.pushAccessToken === undefined) {
+          const error = new Error("Push requires a configured remote and access token") as Error & { code: string };
+          error.code = "GIT_PUSH_REMOTE_MISSING";
+          throw error;
+        }
+        return this.pushAccessToken;
+      },
+    }, { draftId });
   }
 
   isGitError(error: unknown): error is GitCommandError {

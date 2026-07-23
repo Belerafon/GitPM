@@ -11,10 +11,10 @@ import { CommentStore, EntityStore } from "@gitpm/domain";
 import { GitClient } from "@gitpm/git-client";
 import { assertSafeRepositoryUrl } from "@gitpm/security";
 import { HistoryService } from "@gitpm/history";
+import { PublicationService } from "@gitpm/publishing";
 import { resolveRepositoryMode, type RepositoryMode } from "@gitpm/shared";
 import { buildApp } from "./app.js";
-import { registerRepositoryAuthApi } from "./repository-auth-api.js";
-import { RepositoryPublishingService } from "./repository-publishing.js";
+import { registerAuthApi } from "./auth-api.js";
 import { RepositoryConnectionManager, type ConnectionValueSource, type GitLabConnectionConfiguration } from "./repository-connection.js";
 
 const execFileAsync = promisify(execFile);
@@ -208,14 +208,11 @@ export async function buildRepositoryApp() {
       || `http://127.0.0.1:${process.env.PORT?.trim() || "3000"}/api/auth/callback`,
     ...(configuration.repositoryMode === "direct" ? { directCheckoutPath: configuration.repository } : {}),
   });
-  const publishing = new RepositoryPublishingService(draftManager, gitClient, {
-    ownerId: LOCAL_USER_ID,
-    authorName: configuration.authorName,
-    authorEmail: configuration.authorEmail,
+  const publishing = new PublicationService(draftManager, gitClient, {
     defaultBranch: configuration.defaultBranch,
-    remote: connection,
+    mergeRequests: connection,
   });
-  registerRepositoryAuthApi(app, {
+  registerAuthApi(app, {
     session_id: "repository-session",
     user: { id: LOCAL_USER_ID, username: os.userInfo().username || "local" },
     role: "Maintainer",
@@ -228,7 +225,11 @@ export async function buildRepositoryApp() {
       ...(configuration.repositoryMode === "direct" ? { branch: configuration.defaultBranch } : {}),
     },
     expires_at: "9999-12-31T23:59:59.999Z",
-  }, publishing, connection, configuration.webUrl, connection);
+  }, publishing, {
+    ownerId: LOCAL_USER_ID,
+    authorName: configuration.authorName,
+    authorEmail: configuration.authorEmail,
+  }, connection, configuration.webUrl, connection);
 
   return app;
 }

@@ -157,6 +157,10 @@ Mode differences live behind a single seam: `DraftBackend`
 GitPM (domain, changes, history, publishing, UI) is mode-agnostic and reuses the
 same `RepositoryWorkspace` and repository-mutation surface; direct mutations use
 `repository` mode while worktree UI and agents explicitly use `ui` and `external`.
+`PublicationService` is the single application service for commit, push, and Merge
+Request orchestration. The server OAuth route and CLI runtimes only adapt local
+author identity, in-memory credentials, and agent scope/writer-mode preconditions
+before calling that service.
 Both UI and agent CRUD delegate to `EntityStore`, so validation, reference rewrites,
 rollback, and scope planning have one implementation. The server runtime picks the
 backend from the resolved mode.
