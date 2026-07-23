@@ -1,8 +1,8 @@
 {
   "app.title": "GitPM",
   "app.repository": "Portfolio repository",
-  "app.singleRepository": "One configured repository",
-  "app.repositoryDetails": "Repository details",
+  "app.version": "Version {version}",
+  "app.buildInfo": "Built {date} · {commit}",
   "auth.heading": "Sign in to GitPM",
   "auth.description": "Use your GitLab project membership to continue.",
   "auth.login": "Sign in with GitLab",

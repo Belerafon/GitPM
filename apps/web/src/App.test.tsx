@@ -146,7 +146,6 @@ describe("frontend draft lifecycle", () => {
     render(<App api={api} browserLanguages={["en"]} />);
 
     const statuses = await screen.findAllByRole("button", { name: "Changed files: 2" });
-    expect(screen.getByText("One configured repository")).toBeTruthy();
     expect(statuses).toHaveLength(1);
     expect(statuses[0]!.textContent).toBe("2");
     fireEvent.click(statuses[0]!);
@@ -327,8 +326,8 @@ describe("frontend draft lifecycle", () => {
     api.drafts = [draft({ draft_id: "DRF-LOCAL", owner_gitlab_user_id: "local-user" })];
     render(<App api={api} browserLanguages={["en"]} />);
     expect(await screen.findByText("Local mode · Role: Maintainer")).toBeTruthy();
-    expect(screen.getByText("Repository details")).toBeTruthy();
-    expect(screen.getByText("D:\\portfolio")).toBeTruthy();
+    expect(screen.getByText("portfolio")).toBeTruthy();
+    expect(screen.getByTestId("sidebar-version").textContent).toContain("Version dev");
     expect(await screen.findByRole("heading", { name: "Projects" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Repository" })).toBeTruthy();
     expect((screen.getByRole("combobox", { name: "Current working copy" }) as HTMLSelectElement).value).toBe("DRF-LOCAL");

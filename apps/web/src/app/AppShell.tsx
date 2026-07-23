@@ -1,27 +1,26 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import type { MessageKey } from "../i18n.js";
+import { formatDateTime, type Locale, type MessageKey } from "../i18n.js";
+import { BUILD_COMMIT, BUILD_COMMIT_DATE, BUILD_VERSION } from "../version.js";
 
 export interface NavigationGroup {
   readonly label: MessageKey;
   readonly items: readonly MessageKey[];
 }
 
-export function AppShell({ activeView, banner, breadcrumbs, children, headerMeta, headerTitle, navigationGroups, onNavigate, onOpenRepositoryStatus, repositoryDetails, repositoryMode, repositoryName, repositoryStatus, showSingleRepositoryLabel, t, topActions }: {
+export function AppShell({ activeView, banner, breadcrumbs, children, headerMeta, headerTitle, locale, navigationGroups, onNavigate, onOpenRepositoryStatus, repositoryMode, repositoryStatus, t, topActions }: {
   readonly activeView: MessageKey;
   readonly banner?: ReactNode;
   readonly breadcrumbs?: ReactNode;
   readonly children: ReactNode;
   readonly headerMeta: ReactNode;
   readonly headerTitle: string;
+  readonly locale: Locale;
   readonly navigationGroups: readonly NavigationGroup[];
   readonly onNavigate: (key: MessageKey) => void;
   readonly onOpenRepositoryStatus?: () => void;
-  readonly repositoryDetails?: ReactNode;
   readonly repositoryMode: boolean;
-  readonly repositoryName: string;
   readonly repositoryStatus?: { readonly label: string; readonly description: string };
-  readonly showSingleRepositoryLabel: boolean;
-  readonly t: (key: MessageKey) => string;
+  readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string;
   readonly topActions: ReactNode;
 }) {
   const [navigationOpen, setNavigationOpen] = useState(false);
@@ -78,9 +77,10 @@ export function AppShell({ activeView, banner, breadcrumbs, children, headerMeta
           {key === "nav.repository" && repositoryStatus !== undefined && <button aria-label={repositoryStatus.description} className="repository-status navigation-repository-status" onClick={() => { onOpenRepositoryStatus?.(); setNavigationOpen(false); }} title={repositoryStatus.description}>{repositoryStatus.label}</button>}
         </div>)}</div>
       </div>)}</nav>
-      <div className="repository-card">{showSingleRepositoryLabel && <span>{t("app.singleRepository")}</span>}{repositoryDetails === undefined
-        ? <strong>{repositoryName}</strong>
-        : <details><summary>{repositoryName}</summary><div>{repositoryDetails}</div></details>}</div>
+      <div className="sidebar-footer" data-testid="sidebar-version">
+        <span className="sidebar-footer-line">{t("app.version", { version: BUILD_VERSION })}</span>
+        {BUILD_COMMIT_DATE !== "" && <span className="sidebar-footer-meta">{t("app.buildInfo", { commit: BUILD_COMMIT, date: formatDateTime(locale, BUILD_COMMIT_DATE) })}</span>}
+      </div>
     </aside>
     <main className="workspace" ref={workspaceRef}>
       <header className="topbar">

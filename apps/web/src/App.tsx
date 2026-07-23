@@ -180,14 +180,12 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
       breadcrumbs={breadcrumbs}
         headerMeta={<><strong>{repository?.name ?? t("app.repository")}</strong>{directMode && repository?.branch !== undefined && <span className="runtime-context"><code>{repository.branch}</code></span>}<span className="runtime-context">{t("auth.localMode")} · {t("auth.role", { role: drafts.session.role })}</span></>}
       headerTitle={pageTitle}
+      locale={locale}
       navigationGroups={navigationGroups}
       onNavigate={selectNavigationView}
       onOpenRepositoryStatus={openRepositoryStatus}
-      repositoryDetails={<><strong>{t("app.repositoryDetails")}</strong><code>{repository?.path ?? drafts.session.user.username}</code>{directMode && repository?.branch !== undefined && <><span className="runtime-context">{t("drafts.branch")}</span><code>{repository.branch}</code></>}</>}
       repositoryMode={repositoryMode}
-      repositoryName={repository?.name ?? t("app.repository")}
       repositoryStatus={repositoryStatus}
-      showSingleRepositoryLabel={!directMode}
       t={t}
       topActions={<>
             <NotificationsMenu api={api} draft={active} locale={locale} namespace={`${repository?.path ?? repository?.name ?? "repository"}:${drafts.session.user.id}`} onNavigate={openWorkspace} />
