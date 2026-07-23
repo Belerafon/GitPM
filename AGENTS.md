@@ -73,6 +73,64 @@ Use the narrowest relevant build and Vitest files while iterating, then widen ve
 proportion to risk. Build workspace dependencies before tests when package imports resolve from
 `dist`.
 
+## Git worktree policy
+
+For each new task, create a separate branch and a separate git worktree.
+
+Main repository:
+
+`D:\other_projects\GitPM`
+
+Directory for all worktrees of this repository:
+
+`D:\other_projects\GitPM-worktrees`
+
+Rules:
+
+1. Do not make changes directly in the main working tree
+   `D:\other_projects\GitPM`.
+
+2. Create worktrees only under the pattern:
+
+   `D:\other_projects\GitPM-worktrees\<task-slug>`
+
+3. Never create a worktree next to the main repository under the pattern:
+
+   `D:\other_projects\GitPM-*`
+
+4. Use a short task name in kebab-case for the directory name.
+   Replace "/" characters from the branch name with "-".
+
+   Example:
+
+   ```
+   branch:    feature/project-group-editor
+   directory: D:\other_projects\GitPM-worktrees\feature-project-group-editor
+   ```
+
+5. Before creating a worktree, check existing worktrees:
+
+   ```
+   git -C D:\other_projects\GitPM worktree list
+   ```
+
+6. If the branch does not exist yet, create it together with the worktree:
+
+   ```
+   git -C D:\other_projects\GitPM worktree add -b <branch-name> <worktree-path> <base-branch>
+   ```
+
+7. If the branch already exists:
+
+   ```
+   git -C D:\other_projects\GitPM worktree add <worktree-path> <branch-name>
+   ```
+
+8. Run all commands, edits, builds, and tests inside the created worktree.
+
+9. After completing the task, do not remove the worktree or the branch without an explicit
+   instruction from the user, but remember to ask about it explicitly.
+
 ## Change rules
 
 - Inspect existing code, tests, schemas, and normative docs before changing a contract.
