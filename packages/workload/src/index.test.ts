@@ -30,4 +30,17 @@ describe("workload calculator", () => {
     expect(report.rows.filter((row) => row.person_id === ada.id).map((row) => [row.week, row.allocated_hours])).toEqual([["2026-07-06", 14.4], ["2026-07-13", 21.6]]);
     expect(report.exclusions).toEqual({ archived: 1, undated: 1, unestimated: 1, unassigned: 1, unavailable_assignees: 1 });
   });
+
+  it("does not reassign an unavailable assignee share to active assignees", () => {
+    const archived = { ...linus, lifecycle: "archived" as const };
+    const report = calculateWorkload([
+      { id: "T-26-SHARED", title: "Shared", lifecycle: "active", estimate_hours: 40, start: "2026-07-06", due: "2026-07-10", assignees: [ada.id, archived.id] },
+    ], [ada, archived], [calendar]);
+
+    expect(report.rows).toEqual([
+      { person_id: ada.id, person_name: "Ada", week: "2026-07-06", allocated_hours: 20, capacity_hours: 32, utilization_percent: 62.5, task_ids: ["T-26-SHARED"] },
+    ]);
+    expect(report.included_tasks).toBe(1);
+    expect(report.exclusions.unavailable_assignees).toBe(1);
+  });
 });

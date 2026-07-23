@@ -128,8 +128,19 @@ gitpm entity import --type person --format csv --file /tmp/people.csv --json
 ошибке. Поля следует сверять через `gitpm schema show <type> --json`, а не выводить
 из случайных существующих файлов.
 
-CLI v0.1 пока не предоставляет отдельные archive/delete entity commands. Agent
-обязан сообщить этот product gap и не обходить его ручным удалением или правкой YAML.
+Перед физическим удалением agent выполняет preview, затем повторяет подтверждённую
+операцию с явным delete-разрешением:
+
+```bash
+gitpm entity delete --type task --id T-26-RHBNH8 --dry-run --json
+gitpm entity delete --type task --id T-26-RHBNH8 --allow-delete --json
+gitpm entity archive --type task --id T-26-RHBNH8 --json
+```
+
+Для Person `--unlink-references` разрешает явно удалить поддерживаемые ссылки перед
+delete. В `worktree` mode эти entity-команды получают `--draft <id>`. Отдельные
+`comment` и `config` команды пока доступны только в `direct` mode; этот gap нельзя
+обходить прямой правкой YAML.
 
 ## Scope, validation и publication
 

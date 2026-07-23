@@ -551,6 +551,8 @@ Workload:
 - равномерно распределяет часы по ISO-неделям между `start` и `due`;
 - исключает archived Task и non-working dates Calendar;
 - делит часы поровну между несколькими assignee;
+- не перераспределяет долю archived или иначе недоступного assignee на оставшихся
+  активных исполнителей и явно считает такую Task в `unavailable_assignees`;
 - сравнивает результат с `weekly_capacity_hours`;
 - показывает формулу и помечает отчет как approximation.
 

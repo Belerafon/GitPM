@@ -1,4 +1,4 @@
-import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -79,6 +79,36 @@ describe("repository validation", () => {
     await writeFile(path.join(root, "uploads", "incoming-report.pdf"), "opaque user input", "utf8");
     await writeFile(path.join(root, "uploads", "source.yaml"), "customer: Acme\n", "utf8");
     expect(await validateRepository(root)).toMatchObject({ valid: true, errors: [] });
+  });
+
+  it("rejects unknown files and directories inside the repository domain layout", async () => {
+    const root = await fixture();
+    await writeFile(path.join(root, "projects", project, "payload.bin"), "opaque", "utf8");
+    await mkdir(path.join(root, "people", "attachments"));
+    const report = await validateRepository(root);
+    expect(report.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "REPOSITORY_UNKNOWN_PATH", path: `projects/${project}/payload.bin` }),
+      expect.objectContaining({ code: "REPOSITORY_UNKNOWN_PATH", path: "people/attachments" }),
+    ]));
+  });
+
+  it("does not reuse a cached document when same-size content preserves mtime", async () => {
+    const root = await fixture();
+    const task = path.join(root, "projects", project, "tasks", taskOne + ".yaml");
+    const fixedTime = new Date("2026-01-01T00:00:00.000Z");
+    await utimes(task, fixedTime, fixedTime);
+    expect(await validateRepository(root)).toMatchObject({ valid: true });
+
+    const original = await readFile(task, "utf8");
+    const invalid = original.replace("status: done", "status: nope");
+    expect(invalid).not.toBe(original);
+    expect(Buffer.byteLength(invalid)).toBe(Buffer.byteLength(original));
+    await writeFile(task, invalid, "utf8");
+    await utimes(task, fixedTime, fixedTime);
+
+    expect((await validateRepository(root)).errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "CONFIG_REFERENCE", path: `projects/${project}/tasks/${taskOne}.yaml` }),
+    ]));
   });
 
   it("rejects symlinks inside domain directories without following them", async () => {

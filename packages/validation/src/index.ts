@@ -1,4 +1,5 @@
-import { lstat, readdir, readFile, realpath, stat } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { lstat, readdir, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Ajv2020 } from "ajv/dist/2020.js";
@@ -52,6 +53,7 @@ interface CachedDocument {
   readonly structurallyValid: boolean;
 }
 
+const MAX_CACHED_REPOSITORIES = 32;
 const documentCache = new Map<string, Map<string, CachedDocument>>();
 
 const schemaIds = new Map([
@@ -95,10 +97,64 @@ async function filesUnder(
       issues.push({ severity: "error", code: "FS_SYMLINK", path: relative, message: "Repository domain paths must not contain symlinks" });
       return [];
     }
-    if (entry.isDirectory()) return await filesUnder(root, absolute, issues);
-    return entry.isFile() && entry.name.endsWith(".yaml") ? [absolute] : [];
+    if (entry.isDirectory()) {
+      if (!isAllowedDomainDirectory(relative)) {
+        issues.push({ severity: "error", code: "REPOSITORY_UNKNOWN_PATH", path: relative, message: "Unknown directory in repository domain layout" });
+        return [];
+      }
+      return await filesUnder(root, absolute, issues);
+    }
+    if (!entry.isFile()) {
+      issues.push({ severity: "error", code: "REPOSITORY_UNKNOWN_PATH", path: relative, message: "Unsupported repository domain entry" });
+      return [];
+    }
+    if (isAllowedDomainKeeper(relative)) return [];
+    if (!relative.endsWith(".yaml")) {
+      issues.push({ severity: "error", code: "REPOSITORY_UNKNOWN_PATH", path: relative, message: "Unknown file in repository domain layout" });
+      return [];
+    }
+    if (!isAllowedYamlContainer(relative)) {
+      issues.push({ severity: "error", code: "REPOSITORY_UNKNOWN_PATH", path: relative, message: "YAML file is outside a supported repository domain path" });
+    }
+    return [absolute];
   }));
   return nested.flat();
+}
+
+function isAllowedDomainDirectory(relative: string): boolean {
+  return /^projects\/P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}$/u.test(relative)
+    || /^projects\/P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}\/(?:milestones|tasks|views|comments)$/u.test(relative)
+    || /^projects\/P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}\/comments\/T-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}$/u.test(relative);
+}
+
+function isAllowedDomainKeeper(relative: string): boolean {
+  return ["people/.gitkeep", "teams/.gitkeep", "projects/.gitkeep"].includes(relative);
+}
+
+function isAllowedYamlContainer(relative: string): boolean {
+  return /^\.gitpm\/(?:repository|statuses|issue-types)\.yaml$/u.test(relative)
+    || /^(?:people|teams|calendars)\/[^/]+\.yaml$/u.test(relative)
+    || /^projects\/P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}\/project\.yaml$/u.test(relative)
+    || /^projects\/P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}\/(?:milestones|tasks|views)\/[^/]+\.yaml$/u.test(relative)
+    || /^projects\/P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}\/comments\/T-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}\/[^/]+\.yaml$/u.test(relative);
+}
+
+function cachedDocuments(root: string): Map<string, CachedDocument> {
+  const cached = documentCache.get(root);
+  if (cached === undefined) return new Map();
+  documentCache.delete(root);
+  documentCache.set(root, cached);
+  return cached;
+}
+
+function storeCachedDocuments(root: string, documents: Map<string, CachedDocument>): void {
+  documentCache.delete(root);
+  documentCache.set(root, documents);
+  while (documentCache.size > MAX_CACHED_REPOSITORIES) {
+    const oldest = documentCache.keys().next().value as string | undefined;
+    if (oldest === undefined) break;
+    documentCache.delete(oldest);
+  }
 }
 
 export async function discoverRepositoryFiles(repositoryRoot: string): Promise<RepositoryFileDiscovery> {
@@ -246,12 +302,12 @@ export async function validateRepository(repositoryRoot: string): Promise<Valida
   const discovery = await discoverRepositoryFiles(root);
   for (const issue of discovery.issues) add(issue);
 
-  const previousCache = documentCache.get(root) ?? new Map<string, CachedDocument>();
+  const previousCache = cachedDocuments(root);
   const nextCache = new Map<string, CachedDocument>();
   const loaded = await Promise.all(discovery.files.map(async (absolute): Promise<CachedDocument> => {
     const relative = normalize(path.relative(root, absolute));
-    const metadata = await stat(absolute, { bigint: true });
-    const cacheKey = `${metadata.size}:${metadata.mtimeNs}`;
+    const source = await readFile(absolute, "utf8");
+    const cacheKey = createHash("sha256").update(source).digest("hex");
     const cached = previousCache.get(relative);
     if (cached?.cacheKey === cacheKey) {
       nextCache.set(relative, cached);
@@ -259,7 +315,7 @@ export async function validateRepository(repositoryRoot: string): Promise<Valida
     }
     const loadedIssues: ValidationIssue[] = [];
     try {
-      const value = parseYamlDocument(await readFile(absolute, "utf8"), relative);
+      const value = parseYamlDocument(source, relative);
       const validator = validators.get(value.schema);
       let structurallyValid = false;
       if (!validator) {
@@ -303,7 +359,7 @@ export async function validateRepository(repositoryRoot: string): Promise<Valida
       return result;
     }
   }));
-  documentCache.set(root, nextCache);
+  storeCachedDocuments(root, nextCache);
   for (const item of loaded) {
     for (const issue of item.issues) add(issue);
     if (item.document) documents.push(item.document);

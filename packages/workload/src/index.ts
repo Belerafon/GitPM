@@ -84,7 +84,7 @@ export function calculateWorkload(
   const activeCalendars = new Map(calendars.filter((calendar) => calendar.lifecycle === "active").map((calendar) => [calendar.id, calendar]));
   const activePeople = new Map(people.filter((person) => person.lifecycle === "active" && activeCalendars.has(person.calendar)).map((person) => [person.id, person]));
   const exclusions = { archived: 0, undated: 0, unestimated: 0, unassigned: 0, unavailable_assignees: 0 };
-  const included: { task: WorkloadTask; assignees: readonly WorkloadPerson[] }[] = [];
+  const included: { task: WorkloadTask; assignees: readonly WorkloadPerson[]; assigneeCount: number }[] = [];
 
   for (const task of tasks) {
     if (task.lifecycle !== "active") { exclusions.archived += 1; continue; }
@@ -92,8 +92,9 @@ export function calculateWorkload(
     if (task.estimate_hours === undefined || !Number.isFinite(task.estimate_hours) || task.estimate_hours < 0) { exclusions.unestimated += 1; continue; }
     if (task.assignees === undefined || task.assignees.length === 0) { exclusions.unassigned += 1; continue; }
     const assignees = task.assignees.flatMap((id) => { const person = activePeople.get(id); return person === undefined ? [] : [person]; });
-    if (assignees.length === 0) { exclusions.unavailable_assignees += 1; continue; }
-    included.push({ task, assignees });
+    if (assignees.length !== task.assignees.length) exclusions.unavailable_assignees += 1;
+    if (assignees.length === 0) continue;
+    included.push({ task, assignees, assigneeCount: task.assignees.length });
   }
 
   if (included.length === 0) return { formula: "equal-assignee-share/equal-person-working-day/v1", weeks: [], rows: [], included_tasks: 0, exclusions };
@@ -102,8 +103,8 @@ export function calculateWorkload(
   const weeks = weekStartsBetween(first, last);
   const allocations = new Map<string, { hours: number; taskIds: Set<string> }>();
 
-  for (const { task, assignees } of included) {
-    const personShare = task.estimate_hours! / assignees.length;
+  for (const { task, assignees, assigneeCount } of included) {
+    const personShare = task.estimate_hours! / assigneeCount;
     for (const person of assignees) {
       const calendar = activeCalendars.get(person.calendar)!;
       const dates = workingDatesBetween(task.start!, task.due!, calendar);

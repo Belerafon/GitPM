@@ -4,7 +4,7 @@ import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { GITPM_VERSION } from "@gitpm/shared";
+import { ENTITY_ID_PREFIX, GITPM_VERSION, newEntityId } from "@gitpm/shared";
 import { formatYamlText, parseYamlDocument, parseYamlValue, referenceLabelsForDocuments, RepositoryFormatError } from "@gitpm/repository-format";
 import { discoverRepositoryFiles, validateRepository } from "@gitpm/validation";
 import { atomicWriteDomainFile } from "@gitpm/security";
@@ -29,6 +29,10 @@ type CliAgent = Pick<AgentWorkflow, "assertScope" | "commitAll" | "createDraft" 
 export interface CliDependencies {
   readonly agent?: CliAgent;
   readonly direct?: DirectCliRuntime;
+  readonly init?: {
+    readonly now?: () => Date;
+    readonly randomIndex?: () => number;
+  };
 }
 
 function flagValue(args: readonly string[], name: string): string | undefined {
@@ -173,6 +177,82 @@ const commandHelp: Readonly<Record<string, string>> = {
   ].join("\n"),
 };
 
+interface CliArgumentSpec {
+  readonly values?: readonly string[];
+  readonly repeatable?: readonly string[];
+  readonly booleans?: readonly string[];
+  readonly minPositionals: number;
+  readonly maxPositionals: number;
+}
+
+function commandArgumentSpec(command: string | undefined, args: readonly string[]): CliArgumentSpec | undefined {
+  const action = args[0];
+  if (command === "status") return { values: ["--draft"], booleans: ["--json"], minPositionals: 0, maxPositionals: 0 };
+  if (command === "draft") return { values: ["--draft", "--owner"], booleans: ["--json"], minPositionals: 1, maxPositionals: action === "set-writer" ? 2 : 1 };
+  if (command === "entity") {
+    const common = ["--draft", "--type", "--schema"];
+    if (action === "create") return { values: [...common, "--file", "--path", "--project"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
+    if (action === "update") return { values: [...common, "--id", "--file", "--path", "--project"], repeatable: ["--set", "--unset"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
+    if (action === "import" || action === "bulk-import") return { values: [...common, "--format", "--file", "--path", "--project"], booleans: ["--dry-run", "--json"], minPositionals: 1, maxPositionals: 1 };
+    if (action === "list") return { values: [...common, "--project"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
+    if (action === "show") return { values: [...common, "--id"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
+    if (action === "delete") return { values: [...common, "--id", "--project"], booleans: ["--unlink-references", "--dry-run", "--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
+    if (action === "archive") return { values: [...common, "--id", "--project"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
+    if (action === "move") return { values: [...common, "--id", "--to-project", "--to-milestone", "--project"], booleans: ["--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
+    return { booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
+  }
+  if (command === "schema") return action === "show"
+    ? { booleans: ["--example", "--json"], minPositionals: 2, maxPositionals: 2 }
+    : { booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
+  if (command === "format") return { values: ["--root", "--draft", "--project"], booleans: ["--check", "--allow-delete", "--json"], minPositionals: 0, maxPositionals: 0 };
+  if (command === "validate") return { values: ["--root", "--draft", "--project"], booleans: ["--changed", "--allow-delete", "--json"], minPositionals: 0, maxPositionals: 0 };
+  if (command === "diff") return { values: ["--root", "--draft", "--project"], booleans: ["--semantic", "--allow-delete", "--json"], minPositionals: 0, maxPositionals: 0 };
+  if (command === "commit") return { values: ["--draft", "-m", "--message", "--project"], booleans: ["--all", "--allow-delete", "--json"], minPositionals: 0, maxPositionals: 0 };
+  if (command === "push") return { values: ["--draft"], booleans: ["--json"], minPositionals: 0, maxPositionals: 0 };
+  if (command === "mr") return { values: ["--draft", "--owner", "--title", "--description"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
+  if (command === "comment") return { values: ["--project", "--task", "--id", "--body", "--file", "--path"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
+  if (command === "config") {
+    return action === "update"
+      ? { values: ["--kind", "--file", "--path"], repeatable: ["--set", "--unset"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 }
+      : { values: ["--kind"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
+  }
+  if (command === "doctor") return { values: ["--root"], booleans: ["--json"], minPositionals: 0, maxPositionals: 0 };
+  if (command === "init") return { booleans: ["--json"], minPositionals: 0, maxPositionals: 1 };
+  return undefined;
+}
+
+function assertKnownArguments(command: string | undefined, args: readonly string[]): void {
+  const spec = commandArgumentSpec(command, args);
+  if (spec === undefined) return;
+  const values = new Set(spec.values ?? []);
+  const repeatable = new Set(spec.repeatable ?? []);
+  const booleans = new Set(spec.booleans ?? []);
+  const seen = new Set<string>();
+  const positionals: string[] = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index]!;
+    if (!argument.startsWith("-")) {
+      positionals.push(argument);
+      continue;
+    }
+    if (!values.has(argument) && !repeatable.has(argument) && !booleans.has(argument)) {
+      throw new RepositoryFormatError("CLI_USAGE", `Unknown option for ${command ?? "command"}: ${argument}`);
+    }
+    if (!repeatable.has(argument) && seen.has(argument)) {
+      throw new RepositoryFormatError("CLI_USAGE", `Option ${argument} may only be specified once`);
+    }
+    seen.add(argument);
+    if (values.has(argument) || repeatable.has(argument)) {
+      const value = args[index + 1];
+      if (value === undefined || value.startsWith("-")) throw new RepositoryFormatError("CLI_USAGE", `${argument} requires a value`);
+      index += 1;
+    }
+  }
+  if (positionals.length < spec.minPositionals || positionals.length > spec.maxPositionals) {
+    throw new RepositoryFormatError("CLI_USAGE", `Unexpected positional arguments for ${command ?? "command"}`);
+  }
+}
+
 function requestedEntityType(args: readonly string[]): string | undefined {
   const value = flagValue(args, "--type") ?? flagValue(args, "--schema");
   if (value === undefined) return undefined;
@@ -305,20 +385,10 @@ async function runSemanticDiff(args: readonly string[], cwd: string): Promise<Cl
   if (!parsed.rest.includes("--semantic")) {
     return { exitCode: 2, output: render(parsed.json, { ok: false, code: "CLI_USAGE" }, "diff requires --semantic") };
   }
-  const report = await validateRepository(parsed.root);
-  const payload = {
-    ok: report.valid,
-    code: report.valid ? "OK" : "VALIDATION_FAILED",
-    created: [],
-    updated: [],
-    archived: [],
-    deleted: [],
-    changed_files_count: 0,
-    affected_projects: [],
-    validation: report,
-    note: "Git before/after population is introduced with draft Git integration",
-  };
-  return { exitCode: report.valid ? 0 : 1, output: render(parsed.json, payload, "Semantic diff: 0 changed files") };
+  throw new RepositoryFormatError(
+    "CLI_DIRECT_CONFIGURATION_REQUIRED",
+    `Semantic diff requires a configured direct checkout or worktree draft; standalone root ${parsed.root} supports format and validate only`,
+  );
 }
 
 function required(value: string | undefined, name: string): string {
@@ -640,9 +710,9 @@ async function runDoctor(args: readonly string[], cwd: string): Promise<CliResul
 
 const execFileAsync = promisify(execFile);
 
-const INIT_REPOSITORY_YAML = `schema: gitpm/repository@1
+const initRepositoryYaml = (calendarId: string) => `schema: gitpm/repository@1
 default_branch: main
-default_calendar: C-26-WRKDAY # calendar: Standard work week
+default_calendar: ${calendarId} # calendar: Standard work week
 allowed_top_level_files:
   - README.md
   - .gitignore
@@ -679,8 +749,8 @@ issue_types:
     active: true
 `;
 
-const INIT_CALENDAR_YAML = `schema: gitpm/calendar@1
-id: C-26-WRKDAY # calendar: Standard work week
+const initCalendarYaml = (calendarId: string) => `schema: gitpm/calendar@1
+id: ${calendarId} # calendar: Standard work week
 name: Standard work week
 working_weekdays:
   - 1
@@ -722,9 +792,14 @@ async function directoryIsEmpty(directory: string): Promise<boolean> {
   }
 }
 
-async function runInit(args: readonly string[], cwd: string): Promise<CliResult> {
+async function runInit(args: readonly string[], cwd: string, dependencies: NonNullable<CliDependencies["init"]> = {}): Promise<CliResult> {
   const parsed = options(args, cwd);
   const target = parsed.rest[0] !== undefined ? path.resolve(cwd, parsed.rest[0]) : path.resolve(cwd);
+  const calendarId = newEntityId(
+    ENTITY_ID_PREFIX.calendar,
+    dependencies.randomIndex,
+    dependencies.now?.() ?? new Date(),
+  );
   await mkdir(target, { recursive: true });
   if (!(await directoryIsEmpty(target))) {
     throw new RepositoryFormatError("INIT_TARGET_NOT_EMPTY", `Target directory is not empty (excluding .git): ${target}`);
@@ -737,10 +812,10 @@ async function runInit(args: readonly string[], cwd: string): Promise<CliResult>
     await mkdir(directory, { recursive: true });
     await writeFile(path.join(directory, ".gitkeep"), "", "utf8");
   }
-  await writeFile(path.join(target, ".gitpm", "repository.yaml"), INIT_REPOSITORY_YAML, "utf8");
+  await writeFile(path.join(target, ".gitpm", "repository.yaml"), initRepositoryYaml(calendarId), "utf8");
   await writeFile(path.join(target, ".gitpm", "statuses.yaml"), INIT_STATUSES_YAML, "utf8");
   await writeFile(path.join(target, ".gitpm", "issue-types.yaml"), INIT_ISSUE_TYPES_YAML, "utf8");
-  await writeFile(path.join(target, "calendars", "C-26-WRKDAY.yaml"), INIT_CALENDAR_YAML, "utf8");
+  await writeFile(path.join(target, "calendars", `${calendarId}.yaml`), initCalendarYaml(calendarId), "utf8");
   await writeFile(path.join(target, "README.md"), INIT_README_MD, "utf8");
   await writeFile(path.join(target, ".gitignore"), INIT_GITIGNORE, "utf8");
   await writeFile(path.join(target, "uploads", ".gitkeep"), "", "utf8");
@@ -770,6 +845,17 @@ async function runInit(args: readonly string[], cwd: string): Promise<CliResult>
 
 export async function run(args: readonly string[], cwd = process.cwd(), dependencies: CliDependencies = {}): Promise<CliResult> {
   if (args.includes("--version") || args.includes("-v")) {
+    const unknown = args.find((argument) => !["--version", "-v", "--json"].includes(argument));
+    if (unknown !== undefined || (args.includes("--version") && args.includes("-v"))) {
+      return {
+        exitCode: 2,
+        output: render(
+          args.includes("--json"),
+          { ok: false, code: "CLI_USAGE", message: `Unknown or conflicting version option: ${unknown ?? "-v"}` },
+          ROOT_USAGE,
+        ),
+      };
+    }
     const payload = await versionPayload();
     return { exitCode: 0, output: args.includes("--json") ? JSON.stringify(payload, null, 2) : GITPM_VERSION };
   }
@@ -777,8 +863,11 @@ export async function run(args: readonly string[], cwd = process.cwd(), dependen
   if (command === "help" || args.includes("--help") || args.includes("-h")) {
     const requested = command === "help" ? commandArgs[0] : command;
     const key = requested === undefined ? "root" : requested;
-    const help = commandHelp[key] ?? commandHelp.root!;
+    const help = commandHelp[key];
     const json = args.includes("--json");
+    if (help === undefined) {
+      return { exitCode: 2, output: render(json, { ok: false, code: "CLI_USAGE", message: `Unknown command: ${key}` }, ROOT_USAGE) };
+    }
     return { exitCode: 0, output: render(json, { ok: true, code: "OK", command: key, help }, help) };
   }
   const hasDraft = commandArgs.includes("--draft");
@@ -788,6 +877,7 @@ export async function run(args: readonly string[], cwd = process.cwd(), dependen
     ? ["--root", direct.checkoutPath]
     : [];
   try {
+    assertKnownArguments(command, commandArgs);
     if (command === "status") {
       if (hasDraft) {
         const agent = requireAgent(dependencies);
@@ -825,7 +915,7 @@ export async function run(args: readonly string[], cwd = process.cwd(), dependen
     if (command === "config") return await runConfig(commandArgs, cwd, dependencies);
     if (command === "doctor" && direct !== undefined) { await direct.prepare(); return await runDoctor([...directRootArgs, ...commandArgs], cwd); }
     if (command === "doctor") return await runDoctor(commandArgs, cwd);
-    if (command === "init") return await runInit(commandArgs, cwd);
+    if (command === "init") return await runInit(commandArgs, cwd, dependencies.init);
     const json = args.includes("--json");
     return {
       exitCode: 2,

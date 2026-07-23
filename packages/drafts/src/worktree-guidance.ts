@@ -273,7 +273,8 @@ change must be attributable to a documented \`gitpm\` command.
 
 ## Use the supported CLI surface
 
-All commands accept \`--json\`; use it for automation.
+All commands accept \`--json\`; use it for automation. The CLI rejects unknown and duplicate
+non-repeatable options with \`CLI_USAGE\`; never retry a misspelled flag by dropping it silently.
 
 - \`gitpm draft create|open|status|set-writer --draft <id> [--owner <id>]\` manages draft
   lifecycle and writer ownership.

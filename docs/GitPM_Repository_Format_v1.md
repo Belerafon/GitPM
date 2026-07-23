@@ -36,7 +36,11 @@ JSON Schema 2020-12. Этот документ фиксирует правила
 
 Validation возвращает `REPOSITORY_DIRECTORY_REQUIRED`, если обязательный каталог
 отсутствует или не является каталогом, `REPOSITORY_DOCUMENT_REQUIRED`, если отсутствует
-фиксированный конфигурационный документ, и `FS_SYMLINK` для symlink в repository/domain path.
+фиксированный конфигурационный документ, `FS_SYMLINK` для symlink в repository/domain path
+и `REPOSITORY_UNKNOWN_PATH` для неизвестного файла, пустого каталога или другого элемента
+внутри domain layout. Пустые корневые collection-каталоги `people/`, `teams/` и `projects/`
+могут содержать созданный `gitpm init` файл `.gitkeep`; другие non-YAML файлы внутри domain
+layout запрещены.
 
 Person, Team и Calendar хранятся соответственно в `people`, `teams` и
 `calendars`; имя файла равно ID плюс `.yaml`. Project является единственным

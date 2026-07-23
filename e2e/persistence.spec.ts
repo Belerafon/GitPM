@@ -3,7 +3,7 @@ import { cp, mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { expect, request as playwrightRequest, test } from "@playwright/test";
-import { E2E_TASK_ID, cleanupDrafts, taskDocument, type EntityResult } from "./helpers.js";
+import { E2E_TASK_ID, taskDocument, type EntityResult } from "./helpers.js";
 
 const isWindows = process.platform === "win32";
 const workspace = process.cwd();
@@ -102,8 +102,6 @@ test("creates the default local draft and recovers its dirty files after a real 
     expect(await task.json()).toMatchObject({ document: { id: E2E_TASK_ID, title: "E2E task" } });
     const changes = await api.get("/api/drafts/DRF-LOCAL/changes");
     expect(await changes.json()).toMatchObject({ changed_files_count: 1 });
-
-    await cleanupDrafts(api);
   } finally {
     await api.dispose();
     if (server !== undefined) await stopServer(server);

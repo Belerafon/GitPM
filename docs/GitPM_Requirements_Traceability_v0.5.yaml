@@ -429,7 +429,7 @@ requirements:
   description: Новый draft создается только после успешного fetch от current remote main
   source:
     document: GitPM_Implementation_Plan_v0.7.md
-    section: 8. Git clone, fetch и main synchronization
+    section: 8. Git repository, fetch и main synchronization
   owner: BE
   stage: P03
   release_gate: alpha
@@ -659,6 +659,7 @@ requirements:
   release_gate: beta
   acceptance_criteria:
   - Deterministic fixture values match formula and show approximation notice.
+  - Unavailable assignee shares are not reassigned to active assignees and are reported.
   checks:
   - VFY-028
 - id: AGENT-001
@@ -1408,6 +1409,7 @@ verification_checks:
   expected_result:
   - values match documented formula
   - archived and undated Tasks are excluded
+  - a Task with a partially unavailable assignee keeps the original equal share and reports the unavailable assignment
   - approximation notice is visible
   evidence:
   - calculation JSON

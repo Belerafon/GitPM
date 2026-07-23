@@ -111,11 +111,42 @@ describe("CLI P02 commands", () => {
     expect(JSON.parse((await run(["validate", "--json", "--root", root])).output)).toMatchObject({ ok: true, code: "OK" });
   });
 
-  it("provides semantic diff skeleton and doctor output", async () => {
+  it("requires a configured runtime for semantic diff and provides doctor output", async () => {
     const diff = await run(["diff", "--semantic", "--json", "--root", demo]);
-    expect(JSON.parse(diff.output)).toMatchObject({ ok: true, changed_files_count: 0, affected_projects: [] });
+    expect(diff.exitCode).toBe(1);
+    expect(JSON.parse(diff.output)).toMatchObject({ ok: false, code: "CLI_DIRECT_CONFIGURATION_REQUIRED" });
     const doctor = await run(["doctor", "--json", "--root", demo]);
     expect(JSON.parse(doctor.output)).toMatchObject({ ok: true, checks: { node_20: true, repository_valid: true, schemas_loaded: true } });
+  });
+
+  it("rejects unknown and duplicate options instead of silently ignoring them", async () => {
+    const unknown = await run(["schema", "list", "--definitely-not-a-real-flag", "--json"]);
+    expect(unknown.exitCode).toBe(1);
+    expect(JSON.parse(unknown.output)).toMatchObject({ ok: false, code: "CLI_USAGE" });
+
+    const duplicate = await run(["validate", "--root", demo, "--root", demo, "--json"]);
+    expect(duplicate.exitCode).toBe(1);
+    expect(JSON.parse(duplicate.output)).toMatchObject({ ok: false, code: "CLI_USAGE" });
+
+    const disguised = await run(["validate", "--root", "--definitely-not-a-real-flag", "--json"]);
+    expect(disguised.exitCode).toBe(1);
+    expect(JSON.parse(disguised.output)).toMatchObject({ ok: false, code: "CLI_USAGE" });
+
+    const initRoot = await run(["init", "--root", demo, "--json"]);
+    expect(initRoot.exitCode).toBe(1);
+    expect(JSON.parse(initRoot.output)).toMatchObject({ ok: false, code: "CLI_USAGE" });
+
+    const positional = await run(["schema", "list", "ignored", "--json"]);
+    expect(positional.exitCode).toBe(1);
+    expect(JSON.parse(positional.output)).toMatchObject({ ok: false, code: "CLI_USAGE" });
+
+    const version = await run(["--version", "--definitely-not-a-real-flag", "--json"]);
+    expect(version.exitCode).toBe(2);
+    expect(JSON.parse(version.output)).toMatchObject({ ok: false, code: "CLI_USAGE" });
+
+    const help = await run(["help", "nonsense", "--json"]);
+    expect(help.exitCode).toBe(2);
+    expect(JSON.parse(help.output)).toMatchObject({ ok: false, code: "CLI_USAGE" });
   });
 });
 
@@ -175,7 +206,9 @@ describe("CLI init command", () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "gitpm-init-"));
     roots.push(root);
     const target = path.join(root, "portfolio");
-    const init = await run(["init", target, "--json"], root);
+    const init = await run(["init", target, "--json"], root, {
+      init: { now: () => new Date("2027-01-02T03:04:05Z"), randomIndex: () => 19 },
+    });
     expect(init.exitCode).toBe(0);
     const initPayload = JSON.parse(init.output);
     expect(initPayload).toMatchObject({ ok: true, code: "OK" });
@@ -192,6 +225,9 @@ describe("CLI init command", () => {
     expect(await readFile(path.join(target, "uploads", ".gitkeep"), "utf8")).toBe("");
     expect((await git(target, "ls-files")).split(/\r?\n/u)).toEqual(expect.arrayContaining([".gitignore", "uploads/.gitkeep"]));
     expect(await git(target, "check-ignore", "uploads/incoming-report.pdf")).toBe("uploads/incoming-report.pdf");
+    expect(await readFile(path.join(target, ".gitpm", "repository.yaml"), "utf8")).toContain("default_calendar: C-27-KKKKKK");
+    expect(await readFile(path.join(target, "calendars", "C-27-KKKKKK.yaml"), "utf8")).toContain("id: C-27-KKKKKK");
+    await expect(readFile(path.join(target, "calendars", "C-26-WRKDAY.yaml"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("rejects a non-empty target directory", async () => {
@@ -265,6 +301,24 @@ describe("CLI direct mode", () => {
     expect(result.exitCode).toBe(0);
     expect(JSON.parse(result.output)).toMatchObject({ ok: true, code: "OK", branch: "main" });
     expect(await git(checkout, "log", "-1", "--format=%s")).toBe("cli direct commit");
+  });
+
+  it("blocks commit when an unknown file is placed inside the domain layout", async () => {
+    const { direct, checkout } = await directFixture();
+    const unknown = path.join(checkout, "people", "payload.bin");
+    await writeFile(unknown, "not domain data\n", "utf8");
+
+    const result = await run(["commit", "--all", "-m", "must not commit", "--json"], process.cwd(), { direct });
+
+    expect(result.exitCode).toBe(1);
+    expect(JSON.parse(result.output)).toMatchObject({
+      ok: false,
+      code: "VALIDATION_FAILED",
+      details: expect.arrayContaining([
+        expect.objectContaining({ code: "REPOSITORY_UNKNOWN_PATH", path: "people/payload.bin" }),
+      ]),
+    });
+    expect(await git(checkout, "status", "--short", "--", "people/payload.bin")).toContain("??");
   });
 
   it("push publishes main to origin without --draft and refuses force push", async () => {

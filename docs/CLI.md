@@ -89,13 +89,17 @@ soft-delete (tombstone остаётся в Git history). Доступно в dir
 `.gitpm/issue-types.yaml`). Доступно в direct mode.
 
 В `direct` mode команды `status`, `entity create`, `entity update`, `entity import`, `entity list`,
-`entity show`, `entity delete`, `entity archive`, `entity move`, `comment`, `config`, `format`, `validate`, `diff`, `commit` и
-`push` работают с выбранным checkout без `--draft`. В `worktree` mode для них требуется
-`--draft <id>`; `mr create` доступна только в `worktree` mode. `--project <id>` проверяет, что
-все текущие business changes принадлежат указанному Project, а физическое удаление требует
-явного `--allow-delete` при format/validation/diff и commit, пока удалённые пути остаются в checkout.
+`entity show`, `entity delete`, `entity archive`, `entity move`, `comment`, `config`, `format`,
+`validate`, `diff`, `commit` и `push` работают с выбранным checkout без `--draft`.
+В `worktree` mode `status`, `entity`, `format`, `validate`, `diff`, `commit` и `push`
+требуют `--draft <id>`; `comment` и `config` в этом режиме не реализованы, а
+`mr create` доступна только в нём. `--project <id>` проверяет, что все текущие
+business changes принадлежат указанному Project, а физическое удаление требует явного
+`--allow-delete` при format/validation/diff и commit, пока удалённые пути остаются в checkout.
 
 Каждая команда поддерживает `--json` для машинно-читаемого вывода.
+Неизвестная или повторно переданная нереплицируемая option отклоняется с
+`CLI_USAGE`; CLI не игнорирует опечатки во флагах.
 
 Каждый черновик создаёт в worktree локальные `AGENTS.md` и
 `.agents/skills/gitpm/SKILL.md`, чтобы агент мог подключиться на любом этапе. Они описывают GitPM и CLI-only правила, автоматически
@@ -116,6 +120,14 @@ soft-delete (tombstone остаётся в Git history). Доступно в dir
 `gitpm init` создаёт валидный schema-v1 skeleton, корневой `.gitignore` и
 `uploads/.gitkeep`. Входные файлы под `uploads/` игнорируются Git; каталог
 разрешён через `allowed_top_level_directories` и не является domain storage.
+ID стандартного Calendar генерируется при запуске из текущего года и не
+зашит в шаблон.
+
+`gitpm diff --semantic` требует configured direct runtime либо `--draft` в
+worktree mode. Переданный отдельно `--root` достаточен для `format`,
+`validate` и `doctor`, но не создаёт Git before/after context для semantic
+diff; в таком случае CLI возвращает `CLI_DIRECT_CONFIGURATION_REQUIRED`,
+а не пустой успешный diff.
 
 ### Agent workflow (drafts, push, MR)
 

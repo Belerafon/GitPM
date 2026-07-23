@@ -60,8 +60,9 @@ Candidate и release gate приняты. Разработка после baseli
 - нет force push, rebase API, встроенного conflict editor или автоматического merge;
 - Gantt остаётся read-only, Workload — объяснимой приблизительной моделью;
 - публичное размещение требует reverse proxy/TLS и отдельного deployment review;
-- CLI агента пока не предоставляет отдельные archive/delete commands: такой gap
-  нужно сообщать, а не обходить прямым редактированием YAML.
+- отдельные `comment` и repository `config` команды агента доступны только в
+  `direct` mode; в `worktree` mode такой gap нужно сообщать, а не обходить
+  прямым редактированием YAML.
 
 ## Blockers и следующий шаг
 

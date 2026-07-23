@@ -1,14 +1,37 @@
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
+import { cp, mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+import { promisify } from "node:util";
 
 const host = "127.0.0.1";
 const port = 32100 + Math.floor(Math.random() * 1000);
 const baseUrl = `http://${host}:${port}`;
 const correlationId = "p00-smoke-correlation";
 const logs = [];
+const execFileAsync = promisify(execFile);
+const smokeRoot = await mkdtemp(path.join(os.tmpdir(), "gitpm-smoke-"));
+const repository = path.join(smokeRoot, "repository");
+const dataDirectory = path.join(smokeRoot, "data");
+await cp(path.join(process.cwd(), "fixtures", "schema-v1", "demo"), repository, { recursive: true });
+await execFileAsync("git", ["init", "-b", "main"], { cwd: repository, windowsHide: true });
+await execFileAsync("git", ["add", "."], { cwd: repository, windowsHide: true });
+await execFileAsync(
+  "git",
+  ["-c", "user.name=GitPM Smoke", "-c", "user.email=smoke@localhost", "commit", "-m", "Initialize smoke fixture"],
+  { cwd: repository, windowsHide: true },
+);
 const server = spawn(process.execPath, ["apps/server/dist/index.js"], {
   cwd: process.cwd(),
-  env: { ...process.env, HOST: host, LOG_LEVEL: "info", PORT: String(port) },
+  env: {
+    ...process.env,
+    GITPM_DATA_DIR: dataDirectory,
+    GITPM_REPOSITORY_PATH: repository,
+    HOST: host,
+    LOG_LEVEL: "info",
+    PORT: String(port),
+  },
   stdio: ["ignore", "pipe", "pipe"],
 });
 
@@ -29,7 +52,7 @@ async function request(path) {
 }
 
 async function waitUntilListening() {
-  for (let attempt = 0; attempt < 50; attempt += 1) {
+  for (let attempt = 0; attempt < 150; attempt += 1) {
     if (server.exitCode !== null) {
       throw new Error(`server exited early (${server.exitCode})\n${logs.join("")}`);
     }
@@ -68,4 +91,11 @@ try {
   process.stdout.write(`${JSON.stringify({ live, ready, sanitized_log: correlated })}\n`);
 } finally {
   server.kill("SIGTERM");
+  if (server.exitCode === null) {
+    await Promise.race([
+      new Promise((resolve) => server.once("exit", resolve)),
+      delay(5_000),
+    ]);
+  }
+  await rm(smokeRoot, { recursive: true, force: true });
 }

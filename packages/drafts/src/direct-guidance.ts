@@ -108,7 +108,8 @@ YAML/CSV/JSONL file outside this checkout.
 
 ## CLI workflow (direct mode)
 
-Direct-mode commands do not need \`--draft\`. Start with:
+Direct-mode commands do not need \`--draft\`. Unknown and duplicate non-repeatable options fail
+with \`CLI_USAGE\`; never retry a misspelled flag by dropping it silently. Start with:
 
 \`gitpm --version\`
 
