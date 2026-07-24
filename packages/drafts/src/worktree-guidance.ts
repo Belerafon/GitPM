@@ -160,7 +160,8 @@ import --draft <draft-id> --type <type> --format <csv|yaml|jsonl> --file <file>\
 Before removing an entity, preview the impact with
 \`gitpm entity delete --draft ${draftId} --type <type> --id <entity-id> --dry-run --json\`.
 Restrictions, cascade, and unlink paths are reported without writing. Then delete with
-\`--allow-delete\`; add \`--unlink-references\` for a person to remove references first.
+\`--allow-delete\`; add \`--unlink-references\` for a person to remove references first, or
+\`--cascade-references\` for a project to delete every project-owned entity.
 Archive a reversible lifecycle state with
 \`gitpm entity archive --draft ${draftId} --type <type> --id <entity-id> --json\`.
 Move a task with
@@ -293,11 +294,13 @@ non-repeatable options with \`CLI_USAGE\`; never retry a misspelled flag by drop
   optionally filtered by Project.
 - \`gitpm entity show --draft <id> --type <type> --id <entity-id>\` returns a single entity
   document.
-- \`gitpm entity delete --draft <id> --type <type> --id <entity-id> [--unlink-references]
+- \`gitpm entity delete --draft <id> --type <type> --id <entity-id> [--unlink-references|--cascade-references]
   [--dry-run] [--allow-delete] [--project <id>]\` removes an entity file. Task deletion
   cascades to that task's comments. \`--dry-run\` previews the reference impact (restrictions,
   cascade, and unlink preview) without writing. \`--unlink-references\` removes references to a
-  person before deleting (people only). \`--allow-delete\` authorizes the physical deletion scope.
+  person before deleting (people only). \`--cascade-references\` deletes every entity owned by a
+  project before deleting that project (projects only). \`--allow-delete\` authorizes the physical
+  deletion scope.
 - \`gitpm entity archive --draft <id> --type <type> --id <entity-id> [--project <id>]\` sets
   lifecycle to archived (reversible; the file stays and references remain valid).
 - \`gitpm entity move --draft <id> --type task --id <entity-id> --to-project <id>

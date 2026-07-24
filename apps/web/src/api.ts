@@ -63,6 +63,16 @@ export function formatApiError(reason: unknown): string {
   return lines.length === 0 ? heading : [heading, ...lines.map((line) => `- ${line}`)].join("\n");
 }
 
+export function deleteRestrictionLabels(details: unknown): readonly string[] {
+  if (!Array.isArray(details)) return [];
+  return [...new Set(details.flatMap((detail) => {
+    if (detail === null || typeof detail !== "object") return [];
+    const value = detail as { readonly label?: unknown; readonly path?: unknown };
+    if (typeof value.path !== "string") return [];
+    return [typeof value.label === "string" && value.label.trim() !== "" ? `${value.label} (${value.path})` : value.path];
+  }))];
+}
+
 export interface GitPmApi {
   session(): Promise<PublicSession | null>;
   login(): Promise<string>;
@@ -84,7 +94,7 @@ export interface GitPmApi {
   updateEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string, document: GitPmDocument): Promise<EntityResult>;
   moveTask(draftId: string, entity: EntityResult, fingerprint: string, targetProject: string, targetMilestone?: string): Promise<EntityResult>;
   archiveEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string): Promise<EntityResult>;
-  deleteEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string, unlinkReferences?: boolean): Promise<void>;
+  deleteEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string, unlinkReferences?: boolean, cascadeReferences?: boolean): Promise<void>;
   getConfiguration(draftId: string, kind: "statuses" | "issue-types"): Promise<ConfigurationResult>;
   updateConfiguration(draftId: string, kind: "statuses" | "issue-types", entity: ConfigurationResult, fingerprint: string, document: ConfigurationDocument): Promise<ConfigurationResult>;
   listChanges(draftId: string): Promise<ChangesList>;
@@ -219,8 +229,8 @@ export class HttpGitPmApi implements GitPmApi {
   async archiveEntity(draftId: string, entityType: string, entity: EntityResult, expected_fingerprint: string): Promise<EntityResult> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entity.document.id)}/archive`, decodeEntityResult, { method: "POST", body: JSON.stringify({ expected_fingerprint, expected_blob_id: entity.blob_id }) });
   }
-  async deleteEntity(draftId: string, entityType: string, entity: EntityResult, expected_fingerprint: string, unlinkReferences = false): Promise<void> {
-    await this.requestEmpty(`/api/drafts/${encodeURIComponent(draftId)}/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entity.document.id)}`, { method: "DELETE", body: JSON.stringify({ expected_fingerprint, expected_blob_id: entity.blob_id, ...(unlinkReferences ? { unlink_references: true } : {}) }) });
+  async deleteEntity(draftId: string, entityType: string, entity: EntityResult, expected_fingerprint: string, unlinkReferences = false, cascadeReferences = false): Promise<void> {
+    await this.requestEmpty(`/api/drafts/${encodeURIComponent(draftId)}/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entity.document.id)}`, { method: "DELETE", body: JSON.stringify({ expected_fingerprint, expected_blob_id: entity.blob_id, ...(unlinkReferences ? { unlink_references: true } : {}), ...(cascadeReferences ? { cascade_references: true } : {}) }) });
   }
   async getConfiguration(draftId: string, kind: "statuses" | "issue-types"): Promise<ConfigurationResult> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/config/${kind}`, decodeConfigurationResult);

@@ -226,7 +226,24 @@ describe("entity API contract", () => {
       payload: { expected_fingerprint: metadata.fingerprint, expected_blob_id: "a".repeat(40), unlink_references: true },
     });
     expect(response.statusCode).toBe(200);
-    expect(deleteEntity).toHaveBeenCalledWith("DRF-API", "42", "people", "U-26-5EBAE3", metadata.fingerprint, "a".repeat(40), true);
+    expect(deleteEntity).toHaveBeenCalledWith("DRF-API", "42", "people", "U-26-5EBAE3", metadata.fingerprint, "a".repeat(40), true, false);
+  });
+
+  it("forwards explicit reference cascade confirmation to project deletion", async () => {
+    const deleteEntity = vi.fn(async () => ({ deleted: true, path: "projects/P-26-MGP84K/project.yaml", unlinked_paths: [], cascaded_paths: ["projects/P-26-MGP84K/tasks/T-26-P9G3P8.yaml"], draft_fingerprint: metadata.fingerprint }));
+    const app = buildApp({
+      authenticate: () => ({ userId: "42", role: "Maintainer" }),
+      draftManager: manager(),
+      entityStore: { delete: deleteEntity } as unknown as EntityStore,
+    });
+    apps.push(app);
+    const response = await app.inject({
+      method: "DELETE",
+      url: "/api/drafts/DRF-API/entities/projects/P-26-MGP84K",
+      payload: { expected_fingerprint: metadata.fingerprint, expected_blob_id: "a".repeat(40), cascade_references: true },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(deleteEntity).toHaveBeenCalledWith("DRF-API", "42", "projects", "P-26-MGP84K", metadata.fingerprint, "a".repeat(40), false, true);
   });
 
   it("reserves repository configuration mutation for Maintainer", async () => {

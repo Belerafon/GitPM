@@ -70,6 +70,21 @@ describe("HttpGitPmApi request bodies", () => {
     expect(JSON.parse(String(fetchMock.mock.calls[1]![1]?.body))).toMatchObject({ unlink_references: true });
   });
 
+  it("sends explicit project cascade confirmation separately from unlink confirmation", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ deleted: true }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const entity = { document: { schema: "gitpm/project@1", id: "P-26-111111" }, path: "projects/P-26-111111/project.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) } as EntityResult;
+
+    await new HttpGitPmApi().deleteEntity("DRF-1", "projects", entity, entity.draft_fingerprint, false, true);
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0]![1]?.body));
+    expect(body).toMatchObject({ cascade_references: true });
+    expect(body).not.toHaveProperty("unlink_references");
+  });
+
   it("formats API validation errors with their stable code, path, field and expectation", () => {
     const message = formatApiError(new ApiError("VALIDATION_FAILED", "Repository validation failed", [
       {

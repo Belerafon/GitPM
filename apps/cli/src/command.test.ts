@@ -579,6 +579,30 @@ describe.concurrent("CLI direct mode", () => {
     expect(teamFile).not.toContain("U-26-15QJP8");
   });
 
+  it("previews and explicitly cascades project-owned entities on confirmed project deletion", async () => {
+    const { direct, checkout } = await directFixture();
+    const preview = await run(["entity", "delete", "--type", "project", "--id", "P-26-8S9HQQ", "--cascade-references", "--dry-run", "--json"], process.cwd(), { direct });
+    expect(JSON.parse(preview.output)).toMatchObject({
+      ok: true,
+      dry_run: true,
+      supports_cascade: true,
+      cascaded_entities: [expect.objectContaining({ path: "projects/P-26-8S9HQQ/tasks/T-26-G2TG9R.yaml" })],
+    });
+
+    const restricted = await run(["entity", "delete", "--type", "project", "--id", "P-26-8S9HQQ", "--allow-delete", "--json"], process.cwd(), { direct });
+    expect(JSON.parse(restricted.output)).toMatchObject({ ok: false, code: "DELETE_RESTRICTED" });
+
+    const deleted = await run(["entity", "delete", "--type", "project", "--id", "P-26-8S9HQQ", "--cascade-references", "--allow-delete", "--json"], process.cwd(), { direct });
+    expect(JSON.parse(deleted.output)).toMatchObject({
+      ok: true,
+      deleted: true,
+      path: "projects/P-26-8S9HQQ/project.yaml",
+      cascaded_paths: ["projects/P-26-8S9HQQ/tasks/T-26-G2TG9R.yaml"],
+    });
+    await expect(readFile(path.join(checkout, "projects", "P-26-8S9HQQ", "project.yaml"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(readFile(path.join(checkout, "projects", "P-26-8S9HQQ", "tasks", "T-26-G2TG9R.yaml"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
   it("archives an entity and moves a task between projects", async () => {
     const { direct, checkout } = await directFixture();
     const archived = await run(["entity", "archive", "--type", "milestone", "--id", "M-26-461GDJ", "--json"], process.cwd(), { direct });

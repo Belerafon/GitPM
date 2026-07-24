@@ -126,7 +126,7 @@ const commandHelp: Readonly<Record<string, string>> = {
     "  gitpm entity import [--draft <id>] --type <type> --format <csv|yaml|jsonl> (--file <path>|--path <path>) [--dry-run] [--json]",
     "  gitpm entity list [--draft <id>] --type <type> [--project <id>] [--json]",
     "  gitpm entity show [--draft <id>] --type <type> --id <entity-id> [--json]",
-    "  gitpm entity delete [--draft <id>] --type <type> --id <entity-id> [--unlink-references] [--dry-run] [--allow-delete] [--project <id>] [--json]",
+    "  gitpm entity delete [--draft <id>] --type <type> --id <entity-id> [--unlink-references|--cascade-references] [--dry-run] [--allow-delete] [--project <id>] [--json]",
     "  gitpm entity archive [--draft <id>] --type <type> --id <entity-id> [--project <id>] [--json]",
     "  gitpm entity move [--draft <id>] --type task --id <entity-id> --to-project <id> [--to-milestone <id>] [--allow-delete] [--project <id>] [--json]",
     "",
@@ -139,7 +139,8 @@ const commandHelp: Readonly<Record<string, string>> = {
     "show returns a single entity document with its canonical path.",
     "delete removes the entity file. Task deletion cascades to that task's comments.",
     "  --dry-run returns the reference impact (restrictions, cascade and unlink preview) without writing.",
-    "  --unlink-references removes references to a person before deleting (people only; other types raise DELETE_UNLINK_UNSUPPORTED).",
+    "  --unlink-references removes references to a person before deleting (people only).",
+    "  --cascade-references deletes every entity owned by a project before deleting the project (projects only).",
     "  Restricted references raise DELETE_RESTRICTED with structured details listing every affected item.",
     "archive sets lifecycle to archived (reversible); the entity file stays and references remain valid.",
     "move relocates a task (and its comments) to another project and optional milestone.",
@@ -197,7 +198,7 @@ function commandArgumentSpec(command: string | undefined, args: readonly string[
     if (action === "import" || action === "bulk-import") return { values: [...common, "--format", "--file", "--path", "--project"], booleans: ["--dry-run", "--json"], minPositionals: 1, maxPositionals: 1 };
     if (action === "list") return { values: [...common, "--project"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
     if (action === "show") return { values: [...common, "--id"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
-    if (action === "delete") return { values: [...common, "--id", "--project"], booleans: ["--unlink-references", "--dry-run", "--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
+    if (action === "delete") return { values: [...common, "--id", "--project"], booleans: ["--unlink-references", "--cascade-references", "--dry-run", "--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
     if (action === "archive") return { values: [...common, "--id", "--project"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
     if (action === "move") return { values: [...common, "--id", "--to-project", "--to-milestone", "--project"], booleans: ["--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
     return { booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
@@ -523,23 +524,29 @@ async function runEntity(args: readonly string[], cwd: string, dependencies: Cli
       const plan = agent?.planDelete === undefined
         ? await direct!.planDelete(requestedType, requestedId)
         : await agent.planDelete(required(draftId, "--draft"), requestedType, requestedId);
-      const restricted = plan.restrictions.length > 0 && !args.includes("--unlink-references");
+      const unlink = args.includes("--unlink-references");
+      const cascade = args.includes("--cascade-references");
+      const restricted = plan.restrictions.length > 0
+        && !(plan.supports_unlink && unlink)
+        && !(plan.supports_cascade && cascade);
       const human = restricted
         ? `Would be blocked by DELETE_RESTRICTED: ${plan.restrictions.length} reference(s)`
-        : `Would delete ${plan.path}${plan.cascaded_comments.length > 0 ? ` and ${plan.cascaded_comments.length} comment(s)` : ""}${plan.supports_unlink && args.includes("--unlink-references") ? `, unlinking ${plan.would_unlink.length} reference(s)` : ""}`;
+        : `Would delete ${plan.path}${plan.cascaded_comments.length > 0 ? ` and ${plan.cascaded_comments.length} comment(s)` : ""}${plan.supports_unlink && unlink ? `, unlinking ${plan.would_unlink.length} reference(s)` : ""}${plan.supports_cascade && cascade ? `, cascading ${plan.cascaded_entities.length} project entit${plan.cascaded_entities.length === 1 ? "y" : "ies"}` : ""}`;
       return {
         exitCode: restricted ? 0 : 0,
         output: render(json, { ok: true, code: "OK", dry_run: true, ...plan, ...(restricted ? { would_be_restricted: true } : {}) }, human),
       };
     }
     const unlink = args.includes("--unlink-references");
+    const cascade = args.includes("--cascade-references");
     const deleted = agent?.deleteEntity === undefined
-      ? await direct!.deleteEntity(requestedType, requestedId, unlink, agentScope(args))
-      : await agent.deleteEntity(required(draftId, "--draft"), requestedType, requestedId, unlink, agentScope(args));
+      ? await direct!.deleteEntity(requestedType, requestedId, unlink, agentScope(args), cascade)
+      : await agent.deleteEntity(required(draftId, "--draft"), requestedType, requestedId, unlink, agentScope(args), cascade);
     const unlinked = deleted.unlinked_paths.length > 0 ? `, unlinked ${deleted.unlinked_paths.length} reference(s)` : "";
+    const cascaded = deleted.cascaded_paths.length > 0 ? `, cascaded ${deleted.cascaded_paths.length} project entit${deleted.cascaded_paths.length === 1 ? "y" : "ies"}` : "";
     return {
       exitCode: 0,
-      output: render(json, { ok: true, code: "OK", ...deleted }, `Deleted ${deleted.path}${unlinked}`),
+      output: render(json, { ok: true, code: "OK", ...deleted }, `Deleted ${deleted.path}${unlinked}${cascaded}`),
     };
   }
 

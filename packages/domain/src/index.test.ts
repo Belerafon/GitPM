@@ -276,6 +276,45 @@ describe("domain entity store", () => {
     expect(updatedComment).not.toContain(personId);
   }, 60_000);
 
+  it("cascades every project-owned entity after explicit reference confirmation", async () => {
+    const { manager, store, comments } = await runtime();
+    const draft = await manager.createDraft("DRF-CASCADE-PROJECT", "42");
+    const projectId = "P-26-MGP84K";
+    const project = await store.get("DRF-CASCADE-PROJECT", "projects", projectId);
+    const comment = await comments.create(
+      "DRF-CASCADE-PROJECT",
+      projectId,
+      "T-26-P9G3P8",
+      draft.fingerprint,
+      "This comment belongs to the project",
+      { userId: "42", role: "Developer", identity: { provider: "git", subject: "author@example.test", display_name: "Author" } },
+    );
+
+    await expect(store.delete("DRF-CASCADE-PROJECT", "42", "projects", projectId, comment.draft_fingerprint, project.blob_id))
+      .rejects.toMatchObject({
+        code: "DELETE_RESTRICTED",
+        details: expect.arrayContaining([
+          expect.objectContaining({ path: "projects/P-26-MGP84K/milestones/M-26-461GDJ.yaml", label: "Alpha" }),
+          expect.objectContaining({ path: "projects/P-26-MGP84K/tasks/T-26-P9G3P8.yaml", label: "Approve schema v1" }),
+          expect.objectContaining({ path: "projects/P-26-MGP84K/views/V-26-AG873M.yaml", label: "Active work" }),
+          expect.objectContaining({ path: comment.path }),
+        ]),
+      });
+
+    const deleted = await store.delete("DRF-CASCADE-PROJECT", "42", "projects", projectId, comment.draft_fingerprint, project.blob_id, false, true);
+    expect(deleted.cascaded_paths).toEqual(expect.arrayContaining([
+      "projects/P-26-MGP84K/milestones/M-26-461GDJ.yaml",
+      "projects/P-26-MGP84K/tasks/T-26-P9G3P8.yaml",
+      "projects/P-26-MGP84K/tasks/T-26-RHBNH8.yaml",
+      "projects/P-26-MGP84K/views/V-26-AG873M.yaml",
+      comment.path,
+    ]));
+    expect(deleted.unlinked_paths).toEqual([]);
+    await expect(store.get("DRF-CASCADE-PROJECT", "projects", projectId)).rejects.toMatchObject({ code: "ENTITY_NOT_FOUND" });
+    await expect(store.get("DRF-CASCADE-PROJECT", "tasks", "T-26-P9G3P8")).rejects.toMatchObject({ code: "ENTITY_NOT_FOUND" });
+    await expect(store.get("DRF-CASCADE-PROJECT", "projects", "P-26-8S9HQQ")).resolves.toBeDefined();
+  }, 60_000);
+
   it("plans a delete impact preview with restrictions, cascade and unlink without writing", async () => {
     const { manager, store, comments } = await runtime();
     const draft = await manager.createDraft("DRF-PLAN-DELETE", "42");
@@ -313,7 +352,15 @@ describe("domain entity store", () => {
     expect(taskPlan.schema).toBe("gitpm/task@1");
     expect(taskPlan.cascaded_comments.map((item) => item.id)).toEqual(expect.arrayContaining([String(comment.document.id)]));
     expect(taskPlan.supports_unlink).toBe(false);
+    expect(taskPlan.supports_cascade).toBe(false);
     expect(taskPlan.would_unlink).toEqual([]);
+
+    const projectPlan = await store.planDelete("DRF-PLAN-DELETE", "projects", "P-26-MGP84K");
+    expect(projectPlan).toMatchObject({ supports_unlink: false, supports_cascade: true });
+    expect(projectPlan.cascaded_entities).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: "projects/P-26-MGP84K/milestones/M-26-461GDJ.yaml", label: "Alpha" }),
+      expect.objectContaining({ path: comment.path }),
+    ]));
 
     const cleanPlan = await store.planDelete("DRF-PLAN-DELETE", "calendars", "C-26-ABCDEF");
     expect(cleanPlan.restrictions).toEqual([]);

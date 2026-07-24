@@ -214,7 +214,8 @@ export class RepositoryWorkflow {
     id: string,
     unlinkReferences = false,
     scope: AgentScope = {},
-  ): Promise<{ deleted: true; path: string; unlinked_paths: readonly string[]; draft_fingerprint: string }> {
+    cascadeReferences = false,
+  ): Promise<{ deleted: true; path: string; unlinked_paths: readonly string[]; cascaded_paths: readonly string[]; draft_fingerprint: string }> {
     const workspace = await this.beginMutation(workspaceId, scope);
     const plan = await this.entities.planDelete(workspaceId, entityType, id);
     this.assertPlannedPaths([
@@ -222,6 +223,9 @@ export class RepositoryWorkflow {
       ...plan.cascaded_comments.map((item) => ({ path: item.path, kind: "Deleted" as const })),
       ...(unlinkReferences
         ? plan.would_unlink.map((item) => ({ path: item.path, kind: "Modified" as const }))
+        : []),
+      ...(cascadeReferences
+        ? plan.cascaded_entities.map((item) => ({ path: item.path, kind: "Deleted" as const }))
         : []),
     ], scope);
     const current = await this.entities.get(workspaceId, entityType, id);
@@ -233,6 +237,7 @@ export class RepositoryWorkflow {
       workspace.fingerprint,
       current.blob_id,
       unlinkReferences,
+      cascadeReferences,
     );
   }
 

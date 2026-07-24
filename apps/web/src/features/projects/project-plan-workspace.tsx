@@ -1,6 +1,6 @@
 import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { formatApiError, type GitPmApi } from "../../api.js";
+import { ApiError, deleteRestrictionLabels, formatApiError, type GitPmApi } from "../../api.js";
 import { AsyncBoundary, useAsyncLoad } from "../../async-data.js";
 import { AssigneeChecks, existingProjectGroups, projectGroupFromForm, ProjectGroupField, TaskPanel, type ConfigValue } from "../../core-ui.js";
 import { EditorDrawer } from "../../editor-drawer.js";
@@ -324,16 +324,40 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   };
 
   const deleteProject = async () => {
-    if (workspace === null || !confirmAction(t("core.deleteConfirm", { name: text(workspace.project.document, "name") }))) return;
+    if (workspace === null) return;
+    const name = text(workspace.project.document, "name");
+    if (!confirmAction(t("core.deleteConfirm", { name }))) return;
     setError(null);
     try {
       await api.deleteEntity(draft.draft_id, "projects", workspace.project, workspace.draft_fingerprint);
-      await onChanged();
-      setEditor(null);
-      onNavigate("projects");
     } catch (caught) {
-      setError(formatApiError(caught));
+      if (!(caught instanceof ApiError) || caught.code !== "DELETE_RESTRICTED") {
+        setError(t("projectPlan.deleteFailed", { name, message: formatApiError(caught) }));
+        return;
+      }
+      const references = deleteRestrictionLabels(caught.details);
+      if (references.length === 0) {
+        setError(t("projectPlan.deleteRestrictedUnknown", { name }));
+        return;
+      }
+      if (!confirmAction(t("projectPlan.deleteReferencesConfirm", {
+        name,
+        count: references.length,
+        references: references.map((reference) => `• ${reference}`).join("\n"),
+      }))) return;
+      try {
+        await api.deleteEntity(draft.draft_id, "projects", workspace.project, workspace.draft_fingerprint, false, true);
+      } catch (retryError) {
+        const messageKey = retryError instanceof ApiError && retryError.code === "DELETE_RESTRICTED"
+          ? "projectPlan.deleteRestrictedChanged"
+          : "projectPlan.deleteFailed";
+        setError(t(messageKey, { name, message: formatApiError(retryError) }));
+        return;
+      }
     }
+    await onChanged();
+    setEditor(null);
+    onNavigate("projects");
   };
 
   return <section className="project-plan-workspace">
