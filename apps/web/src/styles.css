@@ -682,8 +682,12 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
 .subtle { padding: .4rem .55rem; font-size: .75rem; }
 .change-file { display: grid; grid-template-columns: 7px minmax(0, 1fr); align-items: stretch; gap: .55rem; width: 100%; margin-top: .4rem; padding: .55rem; text-align: left; }
 .change-file.selected { border-color: #49715d; background: #edf3ee; }
-.change-file > span:last-child { display: grid; gap: .2rem; min-width: 0; }
-.change-file strong { font-size: .72rem; font-weight: 650; }
+.change-file-body { display: grid; gap: .32rem; min-width: 0; }
+.change-file-entity { display: grid; gap: .08rem; min-width: 0; }
+.change-file-entity > span { color: #657068; font-size: .65rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
+.change-file-entity > strong { overflow: hidden; color: #2f3731; font-size: .8rem; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.change-file-meta { display: flex; align-items: baseline; gap: .35rem; min-width: 0; }
+.change-file-meta strong { flex: 0 0 auto; font-size: .68rem; font-weight: 650; }
 .change-file code { overflow: hidden; color: #666c67; font-size: .69rem; text-overflow: ellipsis; }
 .change-dot { border-radius: 999px; }
 .kind-added { background-color: #d9eddf; color: #285b37; }

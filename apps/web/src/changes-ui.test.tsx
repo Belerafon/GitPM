@@ -16,13 +16,18 @@ class ChangesApi {
     { path: "projects/P-26-111111/tasks/T-26-222222.yaml", kind: "Deleted", diff_token: "three", diff: "@@ -1,1 +0,0 @@\n-old\n", hunks: [{ old_start: 1, old_count: 1, new_start: 0, new_count: 0, lines: ["-old"] }] },
   ] };
   semantic: SemanticDiff = {
-    created: [{ id: "T-26-111111", path: "projects/P-26-111111/tasks/T-26-111111.yaml", schema: "gitpm/task@1", project: "P-26-111111", fields: [{ field: "title", after: "New" }] }],
-    updated: [{ id: "P-26-111111", path: "projects/P-26-111111/project.yaml", schema: "gitpm/project@1", project: "P-26-111111", fields: [{ field: "name", before: "Old", after: "New" }] }],
-    archived: [], deleted: [{ id: "T-26-222222", path: "projects/P-26-111111/tasks/T-26-222222.yaml", schema: "gitpm/task@1", project: "P-26-111111", fields: [{ field: "title", before: "Old" }] }],
+    created: [{ id: "T-26-111111", path: "projects/P-26-111111/tasks/T-26-111111.yaml", schema: "gitpm/task@1", project: "P-26-111111", fields: [{ field: "title", after: "New task" }] }],
+    updated: [{ id: "P-26-111111", path: "projects/P-26-111111/project.yaml", schema: "gitpm/project@1", project: "P-26-111111", fields: [{ field: "status", before: "backlog", after: "active" }] }],
+    archived: [], deleted: [{ id: "T-26-222222", path: "projects/P-26-111111/tasks/T-26-222222.yaml", schema: "gitpm/task@1", project: "P-26-111111", fields: [{ field: "title", before: "Old task" }] }],
     counts: { created: 1, updated: 1, archived: 0, deleted: 1 }, affected_projects: ["P-26-111111"], unclassified_files: [],
+    file_entities: [
+      { path: "projects/P-26-111111/project.yaml", schema: "gitpm/project@1", id: "P-26-111111", display_name: "Alpha project" },
+      { path: "projects/P-26-111111/tasks/T-26-111111.yaml", schema: "gitpm/task@1", id: "T-26-111111", display_name: "New task" },
+      { path: "projects/P-26-111111/tasks/T-26-222222.yaml", schema: "gitpm/task@1", id: "T-26-222222", display_name: "Old task" },
+    ],
   };
   listChanges = vi.fn(async () => this.committed ? { changed_files_count: 0, affected_projects: [], files: [] } : this.changes);
-  semanticChanges = vi.fn(async () => this.committed ? { created: [], updated: [], archived: [], deleted: [], counts: { created: 0, updated: 0, archived: 0, deleted: 0 }, affected_projects: [], unclassified_files: [] } : this.semantic);
+  semanticChanges = vi.fn(async () => this.committed ? { created: [], updated: [], archived: [], deleted: [], counts: { created: 0, updated: 0, archived: 0, deleted: 0 }, affected_projects: [], file_entities: [], unclassified_files: [] } : this.semantic);
   restoreFile = vi.fn(async (_draftId: string, _fingerprint: string, path: string) => { this.restored.push(path); });
   restoreHunk = vi.fn(async (_draftId: string, _fingerprint: string, path: string) => { this.restored.push(path); });
   discardAll = vi.fn(async () => undefined);
@@ -46,10 +51,20 @@ describe("Changes workspace", () => {
     render(<ChangesWorkspace api={fixture as unknown as GitPmApi} draft={draft} role="Developer" locale="en" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} />);
     expect((await screen.findAllByText("projects/P-26-111111/project.yaml")).length).toBeGreaterThan(0);
     expect(screen.getByText("Added")).toBeTruthy(); expect(screen.getAllByText("Modified").length).toBeGreaterThan(0); expect(screen.getAllByText("Deleted").length).toBeGreaterThan(0);
+    expect(screen.getByText("Project")).toBeTruthy(); expect(screen.getByText("Alpha project")).toBeTruthy();
+    expect(screen.getAllByText("Task")).toHaveLength(2); expect(screen.getAllByText("New task").length).toBeGreaterThan(0); expect(screen.getAllByText("Old task").length).toBeGreaterThan(0);
     expect(screen.getByText("-old")).toBeTruthy(); expect(screen.getByText("+new")).toBeTruthy();
-    expect(screen.getAllByText("Old").length).toBeGreaterThan(0); expect(screen.getAllByText("New").length).toBeGreaterThan(0);
+    expect(screen.getByText("backlog")).toBeTruthy(); expect(screen.getByText("active")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Restore hunk" }));
     await waitFor(() => expect(fixture.restoreHunk).toHaveBeenCalledWith("DRF-CHANGES", draft.fingerprint, "projects/P-26-111111/project.yaml", "one", 0));
+  });
+
+  it("localizes entity types on file cards", async () => {
+    const fixture = new ChangesApi();
+    render(<ChangesWorkspace api={fixture as unknown as GitPmApi} draft={draft} role="Developer" locale="ru" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} />);
+    expect(await screen.findByText("Проект")).toBeTruthy();
+    expect(screen.getByText("Alpha project")).toBeTruthy();
+    expect(screen.getAllByText("Задача")).toHaveLength(2);
   });
 
   it("shows a localized notice instead of the diff for an oversized change", async () => {
