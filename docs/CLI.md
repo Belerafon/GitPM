@@ -15,7 +15,7 @@ gitpm entity update [--draft <id>] --type <type> --id <entity-id> [--file <yaml-
 gitpm entity import [--draft <id>] --type <type> --format csv|yaml|jsonl (--file <file>|--path <file>) [--dry-run]
 gitpm entity list [--draft <id>] --type <type> [--project <id>]
 gitpm entity show [--draft <id>] --type <type> --id <entity-id>
-gitpm entity delete [--draft <id>] --type <type> --id <entity-id> [--unlink-references] [--dry-run] [--allow-delete] [--project <id>]
+gitpm entity delete [--draft <id>] --type <type> --id <entity-id> [--unlink-references|--cascade-references] [--dry-run] [--allow-delete] [--project <id>]
 gitpm entity archive [--draft <id>] --type <type> --id <entity-id> [--project <id>]
 gitpm entity move [--draft <id>] --type task --id <entity-id> --to-project <id> [--to-milestone <id>] [--allow-delete] [--project <id>]
 gitpm comment list --project <id> --task <id>
@@ -71,10 +71,13 @@ domain schemas (включая `comment`) и три repository configuration sch
 `entity delete` физически удаляет файл сущности. При удалении Task автоматически каскадно
 удаляются комментарии этой задачи. `--dry-run` выполняет превью без записи: возвращает
 список ссылающихся документов (`restrictions`), каскадных комментариев (`cascaded_comments`)
-и документов, которые будут отвязаны (`would_unlink`, только для Person). `--unlink-references`
-удаляет ссылки на Person перед удалением (поддерживается только для `person`; другие типы
-вызывают `DELETE_UNLINK_UNSUPPORTED`). Если сущность имеет ссылки и `--unlink-references`
-не указан, возникает `DELETE_RESTRICTED` со структурированным списком затронутых файлов.
+и сущностей внутри удаляемого Project (`cascaded_entities`), а также документов, которые будут
+отвязаны (`would_unlink`, только для Person). `--unlink-references` удаляет ссылки на Person перед
+удалением (поддерживается только для `person`; другие типы вызывают `DELETE_UNLINK_UNSUPPORTED`).
+`--cascade-references` атомарно удаляет все принадлежащие Project сущности перед удалением самого
+Project (поддерживается только для `project`; другие типы вызывают `DELETE_CASCADE_UNSUPPORTED`).
+Без подходящего явного режима подтверждения ссылки вызывают `DELETE_RESTRICTED` со
+структурированным списком всех затронутых файлов.
 
 `entity archive` устанавливает `lifecycle: archived` (обратимо); файл остаётся, ссылки
 остаются валидными.

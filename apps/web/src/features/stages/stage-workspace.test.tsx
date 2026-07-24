@@ -33,6 +33,7 @@ function api() {
     if (type === "tasks") currentTasks = currentTasks.map((item) => item.document.id === document.id ? updated : item);
     return updated;
   });
+  const deleteEntity = vi.fn(async () => undefined);
   return {
     projectWorkspace: vi.fn(async () => ({ project: currentProject, milestones: currentStages, tasks: currentTasks, draft_fingerprint: fingerprint })),
     getConfiguration: vi.fn(async (_draftId: string, kind: "statuses" | "issue-types") => configuration(kind === "statuses"
@@ -41,7 +42,8 @@ function api() {
     listEntities: vi.fn(async (_draftId: string, type: string) => type === "people" ? [person] : type === "projects" ? [currentProject, archivedProject] : []),
     createEntity,
     updateEntity,
-  } as unknown as GitPmApi & { createEntity: typeof createEntity; updateEntity: typeof updateEntity };
+    deleteEntity,
+  } as unknown as GitPmApi & { createEntity: typeof createEntity; updateEntity: typeof updateEntity; deleteEntity: typeof deleteEntity };
 }
 
 afterEach(() => { cleanup(); localStorage.clear(); });
@@ -101,6 +103,57 @@ describe("project plan and stage workspace", () => {
       expect(diagnostic).toContain("[REPOSITORY_TOP_LEVEL] legacy-exports");
       expect(diagnostic).toContain("allowed_top_level_directories");
     });
+    expect(screen.getByRole("dialog", { name: "Edit: Alpha" })).toBeTruthy();
+  });
+
+  it("lists every project reference and requires a second confirmation before cascading deletion", async () => {
+    const client = api();
+    const confirmAction = vi.fn(() => true);
+    const onChanged = vi.fn(async () => undefined);
+    const onNavigate = vi.fn();
+    client.deleteEntity
+      .mockRejectedValueOnce(new ApiError("DELETE_RESTRICTED", `${project.document.id} is referenced`, [
+        { path: "projects/P-26-111111/milestones/M-26-222222.yaml", label: "Launch" },
+        { path: "projects/P-26-111111/tasks/T-26-333333.yaml", label: "Linked task" },
+      ]))
+      .mockResolvedValueOnce(undefined);
+    render(<ProjectPlanWorkspace api={client} confirmAction={confirmAction} draft={draft} locale="en" onChanged={onChanged} onNavigate={onNavigate} projectId={project.document.id} />);
+
+    await screen.findByRole("heading", { name: "Alpha" });
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    const dialog = screen.getByRole("dialog", { name: "Edit: Alpha" });
+    fireEvent.click(within(dialog).getByText("More actions"));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => expect(client.deleteEntity).toHaveBeenCalledTimes(2));
+    expect(confirmAction).toHaveBeenNthCalledWith(1, "Delete Alpha permanently? This action cannot be undone.");
+    expect(confirmAction).toHaveBeenNthCalledWith(2, "Alpha still contains or is referenced by 2 items:\n• Launch (projects/P-26-111111/milestones/M-26-222222.yaml)\n• Linked task (projects/P-26-111111/tasks/T-26-333333.yaml)\n\nDelete all listed items and then delete the project permanently?");
+    expect(client.deleteEntity).toHaveBeenNthCalledWith(1, draft.draft_id, "projects", project, fingerprint);
+    expect(client.deleteEntity).toHaveBeenNthCalledWith(2, draft.draft_id, "projects", project, fingerprint, false, true);
+    expect(onChanged).toHaveBeenCalledOnce();
+    expect(onNavigate).toHaveBeenCalledWith("projects");
+  });
+
+  it("keeps the project unchanged when the reference cascade confirmation is denied", async () => {
+    const client = api();
+    const confirmAction = vi.fn()
+      .mockReturnValueOnce(true)
+      .mockReturnValueOnce(false);
+    const onNavigate = vi.fn();
+    client.deleteEntity.mockRejectedValueOnce(new ApiError("DELETE_RESTRICTED", `${project.document.id} is referenced`, [
+      { path: "projects/P-26-111111/tasks/T-26-333333.yaml", label: "Linked task" },
+    ]));
+    render(<ProjectPlanWorkspace api={client} confirmAction={confirmAction} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={onNavigate} projectId={project.document.id} />);
+
+    await screen.findByRole("heading", { name: "Alpha" });
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    const dialog = screen.getByRole("dialog", { name: "Edit: Alpha" });
+    fireEvent.click(within(dialog).getByText("More actions"));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => expect(confirmAction).toHaveBeenCalledTimes(2));
+    expect(client.deleteEntity).toHaveBeenCalledOnce();
+    expect(onNavigate).not.toHaveBeenCalled();
     expect(screen.getByRole("dialog", { name: "Edit: Alpha" })).toBeTruthy();
   });
 

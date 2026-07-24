@@ -524,7 +524,7 @@ export function registerEntityApi(
     },
   );
 
-  app.delete<{ Params: { draftId: string; entityType: string; id: string }; Body: { expected_fingerprint: string; expected_blob_id: string; unlink_references?: boolean } }>(
+  app.delete<{ Params: { draftId: string; entityType: string; id: string }; Body: { expected_fingerprint: string; expected_blob_id: string; unlink_references?: boolean; cascade_references?: boolean } }>(
     "/api/drafts/:draftId/entities/:entityType/:id",
     { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.deleteEntity } },
     async (request) => {
@@ -538,6 +538,7 @@ export function registerEntityApi(
         request.body.expected_fingerprint,
         request.body.expected_blob_id,
         request.body.unlink_references ?? false,
+        request.body.cascade_references ?? false,
       );
     },
   );

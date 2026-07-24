@@ -152,8 +152,9 @@ export class AgentWorkflow {
     id: string,
     unlinkReferences = false,
     scope: AgentScope = {},
+    cascadeReferences = false,
   ) {
-    return await this.repository.deleteEntity(draftId, entityType, id, unlinkReferences, scope);
+    return await this.repository.deleteEntity(draftId, entityType, id, unlinkReferences, scope, cascadeReferences);
   }
 
   async archiveEntity(draftId: string, entityType: string, id: string, scope: AgentScope = {}) {

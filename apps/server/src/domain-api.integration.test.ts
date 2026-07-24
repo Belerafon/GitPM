@@ -58,6 +58,45 @@ afterEach(async () => {
 });
 
 describe("domain API integration", () => {
+  it("returns project references and cascades them only after explicit confirmation", async () => {
+    const { app, manager } = await runtime();
+    const draft = await manager.createDraft("DRF-PROJECT-CASCADE", "42");
+    const projectId = "P-26-8S9HQQ";
+    const projectResponse = await app.inject({ method: "GET", url: `/api/drafts/DRF-PROJECT-CASCADE/entities/projects/${projectId}` });
+    const project = projectResponse.json<ApiEntityResult>();
+
+    const restricted = await app.inject({
+      method: "DELETE",
+      url: `/api/drafts/DRF-PROJECT-CASCADE/entities/projects/${projectId}`,
+      payload: { expected_fingerprint: draft.fingerprint, expected_blob_id: project.blob_id },
+    });
+    expect(restricted.statusCode).toBe(409);
+    expect(restricted.json()).toMatchObject({
+      error: {
+        code: "DELETE_RESTRICTED",
+        details: [expect.objectContaining({
+          path: "projects/P-26-8S9HQQ/tasks/T-26-G2TG9R.yaml",
+          label: "Prepare operations",
+        })],
+      },
+    });
+
+    const confirmed = await app.inject({
+      method: "DELETE",
+      url: `/api/drafts/DRF-PROJECT-CASCADE/entities/projects/${projectId}`,
+      payload: { expected_fingerprint: draft.fingerprint, expected_blob_id: project.blob_id, cascade_references: true },
+    });
+    expect(confirmed.statusCode).toBe(200);
+    expect(confirmed.json()).toMatchObject({
+      deleted: true,
+      path: `projects/${projectId}/project.yaml`,
+      unlinked_paths: [],
+      cascaded_paths: ["projects/P-26-8S9HQQ/tasks/T-26-G2TG9R.yaml"],
+    });
+    expect((await app.inject({ method: "GET", url: `/api/drafts/DRF-PROJECT-CASCADE/entities/projects/${projectId}` })).statusCode).toBe(404);
+    expect((await app.inject({ method: "GET", url: "/api/drafts/DRF-PROJECT-CASCADE/entities/projects/P-26-MGP84K" })).statusCode).toBe(200);
+  }, 120_000);
+
   it("creates and updates all editable types, archives, deletes and restricts references", async () => {
     const { app, client, manager } = await runtime();
     const draft = await manager.createDraft("DRF-HTTP", "42");

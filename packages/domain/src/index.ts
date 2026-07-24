@@ -105,7 +105,9 @@ export interface DeletePlan {
   readonly schema: string;
   readonly path: string;
   readonly supports_unlink: boolean;
+  readonly supports_cascade: boolean;
   readonly cascaded_comments: readonly { readonly path: string; readonly id: string }[];
+  readonly cascaded_entities: readonly DeleteRestriction[];
   readonly restrictions: readonly DeleteRestriction[];
   readonly would_unlink: readonly DeleteRestriction[];
 }
@@ -719,6 +721,15 @@ export class EntityStore {
         };
       });
     const supportsUnlink = found.document.schema === "gitpm/person@1";
+    const supportsCascade = found.document.schema === "gitpm/project@1";
+    const cascadedEntities: DeleteRestriction[] = supportsCascade
+      ? repository.entities.flatMap((entity) => entity.relative === found.relative || entity.document.project !== id ? [] : [{
+        path: entity.relative,
+        entity_id: typeof entity.document.id === "string" ? entity.document.id : undefined,
+        schema: entity.document.schema,
+        label: entityDisplayLabel(entity.document),
+      }])
+      : [];
     const wouldUnlink: DeleteRestriction[] = supportsUnlink
       ? repository.entities.flatMap((entity) => {
         if (entity.relative === found.relative) return [];
@@ -737,7 +748,9 @@ export class EntityStore {
       schema: found.document.schema,
       path: found.relative,
       supports_unlink: supportsUnlink,
+      supports_cascade: supportsCascade,
       cascaded_comments: cascadedComments.map((comment) => ({ path: comment.relative, id: String(comment.document.id) })),
+      cascaded_entities: cascadedEntities,
       restrictions,
       would_unlink: wouldUnlink,
     };
@@ -751,20 +764,30 @@ export class EntityStore {
     expectedFingerprint: string,
     expectedBlobId: string,
     unlinkReferences = false,
-  ): Promise<{ deleted: true; path: string; unlinked_paths: readonly string[]; draft_fingerprint: string }> {
+    cascadeReferences = false,
+  ): Promise<{ deleted: true; path: string; unlinked_paths: readonly string[]; cascaded_paths: readonly string[]; draft_fingerprint: string }> {
     const mutation = await this.drafts.withRepositoryMutation(draftId, owner, expectedFingerprint, this.mutationMode, async (metadata) => {
       const found = await this.find(draftId, metadata, entityType, id);
       await this.drafts.assertFileBlobId(draftId, found.relative, expectedBlobId);
       const repository = await this.index(draftId, metadata);
+      if (unlinkReferences && cascadeReferences) {
+        throw new DomainOperationError("DELETE_REFERENCE_MODE_CONFLICT", "Reference unlink and cascade modes cannot be combined");
+      }
       if (unlinkReferences && found.document.schema !== "gitpm/person@1") {
         throw new DomainOperationError("DELETE_UNLINK_UNSUPPORTED", "Automatic reference removal is supported only for people");
+      }
+      if (cascadeReferences && found.document.schema !== "gitpm/project@1") {
+        throw new DomainOperationError("DELETE_CASCADE_UNSUPPORTED", "Reference cascade deletion is supported only for projects");
       }
       const cascadedComments = found.document.schema === "gitpm/task@1"
         ? repository.entities.filter((entity) => entity.document.schema === "gitpm/comment@1" && entity.document.task === id)
         : [];
+      const cascadedEntities = found.document.schema === "gitpm/project@1" && cascadeReferences
+        ? repository.entities.filter((entity) => entity.relative !== found.relative && entity.document.project === id)
+        : [];
       const commentPaths = new Set(cascadedComments.map((comment) => comment.relative));
       const restrictions = (await validateDelete(metadata.worktree_path, id)).filter((restriction) => !commentPaths.has(restriction.path));
-      if (restrictions.length > 0 && !unlinkReferences) {
+      if (restrictions.length > 0 && !unlinkReferences && !cascadeReferences) {
         const entitiesByPath = new Map(repository.entities.map((entity) => [entity.relative, entity.document]));
         throw new DomainOperationError("DELETE_RESTRICTED", `${id} is referenced`, restrictions.map((restriction) => {
           const document = entitiesByPath.get(restriction.path);
@@ -783,7 +806,8 @@ export class EntityStore {
           return document === undefined ? [] : [{ entity, document }];
         })
         : [];
-      const removed = [found, ...cascadedComments];
+      const cascaded = [...cascadedComments, ...cascadedEntities];
+      const removed = [found, ...cascaded];
       const originals = new Map<string, string>();
       try {
         const referenceLabels = this.labels(repository);
@@ -804,7 +828,11 @@ export class EntityStore {
         }
         throw error;
       }
-      return { path: found.relative, unlinked_paths: updates.map((update) => update.entity.relative) };
+      return {
+        path: found.relative,
+        unlinked_paths: updates.map((update) => update.entity.relative),
+        cascaded_paths: cascaded.map((entity) => entity.relative),
+      };
     });
     return { deleted: true, ...mutation.result, draft_fingerprint: mutation.metadata.fingerprint };
   }

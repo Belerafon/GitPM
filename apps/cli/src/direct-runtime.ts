@@ -157,13 +157,14 @@ export class DirectCliRuntime {
     return await this.repository.planDelete(DIRECT_WORKSPACE_ID, entityType, id);
   }
 
-  async deleteEntity(entityType: string, id: string, unlinkReferences: boolean, scope: AgentScope = {}): Promise<{ deleted: true; path: string; unlinked_paths: readonly string[]; draft_fingerprint: string }> {
+  async deleteEntity(entityType: string, id: string, unlinkReferences: boolean, scope: AgentScope = {}, cascadeReferences = false): Promise<{ deleted: true; path: string; unlinked_paths: readonly string[]; cascaded_paths: readonly string[]; draft_fingerprint: string }> {
     return await this.repository.deleteEntity(
       DIRECT_WORKSPACE_ID,
       entityType,
       id,
       unlinkReferences,
       scope,
+      cascadeReferences,
     );
   }
 

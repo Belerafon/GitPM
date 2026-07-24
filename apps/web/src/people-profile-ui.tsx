@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, type GitPmApi } from "./api.js";
+import { ApiError, deleteRestrictionLabels, type GitPmApi } from "./api.js";
 import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
 import { EditorDrawer } from "./editor-drawer.js";
 import { formatDateOnly, formatNumber, message, type Locale, type MessageKey } from "./i18n.js";
@@ -12,16 +12,6 @@ const number = (document: GitPmDocument, key: string) => typeof document[key] ==
 const strings = (document: GitPmDocument, key: string) => Array.isArray(document[key]) ? (document[key] as unknown[]).filter((item): item is string => typeof item === "string") : [];
 const numbers = (document: GitPmDocument, key: string) => Array.isArray(document[key]) ? (document[key] as unknown[]).filter((item): item is number => typeof item === "number") : [];
 const validDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/u.test(value);
-
-function deleteRestrictions(details: unknown): readonly string[] {
-  if (!Array.isArray(details)) return [];
-  return [...new Set(details.flatMap((detail) => {
-    if (detail === null || typeof detail !== "object") return [];
-    const value = detail as { readonly label?: unknown; readonly path?: unknown };
-    if (typeof value.path !== "string") return [];
-    return [typeof value.label === "string" && value.label.trim() !== "" ? `${value.label} (${value.path})` : value.path];
-  }))];
-}
 
 interface ProfileData {
   readonly people: readonly EntityResult[];
@@ -80,7 +70,7 @@ export function PeopleProfileWorkspace({ api, confirmAction = () => true, draft,
         setError(t("people.deleteFailed", { name, message: caught instanceof Error ? caught.message : String(caught) }));
         return false;
       }
-      const references = deleteRestrictions(caught.details);
+      const references = deleteRestrictionLabels(caught.details);
       if (references.length === 0) {
         setError(t("people.deleteRestrictedUnknown", { name }));
         return false;

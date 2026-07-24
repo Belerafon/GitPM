@@ -400,14 +400,21 @@ Optimistic revision для файла является Git blob object ID, вы�
 
 Archive меняет `lifecycle: archived` и оставляет файл.
 
-Delete удаляет файл из worktree. Перед delete server проверяет прямые ссылки. В v0.1 используется только `restrict`.
+Delete удаляет файл из worktree. Перед delete server проверяет прямые ссылки и сначала отвечает
+`DELETE_RESTRICTED` со структурированным списком затрагиваемых объектов.
 
 Для Person UI после ответа `409 DELETE_RESTRICTED` может запросить отдельное подтверждение и повторить delete с
 `unlink_references: true`. Это явная Maintainer-only операция: server атомарно удаляет Person из Team members,
 Task assignees и Saved View assignees, очищает необязательный Project owner, превращает ссылки-упоминания в
 Comment в обычный текст и только затем удаляет Person. Ответ `DELETE_RESTRICTED` содержит locale-neutral `details`
 с canonical path, entity ID, schema и label каждой ссылки; UI локализует объяснение и показывает список до
-повторного подтверждения. Для остальных типов `restrict` остаётся единственной политикой.
+повторного подтверждения.
+
+Для Project UI использует тот же двухэтапный сценарий, но повторяет delete с
+`cascade_references: true`: обязательную ссылку `project` нельзя отвязать без нарушения схемы,
+поэтому server атомарно удаляет все Task, Milestone, Saved View и Comment этого Project, а затем
+сам Project. Полный список показывается пользователю до второго подтверждения. Для остальных
+типов `restrict` остаётся единственной политикой.
 
 Восстановление удаленного файла выполняется Git restore до commit или revert draft после commit/merge.
 

@@ -627,6 +627,7 @@ export const HTTP_REQUEST_BODY_SCHEMAS = {
     expected_fingerprint: stringSchema,
     expected_blob_id: stringSchema,
     unlink_references: booleanSchema,
+    cascade_references: booleanSchema,
   }, ["expected_fingerprint", "expected_blob_id"]),
   updateConfiguration: objectSchema({
     expected_fingerprint: stringSchema,
