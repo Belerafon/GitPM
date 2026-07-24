@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { GitPmApi } from "../../api.js";
+import { ApiError, type GitPmApi } from "../../api.js";
 import type { ConfigurationDocument, ConfigurationResult, DraftStatus, EntityDocument, EntityResult } from "../../types.js";
 import { ProjectPlanWorkspace } from "../projects/project-plan-workspace.js";
 import { StageWorkspace } from "./stage-workspace.js";
@@ -73,6 +73,35 @@ describe("project plan and stage workspace", () => {
     fireEvent.change(within(dialog).getByLabelText("Group"), { target: { value: "" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(client.updateEntity.mock.calls.at(-1)?.[4]).not.toHaveProperty("group"));
+  });
+
+  it("shows structured repository diagnostics when a Project group update fails validation", async () => {
+    const client = api();
+    client.updateEntity.mockRejectedValueOnce(new ApiError(
+      "VALIDATION_FAILED",
+      "Repository validation failed with 1 error",
+      [{
+        code: "REPOSITORY_TOP_LEVEL",
+        path: "legacy-exports",
+        message: 'Unknown top-level directory "legacy-exports"; add it to allowed_top_level_directories in .gitpm/repository.yaml if it belongs in the repository',
+      }],
+    ));
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} />);
+
+    await screen.findByRole("heading", { name: "Alpha" });
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    const dialog = screen.getByRole("dialog", { name: "Edit: Alpha" });
+    fireEvent.change(within(dialog).getByLabelText("Group"), { target: { value: "__new__" } });
+    fireEvent.change(within(dialog).getByLabelText("New group name"), { target: { value: "Operations" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      const diagnostic = document.querySelector(".alert.error")?.textContent ?? "";
+      expect(diagnostic).toContain("[VALIDATION_FAILED]");
+      expect(diagnostic).toContain("[REPOSITORY_TOP_LEVEL] legacy-exports");
+      expect(diagnostic).toContain("allowed_top_level_directories");
+    });
+    expect(screen.getByRole("dialog", { name: "Edit: Alpha" })).toBeTruthy();
   });
 
   it("shows every task inside the project plan and opens a stage as a first-class route", async () => {

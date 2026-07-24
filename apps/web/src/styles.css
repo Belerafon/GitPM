@@ -81,7 +81,7 @@ input { min-width: 0; width: 100%; border: 1px solid #c9cbc5; border-radius: 8px
 .alert { display: flex; align-items: center; justify-content: space-between; gap: .8rem; border-radius: 8px; margin: .8rem 0; padding: .75rem .85rem; font-size: .88rem; }
 .alert.warning { background: #fff2cc; color: #6c5311; }
 .alert.info { background: #e5f0ed; color: #31584c; }
-.alert.error { background: #f9e2df; color: #7f3029; }
+.alert.error { align-items: flex-start; background: #f9e2df; color: #7f3029; white-space: pre-wrap; }
 .status-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin: 1.2rem 0; }
 .status-grid div { border-bottom: 1px solid #ecece8; padding-bottom: .8rem; }
 .status-grid dt { color: #747974; font-size: .78rem; }

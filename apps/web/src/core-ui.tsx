@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
-import type { GitPmApi } from "./api.js";
+import { formatApiError, type GitPmApi } from "./api.js";
 import { formatDateOnly, message, type Locale, type MessageKey } from "./i18n.js";
 import type { DraftStatus, EntityDocument, EntityResult, GitPmDocument } from "./types.js";
 import { changedEntityFields, useExternalHighlights, useReducedMotion } from "./external-updates.js";
@@ -164,7 +164,7 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
     setError(null);
     void api.acknowledgeExternalChanges(draft.draft_id)
       .then(async () => await onChanged())
-      .catch((caught: unknown) => setError(caught instanceof Error ? caught.message : String(caught)));
+      .catch((caught: unknown) => setError(formatApiError(caught)));
   };
 
   const load = useCallback(async (preferredProject = projectId, externalUpdate = false) => {
@@ -205,11 +205,11 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
       if (result.document.schema === "gitpm/task@1") setTasks((current) => upsertEntity(current, result));
       markLocal({ [result.document.id]: ["$local"] }); await onChanged(); await load(preferredProject); setFeedback({ kind: "saved", text: t("feedback.saved") }); return result;
     }
-    catch (caught) { setFeedback(null); setError(caught instanceof Error ? caught.message : String(caught)); return null; }
+    catch (caught) { setFeedback(null); setError(formatApiError(caught)); return null; }
   };
   const remove = async (operation: () => Promise<void>) => {
     setError(null); setFeedback({ kind: "saving", text: t("feedback.saving") });
-    try { await operation(); await load(); await onChanged(); setFeedback({ kind: "saved", text: t("feedback.saved") }); return true; } catch (caught) { setFeedback(null); setError(caught instanceof Error ? caught.message : String(caught)); return false; }
+    try { await operation(); await load(); await onChanged(); setFeedback({ kind: "saved", text: t("feedback.saved") }); return true; } catch (caught) { setFeedback(null); setError(formatApiError(caught)); return false; }
   };
   const changeTaskStatus = (task: EntityResult, status: string) => {
     if (statusPending !== null || value(task.document, "status") === status) return;

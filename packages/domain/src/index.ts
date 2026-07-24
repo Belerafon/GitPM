@@ -820,6 +820,16 @@ export class EntityStore {
 
   private async assertRepositoryValid(worktree: string): Promise<void> {
     const report = await validateRepository(worktree);
-    if (!report.valid) throw new DomainOperationError("VALIDATION_FAILED", report.errors[0]?.message ?? "Repository validation failed", report.errors);
+    if (!report.valid) {
+      const first = report.errors[0];
+      const issue = first === undefined
+        ? "validation did not return an issue"
+        : `[${first.code}] ${first.path}${first.field === undefined ? "" : ` (field ${first.field})`}: ${first.message}`;
+      throw new DomainOperationError(
+        "VALIDATION_FAILED",
+        `Repository validation failed with ${report.errors.length} error${report.errors.length === 1 ? "" : "s"}: ${issue}`,
+        report.errors,
+      );
+    }
   }
 }

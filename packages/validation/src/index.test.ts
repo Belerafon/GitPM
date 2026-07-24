@@ -81,6 +81,25 @@ describe("repository validation", () => {
     expect(await validateRepository(root)).toMatchObject({ valid: true, errors: [] });
   });
 
+  it("explains how to allow an unknown top-level file or directory", async () => {
+    const root = await fixture();
+    await writeFile(path.join(root, "notes.txt"), "notes\n", "utf8");
+    await mkdir(path.join(root, "attachments"));
+    const report = await validateRepository(root);
+    expect(report.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: "REPOSITORY_TOP_LEVEL",
+        path: "notes.txt",
+        message: 'Unknown top-level file "notes.txt"; add it to allowed_top_level_files in .gitpm/repository.yaml if it belongs in the repository',
+      }),
+      expect.objectContaining({
+        code: "REPOSITORY_TOP_LEVEL",
+        path: "attachments",
+        message: 'Unknown top-level directory "attachments"; add it to allowed_top_level_directories in .gitpm/repository.yaml if it belongs in the repository',
+      }),
+    ]));
+  });
+
   it("rejects unknown files and directories inside the repository domain layout", async () => {
     const root = await fixture();
     await writeFile(path.join(root, "projects", project, "payload.bin"), "opaque", "utf8");

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { HttpGitPmApi } from "./api.js";
+import { ApiError, formatApiError, HttpGitPmApi } from "./api.js";
 import { ApiContractError } from "@gitpm/contracts";
 import type { EntityResult } from "./types.js";
 
@@ -68,6 +68,29 @@ describe("HttpGitPmApi request bodies", () => {
     await api.deleteEntity("DRF-1", "people", entity, entity.draft_fingerprint, true);
 
     expect(JSON.parse(String(fetchMock.mock.calls[1]![1]?.body))).toMatchObject({ unlink_references: true });
+  });
+
+  it("formats API validation errors with their stable code, path, field and expectation", () => {
+    const message = formatApiError(new ApiError("VALIDATION_FAILED", "Repository validation failed", [
+      {
+        code: "REPOSITORY_TOP_LEVEL",
+        path: "legacy-exports",
+        message: 'Unknown top-level directory "legacy-exports"',
+      },
+      {
+        code: "SCHEMA_INVALID",
+        path: "projects/P-26-111111/project.yaml",
+        field: "group",
+        message: "must match pattern",
+        expected: "a non-empty group name",
+      },
+    ]));
+
+    expect(message).toBe([
+      "[VALIDATION_FAILED] Repository validation failed",
+      '- [REPOSITORY_TOP_LEVEL] legacy-exports — Unknown top-level directory "legacy-exports"',
+      "- [SCHEMA_INVALID] projects/P-26-111111/project.yaml · field group — must match pattern; expected a non-empty group name",
+    ].join("\n"));
   });
 
   it("accepts configuration documents without entity identity fields", async () => {

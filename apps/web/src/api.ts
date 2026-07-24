@@ -40,6 +40,29 @@ export class ApiError extends Error {
   }
 }
 
+function errorDetailLine(detail: unknown): string | undefined {
+  if (detail === null || typeof detail !== "object") return undefined;
+  const value = detail as Readonly<Record<string, unknown>>;
+  const code = typeof value.code === "string" ? `[${value.code}]` : "";
+  const path = typeof value.path === "string" ? value.path : "";
+  const field = typeof value.field === "string" ? `field ${value.field}` : "";
+  const location = [path, field].filter(Boolean).join(" · ");
+  const message = typeof value.message === "string" ? value.message : "";
+  const expected = typeof value.expected === "string" ? `expected ${value.expected}` : "";
+  const explanation = [message, expected].filter(Boolean).join("; ");
+  const prefix = [code, location].filter(Boolean).join(" ");
+  if (prefix === "" && explanation === "") return undefined;
+  return `${prefix}${prefix !== "" && explanation !== "" ? " — " : ""}${explanation}`;
+}
+
+export function formatApiError(reason: unknown): string {
+  if (!(reason instanceof ApiError)) return reason instanceof Error ? reason.message : String(reason);
+  const heading = `[${reason.code}] ${reason.message}`;
+  if (!Array.isArray(reason.details)) return heading;
+  const lines = reason.details.map(errorDetailLine).filter((line): line is string => line !== undefined);
+  return lines.length === 0 ? heading : [heading, ...lines.map((line) => `- ${line}`)].join("\n");
+}
+
 export interface GitPmApi {
   session(): Promise<PublicSession | null>;
   login(): Promise<string>;

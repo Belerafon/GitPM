@@ -90,7 +90,11 @@ describe("domain API integration", () => {
       expect(latestResponse.statusCode).toBe(200);
       const previous = latestResponse.json<ApiEntityResult>();
       const key = entity.type === "tasks" ? "title" : "name";
-      const document = { ...previous.document, [key]: `${String(previous.document[key])} updated` };
+      const document = {
+        ...previous.document,
+        [key]: `${String(previous.document[key])} updated`,
+        ...(entity.type === "projects" ? { group: "Operations" } : {}),
+      } as GitPmDocument;
       const response = await app.inject({
         method: "PUT",
         url: `/api/drafts/DRF-HTTP/entities/${entity.type}/${String(document.id)}`,
@@ -101,6 +105,7 @@ describe("domain API integration", () => {
       current.set(entity.type, result);
       fingerprint = result.draft_fingerprint;
     }
+    expect(current.get("projects")?.document.group).toBe("Operations");
 
     let task = current.get("tasks")!;
     const moveResponse = await app.inject({

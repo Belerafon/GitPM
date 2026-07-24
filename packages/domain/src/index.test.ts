@@ -115,6 +115,36 @@ describe("entity update planning", () => {
 });
 
 describe("domain entity store", () => {
+  it("reports every repository validation detail when a Project group update exposes an older invalid top-level path", async () => {
+    const { manager, store } = await runtime();
+    const draft = await manager.createDraft("DRF-GROUP-DIAGNOSTIC", "42");
+    const project = await store.get("DRF-GROUP-DIAGNOSTIC", "projects", "P-26-MGP84K");
+    const legacyDirectory = path.join(draft.worktree_path, "legacy-exports");
+    await mkdir(legacyDirectory);
+    await writeFile(path.join(legacyDirectory, "report.txt"), "legacy\n", "utf8");
+    const acknowledged = await manager.acknowledgeExternalChanges("DRF-GROUP-DIAGNOSTIC", "42");
+
+    await expect(store.update(
+      "DRF-GROUP-DIAGNOSTIC",
+      "42",
+      "projects",
+      String(project.document.id),
+      acknowledged.fingerprint,
+      project.blob_id,
+      { ...project.document, group: "Operations" },
+    )).rejects.toMatchObject({
+      code: "VALIDATION_FAILED",
+      message: expect.stringContaining("[REPOSITORY_TOP_LEVEL] legacy-exports"),
+      details: expect.arrayContaining([
+        expect.objectContaining({
+          code: "REPOSITORY_TOP_LEVEL",
+          path: "legacy-exports",
+          message: expect.stringContaining("allowed_top_level_directories"),
+        }),
+      ]),
+    });
+  });
+
   it("persists task comments, resolves stable mentions and exposes in-app notifications", async () => {
     const { manager, comments } = await runtime();
     const draft = await manager.createDraft("DRF-COMMENTS", "42");

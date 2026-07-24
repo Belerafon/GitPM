@@ -1,6 +1,6 @@
 import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import type { GitPmApi } from "../../api.js";
+import { formatApiError, type GitPmApi } from "../../api.js";
 import { AsyncBoundary, useAsyncLoad } from "../../async-data.js";
 import { AssigneeChecks, existingProjectGroups, projectGroupFromForm, ProjectGroupField, TaskPanel, type ConfigValue } from "../../core-ui.js";
 import { EditorDrawer } from "../../editor-drawer.js";
@@ -137,7 +137,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
       setEditor(null);
       return true;
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught));
+      setError(formatApiError(caught));
       return false;
     }
   };
@@ -152,7 +152,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
       await load();
       return result;
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught));
+      setError(formatApiError(caught));
       return null;
     }
   };
@@ -165,7 +165,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
       await load();
       return true;
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught));
+      setError(formatApiError(caught));
       return false;
     }
   };
@@ -332,7 +332,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
       setEditor(null);
       onNavigate("projects");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught));
+      setError(formatApiError(caught));
     }
   };
 
@@ -341,7 +341,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
       setError(null);
       void api.acknowledgeExternalChanges(draft.draft_id)
         .then(async () => await onChanged())
-        .catch((caught: unknown) => setError(caught instanceof Error ? caught.message : String(caught)));
+        .catch((caught: unknown) => setError(formatApiError(caught)));
     }} />
     {error !== null && <div className="alert error">{error}</div>}
     <AsyncBoundary state={loader.state} loading={t("status.loading")} retry={() => { void load(); }} error={(loadError, retry) => <div className="alert error">{loadError}<button onClick={retry}>{t("status.retry")}</button></div>}>

@@ -395,7 +395,14 @@ export async function validateRepository(repositoryRoot: string): Promise<Valida
     if (entry.isSymbolicLink() && !discoveryIssueKeys.has(`FS_SYMLINK:${entry.name}`)) {
       add({ severity: "error", code: "FS_SYMLINK", path: entry.name, message: "Repository top-level paths must not be symlinks" });
     } else if (!allowedTop.has(entry.name)) {
-      add({ severity: "error", code: "REPOSITORY_TOP_LEVEL", path: entry.name, message: "Unknown top-level entry" });
+      const kind = entry.isDirectory() ? "directory" : entry.isFile() ? "file" : "entry";
+      const allowList = entry.isDirectory() ? "allowed_top_level_directories" : "allowed_top_level_files";
+      add({
+        severity: "error",
+        code: "REPOSITORY_TOP_LEVEL",
+        path: entry.name,
+        message: `Unknown top-level ${kind} "${entry.name}"; add it to ${allowList} in .gitpm/repository.yaml if it belongs in the repository`,
+      });
     }
   }
 
