@@ -49,7 +49,9 @@ describe("person profile", () => {
     const projects = screen.getByRole("heading", { name: "Responsible for" }).closest("section")!;
     fireEvent.click(within(projects).getByRole("button", { name: /Alpha/u }));
     expect(onNavigate).toHaveBeenCalledWith("projects", { projectId });
-    expect(screen.getByRole("heading", { name: "Participates in" })).toBeTruthy();
+    const participating = screen.getByRole("heading", { name: "Participates in" }).closest("section")!;
+    expect(within(participating).getByRole("button", { name: /Alpha/u })).toBeTruthy();
+    expect(within(participating).getByRole("button", { name: /Beta/u })).toBeTruthy();
   });
 
   it("edits a person only from the profile and keeps the latest draft fingerprint", async () => {

@@ -111,7 +111,7 @@ function PeopleProfile({ archivePerson, data, deletePerson, editorOpen, locale, 
   for (const task of assignedTasks) projectTaskCounts.set(text(task.document, "project"), (projectTaskCounts.get(text(task.document, "project")) ?? 0) + 1);
   const activeProjects = data.projects.filter((item) => item.document.lifecycle === "active");
   const ownedProjects = activeProjects.filter((item) => text(item.document, "owner") === personId).sort((left, right) => text(left.document, "name").localeCompare(text(right.document, "name"), locale));
-  const contributingProjects = activeProjects.filter((item) => text(item.document, "owner") !== personId && projectTaskCounts.has(item.document.id)).sort((left, right) => text(left.document, "name").localeCompare(text(right.document, "name"), locale));
+  const contributingProjects = activeProjects.filter((item) => projectTaskCounts.has(item.document.id)).sort((left, right) => text(left.document, "name").localeCompare(text(right.document, "name"), locale));
   const teams = data.teams.filter((item) => item.document.lifecycle === "active" && strings(item.document, "members").includes(personId));
   const calendar = data.calendars.find((item) => item.document.id === text(person.document, "calendar"));
   const projectNames = new Map(data.projects.map((item) => [item.document.id, text(item.document, "name")]));
