@@ -99,4 +99,26 @@ describe("administration UI", () => {
     fireEvent.click(deleteButton);
     await waitFor(() => expect(screen.queryByText("Default")).toBeNull());
   });
+
+  it("shows each person's projects as clickable links in the people directory", async () => {
+    const personId = "U-26-ADA";
+    const ownedProjectId = "P-26-ALPHA";
+    const taskProjectId = "P-26-BETA";
+    const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
+    await admin.createEntity("DRF-ADMIN", "calendars", "", { schema: "gitpm/calendar@1", id: "CAL-26-DEFAULT", name: "Default", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
+    await admin.createEntity("DRF-ADMIN", "people", "", { schema: "gitpm/person@1", id: personId, name: "Ada", weekly_capacity_hours: 32, calendar: "CAL-26-DEFAULT", lifecycle: "active" });
+    await admin.createEntity("DRF-ADMIN", "projects", "", { schema: "gitpm/project@1", id: ownedProjectId, name: "Alpha", owner: personId, status: "in-progress", lifecycle: "active" });
+    await admin.createEntity("DRF-ADMIN", "projects", "", { schema: "gitpm/project@1", id: taskProjectId, name: "Beta", owner: "U-26-OTHER", status: "planned", lifecycle: "active" });
+    await admin.createEntity("DRF-ADMIN", "tasks", "", { schema: "gitpm/task@1", id: "T-26-REVIEW", project: taskProjectId, title: "Review", status: "planned", assignees: [personId], lifecycle: "active" });
+    const onOpenProject = vi.fn();
+    render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="people" onOpenProject={onOpenProject} onChanged={vi.fn(async () => undefined)} />);
+
+    await screen.findByText("Ada");
+    const peopleTable = document.querySelector<HTMLElement>(".people-directory-table")!;
+    expect(within(peopleTable).getByRole("columnheader", { name: "Projects" })).toBeTruthy();
+    expect(within(peopleTable).getByRole("link", { name: "Alpha" })).toBeTruthy();
+    expect(within(peopleTable).getByRole("link", { name: "Beta" })).toBeTruthy();
+    fireEvent.click(within(peopleTable).getByRole("link", { name: "Alpha" }));
+    expect(onOpenProject).toHaveBeenCalledWith(ownedProjectId);
+  });
 });
