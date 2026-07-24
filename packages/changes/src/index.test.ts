@@ -136,8 +136,24 @@ describe("changes and restore service", () => {
     expect(semantic.counts).toEqual({ created: 1, updated: 1, archived: 1, deleted: 1 });
     expect(semantic.updated[0]).toMatchObject({ id: "P-26-MGP84K", fields: expect.arrayContaining([expect.objectContaining({ field: "name", before: "GitPM launch", after: "GitPM alpha" })]) });
     expect(semantic.archived[0]).toMatchObject({ fields: expect.arrayContaining([expect.objectContaining({ field: "lifecycle", before: "active", after: "archived" })]) });
+    expect(semantic.file_entities).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: projectFile, schema: "gitpm/project@1", id: "P-26-MGP84K", display_name: "GitPM alpha" }),
+      expect.objectContaining({ path: archivedTask, schema: "gitpm/task@1", display_name: expect.any(String) }),
+      expect.objectContaining({ path: deletedTask, schema: "gitpm/task@1", display_name: expect.any(String) }),
+    ]));
     expect(semantic.affected_projects).toEqual(["P-26-MGP84K"]);
     expect((await service.list("DRF-CHANGES")).files.find((file) => file.kind === "Added")?.diff).toContain("--- /dev/null");
+  });
+
+  it("classifies GitPM configuration files without entity IDs", async () => {
+    const { draft, service } = await runtime();
+    const repositoryPath = ".gitpm/repository.yaml";
+    const absolute = path.join(draft.worktree_path, ...repositoryPath.split("/"));
+    await writeFile(absolute, (await readFile(absolute, "utf8")).replace("ui_poll_interval_seconds: 5", "ui_poll_interval_seconds: 6"), "utf8");
+
+    const semantic = await service.semantic("DRF-CHANGES");
+    expect(semantic.file_entities).toContainEqual({ path: repositoryPath, schema: "gitpm/repository@1" });
+    expect(semantic.unclassified_files).not.toContain(repositoryPath);
   });
 
   it("describes a task relocation as one semantic update", async () => {
@@ -153,6 +169,10 @@ describe("changes and restore service", () => {
     const semantic = await service.semantic("DRF-CHANGES");
     expect(semantic.counts).toEqual({ created: 0, updated: 1, archived: 0, deleted: 0 });
     expect(semantic.updated[0]).toMatchObject({ id: "T-26-G2TG9R", path: target, fields: [expect.objectContaining({ field: "project", before: "P-26-8S9HQQ", after: "P-26-MGP84K" })] });
+    expect(semantic.file_entities).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: source, id: "T-26-G2TG9R", display_name: expect.any(String) }),
+      expect.objectContaining({ path: target, id: "T-26-G2TG9R", display_name: expect.any(String) }),
+    ]));
     expect(semantic.affected_projects).toEqual(["P-26-8S9HQQ", "P-26-MGP84K"]);
   });
 });

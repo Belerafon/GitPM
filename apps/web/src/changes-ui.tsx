@@ -1,13 +1,27 @@
 import { useEffect, useMemo, useState } from "react";
 import type { GitPmApi } from "./api.js";
-import { message, type Locale } from "./i18n.js";
-import type { ChangesList, CommitResult, DraftStatus, FileChange, GitPmRole, MergeRequestStatus, SemanticChange, SemanticDiff } from "./types.js";
+import { message, type Locale, type MessageKey } from "./i18n.js";
+import type { ChangesList, CommitResult, DraftStatus, FileChange, GitPmRole, MergeRequestStatus, SemanticChange, SemanticDiff, SemanticFileEntity } from "./types.js";
 import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
 
 const emptyChanges: ChangesList = { files: [], changed_files_count: 0, affected_projects: [] };
 const emptySemantic: SemanticDiff = {
   created: [], updated: [], archived: [], deleted: [],
-  counts: { created: 0, updated: 0, archived: 0, deleted: 0 }, affected_projects: [], unclassified_files: [],
+  counts: { created: 0, updated: 0, archived: 0, deleted: 0 }, affected_projects: [], file_entities: [], unclassified_files: [],
+};
+
+const entityTypeKeys: Readonly<Record<string, MessageKey>> = {
+  "gitpm/project@1": "changes.entityProject",
+  "gitpm/task@1": "changes.entityTask",
+  "gitpm/milestone@1": "changes.entityMilestone",
+  "gitpm/person@1": "changes.entityPerson",
+  "gitpm/team@1": "changes.entityTeam",
+  "gitpm/calendar@1": "changes.entityCalendar",
+  "gitpm/saved-view@1": "changes.entityView",
+  "gitpm/comment@1": "changes.entityComment",
+  "gitpm/repository@1": "changes.entityRepository",
+  "gitpm/statuses@1": "changes.entityStatuses",
+  "gitpm/issue-types@1": "changes.entityIssueTypes",
 };
 
 export function safeExternalUrl(value: string): string | undefined {
@@ -23,6 +37,28 @@ function valueText(value: unknown, empty: string): string {
   if (value === undefined) return empty;
   if (typeof value === "string") return value;
   return JSON.stringify(value);
+}
+
+function entityType(schema: string, t: (key: MessageKey) => string): string {
+  const key = entityTypeKeys[schema];
+  return key === undefined ? schema.replace(/^gitpm\//u, "").replace(/@.*$/u, "") : t(key);
+}
+
+function ChangeFileButton({ file, entity, selected, select, t }: {
+  readonly file: FileChange;
+  readonly entity?: SemanticFileEntity;
+  readonly selected: boolean;
+  readonly select: () => void;
+  readonly t: (key: MessageKey) => string;
+}) {
+  const name = entity?.display_name ?? entity?.id;
+  return <button className={selected ? "change-file selected" : "change-file"} onClick={select}>
+    <span className={`change-dot kind-${file.kind.toLowerCase()}`} />
+    <span className="change-file-body">
+      {entity !== undefined && <span className="change-file-entity"><span>{entityType(entity.schema, t)}</span>{name !== undefined && <strong>{name}</strong>}</span>}
+      <span className="change-file-meta"><strong>{t(`changes.kind${file.kind}`)}</strong><code>{file.path}</code></span>
+    </span>
+  </button>;
 }
 
 function SemanticGroup({ title, items, empty }: { readonly title: string; readonly items: readonly SemanticChange[]; readonly empty: string }) {
@@ -89,6 +125,7 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
   const loadRequest = useAsyncLoad();
   const canMutate = role !== "Reporter" && draft.state === "open" && draft.writer_mode === "ui";
   const selected = useMemo(() => changes.files.find((file) => file.path === selectedPath) ?? changes.files[0], [changes, selectedPath]);
+  const entitiesByPath = useMemo(() => new Map((semantic.file_entities ?? []).map((entity) => [entity.path, entity])), [semantic.file_entities]);
 
   const load = async (keepData = true) => {
     await loadRequest.run(async () => {
@@ -148,7 +185,7 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
     </div>
     <div className={`changes-layout${changes.files.length === 0 ? " clean" : ""}`}>
       <aside className="card change-files"><div className="change-files-heading"><h3>{t("changes.fileChanges")}</h3>{changes.files.length > 0 && canMutate && <button className="danger subtle" disabled={busy} onClick={() => { if (confirmAction(t("changes.discardConfirm"))) void run(() => api.discardAll(draft.draft_id, draft.fingerprint)); }}>{t("changes.discardAll")}</button>}</div>
-        {changes.files.length === 0 ? <p>{t("changes.clean")}</p> : changes.files.map((file) => <button className={selected?.path === file.path ? "change-file selected" : "change-file"} key={file.path} onClick={() => setSelectedPath(file.path)}><span className={`change-dot kind-${file.kind.toLowerCase()}`} /><span><strong>{t(`changes.kind${file.kind}`)}</strong><code>{file.path}</code></span></button>)}
+        {changes.files.length === 0 ? <p>{t("changes.clean")}</p> : changes.files.map((file) => <ChangeFileButton entity={entitiesByPath.get(file.path)} file={file} key={file.path} select={() => setSelectedPath(file.path)} selected={selected?.path === file.path} t={t} />)}
       </aside>
       <div className="card change-detail">{selected === undefined ? <div className="empty-change"><strong>{t("changes.clean")}</strong><span>{t("changes.cleanHint")}</span></div> : <DiffViewer file={selected} canRestore={canMutate} busy={busy} restoreFile={() => void run(() => api.restoreFile(draft.draft_id, draft.fingerprint, selected.path))} restoreHunk={(index) => void run(() => api.restoreHunk(draft.draft_id, draft.fingerprint, selected.path, selected.diff_token, index))} labels={{ restoreFile: t("changes.restoreFile"), restoreHunk: t("changes.restoreHunk"), kind: t(`changes.kind${selected.kind}`), tooLarge: t("changes.diffTooLarge") }} />}</div>
     </div>

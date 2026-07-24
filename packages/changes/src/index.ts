@@ -41,6 +41,13 @@ export interface SemanticChange {
   readonly fields: readonly SemanticFieldChange[];
 }
 
+export interface SemanticFileEntity {
+  readonly path: string;
+  readonly schema: string;
+  readonly id?: string;
+  readonly display_name?: string;
+}
+
 export interface SemanticDiff {
   readonly created: readonly SemanticChange[];
   readonly updated: readonly SemanticChange[];
@@ -48,6 +55,7 @@ export interface SemanticDiff {
   readonly deleted: readonly SemanticChange[];
   readonly counts: Readonly<Record<"created" | "updated" | "archived" | "deleted", number>>;
   readonly affected_projects: readonly string[];
+  readonly file_entities?: readonly SemanticFileEntity[];
   readonly unclassified_files: readonly string[];
 }
 
@@ -105,6 +113,13 @@ function documentIdentity(document: GitPmDocument): { id: string; schema: string
     ? document.project
     : document.schema === "gitpm/project@1" ? id : undefined;
   return { id, schema: document.schema, ...(project === undefined ? {} : { project }) };
+}
+
+function documentDisplayName(document: GitPmDocument): string | undefined {
+  const value = typeof document.title === "string" ? document.title : typeof document.name === "string" ? document.name : undefined;
+  if (value === undefined) return undefined;
+  const displayName = value.replace(/[\u0000-\u001f\u007f]+/gu, " ").replace(/\s+/gu, " ").trim();
+  return displayName === "" ? undefined : displayName;
 }
 
 function fieldChanges(before: GitPmDocument | undefined, after: GitPmDocument | undefined): SemanticFieldChange[] {
@@ -244,6 +259,7 @@ export class ChangesService {
       created: [], updated: [], archived: [], deleted: [],
     };
     const affectedProjects = new Set<string>();
+    const fileEntities: SemanticFileEntity[] = [];
     const unclassifiedFiles: string[] = [];
     const headPaths = changes.files.filter((change) => change.kind !== "Added").map((change) => change.path);
     const headFiles = await this.git.showHeadFiles(metadata.worktree_path, headPaths);
@@ -253,18 +269,30 @@ export class ChangesService {
         if (change.kind !== "Added" && beforeText === undefined) throw new ChangesError("HEAD_FILE_MISSING", "HEAD file is unavailable");
         const before = beforeText === undefined ? undefined : parseYamlDocument(beforeText, change.path);
         const after = change.kind === "Deleted" ? undefined : parseYamlDocument(await readFile(await resolveDomainPath(metadata.worktree_path, change.path), "utf8"), change.path);
-        const identity = documentIdentity(after ?? before!);
-        if (!identity) return { path: change.path };
+        const document = after ?? before!;
+        const displayName = documentDisplayName(document);
+        const fileEntity: SemanticFileEntity = {
+          path: change.path,
+          schema: document.schema,
+          ...(typeof document.id === "string" ? { id: document.id } : {}),
+          ...(displayName === undefined ? {} : { display_name: displayName }),
+        };
+        const identity = documentIdentity(document);
+        if (!identity) return { path: change.path, fileEntity };
         const item: SemanticChange = { path: change.path, ...identity, fields: fieldChanges(before, after) };
         const group: keyof typeof result = change.kind === "Added" ? "created" : change.kind === "Deleted" ? "deleted" : before?.lifecycle !== "archived" && after?.lifecycle === "archived" ? "archived" : "updated";
-        return { path: change.path, project: identity.project, item, group };
+        return { path: change.path, project: identity.project, fileEntity, item, group };
       } catch {
         return { path: change.path };
       }
     });
     for (const classifiedChange of classified) {
-      if (!classifiedChange.item || !classifiedChange.group) unclassifiedFiles.push(classifiedChange.path);
-      else {
+      if (classifiedChange.fileEntity === undefined) {
+        unclassifiedFiles.push(classifiedChange.path);
+      } else {
+        fileEntities.push(classifiedChange.fileEntity);
+      }
+      if (classifiedChange.item && classifiedChange.group) {
         if (classifiedChange.project !== undefined) affectedProjects.add(classifiedChange.project);
         result[classifiedChange.group].push(classifiedChange.item);
       }
@@ -287,6 +315,7 @@ export class ChangesService {
         deleted: result.deleted.length,
       },
       affected_projects: [...affectedProjects].sort(),
+      file_entities: fileEntities.sort((left, right) => left.path.localeCompare(right.path)),
       unclassified_files: unclassifiedFiles.sort(),
     };
   }

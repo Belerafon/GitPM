@@ -33,6 +33,7 @@ export type {
   RevertDraftResult,
   SemanticChange,
   SemanticDiff,
+  SemanticFileEntity,
   SemanticFieldChange,
   ValidationSummary,
   WorktreeDirectory,

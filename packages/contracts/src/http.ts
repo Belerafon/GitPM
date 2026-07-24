@@ -112,6 +112,13 @@ export interface SemanticChange {
   readonly fields: readonly SemanticFieldChange[];
 }
 
+export interface SemanticFileEntity {
+  readonly path: string;
+  readonly schema: string;
+  readonly id?: string;
+  readonly display_name?: string;
+}
+
 export interface SemanticDiff {
   readonly created: readonly SemanticChange[];
   readonly updated: readonly SemanticChange[];
@@ -119,6 +126,7 @@ export interface SemanticDiff {
   readonly deleted: readonly SemanticChange[];
   readonly counts: Readonly<Record<"created" | "updated" | "archived" | "deleted", number>>;
   readonly affected_projects: readonly string[];
+  readonly file_entities?: readonly SemanticFileEntity[];
   readonly unclassified_files: readonly string[];
 }
 
@@ -396,6 +404,12 @@ const semanticChangeSchema = objectSchema({
   project: stringSchema,
   fields: arraySchema(semanticFieldChangeSchema),
 }, ["path", "id", "schema", "fields"]);
+const semanticFileEntitySchema = objectSchema({
+  path: stringSchema,
+  schema: stringSchema,
+  id: stringSchema,
+  display_name: stringSchema,
+}, ["path", "schema"]);
 const semanticDiffSchema = objectSchema({
   created: arraySchema(semanticChangeSchema),
   updated: arraySchema(semanticChangeSchema),
@@ -408,8 +422,9 @@ const semanticDiffSchema = objectSchema({
     deleted: integerSchema,
   }),
   affected_projects: stringArraySchema,
+  file_entities: arraySchema(semanticFileEntitySchema),
   unclassified_files: stringArraySchema,
-});
+}, ["created", "updated", "archived", "deleted", "counts", "affected_projects", "unclassified_files"]);
 
 const historySemanticSummarySchema = objectSchema({
   created: integerSchema,

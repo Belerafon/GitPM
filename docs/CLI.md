@@ -131,6 +131,12 @@ worktree mode. Переданный отдельно `--root` достаточе
 diff; в таком случае CLI возвращает `CLI_DIRECT_CONFIGURATION_REQUIRED`,
 а не пустой успешный diff.
 
+В JSON-ответе semantic diff поле `file_entities` классифицирует каждый
+изменённый GitPM-файл по `path` и `schema`. Для сущностей оно также содержит
+`id` и, когда документ имеет `name` или `title`, нормализованное
+`display_name`. Это позволяет интерфейсам показывать предметный тип и
+читаемое имя независимо от того, какое именно поле сущности изменилось.
+
 `gitpm init` генерирует ID календаря через общий генератор entity ID с текущим UTC-годом,
 использует его и в `calendars/<id>.yaml`, и в `.gitpm/repository.yaml/default_calendar`.
 
