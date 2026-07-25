@@ -4,7 +4,7 @@ import path from "node:path";
 import type { RepositoryMode } from "@gitpm/shared";
 import type { GitClient } from "@gitpm/git-client";
 import type { RepositoryConnectionStatus, RepositoryConnectionUpdate } from "@gitpm/contracts";
-import { assertSafeRepositoryUrl } from "@gitpm/security";
+import { assertSafeRepositoryUrl, classifyRepositoryUrl } from "@gitpm/security";
 import {
   AuthError,
   AuthService,
@@ -123,11 +123,13 @@ export class RepositoryConnectionManager {
   }
 
   status(): RepositoryConnectionStatus {
+    const transport = this.repositoryUrl === undefined ? undefined : classifyRepositoryUrl(this.repositoryUrl).transport;
     return {
       repository_path: this.options.repositoryPath,
       repository_mode: this.options.repositoryMode,
       default_branch: this.options.defaultBranch,
       ...(this.repositoryUrl === undefined ? {} : { repository_url: this.repositoryUrl }),
+      ...(transport === undefined ? {} : { transport }),
       remote_source: this.remoteSource,
       remote_editable: this.options.remoteEditable,
       gitlab_editable: this.options.gitlabEditable,
@@ -205,9 +207,14 @@ export class RepositoryConnectionManager {
     return await this.requireAuth().authorize(sessionId, operation);
   }
 
-  async test(sessionId: string): Promise<{ ok: true; branch: string; commit: string }> {
-    const authorized = await this.authorize(sessionId, "push");
-    const remote = await this.options.git.testPublishingRemote(authorized.accessToken);
+  async test(sessionId: string | undefined): Promise<{ ok: true; branch: string; commit: string }> {
+    let accessToken: string | undefined;
+    if (sessionId !== undefined && this.auth !== undefined) {
+      accessToken = (await this.authorize(sessionId, "push")).accessToken;
+    } else {
+      accessToken = process.env.GITPM_REMOTE_TOKEN?.trim() || undefined;
+    }
+    const remote = await this.options.git.testPublishingRemote(accessToken);
     return { ok: true, ...remote };
   }
 

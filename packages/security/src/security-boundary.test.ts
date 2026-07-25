@@ -9,7 +9,9 @@ import {
   assertSafeRepositoryUrl,
   atomicWriteDomainFile,
   buildFetchInvocation,
+  classifyRepositoryUrl,
   createGitProcessEnvironment,
+  createSshGitProcessEnvironment,
   resolveDomainPath,
 } from "./index.js";
 
@@ -54,6 +56,40 @@ describe("Git process boundary", () => {
     }
   });
 
+  it("classifies HTTPS and SSH remote URLs and rejects credentials and unsafe schemes", () => {
+    expect(classifyRepositoryUrl("https://gitlab.example.test/group/gitpm.git")).toEqual({
+      transport: "https",
+      url: "https://gitlab.example.test/group/gitpm.git",
+    });
+    expect(classifyRepositoryUrl("ssh://git@gitlab.example.test/group/gitpm.git")).toEqual({
+      transport: "ssh",
+      url: "ssh://git@gitlab.example.test/group/gitpm.git",
+      sshUser: "git",
+    });
+    expect(classifyRepositoryUrl("git@gitlab.example.test:group/gitpm.git")).toEqual({
+      transport: "ssh",
+      url: "ssh://git@gitlab.example.test/group/gitpm.git",
+      sshUser: "git",
+    });
+    expect(classifyRepositoryUrl("ssh://git@gitlab.example.test:2222/group/gitpm.git").url).toBe(
+      "ssh://git@gitlab.example.test:2222/group/gitpm.git",
+    );
+    for (const value of [
+      "http://gitlab.example.test/group/gitpm.git",
+      "file:///tmp/repo.git",
+      "ext::command",
+      "git+http://gitlab.example.test/group/gitpm.git",
+      "ssh://git:secret@gitlab.example.test/group/gitpm.git",
+      "https://oauth2:secret@gitlab.example.test/group/gitpm.git",
+      "ssh://git@gitlab.example.test/",
+      "git@gitlab.example.test:",
+      "git@gitlab.example.test:/",
+      "plain-text-not-a-url",
+    ]) {
+      expect(() => classifyRepositoryUrl(value)).toThrowError(expect.objectContaining({ code: "GIT_URL_INVALID" }));
+    }
+  });
+
   it("keeps credentials out of argv, URL, inherited Git config and inspection output", async () => {
     const root = await temporaryRoot();
     const token = "vfy-003-secret-token";
@@ -84,6 +120,37 @@ describe("Git process boundary", () => {
     const digest = (value: string) => createHash("sha256").update(value).digest("hex");
     expect(digest(result.stdout)).toBe(digest(token));
     expect(result.stderr).toBe("");
+  });
+
+  it("builds an SSH environment from allowlisted options and keeps the agent socket passthrough", async () => {
+    const root = await temporaryRoot();
+    const environment = createSshGitProcessEnvironment({
+      hooksPath: path.join(root, "hooks"),
+      isolatedHome: path.join(root, "home"),
+      sshKeyPath: path.join(root, "id_ed25519"),
+      knownHostsPath: path.join(root, "known_hosts"),
+      baseEnvironment: { ...process.env, SSH_AUTH_SOCK: "/tmp/agent.sock", GIT_CONFIG_GLOBAL: "malicious.cfg" },
+    });
+    expect(environment.GIT_CONFIG_GLOBAL).toBeUndefined();
+    expect(environment.SSH_AUTH_SOCK).toBe("/tmp/agent.sock");
+    expect(environment.GIT_SSH_COMMAND).toBe(
+      `ssh -i ${path.join(root, "id_ed25519")} -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=${path.join(root, "known_hosts")}`,
+    );
+    expect(environment.GIT_ASKPASS).toBeUndefined();
+    expect(environment.credential).toBeUndefined();
+    expect(environment.GITPM_ASKPASS_TOKEN).toBeUndefined();
+  });
+
+  it("falls back to ssh-agent when no key path is supplied", async () => {
+    const root = await temporaryRoot();
+    const environment = createSshGitProcessEnvironment({
+      hooksPath: path.join(root, "hooks"),
+      isolatedHome: path.join(root, "home"),
+      baseEnvironment: { SSH_AUTH_SOCK: "/tmp/agent.sock" },
+    });
+    expect(environment.GIT_SSH_COMMAND).toBe(
+      `ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=${path.join(path.join(root, "home"), ".ssh", "known_hosts")}`,
+    );
   });
 });
 

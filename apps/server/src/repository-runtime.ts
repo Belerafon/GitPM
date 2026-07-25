@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { ChangesService } from "@gitpm/changes";
 import { DirectRepositoryBackend, directPushStrategy, DraftManager } from "@gitpm/drafts";
 import { CommentStore, EntityStore } from "@gitpm/domain";
-import { GitClient } from "@gitpm/git-client";
+import { GitClient, type GitClientSshOptions } from "@gitpm/git-client";
 import { assertSafeRepositoryUrl } from "@gitpm/security";
 import { HistoryService } from "@gitpm/history";
 import { PublicationService } from "@gitpm/publishing";
@@ -53,6 +53,25 @@ async function readConfigFile(): Promise<Record<string, unknown>> {
 
 function repositoryConfigPath(): string {
   return path.resolve(process.env.GITPM_CONFIG_PATH?.trim() || path.join(WORKSPACE_ROOT, ".gitpm", "config.json"));
+}
+
+/**
+ * Resolve SSH transport provisioning from the administrator environment. The key
+ * material stays outside GitPM: either a path to a mounted private key (e.g. a
+ * Docker secret) or an ssh-agent socket passthrough. GitPM never reads, copies,
+ * or logs the key.
+ */
+function readSshOptions(): GitClientSshOptions {
+  const keyPath = process.env.GITPM_SSH_KEY_PATH?.trim() || undefined;
+  const knownHostsPath = process.env.GITPM_SSH_KNOWN_HOSTS_FILE?.trim() || undefined;
+  const strict = process.env.GITPM_SSH_STRICT_HOST_KEY_CHECKING?.trim().toLowerCase();
+  const sshCommand = process.env.GITPM_SSH_COMMAND?.trim() || undefined;
+  return {
+    ...(keyPath === undefined ? {} : { keyPath }),
+    ...(knownHostsPath === undefined ? {} : { knownHostsPath }),
+    ...(strict === "yes" || strict === "accept-new" ? { strictHostKeyChecking: strict } : {}),
+    ...(sshCommand === undefined ? {} : { sshCommand }),
+  };
 }
 
 export interface RepositoryRuntimeConfiguration {
@@ -164,14 +183,15 @@ async function buildDirectRuntime(configuration: RepositoryRuntimeConfiguration,
 export async function buildRepositoryApp() {
   const configuration = await loadRepositoryRuntimeConfiguration();
   await mkdir(configuration.dataDirectory, { recursive: true });
-  const worktreeUsesHttpsOrigin = configuration.repositoryMode === "worktree" && configuration.pushRemoteUrl !== undefined;
+  const worktreeUsesRemoteOrigin = configuration.repositoryMode === "worktree" && configuration.pushRemoteUrl !== undefined;
   const gitClient = new GitClient({
     dataDirectory: configuration.dataDirectory,
-    remoteUrl: worktreeUsesHttpsOrigin ? configuration.pushRemoteUrl! : configuration.repository,
+    remoteUrl: worktreeUsesRemoteOrigin ? configuration.pushRemoteUrl! : configuration.repository,
     defaultBranch: configuration.defaultBranch,
-    allowLocalRepository: !worktreeUsesHttpsOrigin,
+    allowLocalRepository: !worktreeUsesRemoteOrigin,
     ...(configuration.pushRemoteUrl === undefined ? {} : { pushRemoteUrl: configuration.pushRemoteUrl }),
     askPassPath: path.join(WORKSPACE_ROOT, "scripts", "git-askpass.mjs"),
+    ssh: readSshOptions(),
   });
 
   if (configuration.repositoryMode === "direct" && ["config", "environment"].includes(configuration.remoteSource) && configuration.pushRemoteUrl !== undefined) {

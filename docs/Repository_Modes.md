@@ -126,13 +126,21 @@ GITPM_REPOSITORY_MODE=worktree
 | --- | --- | --- |
 | `repositoryMode` | `GITPM_REPOSITORY_MODE` | `direct` (default) or `worktree`. Env wins. |
 | `repository` | `GITPM_REPOSITORY_PATH` | Existing checkout used directly by `direct` mode. |
-| `repositoryUrl` | `GITPM_PUSH_REMOTE_URL` | Credential-free HTTPS URL applied as the checkout's `origin`. |
+| `repositoryUrl` | `GITPM_PUSH_REMOTE_URL` | Credential-free HTTPS or SSH URL applied as the checkout's `origin` (`https://...`, `ssh://...`, or `git@host:path`). No embedded username/password/token. |
 | `defaultBranch` | `GITPM_DEFAULT_BRANCH` | Default branch; `main` when unset. |
 
 Maintainers can edit `repositoryUrl` and the non-secret GitLab connection fields in the web
 settings page when those values are not supplied by environment variables. Replacing or removing
 an existing `origin` requires exact confirmation. GitPM verifies that the origin URL and GitLab
 project identify the same host and project path.
+
+The connection page groups fields into the remote `origin` and an optional GitLab integration
+block, and shows the active connection method: GitLab (OAuth), SSH (administrator key), HTTPS
+(administrator token), or Local (no remote). Any git host is accepted as `origin`; when GitLab is
+not configured, publication runs over SSH (key provisioned via `GITPM_SSH_KEY_PATH` or an
+ssh-agent) or HTTPS (token via `GITPM_REMOTE_TOKEN`). These credentials live only in process
+memory and never enter the URL, argv, Git config, or logs. Merge Requests are GitLab-only; over
+SSH or an HTTPS token GitPM pushes the branch to `origin` but cannot open an MR.
 
 ## Docker
 

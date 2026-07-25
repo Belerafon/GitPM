@@ -14,7 +14,7 @@ export interface DraftProvisioning {
 export type DraftPushStrategy = (
   worktreePath: string,
   branch: string,
-  accessToken: string,
+  accessToken: string | undefined,
 ) => Promise<{ branch: string; commit: string }>;
 
 export interface DraftBackend {

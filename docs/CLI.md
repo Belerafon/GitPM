@@ -196,11 +196,32 @@ draft/publish-командам дополнительно нужен remote runt
 | `GITPM_GITLAB_CLIENT_ID` | — | OAuth Application ID, зарегистрированный в GitLab. |
 | `GITPM_GITLAB_REDIRECT_URI` | `http://127.0.0.1:3000/api/auth/callback` | Redirect URI OAuth. На сервере указать внешний URL (например `http://10.0.0.1:86/api/auth/callback`). |
 | `GITPM_COOKIE_SECURE` | `true` | Когда web UI опубликован по plain HTTP (без TLS-терминатора), поставьте `false` — иначе браузер не примет сессионную cookie. |
-| `GITPM_PUSH_REMOTE_URL` | auto из `origin` | Override push-remote URL. Принимает только credential-free HTTPS. |
+| `GITPM_PUSH_REMOTE_URL` | auto из `origin` | Override push-remote URL. Принимает credential-free HTTPS или SSH (`https://...`, `ssh://...`, `git@host:path`). Логин/пароль/токен в самом URL запрещены. |
 
 Если connection fields не заданы через environment, Maintainer может настроить
 credential-free `origin`, GitLab project и OAuth Application ID в web UI.
 Секреты через UI не принимаются; access token остаётся только в памяти процесса.
+
+### Репозиторий без GitLab (SSH или HTTPS-токен)
+
+GitPM публикует не только в GitLab: origin может указывать на любой git-хостинг.
+Способ авторизации определяется транспортом URL и переменными окружения ниже.
+Секреты (ключи и токены) хранятся только в памяти процесса и никогда не попадают
+в URL, argv, git config, временные файлы или логи.
+
+| Переменная | Назначение |
+|------------|------------|
+| `GITPM_SSH_KEY_PATH` | Абсолютный путь к приватному SSH-ключу вне worktree (например, примонтированный Docker secret). Используется как `ssh -i`. Без значения применяется проброс `SSH_AUTH_SOCK` (ssh-agent). |
+| `GITPM_SSH_KNOWN_HOSTS_FILE` | Путь к `known_hosts`. По умолчанию файл под контролируемым home GitPM. |
+| `GITPM_SSH_STRICT_HOST_KEY_CHECKING` | `yes` (только заранее известные хосты) или `accept-new` (по умолчанию: добавлять новые, отвергать изменённые). |
+| `GITPM_SSH_COMMAND` | Полная переопределённая команда запуска ssh (только для администратора; пользовательский ввод не попадает в argv). |
+| `GITPM_REMOTE_TOKEN` | Токен (PAT/deploy token) для HTTPS-репозиториев без GitLab. Передаётся в git через controlled `GIT_ASKPASS`, в логи/config не пишется. Для SSH игнорируется. |
+
+Для SSH: задайте `GITPM_PUSH_REMOTE_URL=git@host:group/project.git` и подведите
+ключ через `GITPM_SSH_KEY_PATH` или ssh-agent. Для HTTPS без GitLab: задайте
+`GITPM_PUSH_REMOTE_URL=https://host/group/project.git` и `GITPM_REMOTE_TOKEN`.
+Merge Requests через GitPM доступны только для GitLab; по SSH/HTTPS-токену
+ветка пушится в origin, но MR не создаётся.
 
 ## Сценарии
 

@@ -367,7 +367,7 @@ export class DraftManager {
    * Publish a draft through the configured push strategy. In worktree mode this pushes the
    * draft branch to origin; in direct mode it fast-forwards the active branch to origin.
    */
-  async push(draftId: string, accessToken: string): Promise<{ branch: string; commit: string }> {
+  async push(draftId: string, accessToken: string | undefined): Promise<{ branch: string; commit: string }> {
     const metadata = await this.getDraft(draftId);
     return await this.pushStrategy(metadata.worktree_path, metadata.branch, accessToken);
   }

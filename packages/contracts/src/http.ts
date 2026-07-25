@@ -146,6 +146,8 @@ export interface RepositoryConnectionStatus {
   readonly repository_mode: "direct" | "worktree";
   readonly default_branch: string;
   readonly repository_url?: string;
+  /** Transport of the configured origin. Absent when no remote URL is configured. */
+  readonly transport?: "https" | "ssh";
   readonly remote_source: "environment" | "config" | "origin" | "none";
   readonly remote_editable: boolean;
   readonly gitlab_editable: boolean;
@@ -463,6 +465,7 @@ const repositoryConnectionStatusSchema = objectSchema({
   repository_mode: { enum: ["direct", "worktree"] },
   default_branch: stringSchema,
   repository_url: stringSchema,
+  transport: { enum: ["https", "ssh"] },
   remote_source: { enum: ["environment", "config", "origin", "none"] },
   remote_editable: booleanSchema,
   gitlab_editable: booleanSchema,

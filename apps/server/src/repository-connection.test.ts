@@ -71,4 +71,28 @@ describe("repository connection", () => {
       .rejects.toMatchObject({ code: "REPOSITORY_CONNECTION_CONFIRMATION_REQUIRED" });
     expect(await git(test.repository, "remote", "get-url", "origin")).toBe("https://gitlab.example/group/one.git");
   });
+
+  it("persists an SSH origin without GitLab and reports the ssh transport", async () => {
+    const test = await fixture();
+    const updated = await test.manager.update({ repository_url: "git@gitlab.example:group/portfolio.git" });
+    expect(updated).toMatchObject({
+      repository_url: "ssh://git@gitlab.example/group/portfolio.git",
+      transport: "ssh",
+      gitlab: { configured: false },
+    });
+    expect(await git(test.repository, "remote", "get-url", "origin")).toBe("ssh://git@gitlab.example/group/portfolio.git");
+  });
+
+  it("persists a plain HTTPS origin without GitLab and reports the https transport", async () => {
+    const test = await fixture();
+    const updated = await test.manager.update({ repository_url: "https://github.example/group/portfolio.git" });
+    expect(updated).toMatchObject({ transport: "https", gitlab: { configured: false } });
+    expect(await git(test.repository, "remote", "get-url", "origin")).toBe("https://github.example/group/portfolio.git");
+  });
+
+  it("rejects an unsafe scheme for the repository origin", async () => {
+    const test = await fixture();
+    await expect(test.manager.update({ repository_url: "file:///tmp/repo.git" }))
+      .rejects.toMatchObject({ code: "GIT_URL_INVALID" });
+  });
 });
