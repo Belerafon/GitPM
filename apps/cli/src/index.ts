@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { DirectCliRuntime } from "./direct-runtime.js";
 import { mergeRequestProtocolFromEnvironment } from "./runtime.js";
+import { ExportService } from "@gitpm/export";
 
 const WORKSPACE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -63,13 +64,14 @@ async function environmentAgent() {
   await git.initialize();
   await drafts.recover();
   const mergeRequests = mergeRequestProtocolFromEnvironment(process.env);
-  return new AgentWorkflow(drafts, git, new ChangesService(drafts, git), {
+  const agent = new AgentWorkflow(drafts, git, new ChangesService(drafts, git), {
     accessToken: process.env.GITPM_ACCESS_TOKEN,
     authorName: process.env.GITPM_AGENT_AUTHOR_NAME ?? "GitPM Agent",
     authorEmail: process.env.GITPM_AGENT_AUTHOR_EMAIL ?? "agent@users.noreply.gitlab.example.test",
     defaultBranch,
     ...(mergeRequests === undefined ? {} : { mergeRequests }),
   });
+  return { agent, exporter: new ExportService(drafts, git) };
 }
 
 async function buildDependencies() {
@@ -81,7 +83,7 @@ async function buildDependencies() {
     const direct = new DirectCliRuntime({ ...env, askPassPath: askPass });
     return { direct };
   }
-  return { agent: await environmentAgent() };
+  return await environmentAgent() ?? {};
 }
 
 const result = await run(process.argv.slice(2), process.cwd(), await buildDependencies());

@@ -46,6 +46,30 @@ describe("HttpGitPmApi request bodies", () => {
     expect(headers.get("content-type")).toBe("application/json");
   });
 
+  it("downloads binary exports and preserves the server filename", async () => {
+    const fetchMock = vi.fn(async () => new Response(new Blob(["%PDF"]), {
+      status: 200,
+      headers: {
+        "content-disposition": 'attachment; filename="gitpm-20260725-deadbeef-portfolio.pdf"',
+        "content-type": "application/pdf",
+      },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await new HttpGitPmApi().exportData("DRF-1", {
+      format: "pdf",
+      locale: "ru",
+      sections: ["projects", "people", "gantt"],
+    });
+
+    expect(result.filename).toBe("gitpm-20260725-deadbeef-portfolio.pdf");
+    expect(result.blob.type).toBe("application/pdf");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/drafts/DRF-1/export?format=pdf&locale=ru&sections=projects%2Cpeople%2Cgantt",
+      { credentials: "include" },
+    );
+  });
+
   it("preserves structured error details and sends explicit unlink confirmation", async () => {
     const details = [{ path: "teams/G-26-CORE.yaml", label: "Core" }];
     const fetchMock = vi.fn()

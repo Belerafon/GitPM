@@ -276,6 +276,8 @@ All commands accept \`--json\`; use it for automation. Direct-mode commands do n
   identities, references, dates, and scope closure.
 - \`gitpm diff --semantic [--project <id>] [--allow-delete]\` reports created, updated, archived, and deleted
   entities.
+- \`gitpm export --format <pdf|html|csv|repository> [--locale <en|ru>] [--section <projects|people|project-details|gantt>] [--include-git] [--output <path>]\`
+  creates a read-only export whose default filename contains the HEAD commit date and short hash.
 - \`gitpm commit --all -m <message> [--project <id>] [--allow-delete]\` validates and commits every change onto the
   active branch.
 - \`gitpm push\` fast-forward publishes the active branch to \`origin\`.

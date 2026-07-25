@@ -11,6 +11,7 @@ import { CommentStore, EntityStore } from "@gitpm/domain";
 import { GitClient, type GitClientSshOptions } from "@gitpm/git-client";
 import { assertSafeRepositoryUrl } from "@gitpm/security";
 import { HistoryService } from "@gitpm/history";
+import { ExportService } from "@gitpm/export";
 import { PublicationService } from "@gitpm/publishing";
 import { resolveRepositoryMode, type RepositoryMode } from "@gitpm/shared";
 import { buildApp } from "./app.js";
@@ -209,6 +210,7 @@ export async function buildRepositoryApp() {
     commentStore: new CommentStore(draftManager),
     draftManager,
     entityStore: new EntityStore(draftManager),
+    exportService: new ExportService(draftManager, gitClient),
     historyService: new HistoryService(draftManager, gitClient),
   });
 

@@ -21,6 +21,7 @@ import { PeopleProfileWorkspace } from "./people-profile-ui.js";
 import { NotificationsMenu } from "./notifications-ui.js";
 import { WorktreeWorkspace } from "./worktree-ui.js";
 import { RepositoryConnectionSettings } from "./repository-connection-ui.js";
+import { ExportMenu } from "./export-ui.js";
 
 interface AppProps {
   readonly api: GitPmApi;
@@ -185,6 +186,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
       t={t}
       topActions={<>
             <NotificationsMenu api={api} draft={active} locale={locale} namespace={`${repository?.path ?? repository?.name ?? "repository"}:${drafts.session.user.id}`} onNavigate={openWorkspace} />
+            {active !== undefined && <ExportMenu api={api} draftId={active.draft_id} locale={locale} />}
             {active !== undefined && !directMode && <div className="workspace-switcher">
               <label htmlFor="current-workspace">{t("drafts.current")}</label>
               <div className="workspace-selection-row">

@@ -656,4 +656,36 @@ describe.concurrent("CLI direct mode", () => {
     const content = await readFile(configPath, "utf8");
     expect(content).toContain("title: Defect");
   });
+
+  it("exports through the shared service without overwriting an existing file", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "gitpm-cli-export-"));
+    removeAfterTest(root);
+    const received: unknown[] = [];
+    const exporter = {
+      create: async (draftId: string, request: unknown) => {
+        received.push({ draftId, request });
+        return {
+          content: Buffer.from("%PDF"),
+          content_type: "application/pdf",
+          filename: "gitpm-20260725-deadbeef-portfolio.pdf",
+        };
+      },
+    };
+
+    const first = await run([
+      "export", "--draft", "DRF-1", "--format", "pdf", "--locale", "ru",
+      "--section", "projects", "--section", "gantt", "--json",
+    ], root, { exporter });
+    const second = await run(["export", "--draft", "DRF-1", "--format", "pdf", "--json"], root, { exporter });
+
+    expect(first.exitCode).toBe(0);
+    expect(received[0]).toEqual({
+      draftId: "DRF-1",
+      request: { format: "pdf", locale: "ru", sections: ["projects", "gantt"] },
+    });
+    const payload = JSON.parse(first.output);
+    expect(await readFile(payload.path, "utf8")).toBe("%PDF");
+    expect(second.exitCode).toBe(1);
+    expect(JSON.parse(second.output)).toMatchObject({ code: "EXPORT_OUTPUT_EXISTS" });
+  });
 });

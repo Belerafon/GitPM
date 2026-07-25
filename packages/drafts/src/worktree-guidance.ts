@@ -312,6 +312,8 @@ non-repeatable options with \`CLI_USAGE\`; never retry a misspelled flag by drop
   schemas, identities, references, dates, and scope closure.
 - \`gitpm diff --semantic [--draft <id>] [--project <id>] [--allow-delete]\` reports created, updated, archived,
   and deleted entities.
+- \`gitpm export --draft <id> --format <pdf|html|csv|repository> [--locale <en|ru>] [--section <projects|people|project-details|gantt>] [--include-git] [--output <path>]\`
+  creates a read-only export whose default filename contains the HEAD commit date and short hash.
 - \`gitpm commit --all --draft <id> -m <message> [--project <id>] [--allow-delete]\` validates and commits the
   complete draft. Partial staging is unsupported.
 - \`gitpm push --draft <id>\` publishes a clean committed branch.

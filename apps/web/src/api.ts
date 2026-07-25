@@ -40,6 +40,19 @@ export class ApiError extends Error {
   }
 }
 
+export type ExportFormat = "pdf" | "html" | "csv" | "repository";
+export type ExportSection = "projects" | "people" | "project-details" | "gantt";
+export interface ExportOptions {
+  readonly format: ExportFormat;
+  readonly locale: string;
+  readonly sections?: readonly ExportSection[];
+  readonly includeGit?: boolean;
+}
+export interface ExportDownload {
+  readonly blob: Blob;
+  readonly filename: string;
+}
+
 function errorDetailLine(detail: unknown): string | undefined {
   if (detail === null || typeof detail !== "object") return undefined;
   const value = detail as Readonly<Record<string, unknown>>;
@@ -88,6 +101,7 @@ export interface GitPmApi {
   closeDraft(draftId: string): Promise<DraftStatus>;
   reopenDraft(draftId: string): Promise<DraftStatus>;
   cleanupDraft(draftId: string): Promise<void>;
+  exportData?(draftId: string, options: ExportOptions): Promise<ExportDownload>;
   listEntities(draftId: string, entityType: string, project?: string): Promise<readonly EntityResult[]>;
   projectWorkspace(draftId: string, projectId: string): Promise<ProjectWorkspaceResult>;
   createEntity(draftId: string, entityType: string, fingerprint: string, document: GitPmDocument): Promise<EntityResult>;
@@ -158,6 +172,19 @@ export class HttpGitPmApi implements GitPmApi {
     }
   }
 
+  private async requestDownload(path: string): Promise<ExportDownload> {
+    const response = await fetch(`${this.baseUrl}${path}`, { credentials: "include" });
+    if (!response.ok) {
+      let body: ErrorBody = {};
+      try { body = await response.json() as ErrorBody; } catch { /* stable fallback below */ }
+      throw new ApiError(body.error?.code ?? `HTTP_${response.status}`, body.error?.message ?? response.statusText, body.error?.details);
+    }
+    const disposition = response.headers.get("content-disposition") ?? "";
+    const filename = /filename="([^"]+)"/u.exec(disposition)?.[1];
+    if (filename === undefined || !/^[A-Za-z0-9._-]+$/u.test(filename)) throw new ApiError("EXPORT_FILENAME_INVALID", "Export response has no safe filename");
+    return { blob: await response.blob(), filename };
+  }
+
   async session(): Promise<PublicSession | null> {
     try { return await this.request("/api/auth/session", decodePublicSession); }
     catch (error) { if (error instanceof ApiError && error.code === "SESSION_INVALID") return null; throw error; }
@@ -208,6 +235,12 @@ export class HttpGitPmApi implements GitPmApi {
   }
   async cleanupDraft(draftId: string): Promise<void> {
     await this.requestEmpty(`/api/drafts/${encodeURIComponent(draftId)}`, { method: "DELETE", body: JSON.stringify({ confirmation: draftId }) });
+  }
+  async exportData(draftId: string, options: ExportOptions): Promise<ExportDownload> {
+    const query = new URLSearchParams({ format: options.format, locale: options.locale });
+    if (options.sections !== undefined) query.set("sections", options.sections.join(","));
+    if (options.includeGit !== undefined) query.set("include_git", String(options.includeGit));
+    return await this.requestDownload(`/api/drafts/${encodeURIComponent(draftId)}/export?${query.toString()}`);
   }
 
   async listEntities(draftId: string, entityType: string, project?: string): Promise<readonly EntityResult[]> {

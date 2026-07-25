@@ -12,6 +12,7 @@ import { atomicWriteDomainFile } from "@gitpm/security";
 import type { AgentScope, AgentScopeReport, AgentWorkflow } from "@gitpm/agent";
 import type { DirectCliRuntime } from "./direct-runtime.js";
 import { parseCsvEntities, parseEntityMapping, parseJsonLinesEntities, parseYamlEntities } from "./entity-input.js";
+import type { ExportFormat, ExportProvider, ExportRequest, ExportSection } from "@gitpm/export";
 
 export interface CliResult {
   readonly exitCode: number;
@@ -30,6 +31,7 @@ type CliAgent = Pick<AgentWorkflow, "assertScope" | "commitAll" | "createDraft" 
 export interface CliDependencies {
   readonly agent?: CliAgent;
   readonly direct?: DirectCliRuntime;
+  readonly exporter?: ExportProvider;
   readonly init?: {
     readonly now?: () => Date;
     readonly randomIndex?: () => number;
@@ -111,7 +113,7 @@ function render(json: boolean, payload: Record<string, unknown>, human: string):
 }
 
 const SCHEMA_DIRECTORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../schemas/v1");
-const ROOT_USAGE = "Usage: gitpm <init|status|draft|entity create|entity update|entity import|entity list|entity show|entity delete|entity archive|entity move|comment|config|schema|format|validate|diff --semantic|commit --all|push|mr create|doctor> [options]";
+const ROOT_USAGE = "Usage: gitpm <init|status|draft|entity create|entity update|entity import|entity list|entity show|entity delete|entity archive|entity move|comment|config|schema|format|validate|diff --semantic|export|commit --all|push|mr create|doctor> [options]";
 
 const commandHelp: Readonly<Record<string, string>> = {
   root: [
@@ -153,6 +155,15 @@ const commandHelp: Readonly<Record<string, string>> = {
   validate: "Usage: gitpm validate [--draft <id>] [--project <id>] [--changed] [--allow-delete] [--json]",
   format: "Usage: gitpm format [--draft <id>] [--project <id>] [--check] [--allow-delete] [--json]",
   diff: "Usage: gitpm diff --semantic [--draft <id>] [--project <id>] [--allow-delete] [--json]",
+  export: [
+    "Usage:",
+    "  gitpm export [--draft <id>] --format pdf|html|csv|repository [--locale en|ru] [--section projects|people|project-details|gantt]... [--include-git] [--output <path>] [--force] [--json]",
+    "",
+    "PDF defaults to Projects and People when --section is omitted.",
+    "HTML is a standalone read-only site. CSV creates a ZIP with one table per schema.",
+    "Repository ZIP excludes .git unless --include-git is set; portable Git exports remove the remote URL.",
+    "The default filename contains the HEAD commit date and short hash. Existing files are not replaced unless --force is set.",
+  ].join("\n"),
   commit: "Usage: gitpm commit --all [--draft <id>] -m <message> [--project <id>] [--allow-delete] [--json]",
   status: "Usage: gitpm status [--draft <id>] [--json]",
   draft: "Usage: gitpm draft create|open|status|set-writer --draft <id> [--owner <id>] [ui|external] [--json]",
@@ -209,6 +220,7 @@ function commandArgumentSpec(command: string | undefined, args: readonly string[
   if (command === "format") return { values: ["--root", "--draft", "--project"], booleans: ["--check", "--allow-delete", "--json"], minPositionals: 0, maxPositionals: 0 };
   if (command === "validate") return { values: ["--root", "--draft", "--project"], booleans: ["--changed", "--allow-delete", "--json"], minPositionals: 0, maxPositionals: 0 };
   if (command === "diff") return { values: ["--root", "--draft", "--project"], booleans: ["--semantic", "--allow-delete", "--json"], minPositionals: 0, maxPositionals: 0 };
+  if (command === "export") return { values: ["--draft", "--format", "--locale", "--output"], repeatable: ["--section"], booleans: ["--include-git", "--force", "--json"], minPositionals: 0, maxPositionals: 0 };
   if (command === "commit") return { values: ["--draft", "-m", "--message", "--project"], booleans: ["--all", "--allow-delete", "--json"], minPositionals: 0, maxPositionals: 0 };
   if (command === "push") return { values: ["--draft"], booleans: ["--json"], minPositionals: 0, maxPositionals: 0 };
   if (command === "mr") return { values: ["--draft", "--owner", "--title", "--description"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
@@ -856,6 +868,47 @@ async function runInit(args: readonly string[], cwd: string, dependencies: NonNu
   };
 }
 
+async function runExport(args: readonly string[], cwd: string, dependencies: CliDependencies): Promise<CliResult> {
+  const format = required(flagValue(args, "--format"), "--format") as ExportFormat;
+  const selectedSections = flagValues(args, "--section") as ExportSection[];
+  if (args.includes("--include-git") && format !== "repository") {
+    throw new RepositoryFormatError("CLI_USAGE", "--include-git is only valid with --format repository");
+  }
+  if (selectedSections.length > 0 && format !== "pdf") {
+    throw new RepositoryFormatError("CLI_USAGE", "--section is only valid with --format pdf");
+  }
+  const request: ExportRequest = {
+    format,
+    locale: (flagValue(args, "--locale") ?? "en") as "en" | "ru",
+    ...(selectedSections.length === 0 ? {} : { sections: selectedSections }),
+    ...(format === "repository" ? { include_git: args.includes("--include-git") } : {}),
+  };
+  const artifact = dependencies.direct !== undefined
+    ? await dependencies.direct.exportData(request)
+    : await dependencies.exporter?.create(required(flagValue(args, "--draft"), "--draft"), request);
+  if (artifact === undefined) throw new RepositoryFormatError("CLI_CONFIGURATION_REQUIRED", "Export runtime is unavailable");
+  const target = path.resolve(cwd, flagValue(args, "--output") ?? artifact.filename);
+  try {
+    await writeFile(target, artifact.content, { flag: args.includes("--force") ? "w" : "wx" });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+      throw new RepositoryFormatError("EXPORT_OUTPUT_EXISTS", `Export output already exists: ${target}`);
+    }
+    throw error;
+  }
+  return {
+    exitCode: 0,
+    output: render(args.includes("--json"), {
+      ok: true,
+      code: "OK",
+      format: request.format,
+      filename: artifact.filename,
+      path: target,
+      bytes: artifact.content.length,
+    }, `Exported ${artifact.filename} to ${target}`),
+  };
+}
+
 export async function run(args: readonly string[], cwd = process.cwd(), dependencies: CliDependencies = {}): Promise<CliResult> {
   if (args.includes("--version") || args.includes("-v")) {
     const unknown = args.find((argument) => !["--version", "-v", "--json"].includes(argument));
@@ -915,6 +968,7 @@ export async function run(args: readonly string[], cwd = process.cwd(), dependen
     if (command === "diff" && hasDraft) { const agent = requireAgent(dependencies); const draftId = required(flagValue(commandArgs, "--draft"), "--draft"); const report = await agent.semanticDiff(draftId, agentScope(commandArgs)); return { exitCode: 0, output: render(commandArgs.includes("--json"), { ok: true, code: "OK", ...report }, `Semantic diff: ${report.counts.created + report.counts.updated + report.counts.archived + report.counts.deleted} changed entities`) }; }
     if (command === "diff" && direct !== undefined) { const report = await direct.semanticDiff(agentScope(commandArgs)); return { exitCode: 0, output: render(commandArgs.includes("--json"), { ok: true, code: "OK", ...report }, `Semantic diff: ${report.counts.created + report.counts.updated + report.counts.archived + report.counts.deleted} changed entities`) }; }
     if (command === "diff") return await runSemanticDiff(commandArgs, cwd);
+    if (command === "export") return await runExport(commandArgs, cwd, dependencies);
     if (command === "commit") {
       if (hasDraft) return await runCommit(commandArgs, dependencies);
       return await runDirectCommit(commandArgs, dependencies);

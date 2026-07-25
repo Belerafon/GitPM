@@ -8,6 +8,7 @@ import { GitClient, GitCommandError } from "@gitpm/git-client";
 import { DirectRepositoryBackend, directPushStrategy, DraftManager, GITPM_GUIDANCE_PATHS } from "@gitpm/drafts";
 import { CommentStore, type CommentActor, type CommentResult, type DeletePlan, type EntityCreateBatchResult, type EntityResult } from "@gitpm/domain";
 import type { GitPmDocument } from "@gitpm/repository-format";
+import { ExportService, type ExportArtifact, type ExportRequest } from "@gitpm/export";
 
 const DIRECT_WORKSPACE_ID = "DRF-LOCAL";
 
@@ -170,6 +171,11 @@ export class DirectCliRuntime {
 
   async archiveEntity(entityType: string, id: string, scope: AgentScope = {}): Promise<EntityResult> {
     return await this.repository.archiveEntity(DIRECT_WORKSPACE_ID, entityType, id, scope);
+  }
+
+  async exportData(request: ExportRequest): Promise<ExportArtifact> {
+    await this.prepare();
+    return await new ExportService(this.drafts, this.git).create(DIRECT_WORKSPACE_ID, request);
   }
 
   async moveTask(id: string, targetProject: string, targetMilestone: string | undefined, scope: AgentScope = {}): Promise<EntityResult> {

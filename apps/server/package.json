@@ -17,6 +17,7 @@
     "@gitpm/drafts": "workspace:*",
     "@gitpm/domain": "workspace:*",
     "@gitpm/git-client": "workspace:*",
+    "@gitpm/export": "workspace:*",
     "@gitpm/gitlab": "workspace:*",
     "@gitpm/history": "workspace:*",
     "@gitpm/logging": "workspace:*",

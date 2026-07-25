@@ -23,6 +23,7 @@ import { WorktreeReadError } from "./worktree-api.js";
 import { RepositoryConnectionError } from "./repository-connection.js";
 import { SecurityBoundaryError } from "@gitpm/security";
 import type { GitPmDocument as RepositoryDocument } from "@gitpm/repository-format";
+import { ExportError } from "@gitpm/export";
 
 export type ProjectRole = "Reporter" | "Developer" | "Maintainer";
 
@@ -104,7 +105,7 @@ function requireEntityMutationRole(actor: RequestActor, entityType: string): voi
   }
 }
 
-async function requireDraftRead(manager: DraftManager, actor: RequestActor, draftId: string): Promise<void> {
+export async function requireDraftRead(manager: DraftManager, actor: RequestActor, draftId: string): Promise<void> {
   const metadata = await manager.getDraft(draftId);
   if (metadata.owner_gitlab_user_id !== actor.userId && actor.role !== "Maintainer") {
     throw new DraftRuntimeError("DRAFT_FORBIDDEN", "Draft owner mismatch");
@@ -168,6 +169,12 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
       code = error.code;
       message = error.message;
       status = 400;
+    } else if (error instanceof ExportError) {
+      code = error.code;
+      message = error.message;
+      status = error.code === "EXPORT_REPOSITORY_INVALID" ? 422
+        : error.code === "EXPORT_GIT_CLONE_FAILED" ? 502
+          : 400;
     } else if (error instanceof WorktreeReadError) {
       code = error.code;
       message = error.message;
