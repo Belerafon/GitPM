@@ -71,8 +71,14 @@ export function registerAuthApi(
     request: FastifyRequest,
     operation: ProtectedOperation,
   ): Promise<RemotePublicationContext> => {
+    if (auth === undefined) {
+      // Non-GitLab transport (SSH key or HTTPS token): the credential is provisioned
+      // at the process boundary, so publication uses the local maintainer identity
+      // without an OAuth session.
+      const envToken = process.env.GITPM_REMOTE_TOKEN?.trim() || undefined;
+      return { ownerId: localContext.ownerId, accessToken: () => envToken };
+    }
     const session = requiredSession(request);
-    if (auth === undefined) throw new AuthError("GITLAB_NOT_CONFIGURED", "GitLab is not configured for this repository");
     const authorized = await auth.authorize(session, operation);
     return { ownerId: localContext.ownerId, accessToken: () => authorized.accessToken };
   };
@@ -121,7 +127,7 @@ export function registerAuthApi(
   if (connection !== undefined) {
     app.get("/api/repository/connection", async () => connection.status());
     app.put<{ Body: RepositoryConnectionUpdate }>("/api/repository/connection", { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.repositoryConnectionUpdate } }, async (request) => await connection.update(request.body));
-    app.post("/api/repository/connection/test", async (request) => await connection.test(requiredSession(request)));
+    app.post("/api/repository/connection/test", async (request) => await connection.test(cookie(request)));
   }
 
   app.post<{ Params: { draftId: string }; Body: { message: string } }>("/api/drafts/:draftId/commit", { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.commit } }, async (request) =>

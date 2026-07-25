@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { mkdir, realpath, stat } from "node:fs/promises";
 import path from "node:path";
-import { assertSafeBranchName, assertSafeRepositoryUrl, createGitProcessEnvironment } from "@gitpm/security";
+import { assertSafeBranchName, assertSafeRepositoryUrl, classifyRepositoryUrl, createGitProcessEnvironment, createSshGitProcessEnvironment, type RepositoryTransport } from "@gitpm/security";
 
 const MAX_OUTPUT_BYTES = 1_048_576;
 
@@ -33,8 +33,20 @@ export interface GitClientOptions {
   /** Optional publication upstream; direct mode applies it as the selected checkout's origin. */
   readonly pushRemoteUrl?: string;
   readonly askPassPath?: string;
+  /** SSH provisioning for SSH transports. Sourced from admin environment, never from user input. */
+  readonly ssh?: GitClientSshOptions;
   readonly timeoutMs?: number;
   readonly onCommand?: (record: GitCommandRecord) => void;
+}
+
+export interface GitClientSshOptions {
+  /** Absolute path to a private key mounted outside the worktree. Optional when ssh-agent is used. */
+  readonly keyPath?: string;
+  /** Absolute path to a known_hosts file. Defaults to a file under the controlled home. */
+  readonly knownHostsPath?: string;
+  readonly strictHostKeyChecking?: "yes" | "accept-new";
+  /** Override the ssh binary/launcher (admin-controlled). */
+  readonly sshCommand?: string;
 }
 
 interface CommandResult {
@@ -176,6 +188,8 @@ export class GitClient {
   private readonly allowLocalRepository: boolean;
   private readonly requirePushRemote: boolean;
   private pushRemoteUrl?: string;
+  private pushTransport?: RepositoryTransport;
+  private readonly sshOptions?: GitClientSshOptions;
   private readonly askPassPath?: string;
   private readonly timeoutMs: number;
   private readonly onCommand?: (record: GitCommandRecord) => void;
@@ -189,13 +203,51 @@ export class GitClient {
     this.requirePushRemote = options.allowLocalRepository === true && options.allowLocalTestRemote !== true;
     this.askPassPath = options.askPassPath;
     this.remoteUrl = this.allowLocalRepository ? path.resolve(options.remoteUrl) : assertSafeRepositoryUrl(options.remoteUrl);
-    this.pushRemoteUrl = options.pushRemoteUrl === undefined
-      ? undefined
-      : options.allowLocalTestRemote === true
-        ? path.resolve(options.pushRemoteUrl)
-        : assertSafeRepositoryUrl(options.pushRemoteUrl);
+    this.applyPushRemote(options.pushRemoteUrl, options.allowLocalTestRemote === true);
+    this.sshOptions = options.ssh;
     this.timeoutMs = options.timeoutMs ?? 30_000;
     this.onCommand = options.onCommand;
+  }
+
+  private applyPushRemote(pushRemoteUrl: string | undefined, asLocalPath: boolean): void {
+    if (pushRemoteUrl === undefined) {
+      this.pushRemoteUrl = undefined;
+      this.pushTransport = undefined;
+      return;
+    }
+    if (asLocalPath) {
+      this.pushRemoteUrl = path.resolve(pushRemoteUrl);
+      this.pushTransport = undefined;
+      return;
+    }
+    const classification = classifyRepositoryUrl(pushRemoteUrl);
+    this.pushRemoteUrl = classification.url;
+    this.pushTransport = classification.transport;
+  }
+
+  /** Resolve the controlled environment for the configured publication transport. */
+  private buildRemoteEnvironment(accessToken: string | undefined): NodeJS.ProcessEnv {
+    if (this.pushTransport === "ssh") {
+      const ssh = this.sshOptions ?? {};
+      return createSshGitProcessEnvironment({
+        hooksPath: path.join(this.homeDirectory, "hooks"),
+        isolatedHome: this.homeDirectory,
+        baseEnvironment: process.env,
+        ...(ssh.keyPath === undefined ? {} : { sshKeyPath: ssh.keyPath }),
+        ...(ssh.knownHostsPath === undefined ? {} : { knownHostsPath: ssh.knownHostsPath }),
+        ...(ssh.strictHostKeyChecking === undefined ? {} : { strictHostKeyChecking: ssh.strictHostKeyChecking }),
+        ...(ssh.sshCommand === undefined ? {} : { sshCommand: ssh.sshCommand }),
+      });
+    }
+    if (!this.askPassPath) throw new GitCommandError("GIT_ASKPASS_REQUIRED", "Controlled ASKPASS path is required for HTTPS push");
+    if (!accessToken) throw new GitCommandError("GIT_ASKPASS_REQUIRED", "An access token is required for HTTPS push");
+    return createGitProcessEnvironment({
+      askPassPath: this.askPassPath,
+      hooksPath: path.join(this.homeDirectory, "hooks"),
+      isolatedHome: this.homeDirectory,
+      token: accessToken,
+      baseEnvironment: process.env,
+    });
   }
 
   private async git(args: readonly string[], input?: string): Promise<CommandResult> {
@@ -213,6 +265,7 @@ export class GitClient {
   async initialize(): Promise<void> {
     await mkdir(this.homeDirectory, { recursive: true, mode: 0o700 });
     await mkdir(path.join(this.homeDirectory, "hooks"), { recursive: true, mode: 0o700 });
+    await mkdir(path.join(this.homeDirectory, ".ssh"), { recursive: true, mode: 0o700 });
     await mkdir(this.worktreesDirectory, { recursive: true, mode: 0o700 });
     try {
       const repositoryStat = await stat(this.bareRepository);
@@ -241,11 +294,7 @@ export class GitClient {
 
   /** Update the single controlled origin used for fetch and push. */
   async configurePublishingRemote(pushRemoteUrl: string | undefined, checkoutPath?: string): Promise<void> {
-    this.pushRemoteUrl = pushRemoteUrl === undefined
-      ? undefined
-      : this.allowLocalRepository && !this.requirePushRemote
-        ? path.resolve(pushRemoteUrl)
-        : assertSafeRepositoryUrl(pushRemoteUrl);
+    this.applyPushRemote(pushRemoteUrl, this.allowLocalRepository && !this.requirePushRemote);
     if (checkoutPath !== undefined) {
       await this.configureCheckoutPublishingRemote(checkoutPath);
       return;
@@ -653,19 +702,12 @@ export class GitClient {
     return await this.headCommit(canonical);
   }
 
-  async pushBranch(worktree: string, branch: string, accessToken: string): Promise<void> {
+  async pushBranch(worktree: string, branch: string, accessToken: string | undefined): Promise<void> {
     if (this.pushRemoteUrl === undefined && this.requirePushRemote) {
       throw new GitCommandError("GIT_PUSH_REMOTE_MISSING", "The selected repository has no supported remote for push");
     }
     const safeBranch = assertSafeBranchName(branch);
-    if (!this.askPassPath) throw new GitCommandError("GIT_ASKPASS_REQUIRED", "Controlled ASKPASS path is required for push");
-    const environment = createGitProcessEnvironment({
-      askPassPath: this.askPassPath,
-      hooksPath: path.join(this.homeDirectory, "hooks"),
-      isolatedHome: this.homeDirectory,
-      token: accessToken,
-      baseEnvironment: process.env,
-    });
+    const environment = this.buildRemoteEnvironment(accessToken);
     await this.gitWithEnvironment([
       ...this.localProtocolArgs(),
       "-C",
@@ -694,16 +736,9 @@ export class GitClient {
   }
 
   /** Verify authenticated access to the configured upstream and resolve its default branch. */
-  async testPublishingRemote(accessToken: string): Promise<{ branch: string; commit: string }> {
+  async testPublishingRemote(accessToken?: string): Promise<{ branch: string; commit: string }> {
     if (this.pushRemoteUrl === undefined) throw new GitCommandError("GIT_PUSH_REMOTE_MISSING", "No publication remote is configured");
-    if (!this.askPassPath) throw new GitCommandError("GIT_ASKPASS_REQUIRED", "Controlled ASKPASS path is required for remote verification");
-    const environment = createGitProcessEnvironment({
-      askPassPath: this.askPassPath,
-      hooksPath: path.join(this.homeDirectory, "hooks"),
-      isolatedHome: this.homeDirectory,
-      token: accessToken,
-      baseEnvironment: process.env,
-    });
+    const environment = this.buildRemoteEnvironment(accessToken);
     const result = await this.gitWithEnvironment([
       ...this.localProtocolArgs(),
       "ls-remote", "--heads", "--", this.pushRemoteUrl, `refs/heads/${this.defaultBranch}`,
@@ -725,19 +760,15 @@ export class GitClient {
       "fetch", "--prune", "origin",
       `+refs/heads/${this.defaultBranch}:refs/remotes/origin/${this.defaultBranch}`,
     ];
+    if (this.pushTransport === "ssh") {
+      await this.gitWithEnvironment(args, this.buildRemoteEnvironment(undefined));
+      return;
+    }
     if (accessToken === undefined) {
       await this.git(args);
       return;
     }
-    if (!this.askPassPath) throw new GitCommandError("GIT_ASKPASS_REQUIRED", "Controlled ASKPASS path is required for authenticated fetch");
-    const environment = createGitProcessEnvironment({
-      askPassPath: this.askPassPath,
-      hooksPath: path.join(this.homeDirectory, "hooks"),
-      isolatedHome: this.homeDirectory,
-      token: accessToken,
-      baseEnvironment: process.env,
-    });
-    await this.gitWithEnvironment(args, environment);
+    await this.gitWithEnvironment(args, this.buildRemoteEnvironment(accessToken));
   }
 
   async checkoutCurrentBranch(checkoutPath: string): Promise<string> {
@@ -814,8 +845,7 @@ export class GitClient {
    * Caller must fetch first. Refuses non-fast-forward, force push, rebase, merge
    * commit, hard reset, and stash. Returns the published branch and commit.
    */
-  async pushMainFastForward(checkoutPath: string, accessToken: string): Promise<{ branch: string; commit: string }> {
-    if (!this.askPassPath) throw new GitCommandError("GIT_ASKPASS_REQUIRED", "Controlled ASKPASS path is required for push");
+  async pushMainFastForward(checkoutPath: string, accessToken: string | undefined): Promise<{ branch: string; commit: string }> {
     const checkout = await realpath(checkoutPath);
     await this.assertCheckoutOnDefaultBranch(checkout);
     await this.assertCheckoutHasSafeOrigin(checkout);
@@ -836,13 +866,7 @@ export class GitClient {
         throw error;
       }
     }
-    const environment = createGitProcessEnvironment({
-      askPassPath: this.askPassPath,
-      hooksPath: path.join(this.homeDirectory, "hooks"),
-      isolatedHome: this.homeDirectory,
-      token: accessToken,
-      baseEnvironment: process.env,
-    });
+    const environment = this.buildRemoteEnvironment(accessToken);
     await this.gitWithEnvironment([
       ...this.localProtocolArgs(),
       "-C", checkout,
@@ -857,7 +881,7 @@ export class GitClient {
     const origin = await this.checkoutOriginUrl(checkoutPath);
     if (origin === undefined) throw new GitCommandError("GIT_PUSH_REMOTE_MISSING", "The selected repository has no origin");
     try { assertSafeRepositoryUrl(origin); }
-    catch { throw new GitCommandError("GIT_PUSH_REMOTE_UNSUPPORTED", "Origin must be a credential-free HTTPS URL"); }
+    catch { throw new GitCommandError("GIT_REMOTE_UNSUPPORTED", "Origin must be a credential-free HTTPS or SSH URL"); }
   }
 
   async hashObject(content: string): Promise<string> {

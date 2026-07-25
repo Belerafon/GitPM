@@ -13,11 +13,21 @@ acceptable boundaries.
 
 - Spawn Git directly with an argv array and an allowlisted operation builder.
 - Validate branch names against the v0.1 ASCII allowlist and validate configured
-  credential-free HTTPS repository URLs before argv construction.
+  repository URLs before argv construction. URLs are classified as HTTPS or SSH;
+  both must be credential-free (no embedded password; HTTPS also forbids a
+  username since GitPM injects the OAuth identity via ASKPASS). Schemes such as
+  `file`, `ext::`, `http`, and `git+http` are rejected.
 - Use isolated HOME/XDG config, disable system config and terminal prompts, set an
   empty controlled hooks directory, and deny unsafe Git protocols.
 - Use a static ASKPASS helper. Pass the token only in `GITPM_ASKPASS_TOKEN` in the
   child environment; never place it in argv, URL, Git config or generated helper files.
+- For SSH transports, build a controlled `GIT_SSH_COMMAND` from an allowlist of
+  options sourced exclusively from administrator environment (`GITPM_SSH_KEY_PATH`,
+  `GITPM_SSH_KNOWN_HOSTS_FILE`, `GITPM_SSH_STRICT_HOST_KEY_CHECKING`,
+  `GITPM_SSH_COMMAND`, or an `SSH_AUTH_SOCK` passthrough). GitPM never reads,
+  copies, or logs the key; the remote host/user/path reach ssh only as arguments
+  passed by Git without a shell. An HTTPS token for non-GitLab remotes
+  (`GITPM_REMOTE_TOKEN`) flows through the same in-memory ASKPASS path.
 - Resolve domain paths from a canonical worktree root, reject absolute/traversal
   input and symlinks, and use same-directory exclusive temp files plus atomic rename.
 - Treat an attacker-writable parent directory as outside the supported deployment
@@ -27,6 +37,11 @@ acceptable boundaries.
 
 - Shell escaping: platform-specific and too easy to bypass as options evolve.
 - Token in remote URL or temporary credential file: leaks through process/config/filesystem inspection.
+- Persisted credentials (PAT/password in config or OS keyring): breaks the
+  memory-only credential invariant; SSH key + in-memory env token cover the same
+  use cases without weakening the threat model.
+- Accepting user-supplied `GIT_SSH_COMMAND` or ssh options: would let user data
+  select a command or option, violating the command-selection invariant.
 - Repository-provided hooks, filters, credential helpers or ASKPASS: crosses the trust boundary.
 - Lexical `startsWith(root)` containment: vulnerable to sibling prefixes, traversal and symlinks.
 - Backup copies before writes: conflicts with the explicit no-backup v0.1 policy.

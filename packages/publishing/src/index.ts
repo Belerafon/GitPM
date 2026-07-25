@@ -25,7 +25,7 @@ export interface CommitPublicationContext extends PublicationContext {
 }
 
 export interface RemotePublicationContext extends PublicationContext {
-  readonly accessToken: () => string;
+  readonly accessToken: () => string | undefined;
 }
 
 export interface PublicationWorkspace {
@@ -108,7 +108,9 @@ export class PublicationService {
       title: data.title,
       ...(data.description?.trim() ? { description: data.description } : {}),
     };
-    const mergeRequest = await this.options.mergeRequests.createMergeRequest(context.accessToken(), payload);
+    const accessToken = context.accessToken();
+    if (!accessToken) throw new PublicationError("GITLAB_NOT_CONFIGURED", "Merge Requests require a GitLab OAuth session");
+    const mergeRequest = await this.options.mergeRequests.createMergeRequest(accessToken, payload);
     await this.drafts.markPublished(workspace.draftId, context.ownerId, mergeRequest.iid);
     return mergeRequest;
   }
@@ -119,7 +121,9 @@ export class PublicationService {
     if (this.options.mergeRequests === undefined) {
       throw new PublicationError("MR_CONFIGURATION_REQUIRED", "Merge Request configuration is unavailable");
     }
-    return await this.options.mergeRequests.getMergeRequest(context.accessToken(), draft.merge_request_iid);
+    const accessToken = context.accessToken();
+    if (!accessToken) throw new PublicationError("GITLAB_NOT_CONFIGURED", "Merge Requests require a GitLab OAuth session");
+    return await this.options.mergeRequests.getMergeRequest(accessToken, draft.merge_request_iid);
   }
 
   private async ownedWorkspace(

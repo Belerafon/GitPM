@@ -109,10 +109,38 @@ describe("optional GitLab repository session", () => {
     expect(committed.statusCode).toBe(200);
     expect(publishing.commit).toHaveBeenCalledWith(localContext, { draftId: "DRF-LOCAL" }, "Local commit");
 
+    // Without GitLab, publication authenticates at the transport layer (SSH key or
+    // HTTPS token) rather than an OAuth session, so push delegates to the local
+    // maintainer context with the environment token accessor.
     const push = await app.inject({ method: "POST", url: "/api/drafts/DRF-LOCAL/push" });
-    expect(push.statusCode).toBe(401);
-    expect(push.json()).toMatchObject({ error: { code: "SESSION_INVALID" } });
-    expect(publishing.push).not.toHaveBeenCalled();
+    expect(push.statusCode).toBe(200);
+    expect(publishing.push).toHaveBeenCalledWith(
+      { ownerId: "local-user", accessToken: expect.any(Function) },
+      { draftId: "DRF-LOCAL" },
+    );
+    const pushContext = vi.mocked(publishing.push).mock.calls[0]![0];
+    expect(pushContext.accessToken()).toBeUndefined();
+  });
+
+  it("routes a non-GitLab HTTPS push through the GITPM_REMOTE_TOKEN accessor", async () => {
+    const previousToken = process.env.GITPM_REMOTE_TOKEN;
+    process.env.GITPM_REMOTE_TOKEN = "pat-admin-token";
+    try {
+      const publishing = {
+        push: vi.fn(async () => ({ branch: "gitpm/local/DRF-LOCAL", commit: "a".repeat(40) })),
+      } as unknown as PublicationService;
+      const app = buildApp({ draftManager: {} as DraftManager, authenticate: () => ({ userId: "local-user", role: "Maintainer" }) });
+      apps.push(app);
+      registerAuthApi(app, baseRepositorySession(), publishing, localContext, undefined, "http://127.0.0.1:5173");
+
+      const response = await app.inject({ method: "POST", url: "/api/drafts/DRF-LOCAL/push" });
+      expect(response.statusCode).toBe(200);
+      const context = vi.mocked(publishing.push).mock.calls[0]![0];
+      expect(context.accessToken()).toBe("pat-admin-token");
+    } finally {
+      if (previousToken === undefined) delete process.env.GITPM_REMOTE_TOKEN;
+      else process.env.GITPM_REMOTE_TOKEN = previousToken;
+    }
   });
 
   it("adapts the GitLab session to an in-memory publication context", async () => {
