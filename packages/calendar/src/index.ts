@@ -16,6 +16,61 @@ export interface CalendarDefinition {
   readonly holidays: readonly string[];
 }
 
+export type CalendarPresetId = "standard-five-day" | "russia-2026-five-day" | "every-day";
+
+export interface CalendarPreset extends CalendarDefinition {
+  readonly id: CalendarPresetId;
+  readonly coverage?: {
+    readonly start: string;
+    readonly due: string;
+  };
+  readonly source_url?: string;
+}
+
+const CALENDAR_PRESETS_BY_ID: Readonly<Record<CalendarPresetId, CalendarPreset>> = {
+  "standard-five-day": {
+    id: "standard-five-day",
+    working_weekdays: [1, 2, 3, 4, 5],
+    holidays: [],
+  },
+  "russia-2026-five-day": {
+    id: "russia-2026-five-day",
+    working_weekdays: [1, 2, 3, 4, 5],
+    holidays: [
+      "2026-01-01",
+      "2026-01-02",
+      "2026-01-05",
+      "2026-01-06",
+      "2026-01-07",
+      "2026-01-08",
+      "2026-01-09",
+      "2026-02-23",
+      "2026-03-09",
+      "2026-05-01",
+      "2026-05-11",
+      "2026-06-12",
+      "2026-11-04",
+      "2026-12-31",
+    ],
+    coverage: {
+      start: "2026-01-01",
+      due: "2026-12-31",
+    },
+    source_url: "https://government.ru/news/56309/",
+  },
+  "every-day": {
+    id: "every-day",
+    working_weekdays: [1, 2, 3, 4, 5, 6, 7],
+    holidays: [],
+  },
+};
+
+export const CALENDAR_PRESETS: readonly CalendarPreset[] = Object.values(CALENDAR_PRESETS_BY_ID);
+
+export function calendarPreset(id: CalendarPresetId): CalendarPreset {
+  return CALENDAR_PRESETS_BY_ID[id];
+}
+
 export function parseDateOnly(value: string): Date {
   const match = DATE_PATTERN.exec(value);
   if (!match) throw new CalendarError("DATE_INVALID", `Invalid date-only value: ${value}`);

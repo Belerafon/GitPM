@@ -10,6 +10,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@gitpm/calendar": "workspace:*",
     "@gitpm/contracts": "workspace:*",
     "@gitpm/shared": "workspace:*",
     "@gitpm/workload": "workspace:*",

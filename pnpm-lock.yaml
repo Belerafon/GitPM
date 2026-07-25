@@ -132,6 +132,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@gitpm/calendar':
+        specifier: workspace:*
+        version: link:../../packages/calendar
       '@gitpm/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts

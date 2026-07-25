@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isWorkingDate, isoWeekday, parseDateOnly, workingDatesBetween } from "./index.js";
+import { CALENDAR_PRESETS, calendarPreset, isWorkingDate, isoWeekday, parseDateOnly, workingDatesBetween } from "./index.js";
 import type { CalendarError } from "./index.js";
 
 const calendar = {
@@ -26,5 +26,25 @@ describe("date-only calendar", () => {
     expect(() => workingDatesBetween("2026-07-14", "2026-07-10", calendar)).toThrowError(
       expect.objectContaining<Partial<CalendarError>>({ code: "DATE_RANGE" }),
     );
+  });
+
+  it("provides validated built-in presets", () => {
+    expect(CALENDAR_PRESETS.map((preset) => preset.id)).toEqual([
+      "standard-five-day",
+      "russia-2026-five-day",
+      "every-day",
+    ]);
+    for (const preset of CALENDAR_PRESETS) {
+      expect(() => workingDatesBetween("2026-07-01", "2026-07-07", preset)).not.toThrow();
+    }
+  });
+
+  it("matches the official Russian five-day calendar for 2026", () => {
+    const preset = calendarPreset("russia-2026-five-day");
+    expect(preset.holidays).toHaveLength(14);
+    expect(workingDatesBetween("2026-01-01", "2026-12-31", preset)).toHaveLength(247);
+    expect(isWorkingDate("2026-01-09", preset)).toBe(false);
+    expect(isWorkingDate("2026-01-12", preset)).toBe(true);
+    expect(isWorkingDate("2026-12-31", preset)).toBe(false);
   });
 });

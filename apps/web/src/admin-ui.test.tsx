@@ -32,7 +32,8 @@ describe("administration UI", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Create calendar/u }));
     const calendarForm = within(screen.getByRole("dialog", { name: "Create calendar" })).getByRole("button", { name: "Create calendar" }).closest("form")!;
     fireEvent.change(within(calendarForm).getByLabelText("Name"), { target: { value: "Default" } });
-    fireEvent.change(within(calendarForm).getByLabelText("Holidays (YYYY-MM-DD, comma-separated)"), { target: { value: "2026-01-01" } }); fireEvent.submit(calendarForm);
+    fireEvent.click(within(calendarForm).getByRole("button", { name: /Add non-working date/u }));
+    fireEvent.change(within(calendarForm).getByLabelText("Non-working date 1"), { target: { value: "2026-01-01" } }); fireEvent.submit(calendarForm);
     expect(await screen.findByText("Default")).toBeTruthy();
     expect(screen.getByLabelText("Working week preview").querySelectorAll(".working")).toHaveLength(5);
 
@@ -70,6 +71,32 @@ describe("administration UI", () => {
     expect(screen.getByLabelText("Statuses done").closest(".config-row")?.classList.contains("recently-changed")).toBe(true);
     await waitFor(() => expect((admin.configurations.get("statuses")!.document.statuses as readonly { slug: string }[])[0]?.slug).toBe("done"));
     expect(changed).toHaveBeenCalled();
+  });
+
+  it("creates the official Russian 2026 preset with understandable defaults", async () => {
+    const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
+    render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="ru" surface="calendar" onChanged={vi.fn(async () => undefined)} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Создать календарь/u }));
+    const dialog = screen.getByRole("dialog", { name: "Создать календарь" });
+    const form = within(dialog).getByRole("button", { name: "Создать календарь" }).closest("form")!;
+    fireEvent.change(within(form).getByLabelText("Предустановка календаря"), { target: { value: "russia-2026-five-day" } });
+
+    expect((within(form).getByLabelText("Название") as HTMLInputElement).value).toBe("Россия — пятидневка (2026)");
+    expect(within(form).getByText("2026: 247 рабочих дней")).toBeTruthy();
+    expect(within(form).getByRole("link", { name: "Официальный источник" }).getAttribute("href")).toBe("https://government.ru/news/56309/");
+    expect(within(form).getAllByLabelText(/Нерабочая дата/u)).toHaveLength(14);
+    fireEvent.submit(form);
+
+    await waitFor(() => expect(admin.entities).toHaveLength(1));
+    expect(admin.entities[0]?.document).toMatchObject({
+      schema: "gitpm/calendar@1",
+      name: "Россия — пятидневка (2026)",
+      working_weekdays: [1, 2, 3, 4, 5],
+      holidays: expect.arrayContaining(["2026-01-09", "2026-11-04", "2026-12-31"]),
+      lifecycle: "active",
+    });
+    expect(admin.entities[0]?.document.holidays).toHaveLength(14);
   });
 
   it("renders Developer administration as read-only", async () => {

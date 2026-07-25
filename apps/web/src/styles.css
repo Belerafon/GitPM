@@ -490,6 +490,16 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .calendar-exceptions { display: flex; flex-wrap: wrap; gap: .35rem; color: #646b66; font-size: .74rem; }
 .calendar-exceptions > span { width: 100%; font-weight: 650; }
 .calendar-exceptions time { border-radius: 999px; background: #fff2cc; padding: .2rem .4rem; }
+.calendar-preset-summary { display: grid; gap: .3rem; border: 1px solid #dce3da; border-radius: 9px; background: #f5f8f4; padding: .75rem; color: #4e5750; }
+.calendar-preset-summary p { margin: 0; font-size: .82rem; line-height: 1.45; }
+.calendar-preset-summary span { font-size: .78rem; font-weight: 650; color: #285936; }
+.calendar-preset-summary a { width: max-content; font-size: .78rem; }
+.calendar-date-list { display: grid; gap: .55rem; }
+.calendar-date-list > p { margin: 0; color: #646b66; font-size: .78rem; line-height: 1.4; }
+.calendar-date-list > div { display: grid; gap: .4rem; }
+.calendar-date-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .4rem; }
+.calendar-date-row button { min-width: 2.6rem; color: #7d2929; }
+.calendar-date-add { justify-self: start; }
 .admin-card-summary .edit-disclosure { margin-top: .25rem; }
 .admin-card-summary .edit-disclosure form { display: grid; gap: .55rem; }
 .admin-card-summary .edit-disclosure label { display: grid; gap: .3rem; color: #5d625f; font-size: .8rem; }
