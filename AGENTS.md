@@ -129,8 +129,15 @@ Rules:
 
 8. Run all commands, edits, builds, and tests inside the created worktree.
 
-9. After completing the task, do not remove the worktree or the branch without an explicit
-   instruction from the user, but remember to ask about it explicitly.
+9. Upon completing the task, commit all work to the worktree branch before handing off.
+   First inspect `git status`, `git diff`, and recent `git log`, stage only intended files,
+   and never commit secrets. Do not leave uncommitted changes behind. Committing the branch
+   is required even if the user has not yet asked to merge or push; running the local quality
+   gate below and writing a concise handoff summary happen alongside this commit. Pushing,
+   merging into `main`, and removing the worktree still require an explicit user instruction.
+
+10. After completing the task, do not remove the worktree or the branch without an explicit
+    instruction from the user, but remember to ask about it explicitly.
 
 ## Required local quality gate
 
