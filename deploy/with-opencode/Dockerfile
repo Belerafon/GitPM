@@ -60,6 +60,15 @@ RUN corepack enable \
  && corepack pnpm build \
  && ln -sf /app/apps/cli/dist/index.js /usr/local/bin/gitpm
 
+# Pre-bake common document parsers so agents can `require('xlsx')` etc. without
+# installing dependencies into the portfolio repository at /repository.
+RUN mkdir -p /opt/agent-tools \
+ && cd /opt/agent-tools \
+ && npm init -y \
+ && npm install --no-audit --no-fund xlsx pdf-parse pdf2json csv-parse \
+ && rm -rf /root/.npm
+ENV NODE_PATH=/opt/agent-tools/node_modules
+
 ENV GITPM_RUNTIME_MODE=production \
     GITPM_BIND_HOST=0.0.0.0 \
     GITPM_NO_BROWSER=1

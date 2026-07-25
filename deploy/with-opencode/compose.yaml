@@ -41,3 +41,6 @@ services:
       - ${GITPM_DEPLOY_ROOT:-/srv/gitpm}/opencode-data:/root/.local/share/opencode
       - ${GITPM_DEPLOY_ROOT:-/srv/gitpm}/state:/root/.local/state/opencode
       - ${GITPM_DEPLOY_ROOT:-/srv/gitpm}/cache:/root/.cache/opencode
+      # Agent working home: scripts, scratch and ad-hoc deps. Kept outside
+      # /repository so the portfolio never fills up with npm artefacts.
+      - ${GITPM_DEPLOY_ROOT:-/srv/gitpm}/agent:/agent

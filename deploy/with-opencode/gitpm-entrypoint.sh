@@ -2,6 +2,9 @@
 export BROWSER=/bin/true
 set -e
 
+mkdir -p /agent
+[ -f /agent/AGENTS.md ] || cp /app/deploy/with-opencode/agent-home.md /agent/AGENTS.md
+
 echo "[entrypoint] Generate Caddyfile..."
 if [ -z "$BASIC_AUTH_USER" ] || [ -z "$BASIC_AUTH_PASS" ]; then
   echo "[entrypoint] WARNING: BASIC_AUTH_* not set, starting Caddy WITHOUT auth"
@@ -27,8 +30,8 @@ cd /app
 node scripts/run-gitpm-local.mjs &
 GITPM_PID=$!
 
-echo "[entrypoint] Start opencode web on :4096..."
-opencode web --hostname 0.0.0.0 --port 4096 &
+echo "[entrypoint] Start opencode web on :4096 (home: /agent)..."
+(cd /agent && exec opencode web --hostname 0.0.0.0 --port 4096) &
 OC_PID=$!
 
 echo "[entrypoint] Start Caddy on :80 -> 5173..."
