@@ -141,6 +141,9 @@ importers:
       '@gitpm/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@gitpm/task-hierarchy':
+        specifier: workspace:*
+        version: link:../../packages/task-hierarchy
       '@gitpm/workload':
         specifier: workspace:*
         version: link:../../packages/workload
@@ -243,6 +246,9 @@ importers:
       '@gitpm/shared':
         specifier: workspace:*
         version: link:../shared
+      '@gitpm/task-hierarchy':
+        specifier: workspace:*
+        version: link:../task-hierarchy
       '@gitpm/validation':
         specifier: workspace:*
         version: link:../validation
@@ -332,6 +338,8 @@ importers:
   packages/security: {}
 
   packages/shared: {}
+
+  packages/task-hierarchy: {}
 
   packages/validation:
     dependencies:

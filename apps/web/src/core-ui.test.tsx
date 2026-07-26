@@ -15,7 +15,7 @@ class EntityApi {
   async listEntities(_draftId: string, type: string, project?: string) { const schemaName = type === "people" ? "person" : type.slice(0, -1); return this.entities.filter((item) => item.document.schema === `gitpm/${schemaName}@1` && (project === undefined || item.document.project === project)); }
   async createEntity(_draftId: string, _type: string, _fingerprint: string, document: EntityDocument) { const next = this.result(document); this.entities.push(next); return next; }
   async updateEntity(_draftId: string, _type: string, entity: EntityResult, _fingerprint: string, document: EntityDocument) { const next = this.result(document); this.entities = this.entities.map((item) => item === entity ? next : item); return next; }
-  async moveTask(_draftId: string, entity: EntityResult, _fingerprint: string, targetProject: string, targetMilestone?: string) { return await this.updateEntity(_draftId, "tasks", entity, _fingerprint, { ...entity.document, project: targetProject, milestone: targetMilestone }); }
+  async moveTask(_draftId: string, entity: EntityResult, _fingerprint: string, targetProject: string, targetMilestone?: string, targetParent?: string) { return await this.updateEntity(_draftId, "tasks", entity, _fingerprint, { ...entity.document, project: targetProject, milestone: targetMilestone, parent: targetParent }); }
   async archiveEntity(_draftId: string, type: string, entity: EntityResult, fingerprint: string) { return await this.updateEntity(_draftId, type, entity, fingerprint, { ...entity.document, lifecycle: "archived" }); }
   async deleteEntity(_draftId: string, _type: string, entity: EntityResult) { this.entities = this.entities.filter((item) => item !== entity); }
   async getConfiguration(_draftId: string, kind: "statuses" | "issue-types"): Promise<ConfigurationResult> { const document = (kind === "statuses" ? { schema: "gitpm/statuses@1", statuses: [{ slug: "backlog", title: "Backlog", active: true }, { slug: "done", title: "Done", active: true }] } : { schema: "gitpm/issue-types@1", issue_types: [{ slug: "task", title: "Task", active: true }] }) as ConfigurationDocument; return { document, path: kind, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) }; }
@@ -256,6 +256,32 @@ describe("core UI", () => {
     expect(onNavigate).toHaveBeenCalledWith("stages", { projectId: project.document.id, stageId: milestone.document.id });
   });
 
+  it("shows task ancestry and rollups and creates a same-milestone subtask from task details", async () => {
+    const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
+    const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
+    const milestone = await entityApi.createEntity("DRF-CORE", "milestones", "", { schema: "gitpm/milestone@1", id: "M-26-222222", project: project.document.id, name: "Beta", lifecycle: "active" });
+    const root = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@1", id: "T-26-333333", project: project.document.id, milestone: milestone.document.id, title: "Root", type: "task", status: "backlog", lifecycle: "active" });
+    const child = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@1", id: "T-26-444444", parent: root.document.id, project: project.document.id, milestone: milestone.document.id, title: "Child", type: "task", status: "backlog", lifecycle: "active", estimate_hours: 3 });
+    const grandchild = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@1", id: "T-26-555555", parent: child.document.id, project: project.document.id, milestone: milestone.document.id, title: "Grandchild", type: "task", status: "done", lifecycle: "active", estimate_hours: 5 });
+
+    const { container } = render(<CoreWorkspace api={api} draft={draft} initialProjectId={project.document.id} initialTaskId={child.document.id} locale="en" surface="tasks" onChanged={vi.fn(async () => undefined)} />);
+    await screen.findByRole("heading", { name: "Child" });
+    expect(container.querySelector(".task-hierarchy-breadcrumbs")?.textContent).toContain("Root");
+    expect(container.querySelector(".task-hierarchy-summary")?.textContent).toContain("1/1 descendant tasks completed");
+    expect(container.querySelector(".task-hierarchy-summary")?.textContent).toContain("5 h descendant estimate");
+
+    fireEvent.click(screen.getByRole("button", { name: /New subtask/u }));
+    const dialog = screen.getByRole("dialog", { name: "New subtask" });
+    fireEvent.change(within(dialog).getByLabelText("Title"), { target: { value: "Nested work" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create task" }));
+    await waitFor(() => expect(entityApi.entities.some((item) =>
+      item.document.title === "Nested work"
+      && item.document.parent === child.document.id
+      && item.document.milestone === milestone.document.id)).toBe(true));
+
+    expect(grandchild.document.parent).toBe(child.document.id);
+  });
+
   it("filters tasks by milestone and links project milestone progress to that filter", async () => {
     const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
     const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
@@ -282,17 +308,21 @@ describe("core UI", () => {
     const source = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-111111", name: "Source", status: "backlog", lifecycle: "active" });
     const target = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-222222", name: "Target", status: "backlog", lifecycle: "active" });
     const milestone = await entityApi.createEntity("DRF-CORE", "milestones", "", { schema: "gitpm/milestone@1", id: "M-26-333333", project: target.document.id, name: "Target stage", lifecycle: "active" });
+    const targetParent = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@1", id: "T-26-555555", project: target.document.id, milestone: milestone.document.id, title: "Target parent", type: "task", status: "backlog", lifecycle: "active" });
     const task = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@1", id: "T-26-444444", project: source.document.id, title: "Move me", type: "task", status: "backlog", lifecycle: "active" });
     const onNavigate = vi.fn();
     render(<CoreWorkspace api={api} draft={draft} initialProjectId={source.document.id} initialTaskId={task.document.id} locale="en" surface="tasks" onNavigate={onNavigate} onChanged={vi.fn(async () => undefined)} />);
     await screen.findByRole("heading", { name: "Move me" });
-    fireEvent.click(screen.getByText("Move to another project"));
-    const moveForm = screen.getByRole("dialog", { name: "Move to another project" });
+    fireEvent.click(screen.getByText("Move task"));
+    const moveForm = screen.getByRole("dialog", { name: "Move task" });
     fireEvent.change(within(moveForm).getByLabelText("Target project"), { target: { value: target.document.id } });
+    await within(moveForm).findByRole("option", { name: "Target stage" });
     fireEvent.change(within(moveForm).getByLabelText("Milestone"), { target: { value: milestone.document.id } });
+    await within(moveForm).findByRole("option", { name: "Target parent" });
+    fireEvent.change(within(moveForm).getByLabelText("Parent task"), { target: { value: targetParent.document.id } });
     fireEvent.click(within(moveForm).getByRole("button", { name: "Move task" }));
 
-    await waitFor(() => expect(entityApi.entities.find((item) => item.document.id === task.document.id)?.document).toMatchObject({ project: target.document.id, milestone: milestone.document.id }));
+    await waitFor(() => expect(entityApi.entities.find((item) => item.document.id === task.document.id)?.document).toMatchObject({ project: target.document.id, milestone: milestone.document.id, parent: targetParent.document.id }));
     expect(onNavigate).toHaveBeenCalledWith("tasks", { projectId: target.document.id, taskId: task.document.id });
   });
 

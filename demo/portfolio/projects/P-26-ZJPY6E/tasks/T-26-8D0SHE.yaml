@@ -9,7 +9,7 @@ acceptance_criteria_markdown:
   - Результат проверен ответственным сотрудником.
   - Связанные материалы сохранены в проекте.
 parent: T-26-HB2NX5 # task: Запустить программу обновления мобильного банка
-milestone: M-26-2HMFX5 # milestone: Закрытое бета-тестирование
+milestone: M-26-SY14EX # milestone: Публикация в магазинах
 assignees:
   - U-26-9C1ZR4 # person: Елена Морозова
   - U-26-ETKSWS # person: Ольга Новикова

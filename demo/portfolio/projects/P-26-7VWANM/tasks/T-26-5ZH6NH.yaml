@@ -9,7 +9,7 @@ acceptance_criteria_markdown:
   - Результат проверен ответственным сотрудником.
   - Связанные материалы сохранены в проекте.
 parent: T-26-SQ5YK5 # task: Перевести аналитику на новую платформу
-milestone: M-26-T4JTV6 # milestone: Первые витрины в новой платформе
+milestone: M-26-9HGQWY # milestone: Отключение старого хранилища
 assignees:
   - U-26-RKTV2A # person: Дмитрий Орлов
   - U-26-1MV0QD # person: Максим Фёдоров

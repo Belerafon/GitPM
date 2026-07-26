@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type DragEvent, type FormEvent } from "react";
 import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
+import { buildTaskHierarchy } from "@gitpm/task-hierarchy";
 import type { GitPmApi } from "./api.js";
 import { message, type Locale, type MessageKey } from "./i18n.js";
 import type { DraftStatus, EntityDocument, EntityResult, GitPmDocument } from "./types.js";
@@ -90,6 +91,11 @@ export function BoardWorkspace({ api, draft, locale, initialProjectId = "", init
   };
 
   const activeTasks = tasks.filter((item) => item.document.lifecycle === "active");
+  const hierarchy = useMemo(() => buildTaskHierarchy(activeTasks.map((entity) => ({
+    id: entity.document.id,
+    parent: text(entity.document, "parent") || undefined,
+    entity,
+  }))), [activeTasks]);
   const boardStatuses = useMemo(() => {
     const known = statuses.map((item) => item.slug);
     return [...new Set([...known, ...activeTasks.map((item) => text(item.document, "status"))])];
@@ -158,9 +164,9 @@ export function BoardWorkspace({ api, draft, locale, initialProjectId = "", init
       const columnTasks = visibleTasks.filter((item) => text(item.document, "status") === status);
       return <section className="board-column" data-status={status} key={status} onDragOver={(event) => event.preventDefault()} onDrop={(event) => drop(event, status)} onPointerUp={() => { if (draggedTaskId !== null) moveTask(status, draggedTaskId); }}>
         <header><h3>{titleForStatus(status)}</h3><span>{columnTasks.length}</span></header>
-        <div className="board-cards">{columnTasks.map((task) => <article className={`board-card${highlights[task.document.id] ? " recently-changed" : ""}${savingTaskId === task.document.id ? " is-saving" : ""}`} draggable={!readOnly} data-flip-key={`board-task:${task.document.id}`} data-task-id={task.document.id} key={task.document.id} onPointerDown={() => { if (!readOnly) setDraggedTaskId(task.document.id); }} onDragStart={(event) => { setDraggedTaskId(task.document.id); event.dataTransfer.setData("text/plain", task.document.id); }} onDragEnd={() => setDraggedTaskId(null)}>
-          {!readOnly && <span aria-hidden="true" className="board-drag-handle">⋮⋮</span>}<button className="board-task-link" onPointerDown={(event) => event.stopPropagation()} onClick={() => onNavigate("tasks", { projectId, taskId: task.document.id })}><strong>{text(task.document, "title")}</strong><code>{task.document.id}</code></button>{catalog.milestone(task.document.milestone) !== undefined && <button className="board-milestone" onPointerDown={(event) => event.stopPropagation()} onClick={() => onNavigate("stages", { projectId, stageId: text(task.document, "milestone") })} type="button">{catalog.milestone(task.document.milestone)?.name}{catalog.milestone(task.document.milestone)?.lifecycle === "archived" ? ` · ${t("core.archived")}` : ""}</button>}<span>{types.find((type) => type.slug === text(task.document, "type"))?.title ?? text(task.document, "type")}</span><span className="board-assignees">{t("core.assignees")}: <PersonLinks empty={t("core.unassigned")} onOpen={(personId) => onNavigate("people", { personId })} people={people} personIds={strings(task.document.assignees)} /></span><label className="board-status-control" onPointerDown={(event) => event.stopPropagation()}>{t("core.status")}<select disabled={readOnly} value={text(task.document, "status")} onChange={(event) => moveTask(event.target.value, task.document.id)}>{boardStatuses.map((nextStatus) => <option key={nextStatus} value={nextStatus}>{titleForStatus(nextStatus)}</option>)}</select></label>
-        </article>)}</div>
+        <div className="board-cards">{columnTasks.map((task) => { const ancestors = hierarchy.ancestorsOf(task.document.id); return <article className={`board-card${highlights[task.document.id] ? " recently-changed" : ""}${savingTaskId === task.document.id ? " is-saving" : ""}`} draggable={!readOnly} data-flip-key={`board-task:${task.document.id}`} data-task-id={task.document.id} key={task.document.id} onPointerDown={() => { if (!readOnly) setDraggedTaskId(task.document.id); }} onDragStart={(event) => { setDraggedTaskId(task.document.id); event.dataTransfer.setData("text/plain", task.document.id); }} onDragEnd={() => setDraggedTaskId(null)}>
+          {!readOnly && <span aria-hidden="true" className="board-drag-handle">⋮⋮</span>}<button className="board-task-link" onPointerDown={(event) => event.stopPropagation()} onClick={() => onNavigate("tasks", { projectId, taskId: task.document.id })}>{ancestors.length > 0 && <span className="board-task-path">{ancestors.map((ancestor) => text(ancestor.entity.document, "title")).join(" › ")}</span>}<strong>{text(task.document, "title")}</strong><code>{task.document.id}</code></button>{catalog.milestone(task.document.milestone) !== undefined && <button className="board-milestone" onPointerDown={(event) => event.stopPropagation()} onClick={() => onNavigate("stages", { projectId, stageId: text(task.document, "milestone") })} type="button">{catalog.milestone(task.document.milestone)?.name}{catalog.milestone(task.document.milestone)?.lifecycle === "archived" ? ` · ${t("core.archived")}` : ""}</button>}<span>{types.find((type) => type.slug === text(task.document, "type"))?.title ?? text(task.document, "type")}</span><span className="board-assignees">{t("core.assignees")}: <PersonLinks empty={t("core.unassigned")} onOpen={(personId) => onNavigate("people", { personId })} people={people} personIds={strings(task.document.assignees)} /></span><label className="board-status-control" onPointerDown={(event) => event.stopPropagation()}>{t("core.status")}<select disabled={readOnly} value={text(task.document, "status")} onChange={(event) => moveTask(event.target.value, task.document.id)}>{boardStatuses.map((nextStatus) => <option key={nextStatus} value={nextStatus}>{titleForStatus(nextStatus)}</option>)}</select></label>
+        </article>; })}</div>
       </section>;
     })}</div>
     <details className="card saved-view-manager"><summary>{t("board.manageViews")}</summary><section className="saved-views"><div><h3>{t("board.savedViews")}</h3><p>{t("board.savedDescription")}</p></div>

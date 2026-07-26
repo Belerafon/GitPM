@@ -132,12 +132,16 @@ Rules:
 9. Upon completing the task, commit all work to the worktree branch before handing off.
    First inspect `git status`, `git diff`, and recent `git log`, stage only intended files,
    and never commit secrets. Do not leave uncommitted changes behind. Committing the branch
-   is required even if the user has not yet asked to merge or push; running the local quality
-   gate below and writing a concise handoff summary happen alongside this commit. Pushing,
-   merging into `main`, and removing the worktree still require an explicit user instruction.
+   is required without asking for separate confirmation; running the local quality gate below
+   and writing a concise handoff summary happen alongside this commit. Pushing still requires
+   a separate explicit user instruction.
 
-10. After completing the task, do not remove the worktree or the branch without an explicit
-    instruction from the user, but remember to ask about it explicitly.
+10. After the completion commit succeeds, end the handoff with one combined confirmation:
+    `Merge <branch> into main and remove worktree <worktree-path>, keeping the branch?`
+    A reply of `Yes` (or its direct equivalent in the conversation language) authorizes both
+    the local merge into `main` and removal of that worktree. Do not perform either action before
+    that confirmation. Do not delete the branch as part of this cleanup; branch deletion requires
+    a separate explicit user instruction.
 
 ## Required local quality gate
 
@@ -181,4 +185,6 @@ product. When a defect or awkward agent workflow is found, describe a concrete G
 instead of hiding it with a test-only special case or undocumented workaround.
 
 Before handing off, summarize changed contracts, list verification actually run, and call out any
-remaining limitation. Do not commit, push, or open a Merge Request unless the user asks.
+remaining limitation. The completion commit is mandatory under rule 9. Do not push or open a
+Merge Request unless the user asks. Merge into `main` and worktree removal follow the combined
+confirmation in rule 10; keep the branch unless the user separately asks to delete it.

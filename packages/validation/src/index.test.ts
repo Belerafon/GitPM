@@ -203,6 +203,15 @@ describe("repository validation", () => {
     expect(report.errors).toEqual(expect.arrayContaining([expect.objectContaining({ code: "TASK_PARENT_CYCLE" })]));
   });
 
+  it("requires a task and its parent to belong to the same milestone", async () => {
+    const root = await fixture();
+    await replace(root, `projects/${project}/tasks/${taskOne}.yaml`, "milestone: M-26-461GDJ", `parent: ${taskTwo}`);
+    const report = await validateRepository(root);
+    expect(report.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "TASK_PARENT_MILESTONE_MISMATCH", path: `projects/${project}/tasks/${taskOne}.yaml` }),
+    ]));
+  });
+
   it("rejects impossible calendar dates", async () => {
     const root = await fixture();
     await replace(root, "calendars/C-26-QD7FJ4.yaml", "2026-01-01", "2026-02-30");

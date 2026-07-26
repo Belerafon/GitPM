@@ -8,8 +8,8 @@ lifecycle: active
 acceptance_criteria_markdown:
   - Результат проверен ответственным сотрудником.
   - Связанные материалы сохранены в проекте.
-parent: T-26-AVEPT4 # task: Запустить портал клиентской поддержки
-milestone: M-26-X7TYSQ # milestone: Внутренняя приёмка портала
+parent: T-26-FZHVK3 # task: Подготовить интерактивный прототип
+milestone: M-26-QP6SH8 # milestone: Открытие портала клиентам
 assignees:
   - U-26-RKTV2A # person: Дмитрий Орлов
   - U-26-NEDN00 # person: Мария Соколова

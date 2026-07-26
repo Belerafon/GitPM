@@ -453,8 +453,15 @@ export async function validateRepository(repositoryRoot: string): Promise<Valida
       if (!statuses.has(String(value.status))) add({ severity: "error", code: "CONFIG_REFERENCE", path: document.path, message: `Unknown status ${String(value.status)}` });
       if (!issueTypes.has(String(value.type))) add({ severity: "error", code: "CONFIG_REFERENCE", path: document.path, message: `Unknown type ${String(value.type)}` });
       for (const assignee of values(value.assignees)) reference(assignee, "gitpm/person@1", document);
+      if (typeof value.parent === "string") {
+        const parent = reference(value.parent, "gitpm/task@1", document);
+        if (parent && parent.value.project !== value.project) {
+          add({ severity: "error", code: "REF_CROSS_PROJECT", path: document.path, message: `${value.parent} belongs to another project` });
+        } else if (parent && (typeof parent.value.milestone === "string" ? parent.value.milestone : undefined) !== (typeof value.milestone === "string" ? value.milestone : undefined)) {
+          add({ severity: "error", code: "TASK_PARENT_MILESTONE_MISMATCH", path: document.path, message: `${value.id} and parent ${value.parent} must belong to the same milestone` });
+        }
+      }
       for (const [id, schema] of [
-        ...(typeof value.parent === "string" ? [[value.parent, "gitpm/task@1"]] : []),
         ...(typeof value.milestone === "string" ? [[value.milestone, "gitpm/milestone@1"]] : []),
         ...values(value.depends_on).map((id) => [id, "gitpm/task@1"]),
       ] as Array<[string, string]>) {

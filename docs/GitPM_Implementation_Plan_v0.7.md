@@ -173,7 +173,13 @@ Markdown поддерживается только в полях с суффик
 - `depends_on`: список Task ID того же Project;
 - `labels`.
 
-В v0.1 допускается несколько assignee. Cross-project parent, milestone и dependencies запрещены. Task без дат не отображается на Gantt. Task без estimate не участвует в Workload.
+В v0.1 допускается несколько assignee. `parent` образует дерево произвольной глубины:
+циклы запрещены, родитель и потомок всегда принадлежат одному Project и одному Milestone
+(включая отсутствие Milestone). Статус, даты и estimate каждой Task независимы; завершение
+родителя или потомка не меняет связанные задачи автоматически. UI отдельно показывает
+вычисляемые progress и сумму estimate по потомкам, не записывая агрегаты в YAML.
+Cross-project parent, milestone и dependencies запрещены. Task без дат не отображается на
+Gantt. Task без estimate не участвует в Workload.
 
 ### 6.4. Milestone
 
@@ -533,6 +539,13 @@ v0.1 использует browser polling каждые 3 секунды, а не
 - Changes;
 - History.
 
+Project Plan отображает Task как сворачиваемое дерево. Модель не ограничивает глубину,
+а визуальная и тестовая опора v0.1 — первые три уровня. Фильтры сохраняют цепочку предков
+как контекст. Board продолжает показывать каждую Task отдельной карточкой и добавляет к
+вложенным Task breadcrumb предков. Карточка Task позволяет создать прямую подзадачу,
+переназначить родителя внутри того же Milestone и показывает derived rollup потомков.
+Milestone наследуется при создании подзадачи и не редактируется отдельно от её поддерева.
+
 Repository selector и server configuration UI отсутствуют. Выбранный locale хранится в browser localStorage и не является бизнес-данными. Специальная virtualization не является требованием v0.1; она добавляется только при нарушении performance smoke.
 
 ## 19. Упрощенный semantic diff
@@ -551,7 +564,8 @@ Semantic diff сообщает:
 
 Calendar schema и date utilities определяются в P01-P02, до API и UI.
 
-Gantt только читает `start`, `due`, hierarchy, milestone и dependency. Drag, resize и inline date editing отсутствуют.
+Gantt только читает `start`, `due`, hierarchy, milestone и dependency. Строки упорядочены
+depth-first, вложенность не ограничена моделью. Drag, resize и inline date editing отсутствуют.
 
 Workload:
 

@@ -625,6 +625,7 @@ export const HTTP_REQUEST_BODY_SCHEMAS = {
     expected_blob_id: stringSchema,
     target_project: stringSchema,
     target_milestone: stringSchema,
+    target_parent: stringSchema,
   }, ["expected_fingerprint", "expected_blob_id", "target_project"]),
   deleteEntity: objectSchema({
     expected_fingerprint: stringSchema,

@@ -513,7 +513,7 @@ export function registerEntityApi(
     },
   );
 
-  app.post<{ Params: { draftId: string; id: string }; Body: { expected_fingerprint: string; expected_blob_id: string; target_project: string; target_milestone?: string } }>(
+  app.post<{ Params: { draftId: string; id: string }; Body: { expected_fingerprint: string; expected_blob_id: string; target_project: string; target_milestone?: string; target_parent?: string } }>(
     "/api/drafts/:draftId/entities/tasks/:id/move",
     { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.moveTask } },
     async (request) => {
@@ -527,6 +527,7 @@ export function registerEntityApi(
         request.body.expected_blob_id,
         request.body.target_project,
         request.body.target_milestone,
+        request.body.target_parent,
       );
     },
   );

@@ -130,7 +130,7 @@ const commandHelp: Readonly<Record<string, string>> = {
     "  gitpm entity show [--draft <id>] --type <type> --id <entity-id> [--json]",
     "  gitpm entity delete [--draft <id>] --type <type> --id <entity-id> [--unlink-references|--cascade-references] [--dry-run] [--allow-delete] [--project <id>] [--json]",
     "  gitpm entity archive [--draft <id>] --type <type> --id <entity-id> [--project <id>] [--json]",
-    "  gitpm entity move [--draft <id>] --type task --id <entity-id> --to-project <id> [--to-milestone <id>] [--allow-delete] [--project <id>] [--json]",
+    "  gitpm entity move [--draft <id>] --type task --id <entity-id> --to-project <id> [--to-milestone <id>] [--to-parent <task-id>] [--allow-delete] [--project <id>] [--json]",
     "",
     "create accepts a YAML mapping. schema, id and lifecycle may be omitted when --type is supplied.",
     "Person calendar may be omitted and is materialized from repository default_calendar.",
@@ -211,7 +211,7 @@ function commandArgumentSpec(command: string | undefined, args: readonly string[
     if (action === "show") return { values: [...common, "--id"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
     if (action === "delete") return { values: [...common, "--id", "--project"], booleans: ["--unlink-references", "--cascade-references", "--dry-run", "--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
     if (action === "archive") return { values: [...common, "--id", "--project"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
-    if (action === "move") return { values: [...common, "--id", "--to-project", "--to-milestone", "--project"], booleans: ["--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
+    if (action === "move") return { values: [...common, "--id", "--to-project", "--to-milestone", "--to-parent", "--project"], booleans: ["--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
     return { booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
   }
   if (command === "schema") return action === "show"
@@ -580,9 +580,10 @@ async function runEntity(args: readonly string[], cwd: string, dependencies: Cli
     const requestedId = required(flagValue(args, "--id"), "--id");
     const targetProject = required(flagValue(args, "--to-project"), "--to-project");
     const targetMilestone = flagValue(args, "--to-milestone");
+    const targetParent = flagValue(args, "--to-parent");
     const moved = agent?.moveTask === undefined
-      ? await direct!.moveTask(requestedId, targetProject, targetMilestone === undefined ? undefined : targetMilestone, agentScope(args))
-      : await agent.moveTask(required(draftId, "--draft"), requestedId, targetProject, targetMilestone === undefined ? undefined : targetMilestone, agentScope(args));
+      ? await direct!.moveTask(requestedId, targetProject, targetMilestone === undefined ? undefined : targetMilestone, targetParent === undefined ? undefined : targetParent, agentScope(args))
+      : await agent.moveTask(required(draftId, "--draft"), requestedId, targetProject, targetMilestone === undefined ? undefined : targetMilestone, targetParent === undefined ? undefined : targetParent, agentScope(args));
     return {
       exitCode: 0,
       output: render(json, { ok: true, code: "OK", path: moved.path, draft_fingerprint: moved.draft_fingerprint, document: moved.document }, `Moved to ${moved.path}`),

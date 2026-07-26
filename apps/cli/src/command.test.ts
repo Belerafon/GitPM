@@ -610,10 +610,23 @@ describe.concurrent("CLI direct mode", () => {
     expect(JSON.parse(archived.output)).toMatchObject({ ok: true, code: "OK", document: { lifecycle: "archived" } });
     await expect(readFile(path.join(checkout, "projects", "P-26-MGP84K", "milestones", "M-26-461GDJ.yaml"), "utf8")).resolves.toContain("lifecycle: archived");
 
-    const moved = await run(["entity", "move", "--type", "task", "--id", "T-26-G2TG9R", "--to-project", "P-26-MGP84K", "--allow-delete", "--json"], process.cwd(), { direct });
+    const moved = await run([
+      "entity", "move",
+      "--type", "task",
+      "--id", "T-26-G2TG9R",
+      "--to-project", "P-26-MGP84K",
+      "--to-milestone", "M-26-461GDJ",
+      "--to-parent", "T-26-P9G3P8",
+      "--allow-delete",
+      "--json",
+    ], process.cwd(), { direct });
     expect(moved.exitCode).toBe(0);
     const movePayload = JSON.parse(moved.output);
-    expect(movePayload).toMatchObject({ ok: true, path: "projects/P-26-MGP84K/tasks/T-26-G2TG9R.yaml", document: { project: "P-26-MGP84K" } });
+    expect(movePayload).toMatchObject({
+      ok: true,
+      path: "projects/P-26-MGP84K/tasks/T-26-G2TG9R.yaml",
+      document: { project: "P-26-MGP84K", milestone: "M-26-461GDJ", parent: "T-26-P9G3P8" },
+    });
     await expect(readFile(path.join(checkout, "projects", "P-26-MGP84K", "tasks", "T-26-G2TG9R.yaml"), "utf8")).resolves.toContain("Prepare operations");
     await expect(readFile(path.join(checkout, "projects", "P-26-8S9HQQ", "tasks", "T-26-G2TG9R.yaml"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
   });

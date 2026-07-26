@@ -290,11 +290,18 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .plan-order-controls button { display: inline-grid; place-items: center; width: 30px; height: 30px; padding: 0; }
 .project-plan-stage-progress { display: grid; grid-template-columns: minmax(140px, 1fr) auto; gap: .75rem; align-items: center; margin: 0 .8rem; color: #68706b; font-size: .75rem; }
 .project-plan-task-list { display: grid; margin: 0 .8rem .7rem 1.4rem; border-left: 2px solid #d6e3dc; padding-left: .75rem; }
-.project-plan-task-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .75rem; align-items: center; width: 100%; border: 0; border-top: 1px solid #e5e7e1; border-left: 3px solid transparent; border-radius: 0; background: transparent; padding: .48rem .4rem .48rem .6rem; text-align: left; }
+.project-plan-task-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .5rem; align-items: center; width: 100%; border: 0; border-top: 1px solid #e5e7e1; border-left: 3px solid transparent; border-radius: 0; background: transparent; padding: .48rem .4rem .48rem calc(.6rem + var(--task-depth, 0) * 1.15rem); text-align: left; }
+.project-plan-task-row.filter-context { opacity: .7; }
+.project-plan-task-tree-control { display: grid; place-items: center; width: 1.25rem; color: #68706b; }
+.project-plan-task-tree-control button { display: grid; place-items: center; width: 1.25rem; height: 1.25rem; border: 0; border-radius: 4px; background: transparent; padding: 0; color: inherit; }
+.project-plan-task-tree-control button:hover { background: #edf2ee; }
 .project-plan-task-row:hover:not(:disabled) { border-top-color: #e5e7e1; background: #f4f8f5; }
 .project-plan-task-row.selected { border-left-color: #3f7967; background: #eaf3ed; }
 .project-plan-task-selector { display: grid; gap: .12rem; min-width: 0; border: 0; border-radius: 0; background: transparent; padding: 0; text-align: left; }
 .project-plan-task-selector:hover:not(:disabled) { border-color: transparent; color: #315f50; }
+.project-plan-task-selector small { color: #68706b; font-size: .68rem; font-weight: 500; }
+.task-add-subtask { border: 0; background: transparent; padding: .2rem .3rem; color: #315f50; font-size: .7rem; }
+.task-parent-context { margin: 0; padding: .65rem .75rem; border-left: 3px solid #6b9b87; background: #f3f6f2; }
 .project-plan-task-kind { color: #617069; font-size: .66rem; font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
 .project-plan-task-row strong { font-size: .82rem; }
 .project-plan-task-row code { color: #777e79; font-size: .66rem; }
@@ -320,6 +327,13 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .task-inspector .task-detail-card { border: 0; box-shadow: none; padding: 0; }
 .task-inspector .task-detail-meta { grid-template-columns: 1fr; gap: 0; border-block: 1px solid #e1e3dd; padding: .25rem 0; }
 .task-inspector .task-detail-meta div { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: .65rem; align-items: baseline; border-radius: 0; background: transparent; padding: .45rem 0; }
+.task-hierarchy-breadcrumbs { display: flex; flex-wrap: wrap; gap: .35rem; align-items: center; color: #68706b; font-size: .75rem; }
+.task-hierarchy-breadcrumbs button::after { margin-left: .35rem; color: #9aa39d; content: "›"; text-decoration: none; }
+.task-hierarchy-summary { display: grid; gap: .6rem; border-top: 1px solid #e5e7e1; border-bottom: 1px solid #e5e7e1; padding: .8rem 0; }
+.task-hierarchy-summary-heading h3, .task-hierarchy-summary-heading p { margin: 0; }
+.task-hierarchy-summary-heading p { margin-top: .2rem; color: #68706b; font-size: .75rem; }
+.task-child-list { display: grid; gap: .35rem; }
+.task-child-list button { display: flex; justify-content: space-between; gap: .75rem; width: 100%; padding: .35rem 0; }
 .task-inspector .task-detail-meta dt, .task-inspector .task-detail-meta dd { margin: 0; }
 .stage-workspace { display: grid; gap: 1rem; margin-top: 1rem; }
 .stage-detail-header { display: flex; justify-content: space-between; gap: 1rem; align-items: start; }
@@ -332,7 +346,8 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .stage-stats span { color: #68706b; font-size: .78rem; }
 .stage-stats strong { font-size: 1.2rem; }
 .stage-task-list { display: grid; gap: .5rem; }
-.stage-task-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .75rem; align-items: center; width: 100%; padding: .7rem .8rem; border: 1px solid #dedfd9; border-radius: 8px; background: #fff; text-align: left; }
+.stage-task-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .75rem; align-items: center; width: 100%; padding: .7rem .8rem .7rem calc(.8rem + var(--task-depth, 0) * 1.25rem); border: 1px solid #dedfd9; border-radius: 8px; background: #fff; text-align: left; }
+.stage-task-row[data-depth]:not([data-depth="0"]) { border-left: 3px solid #c9d8d0; }
 .stage-task-link { display: grid; gap: .15rem; border: 0; border-radius: 4px; background: transparent; padding: 0; text-align: left; }
 .stage-task-link:hover:not(:disabled) { border-color: transparent; color: #315f50; }
 .stage-task-row code { color: #767b77; font-size: .68rem; }
@@ -360,7 +375,7 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .empty-copy { color: #707671; }
 @media (max-width: 1350px) { .project-plan-layout.with-inspector { grid-template-columns: 1fr; } .project-plan-inspector { position: fixed; z-index: 50; inset: 0 0 0 auto; width: min(440px, 100vw); max-height: none; border: 0; border-left: 1px solid #d9ddd6; border-radius: 0; background: #fff; box-shadow: -12px 0 32px rgba(24, 53, 42, .16); padding: 1rem; } }
 @media (max-width: 1000px) { .portfolio-stats, .stage-stats, .project-plan-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .portfolio-project-grid, .project-directory-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .project-detail-layout { grid-template-columns: 1fr; } .task-create { grid-template-columns: 1fr 1fr; } .task-layout { grid-template-columns: 1fr; } .task-panel { border-left: 0; border-top: 1px solid #dedfd9; padding: 1rem 0 0; } }
-@media (max-width: 700px) { .portfolio-stats, .portfolio-project-grid, .project-directory-grid, .stage-stats, .project-plan-stats, .core-columns, .task-detail-meta { grid-template-columns: 1fr; } .project-directory .card-heading, .task-toolbar, .task-toolbar-controls, .stage-detail-header, .project-plan-work-heading, .project-plan-stage > header { align-items: stretch; flex-direction: column; } .project-plan-header, .project-plan-toolbar { grid-template-columns: 1fr; } .project-plan-actions, .project-plan-stage-actions { flex-direction: column; align-items: stretch; } .project-plan-meta { grid-column: 1; } .project-plan-summary, .project-register-summary { gap: .6rem 1rem; } .project-register { overflow-x: auto; } .project-register-head, .project-register-row { min-width: 780px; } .project-plan-stage-progress, .project-plan-task-row { grid-template-columns: 1fr; } .project-plan-task-meta { flex-wrap: wrap; } .stage-detail-actions { flex-direction: column; } .task-create, .task-row { grid-template-columns: 1fr; } }
+@media (max-width: 700px) { .portfolio-stats, .portfolio-project-grid, .project-directory-grid, .stage-stats, .project-plan-stats, .core-columns, .task-detail-meta { grid-template-columns: 1fr; } .project-directory .card-heading, .task-toolbar, .task-toolbar-controls, .stage-detail-header, .project-plan-work-heading, .project-plan-stage > header { align-items: stretch; flex-direction: column; } .project-plan-header, .project-plan-toolbar { grid-template-columns: 1fr; } .project-plan-actions, .project-plan-stage-actions { flex-direction: column; align-items: stretch; } .project-plan-meta { grid-column: 1; } .project-plan-summary, .project-register-summary { gap: .6rem 1rem; } .project-register { overflow-x: auto; } .project-register-head, .project-register-row { min-width: 780px; } .project-plan-stage-progress { grid-template-columns: 1fr; } .project-plan-task-row { grid-template-columns: auto minmax(0, 1fr); } .project-plan-task-meta { grid-column: 2; flex-wrap: wrap; } .stage-detail-actions { flex-direction: column; } .task-create, .task-row { grid-template-columns: 1fr; } }
 @media (max-width: 700px) {
   .project-plan-stage > header { grid-template-columns: 1fr; }
   .project-plan-stage-actions { grid-column: 1; flex-direction: row; justify-content: space-between; align-items: center; }
@@ -861,6 +876,7 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
 .board-card .board-milestone { justify-self: start; border: 0; border-radius: 4px; background: transparent; color: #315f50; padding: 0; font-size: .72rem; font-weight: 650; text-align: left; text-decoration: underline; text-underline-offset: 2px; }
 .board-card .board-assignees { color: #315f50; font-weight: 650; }
 .board-task-link { display: grid; gap: .35rem; cursor: pointer; }
+.board-task-path { overflow: hidden; color: #68706b; font-size: .68rem; text-overflow: ellipsis; white-space: nowrap; }
 .board-status-control { display: grid; gap: .2rem; margin-top: .25rem; color: #666d68; font-size: .68rem; }
 .board-status-control select { min-width: 0; width: 100%; border: 1px solid #d5d9d4; border-radius: 7px; background: #fff; padding: .38rem; }
 .saved-views { display: grid; grid-template-columns: minmax(180px,.7fr) minmax(280px,1fr) minmax(250px,1fr); align-items: start; gap: 1rem; }

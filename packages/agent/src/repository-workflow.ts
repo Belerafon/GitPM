@@ -265,16 +265,16 @@ export class RepositoryWorkflow {
     id: string,
     targetProject: string,
     targetMilestone: string | undefined,
+    targetParent: string | undefined,
     scope: AgentScope = {},
   ): Promise<EntityResult> {
     const workspace = await this.beginMutation(workspaceId, scope);
     const current = await this.entities.get(workspaceId, "tasks", id);
-    const movedDocument = { ...current.document, project: targetProject, milestone: targetMilestone } as GitPmDocument;
+    const movedDocument = { ...current.document, project: targetProject, milestone: targetMilestone, parent: targetParent } as GitPmDocument;
     const targetRelative = entityPathForDocument(movedDocument);
-    this.assertPlannedPaths([
-      { path: current.path, kind: "Deleted" },
-      { path: targetRelative, kind: "Added" },
-    ], scope);
+    this.assertPlannedPaths(current.path === targetRelative
+      ? [{ path: current.path, kind: "Modified" }]
+      : [{ path: current.path, kind: "Deleted" }, { path: targetRelative, kind: "Added" }], scope);
     return await this.entities.moveTask(
       workspaceId,
       workspace.owner_id,
@@ -283,6 +283,7 @@ export class RepositoryWorkflow {
       current.blob_id,
       targetProject,
       targetMilestone,
+      targetParent,
     );
   }
 

@@ -166,9 +166,10 @@ export class AgentWorkflow {
     id: string,
     targetProject: string,
     targetMilestone: string | undefined,
+    targetParent: string | undefined,
     scope: AgentScope = {},
   ) {
-    return await this.repository.moveTask(draftId, id, targetProject, targetMilestone, scope);
+    return await this.repository.moveTask(draftId, id, targetProject, targetMilestone, targetParent, scope);
   }
 
   async commitAll(draftId: string, message: string, scope: AgentScope = {}) {

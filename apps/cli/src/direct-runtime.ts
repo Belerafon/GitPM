@@ -178,12 +178,13 @@ export class DirectCliRuntime {
     return await new ExportService(this.drafts, this.git).create(DIRECT_WORKSPACE_ID, request);
   }
 
-  async moveTask(id: string, targetProject: string, targetMilestone: string | undefined, scope: AgentScope = {}): Promise<EntityResult> {
+  async moveTask(id: string, targetProject: string, targetMilestone: string | undefined, targetParent: string | undefined, scope: AgentScope = {}): Promise<EntityResult> {
     return await this.repository.moveTask(
       DIRECT_WORKSPACE_ID,
       id,
       targetProject,
       targetMilestone,
+      targetParent,
       scope,
     );
   }

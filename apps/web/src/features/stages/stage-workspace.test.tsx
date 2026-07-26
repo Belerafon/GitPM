@@ -21,10 +21,10 @@ const other = result({ schema: "gitpm/task@1", id: "T-26-444444", project: proje
 const urgent = result({ schema: "gitpm/task@1", id: "T-26-555555", project: project.document.id, milestone: stage.document.id, title: "Zebra task", type: "task", status: "backlog", lifecycle: "active", due: "2026-07-20", estimate_hours: 2 });
 const large = result({ schema: "gitpm/task@1", id: "T-26-666666", project: project.document.id, milestone: stage.document.id, title: "Alpha task", type: "task", status: "backlog", lifecycle: "active", due: "2026-09-01", estimate_hours: 13 });
 
-function api() {
+function api(initialTasks: readonly EntityResult[] = [linked, other, large, urgent]) {
   let currentProject = project;
   let currentStages = [stage, laterStage];
-  let currentTasks = [linked, other, large, urgent];
+  let currentTasks = [...initialTasks];
   const createEntity = vi.fn(async (_draftId: string, _type: string, _fingerprint: string, document: EntityDocument) => result(document));
   const updateEntity = vi.fn(async (_draftId: string, type: string, _entity: EntityResult, _fingerprint: string, document: EntityDocument) => {
     const updated = result(document);
@@ -230,6 +230,39 @@ describe("project plan and stage workspace", () => {
     await waitFor(() => expect(stageCard.querySelector(".project-plan-stage-kind")?.textContent).toBe(`Milestone 2. ${stage.document.id}.`));
     expect(client.updateEntity.mock.calls[1]?.[1]).toBe("projects");
     expect(client.updateEntity.mock.calls[1]?.[4]).toMatchObject({ milestone_order: [laterStage.document.id, stage.document.id] });
+  });
+
+  it("renders arbitrary-depth subtasks, preserves ancestor context and creates a child in the same milestone", async () => {
+    const root = result({ ...urgent.document, title: "Root task" });
+    const child = result({ ...large.document, parent: root.document.id, title: "Child task" });
+    const grandchild = result({ ...linked.document, parent: child.document.id, title: "Grandchild task" });
+    const siblingRoot = result({ ...other.document, milestone: stage.document.id, title: "Sibling root" });
+    const client = api([root, child, grandchild, siblingRoot]);
+    render(<ProjectPlanWorkspace api={client} draft={draft} initialStatusFilter="done" locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} />);
+
+    const stageCard = (await screen.findByRole("heading", { name: "Launch" })).closest<HTMLElement>("article")!;
+    expect(screen.getByText("Root task").closest(".project-plan-task-row")?.getAttribute("data-depth")).toBe("0");
+    expect(screen.getByText("Child task").closest(".project-plan-task-row")?.getAttribute("data-depth")).toBe("1");
+    expect(screen.getByText("Grandchild task").closest(".project-plan-task-row")?.getAttribute("data-depth")).toBe("2");
+    expect(screen.getByText("Root task").closest(".project-plan-task-row")?.classList.contains("filter-context")).toBe(true);
+    expect(screen.getByText("Child task").closest(".project-plan-task-row")?.classList.contains("filter-context")).toBe(true);
+
+    fireEvent.click(within(stageCard).getByRole("button", { name: "Collapse subtasks of Root task" }));
+    expect(screen.queryByText("Child task")).toBeNull();
+    fireEvent.click(within(stageCard).getByRole("button", { name: "Expand subtasks of Root task" }));
+    fireEvent.click(within(stageCard).getByRole("button", { name: `Add subtask to task ${child.document.id}` }));
+    const dialog = screen.getByRole("dialog", { name: "New subtask" });
+    expect(within(dialog).getByText("Child task")).toBeTruthy();
+    fireEvent.change(within(dialog).getByLabelText("Title"), { target: { value: "Nested child" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create task" }));
+
+    await waitFor(() => expect(client.createEntity).toHaveBeenCalled());
+    expect(client.createEntity.mock.calls[0]?.[3]).toMatchObject({
+      project: project.document.id,
+      milestone: stage.document.id,
+      parent: child.document.id,
+      title: "Nested child",
+    });
   });
 
   it("shows only stage tasks and creates a task inside the stage context", async () => {

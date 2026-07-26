@@ -17,7 +17,7 @@ gitpm entity list [--draft <id>] --type <type> [--project <id>]
 gitpm entity show [--draft <id>] --type <type> --id <entity-id>
 gitpm entity delete [--draft <id>] --type <type> --id <entity-id> [--unlink-references|--cascade-references] [--dry-run] [--allow-delete] [--project <id>]
 gitpm entity archive [--draft <id>] --type <type> --id <entity-id> [--project <id>]
-gitpm entity move [--draft <id>] --type task --id <entity-id> --to-project <id> [--to-milestone <id>] [--allow-delete] [--project <id>]
+gitpm entity move [--draft <id>] --type task --id <entity-id> --to-project <id> [--to-milestone <id>] [--to-parent <task-id>] [--allow-delete] [--project <id>]
 gitpm comment list --project <id> --task <id>
 gitpm comment create --project <id> --task <id> (--body <text> | --file <path>)
 gitpm comment update --project <id> --task <id> --id <comment-id> (--body <text> | --file <path>)
@@ -90,8 +90,11 @@ Project (поддерживается только для `project`; други�
 `entity archive` устанавливает `lifecycle: archived` (обратимо); файл остаётся, ссылки
 остаются валидными.
 
-`entity move` перемещает Task (и её комментарии) в другой Project и опционально другой
-Milestone. Cross-project ссылки (`depends_on`, `parent`) блокируются validation.
+`entity move` атомарно перемещает Task, всё её поддерево и комментарии в другой Project
+и опционально другой Milestone. `--to-parent` прикрепляет корень перемещаемого поддерева
+к Task целевого Project и Milestone; циклы запрещены. Все потомки получают целевые
+`project` и `milestone`, а их внутренние связи `parent` сохраняются. Cross-project
+зависимости `depends_on` блокируются validation.
 
 `comment` управляет комментариями к Task: Markdown с упоминаниями `@[Name](person:U-...)`,
 soft-delete (tombstone остаётся в Git history). Доступно в direct mode.

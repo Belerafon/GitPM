@@ -12,6 +12,7 @@ const task = (suffix: string, title: string, start?: string, due?: string, extra
 
 const parent = task("2", "Plan release", "2026-07-01", "2026-07-05");
 const child = task("3", "Build API", "2026-07-02", "2026-07-03", { parent: parent.document.id, milestone: "M-26-888888" });
+const grandchild = task("8", "Implement endpoint", "2026-07-03", "2026-07-03", { parent: child.document.id, milestone: "M-26-888888" });
 const dependent = task("4", "Ship UI", "2026-07-04", "2026-07-06", { depends_on: [child.document.id] });
 const review = task("5", "Review", "2026-07-06", "2026-07-07", { depends_on: [dependent.document.id] });
 const launch = task("6", "Launch", "2026-07-08", "2026-07-08", { depends_on: [review.document.id, dependent.document.id] });
@@ -27,25 +28,27 @@ describe("read-only Gantt", () => {
   });
 
   it("builds deterministic bars, hierarchy, milestones, and dependency edges", () => {
-    const model = buildGanttModel([parent, child, dependent, review, launch, undated, archived], [milestone])!;
-    expect(model.rows).toHaveLength(5);
+    const model = buildGanttModel([parent, child, grandchild, dependent, review, launch, undated, archived], [milestone])!;
+    expect(model.rows).toHaveLength(6);
     expect(model.rows.map((row) => row.title)).not.toContain("Undated");
     expect(model.rows.map((row) => row.title)).not.toContain("Archived");
     expect(model.rows.find((row) => row.id === child.document.id)).toMatchObject({ startOffset: 1, duration: 2, depth: 1, milestone: milestone.document.id });
+    expect(model.rows.find((row) => row.id === grandchild.document.id)).toMatchObject({ startOffset: 2, duration: 1, depth: 2, milestone: milestone.document.id });
+    expect(model.rows.slice(0, 3).map((row) => row.id)).toEqual([parent.document.id, child.document.id, grandchild.document.id]);
     expect(model.milestones).toEqual([{ id: milestone.document.id, name: "Beta", due: "2026-07-08", offset: 7 }]);
     expect(model.dependencies).toEqual([{ from: child.document.id, to: dependent.document.id }, { from: dependent.document.id, to: review.document.id }, { from: review.document.id, to: launch.document.id }, { from: dependent.document.id, to: launch.document.id }]);
   });
 
-  it("renders five bars and cannot mutate repository data", async () => {
+  it("renders six bars and cannot mutate repository data", async () => {
     const updateEntity = vi.fn(); const createEntity = vi.fn(); const deleteEntity = vi.fn();
     const onNavigate = vi.fn();
-    const entities = [result({ schema: "gitpm/project@1", id: projectId, name: "Beta portfolio", status: "backlog", lifecycle: "active" }), parent, child, dependent, review, launch, undated, archived, milestone];
+    const entities = [result({ schema: "gitpm/project@1", id: projectId, name: "Beta portfolio", status: "backlog", lifecycle: "active" }), parent, child, grandchild, dependent, review, launch, undated, archived, milestone];
     const api = { listEntities: vi.fn(async (_draftId: string, type: string, project?: string) => entities.filter((item) => {
       const schemas: Record<string, string> = { projects: "gitpm/project@1", tasks: "gitpm/task@1", milestones: "gitpm/milestone@1" };
       return item.document.schema === schemas[type] && (project === undefined || item.document.project === project);
     })), updateEntity, createEntity, deleteEntity } as unknown as GitPmApi;
     const { container } = render(<GanttWorkspace api={api} draft={draft} locale="en" onNavigate={onNavigate} />);
-    await waitFor(() => expect(container.querySelectorAll(".gantt-bar")).toHaveLength(5));
+    await waitFor(() => expect(container.querySelectorAll(".gantt-bar")).toHaveLength(6));
     expect(screen.queryByText("Undated")).toBeNull(); expect(screen.queryByText("Archived")).toBeNull();
     expect(container.querySelectorAll(".gantt-dependencies path[data-from]")).toHaveLength(4);
     expect(container.querySelector(".gantt-dependencies path[data-from]")?.getAttribute("d")).not.toContain("C");

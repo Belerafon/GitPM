@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import type { GitPmApi } from "./api.js";
+import { buildTaskHierarchy } from "@gitpm/task-hierarchy";
 import { formatDateOnly, message, type Locale, type MessageKey } from "./i18n.js";
 import type { DraftStatus, EntityResult, GitPmDocument } from "./types.js";
 import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
@@ -52,19 +53,15 @@ export function buildGanttModel(tasks: readonly EntityResult[], milestones: read
   const dated = tasks.filter((item) => item.document.lifecycle === "active" && /^\d{4}-\d{2}-\d{2}$/u.test(text(item.document, "start")) && /^\d{4}-\d{2}-\d{2}$/u.test(text(item.document, "due")) && dayNumber(text(item.document, "start")) <= dayNumber(text(item.document, "due")));
   if (dated.length === 0) return null;
   const byId = new Map(dated.map((item) => [item.document.id, item]));
-  const depth = (item: EntityResult, seen = new Set<string>()): number => {
-    const parent = text(item.document, "parent");
-    if (parent === "" || seen.has(parent)) return 0;
-    const parentEntity = byId.get(parent);
-    if (parentEntity === undefined) return 0;
-    return 1 + depth(parentEntity, new Set([...seen, item.document.id]));
-  };
-  const ordered = [...dated].sort((left, right) => {
-    const leftParent = text(left.document, "parent"); const rightParent = text(right.document, "parent");
-    if (rightParent === left.document.id) return -1;
-    if (leftParent === right.document.id) return 1;
-    return dayNumber(text(left.document, "start")) - dayNumber(text(right.document, "start")) || text(left.document, "title").localeCompare(text(right.document, "title"));
-  });
+  const chronological = [...dated].sort((left, right) =>
+    dayNumber(text(left.document, "start")) - dayNumber(text(right.document, "start"))
+    || text(left.document, "title").localeCompare(text(right.document, "title")));
+  const hierarchy = buildTaskHierarchy(dated.map((entity) => ({
+    id: entity.document.id,
+    parent: text(entity.document, "parent") || undefined,
+    entity,
+  })), { order: chronological.map((entity) => entity.document.id) });
+  const ordered = hierarchy.flatten().map((entry) => entry.task.entity);
   const activeMilestones = milestones.filter((item) => item.document.lifecycle === "active" && /^\d{4}-\d{2}-\d{2}$/u.test(text(item.document, "due")));
   const first = Math.min(...dated.map((item) => dayNumber(text(item.document, "start"))), ...activeMilestones.map((item) => dayNumber(text(item.document, "due"))));
   const last = Math.max(...dated.map((item) => dayNumber(text(item.document, "due"))), ...activeMilestones.map((item) => dayNumber(text(item.document, "due"))));
@@ -72,7 +69,7 @@ export function buildGanttModel(tasks: readonly EntityResult[], milestones: read
   const rows = ordered.map((entity): GanttRow => ({
     entity, id: entity.document.id, title: text(entity.document, "title"), start: text(entity.document, "start"), due: text(entity.document, "due"),
     startOffset: dayNumber(text(entity.document, "start")) - first, duration: dayNumber(text(entity.document, "due")) - dayNumber(text(entity.document, "start")) + 1,
-    depth: depth(entity), milestone: text(entity.document, "milestone") || undefined, dependencies: strings(entity.document.depends_on).filter((id) => byId.has(id)),
+    depth: hierarchy.depthOf(entity.document.id), milestone: text(entity.document, "milestone") || undefined, dependencies: strings(entity.document.depends_on).filter((id) => byId.has(id)),
   }));
   return {
     start: isoDate(first), due: isoDate(last), days, rows,

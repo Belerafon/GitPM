@@ -216,20 +216,44 @@ describe("domain entity store", () => {
     expect(after.tasks.find((item) => item.document.id === task.document.id)?.document.title).toBe("Externally changed");
   });
 
-  it("moves a task between projects and rejects moves that break project-local references", async () => {
+  it("moves a complete task subtree and its comments between projects and rejects broken external references", async () => {
     const { manager, store, comments } = await runtime();
     const draft = await manager.createDraft("DRF-MOVE", "42");
     const task = await store.get("DRF-MOVE", "tasks", "T-26-G2TG9R");
-    const comment = await comments.create("DRF-MOVE", String(task.document.project), String(task.document.id), draft.fingerprint, "Moves with its task", { userId: "42", role: "Developer", identity: { provider: "git", subject: "author@example.test", display_name: "Author" } });
+    const child = await store.create("DRF-MOVE", "42", draft.fingerprint, { schema: "gitpm/task@1", id: "T-26-ABCDEF", project: task.document.project, parent: task.document.id, title: "Child task", type: "task", status: "backlog", lifecycle: "active" });
+    const grandchild = await store.create("DRF-MOVE", "42", child.draft_fingerprint, { schema: "gitpm/task@1", id: "T-26-BCDEFG", project: task.document.project, parent: child.document.id, title: "Grandchild task", type: "task", status: "backlog", lifecycle: "active" });
+    const comment = await comments.create("DRF-MOVE", String(task.document.project), String(grandchild.document.id), grandchild.draft_fingerprint, "Moves with the subtree", { userId: "42", role: "Developer", identity: { provider: "git", subject: "author@example.test", display_name: "Author" } });
     const moved = await store.moveTask("DRF-MOVE", "42", String(task.document.id), comment.draft_fingerprint, task.blob_id, "P-26-MGP84K", "M-26-461GDJ");
 
     expect(moved.document).toMatchObject({ project: "P-26-MGP84K", milestone: "M-26-461GDJ" });
     expect(moved.path).toBe("projects/P-26-MGP84K/tasks/T-26-G2TG9R.yaml");
-    expect(await readFile(path.join(draft.worktree_path, "projects", "P-26-MGP84K", "comments", "T-26-G2TG9R", `${comment.document.id}.yaml`), "utf8")).toContain("project: P-26-MGP84K");
+    expect((await store.get("DRF-MOVE", "tasks", String(child.document.id))).document).toMatchObject({ project: "P-26-MGP84K", milestone: "M-26-461GDJ", parent: task.document.id });
+    expect((await store.get("DRF-MOVE", "tasks", String(grandchild.document.id))).document).toMatchObject({ project: "P-26-MGP84K", milestone: "M-26-461GDJ", parent: child.document.id });
+    expect(await readFile(path.join(draft.worktree_path, "projects", "P-26-MGP84K", "comments", String(grandchild.document.id), `${comment.document.id}.yaml`), "utf8")).toContain("project: P-26-MGP84K");
+    expect((await store.get("DRF-MOVE", "milestones", "M-26-461GDJ")).document.task_order).toEqual(expect.arrayContaining([task.document.id, child.document.id, grandchild.document.id]));
     const dependent = await store.get("DRF-MOVE", "tasks", "T-26-P9G3P8");
     await expect(store.moveTask("DRF-MOVE", "42", String(dependent.document.id), moved.draft_fingerprint, dependent.blob_id, "P-26-8S9HQQ"))
       .rejects.toMatchObject({ code: "VALIDATION_FAILED" });
     expect((await store.get("DRF-MOVE", "tasks", String(dependent.document.id))).path).toBe(dependent.path);
+  });
+
+  it("atomically reparents a subtree inside the project and keeps every descendant in the target milestone", async () => {
+    const { manager, store } = await runtime();
+    const draft = await manager.createDraft("DRF-REPARENT", "42");
+    const root = await store.get("DRF-REPARENT", "tasks", "T-26-RHBNH8");
+    const child = await store.create("DRF-REPARENT", "42", draft.fingerprint, { schema: "gitpm/task@1", id: "T-26-ABCDEF", project: root.document.project, parent: root.document.id, milestone: root.document.milestone, title: "Nested parser work", type: "task", status: "backlog", lifecycle: "active" });
+    const targetMilestone = await store.create("DRF-REPARENT", "42", child.draft_fingerprint, { schema: "gitpm/milestone@1", id: "M-26-ABCDEF", project: root.document.project, name: "Follow-up", lifecycle: "active" });
+    const targetParent = await store.create("DRF-REPARENT", "42", targetMilestone.draft_fingerprint, { schema: "gitpm/task@1", id: "T-26-BCDEFG", project: root.document.project, milestone: targetMilestone.document.id, title: "New parent", type: "task", status: "backlog", lifecycle: "active" });
+
+    const moved = await store.moveTask("DRF-REPARENT", "42", String(root.document.id), targetParent.draft_fingerprint, root.blob_id, String(root.document.project), String(targetMilestone.document.id), String(targetParent.document.id));
+
+    expect(moved.document).toMatchObject({ project: root.document.project, milestone: targetMilestone.document.id, parent: targetParent.document.id });
+    expect((await store.get("DRF-REPARENT", "tasks", String(child.document.id))).document).toMatchObject({ milestone: targetMilestone.document.id, parent: root.document.id });
+    const targetOrder = (await store.get("DRF-REPARENT", "milestones", String(targetMilestone.document.id))).document.task_order as string[];
+    expect(targetOrder.slice(targetOrder.indexOf(String(targetParent.document.id)), targetOrder.indexOf(String(targetParent.document.id)) + 3))
+      .toEqual([targetParent.document.id, root.document.id, child.document.id]);
+    await expect(store.moveTask("DRF-REPARENT", "42", String(root.document.id), moved.draft_fingerprint, moved.blob_id, String(root.document.project), String(targetMilestone.document.id), String(child.document.id)))
+      .rejects.toMatchObject({ code: "TASK_PARENT_CYCLE" });
   });
 
   it("unlinks a person from every supported reference before confirmed deletion", async () => {

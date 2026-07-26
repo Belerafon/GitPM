@@ -5,6 +5,7 @@ import { formatYamlDocument, parseYamlDocument, referenceLabelForDocument, refer
 import type { GitPmDocument } from "@gitpm/repository-format";
 import { atomicWriteDomainFile, resolveDomainPath } from "@gitpm/security";
 import { ENTITY_ID_PREFIX, isEntityId, newUniqueEntityId, type EntityIdPrefix } from "@gitpm/shared";
+import { buildTaskHierarchy } from "@gitpm/task-hierarchy";
 import { discoverRepositoryFiles, validateDelete, validateRepository } from "@gitpm/validation";
 import { ENTITY_TYPE_SCHEMAS } from "@gitpm/contracts";
 
@@ -653,40 +654,129 @@ export class EntityStore {
     expectedBlobId: string,
     targetProject: string,
     targetMilestone?: string,
+    targetParent?: string,
   ): Promise<EntityResult> {
     if (!isEntityId(targetProject, ENTITY_ID_PREFIX.project)) throw new DomainOperationError("ENTITY_PROJECT_INVALID", "Target Project ID is invalid");
     if (targetMilestone !== undefined && !isEntityId(targetMilestone, ENTITY_ID_PREFIX.milestone)) throw new DomainOperationError("ENTITY_ID_INVALID", "Target Milestone ID is invalid");
+    if (targetParent !== undefined && !isEntityId(targetParent, ENTITY_ID_PREFIX.task)) throw new DomainOperationError("ENTITY_ID_INVALID", "Target parent Task ID is invalid");
     let movedDocument: GitPmDocument | undefined;
     const mutation = await this.drafts.withRepositoryMutation(draftId, owner, expectedFingerprint, this.mutationMode, async (metadata) => {
       const found = await this.find(draftId, metadata, "tasks", id);
       await this.drafts.assertFileBlobId(draftId, found.relative, expectedBlobId);
-      if (found.document.project === targetProject) throw new DomainOperationError("TASK_ALREADY_IN_PROJECT", `${id} already belongs to ${targetProject}`);
-      movedDocument = { ...found.document, project: targetProject, milestone: targetMilestone };
-      const targetRelative = entityPathForDocument(movedDocument);
-      const targetAbsolute = path.join(metadata.worktree_path, ...targetRelative.split("/"));
-      if (await exists(targetAbsolute)) throw new DomainOperationError("ENTITY_EXISTS", `${targetRelative} already exists`);
       const repository = await this.index(draftId, metadata);
-      const comments = repository.entities.filter((entity) => entity.document.schema === "gitpm/comment@1" && entity.document.task === id);
+      if (repository.bySchemaAndId.get(`gitpm/project@1:${targetProject}`) === undefined) throw new DomainOperationError("REF_MISSING", `${targetProject} does not reference a Project`);
+      const targetMilestoneEntity = targetMilestone === undefined ? undefined : repository.bySchemaAndId.get(`gitpm/milestone@1:${targetMilestone}`);
+      if (targetMilestone !== undefined && (targetMilestoneEntity === undefined || targetMilestoneEntity.document.project !== targetProject)) {
+        throw new DomainOperationError("REF_CROSS_PROJECT", `${targetMilestone} does not belong to ${targetProject}`);
+      }
+      const taskEntities = repository.entities.filter((entity) => entity.document.schema === "gitpm/task@1");
+      const sourceMilestone = typeof found.document.milestone === "string"
+        ? repository.bySchemaAndId.get(`gitpm/milestone@1:${found.document.milestone}`)
+        : undefined;
+      const sourceOrder = Array.isArray(sourceMilestone?.document.task_order)
+        ? sourceMilestone.document.task_order.filter((taskId): taskId is string => typeof taskId === "string")
+        : [];
+      const hierarchy = buildTaskHierarchy(taskEntities.map((entity) => ({
+        id: String(entity.document.id),
+        parent: typeof entity.document.parent === "string" ? entity.document.parent : undefined,
+        entity,
+      })), { order: sourceOrder });
+      const root = hierarchy.tasks.get(id);
+      if (root === undefined) throw new DomainOperationError("ENTITY_NOT_FOUND", `tasks/${id} not found`);
+      const subtree = [root, ...hierarchy.descendantsOf(id)];
+      const subtreeIds = new Set(subtree.map((item) => item.id));
+      const targetParentEntity = targetParent === undefined ? undefined : repository.bySchemaAndId.get(`gitpm/task@1:${targetParent}`);
+      if (targetParent !== undefined && targetParentEntity === undefined) throw new DomainOperationError("REF_MISSING", `${targetParent} does not reference a Task`);
+      if (targetParent !== undefined && subtreeIds.has(targetParent)) throw new DomainOperationError("TASK_PARENT_CYCLE", `${targetParent} belongs to the moved subtree`);
+      if (targetParentEntity !== undefined && targetParentEntity.document.project !== targetProject) throw new DomainOperationError("REF_CROSS_PROJECT", `${targetParent} does not belong to ${targetProject}`);
+      if (targetParentEntity !== undefined && (typeof targetParentEntity.document.milestone === "string" ? targetParentEntity.document.milestone : undefined) !== targetMilestone) {
+        throw new DomainOperationError("TASK_PARENT_MILESTONE_MISMATCH", `${targetParent} does not belong to the target milestone`);
+      }
+      const currentMilestone = typeof found.document.milestone === "string" ? found.document.milestone : undefined;
+      const currentParent = typeof found.document.parent === "string" ? found.document.parent : undefined;
+      if (found.document.project === targetProject && currentMilestone === targetMilestone && currentParent === targetParent) {
+        throw new DomainOperationError("TASK_ALREADY_AT_TARGET", `${id} already has the requested project, milestone and parent`);
+      }
+
+      const movedTasks = subtree.map((item) => {
+        const document = {
+          ...item.entity.document,
+          project: targetProject,
+          milestone: targetMilestone,
+          ...(item.id === id ? { parent: targetParent } : {}),
+        } as GitPmDocument;
+        if (targetMilestone === undefined) delete (document as Record<string, unknown>).milestone;
+        if (item.id === id && targetParent === undefined) delete (document as Record<string, unknown>).parent;
+        return { source: item.entity, document };
+      });
+      movedDocument = movedTasks[0]!.document;
+      const comments = repository.entities.filter((entity) => entity.document.schema === "gitpm/comment@1" && typeof entity.document.task === "string" && subtreeIds.has(entity.document.task));
       const movedComments = comments.map((comment) => ({ source: comment, document: { ...comment.document, project: targetProject } as GitPmDocument }));
-      const targets = [
-        { source: found, document: movedDocument },
-        ...movedComments,
-      ].map((item) => ({ ...item, relative: entityPathForDocument(item.document) }));
-      for (const target of targets) if (await exists(path.join(metadata.worktree_path, ...target.relative.split("/")))) throw new DomainOperationError("ENTITY_EXISTS", `${target.relative} already exists`);
+      const orderUpdates: Array<{ source: IndexedEntity; document: GitPmDocument }> = [];
+      const movedTaskDocuments = new Map(movedTasks.map((item) => [String(item.document.id), item.document]));
+      const orderedTaskIds = (projectId: string, milestoneId: string, explicitOrder: string[]): string[] => {
+        const tasks = taskEntities
+          .map((entity) => movedTaskDocuments.get(String(entity.document.id)) ?? entity.document)
+          .filter((document) => document.project === projectId && document.milestone === milestoneId)
+          .map((document) => ({
+            id: String(document.id),
+            parent: typeof document.parent === "string" ? document.parent : undefined,
+          }));
+        return buildTaskHierarchy(tasks, { order: explicitOrder }).flatten().map((entry) => entry.task.id);
+      };
+      if (sourceMilestone?.document.id !== targetMilestoneEntity?.document.id) {
+        if (sourceMilestone !== undefined) {
+          orderUpdates.push({
+            source: sourceMilestone,
+            document: {
+              ...sourceMilestone.document,
+              task_order: orderedTaskIds(String(sourceMilestone.document.project), String(sourceMilestone.document.id), sourceOrder),
+            } as GitPmDocument,
+          });
+        }
+      }
+      if (targetMilestoneEntity !== undefined) {
+        const targetOrder = Array.isArray(targetMilestoneEntity.document.task_order)
+          ? targetMilestoneEntity.document.task_order.filter((taskId): taskId is string => typeof taskId === "string")
+          : [];
+        orderUpdates.push({
+          source: targetMilestoneEntity,
+          document: {
+            ...targetMilestoneEntity.document,
+            task_order: orderedTaskIds(targetProject, String(targetMilestoneEntity.document.id), targetOrder),
+          } as GitPmDocument,
+        });
+      }
+      const targets = [...movedTasks, ...movedComments, ...orderUpdates].map((item) => ({
+        ...item,
+        relative: entityPathForDocument(item.document),
+      }));
+      const sourceRelatives = new Set(targets.map((target) => target.source.relative));
+      for (const target of targets) {
+        if (target.relative !== target.source.relative
+          && !sourceRelatives.has(target.relative)
+          && await exists(path.join(metadata.worktree_path, ...target.relative.split("/")))) {
+          throw new DomainOperationError("ENTITY_EXISTS", `${target.relative} already exists`);
+        }
+      }
       const originals = new Map<string, string>();
-      const referenceLabels = this.labels(repository, movedDocument);
+      const replacementIds = new Set(targets.map((target) => target.document.id));
+      const referenceLabels = referenceLabelsForDocuments([
+        ...repository.entities.filter((entity) => !replacementIds.has(entity.document.id)).map((entity) => entity.document),
+        ...targets.map((target) => target.document),
+      ]);
       try {
         for (const target of targets) {
-          originals.set(target.source.relative, await readFile(target.source.absolute, "utf8"));
+          if (!originals.has(target.source.relative)) originals.set(target.source.relative, await readFile(target.source.absolute, "utf8"));
           const absolute = path.join(metadata.worktree_path, ...target.relative.split("/"));
           await mkdir(path.dirname(absolute), { recursive: true, mode: 0o700 });
           await resolveDomainPath(metadata.worktree_path, target.relative);
           await atomicWriteDomainFile(metadata.worktree_path, target.relative, formatYamlDocument(target.document, referenceLabels));
         }
-        for (const target of targets) await rm(target.source.absolute);
+        for (const target of targets) if (target.source.relative !== target.relative) await rm(target.source.absolute);
         await this.assertRepositoryValid(metadata.worktree_path);
       } catch (error) {
-        for (const target of targets) await rm(path.join(metadata.worktree_path, ...target.relative.split("/")), { force: true });
+        for (const relative of new Set(targets.map((target) => target.relative))) await rm(path.join(metadata.worktree_path, ...relative.split("/")), { force: true });
         for (const [sourceRelative, original] of originals) {
           const absolute = path.join(metadata.worktree_path, ...sourceRelative.split("/"));
           await mkdir(path.dirname(absolute), { recursive: true, mode: 0o700 });
@@ -694,7 +784,7 @@ export class EntityStore {
         }
         throw error;
       }
-      return targetRelative;
+      return entityPathForDocument(movedDocument);
     });
     if (movedDocument === undefined) throw new DomainOperationError("ENTITY_NOT_FOUND", `tasks/${id} not found`);
     return await this.getWithFingerprint(draftId, movedDocument, mutation.result, mutation.metadata.fingerprint);

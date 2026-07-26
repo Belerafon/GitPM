@@ -1,5 +1,6 @@
 import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { buildTaskHierarchy } from "@gitpm/task-hierarchy";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type FormEvent } from "react";
 import type { GitPmApi } from "../../api.js";
 import { AsyncBoundary, useAsyncLoad } from "../../async-data.js";
 import { AssigneeChecks } from "../../core-ui.js";
@@ -193,6 +194,8 @@ function StageDetails({ stage, tasks, projectId, locale, people, readOnly, chang
   const overdue = tasks.filter((task) => text(task.document, "status") !== "done" && /^\d{4}-\d{2}-\d{2}$/u.test(text(task.document, "due")) && text(task.document, "due") < new Date().toISOString().slice(0, 10)).length;
   const estimate = tasks.reduce((sum, task) => sum + (typeof task.document.estimate_hours === "number" ? task.document.estimate_hours : 0), 0);
   const stageAssignees = [...new Set(tasks.flatMap((task) => Array.isArray(task.document.assignees) ? task.document.assignees.filter((id): id is string => typeof id === "string") : []))];
+  const hierarchy = buildTaskHierarchy(tasks.map((entity) => ({ id: entity.document.id, parent: text(entity.document, "parent") || undefined, entity })));
+  const taskEntries = hierarchy.flatten();
   return <>
     <header className={`card stage-detail-header${changed ? " recently-changed" : ""}`}>
       <div><span className="eyebrow">{t("core.milestone")}</span><h2>{text(stage.document, "name")}</h2><p>{text(stage.document, "description_markdown") || t("core.noDescription")}</p><p className="stage-detail-assignees">{t("core.assignees")}: <PersonLinks empty={t("core.unassigned")} onOpen={(personId) => onNavigate("people", { personId })} people={people} personIds={stageAssignees} /></p></div>
@@ -205,7 +208,7 @@ function StageDetails({ stage, tasks, projectId, locale, people, readOnly, chang
       <div className="card"><span>{t("core.due")}</span><strong>{text(stage.document, "due") ? formatDateOnly(locale, text(stage.document, "due")) : "—"}</strong></div>
     </div>
     <section className="card stage-task-list"><div className="card-heading"><div><h3>{t("stages.tasks")}</h3><p>{t("stages.tasksDescription")}</p></div><button onClick={() => onNavigate("board", { projectId, query: { milestone: [stage.document.id] } })}>{t("stages.openBoard")}</button></div>
-      {tasks.length === 0 ? <p>{t("stages.emptyTasks")}</p> : tasks.map((task) => { const assignees = Array.isArray(task.document.assignees) ? task.document.assignees.filter((id): id is string => typeof id === "string") : []; return <div className={`stage-task-row${changedTaskIds.has(task.document.id) ? " recently-changed" : ""}${statusSavingId === task.document.id ? " is-saving" : ""}`} key={task.document.id}>
+      {tasks.length === 0 ? <p>{t("stages.emptyTasks")}</p> : taskEntries.map((entry) => { const task = entry.task.entity; const assignees = Array.isArray(task.document.assignees) ? task.document.assignees.filter((id): id is string => typeof id === "string") : []; return <div className={`stage-task-row${changedTaskIds.has(task.document.id) ? " recently-changed" : ""}${statusSavingId === task.document.id ? " is-saving" : ""}`} data-depth={entry.depth} key={task.document.id} style={{ "--task-depth": entry.depth } as CSSProperties}>
         <button className="stage-task-link" onClick={() => onNavigate("tasks", { projectId, taskId: task.document.id })}><strong>{text(task.document, "title")}</strong><code>{task.document.id}</code><span className="task-assignees"><PersonLinks empty={t("core.unassigned")} onOpen={(personId) => onNavigate("people", { personId })} people={people} personIds={assignees} /></span></button>{readOnly ? <span className="state open">{statusOptions.find((status) => status.slug === text(task.document, "status"))?.title ?? text(task.document, "status")}</span> : <select aria-label={`${t("core.status")}: ${text(task.document, "title")}`} className="inline-status-select" disabled={statusBusy} onChange={(event) => onStatusChange(task, event.target.value)} value={text(task.document, "status")}>{statusOptions.map((status) => <option key={status.slug} value={status.slug}>{status.title}</option>)}</select>}
       </div>; })}
     </section>

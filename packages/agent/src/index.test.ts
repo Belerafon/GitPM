@@ -173,7 +173,7 @@ describe("agent file and CLI workflow core", () => {
     expect(await readFile(path.join(worktree, ...milestoneBefore.path.split("/")), "utf8")).toContain("lifecycle: archived");
     await workflow.commitAll("DRF-ENTITY", "Archive milestone");
 
-    const moved = await workflow.moveTask("DRF-ENTITY", "T-26-G2TG9R", "P-26-MGP84K", undefined, { allowDelete: true });
+    const moved = await workflow.moveTask("DRF-ENTITY", "T-26-G2TG9R", "P-26-MGP84K", undefined, undefined, { allowDelete: true });
     expect(moved.document.project).toBe("P-26-MGP84K");
     expect(moved.path).toBe("projects/P-26-MGP84K/tasks/T-26-G2TG9R.yaml");
     await expect(readFile(path.join(worktree, ...moved.path.split("/")), "utf8")).resolves.toContain("Prepare operations");
