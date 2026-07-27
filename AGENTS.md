@@ -146,17 +146,45 @@ Rules:
 ## Required local quality gate
 
 This repository intentionally has no hosted GitHub Actions workflow. Local verification is
-therefore a required delivery contract, not an optional reminder. Before declaring source work
-complete, an agent must run:
+therefore a required delivery contract, not an optional reminder. Select exactly one gate from
+the changed-file scope:
+
+- If the only changed source files are `packages/drafts/src/direct-guidance.ts`,
+  `packages/drafts/src/worktree-guidance.ts`, and/or
+  `packages/drafts/src/guidance.test.ts`, run:
+
+  ```bash
+  corepack pnpm verify:guidance
+  ```
+
+  This performs a frozen install, builds the guidance package and its dependencies, lints the
+  guidance files, and runs the fast generated-guidance contract tests. The slower draft lifecycle
+  integration suite is not required for text-only guidance changes.
+
+- If the only changed file is this root `AGENTS.md`, run:
+
+  ```bash
+  corepack pnpm verify:docs
+  ```
+
+- For every other source, test, schema, build configuration, executable script, planning file,
+  or mixed-scope change, run the complete gate:
 
 ```bash
 corepack pnpm verify:local
 ```
 
-This command first proves that the lockfile installs unchanged with
-`pnpm install --frozen-lockfile`, then runs the complete `pnpm verify` suite. If the full gate
-cannot run, do not describe the work as verified: report the exact failing or skipped command and
-the reason. Narrow tests are useful while iterating but never replace this final gate.
+`verify:local` first proves that the lockfile installs unchanged with
+`pnpm install --frozen-lockfile`, then runs the complete `pnpm verify` suite. The verification
+runner prints each command, PID, timeout, 30-second heartbeat, per-step result, and final timing
+summary. Override conservative local concurrency with `GITPM_TEST_WORKERS` and
+`GITPM_E2E_WORKERS` only when the machine has spare capacity. Override the heartbeat interval
+with `GITPM_VERIFY_HEARTBEAT_SECONDS` and a step timeout with
+`GITPM_VERIFY_TIMEOUT_MINUTES`.
+
+If the selected gate cannot run, do not describe the work as verified: report the exact failing
+or skipped command and the reason. Narrow tests are useful while iterating but never replace the
+scope-appropriate final gate above.
 
 ## Change rules
 

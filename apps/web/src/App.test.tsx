@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App.js";
 import type { GitPmApi } from "./api.js";
@@ -279,7 +279,7 @@ describe("frontend draft lifecycle", () => {
     render(<App api={api} browserLanguages={["en"]} />);
 
     expect(await screen.findByRole("heading", { name: "Projects" })).toBeTruthy();
-    expect(`${window.location.pathname}${window.location.search}`).toBe("/projects");
+    await waitFor(() => expect(`${window.location.pathname}${window.location.search}`).toBe("/projects"));
     expect(await screen.findByRole("button", { name: /New project/u })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Create task" })).toBeNull();
 

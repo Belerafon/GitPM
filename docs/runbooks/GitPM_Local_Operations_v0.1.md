@@ -25,7 +25,23 @@ corepack pnpm install --frozen-lockfile
 corepack pnpm verify
 ```
 
-The install must not modify `pnpm-lock.yaml`. `verify` performs a clean build, lint, typecheck, tests, health smoke, schema fixtures, credential-boundary report and planning checks.
+The install must not modify `pnpm-lock.yaml`. `verify` performs a clean build, lint, typecheck,
+tests, health smoke, schema fixtures, credential-boundary report and planning checks. The local
+runner reports the active command and PID, emits a heartbeat every 30 seconds, enforces a timeout
+for every step, fails fast, and prints a timing summary. This makes slow Git and browser tests
+distinguishable from a stalled process.
+
+Local verification defaults to two Vitest workers and one Playwright worker to remain stable when
+several worktrees verify at once. On an otherwise idle machine,
+`GITPM_TEST_WORKERS=4` and `GITPM_E2E_WORKERS=2` opt into higher concurrency. Set
+`GITPM_VERIFY_HEARTBEAT_SECONDS` to change heartbeat frequency or
+`GITPM_VERIFY_TIMEOUT_MINUTES` to override every step timeout.
+
+For a text-only change to generated agent guidance, use `corepack pnpm verify:guidance`. It keeps
+the frozen install, dependency build, lint, and direct/worktree guidance contract tests while
+skipping unrelated draft lifecycle and browser suites. If only the source-development
+`AGENTS.md` changed, use `corepack pnpm verify:docs`. Mixed changes still require
+`corepack pnpm verify:local`.
 
 ## Start and health verification
 
