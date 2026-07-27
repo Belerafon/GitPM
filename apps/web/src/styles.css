@@ -1017,6 +1017,7 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
 .task-comments-heading { display: flex; align-items: center; gap: .55rem; }
 .task-comments-heading h3 { margin: 0; font-size: 1rem; }
 .task-comments-heading > span { display: grid; place-items: center; min-width: 1.5rem; height: 1.5rem; border-radius: 999px; background: #e5ece7; color: #31584c; padding: 0 .35rem; font-size: .7rem; font-weight: 700; }
+.task-comments-heading > button { margin-left: auto; }
 .comment-list { display: grid; }
 .task-comment { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: .7rem; border-top: 1px solid #eceee9; padding: .85rem 0; }
 .task-comment:first-child { border-top: 0; }

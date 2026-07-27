@@ -57,7 +57,10 @@ describe("task comments", () => {
     } as unknown as GitPmApi;
 
     render(<TaskComments api={api} confirmDelete={() => true} draft={draft} fingerprint={draft.fingerprint} locale="en" onFingerprintChange={async () => undefined} onNavigate={() => undefined} people={[anna]} projectId="P-26-MGP84K" readOnly={false} taskId="T-26-P9G3P8" />);
-    await screen.findByText("No comments yet.");
+    const revealComposer = await screen.findByRole("button", { name: "Add comment" });
+    expect(revealComposer.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByLabelText("Add comment")).toBeNull();
+    fireEvent.click(revealComposer);
     const composer = screen.getByLabelText("Add comment");
     fireEvent.change(composer, { target: { value: "Please review @Ann", selectionStart: 18 } });
     fireEvent.click(await screen.findByRole("option", { name: /Anna Petrova/iu }));
@@ -67,6 +70,36 @@ describe("task comments", () => {
     await waitFor(() => expect(api.createComment).toHaveBeenCalledOnce());
     expect(submittedBody).toBe("Please review @[Anna Petrova](person:U-26-5EBAE3) ");
     expect(await screen.findByRole("button", { name: "@Anna Petrova" })).toBeTruthy();
+  });
+
+  it("keeps the composer visible when comments already exist", async () => {
+    const existing: CommentResult = {
+      document: {
+        schema: "gitpm/comment@1",
+        id: "N-26-ABC123",
+        project: "P-26-MGP84K",
+        task: "T-26-P9G3P8",
+        author: { provider: "git", subject: "boris@example.test", display_name: "Boris" },
+        created_at: "2026-07-20T10:05:00.000Z",
+        state: "active",
+        body_markdown: "Already discussed",
+        mentions: [],
+      },
+      path: "projects/P-26-MGP84K/comments/T-26-P9G3P8/N-26-ABC123.yaml",
+      blob_id: "d".repeat(40),
+      draft_fingerprint: "e".repeat(64),
+      can_edit: true,
+      can_delete: true,
+    };
+    const api = {
+      listComments: vi.fn(async () => [existing]),
+    } as unknown as GitPmApi;
+
+    render(<TaskComments api={api} confirmDelete={() => true} draft={draft} fingerprint={draft.fingerprint} locale="en" onFingerprintChange={async () => undefined} onNavigate={() => undefined} people={[]} projectId="P-26-MGP84K" readOnly={false} taskId="T-26-P9G3P8" />);
+
+    expect(await screen.findByText("Already discussed")).toBeTruthy();
+    expect(screen.getByLabelText("Add comment")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Add comment" })).toBeNull();
   });
 });
 
