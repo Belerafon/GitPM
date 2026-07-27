@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useState, type CSSProperties, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type CSSProperties, type FormEvent } from "react";
 import { CALENDAR_PRESETS, calendarPreset, workingDatesBetween, type CalendarPresetId } from "@gitpm/calendar";
 import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
 import type { GitPmApi } from "./api.js";
@@ -173,13 +173,23 @@ const configBadgeStyle = (token: string): CSSProperties => {
   return { "--config-swatch": color.swatch, backgroundColor: color.soft, borderColor: color.swatch, color: color.text } as CSSProperties;
 };
 const ConfigBadge = ({ item, inactiveLabel }: { readonly item: ConfigValue; readonly inactiveLabel: string }) => <span className={`config-preview${item.active ? "" : " inactive"}`} style={configBadgeStyle(item.color)} title={item.active ? item.color : inactiveLabel}><span aria-hidden="true" className="config-preview-dot" />{item.title}</span>;
+const ConfigColorPalette = ({ item, disabled, t, onChange }: { readonly item: ConfigValue; readonly disabled: boolean; readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string; readonly onChange: (color: string) => void }) => {
+  const known = CONFIG_COLOR_OPTIONS.some(([token]) => token === item.color);
+  const options: readonly { readonly token: string; readonly label?: MessageKey }[] = [
+    ...(!known ? [{ token: item.color }] : []),
+    ...CONFIG_COLOR_OPTIONS.map(([token, label]) => ({ token, label })),
+  ];
+  return <fieldset aria-label={`${t("admin.color")} ${item.slug}`} className="config-color-palette"><legend>{t("admin.color")}</legend><div className="config-color-options">{options.map(({ token, label }) => {
+    const name = label === undefined ? token : t(label);
+    return <button aria-label={t("admin.chooseColor", { color: name, name: item.title })} aria-pressed={item.color === token} disabled={disabled} key={token} onClick={() => onChange(token)} style={{ backgroundColor: configColor(token).swatch }} title={name} type="button"><span aria-hidden="true" className="config-color-check">✓</span></button>;
+  })}</div></fieldset>;
+};
 function ConfigEditor({ api, draft, entity, kind, listKey, title, readOnly, t, mutate }: { readonly api: GitPmApi; readonly draft: DraftStatus; readonly entity: ConfigurationResult; readonly kind: "statuses" | "issue-types"; readonly listKey: "statuses" | "issue_types"; readonly title: string; readonly readOnly: boolean; readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string; readonly mutate: <Result extends EntityResult | ConfigurationResult>(operation: () => Promise<Result>) => Promise<Result | null> }) {
   const [open, setOpen] = useState(false);
   const entityValues = Array.isArray(entity.document[listKey]) ? entity.document[listKey] as ConfigValue[] : [];
   const [values, setValues] = useState(entityValues);
   const [busy, setBusy] = useState(false);
   const [savingRows, setSavingRows] = useState<ReadonlySet<string>>(new Set());
-  const colorListId = useId();
   const { highlights: recentRows, mark: markRows } = useExternalHighlights(500);
   const formRef = useFlipList<HTMLFormElement>(useReducedMotion());
   useEffect(() => setValues(entityValues), [entity]);
@@ -198,7 +208,6 @@ function ConfigEditor({ api, draft, entity, kind, listKey, title, readOnly, t, m
     <div className="config-summary-values">{values.map((item) => <ConfigBadge inactiveLabel={t("admin.inactive")} item={item} key={item.slug} />)}</div>
     <EditorDrawer closeLabel={t("core.closeEditor")} onClose={close} open={open} title={`${t("core.edit")}: ${title}`}><form className="editor-drawer-form config-editor-form" onSubmit={submit} ref={formRef}>
       <p className="config-hint">{t("admin.slugHint")}</p>
-      <datalist id={colorListId}>{CONFIG_COLOR_OPTIONS.map(([token, label]) => <option key={token} label={t(label)} value={token} />)}</datalist>
       <div className="config-list">{values.map((item, index) => <section className={`config-row${recentRows[item.slug] ? " recently-changed" : ""}${savingRows.has(item.slug) ? " is-saving" : ""}`} data-flip-key={`config:${kind}:${item.slug}`} key={item.slug}>
         <header className="config-row-heading">
           <div className="config-identity"><ConfigBadge inactiveLabel={t("admin.inactive")} item={item} /><span className="config-technical-id"><span>{t("admin.technicalId")}</span><code>{item.slug}</code></span></div>
@@ -206,7 +215,7 @@ function ConfigEditor({ api, draft, entity, kind, listKey, title, readOnly, t, m
         </header>
         <div className="config-row-fields">
           <label className="config-field"><span>{t("core.name")}</span><input aria-label={`${title} ${item.slug}`} disabled={readOnly || busy} name={`title-${index}`} onChange={(event) => updateValue(index, { title: event.currentTarget.value })} required value={item.title} /></label>
-          <label className="config-field"><span>{t("admin.color")}</span><span className="config-color-control"><span aria-hidden="true" className="config-color-swatch" style={{ backgroundColor: configColor(item.color).swatch }} /><input aria-label={`${t("admin.color")} ${item.slug}`} disabled={readOnly || busy} list={colorListId} name={`color-${index}`} onChange={(event) => updateValue(index, { color: event.currentTarget.value })} pattern="[a-z][a-z0-9]*(?:-[a-z0-9]+)*" required spellCheck={false} value={item.color} /></span></label>
+          <ConfigColorPalette disabled={readOnly || busy} item={item} onChange={(color) => updateValue(index, { color })} t={t} />
         </div>
         <footer className="config-row-footer"><span>{t("admin.orderPosition", { position: index + 1, count: values.length })}</span><div className="config-order"><button aria-label={t("admin.moveUp", { name: item.title })} disabled={readOnly || busy || index === 0} onClick={() => move(index, -1)} type="button"><span aria-hidden="true">↑</span>{t("admin.higher")}</button><button aria-label={t("admin.moveDown", { name: item.title })} disabled={readOnly || busy || index === values.length - 1} onClick={() => move(index, 1)} type="button"><span aria-hidden="true">↓</span>{t("admin.lower")}</button></div></footer>
       </section>)}</div>
