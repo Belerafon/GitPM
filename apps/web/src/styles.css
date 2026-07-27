@@ -292,9 +292,11 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .project-plan-task-list { display: grid; margin: 0 .8rem .7rem 1.4rem; border-left: 2px solid #d6e3dc; padding-left: .75rem; }
 .project-plan-task-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .5rem; align-items: center; width: 100%; border: 0; border-top: 1px solid #e5e7e1; border-left: 3px solid transparent; border-radius: 0; background: transparent; padding: .48rem .4rem .48rem calc(.6rem + var(--task-depth, 0) * 1.15rem); text-align: left; }
 .project-plan-task-row.filter-context { opacity: .7; }
-.project-plan-task-tree-control { display: grid; place-items: center; width: 1.25rem; color: #68706b; }
-.project-plan-task-tree-control button { display: grid; place-items: center; width: 1.25rem; height: 1.25rem; border: 0; border-radius: 4px; background: transparent; padding: 0; color: inherit; }
-.project-plan-task-tree-control button:hover { background: #edf2ee; }
+.project-plan-task-tree-control { display: grid; place-items: center; width: 1.5rem; height: 1.5rem; color: #526b60; }
+.project-plan-task-tree-control button { display: grid; place-items: center; width: 1.5rem; height: 1.5rem; border: 1px solid #ccd9d2; border-radius: 5px; background: #fff; padding: 0; color: inherit; }
+.project-plan-task-tree-control button:hover { border-color: #9bb2a7; background: #edf2ee; color: #315f50; }
+.project-plan-task-tree-control svg { width: .75rem; height: .75rem; overflow: visible; }
+.project-plan-task-tree-control path { fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 .project-plan-task-row:hover:not(:disabled) { border-top-color: #e5e7e1; background: #f4f8f5; }
 .project-plan-task-row.selected { border-left-color: #3f7967; background: #eaf3ed; }
 .project-plan-task-selector { display: grid; gap: .12rem; min-width: 0; border: 0; border-radius: 0; background: transparent; padding: 0; text-align: left; }

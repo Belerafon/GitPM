@@ -250,10 +250,18 @@ describe("project plan and stage workspace", () => {
     expect(screen.getByText("Grandchild task").closest(".project-plan-task-row")?.querySelector(".project-plan-task-kind")?.textContent).toBe(`Task 1.1.1.1. ${grandchild.document.id}.`);
     expect(screen.getByText("Root task").closest(".project-plan-task-row")?.classList.contains("filter-context")).toBe(true);
     expect(screen.getByText("Child task").closest(".project-plan-task-row")?.classList.contains("filter-context")).toBe(true);
+    expect(screen.getByText("Grandchild task").closest(".project-plan-task-row")?.querySelector(".project-plan-task-tree-control")?.textContent).toBe("");
+    expect(screen.getByText("Grandchild task").closest(".project-plan-task-row")?.querySelector(".project-plan-task-tree-control button")).toBeNull();
 
-    fireEvent.click(within(stageCard).getByRole("button", { name: "Collapse subtasks of Root task" }));
+    const collapseRoot = within(stageCard).getByRole("button", { name: "Collapse subtasks of Root task" });
+    expect(collapseRoot.getAttribute("aria-expanded")).toBe("true");
+    expect(collapseRoot.querySelector("svg path")?.getAttribute("d")).toBe("m2.5 4 3.5 4 3.5-4");
+    fireEvent.click(collapseRoot);
     expect(screen.queryByText("Child task")).toBeNull();
-    fireEvent.click(within(stageCard).getByRole("button", { name: "Expand subtasks of Root task" }));
+    const expandRoot = within(stageCard).getByRole("button", { name: "Expand subtasks of Root task" });
+    expect(expandRoot.getAttribute("aria-expanded")).toBe("false");
+    expect(expandRoot.querySelector("svg path")?.getAttribute("d")).toBe("M4 2.5 8 6 4 9.5");
+    fireEvent.click(expandRoot);
     fireEvent.click(within(stageCard).getByRole("button", { name: `Add subtask to task ${child.document.id}` }));
     const dialog = screen.getByRole("dialog", { name: "New subtask" });
     expect(within(dialog).getByText("Child task")).toBeTruthy();
