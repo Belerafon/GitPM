@@ -211,8 +211,10 @@ corepack pnpm planning:verify
 
 Интеграционные Vitest-тесты сохраняют реальные Git-команды, но готовят неизменяемый эталонный
 remote один раз на test file и выдают каждому тесту отдельную копию. Playwright запускает test
-files двумя workers; параллельные наборы обязаны использовать собственные префиксы draft ID и
-удалять только свои draft. Browser UI, proxy, restart и readiness сценарии остаются E2E-проверками.
+files одним worker для устойчивости при параллельных проверках worktree; на свободной машине
+`GITPM_E2E_WORKERS=2` включает два worker. Параллельные наборы обязаны использовать собственные
+префиксы draft ID и удалять только свои draft. Browser UI, proxy, restart и readiness сценарии
+остаются E2E-проверками.
 
 Низкоуровневые проверки завершённого planning/evidence set доступны отдельно:
 
