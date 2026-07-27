@@ -204,13 +204,18 @@ textarea { min-height: 76px; resize: vertical; border: 1px solid #c9cbc5; border
 .editor-trigger { justify-self: start; }
 .editor-drawer-layer { position: fixed; z-index: 70; inset: 0; display: flex; justify-content: flex-end; }
 .editor-drawer-backdrop { position: absolute; inset: 0; width: 100%; border: 0; border-radius: 0; background: rgba(13, 29, 22, .42); padding: 0; }
-.editor-drawer { position: relative; display: grid; grid-template-rows: auto minmax(0, 1fr); width: min(520px, calc(100vw - 48px)); height: 100%; background: #fff; box-shadow: -18px 0 44px rgba(13, 29, 22, .2); }
+.editor-drawer { position: relative; display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; width: min(520px, calc(100vw - 48px)); height: 100%; background: #fff; box-shadow: -18px 0 44px rgba(13, 29, 22, .2); }
 .editor-drawer-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; border-bottom: 1px solid #dedfd9; padding: 1rem 1.25rem; }
 .editor-drawer-header h2 { margin: 0; font-size: 1.2rem; }
 .editor-drawer-close { display: inline-grid; flex: 0 0 auto; place-items: center; width: 40px; height: 40px; padding: 0; font-size: 1.45rem; line-height: 1; }
-.editor-drawer-body { overflow-y: auto; padding: 1.25rem; }
-.editor-drawer-form { display: grid; min-height: 100%; gap: .8rem; align-content: start; }
-.editor-drawer-form > label { display: grid; gap: .3rem; }
+.editor-drawer-body { min-width: 0; overflow-y: auto; padding: 1.25rem; }
+.editor-drawer-form { display: grid; min-width: 0; min-height: 100%; gap: .8rem; align-content: start; }
+.editor-drawer-form > label { display: grid; min-width: 0; gap: .3rem; }
+.editor-drawer-form select, .editor-drawer-form textarea { min-width: 0; width: 100%; max-width: 100%; }
+.task-reference-control { position: relative; display: block; min-width: 0; max-width: 100%; }
+.task-reference-select { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-reference-tooltip { position: absolute; z-index: 20; top: calc(100% + .3rem); inset-inline-start: 0; visibility: hidden; width: max-content; max-width: 100%; border-radius: 6px; background: #18352a; box-shadow: 0 5px 16px rgba(13, 29, 22, .2); color: #fff; opacity: 0; padding: .4rem .55rem; font-size: .76rem; line-height: 1.35; overflow-wrap: anywhere; pointer-events: none; transform: translateY(-2px); transition: opacity .12s ease, transform .12s ease, visibility .12s ease; }
+.task-reference-control:hover .task-reference-tooltip, .task-reference-control:focus-within .task-reference-tooltip { visibility: visible; opacity: 1; transform: translateY(0); }
 .form-section-title { margin: .4rem 0 0; font-size: 1rem; }
 .field-help { margin: 0; color: #747974; font-size: .82rem; line-height: 1.35; }
 .field-help code { font-size: .8rem; }
