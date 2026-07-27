@@ -123,13 +123,13 @@ const commandHelp: Readonly<Record<string, string>> = {
   ].join("\n"),
   entity: [
     "Usage:",
-    "  gitpm entity create [--draft <id>] --file <yaml> [--type <type>] [--project <id>] [--json]",
-    "  gitpm entity update [--draft <id>] --type <type> --id <entity-id> [--file <yaml-patch>] [--set <field>=<yaml-value>]... [--unset <field>]... [--project <id>] [--json]",
-    "  gitpm entity import [--draft <id>] --type <type> --format <csv|yaml|jsonl> (--file <path>|--path <path>) [--dry-run] [--json]",
+    "  gitpm entity create [--draft <id>] --file <yaml> [--type <type>] [--project <id>] [--allow-delete] [--json]",
+    "  gitpm entity update [--draft <id>] --type <type> --id <entity-id> [--file <yaml-patch>] [--set <field>=<yaml-value>]... [--unset <field>]... [--project <id>] [--allow-delete] [--json]",
+    "  gitpm entity import [--draft <id>] --type <type> --format <csv|yaml|jsonl> (--file <path>|--path <path>) [--dry-run] [--project <id>] [--allow-delete] [--json]",
     "  gitpm entity list [--draft <id>] --type <type> [--project <id>] [--json]",
     "  gitpm entity show [--draft <id>] --type <type> --id <entity-id> [--json]",
     "  gitpm entity delete [--draft <id>] --type <type> --id <entity-id> [--unlink-references|--cascade-references] [--dry-run] [--allow-delete] [--project <id>] [--json]",
-    "  gitpm entity archive [--draft <id>] --type <type> --id <entity-id> [--project <id>] [--json]",
+    "  gitpm entity archive [--draft <id>] --type <type> --id <entity-id> [--project <id>] [--allow-delete] [--json]",
     "  gitpm entity move [--draft <id>] --type task --id <entity-id> --to-project <id> [--to-milestone <id>] [--to-parent <task-id>] [--allow-delete] [--project <id>] [--json]",
     "",
     "create accepts a YAML mapping. schema, id and lifecycle may be omitted when --type is supplied.",
@@ -184,7 +184,7 @@ const commandHelp: Readonly<Record<string, string>> = {
   config: [
     "Usage:",
     "  gitpm config show --kind statuses|issue-types [--json]",
-    "  gitpm config update --kind statuses|issue-types [--file <yaml>] [--set <field>=<yaml-value>]... [--unset <field>] [--json]",
+    "  gitpm config update --kind statuses|issue-types [--file <yaml>] [--set <field>=<yaml-value>]... [--unset <field>] [--allow-delete] [--json]",
     "",
     "Reads or updates repository configuration documents in .gitpm/. Available in direct mode.",
   ].join("\n"),
@@ -204,13 +204,13 @@ function commandArgumentSpec(command: string | undefined, args: readonly string[
   if (command === "draft") return { values: ["--draft", "--owner"], booleans: ["--json"], minPositionals: 1, maxPositionals: action === "set-writer" ? 2 : 1 };
   if (command === "entity") {
     const common = ["--draft", "--type", "--schema"];
-    if (action === "create") return { values: [...common, "--file", "--path", "--project"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
-    if (action === "update") return { values: [...common, "--id", "--file", "--path", "--project"], repeatable: ["--set", "--unset"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
-    if (action === "import" || action === "bulk-import") return { values: [...common, "--format", "--file", "--path", "--project"], booleans: ["--dry-run", "--json"], minPositionals: 1, maxPositionals: 1 };
+    if (action === "create") return { values: [...common, "--file", "--path", "--project"], booleans: ["--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
+    if (action === "update") return { values: [...common, "--id", "--file", "--path", "--project"], repeatable: ["--set", "--unset"], booleans: ["--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
+    if (action === "import" || action === "bulk-import") return { values: [...common, "--format", "--file", "--path", "--project"], booleans: ["--dry-run", "--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
     if (action === "list") return { values: [...common, "--project"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
     if (action === "show") return { values: [...common, "--id"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
     if (action === "delete") return { values: [...common, "--id", "--project"], booleans: ["--unlink-references", "--cascade-references", "--dry-run", "--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
-    if (action === "archive") return { values: [...common, "--id", "--project"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
+    if (action === "archive") return { values: [...common, "--id", "--project"], booleans: ["--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
     if (action === "move") return { values: [...common, "--id", "--to-project", "--to-milestone", "--to-parent", "--project"], booleans: ["--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
     return { booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
   }
@@ -227,7 +227,7 @@ function commandArgumentSpec(command: string | undefined, args: readonly string[
   if (command === "comment") return { values: ["--project", "--task", "--id", "--body", "--file", "--path"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
   if (command === "config") {
     return action === "update"
-      ? { values: ["--kind", "--file", "--path"], repeatable: ["--set", "--unset"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 }
+      ? { values: ["--kind", "--file", "--path"], repeatable: ["--set", "--unset"], booleans: ["--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 }
       : { values: ["--kind"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
   }
   if (command === "doctor") return { values: ["--root"], booleans: ["--json"], minPositionals: 0, maxPositionals: 0 };
@@ -707,7 +707,7 @@ async function runConfig(args: readonly string[], cwd: string, dependencies: Cli
     else next[field] = value;
   }
   next.schema = current.document.schema;
-  const updated = await direct.updateConfiguration(kind, next);
+  const updated = await direct.updateConfiguration(kind, next, agentScope(args));
   return { exitCode: 0, output: render(json, { ok: true, code: "OK", document: updated.document, path: updated.path }, `Updated ${updated.path}`) };
 }
 

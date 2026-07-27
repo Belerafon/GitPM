@@ -10,20 +10,20 @@ gitpm init [path]                    Создать skeleton схемы v1 в pa
 gitpm status [--draft <id>]
 gitpm draft create|open|status --draft <id> [--owner <id>]
 gitpm draft set-writer ui|external --draft <id> [--owner <id>]
-gitpm entity create [--draft <id>] --file <file> [--type <type>] [--project <id>]
-gitpm entity update [--draft <id>] --type <type> --id <entity-id> [--file <yaml-patch>] [--set <field>=<yaml-value>]... [--unset <field>]... [--project <id>]
-gitpm entity import [--draft <id>] --type <type> --format csv|yaml|jsonl (--file <file>|--path <file>) [--dry-run]
+gitpm entity create [--draft <id>] --file <file> [--type <type>] [--project <id>] [--allow-delete]
+gitpm entity update [--draft <id>] --type <type> --id <entity-id> [--file <yaml-patch>] [--set <field>=<yaml-value>]... [--unset <field>]... [--project <id>] [--allow-delete]
+gitpm entity import [--draft <id>] --type <type> --format csv|yaml|jsonl (--file <file>|--path <file>) [--dry-run] [--project <id>] [--allow-delete]
 gitpm entity list [--draft <id>] --type <type> [--project <id>]
 gitpm entity show [--draft <id>] --type <type> --id <entity-id>
 gitpm entity delete [--draft <id>] --type <type> --id <entity-id> [--unlink-references|--cascade-references] [--dry-run] [--allow-delete] [--project <id>]
-gitpm entity archive [--draft <id>] --type <type> --id <entity-id> [--project <id>]
+gitpm entity archive [--draft <id>] --type <type> --id <entity-id> [--project <id>] [--allow-delete]
 gitpm entity move [--draft <id>] --type task --id <entity-id> --to-project <id> [--to-milestone <id>] [--to-parent <task-id>] [--allow-delete] [--project <id>]
 gitpm comment list --project <id> --task <id>
 gitpm comment create --project <id> --task <id> (--body <text> | --file <path>)
 gitpm comment update --project <id> --task <id> --id <comment-id> (--body <text> | --file <path>)
 gitpm comment delete --project <id> --task <id> --id <comment-id>
 gitpm config show --kind statuses|issue-types
-gitpm config update --kind statuses|issue-types [--file <yaml>] [--set <field>=<yaml-value>]... [--unset <field>]
+gitpm config update --kind statuses|issue-types [--file <yaml>] [--set <field>=<yaml-value>]... [--unset <field>] [--allow-delete]
 gitpm schema list
 gitpm schema show <type> [--example]
 gitpm format [--draft <id>] [--project <id>] [--check] [--allow-delete]
@@ -109,7 +109,9 @@ soft-delete (tombstone остаётся в Git history). Доступно в dir
 требуют `--draft <id>`; `comment` и `config` в этом режиме не реализованы, а
 `mr create` доступна только в нём. `--project <id>` проверяет, что все текущие
 business changes принадлежат указанному Project, а физическое удаление требует явного
-`--allow-delete` при format/validation/diff и commit, пока удалённые пути остаются в checkout.
+`--allow-delete` при каждой следующей мутации, а также при format/validation/diff и commit,
+пока удалённые пути остаются в checkout. Флаг подтверждает весь текущий набор физических
+удалений; он не создаёт новые удаления сам по себе.
 
 Каждая команда поддерживает `--json` для машинно-читаемого вывода.
 Неизвестная или повторно переданная нереплицируемая option отклоняется с
