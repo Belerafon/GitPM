@@ -85,6 +85,11 @@ test.describe("GitPM browser UI", () => {
     await page.locator(".locale-picker select").selectOption("en");
     await page.locator(".interface-settings > summary").click();
 
+    const taskSection = page.getByRole("heading", { name: "Tasks by project", exact: true }).locator("xpath=ancestor::section[1]");
+    await expect(taskSection.getByText("Shown: 0 of 1")).toBeVisible();
+    await taskSection.locator(".people-task-filters > summary").click();
+    await taskSection.getByRole("checkbox", { name: "Done" }).check();
+
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: 900 });
 

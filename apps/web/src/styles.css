@@ -638,6 +638,17 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .people-task-list small, .people-task-list time, .people-project-list span, .people-project-list small { color: #6a726d; font-size: .72rem; }
 .people-task-list time { text-align: right; }
 .people-task-status { border-radius: 999px; background: #edf1ed; padding: .18rem .45rem; font-size: .7rem; }
+.people-task-filters { margin: .6rem 0 .15rem; border: 1px solid #dfe3de; border-radius: 9px; background: #f8faf7; }
+.people-task-filters > summary { cursor: pointer; list-style: none; padding: .5rem .7rem; font-size: .78rem; font-weight: 650; color: #315f50; }
+.people-task-filters > summary::-webkit-details-marker { display: none; }
+.people-task-filters[open] > summary { border-bottom: 1px solid #dfe3de; }
+.people-task-filters-body { display: grid; gap: .65rem; padding: .6rem .7rem .7rem; }
+.people-task-filter-group { display: block; margin: 0; padding: .5rem .6rem .55rem; border: 1px solid #e3e6e0; border-radius: 8px; background: #fff; }
+.people-task-filter-group > legend { padding: 0 .35rem; color: #4a524d; font-size: .72rem; font-weight: 650; }
+.people-task-filter-options { display: flex; flex-wrap: wrap; gap: .3rem .85rem; margin-top: .25rem; }
+.people-task-filter-options label { display: inline-flex; align-items: center; gap: .3rem; font-size: .8rem; color: #2c3a32; cursor: pointer; }
+.people-task-filters-reset { justify-self: start; padding: 0; font-size: .76rem; }
+.people-profile-count { align-self: center; color: #6a726d; font-size: .74rem; white-space: nowrap; }
 .people-calendar-capacity { color: #4e5d54; font-size: .82rem; }
 .people-holidays { display: flex; flex-wrap: wrap; gap: .35rem; color: #6a726d; font-size: .74rem; }
 .people-holidays time { border-radius: 999px; background: #fff2cc; padding: .25rem .45rem; }

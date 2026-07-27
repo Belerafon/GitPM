@@ -7,8 +7,16 @@ import type { DraftStatus, EntityDocument, EntityResult } from "./types.js";
 
 const draft: DraftStatus = { draft_id: "DRF-PEOPLE", owner_gitlab_user_id: "42", branch: "gitpm/42/DRF-PEOPLE", base_commit: "a".repeat(40), writer_mode: "ui", state: "open", fingerprint: "b".repeat(64), created_at: "2026-07-10T00:00:00.000Z", updated_at: "2026-07-10T00:00:00.000Z" };
 const result = (document: EntityDocument): EntityResult => ({ document, path: `${document.id}.yaml`, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) });
+const statusesConfig = (slugs: readonly { slug: string; title: string }[] = [
+  { slug: "backlog", title: "Backlog" },
+  { slug: "planned", title: "Planned" },
+  { slug: "in-progress", title: "In Progress" },
+  { slug: "review", title: "Review" },
+  { slug: "blocked", title: "Blocked" },
+  { slug: "done", title: "Done" },
+]) => ({ document: { schema: "gitpm/statuses@1", id: "statuses", lifecycle: "active", statuses: slugs.map((status) => ({ ...status, active: true, color: "gray" })) }, path: ".gitpm/statuses.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) });
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); localStorage.clear(); });
 
 describe("person profile", () => {
   it("shows a person's tasks, dated schedule, calendar, teams and projects with navigation", async () => {
@@ -26,7 +34,7 @@ describe("person profile", () => {
       result({ schema: "gitpm/task@1", id: "T-26-SECOND", project: contributingProjectId, title: "Review calendar", status: "planned", assignees: [personId], start: "2026-07-22", due: "2026-07-23", lifecycle: "active" }),
     ];
     const schemaByType: Record<string, string> = { people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1", projects: "gitpm/project@1", tasks: "gitpm/task@1" };
-    const api = { listEntities: vi.fn(async (_draftId: string, type: string) => entities.filter((item) => item.document.schema === schemaByType[type])) } as unknown as GitPmApi;
+    const api = { listEntities: vi.fn(async (_draftId: string, type: string) => entities.filter((item) => item.document.schema === schemaByType[type])), getConfiguration: vi.fn(async () => statusesConfig()) } as unknown as GitPmApi;
     const onNavigate = vi.fn();
 
     render(<PeopleProfileWorkspace api={api} draft={draft} locale="en" onNavigate={onNavigate} personId={personId} />);
@@ -54,6 +62,95 @@ describe("person profile", () => {
     expect(within(participating).getByRole("button", { name: /Beta/u })).toBeTruthy();
   });
 
+  it("hides done tasks by default, translates status titles, and keeps counts in sync", async () => {
+    const personId = "U-26-ADA";
+    const projectId = "P-26-ALPHA";
+    const entities = [
+      result({ schema: "gitpm/person@1", id: personId, name: "Ada Lovelace", weekly_capacity_hours: 32, lifecycle: "active" }),
+      result({ schema: "gitpm/project@1", id: projectId, name: "Alpha", owner: personId, status: "in-progress", lifecycle: "active" }),
+      result({ schema: "gitpm/task@1", id: "T-OPEN", project: projectId, title: "Open work", status: "in-progress", assignees: [personId], lifecycle: "active" }),
+      result({ schema: "gitpm/task@1", id: "T-DONE", project: projectId, title: "Finished work", status: "done", assignees: [personId], lifecycle: "active" }),
+    ];
+    const schemaByType: Record<string, string> = { people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1", projects: "gitpm/project@1", tasks: "gitpm/task@1" };
+    const api = { listEntities: vi.fn(async (_draftId: string, type: string) => entities.filter((item) => item.document.schema === schemaByType[type])), getConfiguration: vi.fn(async () => statusesConfig()) } as unknown as GitPmApi;
+
+    render(<PeopleProfileWorkspace api={api} draft={draft} locale="en" onNavigate={vi.fn()} personId={personId} />);
+
+    const tasks = (await screen.findByRole("heading", { name: "Tasks by project" })).closest("section")!;
+    expect(within(tasks).getByText("Shown: 1 of 2")).toBeTruthy();
+    expect(within(tasks).getByRole("button", { name: /Open work/u })).toBeTruthy();
+    expect(within(tasks).queryByRole("button", { name: /Finished work/u })).toBeNull();
+    expect(within(tasks).queryByText(/^in-progress$/u)).toBeNull();
+    expect(within(tasks).queryByText(/^done$/u)).toBeNull();
+    expect(within(tasks).getAllByText("In Progress").length).toBeGreaterThan(0);
+    const doneCheckbox = within(tasks).getByRole("checkbox", { name: "Done" }) as HTMLInputElement;
+    const openCheckbox = within(tasks).getByRole("checkbox", { name: "In Progress" }) as HTMLInputElement;
+    expect(doneCheckbox.checked).toBe(false);
+    expect(openCheckbox.checked).toBe(true);
+  });
+
+  it("toggles status and project checkboxes, persists them per person, and restores on next mount", async () => {
+    const personId = "U-26-ADA";
+    const projectId = "P-26-ALPHA";
+    const contributingProjectId = "P-26-BETA";
+    const entities = [
+      result({ schema: "gitpm/person@1", id: personId, name: "Ada Lovelace", weekly_capacity_hours: 32, lifecycle: "active" }),
+      result({ schema: "gitpm/project@1", id: projectId, name: "Alpha", owner: personId, status: "in-progress", lifecycle: "active" }),
+      result({ schema: "gitpm/project@1", id: contributingProjectId, name: "Beta", owner: "U-26-GRACE", status: "planned", lifecycle: "active" }),
+      result({ schema: "gitpm/task@1", id: "T-ALPHA-OPEN", project: projectId, title: "Alpha open", status: "in-progress", assignees: [personId], lifecycle: "active" }),
+      result({ schema: "gitpm/task@1", id: "T-ALPHA-DONE", project: projectId, title: "Alpha done", status: "done", assignees: [personId], lifecycle: "active" }),
+      result({ schema: "gitpm/task@1", id: "T-BETA-PLANNED", project: contributingProjectId, title: "Beta planned", status: "planned", assignees: [personId], lifecycle: "active" }),
+    ];
+    const schemaByType: Record<string, string> = { people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1", projects: "gitpm/project@1", tasks: "gitpm/task@1" };
+    const buildApi = () => ({ listEntities: vi.fn(async (_draftId: string, type: string) => entities.filter((item) => item.document.schema === schemaByType[type])), getConfiguration: vi.fn(async () => statusesConfig()) } as unknown as GitPmApi);
+
+    const { unmount } = render(<PeopleProfileWorkspace api={buildApi()} draft={draft} locale="en" onNavigate={vi.fn()} personId={personId} />);
+    const tasks = (await screen.findByRole("heading", { name: "Tasks by project" })).closest("section")!;
+    expect(within(tasks).getByText("Shown: 2 of 3")).toBeTruthy();
+
+    fireEvent.click(within(tasks).getByRole("checkbox", { name: "Done" }));
+    expect(await within(tasks).findByText("Shown: 3 of 3")).toBeTruthy();
+    expect(within(tasks).getByRole("button", { name: /Alpha done/u })).toBeTruthy();
+
+    fireEvent.click(within(tasks).getByRole("checkbox", { name: "Beta" }));
+    expect(within(tasks).getByText("Shown: 2 of 3")).toBeTruthy();
+    expect(within(tasks).queryByRole("button", { name: /Beta planned/u })).toBeNull();
+
+    expect(JSON.parse(localStorage.getItem("gitpm.peopleProfile.taskFilters") ?? "{}")).toEqual({
+      [personId]: { statuses: expect.arrayContaining(["backlog", "planned", "in-progress", "review", "blocked", "done"]), projects: [projectId] },
+    });
+    unmount();
+
+    render(<PeopleProfileWorkspace api={buildApi()} draft={draft} locale="en" onNavigate={vi.fn()} personId={personId} />);
+    const restoredTasks = (await screen.findByRole("heading", { name: "Tasks by project" })).closest("section")!;
+    expect(within(restoredTasks).getByText("Shown: 2 of 3")).toBeTruthy();
+    expect((within(restoredTasks).getByRole("checkbox", { name: "Done" }) as HTMLInputElement).checked).toBe(true);
+    expect((within(restoredTasks).getByRole("checkbox", { name: "Beta" }) as HTMLInputElement).checked).toBe(false);
+    expect(within(restoredTasks).queryByRole("button", { name: /Beta planned/u })).toBeNull();
+  });
+
+  it("resets filters back to the default hide-done state", async () => {
+    const personId = "U-26-ADA";
+    const projectId = "P-26-ALPHA";
+    const entities = [
+      result({ schema: "gitpm/person@1", id: personId, name: "Ada Lovelace", weekly_capacity_hours: 32, lifecycle: "active" }),
+      result({ schema: "gitpm/project@1", id: projectId, name: "Alpha", owner: personId, status: "in-progress", lifecycle: "active" }),
+      result({ schema: "gitpm/task@1", id: "T-1", project: projectId, title: "Open work", status: "in-progress", assignees: [personId], lifecycle: "active" }),
+      result({ schema: "gitpm/task@1", id: "T-2", project: projectId, title: "Finished work", status: "done", assignees: [personId], lifecycle: "active" }),
+    ];
+    const schemaByType: Record<string, string> = { people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1", projects: "gitpm/project@1", tasks: "gitpm/task@1" };
+    const api = { listEntities: vi.fn(async (_draftId: string, type: string) => entities.filter((item) => item.document.schema === schemaByType[type])), getConfiguration: vi.fn(async () => statusesConfig()) } as unknown as GitPmApi;
+
+    render(<PeopleProfileWorkspace api={api} draft={draft} locale="en" onNavigate={vi.fn()} personId={personId} />);
+    const tasks = (await screen.findByRole("heading", { name: "Tasks by project" })).closest("section")!;
+    fireEvent.click(within(tasks).getByRole("checkbox", { name: "In Progress" }));
+    const emptyState = within(tasks).getByText(/No tasks match the active filters/u).closest("p")!;
+    fireEvent.click(within(emptyState).getByRole("button", { name: "Reset filters" }));
+    expect(await within(tasks).findByRole("button", { name: /Open work/u })).toBeTruthy();
+    expect((within(tasks).getByRole("checkbox", { name: "In Progress" }) as HTMLInputElement).checked).toBe(true);
+    expect((within(tasks).getByRole("checkbox", { name: "Done" }) as HTMLInputElement).checked).toBe(false);
+  });
+
   it("edits a person only from the profile and keeps the latest draft fingerprint", async () => {
     const personId = "U-26-ADA";
     const calendar = result({ schema: "gitpm/calendar@1", id: "C-26-DEFAULT", name: "Default", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
@@ -67,6 +164,7 @@ describe("person profile", () => {
     });
     const api = {
       listEntities: vi.fn(async (_draftId: string, type: string) => [person, calendar].filter((item) => item.document.schema === schemaByType[type])),
+      getConfiguration: vi.fn(async () => statusesConfig()),
       updateEntity,
     } as unknown as GitPmApi;
     const onChanged = vi.fn(async () => undefined);
@@ -99,7 +197,7 @@ describe("person profile", () => {
     const deleteEntity = vi.fn(async () => undefined);
     const confirmAction = vi.fn(() => false);
     const onNavigate = vi.fn();
-    const api = { listEntities: vi.fn(async (_draftId: string, type: string) => [person, calendar].filter((item) => item.document.schema === schemaByType[type])), deleteEntity } as unknown as GitPmApi;
+    const api = { listEntities: vi.fn(async (_draftId: string, type: string) => [person, calendar].filter((item) => item.document.schema === schemaByType[type])), getConfiguration: vi.fn(async () => statusesConfig()), deleteEntity } as unknown as GitPmApi;
 
     render(<PeopleProfileWorkspace api={api} confirmAction={confirmAction} draft={draft} locale="en" onNavigate={onNavigate} personId={personId} role="Maintainer" />);
     fireEvent.click(await screen.findByRole("button", { name: "Edit person" }));
@@ -126,7 +224,7 @@ describe("person profile", () => {
       .mockResolvedValueOnce(undefined);
     const confirmAction = vi.fn(() => true);
     const onNavigate = vi.fn();
-    const api = { listEntities: vi.fn(async (_draftId: string, type: string) => [person, calendar].filter((item) => item.document.schema === schemaByType[type])), deleteEntity } as unknown as GitPmApi;
+    const api = { listEntities: vi.fn(async (_draftId: string, type: string) => [person, calendar].filter((item) => item.document.schema === schemaByType[type])), getConfiguration: vi.fn(async () => statusesConfig()), deleteEntity } as unknown as GitPmApi;
 
     render(<PeopleProfileWorkspace api={api} confirmAction={confirmAction} draft={draft} locale="en" onNavigate={onNavigate} personId={personId} role="Maintainer" />);
     fireEvent.click(await screen.findByRole("button", { name: "Edit person" }));
@@ -144,7 +242,7 @@ describe("person profile", () => {
     const person = result({ schema: "gitpm/person@1", id: personId, name: "Ada", weekly_capacity_hours: 32, calendar: "C-26-DEFAULT", lifecycle: "active" });
     const calendar = result({ schema: "gitpm/calendar@1", id: "C-26-DEFAULT", name: "Default", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
     const schemaByType: Record<string, string> = { people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1", projects: "gitpm/project@1", tasks: "gitpm/task@1" };
-    const api = { listEntities: vi.fn(async (_draftId: string, type: string) => [person, calendar].filter((item) => item.document.schema === schemaByType[type])) } as unknown as GitPmApi;
+    const api = { listEntities: vi.fn(async (_draftId: string, type: string) => [person, calendar].filter((item) => item.document.schema === schemaByType[type])), getConfiguration: vi.fn(async () => statusesConfig()) } as unknown as GitPmApi;
 
     render(<PeopleProfileWorkspace api={api} draft={draft} locale="en" onNavigate={vi.fn()} personId={personId} role="Developer" />);
 
