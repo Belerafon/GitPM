@@ -78,7 +78,13 @@ describe("CLI P02 commands", () => {
   it("provides command help and inspectable schemas without runtime configuration", async () => {
     const help = await run(["entity", "create", "--help", "--json"]);
     expect(help.exitCode).toBe(0);
-    expect(JSON.parse(help.output)).toMatchObject({ ok: true, command: "entity", help: expect.stringContaining("default_calendar") });
+    const entityHelp = JSON.parse(help.output);
+    expect(entityHelp).toMatchObject({ ok: true, command: "entity", help: expect.stringContaining("default_calendar") });
+    for (const action of ["create", "update", "import", "archive"]) {
+      expect(entityHelp.help).toMatch(new RegExp(`entity ${action}.*--allow-delete`, "u"));
+    }
+    const configHelp = JSON.parse((await run(["config", "--help", "--json"])).output) as { help: string };
+    expect(configHelp.help).toMatch(/config update.*--allow-delete/u);
     for (const command of ["format", "validate", "diff", "commit"]) {
       const commandHelp = JSON.parse((await run([command, "--help", "--json"])).output) as { help: string };
       expect(commandHelp.help).toContain("--allow-delete");
@@ -519,6 +525,18 @@ describe.concurrent("CLI direct mode", () => {
     expect(JSON.parse(blocked.output)).toMatchObject({ ok: false, code: "AGENT_DELETE_CONFIRMATION_REQUIRED" });
     const allowed = await run(["diff", "--semantic", "--project", "P-26-MGP84K", "--allow-delete", "--json"], process.cwd(), { direct });
     expect(JSON.parse(allowed.output)).toMatchObject({ ok: true, counts: { deleted: 1 } });
+
+    const updateArgs = ["entity", "update", "--type", "milestone", "--id", "M-26-461GDJ", "--set", "name=Updated after deletion", "--project", "P-26-MGP84K"];
+    const blockedUpdate = await run([...updateArgs, "--json"], process.cwd(), { direct });
+    expect(JSON.parse(blockedUpdate.output)).toMatchObject({ ok: false, code: "AGENT_DELETE_CONFIRMATION_REQUIRED" });
+    const allowedUpdate = await run([...updateArgs, "--allow-delete", "--json"], process.cwd(), { direct });
+    expect(JSON.parse(allowedUpdate.output)).toMatchObject({ ok: true, document: { name: "Updated after deletion" } });
+
+    const configArgs = ["config", "update", "--kind", "statuses", "--set", "schema=gitpm/statuses@1"];
+    const blockedConfig = await run([...configArgs, "--json"], process.cwd(), { direct });
+    expect(JSON.parse(blockedConfig.output)).toMatchObject({ ok: false, code: "AGENT_DELETE_CONFIRMATION_REQUIRED" });
+    const allowedConfig = await run([...configArgs, "--allow-delete", "--json"], process.cwd(), { direct });
+    expect(JSON.parse(allowedConfig.output)).toMatchObject({ ok: true, document: { schema: "gitpm/statuses@1" } });
   });
 
   it("requires direct runtime configuration for direct commands", async () => {

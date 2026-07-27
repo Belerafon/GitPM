@@ -146,12 +146,12 @@ Start with:
 For supported entity creation, supply a YAML mapping from a temporary path outside this worktree.
 Use \`--type\` when schema is omitted; GitPM generates a missing ID and applies documented defaults:
 
-\`gitpm entity create --draft ${draftId} --type <type> --file <temporary-yaml> [--project <project-id>] --json\`
+\`gitpm entity create --draft ${draftId} --type <type> --file <temporary-yaml> [--project <project-id>] [--allow-delete] --json\`
 
 Update one or more fields without a temporary file by repeating \`--set\`; use \`--unset\` to
 remove an optional field:
 
-\`gitpm entity update --draft ${draftId} --type <type> --id <entity-id> --set <field>=<yaml-value> [--set ...] [--unset <field>] [--project <project-id>] --json\`
+\`gitpm entity update --draft ${draftId} --type <type> --id <entity-id> --set <field>=<yaml-value> [--set ...] [--unset <field>] [--project <project-id>] [--allow-delete] --json\`
 
 Inspect fields with \`gitpm schema show <type> --json\`. Inspect existing data with
 \`gitpm entity list --draft ${draftId} --type <type> [--project <id>] --json\` and
@@ -159,7 +159,8 @@ Inspect fields with \`gitpm schema show <type> --json\`. Inspect existing data w
 
 For bulk creation, use \`gitpm entity
 import --draft <draft-id> --type <type> --format <csv|yaml|jsonl> --file <file>\`, first with
-\`--dry-run\` and then without it.
+\`--dry-run\` and then without it; add \`--project <project-id>\` when scoped and
+\`--allow-delete\` while a physical deletion is present.
 
 Before removing an entity, preview the impact with
 \`gitpm entity delete --draft ${draftId} --type <type> --id <entity-id> --dry-run --json\`.
@@ -167,13 +168,14 @@ Restrictions, cascade, and unlink paths are reported without writing. Then delet
 \`--allow-delete\`; add \`--unlink-references\` for a person to remove references first, or
 \`--cascade-references\` for a project to delete every project-owned entity.
 Archive a reversible lifecycle state with
-\`gitpm entity archive --draft ${draftId} --type <type> --id <entity-id> --json\`.
+\`gitpm entity archive --draft ${draftId} --type <type> --id <entity-id> [--project <project-id>] [--allow-delete] --json\`.
 Move a task with
 \`gitpm entity move --draft ${draftId} --type task --id <entity-id> --to-project <id> [--to-milestone <id>] --allow-delete --json\`.
 
 Then run \`format\`, \`validate --changed\`, and \`diff --semantic\` with
 \`--draft ${draftId}\`, \`--json\`, and \`--project\` when scoped. Repeat
-\`--allow-delete\` on every verification and commit command while a physical deletion is present.
+\`--allow-delete\` on every subsequent mutation, verification, and commit command while a
+physical deletion is present.
 Stop after reporting the verified semantic diff unless the user explicitly requested a commit.
 When a commit was explicitly requested, use only \`gitpm commit --all\`. Use \`gitpm push\` and
 \`gitpm mr create\` only when publication was requested. The full command reference and decision
@@ -288,14 +290,14 @@ non-repeatable options with \`CLI_USAGE\`; never retry a misspelled flag by drop
 
 - \`gitpm draft create|open|status|set-writer --draft <id> [--owner <id>]\` manages draft
   lifecycle and writer ownership.
-- \`gitpm entity create --draft <id> --type <type> --file <file> [--project <id>]\` creates an
+- \`gitpm entity create --draft <id> --type <type> --file <file> [--project <id>] [--allow-delete]\` creates an
   entity from a YAML mapping, generating a missing ID and applying documented defaults.
 - \`gitpm entity update --draft <id> --type <type> --id <entity-id> [--file <yaml-patch>]
-  [--set <field>=<yaml-value>]... [--unset <field>]... [--project <id>]\` transactionally patches
+  [--set <field>=<yaml-value>]... [--unset <field>]... [--project <id>] [--allow-delete]\` transactionally patches
   any supported entity type. Inline values use YAML scalar/collection types; \`--unset\` removes
   an optional field. Identity, schema, and owning Project are immutable.
 - \`gitpm entity import --draft <id> --type <type> --format <csv|yaml|jsonl> --file <file>
-  [--dry-run]\` atomically validates and creates a batch.
+  [--dry-run] [--project <id>] [--allow-delete]\` atomically validates and creates a batch.
 - \`gitpm entity list --draft <id> --type <type> [--project <id>]\` lists entities of a type,
   optionally filtered by Project.
 - \`gitpm entity show --draft <id> --type <type> --id <entity-id>\` returns a single entity
@@ -307,7 +309,8 @@ non-repeatable options with \`CLI_USAGE\`; never retry a misspelled flag by drop
   person before deleting (people only). \`--cascade-references\` deletes every entity owned by a
   project before deleting that project (projects only). \`--allow-delete\` authorizes the physical
   deletion scope.
-- \`gitpm entity archive --draft <id> --type <type> --id <entity-id> [--project <id>]\` sets
+- \`gitpm entity archive --draft <id> --type <type> --id <entity-id> [--project <id>]
+  [--allow-delete]\` sets
   lifecycle to archived (reversible; the file stays and references remain valid).
 - \`gitpm entity move --draft <id> --type task --id <entity-id> --to-project <id>
   [--to-milestone <id>] [--allow-delete] [--project <id>]\` relocates a task and its comments
@@ -349,7 +352,9 @@ requires global changes.
 
 Physical deletion is distinct from archive. \`gitpm entity delete\` removes the entity file and
 requires \`--allow-delete\`; use \`--dry-run\` first to preview reference restrictions. Repeat
-\`--allow-delete\` for format, validation, semantic diff, and commit while the deletion is present.
+\`--allow-delete\` for every subsequent mutation, format, validation, semantic diff, and commit
+while the deletion is present. The flag confirms the current deletion set; it does not create
+additional deletions.
 \`gitpm entity archive\` sets lifecycle to archived without removing the file. Reference and
 repository validation still apply to both.
 

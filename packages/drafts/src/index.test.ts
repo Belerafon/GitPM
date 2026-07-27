@@ -83,11 +83,13 @@ describe("draft manager", () => {
     expect(await firstRuntime.gitClient.headCommit(draft.worktree_path)).toBe(remoteHead);
     const initialAgentFile = await readFile(path.join(draft.worktree_path, "AGENTS.md"), "utf8");
     expect(initialAgentFile).toContain("gitpm entity update --draft DRF-001 --type <type> --id <entity-id>");
+    expect(initialAgentFile).toContain("[--project <project-id>] [--allow-delete] --json");
     expect(initialAgentFile).toContain("A request to create, update, archive, move, or delete GitPM data does not authorize a commit.");
     expect(initialAgentFile).toContain("Stop after reporting the verified semantic diff unless the user explicitly requested a commit.");
     const initialSkill = await readFile(path.join(draft.worktree_path, ".agents", "skills", "gitpm", "SKILL.md"), "utf8");
     expect(initialSkill).toContain("name: gitpm");
     expect(initialSkill).toContain("gitpm entity update --draft <id> --type <type> --id <entity-id>");
+    expect(initialSkill).toContain("[--project <id>] [--allow-delete]");
     expect(initialSkill).toContain("gitpm validate --changed --draft <draft-id> [--project <project-id>] [--allow-delete] --json");
     expect(initialSkill).toContain("gitpm commit --all --draft <draft-id> -m <message> [--project <project-id>] [--allow-delete] --json");
     expect(initialSkill).toContain("Do not commit unless the user explicitly requests a commit.");
@@ -239,9 +241,11 @@ describe("direct mode draft manager", () => {
     expect(await git(draft.worktree_path, "rev-parse", "--abbrev-ref", "HEAD")).toBe("main");
     const directAgentFile = await readFile(path.join(draft.worktree_path, "AGENTS.md"), "utf8");
     expect(directAgentFile)
-      .toContain("gitpm entity create --type <type> --file <temporary-yaml> [--project <project-id>] --json");
+      .toContain("gitpm entity create --type <type> --file <temporary-yaml> [--project <project-id>] [--allow-delete] --json");
     expect(directAgentFile)
       .toContain("gitpm entity update --type <type> --id <entity-id> --set <field>=<yaml-value>");
+    expect(directAgentFile)
+      .toContain("[--project <project-id>] [--allow-delete] --json");
     expect(directAgentFile)
       .toContain("A request to create, update, archive, move, or delete GitPM data does not authorize a commit.");
     expect(directAgentFile)
@@ -253,6 +257,7 @@ describe("direct mode draft manager", () => {
     expect(skill).toContain("gitpm commit --all -m <message> [--project <project-id>] [--allow-delete] --json");
     expect(skill).toContain("Do not commit unless the user explicitly requests a commit.");
     expect(skill).toContain("gitpm entity update --type <type> --id <entity-id>");
+    expect(skill).toContain("[--project <id>] [--allow-delete]");
     // No bare repository and no worktrees directory contents are created in direct mode.
     await expect(stat(path.join(test.data, "repository.git"))).rejects.toMatchObject({ code: "ENOENT" });
 
