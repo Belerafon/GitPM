@@ -21,9 +21,12 @@ const other = result({ schema: "gitpm/task@1", id: "T-26-444444", project: proje
 const urgent = result({ schema: "gitpm/task@1", id: "T-26-555555", project: project.document.id, milestone: stage.document.id, title: "Zebra task", type: "task", status: "backlog", lifecycle: "active", due: "2026-07-20", estimate_hours: 2 });
 const large = result({ schema: "gitpm/task@1", id: "T-26-666666", project: project.document.id, milestone: stage.document.id, title: "Alpha task", type: "task", status: "backlog", lifecycle: "active", due: "2026-09-01", estimate_hours: 13 });
 
-function api(initialTasks: readonly EntityResult[] = [linked, other, large, urgent]) {
+function api(
+  initialTasks: readonly EntityResult[] = [linked, other, large, urgent],
+  initialStages: readonly EntityResult[] = [stage, laterStage],
+) {
   let currentProject = project;
-  let currentStages = [stage, laterStage];
+  let currentStages = [...initialStages];
   let currentTasks = [...initialTasks];
   const createEntity = vi.fn(async (_draftId: string, _type: string, _fingerprint: string, document: EntityDocument) => result(document));
   const updateEntity = vi.fn(async (_draftId: string, type: string, _entity: EntityResult, _fingerprint: string, document: EntityDocument) => {
@@ -233,6 +236,31 @@ describe("project plan and stage workspace", () => {
     expect(client.updateEntity.mock.calls[1]?.[4]).toMatchObject({ milestone_order: [laterStage.document.id, stage.document.id] });
   });
 
+  it("renders milestone task_order directly even when tasks from other milestones interleave by due date", async () => {
+    const orderedTasks = [
+      result({ schema: "gitpm/task@1", id: "T-26-AAAAAA", project: project.document.id, milestone: stage.document.id, title: "Ordered A", type: "task", status: "backlog", lifecycle: "active", due: "2026-08-01" }),
+      result({ schema: "gitpm/task@1", id: "T-26-BBBBBB", project: project.document.id, milestone: stage.document.id, title: "Ordered B", type: "task", status: "backlog", lifecycle: "active", due: "2026-08-04" }),
+      result({ schema: "gitpm/task@1", id: "T-26-CCCCCC", project: project.document.id, milestone: stage.document.id, title: "Ordered C", type: "task", status: "backlog", lifecycle: "active", due: "2026-08-02" }),
+      result({ schema: "gitpm/task@1", id: "T-26-DDDDDD", project: project.document.id, milestone: stage.document.id, title: "Ordered D", type: "task", status: "backlog", lifecycle: "active", due: "2026-08-03" }),
+    ];
+    const distractors = [
+      result({ schema: "gitpm/task@1", id: "T-26-XXXXXX", project: project.document.id, milestone: laterStage.document.id, title: "Distractor 0", type: "task", status: "backlog", lifecycle: "active", due: "2026-08-01" }),
+      result({ schema: "gitpm/task@1", id: "T-26-YYYYYY", project: project.document.id, milestone: laterStage.document.id, title: "Distractor 1", type: "task", status: "backlog", lifecycle: "active", due: "2026-08-02" }),
+      result({ schema: "gitpm/task@1", id: "T-26-ZZZZZZ", project: project.document.id, milestone: laterStage.document.id, title: "Distractor 2", type: "task", status: "backlog", lifecycle: "active", due: "2026-08-03" }),
+      result({ schema: "gitpm/task@1", id: "T-26-WWWWWW", project: project.document.id, milestone: laterStage.document.id, title: "Distractor 3", type: "task", status: "backlog", lifecycle: "active", due: "2026-08-05" }),
+    ];
+    const orderedStage = result({ ...stage.document, task_order: orderedTasks.map((task) => task.document.id) });
+    const client = api(
+      [distractors[2]!, ...orderedTasks, distractors[0]!, distractors[1]!, distractors[3]!],
+      [orderedStage, laterStage],
+    );
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} />);
+
+    const stageCard = (await screen.findByRole("heading", { name: "Launch" })).closest<HTMLElement>("article")!;
+    expect(Array.from(stageCard.querySelectorAll(".project-plan-task-row strong"), (element) => element.textContent))
+      .toEqual(["Ordered A", "Ordered B", "Ordered C", "Ordered D"]);
+  });
+
   it("renders arbitrary-depth subtasks, preserves ancestor context and creates a child in the same milestone", async () => {
     const root = result({ ...urgent.document, title: "Root task" });
     const child = result({ ...large.document, parent: root.document.id, title: "Child task" });
@@ -295,5 +323,15 @@ describe("project plan and stage workspace", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Create task" }));
     await waitFor(() => expect(client.createEntity).toHaveBeenCalled());
     expect(client.createEntity.mock.calls[0]?.[3]).toMatchObject({ project: project.document.id, milestone: stage.document.id, title: "Created here" });
+  });
+
+  it("uses milestone task_order in the stage workspace", async () => {
+    const orderedStage = result({ ...stage.document, task_order: [linked.document.id, urgent.document.id, large.document.id] });
+    const client = api([linked, large, urgent], [orderedStage, laterStage]);
+    render(<StageWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} stageId={stage.document.id} />);
+
+    await screen.findByRole("heading", { name: "Launch" });
+    expect(Array.from(document.querySelectorAll(".stage-task-row strong"), (element) => element.textContent))
+      .toEqual(["Linked task", "Zebra task", "Alpha task"]);
   });
 });
