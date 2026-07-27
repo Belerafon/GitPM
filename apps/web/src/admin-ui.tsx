@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useId, useState, type CSSProperties, type FormEvent } from "react";
 import { CALENDAR_PRESETS, calendarPreset, workingDatesBetween, type CalendarPresetId } from "@gitpm/calendar";
 import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
 import type { GitPmApi } from "./api.js";
@@ -95,7 +95,7 @@ export function AdminWorkspace({ api, draft, role, locale, surface, confirmActio
     {surface === "calendar" && <section className="card"><button className="primary editor-trigger" disabled={readOnly} onClick={() => setCreateEditor("calendar")} type="button">+ {t("admin.createCalendar")}</button><EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setCreateEditor(null)} open={createEditor === "calendar"} title={t("admin.createCalendar")}><CalendarCreateForm disabled={readOnly} onCancel={() => setCreateEditor(null)} onSubmit={createCalendar} t={t} /></EditorDrawer><div className="admin-grid">{activeCalendars.map((entity) => <div className={highlights[entity.document.id] ? "recently-changed" : ""} key={entity.document.id}><CalendarEditor {...{ api, draft, entity, fingerprint, readOnly, t, locale, mutate, remove, confirmDelete }} /></div>)}</div></section>}
     {surface === "people" && <div className="people-admin-sections"><section className="card directory-card"><div className="card-heading"><h3>{t("admin.people")}</h3><label className="search-field">{t("admin.peopleSearch")}<input type="search" value={peopleQuery} onChange={(event) => setPeopleQuery(event.target.value)} /></label></div><button className="primary editor-trigger" disabled={readOnly || activeCalendars.length === 0} onClick={() => setCreateEditor("person")} type="button">+ {t("admin.createPerson")}</button><EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setCreateEditor(null)} open={createEditor === "person"} title={t("admin.createPerson")}><form className="editor-drawer-form" onSubmit={createPerson}><label>{t("core.name")}<input name="name" required /></label><label>{t("admin.email")}<input name="email" type="email" /></label><label>{t("admin.capacity")}<input name="capacity" type="number" min="0" step="0.25" defaultValue="40" required /></label><label>{t("admin.calendar")}<select name="calendar"><option value="">{t("admin.defaultCalendar")}</option>{activeCalendars.map((item) => <option value={item.document.id} key={item.document.id}>{text(item.document, "name")}</option>)}</select></label><div className="editor-drawer-actions"><button onClick={() => setCreateEditor(null)} type="button">{t("core.cancel")}</button><button className="primary" disabled={readOnly || activeCalendars.length === 0}>{t("admin.createPerson")}</button></div></form></EditorDrawer><div className="directory-table-wrap"><table className="directory-table people-directory-table"><thead><tr><th>{t("admin.person")}</th><th>{t("people.projects")}</th><th>{t("admin.teams")}</th><th>{t("admin.capacity")}</th><th>{t("admin.calendar")}</th></tr></thead><tbody>{visiblePeople.map((entity) => { const calendar = activeCalendars.find((item) => item.document.id === text(entity.document, "calendar")); const personTeams = teamsByPerson.get(entity.document.id) ?? []; return <tr className={highlights[entity.document.id] ? "recently-changed" : ""} key={entity.document.id}><th><PersonLink name={text(entity.document, "name")} onOpen={onOpenPerson} personId={entity.document.id} /></th><td><ProjectLinks empty="—" onOpen={onOpenProject} projectIds={(projectsByPerson.get(entity.document.id) ?? []).map((project) => project.document.id)} projects={activeProjects} /></td><td>{personTeams.length === 0 ? "—" : personTeams.map((team) => text(team.document, "name")).join(", ")}</td><td>{t("people.hoursPerWeek", { count: number(entity.document, "weekly_capacity_hours") })}</td><td>{calendar === undefined ? "—" : text(calendar.document, "name")}</td></tr>; })}</tbody></table></div></section>
       <section className="card directory-card"><div className="card-heading"><h3>{t("admin.teams")}</h3><label className="search-field">{t("admin.teamSearch")}<input type="search" value={teamQuery} onChange={(event) => setTeamQuery(event.target.value)} /></label></div><button className="primary editor-trigger" disabled={readOnly} onClick={() => setCreateEditor("team")} type="button">+ {t("admin.createTeam")}</button><EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setCreateEditor(null)} open={createEditor === "team"} title={t("admin.createTeam")}><form className="editor-drawer-form" onSubmit={createTeam}><label>{t("core.name")}<input name="name" required /></label><MemberChecks people={activePeople} selected={[]} t={t} /><div className="editor-drawer-actions"><button onClick={() => setCreateEditor(null)} type="button">{t("core.cancel")}</button><button className="primary" disabled={readOnly}>{t("admin.createTeam")}</button></div></form></EditorDrawer><div className="directory-table-wrap"><table className="directory-table team-directory-table"><thead><tr><th>{t("admin.team")}</th><th>{t("admin.members")}</th><th>{t("admin.actions")}</th></tr></thead><tbody>{visibleTeams.map((entity) => <tr className={highlights[entity.document.id] ? "recently-changed" : ""} key={entity.document.id}><TeamEditor {...{ api, draft, entity, fingerprint, readOnly, t, people: activePeople, mutate, remove, confirmDelete, onOpenPerson }} /></tr>)}</tbody></table></div></section></div>}
-    {surface === "settings" && <section className="card"><h3>{t("admin.settings")}</h3><div className="admin-columns">{statuses !== null && <ConfigEditor api={api} draft={draft} entity={statuses} kind="statuses" listKey="statuses" title={t("admin.statuses")} readOnly={readOnly} t={t} mutate={mutate} />}{issueTypes !== null && <ConfigEditor api={api} draft={draft} entity={issueTypes} kind="issue-types" listKey="issue_types" title={t("admin.issueTypes")} readOnly={readOnly} t={t} mutate={mutate} />}</div></section>}
+    {surface === "settings" && <section aria-label={t("admin.settings")} className="settings-config-grid">{statuses !== null && <ConfigEditor api={api} draft={draft} entity={statuses} kind="statuses" listKey="statuses" title={t("admin.statuses")} readOnly={readOnly} t={t} mutate={mutate} />}{issueTypes !== null && <ConfigEditor api={api} draft={draft} entity={issueTypes} kind="issue-types" listKey="issue_types" title={t("admin.issueTypes")} readOnly={readOnly} t={t} mutate={mutate} />}</section>}
     </>
     </AsyncBoundary>
   </section>;
@@ -146,23 +146,71 @@ function TeamEditor(props: EditorProps & { people: readonly EntityResult[]; read
 }
 
 interface ConfigValue { readonly slug: string; readonly title: string; readonly color: string; readonly active: boolean }
+const CONFIG_COLORS = {
+  gray: { swatch: "#6b7280", soft: "#eef0f2", text: "#3f4650" },
+  blue: { swatch: "#2563eb", soft: "#e9f0ff", text: "#244a99" },
+  green: { swatch: "#15803d", soft: "#e5f4e9", text: "#25613a" },
+  red: { swatch: "#dc2626", soft: "#fce9e8", text: "#8f302b" },
+  orange: { swatch: "#d97706", soft: "#fff0dc", text: "#8a5109" },
+  yellow: { swatch: "#ca8a04", soft: "#fff7d6", text: "#745a0b" },
+  purple: { swatch: "#7c3aed", soft: "#f2eafd", text: "#6032a2" },
+  teal: { swatch: "#0f766e", soft: "#e2f3f1", text: "#285f5a" },
+} as const;
+const CONFIG_COLOR_OPTIONS = [
+  ["gray", "admin.colorGray"],
+  ["blue", "admin.colorBlue"],
+  ["green", "admin.colorGreen"],
+  ["red", "admin.colorRed"],
+  ["orange", "admin.colorOrange"],
+  ["yellow", "admin.colorYellow"],
+  ["purple", "admin.colorPurple"],
+  ["teal", "admin.colorTeal"],
+] as const satisfies readonly (readonly [keyof typeof CONFIG_COLORS, MessageKey])[];
+const fallbackConfigColor = CONFIG_COLORS.gray;
+const configColor = (token: string) => CONFIG_COLORS[token as keyof typeof CONFIG_COLORS] ?? fallbackConfigColor;
+const configBadgeStyle = (token: string): CSSProperties => {
+  const color = configColor(token);
+  return { "--config-swatch": color.swatch, backgroundColor: color.soft, borderColor: color.swatch, color: color.text } as CSSProperties;
+};
+const ConfigBadge = ({ item, inactiveLabel }: { readonly item: ConfigValue; readonly inactiveLabel: string }) => <span className={`config-preview${item.active ? "" : " inactive"}`} style={configBadgeStyle(item.color)} title={item.active ? item.color : inactiveLabel}><span aria-hidden="true" className="config-preview-dot" />{item.title}</span>;
 function ConfigEditor({ api, draft, entity, kind, listKey, title, readOnly, t, mutate }: { readonly api: GitPmApi; readonly draft: DraftStatus; readonly entity: ConfigurationResult; readonly kind: "statuses" | "issue-types"; readonly listKey: "statuses" | "issue_types"; readonly title: string; readonly readOnly: boolean; readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string; readonly mutate: <Result extends EntityResult | ConfigurationResult>(operation: () => Promise<Result>) => Promise<Result | null> }) {
   const [open, setOpen] = useState(false);
   const entityValues = Array.isArray(entity.document[listKey]) ? entity.document[listKey] as ConfigValue[] : [];
   const [values, setValues] = useState(entityValues);
   const [busy, setBusy] = useState(false);
   const [savingRows, setSavingRows] = useState<ReadonlySet<string>>(new Set());
+  const colorListId = useId();
   const { highlights: recentRows, mark: markRows } = useExternalHighlights(500);
   const formRef = useFlipList<HTMLFormElement>(useReducedMotion());
   useEffect(() => setValues(entityValues), [entity]);
-  const readValues = (form: HTMLFormElement) => { const data = new FormData(form); return values.map((item, index) => ({ slug: item.slug, title: String(data.get(`title-${index}`)), color: String(data.get(`color-${index}`)), active: data.get(`active-${index}`) === "on" })); };
+  const updateValue = (index: number, changes: Partial<Pick<ConfigValue, "title" | "color" | "active">>) => setValues((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, ...changes } : item));
   const persist = async (next: readonly ConfigValue[], onPersisted?: () => void) => {
     const previous = values; setValues([...next]); setBusy(true);
     const result = await mutate(async () => { const saved = await api.updateConfiguration(draft.draft_id, kind, entity, entity.draft_fingerprint, { ...entity.document, [listKey]: next }); setBusy(false); onPersisted?.(); return saved; });
     if (result === null) setValues(previous);
     setBusy(false); return result;
   };
-  const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); void persist(readValues(event.currentTarget)).then((result) => { if (result !== null) setOpen(false); }); };
-  const move = (form: HTMLFormElement, index: number, offset: number) => { const next = readValues(form); const target = index + offset; if (target < 0 || target >= next.length) return; const first = next[index]!; const second = next[target]!; [next[index], next[target]] = [second, first]; const rows = { [first.slug]: ["order"], [second.slug]: ["order"] }; setSavingRows(new Set([first.slug, second.slug])); void persist(next, () => { setSavingRows(new Set()); markRows(rows); }).finally(() => setSavingRows(new Set())); };
-  return <article className="config-editor config-summary"><h4>{title}</h4><div className="config-summary-values">{values.map((item) => <span className="config-preview" key={item.slug} style={{ borderColor: item.color }}>{item.title}</span>)}</div><button className="editor-trigger" onClick={() => setOpen(true)} type="button">{t("core.edit")}</button><EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setOpen(false)} open={open} title={`${t("core.edit")}: ${title}`}><form className="editor-drawer-form config-editor-form" onSubmit={submit} ref={formRef}><p className="config-hint">{t("admin.slugHint")}</p>{values.map((item, index) => <div className={`config-row${recentRows[item.slug] ? " recently-changed" : ""}${savingRows.has(item.slug) ? " is-saving" : ""}`} data-flip-key={`config:${kind}:${item.slug}`} key={item.slug}><div className="config-identity"><code>{item.slug}</code><span className="config-preview" style={{ borderColor: item.color }}>{item.title}</span></div><input name={`title-${index}`} aria-label={`${title} ${item.slug}`} defaultValue={item.title} /><label className="color-field"><input type="color" aria-label={`${t("admin.colorPicker")} ${item.slug}`} defaultValue={/^#[0-9a-f]{6}$/iu.test(item.color) ? item.color : "#777777"} onChange={(event) => { const input = event.currentTarget.nextElementSibling as HTMLInputElement | null; if (input !== null) input.value = event.currentTarget.value; }} /><input name={`color-${index}`} aria-label={`${t("admin.color")} ${item.slug}`} defaultValue={item.color} /></label><label><input type="checkbox" name={`active-${index}`} defaultChecked={item.active} />{t("admin.active")}</label><div className="config-order"><button aria-label={t("admin.moveUp", { name: item.title })} disabled={readOnly || busy || index === 0} onClick={(event) => { if (event.currentTarget.form !== null) move(event.currentTarget.form, index, -1); }} type="button">↑</button><button aria-label={t("admin.moveDown", { name: item.title })} disabled={readOnly || busy || index === values.length - 1} onClick={(event) => { if (event.currentTarget.form !== null) move(event.currentTarget.form, index, 1); }} type="button">↓</button></div></div>)}<div className="editor-drawer-actions"><button onClick={() => setOpen(false)} type="button">{t("core.cancel")}</button><button className="primary" disabled={readOnly || busy}>{t("core.save")}</button></div></form></EditorDrawer></article>;
+  const close = () => { setValues(entityValues); setOpen(false); };
+  const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); void persist(values).then((result) => { if (result !== null) setOpen(false); }); };
+  const move = (index: number, offset: number) => { const next = [...values]; const target = index + offset; if (target < 0 || target >= next.length) return; const first = next[index]!; const second = next[target]!; [next[index], next[target]] = [second, first]; const rows = { [first.slug]: ["order"], [second.slug]: ["order"] }; setSavingRows(new Set([first.slug, second.slug])); void persist(next, () => { setSavingRows(new Set()); markRows(rows); }).finally(() => setSavingRows(new Set())); };
+  return <article className="config-editor config-summary">
+    <header className="config-summary-heading"><h3>{title}</h3><button className="editor-trigger" aria-label={t("admin.editConfig", { name: title })} disabled={readOnly} onClick={() => { setValues(entityValues); setOpen(true); }} type="button">{t("core.edit")}</button></header>
+    <div className="config-summary-values">{values.map((item) => <ConfigBadge inactiveLabel={t("admin.inactive")} item={item} key={item.slug} />)}</div>
+    <EditorDrawer closeLabel={t("core.closeEditor")} onClose={close} open={open} title={`${t("core.edit")}: ${title}`}><form className="editor-drawer-form config-editor-form" onSubmit={submit} ref={formRef}>
+      <p className="config-hint">{t("admin.slugHint")}</p>
+      <datalist id={colorListId}>{CONFIG_COLOR_OPTIONS.map(([token, label]) => <option key={token} label={t(label)} value={token} />)}</datalist>
+      <div className="config-list">{values.map((item, index) => <section className={`config-row${recentRows[item.slug] ? " recently-changed" : ""}${savingRows.has(item.slug) ? " is-saving" : ""}`} data-flip-key={`config:${kind}:${item.slug}`} key={item.slug}>
+        <header className="config-row-heading">
+          <div className="config-identity"><ConfigBadge inactiveLabel={t("admin.inactive")} item={item} /><span className="config-technical-id"><span>{t("admin.technicalId")}</span><code>{item.slug}</code></span></div>
+          <label className="config-active-switch"><input aria-label={t("admin.activeLabel", { name: item.title })} checked={item.active} disabled={readOnly || busy} name={`active-${index}`} onChange={(event) => updateValue(index, { active: event.currentTarget.checked })} role="switch" type="checkbox" /><span aria-hidden="true" className="config-switch-track" /><span>{t("admin.active")}</span></label>
+        </header>
+        <div className="config-row-fields">
+          <label className="config-field"><span>{t("core.name")}</span><input aria-label={`${title} ${item.slug}`} disabled={readOnly || busy} name={`title-${index}`} onChange={(event) => updateValue(index, { title: event.currentTarget.value })} required value={item.title} /></label>
+          <label className="config-field"><span>{t("admin.color")}</span><span className="config-color-control"><span aria-hidden="true" className="config-color-swatch" style={{ backgroundColor: configColor(item.color).swatch }} /><input aria-label={`${t("admin.color")} ${item.slug}`} disabled={readOnly || busy} list={colorListId} name={`color-${index}`} onChange={(event) => updateValue(index, { color: event.currentTarget.value })} pattern="[a-z][a-z0-9]*(?:-[a-z0-9]+)*" required spellCheck={false} value={item.color} /></span></label>
+        </div>
+        <footer className="config-row-footer"><span>{t("admin.orderPosition", { position: index + 1, count: values.length })}</span><div className="config-order"><button aria-label={t("admin.moveUp", { name: item.title })} disabled={readOnly || busy || index === 0} onClick={() => move(index, -1)} type="button"><span aria-hidden="true">↑</span>{t("admin.higher")}</button><button aria-label={t("admin.moveDown", { name: item.title })} disabled={readOnly || busy || index === values.length - 1} onClick={() => move(index, 1)} type="button"><span aria-hidden="true">↓</span>{t("admin.lower")}</button></div></footer>
+      </section>)}</div>
+      <div className="editor-drawer-actions"><button onClick={close} type="button">{t("core.cancel")}</button><button className="primary" disabled={readOnly || busy}>{t("core.save")}</button></div>
+    </form></EditorDrawer>
+  </article>;
 }

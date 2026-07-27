@@ -491,11 +491,12 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
   .fm-preview-actions { justify-content: flex-start; }
 }
 .admin-workspace { margin-top: 1.5rem; }
-.admin-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; }
+.settings-config-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
 .admin-create { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .55rem; align-items: start; }
 .admin-create select, .admin-card select { border: 1px solid #c9cbc5; border-radius: 8px; background: #fff; padding: .62rem; }
 .admin-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; margin-top: 1rem; }
 .admin-card, .config-editor { display: grid; align-content: start; gap: .5rem; border: 1px solid #dedfd9; border-radius: 9px; padding: .75rem; }
+.config-editor { border-radius: 12px; background: #fff; box-shadow: 0 4px 18px rgba(31, 45, 37, .04); padding: 1rem; }
 .admin-card input { width: 100%; }
 .admin-card-summary > span { color: #646b66; font-size: .8rem; overflow-wrap: anywhere; }
 .calendar-week-preview { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: .25rem; }
@@ -646,22 +647,41 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
 .assignee-search-results button:last-child { border-bottom: 0; }
 .assignee-search-results button:hover { background: #edf3ee; }
 .assignee-search-results small, .assignee-search-message, .assignee-fieldset .assignee-hint { color: #666d68; }
-.config-hint { margin: -.15rem 0 .35rem; color: #666d68; font-size: .76rem; }
-.config-summary-values { display: flex; flex-wrap: wrap; gap: .4rem; }
-.config-editor-form .config-row { grid-template-columns: 1fr; border-bottom: 1px solid #e4e6e2; padding-bottom: .8rem; }
-.config-row { display: grid; grid-template-columns: .9fr 1fr minmax(120px,.65fr) auto auto; gap: .4rem; align-items: center; }
-.config-identity { display: grid; gap: .25rem; min-width: 0; }
-.config-identity code { overflow: hidden; color: #737a75; text-overflow: ellipsis; }
-.config-preview { width: fit-content; border-left: 4px solid; border-radius: 4px; background: #f5f6f3; padding: .2rem .35rem; font-size: .72rem; }
-.config-row label { display: flex; gap: .25rem; align-items: center; }
-.color-field { display: grid !important; grid-template-columns: 42px minmax(0,1fr); }
-.color-field input[type="color"] { width: 42px; height: 36px; padding: .2rem; }
-.color-field input:not([type="color"]) { min-width: 0; }
-.config-order { display: flex; gap: .25rem; }
-.config-order button { width: 34px; height: 34px; padding: 0; }
-@media (max-width: 1300px) { .admin-columns { grid-template-columns: 1fr; } }
-@media (max-width: 900px) { .admin-grid { grid-template-columns: 1fr; } .admin-create { grid-template-columns: 1fr 1fr; } }
-@media (max-width: 560px) { .admin-create, .config-row { grid-template-columns: 1fr; } .config-order { justify-content: end; } .card-heading { align-items: stretch; flex-direction: column; } }
+.config-summary { min-height: 116px; gap: .9rem; }
+.config-summary-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.config-summary-heading h3 { margin: 0; font-size: 1rem; }
+.config-summary-heading .editor-trigger { padding: .48rem .7rem; }
+.config-summary-values { display: flex; flex-wrap: wrap; gap: .45rem; }
+.config-preview { display: inline-flex; align-items: center; gap: .38rem; width: fit-content; max-width: 100%; border: 1px solid; border-radius: 999px; padding: .3rem .58rem; font-size: .76rem; font-weight: 680; line-height: 1.2; }
+.config-preview-dot { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 999px; background: var(--config-swatch); }
+.config-preview.inactive { opacity: .55; filter: saturate(.4); text-decoration: line-through; }
+.config-hint { border-radius: 8px; background: #f2f5f2; margin: 0; padding: .7rem .8rem; color: #626b65; font-size: .78rem; line-height: 1.45; }
+.config-list { display: grid; gap: .7rem; }
+.config-editor-form .config-row { display: grid; gap: .75rem; border: 1px solid #dfe3dd; border-radius: 10px; background: #fff; padding: .8rem; }
+.config-row-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; }
+.config-identity { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .6rem; min-width: 0; }
+.config-technical-id { display: inline-flex; align-items: baseline; gap: .3rem; min-width: 0; color: #737a75; font-size: .68rem; }
+.config-technical-id code { overflow: hidden; color: #59615c; font-size: .68rem; text-overflow: ellipsis; }
+.config-active-switch { display: inline-flex !important; flex: 0 0 auto; align-items: center; gap: .4rem; margin: .15rem 0 0; color: #4f5953; font-size: .76rem; cursor: pointer; }
+.config-active-switch input { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; }
+.config-switch-track { position: relative; width: 32px; height: 18px; border-radius: 999px; background: #b9bfbb; transition: background .15s ease; }
+.config-switch-track::after { position: absolute; top: 3px; left: 3px; width: 12px; height: 12px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(26, 38, 31, .25); content: ""; transition: transform .15s ease; }
+.config-active-switch input:checked + .config-switch-track { background: #347a58; }
+.config-active-switch input:checked + .config-switch-track::after { transform: translateX(14px); }
+.config-active-switch input:focus-visible + .config-switch-track { outline: 3px solid #8bb8a4; outline-offset: 2px; }
+.config-active-switch input:disabled + .config-switch-track { opacity: .55; }
+.config-row-fields { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(150px, .8fr); gap: .65rem; }
+.config-field { display: grid !important; gap: .3rem; margin: 0; color: #5d625f; font-size: .76rem; }
+.config-color-control { position: relative; display: block; }
+.config-color-control input { padding-left: 2.15rem; }
+.config-color-swatch { position: absolute; z-index: 1; top: 50%; left: .7rem; width: 12px; height: 12px; border: 1px solid rgba(25, 35, 29, .18); border-radius: 50%; transform: translateY(-50%); pointer-events: none; }
+.config-row-footer { display: flex; align-items: center; justify-content: space-between; gap: .75rem; border-top: 1px solid #edf0ec; padding-top: .65rem; }
+.config-row-footer > span { color: #747b76; font-size: .7rem; }
+.config-order { display: flex; gap: .35rem; }
+.config-order button { display: inline-flex; align-items: center; gap: .3rem; padding: .38rem .55rem; color: #435149; font-size: .72rem; }
+.config-order button > span { font-size: .9rem; line-height: 1; }
+@media (max-width: 900px) { .settings-config-grid, .admin-grid { grid-template-columns: 1fr; } .admin-create { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .admin-create, .config-row-fields { grid-template-columns: 1fr; } .config-row-heading, .config-row-footer { align-items: stretch; flex-direction: column; } .config-order { justify-content: end; } .card-heading { align-items: stretch; flex-direction: column; } }
 
 @media (max-width: 560px) {
   .editor-drawer { width: 100vw; }

@@ -6,7 +6,7 @@ import { AdminWorkspace } from "./admin-ui.js";
 import type { ConfigurationDocument, ConfigurationResult, DraftStatus, EntityDocument, EntityResult } from "./types.js";
 
 const draft: DraftStatus = { draft_id: "DRF-ADMIN", owner_gitlab_user_id: "42", branch: "gitpm/42/DRF-ADMIN", base_commit: "a".repeat(40), writer_mode: "ui", state: "open", fingerprint: "b".repeat(64), created_at: "2026-07-10T00:00:00.000Z", updated_at: "2026-07-10T00:00:00.000Z" };
-const configDocument = (kind: "statuses" | "issue-types") => (kind === "statuses" ? { schema: "gitpm/statuses@1", statuses: [{ slug: "backlog", title: "Backlog", color: "#808080", active: true }, { slug: "done", title: "Done", color: "#228b22", active: true }] } : { schema: "gitpm/issue-types@1", issue_types: [{ slug: "task", title: "Task", color: "#0000ff", active: true }] }) as ConfigurationDocument;
+const configDocument = (kind: "statuses" | "issue-types") => (kind === "statuses" ? { schema: "gitpm/statuses@1", statuses: [{ slug: "backlog", title: "Backlog", color: "gray", active: true }, { slug: "done", title: "Done", color: "green", active: true }] } : { schema: "gitpm/issue-types@1", issue_types: [{ slug: "task", title: "Task", color: "blue", active: true }] }) as ConfigurationDocument;
 
 class AdminApi {
   entities: EntityResult[] = [];
@@ -60,10 +60,25 @@ describe("administration UI", () => {
 
     rendered.rerender(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="settings" onChanged={changed} />);
     const statusesCard = (await screen.findByRole("heading", { name: "Statuses" })).closest<HTMLElement>(".config-editor")!;
-    fireEvent.click(within(statusesCard).getByRole("button", { name: "Edit" }));
-    const statusTitle = await screen.findByLabelText("Statuses backlog"); fireEvent.change(statusTitle, { target: { value: "Queue" } }); fireEvent.submit(statusTitle.closest("form")!);
-    await waitFor(() => expect((admin.configurations.get("statuses")!.document.statuses as readonly { title: string }[])[0]?.title).toBe("Queue"));
-    fireEvent.click(within(statusesCard).getByRole("button", { name: "Edit" }));
+    expect(within(statusesCard).getByText("Backlog").closest<HTMLElement>(".config-preview")?.style.backgroundColor).toBe("rgb(238, 240, 242)");
+    fireEvent.click(within(statusesCard).getByRole("button", { name: "Edit Statuses" }));
+    const dialog = await screen.findByRole("dialog", { name: "Edit: Statuses" });
+    expect(within(dialog).getAllByText("Technical ID")).toHaveLength(2);
+    expect(within(dialog).getByRole("switch", { name: "Active: Backlog" })).toBeTruthy();
+    const statusTitle = within(dialog).getByLabelText("Statuses backlog");
+    fireEvent.change(statusTitle, { target: { value: "Queue" } });
+    expect(statusTitle.closest(".config-row")?.querySelector(".config-preview")?.textContent).toBe("Queue");
+    fireEvent.change(within(dialog).getByLabelText("Color backlog"), { target: { value: "blue" } });
+    expect(statusTitle.closest(".config-row")?.querySelector<HTMLElement>(".config-preview")?.style.backgroundColor).toBe("rgb(233, 240, 255)");
+    fireEvent.click(within(dialog).getByRole("switch", { name: "Active: Queue" }));
+    fireEvent.submit(statusTitle.closest("form")!);
+    await waitFor(() => expect((admin.configurations.get("statuses")!.document.statuses as readonly { title: string; color: string; active: boolean }[])[0]).toMatchObject({ title: "Queue", color: "blue", active: false }));
+    fireEvent.click(within(statusesCard).getByRole("button", { name: "Edit Statuses" }));
+    fireEvent.change(screen.getByLabelText("Statuses backlog"), { target: { value: "Unsaved" } });
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog", { name: "Edit: Statuses" })).toBeNull();
+    fireEvent.click(within(statusesCard).getByRole("button", { name: "Edit Statuses" }));
+    expect((screen.getByLabelText("Statuses backlog") as HTMLInputElement).value).toBe("Queue");
     fireEvent.click(screen.getByRole("button", { name: "Move Queue down" }));
     expect(screen.getByLabelText("Statuses backlog").closest(".config-row")?.classList.contains("is-saving")).toBe(true);
     expect(screen.getByLabelText("Statuses done").closest(".config-row")?.classList.contains("is-saving")).toBe(true);
