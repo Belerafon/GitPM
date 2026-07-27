@@ -78,7 +78,8 @@ Work conservatively:
 - preserve immutable IDs and explicit references;
 - limit work to the requested Project whenever possible;
 - validate the complete repository and review the semantic diff;
-- commit the complete draft atomically through GitPM;
+- do not commit unless the user explicitly requests a commit; when requested, commit the
+  complete draft atomically through GitPM;
 - publish only when the user explicitly requests it;
 - prefer a clear blocker over a guessed command or a hidden manual edit.
 
@@ -105,6 +106,8 @@ Work conservatively:
 - Never use raw \`git add\`, \`git commit\`, \`git push\`, Git hosting APIs, MCP, or UI API
   calls to mutate GitPM data.
 - Reading repository files and using read-only Git commands for orientation is allowed.
+- A request to create, update, archive, move, or delete GitPM data does not authorize a commit.
+  Run a commit command only when the user explicitly requests a commit.
 - Prefer \`--json\`; evaluate both the process exit code and the stable GitPM result code.
 - Never place credentials in arguments, repository URLs, files, Git configuration, logs, or
   responses.
@@ -170,8 +173,10 @@ Move a task with
 Then run \`format\`, \`validate --changed\`, and \`diff --semantic\` with
 \`--draft ${draftId}\`, \`--json\`, and \`--project\` when scoped. Repeat
 \`--allow-delete\` on every verification and commit command while a physical deletion is present.
-Commit only with \`gitpm commit --all\`. Use \`gitpm push\` and \`gitpm mr create\` only when
-publication was requested. The full command reference and decision rules are in the skill.
+Stop after reporting the verified semantic diff unless the user explicitly requested a commit.
+When a commit was explicitly requested, use only \`gitpm commit --all\`. Use \`gitpm push\` and
+\`gitpm mr create\` only when publication was requested. The full command reference and decision
+rules are in the skill.
 
 ## Errors, ambiguity, and product feedback
 
@@ -213,8 +218,8 @@ stop: the root source-development \`AGENTS.md\` applies there and this skill doe
 Apply these principles:
 
 - Repository truth over hidden state: do not create side databases or private shadow files.
-- Explicit workflow over convenience: acquire external writer mode, validate, review, commit
-  all, and publish deliberately.
+- Explicit workflow over convenience: acquire external writer mode, validate, review, wait for
+  an explicit user request before committing all, and publish deliberately.
 - Semantic intent over textual patches: use semantic diff and stable entity IDs to understand
   the result.
 - Safety over improvisation: stop when the CLI cannot express the requested operation.
@@ -364,7 +369,12 @@ or retrying with broader scope.
 
 ## Commit and publish deliberately
 
-Commit only after the semantic result matches the user's intent:
+Do not commit unless the user explicitly requests a commit. A request to create, update, archive,
+move, or delete GitPM data is not commit authorization. After validation and semantic diff, stop
+and report the uncommitted result unless the user explicitly requested a commit.
+
+When the user explicitly requests a commit, commit only after the semantic result matches the
+user's intent:
 
 \`gitpm commit --all --draft <draft-id> -m <message> [--project <project-id>] [--allow-delete] --json\`
 

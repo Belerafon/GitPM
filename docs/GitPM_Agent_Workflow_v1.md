@@ -161,9 +161,12 @@ Repository configuration, People, Teams, Calendars и другие Projects пр
 `--unlink-references`, а удаление непустого Project — `--cascade-references`; перед обоими
 сначала проверяется полный `--dry-run --json` impact.
 
-Commit всегда включает все изменения runtime checkout/draft после полной scope и
-repository validation. Partial staging не поддерживается. Push требует clean
-committed tree.
+Agent не выполняет commit без явной просьбы пользователя именно о commit. Просьба создать,
+изменить, архивировать, переместить или удалить GitPM data сама по себе не разрешает commit:
+после validation и semantic diff agent сообщает результат и оставляет изменения uncommitted.
+При явной просьбе commit всегда включает все изменения runtime checkout/draft после полной
+scope и repository validation. Partial staging не поддерживается. Push требует clean committed
+tree.
 
 При ошибке, неоднозначном контракте или отсутствующей операции agent сообщает
 sanitized command, стабильный error code, observed/expected behavior и конкретное
