@@ -51,14 +51,29 @@ interface CopyText {
   readonly title: string;
   readonly projects: string;
   readonly people: string;
+  readonly person: string;
   readonly projectDetails: string;
   readonly gantt: string;
   readonly tasks: string;
   readonly milestones: string;
   readonly teams: string;
   readonly calendars: string;
+  readonly calendar: string;
+  readonly capacity: string;
   readonly status: string;
   readonly owner: string;
+  readonly due: string;
+  readonly risk: string;
+  readonly riskOnTrack: string;
+  readonly riskNear: string;
+  readonly riskOverdue: string;
+  readonly riskUnknown: string;
+  readonly unassigned: string;
+  readonly ungrouped: string;
+  readonly activeProjects: string;
+  readonly activeTasks: string;
+  readonly activeMilestones: string;
+  readonly completedTasks: string;
   readonly assignees: string;
   readonly schedule: string;
   readonly noData: string;
@@ -69,13 +84,21 @@ interface CopyText {
 
 const COPY: Readonly<Record<ExportLocale, CopyText>> = {
   en: {
-    title: "GitPM portfolio", projects: "Projects", people: "People", projectDetails: "Project details", gantt: "Gantt",
-    tasks: "Tasks", milestones: "Milestones", teams: "Teams", calendars: "Calendars", status: "Status", owner: "Owner",
+    title: "GitPM portfolio", projects: "Projects", people: "People", person: "Person", projectDetails: "Project details", gantt: "Gantt",
+    tasks: "Tasks", milestones: "Milestones", teams: "Teams", calendars: "Calendars", calendar: "Calendar",
+    capacity: "Weekly capacity (hours)", status: "Status", owner: "Project owner", due: "Due date", risk: "Risk",
+    riskOnTrack: "On track", riskNear: "Due soon", riskOverdue: "Overdue", riskUnknown: "No due date",
+    unassigned: "Unassigned", ungrouped: "Ungrouped", activeProjects: "Active projects", activeTasks: "Active tasks",
+    activeMilestones: "Active milestones", completedTasks: "Completed tasks",
     assignees: "Assignees", schedule: "Schedule", noData: "No data", generated: "Generated", commit: "Commit", board: "Board",
   },
   ru: {
-    title: "Портфель GitPM", projects: "Проекты", people: "Люди", projectDetails: "Подробности проектов", gantt: "Гант",
-    tasks: "Задачи", milestones: "Этапы", teams: "Команды", calendars: "Календари", status: "Статус", owner: "Владелец",
+    title: "Портфель GitPM", projects: "Проекты", people: "Люди", person: "Сотрудник", projectDetails: "Подробности проектов", gantt: "Гант",
+    tasks: "Задачи", milestones: "Этапы", teams: "Команды", calendars: "Календари", calendar: "Календарь",
+    capacity: "Недельная ёмкость (часы)", status: "Статус", owner: "Ответственный за проект", due: "Срок", risk: "Риск",
+    riskOnTrack: "По плану", riskNear: "Срок близко", riskOverdue: "Просрочен", riskUnknown: "Без срока",
+    unassigned: "Не назначен", ungrouped: "Без группы", activeProjects: "Активных проектов", activeTasks: "Активных задач",
+    activeMilestones: "Активных этапов", completedTasks: "Завершённых задач",
     assignees: "Исполнители", schedule: "Сроки", noData: "Нет данных", generated: "Сформировано", commit: "Коммит", board: "Доска",
   },
 };
@@ -109,6 +132,14 @@ function strings(value: unknown): readonly string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
+function number(document: GitPmDocument, key: string): number | undefined {
+  return typeof document[key] === "number" ? document[key] : undefined;
+}
+
+function active(documents: readonly GitPmDocument[]): readonly GitPmDocument[] {
+  return documents.filter((document) => text(document, "lifecycle") === "active");
+}
+
 function escapeHtml(value: unknown): string {
   return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
 }
@@ -131,7 +162,8 @@ function documentGroups(snapshot: ExportSnapshot) {
   const milestones = bySchema("gitpm/milestone@1");
   const teams = bySchema("gitpm/team@1");
   const calendars = bySchema("gitpm/calendar@1");
-  return { projects, people, tasks, milestones, teams, calendars };
+  const statuses = bySchema("gitpm/statuses@1");
+  return { projects, people, tasks, milestones, teams, calendars, statuses };
 }
 
 function namesById(documents: readonly GitPmDocument[]): ReadonlyMap<string, string> {
@@ -203,15 +235,86 @@ function renderHtml(snapshot: ExportSnapshot, locale: ExportLocale): Buffer {
   return Buffer.from(html, "utf8");
 }
 
-function pdfTable(header: readonly string[], rows: readonly (readonly string[])[]): unknown {
+type PdfTableCell = string | Readonly<Record<string, unknown>>;
+
+function pdfTable(
+  header: readonly string[],
+  rows: readonly (readonly PdfTableCell[])[],
+  widths: readonly (number | string)[] = header.map(() => "*"),
+): unknown {
   return {
     layout: "lightHorizontalLines",
     table: {
       headerRows: 1,
-      widths: header.map(() => "*"),
-      body: [header.map((value) => ({ text: value, bold: true })), ...rows],
+      widths,
+      body: [header.map((value) => ({ text: value, bold: true, color: "#33443b", fillColor: "#edf2ee" })), ...rows],
     },
     margin: [0, 8, 0, 16],
+  };
+}
+
+function localizedDate(locale: ExportLocale, value: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(value)) return "-";
+  return new Intl.DateTimeFormat(locale === "ru" ? "ru-RU" : "en-US", { dateStyle: "medium", timeZone: "UTC" })
+    .format(new Date(`${value}T00:00:00.000Z`));
+}
+
+function localizedNumber(locale: ExportLocale, value: number): string {
+  return new Intl.NumberFormat(locale === "ru" ? "ru-RU" : "en-US", { maximumFractionDigits: 2 }).format(value);
+}
+
+function statusTitles(statusDocuments: readonly GitPmDocument[]): ReadonlyMap<string, string> {
+  const values = statusDocuments.flatMap((document) => Array.isArray(document.statuses) ? document.statuses : []);
+  return new Map(values.flatMap((value) => {
+    if (typeof value !== "object" || value === null) return [];
+    const candidate = value as Readonly<Record<string, unknown>>;
+    return candidate.active === true && typeof candidate.slug === "string" && typeof candidate.title === "string"
+      ? [[candidate.slug, candidate.title] as const]
+      : [];
+  }));
+}
+
+function projectRisk(project: GitPmDocument, generatedAt: string): "onTrack" | "near" | "overdue" | "unknown" {
+  const due = text(project, "due");
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(due)) return "unknown";
+  const days = Math.ceil((Date.parse(`${due}T00:00:00Z`) - Date.parse(generatedAt)) / 86_400_000);
+  return days < 0 ? "overdue" : days <= 14 ? "near" : "onTrack";
+}
+
+function compactDescription(document: GitPmDocument): string {
+  const value = text(document, "description_markdown").replace(/\s+/gu, " ").trim();
+  return value.length <= 120 ? value : `${value.slice(0, 117).trimEnd()}...`;
+}
+
+function projectGroups(projects: readonly GitPmDocument[], locale: ExportLocale, ungrouped: string) {
+  const named = new Map<string, GitPmDocument[]>();
+  const withoutGroup: GitPmDocument[] = [];
+  for (const project of projects) {
+    const group = text(project, "group").trim();
+    if (group === "") withoutGroup.push(project);
+    else named.set(group, [...(named.get(group) ?? []), project]);
+  }
+  const byName = (left: GitPmDocument, right: GitPmDocument) =>
+    text(left, "name").localeCompare(text(right, "name"), locale);
+  const groups = [...named.entries()]
+    .sort(([left], [right]) => left.localeCompare(right, locale))
+    .map(([title, items]) => ({ title, projects: [...items].sort(byName) }));
+  if (withoutGroup.length > 0) groups.push({ title: ungrouped, projects: [...withoutGroup].sort(byName) });
+  return groups;
+}
+
+function summaryMetrics(items: readonly { readonly label: string; readonly value: number }[]): unknown {
+  return {
+    columns: items.map((item) => ({
+      width: "*",
+      stack: [
+        { text: String(item.value), fontSize: 18, bold: true, color: "#173d2d" },
+        { text: item.label, fontSize: 7, color: "#647068" },
+      ],
+      margin: [8, 7, 8, 7],
+    })),
+    columnGap: 8,
+    margin: [0, 0, 0, 10],
   };
 }
 
@@ -261,23 +364,95 @@ function renderGanttPdf(tasks: readonly GitPmDocument[], noData: string): unknow
 async function renderPdf(snapshot: ExportSnapshot, locale: ExportLocale, selected: ReadonlySet<ExportSection>): Promise<Buffer> {
   pdfMake.vfs = pdfFonts;
   const t = COPY[locale];
-  const { projects, people, tasks, milestones } = documentGroups(snapshot);
+  const groups = documentGroups(snapshot);
+  const projects = active(groups.projects);
+  const people = active(groups.people);
+  const tasks = active(groups.tasks);
+  const milestones = active(groups.milestones);
+  const teams = active(groups.teams);
+  const calendars = active(groups.calendars);
   const peopleNames = namesById(people);
+  const projectNames = namesById(projects);
+  const calendarNames = namesById(calendars);
+  const titlesByStatus = statusTitles(groups.statuses);
   const content: unknown[] = [
     { text: t.title, style: "title" },
     { text: `${t.commit}: ${snapshot.shortCommit} · ${t.generated}: ${snapshot.generatedAt}`, style: "meta" },
   ];
   if (selected.has("projects")) {
     content.push({ text: t.projects, style: "heading", pageBreak: content.length > 2 ? "before" : undefined });
-    content.push(pdfTable([t.projects, t.status, t.owner], projects.map((project) => [
-      text(project, "name"), text(project, "status"), (peopleNames.get(text(project, "owner")) ?? text(project, "owner")) || "-",
-    ])));
+    content.push(summaryMetrics([
+      { label: t.activeProjects, value: projects.length },
+      { label: t.activeTasks, value: tasks.length },
+      { label: t.activeMilestones, value: milestones.length },
+      { label: t.completedTasks, value: tasks.filter((task) => text(task, "status") === "done").length },
+    ]));
+    const groupedProjects = projectGroups(projects, locale, t.ungrouped);
+    if (groupedProjects.length === 0) content.push({ text: t.noData });
+    for (const group of groupedProjects) {
+      content.push({ text: `${group.title} (${group.projects.length})`, style: "tableGroup" });
+      content.push(pdfTable(
+        [t.projects, t.status, t.owner, t.tasks, t.milestones, t.due, t.risk],
+        group.projects.map((project) => {
+          const projectId = text(project, "id");
+          const description = compactDescription(project);
+          const risk = projectRisk(project, snapshot.generatedAt);
+          const projectCell: Readonly<Record<string, unknown>> = {
+            stack: [
+              { text: text(project, "name"), bold: true },
+              { text: projectId, fontSize: 6.5, color: "#727a75" },
+              ...(description === "" ? [] : [{ text: description, fontSize: 7, color: "#647068" }]),
+            ],
+          };
+          return [
+            projectCell,
+            titlesByStatus.get(text(project, "status")) ?? text(project, "status"),
+            (peopleNames.get(text(project, "owner")) ?? text(project, "owner")) || t.unassigned,
+            String(tasks.filter((task) => text(task, "project") === projectId).length),
+            String(milestones.filter((milestone) => text(milestone, "project") === projectId).length),
+            localizedDate(locale, text(project, "due")),
+            risk === "onTrack" ? t.riskOnTrack : risk === "near" ? t.riskNear : risk === "overdue" ? t.riskOverdue : t.riskUnknown,
+          ];
+        }),
+        [172, 72, 105, 42, 48, 70, 68],
+      ));
+    }
   }
   if (selected.has("people")) {
     content.push({ text: t.people, style: "heading", pageBreak: "before" });
-    content.push(pdfTable([t.people, "Email", "h/week"], people.map((person) => [
-      text(person, "name"), text(person, "email") || "-", String(person.weekly_capacity_hours ?? "-"),
-    ])));
+    content.push(pdfTable(
+      [t.person, t.projects, t.teams, t.capacity, t.calendar],
+      people.map((person) => {
+        const personId = text(person, "id");
+        const personProjectIds = new Set(
+          projects.filter((project) => text(project, "owner") === personId).map((project) => text(project, "id")),
+        );
+        for (const task of tasks) {
+          if (strings(task.assignees).includes(personId) && projectNames.has(text(task, "project"))) {
+            personProjectIds.add(text(task, "project"));
+          }
+        }
+        const personProjects = [...personProjectIds]
+          .map((projectId) => projectNames.get(projectId) ?? projectId)
+          .sort((left, right) => left.localeCompare(right, locale));
+        const personTeams = teams
+          .filter((team) => strings(team.members).includes(personId))
+          .map((team) => text(team, "name"))
+          .sort((left, right) => left.localeCompare(right, locale));
+        const capacity = number(person, "weekly_capacity_hours");
+        return [
+          { stack: [
+            { text: text(person, "name"), bold: true },
+            { text: personId, fontSize: 6.5, color: "#727a75" },
+          ] },
+          personProjects.join(", ") || "-",
+          personTeams.join(", ") || "-",
+          capacity === undefined ? "-" : `${localizedNumber(locale, capacity)} ${locale === "ru" ? "ч/нед." : "h/week"}`,
+          calendarNames.get(text(person, "calendar")) ?? "-",
+        ];
+      }),
+      [130, 210, 110, 92, 128],
+    ));
   }
   for (const project of projects) {
     const projectId = text(project, "id");
@@ -301,11 +476,13 @@ async function renderPdf(snapshot: ExportSnapshot, locale: ExportLocale, selecte
   const definition = {
     content,
     defaultStyle: { font: "Roboto", fontSize: 9 },
+    pageOrientation: "landscape",
     pageMargins: [36, 42, 36, 42],
     styles: {
       title: { fontSize: 24, bold: true, color: "#173d2d", margin: [0, 0, 0, 8] },
       heading: { fontSize: 18, bold: true, color: "#245c42", margin: [0, 0, 0, 12] },
       subheading: { fontSize: 12, bold: true, margin: [0, 8, 0, 4] },
+      tableGroup: { fontSize: 10, bold: true, color: "#33443b", margin: [0, 6, 0, 0] },
       meta: { fontSize: 8, color: "#647068", margin: [0, 0, 0, 18] },
     },
     footer: (currentPage: number, pageCount: number) => ({ text: `${currentPage} / ${pageCount}`, alignment: "center", fontSize: 8, color: "#647068" }),
