@@ -265,8 +265,8 @@ describe("project plan and stage workspace", () => {
     const root = result({ ...urgent.document, title: "Root task" });
     const child = result({ ...large.document, parent: root.document.id, title: "Child task" });
     const grandchild = result({ ...linked.document, parent: child.document.id, title: "Grandchild task" });
-    const siblingRoot = result({ ...other.document, milestone: stage.document.id, title: "Sibling root" });
-    const client = api([root, child, grandchild, siblingRoot]);
+    const siblingChild = result({ ...other.document, milestone: stage.document.id, parent: root.document.id, status: "done", title: "Sibling child" });
+    const client = api([root, child, grandchild, siblingChild]);
     render(<ProjectPlanWorkspace api={client} draft={draft} initialStatusFilter="done" locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} />);
 
     const stageCard = (await screen.findByRole("heading", { name: "Launch" })).closest<HTMLElement>("article")!;
@@ -280,12 +280,18 @@ describe("project plan and stage workspace", () => {
     expect(screen.getByText("Child task").closest(".project-plan-task-row")?.classList.contains("filter-context")).toBe(true);
     expect(screen.getByText("Grandchild task").closest(".project-plan-task-row")?.querySelector(".project-plan-task-tree-control")?.textContent).toBe("");
     expect(screen.getByText("Grandchild task").closest(".project-plan-task-row")?.querySelector(".project-plan-task-tree-control button")).toBeNull();
+    expect(screen.getByText("Root task").closest(".project-plan-task-row")?.querySelector(".project-plan-task-tree")?.classList.contains("has-visible-children")).toBe(true);
+    expect(screen.getByText("Child task").closest(".project-plan-task-row")?.querySelector(".project-plan-task-branch")?.classList.contains("last")).toBe(false);
+    expect(screen.getByText("Grandchild task").closest(".project-plan-task-row")?.querySelectorAll(".project-plan-task-ancestor-rail")).toHaveLength(1);
+    expect(screen.getByText("Grandchild task").closest(".project-plan-task-row")?.querySelector(".project-plan-task-branch")?.classList.contains("last")).toBe(true);
+    expect(screen.getByText("Sibling child").closest(".project-plan-task-row")?.querySelector(".project-plan-task-branch")?.classList.contains("last")).toBe(true);
 
     const collapseRoot = within(stageCard).getByRole("button", { name: "Collapse subtasks of Root task" });
     expect(collapseRoot.getAttribute("aria-expanded")).toBe("true");
     expect(collapseRoot.querySelector("svg path")?.getAttribute("d")).toBe("m2.5 4 3.5 4 3.5-4");
     fireEvent.click(collapseRoot);
     expect(screen.queryByText("Child task")).toBeNull();
+    expect(screen.getByText("Root task").closest(".project-plan-task-row")?.querySelector(".project-plan-task-tree")?.classList.contains("has-visible-children")).toBe(false);
     const expandRoot = within(stageCard).getByRole("button", { name: "Expand subtasks of Root task" });
     expect(expandRoot.getAttribute("aria-expanded")).toBe("false");
     expect(expandRoot.querySelector("svg path")?.getAttribute("d")).toBe("M4 2.5 8 6 4 9.5");

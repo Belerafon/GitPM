@@ -600,22 +600,39 @@ function TaskRows({ tasks, allTasks, projectId, query = {}, locale, people, numb
   const entries = hierarchy.flatten().filter((entry) =>
     included.has(entry.task.id)
     && !hierarchy.ancestorsOf(entry.task.id).some((ancestor) => collapsed.has(ancestor.id)));
+  const visibleEntryIds = new Set(entries.map((entry) => entry.task.id));
   return <div className="project-plan-task-list">{entries.map((entry) => {
     const task = entry.task.entity;
     const selected = selectedTaskId === task.document.id;
+    const taskPath = hierarchy.pathTo(task.document.id);
     const taskNumber = [
       ...(numberPrefix === undefined ? [] : [numberPrefix]),
-      ...hierarchy.pathTo(task.document.id).map((pathTask) => hierarchy.childrenOf(pathTask.parent).findIndex((sibling) => sibling.id === pathTask.id) + 1),
+      ...taskPath.map((pathTask) => hierarchy.childrenOf(pathTask.parent).findIndex((sibling) => sibling.id === pathTask.id) + 1),
     ].join(".");
     const assignees = strings(task.document, "assignees");
     const siblings = hierarchy.childrenOf(entry.parentId);
     const siblingIndex = siblings.findIndex((item) => item.id === task.document.id);
+    const visibleSiblings = siblings.filter((item) => visibleEntryIds.has(item.id));
+    const isLastVisibleSibling = visibleSiblings.at(-1)?.id === task.document.id;
     const children = hierarchy.childrenOf(task.document.id);
+    const hasVisibleChildren = children.some((child) => visibleEntryIds.has(child.id));
     const completedChildren = children.filter((child) => text(child.entity.document, "status") === "done").length;
     const isContextOnly = !tasks.some((visible) => visible.document.id === task.document.id);
-    const style = { "--task-depth": entry.depth } as CSSProperties;
+    const ancestorRailLevels = taskPath.slice(1, -1).flatMap((pathTask, level) => {
+      const visiblePathSiblings = hierarchy.childrenOf(pathTask.parent).filter((item) => visibleEntryIds.has(item.id));
+      return visiblePathSiblings.at(-1)?.id === pathTask.id ? [] : [level];
+    });
+    const style = {
+      "--task-depth": entry.depth,
+      "--task-tree-width": `${1.5 + entry.depth * 1.15}rem`,
+      "--task-tree-parent-offset": `${.75 + Math.max(0, entry.depth - 1) * 1.15}rem`,
+    } as CSSProperties;
     return <div className={`project-plan-task-row${selected ? " selected" : ""}${isContextOnly ? " filter-context" : ""}${changedTaskIds.has(task.document.id) ? " recently-changed" : ""}${savingTaskIds.has(task.document.id) ? " is-saving" : ""}`} data-depth={entry.depth} data-flip-key={`task:${task.document.id}`} key={task.document.id} style={style}>
-      <span className="project-plan-task-tree-control">{entry.hasChildren ? <button aria-expanded={!collapsed.has(task.document.id)} aria-label={collapsed.has(task.document.id) ? t("taskHierarchy.expand", { title: text(task.document, "title") }) : t("taskHierarchy.collapse", { title: text(task.document, "title") })} onClick={() => setCollapsed((current) => { const next = new Set(current); if (next.has(task.document.id)) next.delete(task.document.id); else next.add(task.document.id); return next; })} type="button"><svg aria-hidden="true" viewBox="0 0 12 12"><path d={collapsed.has(task.document.id) ? "M4 2.5 8 6 4 9.5" : "m2.5 4 3.5 4 3.5-4"} /></svg></button> : null}</span>
+      <span className={`project-plan-task-tree${hasVisibleChildren ? " has-visible-children" : ""}`}>
+        {ancestorRailLevels.map((level) => <span aria-hidden="true" className="project-plan-task-ancestor-rail" key={level} style={{ left: `${.75 + level * 1.15}rem` }} />)}
+        {entry.depth > 0 && <span aria-hidden="true" className={`project-plan-task-branch${isLastVisibleSibling ? " last" : ""}`} />}
+        <span className="project-plan-task-tree-control">{entry.hasChildren ? <button aria-expanded={!collapsed.has(task.document.id)} aria-label={collapsed.has(task.document.id) ? t("taskHierarchy.expand", { title: text(task.document, "title") }) : t("taskHierarchy.collapse", { title: text(task.document, "title") })} onClick={() => setCollapsed((current) => { const next = new Set(current); if (next.has(task.document.id)) next.delete(task.document.id); else next.add(task.document.id); return next; })} type="button"><svg aria-hidden="true" viewBox="0 0 12 12"><path d={collapsed.has(task.document.id) ? "M4 2.5 8 6 4 9.5" : "m2.5 4 3.5 4 3.5-4"} /></svg></button> : null}</span>
+      </span>
       <button aria-current={selected ? "true" : undefined} className="project-plan-task-selector" onClick={() => onNavigate("tasks", { projectId, taskId: task.document.id, ...(Object.keys(query).length > 0 ? { query } : {}) })} type="button"><span className="project-plan-task-kind">{t("projectPlan.taskLabel")} {taskNumber}. <code>{task.document.id}</code>.</span><strong>{text(task.document, "title")}</strong>{entry.hasChildren && <small>{t("taskHierarchy.directProgress", { completed: completedChildren, count: children.length })}</small>}</button>
       <span className="project-plan-task-meta">{taskFields.assignees && <span className="task-assignees"><PersonLinks empty={t("core.unassigned")} onOpen={(personId) => onNavigate("people", { personId })} people={people} personIds={assignees} /></span>}{taskFields.due && text(task.document, "due") && <time dateTime={text(task.document, "due")}>{formatDateOnly(locale, text(task.document, "due"))}</time>}{taskFields.estimate && number(task.document, "estimate_hours") !== undefined && <span>{number(task.document, "estimate_hours")}h</span>}{taskFields.status && (onStatusChange === undefined || readOnly ? <span className="state open">{statusTitle(text(task.document, "status"))}</span> : <select aria-label={`${t("core.status")}: ${text(task.document, "title")}`} className="inline-status-select" disabled={statusBusy} onChange={(event) => onStatusChange(task, event.target.value)} value={text(task.document, "status")}>{statusOptions.map((status) => <option key={status.slug} value={status.slug}>{status.title}</option>)}</select>)}{onNewSubtask !== undefined && <button aria-label={t("taskHierarchy.addSubtaskTo", { id: task.document.id })} className="task-add-subtask" disabled={readOnly} onClick={() => onNewSubtask(task.document.id)} type="button">+ {t("taskHierarchy.subtask")}</button>}{onMoveTask !== undefined && <span className="plan-order-controls"><button aria-label={t("projectPlan.moveTaskUp", { number: taskNumber })} disabled={readOnly || orderBusy || siblingIndex === 0} onClick={() => onMoveTask(task.document.id, -1)} type="button">↑</button><button aria-label={t("projectPlan.moveTaskDown", { number: taskNumber })} disabled={readOnly || orderBusy || siblingIndex === siblings.length - 1} onClick={() => onMoveTask(task.document.id, 1)} type="button">↓</button></span>}</span>
     </div>;
