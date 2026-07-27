@@ -15,6 +15,7 @@ import { draftReadOnlyReason } from "../../draft-read-only.js";
 
 interface ConfigValue { readonly slug: string; readonly title: string; readonly active: boolean }
 const text = (document: GitPmDocument, key: string): string => typeof document[key] === "string" ? document[key] as string : "";
+const strings = (document: GitPmDocument, key: string): string[] => Array.isArray(document[key]) ? (document[key] as unknown[]).filter((item): item is string => typeof item === "string") : [];
 const configValues = (document: GitPmDocument, key: "statuses" | "issue_types"): ConfigValue[] => Array.isArray(document[key])
   ? (document[key] as unknown[]).filter((item): item is ConfigValue => typeof item === "object" && item !== null && typeof (item as ConfigValue).slug === "string" && typeof (item as ConfigValue).title === "string" && (item as ConfigValue).active === true)
   : [];
@@ -194,7 +195,10 @@ function StageDetails({ stage, tasks, projectId, locale, people, readOnly, chang
   const overdue = tasks.filter((task) => text(task.document, "status") !== "done" && /^\d{4}-\d{2}-\d{2}$/u.test(text(task.document, "due")) && text(task.document, "due") < new Date().toISOString().slice(0, 10)).length;
   const estimate = tasks.reduce((sum, task) => sum + (typeof task.document.estimate_hours === "number" ? task.document.estimate_hours : 0), 0);
   const stageAssignees = [...new Set(tasks.flatMap((task) => Array.isArray(task.document.assignees) ? task.document.assignees.filter((id): id is string => typeof id === "string") : []))];
-  const hierarchy = buildTaskHierarchy(tasks.map((entity) => ({ id: entity.document.id, parent: text(entity.document, "parent") || undefined, entity })));
+  const hierarchy = buildTaskHierarchy(
+    tasks.map((entity) => ({ id: entity.document.id, parent: text(entity.document, "parent") || undefined, entity })),
+    { order: strings(stage.document, "task_order") },
+  );
   const taskEntries = hierarchy.flatten();
   return <>
     <header className={`card stage-detail-header${changed ? " recently-changed" : ""}`}>

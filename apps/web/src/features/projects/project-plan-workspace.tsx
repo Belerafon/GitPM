@@ -183,16 +183,10 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     const byDue = (text(left.document, "due") || "9999-12-31").localeCompare(text(right.document, "due") || "9999-12-31");
     return byOrder || byDue || text(left.document, "name").localeCompare(text(right.document, "name"), locale);
   }), [locale, workspace]);
-  const activeTasks = useMemo(() => {
-    const stages = new Map((workspace?.milestones ?? []).map((stage) => [stage.document.id, stage]));
-    return [...(workspace?.tasks.filter((item) => item.document.lifecycle === "active") ?? [])].sort((left, right) => {
-      const milestone = text(left.document, "milestone");
-      const byOrder = milestone !== "" && milestone === text(right.document, "milestone")
-        ? compareOrder(strings(stages.get(milestone)?.document ?? { schema: "", id: "", lifecycle: "active" }, "task_order"), left.document.id, right.document.id)
-        : 0;
-      return byOrder || compareTasks(left, right, locale);
-    });
-  }, [locale, workspace]);
+  const activeTasks = useMemo(
+    () => [...(workspace?.tasks.filter((item) => item.document.lifecycle === "active") ?? [])].sort((left, right) => compareTasks(left, right, locale)),
+    [locale, workspace],
+  );
   const visibleTasks = useMemo(() => activeTasks.filter((task) =>
     (statusFilter === "" || text(task.document, "status") === statusFilter)
     && (milestoneFilter === "" || (milestoneFilter === "none" ? text(task.document, "milestone") === "" : text(task.document, "milestone") === milestoneFilter))), [activeTasks, milestoneFilter, statusFilter]);
@@ -570,11 +564,11 @@ function StageSection({ stage, tasks, allTasks, stageIndex, stageCount, projectI
       <div className="project-plan-stage-actions"><span className="plan-order-controls"><button aria-label={t("projectPlan.moveStageUp", { number: stageIndex + 1 })} disabled={readOnly || orderBusy || stageIndex === 0} onClick={() => onMoveStage(-1)} type="button">↑</button><button aria-label={t("projectPlan.moveStageDown", { number: stageIndex + 1 })} disabled={readOnly || orderBusy || stageIndex === stageCount - 1} onClick={() => onMoveStage(1)} type="button">↓</button></span><time dateTime={text(stage.document, "due")}>{text(stage.document, "due") ? formatDateOnly(locale, text(stage.document, "due")) : "—"}</time><button disabled={readOnly} onClick={onNewTask}>+ {t("core.createTaskAction")}</button></div>
     </header>
     <div className="project-plan-stage-progress"><progress aria-label={t("stages.progressLabel")} max="100" value={progress}>{progress}%</progress><span>{t("stages.progress", { completed, count: allTasks.length })}</span></div>
-    <TaskRows allTasks={allTasks} changedTaskIds={changedTaskIds} locale={locale} numberPrefix={stageIndex + 1} onMoveTask={onMoveTask} onNavigate={onNavigate} onNewSubtask={onNewSubtask} onStatusChange={onStatusChange} orderBusy={orderBusy} people={people} projectId={projectId} query={query} readOnly={readOnly} savingTaskIds={savingTaskIds} selectedTaskId={selectedTaskId} statusBusy={statusBusy} statusOptions={statusOptions} statusTitle={statusTitle} taskFields={taskFields} tasks={tasks} t={t} />
+    <TaskRows allTasks={allTasks} changedTaskIds={changedTaskIds} locale={locale} numberPrefix={stageIndex + 1} onMoveTask={onMoveTask} onNavigate={onNavigate} onNewSubtask={onNewSubtask} onStatusChange={onStatusChange} order={strings(stage.document, "task_order")} orderBusy={orderBusy} people={people} projectId={projectId} query={query} readOnly={readOnly} savingTaskIds={savingTaskIds} selectedTaskId={selectedTaskId} statusBusy={statusBusy} statusOptions={statusOptions} statusTitle={statusTitle} taskFields={taskFields} tasks={tasks} t={t} />
   </article>;
 }
 
-function TaskRows({ tasks, allTasks, projectId, query = {}, locale, people, numberPrefix, readOnly = true, orderBusy = false, selectedTaskId, changedTaskIds = new Set<string>(), savingTaskIds = new Set<string>(), statusTitle, statusOptions = [], statusBusy = false, taskFields, onMoveTask, onNewSubtask, onStatusChange, onNavigate, t }: {
+function TaskRows({ tasks, allTasks, projectId, query = {}, locale, people, numberPrefix, readOnly = true, order = [], orderBusy = false, selectedTaskId, changedTaskIds = new Set<string>(), savingTaskIds = new Set<string>(), statusTitle, statusOptions = [], statusBusy = false, taskFields, onMoveTask, onNewSubtask, onStatusChange, onNavigate, t }: {
   readonly tasks: readonly EntityResult[];
   readonly allTasks: readonly EntityResult[];
   readonly projectId: string;
@@ -583,6 +577,7 @@ function TaskRows({ tasks, allTasks, projectId, query = {}, locale, people, numb
   readonly people: readonly EntityResult[];
   readonly numberPrefix?: number;
   readonly readOnly?: boolean;
+  readonly order?: readonly string[];
   readonly orderBusy?: boolean;
   readonly selectedTaskId: string;
   readonly changedTaskIds?: ReadonlySet<string>;
@@ -598,7 +593,7 @@ function TaskRows({ tasks, allTasks, projectId, query = {}, locale, people, numb
   readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string;
 }) {
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
-  const hierarchy = taskHierarchy(allTasks);
+  const hierarchy = taskHierarchy(allTasks, order);
   if (tasks.length === 0) return <p className="project-plan-empty-tasks">{t("stages.emptyTasks")}</p>;
   const included = new Set(tasks.map((task) => task.document.id));
   for (const id of [...included]) for (const ancestor of hierarchy.ancestorsOf(id)) included.add(ancestor.id);
