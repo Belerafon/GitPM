@@ -280,6 +280,7 @@
   ,"admin.colorYellow": "Yellow"
   ,"admin.colorPurple": "Purple"
   ,"admin.colorTeal": "Teal"
+  ,"admin.chooseColor": "Use {color} for {name}"
   ,"admin.slugHint": "Technical slugs stay fixed; titles, colors, visibility, and order are safe to change."
   ,"admin.technicalId": "Technical ID"
   ,"admin.moveUp": "Move {name} up"

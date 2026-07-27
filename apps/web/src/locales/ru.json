@@ -280,6 +280,7 @@
   ,"admin.colorYellow": "Жёлтый"
   ,"admin.colorPurple": "Фиолетовый"
   ,"admin.colorTeal": "Бирюзовый"
+  ,"admin.chooseColor": "Выбрать цвет «{color}» для «{name}»"
   ,"admin.slugHint": "Технические slug зафиксированы; названия, цвета, видимость и порядок можно безопасно менять."
   ,"admin.technicalId": "Технический ID"
   ,"admin.moveUp": "Переместить «{name}» выше"
