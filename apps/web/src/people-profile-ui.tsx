@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, deleteRestrictionLabels, type GitPmApi } from "./api.js";
 import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
+import type { ConfigValue } from "./core-ui.js";
 import { EditorDrawer } from "./editor-drawer.js";
 import { formatDateOnly, formatNumber, message, type Locale, type MessageKey } from "./i18n.js";
 import type { DraftStatus, EntityResult, GitPmDocument, GitPmRole } from "./types.js";
@@ -12,6 +13,9 @@ const number = (document: GitPmDocument, key: string) => typeof document[key] ==
 const strings = (document: GitPmDocument, key: string) => Array.isArray(document[key]) ? (document[key] as unknown[]).filter((item): item is string => typeof item === "string") : [];
 const numbers = (document: GitPmDocument, key: string) => Array.isArray(document[key]) ? (document[key] as unknown[]).filter((item): item is number => typeof item === "number") : [];
 const validDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/u.test(value);
+const configValues = (document: GitPmDocument, key: "statuses" | "issue_types"): ConfigValue[] => Array.isArray(document[key])
+  ? (document[key] as unknown[]).filter((item): item is ConfigValue => typeof item === "object" && item !== null && typeof (item as ConfigValue).slug === "string" && typeof (item as ConfigValue).title === "string" && (item as ConfigValue).active === true)
+  : [];
 
 interface ProfileData {
   readonly people: readonly EntityResult[];
@@ -19,7 +23,33 @@ interface ProfileData {
   readonly teams: readonly EntityResult[];
   readonly projects: readonly EntityResult[];
   readonly tasks: readonly EntityResult[];
+  readonly statuses: readonly ConfigValue[];
 }
+
+const FILTERS_STORAGE_KEY = "gitpm.peopleProfile.taskFilters";
+const DEFAULT_HIDDEN_STATUS_SLUGS = new Set(["done"]);
+type StoredEntry = Readonly<{ statuses: readonly string[]; projects: readonly string[] }>;
+type StoredFilters = Record<string, { statuses: readonly string[]; projects: readonly string[] }>;
+const stringArray = (value: unknown): readonly string[] | undefined => Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : undefined;
+const readStoredTaskFilters = (personId: string): Partial<StoredEntry> => {
+  if (typeof localStorage === "undefined") return {};
+  try {
+    const parsed = JSON.parse(localStorage.getItem(FILTERS_STORAGE_KEY) ?? "{}") as StoredFilters;
+    const entry = parsed[personId];
+    if (entry === undefined || entry === null) return {};
+    const statuses = stringArray(entry.statuses);
+    const projects = stringArray(entry.projects);
+    return { ...(statuses === undefined ? {} : { statuses }), ...(projects === undefined ? {} : { projects }) };
+  } catch { return {}; }
+};
+const writeStoredTaskFilters = (personId: string, filters: StoredEntry) => {
+  if (typeof localStorage === "undefined") return;
+  try {
+    const parsed = JSON.parse(localStorage.getItem(FILTERS_STORAGE_KEY) ?? "{}") as StoredFilters;
+    parsed[personId] = { statuses: [...filters.statuses], projects: [...filters.projects] };
+    localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(parsed));
+  } catch { /* Browser storage may be unavailable. */ }
+};
 
 export function PeopleProfileWorkspace({ api, confirmAction = () => true, draft, locale, onChanged = async () => undefined, personId, role = "Reporter", onNavigate }: { readonly api: GitPmApi; readonly confirmAction?: (message: string) => boolean; readonly draft: DraftStatus; readonly locale: Locale; readonly onChanged?: () => Promise<void>; readonly personId: string; readonly role?: GitPmRole; readonly onNavigate: WorkspaceNavigate }) {
   const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
@@ -29,14 +59,15 @@ export function PeopleProfileWorkspace({ api, confirmAction = () => true, draft,
   const loadRequest = useAsyncLoad();
   const load = useCallback(async () => {
     await loadRequest.run(async () => {
-      const [people, calendars, teams, projects, tasks] = await Promise.all([
+      const [people, calendars, teams, projects, tasks, statusConfig] = await Promise.all([
         api.listEntities(draft.draft_id, "people"),
         api.listEntities(draft.draft_id, "calendars"),
         api.listEntities(draft.draft_id, "teams"),
         api.listEntities(draft.draft_id, "projects"),
         api.listEntities(draft.draft_id, "tasks"),
+        api.getConfiguration(draft.draft_id, "statuses"),
       ]);
-      return { people, calendars, teams, projects, tasks };
+      return { people, calendars, teams, projects, tasks, statuses: configValues(statusConfig.document, "statuses") };
     }, setData);
   }, [api, draft.draft_id, draft.external_fingerprint, loadRequest.run]);
   useEffect(() => { void load(); }, [load]);
@@ -102,11 +133,55 @@ export function PeopleProfileWorkspace({ api, confirmAction = () => true, draft,
 
 function PeopleProfile({ archivePerson, data, deletePerson, editorOpen, locale, onCloseEditor, onEdit, personId, readOnly, savePerson, onNavigate, t }: { readonly archivePerson: () => Promise<boolean>; readonly data: ProfileData; readonly deletePerson: () => Promise<boolean>; readonly editorOpen: boolean; readonly locale: Locale; readonly onCloseEditor: () => void; readonly onEdit: () => void; readonly personId: string; readonly readOnly: boolean; readonly savePerson: (document: GitPmDocument) => Promise<boolean>; readonly onNavigate: WorkspaceNavigate; readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string }) {
   const person = data.people.find((item) => item.document.id === personId);
-  if (person === undefined) return <div className="card empty-workspace"><p>{t("people.notFound")}</p><button onClick={() => onNavigate("people")}>← {t("people.back")}</button></div>;
-
+  const projectNames = new Map(data.projects.map((item) => [item.document.id, text(item.document, "name")]));
   const assignedTasks = data.tasks
     .filter((item) => item.document.lifecycle === "active" && strings(item.document, "assignees").includes(personId))
     .sort((left, right) => (text(left.document, "due") || "9999").localeCompare(text(right.document, "due") || "9999") || text(left.document, "title").localeCompare(text(right.document, "title"), locale));
+  const statusOptions = (() => {
+    const configured = data.statuses.map((status) => ({ slug: status.slug, title: status.title }));
+    const known = new Set(configured.map((status) => status.slug));
+    const extras = assignedTasks
+      .map((task) => text(task.document, "status"))
+      .filter((slug) => slug !== "" && !known.has(slug));
+    return [...configured, ...[...new Set(extras)].map((slug) => ({ slug, title: slug }))];
+  })();
+  const projectOptions = [...new Set(assignedTasks.map((task) => text(task.document, "project")))]
+    .map((projectId) => ({ id: projectId, name: projectNames.get(projectId) ?? projectId }))
+    .sort((left, right) => left.name.localeCompare(right.name, locale));
+  const initialStatusSelection = (): Set<string> => {
+    const stored = readStoredTaskFilters(personId).statuses;
+    const known = statusOptions.map((option) => option.slug);
+    if (stored !== undefined) return new Set(stored.filter((slug) => known.includes(slug)));
+    return new Set(known.filter((slug) => !DEFAULT_HIDDEN_STATUS_SLUGS.has(slug)));
+  };
+  const initialProjectSelection = (): Set<string> => {
+    const stored = readStoredTaskFilters(personId).projects;
+    const known = projectOptions.map((option) => option.id);
+    if (stored !== undefined) return new Set(stored.filter((id) => known.includes(id)));
+    return new Set(known);
+  };
+  const [statusSelection, setStatusSelection] = useState<Set<string>>(initialStatusSelection);
+  const [projectSelection, setProjectSelection] = useState<Set<string>>(initialProjectSelection);
+  const [filtersDirty, setFiltersDirty] = useState(false);
+  useEffect(() => {
+    if (!filtersDirty) return;
+    writeStoredTaskFilters(personId, { statuses: [...statusSelection], projects: [...projectSelection] });
+  }, [filtersDirty, personId, statusSelection, projectSelection]);
+  const toggleStatus = (slug: string, checked: boolean) => {
+    setFiltersDirty(true);
+    setStatusSelection((current) => { const next = new Set(current); if (checked) next.add(slug); else next.delete(slug); return next; });
+  };
+  const toggleProject = (id: string, checked: boolean) => {
+    setFiltersDirty(true);
+    setProjectSelection((current) => { const next = new Set(current); if (checked) next.add(id); else next.delete(id); return next; });
+  };
+  const resetFilters = () => {
+    setFiltersDirty(true);
+    setStatusSelection(new Set(statusOptions.map((option) => option.slug).filter((slug) => !DEFAULT_HIDDEN_STATUS_SLUGS.has(slug))));
+    setProjectSelection(new Set(projectOptions.map((option) => option.id)));
+  };
+  if (person === undefined) return <div className="card empty-workspace"><p>{t("people.notFound")}</p><button onClick={() => onNavigate("people")}>← {t("people.back")}</button></div>;
+
   const projectTaskCounts = new Map<string, number>();
   for (const task of assignedTasks) projectTaskCounts.set(text(task.document, "project"), (projectTaskCounts.get(text(task.document, "project")) ?? 0) + 1);
   const activeProjects = data.projects.filter((item) => item.document.lifecycle === "active");
@@ -114,12 +189,13 @@ function PeopleProfile({ archivePerson, data, deletePerson, editorOpen, locale, 
   const contributingProjects = activeProjects.filter((item) => projectTaskCounts.has(item.document.id)).sort((left, right) => text(left.document, "name").localeCompare(text(right.document, "name"), locale));
   const teams = data.teams.filter((item) => item.document.lifecycle === "active" && strings(item.document, "members").includes(personId));
   const calendar = data.calendars.find((item) => item.document.id === text(person.document, "calendar"));
-  const projectNames = new Map(data.projects.map((item) => [item.document.id, text(item.document, "name")]));
-  const taskGroups = [...new Set(assignedTasks.map((task) => text(task.document, "project")))].map((projectId) => ({
+  const visibleAssignedTasks = assignedTasks.filter((task) => statusSelection.has(text(task.document, "status")) && projectSelection.has(text(task.document, "project")));
+  const taskGroups = [...new Set(visibleAssignedTasks.map((task) => text(task.document, "project")))].map((projectId) => ({
     projectId,
     project: data.projects.find((item) => item.document.id === projectId),
-    tasks: assignedTasks.filter((task) => text(task.document, "project") === projectId),
+    tasks: visibleAssignedTasks.filter((task) => text(task.document, "project") === projectId),
   })).sort((left, right) => (projectNames.get(left.projectId) ?? left.projectId).localeCompare(projectNames.get(right.projectId) ?? right.projectId, locale));
+  const filtersActive = visibleAssignedTasks.length !== assignedTasks.length;
   const name = text(person.document, "name");
   const initials = name.split(/\s+/u).filter(Boolean).slice(0, 2).map((part) => [...part][0] ?? "").join("").toLocaleUpperCase(locale);
   const dateLabel = (task: EntityResult) => {
@@ -145,8 +221,11 @@ function PeopleProfile({ archivePerson, data, deletePerson, editorOpen, locale, 
 
     <div className="people-profile-layout">
       <main className="people-profile-main">
-        <section className="card people-profile-section"><div className="card-heading"><div><h3>{t("people.tasksByProject")}</h3><p>{t("people.tasksDescription")}</p></div></div>
-          {taskGroups.length === 0 ? <p className="people-empty">{t("people.noTasks")}</p> : <div className="people-task-groups">{taskGroups.map((group) => <section className="people-task-group" key={group.projectId}><header><button onClick={() => onNavigate("projects", { projectId: group.projectId })}><strong>{projectNames.get(group.projectId) ?? group.projectId}</strong><small>{group.project?.document.owner === personId ? t("people.projectOwner") : t("people.projectContributor")}</small></button><span>{t("people.projectTaskCount", { count: group.tasks.length })}</span></header><div className="people-task-list">{group.tasks.map((task) => <button key={task.document.id} onClick={() => onNavigate("tasks", { projectId: group.projectId, taskId: task.document.id })}><span><strong>{text(task.document, "title")}</strong><small>{task.document.id}</small></span><span className="people-task-status">{text(task.document, "status")}</span><time>{dateLabel(task)}</time></button>)}</div></section>)}</div>}
+        <section className="card people-profile-section"><div className="card-heading"><div><h3>{t("people.tasksByProject")}</h3><p>{t("people.tasksDescription")}</p></div>{assignedTasks.length > 0 && <span className="people-profile-count">{t("people.visibleTasksOfTotal", { count: visibleAssignedTasks.length, total: assignedTasks.length })}</span>}</div>
+          {assignedTasks.length > 0 && <PeopleTaskFilters projectOptions={projectOptions} projectSelection={projectSelection} statusOptions={statusOptions} statusSelection={statusSelection} t={t} onReset={resetFilters} onToggleProject={toggleProject} onToggleStatus={toggleStatus} />}
+          {assignedTasks.length === 0 ? <p className="people-empty">{t("people.noTasks")}</p>
+            : taskGroups.length === 0 ? <p className="people-empty">{t("people.tasksFilteredOut")}{filtersActive && <> · <button className="text-link" onClick={resetFilters} type="button">{t("people.resetFilters")}</button></>}</p>
+            : <div className="people-task-groups">{taskGroups.map((group) => <section className="people-task-group" key={group.projectId}><header><button onClick={() => onNavigate("projects", { projectId: group.projectId })}><strong>{projectNames.get(group.projectId) ?? group.projectId}</strong><small>{group.project?.document.owner === personId ? t("people.projectOwner") : t("people.projectContributor")}</small></button><span>{t("people.projectTaskCount", { count: group.tasks.length })}</span></header><div className="people-task-list">{group.tasks.map((task) => <button key={task.document.id} onClick={() => onNavigate("tasks", { projectId: group.projectId, taskId: task.document.id })}><span><strong>{text(task.document, "title")}</strong><small>{task.document.id}</small></span><span className="people-task-status">{statusOptions.find((option) => option.slug === text(task.document, "status"))?.title ?? text(task.document, "status")}</span><time>{dateLabel(task)}</time></button>)}</div></section>)}</div>}
         </section>
       </main>
 
@@ -159,6 +238,37 @@ function PeopleProfile({ archivePerson, data, deletePerson, editorOpen, locale, 
       </aside>
     </div>
   </>;
+}
+
+function PeopleTaskFilters({ projectOptions, projectSelection, statusOptions, statusSelection, t, onReset, onToggleProject, onToggleStatus }: {
+  readonly projectOptions: readonly { readonly id: string; readonly name: string }[];
+  readonly projectSelection: ReadonlySet<string>;
+  readonly statusOptions: readonly { readonly slug: string; readonly title: string }[];
+  readonly statusSelection: ReadonlySet<string>;
+  readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string;
+  readonly onReset: () => void;
+  readonly onToggleProject: (id: string, checked: boolean) => void;
+  readonly onToggleStatus: (slug: string, checked: boolean) => void;
+}) {
+  if (statusOptions.length === 0 && projectOptions.length === 0) return null;
+  return <details className="people-task-filters">
+    <summary>{t("people.taskFilters")}</summary>
+    <div className="people-task-filters-body">
+      {statusOptions.length > 0 && <fieldset className="people-task-filter-group">
+        <legend>{t("core.status")}</legend>
+        <div className="people-task-filter-options">
+          {statusOptions.map((option) => <label key={option.slug}><input aria-label={option.title} checked={statusSelection.has(option.slug)} onChange={(event) => onToggleStatus(option.slug, event.target.checked)} type="checkbox" />{option.title}</label>)}
+        </div>
+      </fieldset>}
+      {projectOptions.length > 1 && <fieldset className="people-task-filter-group">
+        <legend>{t("core.project")}</legend>
+        <div className="people-task-filter-options">
+          {projectOptions.map((option) => <label key={option.id}><input aria-label={option.name} checked={projectSelection.has(option.id)} onChange={(event) => onToggleProject(option.id, event.target.checked)} type="checkbox" />{option.name}</label>)}
+        </div>
+      </fieldset>}
+      <button className="text-link people-task-filters-reset" onClick={onReset} type="button">{t("people.resetFilters")}</button>
+    </div>
+  </details>;
 }
 
 function PersonEditorDrawer({ archivePerson, calendars, close, deletePerson, open, person, readOnly, savePerson, t }: { readonly archivePerson: () => Promise<boolean>; readonly calendars: readonly EntityResult[]; readonly close: () => void; readonly deletePerson: () => Promise<boolean>; readonly open: boolean; readonly person: EntityResult; readonly readOnly: boolean; readonly savePerson: (document: GitPmDocument) => Promise<boolean>; readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string }) {
