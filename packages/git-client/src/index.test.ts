@@ -49,6 +49,18 @@ async function remoteFixture(): Promise<{ root: string; source: string; remote: 
 afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))));
 
 describe("controlled Git client", () => {
+  it("accepts a credential-free HTTP remote for a local-network GitLab", () => {
+    const client = new GitClient({
+      dataDirectory: path.join(os.tmpdir(), "gitpm-http-remote-test"),
+      remoteUrl: "http://gitlab.local/group/project.git",
+      pushRemoteUrl: "http://gitlab.local/group/project.git",
+      defaultBranch: "main",
+      askPassPath: path.resolve("scripts", "git-askpass.mjs"),
+    });
+    expect(client.fetchRemoteUrl).toBe("http://gitlab.local/group/project.git");
+    expect(client.hasPushRemote).toBe(true);
+  });
+
   it("fetches before creating a worktree from exact current remote main", async () => {
     const fixture = await remoteFixture();
     const commands: string[][] = [];

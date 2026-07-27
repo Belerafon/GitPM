@@ -22,7 +22,7 @@ const CONNECTION_ERROR_KEYS: Readonly<Record<string, MessageKey>> = {
 function providerOf(connection: RepositoryConnectionStatus): ProviderKind {
   if (connection.gitlab.configured) return "gitlab";
   if (connection.transport === "ssh") return "ssh";
-  if (connection.transport === "https") return "https";
+  if (connection.transport === "http" || connection.transport === "https") return "https";
   return "none";
 }
 
@@ -116,14 +116,14 @@ export function RepositoryConnectionSettings({ api, locale, maintainer, confirmA
     <form className="editor-drawer-form" onSubmit={save} key={`${connection.repository_url ?? ""}:${connection.gitlab.client_id ?? ""}`}>
       <h3 className="form-section-title">{t("repositoryConnection.originSection")}</h3>
       <label>{t("repositoryConnection.repositoryUrl")}
-        <input name="repository_url" type="url" placeholder="https://gitlab.example/group/project.git  или  git@gitlab.example:group/project.git" defaultValue={connection.repository_url ?? ""} disabled={!editable || busy} />
+        <input name="repository_url" type="url" placeholder="http://gitlab.local/group/project.git  или  git@gitlab.local:group/project.git" defaultValue={connection.repository_url ?? ""} disabled={!editable || busy} />
       </label>
       <p className="field-help">{t("repositoryConnection.originHelp")}</p>
 
       <h3 className="form-section-title">{t("repositoryConnection.gitlabSection")}</h3>
       <p className="field-help">{t("repositoryConnection.gitlabSectionHelp")}</p>
       <div className="admin-columns">
-        <label>{t("repositoryConnection.gitlabUrl")}<input name="gitlab_base_url" type="url" placeholder="https://gitlab.example" defaultValue={connection.gitlab.base_url ?? ""} disabled={!editable || busy} /></label>
+        <label>{t("repositoryConnection.gitlabUrl")}<input name="gitlab_base_url" type="url" placeholder="http://gitlab.local" defaultValue={connection.gitlab.base_url ?? ""} disabled={!editable || busy} /></label>
         <label>{t("repositoryConnection.gitlabProject")}<input name="gitlab_project" placeholder="group/project" defaultValue={connection.gitlab.project ?? ""} disabled={!editable || busy} /></label>
         <label>{t("repositoryConnection.clientId")}<input name="gitlab_client_id" placeholder="application-id" defaultValue={connection.gitlab.client_id ?? ""} disabled={!editable || busy} /></label>
       </div>

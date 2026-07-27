@@ -72,7 +72,7 @@ export function registerAuthApi(
     operation: ProtectedOperation,
   ): Promise<RemotePublicationContext> => {
     if (auth === undefined) {
-      // Non-GitLab transport (SSH key or HTTPS token): the credential is provisioned
+      // Non-GitLab transport (SSH key or HTTP(S) token): the credential is provisioned
       // at the process boundary, so publication uses the local maintainer identity
       // without an OAuth session.
       const envToken = process.env.GITPM_REMOTE_TOKEN?.trim() || undefined;

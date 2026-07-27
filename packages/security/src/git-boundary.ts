@@ -31,7 +31,7 @@ export function assertSafeBranchName(value: string): string {
   return value;
 }
 
-export type RepositoryTransport = "https" | "ssh";
+export type RepositoryTransport = "http" | "https" | "ssh";
 
 export interface RepositoryUrlClassification {
   readonly transport: RepositoryTransport;
@@ -42,19 +42,22 @@ export interface RepositoryUrlClassification {
 const SCP_SSH_PATTERN = /^([A-Za-z0-9._-]+)@([A-Za-z0-9.-]+):(.*)$/u;
 
 function rejectInvalidUrl(): never {
-  throw new SecurityBoundaryError("GIT_URL_INVALID", "repository URL must be credential-free HTTPS or SSH");
+  throw new SecurityBoundaryError("GIT_URL_INVALID", "repository URL must be credential-free HTTP(S) or SSH");
 }
 
 /**
- * Classify a git remote URL as HTTPS or SSH and return a credential-free
+ * Classify a git remote URL as HTTP(S) or SSH and return a credential-free
  * canonical form. Accepted shapes:
+ *   - http://host/path[.git]             (no userinfo, no query, no hash)
  *   - https://host/path[.git]            (no userinfo, no query, no hash)
  *   - ssh://[user@]host[:port]/path      (no password)
  *   - user@host:path                     (SCP-like, no password)
  *
- * Embedded passwords are rejected in every transport. For HTTPS the username
- * is also rejected (GitPM injects the OAuth username via ASKPASS); for SSH the
- * username is the connection identity (e.g. `git`) and is kept.
+ * Embedded passwords are rejected in every transport. For HTTP(S) the
+ * username is also rejected (GitPM injects the OAuth username via ASKPASS);
+ * for SSH the username is the connection identity (e.g. `git`) and is kept.
+ * Plain HTTP is intended only for trusted local networks because credentials
+ * and repository contents are not encrypted in transit.
  */
 export function classifyRepositoryUrl(value: string): RepositoryUrlClassification {
   const input = value.trim();
@@ -75,9 +78,9 @@ export function classifyRepositoryUrl(value: string): RepositoryUrlClassificatio
   }
   const parsed = parseUrl(input);
   if (parsed.password !== "" || parsed.search !== "" || parsed.hash !== "" || parsed.hostname === "") throw rejectInvalidUrl();
-  if (parsed.protocol === "https:") {
+  if (parsed.protocol === "http:" || parsed.protocol === "https:") {
     if (parsed.username !== "" || parsed.pathname === "/") throw rejectInvalidUrl();
-    return { transport: "https", url: parsed.toString() };
+    return { transport: parsed.protocol === "http:" ? "http" : "https", url: parsed.toString() };
   }
   if (parsed.protocol === "ssh:") {
     if (parsed.pathname === "/" || parsed.pathname === "") throw rejectInvalidUrl();

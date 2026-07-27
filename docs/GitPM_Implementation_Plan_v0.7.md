@@ -486,7 +486,7 @@ GitPM не выполняет rebase и не разрешает conflicts. Пр�
 - role cache живет не более 60 секунд;
 - роль повторно запрашивается перед commit, push и MR.
 
-Для Git over HTTPS используется статический controlled `GIT_ASKPASS` helper. Token передается дочернему процессу только через environment, отсутствует в remote URL, argv, Git config, temp files и logs. Устанавливаются `GIT_TERMINAL_PROMPT=0`, isolated HOME и controlled Git config.
+Для Git over HTTP(S) используется статический controlled `GIT_ASKPASS` helper. Token передается дочернему процессу только через environment, отсутствует в remote URL, argv, Git config, temp files и logs. Устанавливаются `GIT_TERMINAL_PROMPT=0`, isolated HOME и controlled Git config. Обычный HTTP поддерживается для доверенных локальных сетей и не обеспечивает шифрование токена или содержимого репозитория при передаче.
 
 Автоматические тесты используют:
 

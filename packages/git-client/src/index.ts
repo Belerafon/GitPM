@@ -239,8 +239,8 @@ export class GitClient {
         ...(ssh.sshCommand === undefined ? {} : { sshCommand: ssh.sshCommand }),
       });
     }
-    if (!this.askPassPath) throw new GitCommandError("GIT_ASKPASS_REQUIRED", "Controlled ASKPASS path is required for HTTPS push");
-    if (!accessToken) throw new GitCommandError("GIT_ASKPASS_REQUIRED", "An access token is required for HTTPS push");
+    if (!this.askPassPath) throw new GitCommandError("GIT_ASKPASS_REQUIRED", "Controlled ASKPASS path is required for HTTP(S) push");
+    if (!accessToken) throw new GitCommandError("GIT_ASKPASS_REQUIRED", "An access token is required for HTTP(S) push");
     return createGitProcessEnvironment({
       askPassPath: this.askPassPath,
       hooksPath: path.join(this.homeDirectory, "hooks"),
@@ -881,7 +881,7 @@ export class GitClient {
     const origin = await this.checkoutOriginUrl(checkoutPath);
     if (origin === undefined) throw new GitCommandError("GIT_PUSH_REMOTE_MISSING", "The selected repository has no origin");
     try { assertSafeRepositoryUrl(origin); }
-    catch { throw new GitCommandError("GIT_REMOTE_UNSUPPORTED", "Origin must be a credential-free HTTPS or SSH URL"); }
+    catch { throw new GitCommandError("GIT_REMOTE_UNSUPPORTED", "Origin must be a credential-free HTTP(S) or SSH URL"); }
   }
 
   async hashObject(content: string): Promise<string> {

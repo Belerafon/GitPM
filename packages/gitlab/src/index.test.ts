@@ -121,13 +121,21 @@ describe("GitLab HTTP protocol", () => {
     expect(requests.map((request) => request.url).join(" ")).not.toContain("secret-token");
   });
 
-  it("maps a missing membership to no access and rejects insecure remote instances", async () => {
+  it("maps a missing membership to no access and accepts HTTP for local-network instances", async () => {
     const fetchImplementation = vi.fn(async (input: string | URL | Request) => String(input).endsWith("/api/v4/user")
       ? new Response(JSON.stringify({ id: 42, username: "developer" }), { status: 200 })
       : new Response("not found", { status: 404 }));
     const protocol = new GitLabHttpProtocol({ baseUrl: "https://gitlab.example.test", clientId: "client", project: "group/project", fetch: fetchImplementation as typeof fetch });
     expect(await protocol.projectAccessLevel("token")).toBeNull();
-    expect(() => new GitLabHttpProtocol({ baseUrl: "http://gitlab.example.test", clientId: "client", project: "group/project" }))
-      .toThrowError(expect.objectContaining({ code: "GITLAB_URL_INVALID" }));
+    expect(() => new GitLabHttpProtocol({ baseUrl: "http://gitlab.local", clientId: "client", project: "group/project" })).not.toThrow();
+    for (const baseUrl of [
+      "ftp://gitlab.local",
+      "http://user:secret@gitlab.local",
+      "http://gitlab.local/group/project",
+      "not a URL",
+    ]) {
+      expect(() => new GitLabHttpProtocol({ baseUrl, clientId: "client", project: "group/project" }))
+        .toThrowError(expect.objectContaining({ code: "GITLAB_URL_INVALID" }));
+    }
   });
 });

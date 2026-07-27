@@ -197,11 +197,21 @@ export class GitLabHttpProtocol implements GitLabProtocol, GitLabMergeRequestPro
   private readonly fetchImplementation: typeof globalThis.fetch;
 
   constructor(private readonly options: GitLabHttpProtocolOptions) {
-    const baseUrl = new URL(options.baseUrl);
-    if (baseUrl.protocol !== "https:" && !["127.0.0.1", "localhost"].includes(baseUrl.hostname)) {
-      throw new AuthError("GITLAB_URL_INVALID", "GitLab must use HTTPS");
+    let baseUrl: URL;
+    try {
+      baseUrl = new URL(options.baseUrl);
+    } catch {
+      throw new AuthError("GITLAB_URL_INVALID", "GitLab base URL is invalid");
     }
-    this.baseUrl = baseUrl.toString().replace(/\/$/u, "");
+    if (baseUrl.protocol !== "http:" && baseUrl.protocol !== "https:") {
+      throw new AuthError("GITLAB_URL_INVALID", "GitLab must use HTTP or HTTPS");
+    }
+    if (baseUrl.hostname === "" || baseUrl.username !== "" || baseUrl.password !== ""
+      || baseUrl.search !== "" || baseUrl.hash !== ""
+      || (baseUrl.pathname !== "/" && baseUrl.pathname !== "")) {
+      throw new AuthError("GITLAB_URL_INVALID", "GitLab base URL must contain only the instance origin");
+    }
+    this.baseUrl = baseUrl.origin;
     this.fetchImplementation = options.fetch ?? globalThis.fetch;
   }
 

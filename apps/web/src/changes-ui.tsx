@@ -27,7 +27,9 @@ const entityTypeKeys: Readonly<Record<string, MessageKey>> = {
 export function safeExternalUrl(value: string): string | undefined {
   try {
     const url = new URL(value);
-    return url.protocol === "https:" && url.username === "" && url.password === "" ? url.toString() : undefined;
+    return (url.protocol === "http:" || url.protocol === "https:") && url.username === "" && url.password === ""
+      ? url.toString()
+      : undefined;
   } catch {
     return undefined;
   }

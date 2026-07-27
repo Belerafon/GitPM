@@ -24,7 +24,7 @@ arbitrary command API и MCP.
 
 | ID | Threat | Required controls | Residual risk |
 |---|---|---|---|
-| TM-GIT-01 | Command/option/ref injection | argv array without shell; allowlisted operations; strict ref and HTTPS URL validation | Future Git options require explicit review |
+| TM-GIT-01 | Command/option/ref injection | argv array without shell; allowlisted operations; strict ref and HTTP(S)/SSH URL validation | Future Git options require explicit review |
 | TM-GIT-02 | Hooks, filters, textconv or protocol execution | isolated HOME; system config disabled; empty hooks path; protocol/file/ext disabled; no submodule init | Repository-local config must never be trusted by new code paths |
 | TM-FS-01 | Traversal or symlink escape | relative domain paths only; canonical root; every existing component lstat; final containment check | Node path checks cannot remove all TOCTOU risk on attacker-writable parent directories |
 | TM-FS-02 | Partial/interrupted write | same-directory exclusive temp file; fsync; recheck parent; atomic rename; cleanup | Hard kill can leave a harmless temp file for startup cleanup |

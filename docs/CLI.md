@@ -174,7 +174,7 @@ draft/publish-командам дополнительно нужен remote runt
 | `GITPM_DEFAULT_BRANCH` | Основная ветка direct checkout и target MR (по умолчанию `main`). |
 | `GITPM_ASKPASS_PATH` | Скрипт git askpass для авторизации при push. По умолчанию `scripts/git-askpass.mjs`. |
 | `GITPM_ACCESS_TOKEN` | Токен GitLab API. В логи/commits не попадает, передаётся только в in-memory calls. |
-| `GITPM_GITLAB_URL` | HTTPS base URL GitLab-инстанса для `mr create`. |
+| `GITPM_GITLAB_URL` | HTTP(S) base URL GitLab-инстанса для `mr create`. |
 | `GITPM_GITLAB_PROJECT` | GitLab project path (`group/project`) для `mr create`. |
 | `GITPM_AGENT_AUTHOR_NAME` | `user.name` для коммитов от лица агента (по умолчанию `GitPM Agent`). |
 | `GITPM_AGENT_AUTHOR_EMAIL` | `user.email` для коммитов от лица агента. |
@@ -202,18 +202,18 @@ draft/publish-командам дополнительно нужен remote runt
 
 | Переменная | По умолчанию | Назначение |
 |------------|--------------|------------|
-| `GITPM_GITLAB_URL` | — | HTTPS base URL GitLab-инстанса, например `https://gitlab.example`; HTTP разрешён только для localhost/127.0.0.1. |
+| `GITPM_GITLAB_URL` | — | HTTP(S) base URL GitLab-инстанса, например `http://gitlab.local` или `https://gitlab.example`. Обычный HTTP используйте только в доверенной локальной сети. |
 | `GITPM_GITLAB_PROJECT` | — | `group/project` для MR. |
 | `GITPM_GITLAB_CLIENT_ID` | — | OAuth Application ID, зарегистрированный в GitLab. |
 | `GITPM_GITLAB_REDIRECT_URI` | `http://127.0.0.1:3000/api/auth/callback` | Redirect URI OAuth. На сервере указать внешний URL (например `http://10.0.0.1:86/api/auth/callback`). |
 | `GITPM_COOKIE_SECURE` | `true` | Когда web UI опубликован по plain HTTP (без TLS-терминатора), поставьте `false` — иначе браузер не примет сессионную cookie. |
-| `GITPM_PUSH_REMOTE_URL` | auto из `origin` | Override push-remote URL. Принимает credential-free HTTPS или SSH (`https://...`, `ssh://...`, `git@host:path`). Логин/пароль/токен в самом URL запрещены. |
+| `GITPM_PUSH_REMOTE_URL` | auto из `origin` | Override push-remote URL. Принимает credential-free HTTP(S) или SSH (`http://...`, `https://...`, `ssh://...`, `git@host:path`). Логин/пароль/токен в самом URL запрещены. |
 
 Если connection fields не заданы через environment, Maintainer может настроить
 credential-free `origin`, GitLab project и OAuth Application ID в web UI.
 Секреты через UI не принимаются; access token остаётся только в памяти процесса.
 
-### Репозиторий без GitLab (SSH или HTTPS-токен)
+### Репозиторий без GitLab (SSH или HTTP(S)-токен)
 
 GitPM публикует не только в GitLab: origin может указывать на любой git-хостинг.
 Способ авторизации определяется транспортом URL и переменными окружения ниже.
@@ -226,20 +226,24 @@ GitPM публикует не только в GitLab: origin может указ
 | `GITPM_SSH_KNOWN_HOSTS_FILE` | Путь к `known_hosts`. По умолчанию файл под контролируемым home GitPM. |
 | `GITPM_SSH_STRICT_HOST_KEY_CHECKING` | `yes` (только заранее известные хосты) или `accept-new` (по умолчанию: добавлять новые, отвергать изменённые). |
 | `GITPM_SSH_COMMAND` | Полная переопределённая команда запуска ssh (только для администратора; пользовательский ввод не попадает в argv). |
-| `GITPM_REMOTE_TOKEN` | Токен (PAT/deploy token) для HTTPS-репозиториев без GitLab. Передаётся в git через controlled `GIT_ASKPASS`, в логи/config не пишется. Для SSH игнорируется. |
+| `GITPM_REMOTE_TOKEN` | Токен (PAT/deploy token) для HTTP(S)-репозиториев без GitLab. Передаётся в git через controlled `GIT_ASKPASS`, в логи/config не пишется. Для SSH игнорируется. |
 
 Для SSH: задайте `GITPM_PUSH_REMOTE_URL=git@host:group/project.git` и подведите
-ключ через `GITPM_SSH_KEY_PATH` или ssh-agent. Для HTTPS без GitLab: задайте
-`GITPM_PUSH_REMOTE_URL=https://host/group/project.git` и `GITPM_REMOTE_TOKEN`.
-Merge Requests через GitPM доступны только для GitLab; по SSH/HTTPS-токену
+ключ через `GITPM_SSH_KEY_PATH` или ssh-agent. Для HTTP(S) без GitLab: задайте
+`GITPM_PUSH_REMOTE_URL=http://gitlab.local/group/project.git` (или HTTPS URL) и `GITPM_REMOTE_TOKEN`.
+Merge Requests через GitPM доступны только для GitLab; по SSH/HTTP(S)-токену
 ветка пушится в origin, но MR не создаётся.
+
+При HTTP OAuth token/PAT и содержимое репозитория передаются без транспортного
+шифрования. Такой режим предназначен только для доверенной локальной сети; для
+любого недоверенного сегмента используйте HTTPS или SSH.
 
 ## Сценарии
 
 ### Локально на Windows
 
 `run-gitpm.bat` запускает сервер и web UI в dev-режиме. Авторизация не
-требуется для локальных операций; наличие безопасного HTTPS remote и GitLab OAuth
+требуется для локальных операций; наличие поддерживаемого HTTP(S)/SSH remote и GitLab OAuth
 определяет доступность push/MR. Без `.gitpm/config.json` launcher создаёт и открывает
 актуальную копию bundled demo.
 

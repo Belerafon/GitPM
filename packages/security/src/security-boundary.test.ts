@@ -44,10 +44,11 @@ describe("Git process boundary", () => {
     expect(assertSafeBranchName("feature/schema-v1")).toBe("feature/schema-v1");
   });
 
-  it("allows only credential-free HTTPS repository URLs", () => {
+  it("allows only credential-free HTTP(S) repository URLs", () => {
+    expect(assertSafeRepositoryUrl("http://gitlab.local/group/gitpm.git")).toBe("http://gitlab.local/group/gitpm.git");
     expect(assertSafeRepositoryUrl("https://gitlab.example.test/group/gitpm.git")).toBe("https://gitlab.example.test/group/gitpm.git");
     for (const value of [
-      "http://gitlab.example.test/group/gitpm.git",
+      "http://oauth2:secret@gitlab.local/group/gitpm.git",
       "https://oauth2:secret@gitlab.example.test/group/gitpm.git",
       "file:///tmp/repo.git",
       "https://gitlab.example.test/group/gitpm.git?upload-pack=evil",
@@ -56,7 +57,11 @@ describe("Git process boundary", () => {
     }
   });
 
-  it("classifies HTTPS and SSH remote URLs and rejects credentials and unsafe schemes", () => {
+  it("classifies HTTP, HTTPS and SSH remote URLs and rejects credentials and unsafe schemes", () => {
+    expect(classifyRepositoryUrl("http://gitlab.local/group/gitpm.git")).toEqual({
+      transport: "http",
+      url: "http://gitlab.local/group/gitpm.git",
+    });
     expect(classifyRepositoryUrl("https://gitlab.example.test/group/gitpm.git")).toEqual({
       transport: "https",
       url: "https://gitlab.example.test/group/gitpm.git",
@@ -75,7 +80,6 @@ describe("Git process boundary", () => {
       "ssh://git@gitlab.example.test:2222/group/gitpm.git",
     );
     for (const value of [
-      "http://gitlab.example.test/group/gitpm.git",
       "file:///tmp/repo.git",
       "ext::command",
       "git+http://gitlab.example.test/group/gitpm.git",

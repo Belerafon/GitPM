@@ -58,6 +58,26 @@ describe("repository connection", () => {
     });
   });
 
+  it("persists a plain HTTP GitLab origin for a trusted local-network instance", async () => {
+    const test = await fixture();
+    const updated = await test.manager.update({
+      repository_url: "http://gitlab.local/group/portfolio.git",
+      gitlab: { base_url: "http://gitlab.local", project: "group/portfolio", client_id: "client-id" },
+    });
+
+    expect(updated).toMatchObject({
+      repository_url: "http://gitlab.local/group/portfolio.git",
+      transport: "http",
+      gitlab: { configured: true, base_url: "http://gitlab.local" },
+    });
+    expect(await git(test.repository, "remote", "get-url", "origin")).toBe("http://gitlab.local/group/portfolio.git");
+    expect(JSON.parse(await readFile(test.configPath, "utf8"))).toMatchObject({
+      repositoryUrl: "http://gitlab.local/group/portfolio.git",
+      gitlab: { baseUrl: "http://gitlab.local", project: "group/portfolio", clientId: "client-id" },
+    });
+    expect(test.manager.startLogin().authorization_url).toMatch(/^http:\/\/gitlab\.local\/oauth\/authorize\?/u);
+  });
+
   it("rejects a GitLab API project that differs from origin", async () => {
     expect(() => assertGitLabRemoteMatchesProject("https://gitlab.example/group/one.git", {
       baseUrl: "https://gitlab.example", project: "group/two", clientId: "client-id",
