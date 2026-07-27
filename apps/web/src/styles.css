@@ -294,10 +294,18 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .plan-order-controls { display: inline-flex; gap: .2rem; align-items: center; }
 .plan-order-controls button { display: inline-grid; place-items: center; width: 30px; height: 30px; padding: 0; }
 .project-plan-stage-progress { display: grid; grid-template-columns: minmax(140px, 1fr) auto; gap: .75rem; align-items: center; margin: 0 .8rem; color: #68706b; font-size: .75rem; }
-.project-plan-task-list { display: grid; margin: 0 .8rem .7rem 1.4rem; border-left: 2px solid #d6e3dc; padding-left: .75rem; }
-.project-plan-task-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .5rem; align-items: center; width: 100%; border: 0; border-top: 1px solid #e5e7e1; border-left: 3px solid transparent; border-radius: 0; background: transparent; padding: .48rem .4rem .48rem calc(.6rem + var(--task-depth, 0) * 1.15rem); text-align: left; }
+.project-plan-task-list { display: grid; margin: 0 .8rem .7rem 1.4rem; padding-left: .75rem; }
+.project-plan-task-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .5rem; align-items: center; width: 100%; border: 0; border-top: 1px solid #e5e7e1; border-left: 3px solid transparent; border-radius: 0; background: transparent; padding: .48rem .4rem .48rem .6rem; text-align: left; }
 .project-plan-task-row.filter-context { opacity: .7; }
-.project-plan-task-tree-control { display: grid; place-items: center; width: 1.5rem; height: 1.5rem; color: #526b60; }
+.project-plan-task-tree { position: relative; align-self: stretch; width: var(--task-tree-width, 1.5rem); margin-block: -.48rem; }
+.project-plan-task-tree::after, .project-plan-task-ancestor-rail, .project-plan-task-branch::before, .project-plan-task-branch::after { position: absolute; z-index: 0; display: block; content: ""; background: #b9cec4; pointer-events: none; }
+.project-plan-task-tree.has-visible-children::after { top: 50%; bottom: 0; left: calc(100% - .75rem); width: 1px; }
+.project-plan-task-ancestor-rail { top: 0; bottom: 0; width: 1px; }
+.project-plan-task-branch { position: absolute; z-index: 0; inset: 0 0 0 var(--task-tree-parent-offset, .75rem); pointer-events: none; }
+.project-plan-task-branch::before { top: 0; bottom: 0; left: 0; width: 1px; }
+.project-plan-task-branch.last::before { bottom: 50%; }
+.project-plan-task-branch::after { top: 50%; right: -.25rem; left: 0; height: 1px; }
+.project-plan-task-tree-control { position: absolute; z-index: 1; top: 50%; right: 0; display: grid; place-items: center; width: 1.5rem; height: 1.5rem; color: #526b60; transform: translateY(-50%); }
 .project-plan-task-tree-control button { display: grid; place-items: center; width: 1.5rem; height: 1.5rem; border: 1px solid #ccd9d2; border-radius: 5px; background: #fff; padding: 0; color: inherit; }
 .project-plan-task-tree-control button:hover { border-color: #9bb2a7; background: #edf2ee; color: #315f50; }
 .project-plan-task-tree-control svg { width: .75rem; height: .75rem; overflow: visible; }
