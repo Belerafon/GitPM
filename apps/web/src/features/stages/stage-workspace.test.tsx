@@ -207,9 +207,9 @@ describe("project plan and stage workspace", () => {
     const titles = () => Array.from(stageCard.querySelectorAll(".project-plan-task-row strong"), (element) => element.textContent);
     expect(titles()).toEqual(["Zebra task", "Alpha task", "Linked task"]);
     expect(stageCard.querySelector(".project-plan-stage-kind")?.textContent).toBe(`Milestone 1. ${stage.document.id}.`);
-    expect(stageCard.querySelector(".project-plan-task-kind")?.textContent).toBe(`Task 1. ${urgent.document.id}.`);
+    expect(stageCard.querySelector(".project-plan-task-kind")?.textContent).toBe(`Task 1.1. ${urgent.document.id}.`);
 
-    fireEvent.click(within(stageCard).getByRole("button", { name: "Move task 2 up" }));
+    fireEvent.click(within(stageCard).getByRole("button", { name: "Move task 1.2 up" }));
     expect(titles()).toEqual(["Alpha task", "Zebra task", "Linked task"]);
     expect(screen.getByText("Alpha task").closest(".project-plan-task-row")?.classList.contains("is-saving")).toBe(true);
     expect(screen.getByText("Zebra task").closest(".project-plan-task-row")?.classList.contains("is-saving")).toBe(true);
@@ -228,6 +228,7 @@ describe("project plan and stage workspace", () => {
     await waitFor(() => expect(stageCard.classList.contains("recently-changed")).toBe(true));
     expect(screen.getByRole("heading", { name: "Follow-up" }).closest(".project-plan-stage")?.classList.contains("recently-changed")).toBe(true);
     await waitFor(() => expect(stageCard.querySelector(".project-plan-stage-kind")?.textContent).toBe(`Milestone 2. ${stage.document.id}.`));
+    expect(stageCard.querySelector(".project-plan-task-kind")?.textContent).toBe(`Task 2.1. ${large.document.id}.`);
     expect(client.updateEntity.mock.calls[1]?.[1]).toBe("projects");
     expect(client.updateEntity.mock.calls[1]?.[4]).toMatchObject({ milestone_order: [laterStage.document.id, stage.document.id] });
   });
@@ -244,6 +245,9 @@ describe("project plan and stage workspace", () => {
     expect(screen.getByText("Root task").closest(".project-plan-task-row")?.getAttribute("data-depth")).toBe("0");
     expect(screen.getByText("Child task").closest(".project-plan-task-row")?.getAttribute("data-depth")).toBe("1");
     expect(screen.getByText("Grandchild task").closest(".project-plan-task-row")?.getAttribute("data-depth")).toBe("2");
+    expect(screen.getByText("Root task").closest(".project-plan-task-row")?.querySelector(".project-plan-task-kind")?.textContent).toBe(`Task 1.1. ${root.document.id}.`);
+    expect(screen.getByText("Child task").closest(".project-plan-task-row")?.querySelector(".project-plan-task-kind")?.textContent).toBe(`Task 1.1.1. ${child.document.id}.`);
+    expect(screen.getByText("Grandchild task").closest(".project-plan-task-row")?.querySelector(".project-plan-task-kind")?.textContent).toBe(`Task 1.1.1.1. ${grandchild.document.id}.`);
     expect(screen.getByText("Root task").closest(".project-plan-task-row")?.classList.contains("filter-context")).toBe(true);
     expect(screen.getByText("Child task").closest(".project-plan-task-row")?.classList.contains("filter-context")).toBe(true);
 
