@@ -103,6 +103,7 @@ never tracks incoming files. The companion root \`.ignore\` un-ignores
 discover and read these files while Git ignores them:
 
 - read, parse, and convert these files freely;
+- use Python with \`openpyxl\` to read, create, or modify Excel workbooks;
 - never copy their bytes into \`projects/\`, \`people/\`, \`teams/\`, \`calendars/\`,
   or \`.gitpm/\`;
 - never \`git add\` or commit incoming files under \`uploads/\`;
