@@ -37,7 +37,7 @@ async function fixture() {
     redirectUri: "http://127.0.0.1:3000/api/auth/callback",
     directCheckoutPath: repository,
   });
-  return { repository, configPath, manager };
+  return { repository, configPath, manager, client };
 }
 
 afterEach(async () => await Promise.all(roots.splice(0).map(async (root) => await rm(root, { recursive: true, force: true }))));
@@ -114,5 +114,47 @@ describe("repository connection", () => {
     const test = await fixture();
     await expect(test.manager.update({ repository_url: "file:///tmp/repo.git" }))
       .rejects.toMatchObject({ code: "GIT_URL_INVALID" });
+  });
+
+  it("keeps identity/project-token coordinates administrator-managed and never exposes the token", async () => {
+    const test = await fixture();
+    const manager = new RepositoryConnectionManager({
+      git: test.client,
+      configPath: test.configPath,
+      configuration: { repository: test.repository, repositoryMode: "worktree" },
+      repositoryPath: test.repository,
+      repositoryMode: "worktree",
+      defaultBranch: "main",
+      repositoryUrl: "https://gitlab.example/group/portfolio.git",
+      remoteSource: "environment",
+      remoteEditable: false,
+      gitlab: {
+        baseUrl: "https://gitlab.example",
+        project: "group/portfolio",
+        clientId: "client-id",
+      },
+      authMode: "oauth-identity-project-token",
+      projectAccessToken: "project-token-secret",
+      gitlabEditable: false,
+      redirectUri: "https://gitpm.example/api/auth/callback",
+    });
+
+    expect(manager.status()).toMatchObject({
+      remote_editable: false,
+      gitlab_editable: false,
+      gitlab: {
+        project: "group/portfolio",
+        auth_mode: "oauth-identity-project-token",
+      },
+    });
+    expect(JSON.stringify(manager.status())).not.toContain("project-token-secret");
+    await expect(manager.update({
+      repository_url: "https://gitlab.example/group/other.git",
+      gitlab: {
+        base_url: "https://gitlab.example",
+        project: "group/other",
+        client_id: "attacker",
+      },
+    })).rejects.toMatchObject({ code: "REPOSITORY_CONNECTION_MANAGED_EXTERNALLY" });
   });
 });

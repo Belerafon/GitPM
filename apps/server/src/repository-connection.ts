@@ -9,6 +9,7 @@ import {
   AuthError,
   AuthService,
   GitLabHttpProtocol,
+  type GitLabAuthMode,
   type MergeRequestPayload,
   type MergeRequestState,
   type ProtectedOperation,
@@ -35,6 +36,8 @@ export interface RepositoryConnectionManagerOptions {
   readonly remoteSource: ConnectionValueSource;
   readonly remoteEditable: boolean;
   readonly gitlab?: GitLabConnectionConfiguration;
+  readonly authMode?: GitLabAuthMode;
+  readonly projectAccessToken?: string;
   readonly gitlabEditable: boolean;
   readonly redirectUri: string;
   readonly directCheckoutPath?: string;
@@ -139,6 +142,7 @@ export class RepositoryConnectionManager {
           base_url: this.gitlab.baseUrl,
           project: this.gitlab.project,
           client_id: this.gitlab.clientId,
+          ...(this.options.authMode === undefined ? {} : { auth_mode: this.options.authMode }),
         }),
       },
     };
@@ -207,10 +211,16 @@ export class RepositoryConnectionManager {
     return await this.requireAuth().authorize(sessionId, operation);
   }
 
+  get authMode(): GitLabAuthMode | undefined {
+    return this.options.authMode;
+  }
+
   async test(sessionId: string | undefined): Promise<{ ok: true; branch: string; commit: string }> {
     let accessToken: string | undefined;
     if (sessionId !== undefined && this.auth !== undefined) {
       accessToken = (await this.authorize(sessionId, "push")).accessToken;
+    } else if (this.options.authMode === "oauth-identity-project-token") {
+      throw new AuthError("SESSION_INVALID", "Sign in to GitLab before testing the configured project");
     } else {
       accessToken = process.env.GITPM_REMOTE_TOKEN?.trim() || undefined;
     }
@@ -242,6 +252,8 @@ export class RepositoryConnectionManager {
       clientId: this.gitlab.clientId,
       redirectUri: this.options.redirectUri,
       protocol: this.protocol,
+      ...(this.options.authMode === undefined ? {} : { authMode: this.options.authMode }),
+      ...(this.options.projectAccessToken === undefined ? {} : { projectAccessToken: this.options.projectAccessToken }),
     });
   }
 

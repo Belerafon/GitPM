@@ -73,6 +73,27 @@ describe("RepositoryConnectionSettings", () => {
     expect(screen.getByText(/Plain HTTP sends credentials and repository data without encryption/)).toBeTruthy();
   });
 
+  it("explains the separated identity and Project Access Token mode", async () => {
+    const api = mockApi(baseStatus({
+      repository_mode: "worktree",
+      repository_url: "https://gitlab.example/group/portfolio.git",
+      transport: "https",
+      remote_source: "environment",
+      remote_editable: false,
+      gitlab_editable: false,
+      gitlab: {
+        configured: true,
+        base_url: "https://gitlab.example",
+        project: "group/portfolio",
+        client_id: "app",
+        auth_mode: "oauth-identity-project-token",
+      },
+    }));
+    render(<RepositoryConnectionSettings api={api} locale="en" maintainer={true} />);
+    expect(await screen.findByText(/OAuth is used only for your identity/)).toBeTruthy();
+    expect(screen.getByText(/Public email is required/)).toBeTruthy();
+  });
+
   it("shows the local provider with a disabled test button when no remote is configured", async () => {
     const api = mockApi(baseStatus({ remote_source: "none" }));
     const view = render(<RepositoryConnectionSettings api={api} locale="en" maintainer={true} />);

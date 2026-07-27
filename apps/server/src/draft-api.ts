@@ -107,7 +107,7 @@ function requireEntityMutationRole(actor: RequestActor, entityType: string): voi
 
 export async function requireDraftRead(manager: DraftManager, actor: RequestActor, draftId: string): Promise<void> {
   const metadata = await manager.getDraft(draftId);
-  if (metadata.owner_gitlab_user_id !== actor.userId && actor.role !== "Maintainer") {
+  if (metadata.owner_gitlab_user_id !== actor.userId) {
     throw new DraftRuntimeError("DRAFT_FORBIDDEN", "Draft owner mismatch");
   }
 }
@@ -160,7 +160,11 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
     } else if (error instanceof AuthError) {
       code = error.code;
       message = error.message;
-      status = error.code === "ROLE_READ_ONLY" || error.code === "PROJECT_MEMBERSHIP_REQUIRED" ? 403 : 401;
+      status = error.code === "ROLE_READ_ONLY" || error.code === "PROJECT_MEMBERSHIP_REQUIRED"
+        ? 403
+        : error.code === "GITLAB_PUBLIC_EMAIL_REQUIRED" || error.code === "GITLAB_PROFILE_NAME_REQUIRED"
+          ? 422
+          : 401;
     } else if (error instanceof PublicationError) {
       code = error.code;
       message = error.message;
@@ -214,14 +218,14 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
     const actor = await authenticate(request);
     const drafts = await manager.listDrafts();
     return drafts
-      .filter((draft) => draft.owner_gitlab_user_id === actor.userId || actor.role === "Maintainer")
+      .filter((draft) => draft.owner_gitlab_user_id === actor.userId)
       .map(publicMetadata);
   });
 
   app.get<{ Params: { draftId: string } }>("/api/drafts/:draftId", async (request) => {
     const actor = await authenticate(request);
     const status = await manager.poll(request.params.draftId);
-    if (status.metadata.owner_gitlab_user_id !== actor.userId && actor.role !== "Maintainer") {
+    if (status.metadata.owner_gitlab_user_id !== actor.userId) {
       throw new DraftRuntimeError("DRAFT_FORBIDDEN", "Draft owner mismatch");
     }
     return { ...publicMetadata(status.metadata), changed_externally: status.changedExternally, external_fingerprint: status.currentFingerprint };

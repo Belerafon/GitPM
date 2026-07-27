@@ -6,6 +6,7 @@ const PENDING_LOGIN_MS = 10 * 60 * 1000;
 
 export type GitPmRole = "Reporter" | "Developer" | "Maintainer";
 export type ProtectedOperation = "read" | "mutation" | "commit" | "push" | "mr";
+export type GitLabAuthMode = "user-oauth-publication" | "oauth-identity-project-token";
 
 export interface OAuthTokenResponse {
   readonly access_token: string;
@@ -16,6 +17,8 @@ export interface OAuthTokenResponse {
 export interface GitLabUser {
   readonly id: string;
   readonly username: string;
+  readonly name: string;
+  readonly email?: string;
 }
 
 export interface GitLabProtocol {
@@ -25,7 +28,7 @@ export interface GitLabProtocol {
     readonly redirectUri: string;
   }): Promise<OAuthTokenResponse>;
   currentUser(accessToken: string): Promise<GitLabUser>;
-  projectAccessLevel(accessToken: string): Promise<number | null>;
+  projectAccessLevel(accessToken: string, userId: string): Promise<number | null>;
 }
 
 export interface MergeRequestPayload {
@@ -65,6 +68,8 @@ export interface AuthServiceOptions {
   readonly clientId: string;
   readonly redirectUri: string;
   readonly protocol: GitLabProtocol;
+  readonly authMode?: GitLabAuthMode;
+  readonly projectAccessToken?: string;
   readonly now?: () => number;
 }
 
@@ -75,7 +80,7 @@ interface PendingLogin {
 
 interface Session {
   readonly id: string;
-  readonly accessToken: string;
+  readonly oauthAccessToken?: string;
   readonly user: GitLabUser;
   readonly expiresAt: number;
   role: GitPmRole;
@@ -115,6 +120,21 @@ export class AuthService {
 
   constructor(private readonly options: AuthServiceOptions) {
     this.now = options.now ?? Date.now;
+    if (this.authMode === "oauth-identity-project-token" && !options.projectAccessToken?.trim()) {
+      throw new AuthError("GITLAB_PROJECT_TOKEN_REQUIRED", "Project Access Token is required for the configured authentication mode");
+    }
+  }
+
+  private get authMode(): GitLabAuthMode {
+    return this.options.authMode ?? "user-oauth-publication";
+  }
+
+  private roleAccessToken(session?: Session): string {
+    const accessToken = this.authMode === "oauth-identity-project-token"
+      ? this.options.projectAccessToken
+      : session?.oauthAccessToken;
+    if (!accessToken) throw new AuthError("GITLAB_ACCESS_TOKEN_REQUIRED", "GitLab access token is unavailable");
+    return accessToken;
   }
 
   startLogin(): { authorization_url: string; state: string } {
@@ -126,7 +146,7 @@ export class AuthService {
     url.searchParams.set("client_id", this.options.clientId);
     url.searchParams.set("redirect_uri", this.options.redirectUri);
     url.searchParams.set("response_type", "code");
-    url.searchParams.set("scope", "api write_repository");
+    url.searchParams.set("scope", this.authMode === "oauth-identity-project-token" ? "read_user" : "api write_repository");
     url.searchParams.set("state", state);
     url.searchParams.set("code_challenge", challenge);
     url.searchParams.set("code_challenge_method", "S256");
@@ -144,10 +164,13 @@ export class AuthService {
     });
     if (!token.access_token || token.expires_in <= 0) throw new AuthError("OAUTH_TOKEN_INVALID", "OAuth token response is invalid");
     const user = await this.options.protocol.currentUser(token.access_token);
-    const role = mapAccessLevel(await this.options.protocol.projectAccessLevel(token.access_token));
+    const roleToken = this.authMode === "oauth-identity-project-token"
+      ? this.roleAccessToken()
+      : token.access_token;
+    const role = mapAccessLevel(await this.options.protocol.projectAccessLevel(roleToken, user.id));
     const session: Session = {
       id: randomUUID(),
-      accessToken: token.access_token,
+      ...(this.authMode === "user-oauth-publication" ? { oauthAccessToken: token.access_token } : {}),
       user,
       role,
       roleCheckedAt: this.now(),
@@ -165,13 +188,13 @@ export class AuthService {
     }
     const publishSensitive = operation !== "read";
     if (publishSensitive || this.now() - session.roleCheckedAt >= ROLE_CACHE_MS) {
-      session.role = mapAccessLevel(await this.options.protocol.projectAccessLevel(session.accessToken));
+      session.role = mapAccessLevel(await this.options.protocol.projectAccessLevel(this.roleAccessToken(session), session.user.id));
       session.roleCheckedAt = this.now();
     }
     if (operation !== "read" && session.role === "Reporter") {
       throw new AuthError("ROLE_READ_ONLY", "Reporter role is read-only");
     }
-    return { session: this.public(session), accessToken: session.accessToken };
+    return { session: this.public(session), accessToken: this.roleAccessToken(session) };
   }
 
   logout(sessionId: string): void {
@@ -227,15 +250,25 @@ export class GitLabHttpProtocol implements GitLabProtocol, GitLabMergeRequestPro
   }
 
   async currentUser(accessToken: string): Promise<GitLabUser> {
-    const user = await this.request<{ id: number | string; username: string }>("/api/v4/user", {}, accessToken);
-    return { id: String(user.id), username: user.username };
+    const user = await this.request<{
+      id: number | string;
+      username: string;
+      name: string;
+      public_email?: string | null;
+    }>("/api/v4/user", {}, accessToken);
+    const email = user.public_email?.trim() || undefined;
+    return {
+      id: String(user.id),
+      username: user.username,
+      name: user.name,
+      ...(email === undefined ? {} : { email }),
+    };
   }
 
-  async projectAccessLevel(accessToken: string): Promise<number | null> {
-    const user = await this.currentUser(accessToken);
+  async projectAccessLevel(accessToken: string, userId: string): Promise<number | null> {
     try {
       const membership = await this.request<{ access_level: number }>(
-        `/api/v4/projects/${encodeURIComponent(this.options.project)}/members/all/${encodeURIComponent(user.id)}`,
+        `/api/v4/projects/${encodeURIComponent(this.options.project)}/members/all/${encodeURIComponent(userId)}`,
         {},
         accessToken,
       );
@@ -280,7 +313,7 @@ export class GitLabHttpProtocol implements GitLabProtocol, GitLabMergeRequestPro
 export class GitLabProtocolTestDouble implements GitLabProtocol, GitLabMergeRequestProtocol {
   readonly captures: SanitizedCapture[] = [];
   accessLevel: number | null = 30;
-  user: GitLabUser = { id: "42", username: "developer" };
+  user: GitLabUser = { id: "42", username: "developer", name: "GitLab Developer", email: "developer@example.test" };
   private readonly mergeRequests = new Map<number, MergeRequestState>();
   private nextIid = 1;
 
@@ -301,8 +334,8 @@ export class GitLabProtocolTestDouble implements GitLabProtocol, GitLabMergeRequ
     return this.user;
   }
 
-  async projectAccessLevel(_accessToken: string): Promise<number | null> {
-    this.captures.push({ operation: "project-role" });
+  async projectAccessLevel(_accessToken: string, userId: string): Promise<number | null> {
+    this.captures.push({ operation: "project-role", payload: { user_id: userId } });
     return this.accessLevel;
   }
 

@@ -208,7 +208,7 @@ function decodeUpload(contentBase64: string): Buffer {
 async function draftRoot(manager: DraftManager, authenticate: Authenticate, request: Parameters<Authenticate>[0], draftId: string): Promise<string> {
   const actor = await authenticate(request);
   const draft = await manager.getDraft(draftId);
-  if (draft.owner_gitlab_user_id !== actor.userId && actor.role !== "Maintainer") {
+  if (draft.owner_gitlab_user_id !== actor.userId) {
     throw new WorktreeReadError("DRAFT_FORBIDDEN", "Draft owner mismatch");
   }
   return draft.worktree_path;

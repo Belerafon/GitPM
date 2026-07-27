@@ -29,7 +29,7 @@ function cookie(request: FastifyRequest): string | undefined {
   return undefined;
 }
 
-function requiredSession(request: FastifyRequest): string {
+export function requiredRepositorySession(request: FastifyRequest): string {
   const session = cookie(request);
   if (!session) throw new AuthError("SESSION_INVALID", "Sign in to GitLab before using the remote");
   return session;
@@ -37,14 +37,24 @@ function requiredSession(request: FastifyRequest): string {
 
 export interface RepositorySession {
   readonly session_id: "repository-session";
-  readonly user: { readonly id: string; readonly username: string };
-  readonly role: "Maintainer";
+  readonly user: {
+    readonly id: string;
+    readonly username: string;
+    readonly name?: string;
+    readonly email?: string;
+  };
+  readonly role: "Reporter" | "Developer" | "Maintainer";
   readonly mode: "repository";
   readonly repository_mode?: "direct" | "worktree";
   readonly repository: { readonly name: string; readonly path: string; readonly has_remote: boolean; readonly branch?: string };
   readonly gitlab: {
     readonly configured: boolean;
-    readonly user?: { readonly id: string; readonly username: string };
+    readonly user?: {
+      readonly id: string;
+      readonly username: string;
+      readonly name?: string;
+      readonly email?: string;
+    };
     readonly role?: "Reporter" | "Developer" | "Maintainer";
   };
   readonly expires_at: string;
@@ -59,6 +69,7 @@ export function registerAuthApi(
   webUrl: string,
   connection?: RepositoryConnectionManager,
 ): void {
+  const identityProjectTokenMode = connection?.authMode === "oauth-identity-project-token";
   const publicBaseSession: Omit<RepositorySession, "session_id" | "gitlab"> = {
     user: baseSession.user,
     role: baseSession.role,
@@ -70,17 +81,64 @@ export function registerAuthApi(
   const remoteContext = async (
     request: FastifyRequest,
     operation: ProtectedOperation,
-  ): Promise<RemotePublicationContext> => {
+  ): Promise<{ context: RemotePublicationContext; user?: PublicSession["user"] }> => {
     if (auth === undefined) {
       // Non-GitLab transport (SSH key or HTTP(S) token): the credential is provisioned
       // at the process boundary, so publication uses the local maintainer identity
       // without an OAuth session.
       const envToken = process.env.GITPM_REMOTE_TOKEN?.trim() || undefined;
-      return { ownerId: localContext.ownerId, accessToken: () => envToken };
+      return { context: { ownerId: localContext.ownerId, accessToken: () => envToken } };
     }
-    const session = requiredSession(request);
+    const session = requiredRepositorySession(request);
     const authorized = await auth.authorize(session, operation);
-    return { ownerId: localContext.ownerId, accessToken: () => authorized.accessToken };
+    return {
+      context: {
+        ownerId: identityProjectTokenMode ? authorized.session.user.id : localContext.ownerId,
+        accessToken: () => authorized.accessToken,
+      },
+      ...(identityProjectTokenMode ? { user: authorized.session.user } : {}),
+    };
+  };
+
+  const commitContext = async (
+    request: FastifyRequest,
+  ): Promise<{ context: CommitPublicationContext; user?: PublicSession["user"] }> => {
+    if (!identityProjectTokenMode || auth === undefined) return { context: localContext };
+    const authorized = await auth.authorize(requiredRepositorySession(request), "commit");
+    const user = authorized.session.user;
+    if (!user.email) {
+      throw new AuthError(
+        "GITLAB_PUBLIC_EMAIL_REQUIRED",
+        "Configure a Public email in your GitLab profile before creating a commit",
+      );
+    }
+    if (!user.name.trim()) {
+      throw new AuthError("GITLAB_PROFILE_NAME_REQUIRED", "GitLab profile name is required before creating a commit");
+    }
+    return {
+      context: {
+        ownerId: user.id,
+        authorName: user.name,
+        authorEmail: user.email,
+      },
+      user,
+    };
+  };
+
+  const audit = (
+    request: FastifyRequest,
+    operation: string,
+    user: PublicSession["user"] | undefined,
+    result: "succeeded" | "failed",
+    details: Record<string, unknown> = {},
+  ): void => {
+    request.log.info({
+      audit: true,
+      operation,
+      result,
+      ...(user === undefined ? {} : { gitlab_user_id: user.id, gitlab_username: user.username }),
+      ...details,
+    }, "GitPM publication audit");
   };
 
   app.get("/api/auth/session", async (request): Promise<Omit<RepositorySession, "session_id">> => {
@@ -92,7 +150,12 @@ export function registerAuthApi(
           ...baseSession.repository,
           has_remote: connection.status().repository_url !== undefined,
         };
-        return { ...publicBaseSession, repository, gitlab: { configured: true, user: authorized.session.user, role: authorized.session.role } };
+        return {
+          ...publicBaseSession,
+          ...(identityProjectTokenMode ? { user: authorized.session.user, role: authorized.session.role } : {}),
+          repository,
+          gitlab: { configured: true, user: authorized.session.user, role: authorized.session.role },
+        };
       } catch (error) {
         if (!(error instanceof AuthError) || error.code !== "SESSION_INVALID") throw error;
       }
@@ -126,20 +189,57 @@ export function registerAuthApi(
 
   if (connection !== undefined) {
     app.get("/api/repository/connection", async () => connection.status());
-    app.put<{ Body: RepositoryConnectionUpdate }>("/api/repository/connection", { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.repositoryConnectionUpdate } }, async (request) => await connection.update(request.body));
+    app.put<{ Body: RepositoryConnectionUpdate }>("/api/repository/connection", { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.repositoryConnectionUpdate } }, async (request) => {
+      if (identityProjectTokenMode && auth !== undefined) {
+        await auth.authorize(requiredRepositorySession(request), "mutation");
+      }
+      return await connection.update(request.body);
+    });
     app.post("/api/repository/connection/test", async (request) => await connection.test(cookie(request)));
   }
 
-  app.post<{ Params: { draftId: string }; Body: { message: string } }>("/api/drafts/:draftId/commit", { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.commit } }, async (request) =>
-    await publishing.commit(localContext, { draftId: request.params.draftId }, request.body.message));
-  app.post<{ Params: { draftId: string } }>("/api/drafts/:draftId/push", async (request) =>
-    await publishing.push(await remoteContext(request, "push"), { draftId: request.params.draftId }));
-  app.post<{ Params: { draftId: string }; Body: { title: string; description?: string } }>("/api/drafts/:draftId/merge-request", { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.mergeRequest } }, async (request) =>
-    await publishing.createMergeRequest(
-      await remoteContext(request, "mr"),
-      { draftId: request.params.draftId },
-      { title: request.body.title, ...(request.body.description === undefined ? {} : { description: request.body.description }) },
-    ));
+  app.post<{ Params: { draftId: string }; Body: { message: string } }>("/api/drafts/:draftId/commit", { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.commit } }, async (request) => {
+    const { context, user } = await commitContext(request);
+    try {
+      const result = await publishing.commit(context, { draftId: request.params.draftId }, request.body.message);
+      audit(request, "commit", user, "succeeded", { commit_sha: result.commit, branch: result.branch });
+      return result;
+    } catch (error) {
+      audit(request, "commit", user, "failed");
+      throw error;
+    }
+  });
+  app.post<{ Params: { draftId: string } }>("/api/drafts/:draftId/push", async (request) => {
+    const { context, user } = await remoteContext(request, "push");
+    try {
+      const result = await publishing.push(context, { draftId: request.params.draftId });
+      audit(request, "push", user, "succeeded", { commit_sha: result.commit, branch: result.branch });
+      return result;
+    } catch (error) {
+      audit(request, "push", user, "failed");
+      throw error;
+    }
+  });
+  app.post<{ Params: { draftId: string }; Body: { title: string; description?: string } }>("/api/drafts/:draftId/merge-request", { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.mergeRequest } }, async (request) => {
+    const { context, user } = await remoteContext(request, "mr");
+    const initiatedBy = user === undefined ? undefined : `Initiated in GitPM by @${user.username}`;
+    const suppliedDescription = request.body.description?.trim();
+    const description = initiatedBy === undefined
+      ? suppliedDescription
+      : suppliedDescription ? `${suppliedDescription}\n\n${initiatedBy}` : initiatedBy;
+    try {
+      const result = await publishing.createMergeRequest(
+        context,
+        { draftId: request.params.draftId },
+        { title: request.body.title, ...(description === undefined ? {} : { description }) },
+      );
+      audit(request, "merge-request", user, "succeeded", { merge_request_iid: result.iid });
+      return result;
+    } catch (error) {
+      audit(request, "merge-request", user, "failed");
+      throw error;
+    }
+  });
   app.get<{ Params: { draftId: string } }>("/api/drafts/:draftId/merge-request", async (request) =>
-    await publishing.pollMergeRequest(await remoteContext(request, "read"), { draftId: request.params.draftId }));
+    await publishing.pollMergeRequest((await remoteContext(request, "read")).context, { draftId: request.params.draftId }));
 }

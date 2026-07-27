@@ -649,6 +649,7 @@
   ,"repositoryConnection.error.REPOSITORY_CONNECTION_MANAGED_EXTERNALLY": "Подключение задано переменными окружения и недоступно для изменения через форму."
   ,"repositoryConnection.error.GITLAB_NOT_CONFIGURED": "GitLab не настроен. Войдите после заполнения блока интеграции с GitLab."
   ,"repositoryConnection.error.SESSION_INVALID": "Сессия истекла или отсутствует. Перезайдите в GitLab."
+  ,"repositoryConnection.credentialNoteIdentityProjectToken": "GitLab OAuth используется только для вашей идентификации и запрашивает read_user. Fetch, push, проверка роли и Merge Request выполняются с серверным Project Access Token, который не передаётся в браузер и не хранится в вашей сессии. Для создания коммита нужен Public email в профиле GitLab."
   ,"taskHierarchy.parent": "Родительская задача"
   ,"taskHierarchy.subtask": "Подзадача"
   ,"taskHierarchy.newSubtask": "Новая подзадача"

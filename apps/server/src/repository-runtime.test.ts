@@ -196,3 +196,83 @@ describe("repository mode selection", () => {
     await expect(buildRepositoryApp()).rejects.toThrow(/Unknown repository mode/u);
   });
 });
+
+describe("OAuth identity plus Project Access Token configuration", () => {
+  it("requires an environment-managed single project and worktree mode", async () => {
+    const fixture = await fixtureRepository();
+    vi.stubEnv("GITPM_REPOSITORY_PATH", fixture.repository);
+    vi.stubEnv("GITPM_DATA_DIR", fixture.data);
+    vi.stubEnv("GITPM_CONFIG_PATH", path.join(fixture.root, "missing-config.json"));
+    vi.stubEnv("GITPM_REPOSITORY_MODE", "worktree");
+    vi.stubEnv("GITPM_GITLAB_AUTH_MODE", "oauth-identity-project-token");
+    vi.stubEnv("GITPM_GITLAB_URL", "https://gitlab.example");
+    vi.stubEnv("GITPM_GITLAB_PROJECT", "group/portfolio");
+    vi.stubEnv("GITPM_GITLAB_CLIENT_ID", "oauth-app");
+    vi.stubEnv("GITPM_GITLAB_PROJECT_TOKEN", "project-token-secret");
+    vi.stubEnv("GITPM_PUSH_REMOTE_URL", "https://gitlab.example/group/portfolio.git");
+
+    const configuration = await loadRepositoryRuntimeConfiguration();
+    expect(configuration).toMatchObject({
+      repositoryMode: "worktree",
+      gitlabAuthMode: "oauth-identity-project-token",
+      gitlabProjectToken: "project-token-secret",
+      pushRemoteUrl: "https://gitlab.example/group/portfolio.git",
+      remoteEditable: false,
+      gitlabEditable: false,
+      gitlab: {
+        baseUrl: "https://gitlab.example",
+        project: "group/portfolio",
+        clientId: "oauth-app",
+      },
+    });
+    expect(configuration.rawConfiguration).not.toHaveProperty("gitlabProjectToken");
+  });
+
+  it("rejects direct mode and incomplete administrative configuration", async () => {
+    const fixture = await fixtureRepository();
+    vi.stubEnv("GITPM_REPOSITORY_PATH", fixture.repository);
+    vi.stubEnv("GITPM_DATA_DIR", fixture.data);
+    vi.stubEnv("GITPM_CONFIG_PATH", path.join(fixture.root, "missing-config.json"));
+    vi.stubEnv("GITPM_REPOSITORY_MODE", "direct");
+    vi.stubEnv("GITPM_GITLAB_AUTH_MODE", "oauth-identity-project-token");
+    vi.stubEnv("GITPM_GITLAB_URL", "https://gitlab.example");
+    vi.stubEnv("GITPM_GITLAB_PROJECT", "group/portfolio");
+    vi.stubEnv("GITPM_GITLAB_CLIENT_ID", "oauth-app");
+    vi.stubEnv("GITPM_GITLAB_PROJECT_TOKEN", "project-token-secret");
+    vi.stubEnv("GITPM_PUSH_REMOTE_URL", "https://gitlab.example/group/portfolio.git");
+    await expect(loadRepositoryRuntimeConfiguration()).rejects.toThrow(/requires GITPM_REPOSITORY_MODE=worktree/u);
+
+    vi.stubEnv("GITPM_REPOSITORY_MODE", "worktree");
+    vi.stubEnv("GITPM_GITLAB_PROJECT_TOKEN", "");
+    await expect(loadRepositoryRuntimeConfiguration()).rejects.toThrow(/requires administrator environment values/u);
+  });
+
+  it("rejects a mismatched repository URL before the Project Access Token can be used", async () => {
+    const fixture = await fixtureRepository();
+    vi.stubEnv("GITPM_REPOSITORY_PATH", fixture.repository);
+    vi.stubEnv("GITPM_DATA_DIR", fixture.data);
+    vi.stubEnv("GITPM_CONFIG_PATH", path.join(fixture.root, "missing-config.json"));
+    vi.stubEnv("GITPM_REPOSITORY_MODE", "worktree");
+    vi.stubEnv("GITPM_GITLAB_AUTH_MODE", "oauth-identity-project-token");
+    vi.stubEnv("GITPM_GITLAB_URL", "https://gitlab.example");
+    vi.stubEnv("GITPM_GITLAB_PROJECT", "group/portfolio");
+    vi.stubEnv("GITPM_GITLAB_CLIENT_ID", "oauth-app");
+    vi.stubEnv("GITPM_GITLAB_PROJECT_TOKEN", "project-token-secret");
+    vi.stubEnv("GITPM_PUSH_REMOTE_URL", "https://gitlab.example/group/other.git");
+
+    await expect(loadRepositoryRuntimeConfiguration())
+      .rejects.toMatchObject({ code: "GIT_REMOTE_PROJECT_MISMATCH" });
+  });
+
+  it("rejects Project Access Tokens stored in config.json", async () => {
+    const fixture = await fixtureRepository();
+    const configPath = path.join(fixture.root, "config.json");
+    await writeFile(configPath, JSON.stringify({
+      repository: fixture.repository,
+      gitlab: { projectToken: "must-not-be-persisted" },
+    }), "utf8");
+    vi.stubEnv("GITPM_CONFIG_PATH", configPath);
+    vi.stubEnv("GITPM_REPOSITORY_PATH", fixture.repository);
+    await expect(loadRepositoryRuntimeConfiguration()).rejects.toThrow(/must not be stored/u);
+  });
+});

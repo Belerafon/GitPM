@@ -131,7 +131,11 @@ export function RepositoryConnectionSettings({ api, locale, maintainer, confirmA
       <p className="field-help">{t("repositoryConnection.gitlabProjectHelp")}</p>
       <p className="field-help">{t("repositoryConnection.clientIdHelp")}</p>
 
-      {provider === "gitlab" && <div className="alert info">{t("repositoryConnection.credentialNote")}</div>}
+      {provider === "gitlab" && <div className="alert info">{t(
+        connection.gitlab.auth_mode === "oauth-identity-project-token"
+          ? "repositoryConnection.credentialNoteIdentityProjectToken"
+          : "repositoryConnection.credentialNote",
+      )}</div>}
       {provider === "ssh" && <div className="alert info">{t("repositoryConnection.sshNote")}</div>}
       {provider === "https" && <div className="alert info">{t("repositoryConnection.httpsTokenNote")}</div>}
       {provider !== "gitlab" && hasRemote && <div className="alert info">{t("repositoryConnection.mrNote")}</div>}

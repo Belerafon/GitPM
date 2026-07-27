@@ -24,14 +24,24 @@ export interface EntityResult<Document extends EntityDocument | ConfigurationDoc
 export type ConfigurationResult = EntityResult<ConfigurationDocument>;
 
 export interface PublicSession {
-  readonly user: { readonly id: string; readonly username: string };
+  readonly user: {
+    readonly id: string;
+    readonly username: string;
+    readonly name?: string;
+    readonly email?: string;
+  };
   readonly role: GitPmRole;
   readonly mode?: "repository";
   readonly repository_mode?: "direct" | "worktree";
   readonly repository?: { readonly name: string; readonly path: string; readonly has_remote: boolean; readonly branch?: string };
   readonly gitlab?: {
     readonly configured: boolean;
-    readonly user?: { readonly id: string; readonly username: string };
+    readonly user?: {
+      readonly id: string;
+      readonly username: string;
+      readonly name?: string;
+      readonly email?: string;
+    };
     readonly role?: GitPmRole;
   };
   readonly expires_at: string;
@@ -156,6 +166,7 @@ export interface RepositoryConnectionStatus {
     readonly base_url?: string;
     readonly project?: string;
     readonly client_id?: string;
+    readonly auth_mode?: "user-oauth-publication" | "oauth-identity-project-token";
   };
 }
 
@@ -342,7 +353,10 @@ const configurationResultSchema = objectSchema({
 });
 
 const publicSessionSchema = objectSchema({
-  user: objectSchema({ id: stringSchema, username: stringSchema }),
+  user: objectSchema(
+    { id: stringSchema, username: stringSchema, name: stringSchema, email: stringSchema },
+    ["id", "username"],
+  ),
   role: { enum: ["Reporter", "Developer", "Maintainer"] },
   mode: { const: "repository" },
   repository_mode: { enum: ["direct", "worktree"] },
@@ -354,7 +368,10 @@ const publicSessionSchema = objectSchema({
   }, ["name", "path", "has_remote"]),
   gitlab: objectSchema({
     configured: booleanSchema,
-    user: objectSchema({ id: stringSchema, username: stringSchema }),
+    user: objectSchema(
+      { id: stringSchema, username: stringSchema, name: stringSchema, email: stringSchema },
+      ["id", "username"],
+    ),
     role: { enum: ["Reporter", "Developer", "Maintainer"] },
   }, ["configured"]),
   expires_at: stringSchema,
@@ -474,6 +491,7 @@ const repositoryConnectionStatusSchema = objectSchema({
     base_url: stringSchema,
     project: stringSchema,
     client_id: stringSchema,
+    auth_mode: { enum: ["user-oauth-publication", "oauth-identity-project-token"] },
   }, ["configured"]),
 }, ["repository_path", "repository_mode", "default_branch", "remote_source", "remote_editable", "gitlab_editable", "gitlab"]);
 

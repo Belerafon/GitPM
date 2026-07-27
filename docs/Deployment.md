@@ -92,6 +92,60 @@ docker compose -f compose.yaml -f compose.server.yaml up -d --build
 
 Configuration for the server profile is documented in `compose.server.yaml`.
 
+## Multi-user GitLab authentication
+
+The supported multi-user mode deliberately separates user identity from
+repository credentials:
+
+* the GitLab OAuth application requests only `read_user`; GitPM uses the
+  resulting profile for the server session and commit author/committer;
+* one administrator-provisioned Project Access Token performs membership
+  checks, fetch, push, and Merge Request API calls for exactly one configured
+  GitLab project.
+
+Configure all project coordinates administratively and use worktree mode:
+
+```bash
+GITPM_REPOSITORY_MODE=worktree
+GITPM_GITLAB_AUTH_MODE=oauth-identity-project-token
+GITPM_GITLAB_URL=https://gitlab.example
+GITPM_GITLAB_PROJECT=group/portfolio
+GITPM_GITLAB_CLIENT_ID=<oauth-application-id>
+GITPM_GITLAB_REDIRECT_URI=https://gitpm.example/api/auth/callback
+GITPM_PUSH_REMOTE_URL=https://gitlab.example/group/portfolio.git
+GITPM_GITLAB_PROJECT_TOKEN_FILE=/run/secrets/gitpm_gitlab_project_token
+```
+
+`GITPM_GITLAB_PROJECT_TOKEN` may be used instead of the `*_FILE` variable, but
+a Docker secret is preferred. Never set both. The secret file must contain only
+the token. The token is rejected if placed in `.gitpm/config.json`; it is never
+accepted from the browser, returned by the API, embedded in the repository URL,
+or stored in a user session.
+
+The OAuth application needs only the `read_user` scope. The Project Access
+Token must belong to the configured project, have Developer or Maintainer
+access, and have `api` plus `write_repository` scopes. GitPM validates that the
+credential-free repository URL and configured `group/project` identify the same
+project on the configured GitLab origin. In this mode those values cannot be
+changed through HTTP.
+
+Reporter sessions are read-only. Developer and Maintainer sessions may mutate
+data and publish their own drafts. Role membership is checked again through the
+Project Access Token before every mutation, commit, push, and Merge Request.
+Each commit uses the OAuth user's GitLab name and Public email for both author
+and committer without modifying Git config. A missing Public email blocks the
+commit until the user configures one in GitLab.
+
+GitLab records the Project Access Token bot as the pusher and Merge Request
+creator; the Git commit itself records the initiating user. GitPM adds
+`Initiated in GitPM by @username` to the Merge Request description and writes a
+sanitized server audit event with user ID/username, operation, result, branch,
+commit SHA, and Merge Request IID when applicable. Tokens are excluded.
+
+The older `user-oauth-publication` mode remains available as a separate
+compatibility mode. It requests the historical publication scopes and must not
+be combined with `GITPM_GITLAB_PROJECT_TOKEN`.
+
 ## With-OpenCode profile (LAN server)
 
 This profile bundles the OpenCode web UI (`:4096`) alongside GitPM, with Caddy

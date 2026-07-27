@@ -102,6 +102,39 @@ describe("controlled Git client", () => {
     await expect(client.fetch()).rejects.toBeInstanceOf(GitCommandError);
   });
 
+  it("sets author and committer only for one commit without changing repository config", async () => {
+    const fixture = await remoteFixture();
+    const commands: string[][] = [];
+    const client = new GitClient({
+      dataDirectory: path.join(fixture.root, "data"),
+      remoteUrl: fixture.remote,
+      defaultBranch: "main",
+      allowLocalTestRemote: true,
+      onCommand: (record) => commands.push([...record.args]),
+    });
+    await client.initialize();
+    const worktree = await client.addWorktree(
+      "gitpm/42/DRF-IDENTITY",
+      "DRF-IDENTITY",
+      await client.fetch(),
+    );
+    await writeFile(path.join(worktree, "identity.txt"), "identity\n", "utf8");
+    await client.commitAll(
+      worktree,
+      "OAuth identity",
+      "OAuth User",
+      "oauth.user@example.test",
+    );
+
+    expect(await git(worktree, "log", "-1", "--format=%an|%ae|%cn|%ce"))
+      .toBe("OAuth User|oauth.user@example.test|OAuth User|oauth.user@example.test");
+    await expect(git(worktree, "config", "--local", "--get", "user.name")).rejects.toBeDefined();
+    await expect(git(worktree, "config", "--local", "--get", "user.email")).rejects.toBeDefined();
+    const commitCommand = commands.find((args) => args.includes("commit"));
+    expect(commitCommand?.join(" ")).not.toContain("OAuth User");
+    expect(commitCommand?.join(" ")).not.toContain("oauth.user@example.test");
+  });
+
   it("computes Git blob IDs for optimistic revisions", async () => {
     const fixture = await remoteFixture();
     const client = new GitClient({

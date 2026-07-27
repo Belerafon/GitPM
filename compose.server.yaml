@@ -12,13 +12,17 @@
 #   GITPM_BIND_IP            LAN IP to bind published ports to (required).
 #                            Example: 10.0.0.1
 #   GITPM_WEB_PORT           Host port for the web UI (default 86).
-#   GITPM_REPOSITORY_MODE    Repository mode: "direct" (default) or "worktree".
+#   GITPM_REPOSITORY_MODE    Use "worktree" for multi-user GitLab OAuth.
 #   GITPM_REPOSITORY_PATH    Host path to the Git repository managed by GitPM.
 #   GITPM_GITLAB_REDIRECT_URI GitLab OAuth redirect URI pointed at this server,
 #                            e.g. http://10.0.0.1:86/api/auth/callback
 #   GITPM_GITLAB_URL         Base URL of the GitLab instance.
 #   GITPM_GITLAB_PROJECT     group/project path.
 #   GITPM_GITLAB_CLIENT_ID   OAuth Application ID registered in GitLab.
+#   GITPM_GITLAB_AUTH_MODE   Set oauth-identity-project-token for multi-user mode.
+#   GITPM_PUSH_REMOTE_URL    Credential-free URL for the same GitLab project.
+#   GITPM_GITLAB_PROJECT_TOKEN Project Access Token (prefer *_TOKEN_FILE below).
+#   GITPM_GITLAB_PROJECT_TOKEN_FILE Path to a mounted Docker secret.
 #
 # Notes:
 #   * Port 87 is intentionally avoided — Chromium/Firefox block it
@@ -41,6 +45,10 @@ services:
       GITPM_GITLAB_URL: ${GITPM_GITLAB_URL:-}
       GITPM_GITLAB_PROJECT: ${GITPM_GITLAB_PROJECT:-}
       GITPM_GITLAB_CLIENT_ID: ${GITPM_GITLAB_CLIENT_ID:-}
+      GITPM_GITLAB_AUTH_MODE: ${GITPM_GITLAB_AUTH_MODE:-}
+      GITPM_PUSH_REMOTE_URL: ${GITPM_PUSH_REMOTE_URL:-}
+      GITPM_GITLAB_PROJECT_TOKEN: ${GITPM_GITLAB_PROJECT_TOKEN:-}
+      GITPM_GITLAB_PROJECT_TOKEN_FILE: ${GITPM_GITLAB_PROJECT_TOKEN_FILE:-}
       # Set to "false" when serving over plain HTTP (no TLS terminator in front).
       GITPM_COOKIE_SECURE: ${GITPM_COOKIE_SECURE:-true}
     volumes: !override

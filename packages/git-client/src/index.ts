@@ -33,6 +33,8 @@ export interface GitClientOptions {
   /** Optional publication upstream; direct mode applies it as the selected checkout's origin. */
   readonly pushRemoteUrl?: string;
   readonly askPassPath?: string;
+  /** Server-owned credential accessor for controlled fetches. Never serialized or logged. */
+  readonly remoteAccessToken?: () => string | undefined;
   /** SSH provisioning for SSH transports. Sourced from admin environment, never from user input. */
   readonly ssh?: GitClientSshOptions;
   readonly timeoutMs?: number;
@@ -111,7 +113,15 @@ function commitFileStatus(value: string): GitCommitFile["status"] {
 function safeEnvironment(home: string): NodeJS.ProcessEnv {
   const environment: NodeJS.ProcessEnv = {};
   for (const [key, value] of Object.entries(process.env)) {
-    if (!key.toUpperCase().startsWith("GIT_") && value !== undefined) environment[key] = value;
+    const normalized = key.toUpperCase();
+    const gitPmCredential = [
+      "GITPM_ACCESS_TOKEN",
+      "GITPM_REMOTE_TOKEN",
+      "GITPM_GITLAB_PROJECT_TOKEN",
+      "GITPM_GITLAB_PROJECT_TOKEN_FILE",
+      "GITPM_ASKPASS_TOKEN",
+    ].includes(normalized);
+    if (!normalized.startsWith("GIT_") && !gitPmCredential && value !== undefined) environment[key] = value;
   }
   return {
     ...environment,
@@ -191,6 +201,7 @@ export class GitClient {
   private pushTransport?: RepositoryTransport;
   private readonly sshOptions?: GitClientSshOptions;
   private readonly askPassPath?: string;
+  private readonly remoteAccessToken?: () => string | undefined;
   private readonly timeoutMs: number;
   private readonly onCommand?: (record: GitCommandRecord) => void;
 
@@ -202,6 +213,7 @@ export class GitClient {
     this.allowLocalRepository = options.allowLocalRepository ?? options.allowLocalTestRemote ?? false;
     this.requirePushRemote = options.allowLocalRepository === true && options.allowLocalTestRemote !== true;
     this.askPassPath = options.askPassPath;
+    this.remoteAccessToken = options.remoteAccessToken;
     this.remoteUrl = this.allowLocalRepository ? path.resolve(options.remoteUrl) : assertSafeRepositoryUrl(options.remoteUrl);
     this.applyPushRemote(options.pushRemoteUrl, options.allowLocalTestRemote === true);
     this.sshOptions = options.ssh;
@@ -347,8 +359,8 @@ export class GitClient {
     }
   }
 
-  async fetch(): Promise<string> {
-    await this.git([
+  async fetch(accessToken?: string): Promise<string> {
+    const args = [
       ...this.localProtocolArgs(),
       "--git-dir",
       this.bareRepository,
@@ -356,7 +368,13 @@ export class GitClient {
       "--prune",
       "origin",
       "+refs/heads/*:refs/remotes/origin/*",
-    ]);
+    ];
+    const token = accessToken ?? this.remoteAccessToken?.();
+    if (this.pushTransport === "http" || this.pushTransport === "https") {
+      await this.gitWithEnvironment(args, this.buildRemoteEnvironment(token));
+    } else {
+      await this.git(args);
+    }
     return await this.remoteDefaultCommit();
   }
 
@@ -693,12 +711,16 @@ export class GitClient {
     const canonical = await realpath(worktree);
     await this.git(["-C", canonical, "add", "--all"]);
     if (excludedPaths.length > 0) await this.git(["-C", canonical, "reset", "--", ...excludedPaths]);
-    await this.git([
-      "-c", `user.name=${authorName}`,
-      "-c", `user.email=${authorEmail}`,
-      "-C", canonical,
-      "commit", "-m", message,
-    ]);
+    await this.gitWithEnvironment(
+      ["-C", canonical, "commit", "-m", message],
+      {
+        ...safeEnvironment(this.homeDirectory),
+        GIT_AUTHOR_NAME: authorName,
+        GIT_AUTHOR_EMAIL: authorEmail,
+        GIT_COMMITTER_NAME: authorName,
+        GIT_COMMITTER_EMAIL: authorEmail,
+      },
+    );
     return await this.headCommit(canonical);
   }
 

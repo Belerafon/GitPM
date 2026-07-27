@@ -103,9 +103,14 @@ describe("Git process boundary", () => {
       hooksPath: path.join(root, "hooks"),
       isolatedHome: path.join(root, "home"),
       token,
-      baseEnvironment: { ...process.env, GIT_CONFIG_GLOBAL: "malicious.cfg" },
+      baseEnvironment: {
+        ...process.env,
+        GIT_CONFIG_GLOBAL: "malicious.cfg",
+        GITPM_GITLAB_PROJECT_TOKEN: "ambient-project-token",
+      },
     });
     expect(environment.GIT_CONFIG_GLOBAL).toBeUndefined();
+    expect(environment.GITPM_GITLAB_PROJECT_TOKEN).toBeUndefined();
     expect(environment.GITPM_ASKPASS_TOKEN).toBe(token);
 
     const inspection = JSON.stringify({

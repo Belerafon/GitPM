@@ -10,8 +10,13 @@ function protocol(level: number | null = 30) {
       captured.push({ kind: "token", code: input.code, redirect_uri: input.redirectUri, verifier_hash: createHash("sha256").update(input.codeVerifier).digest("hex") });
       return { access_token: "test-access-token-secret", refresh_token: "discarded", expires_in: 7200 };
     }),
-    currentUser: vi.fn(async () => ({ id: "42", username: "developer" })),
-    projectAccessLevel: vi.fn(async () => level),
+    currentUser: vi.fn(async () => ({
+      id: "42",
+      username: "developer",
+      name: "Dev User",
+      email: "dev@example.test",
+    })),
+    projectAccessLevel: vi.fn(async (_accessToken, _userId) => level),
   };
   return { captured, implementation };
 }
@@ -22,6 +27,21 @@ function service(implementation: GitLabProtocol, now = () => Date.parse("2026-07
     clientId: "gitpm-client",
     redirectUri: "https://gitpm.example.test/auth/callback",
     protocol: implementation,
+    now,
+  });
+}
+
+function identityProjectTokenService(
+  implementation: GitLabProtocol,
+  now = () => Date.parse("2026-07-10T00:00:00Z"),
+) {
+  return new AuthService({
+    authorizeUrl: "https://gitlab.example.test/oauth/authorize",
+    clientId: "gitpm-client",
+    redirectUri: "https://gitpm.example.test/auth/callback",
+    protocol: implementation,
+    authMode: "oauth-identity-project-token",
+    projectAccessToken: "project-access-token-secret",
     now,
   });
 }
@@ -40,6 +60,31 @@ describe("OAuth PKCE and memory-only sessions", () => {
     expect(session).toMatchObject({ user: { id: "42" }, role: "Developer" });
     expect(auth.sessionCount()).toBe(1);
     expect(JSON.stringify(testDouble.captured)).not.toContain("test-access-token-secret");
+  });
+
+  it("requests only read_user and uses the Project Access Token for role and remote authorization", async () => {
+    const testDouble = protocol(30);
+    const auth = identityProjectTokenService(testDouble.implementation);
+    const started = auth.startLogin();
+    const url = new URL(started.authorization_url);
+    expect(url.searchParams.get("scope")).toBe("read_user");
+    expect(url.searchParams.get("scope")).not.toContain("api");
+    expect(url.searchParams.get("scope")).not.toContain("write_repository");
+
+    const session = await auth.completeLogin(started.state, "authorization-code");
+    expect(session).toMatchObject({
+      user: {
+        id: "42",
+        username: "developer",
+        name: "Dev User",
+        email: "dev@example.test",
+      },
+      role: "Developer",
+    });
+    expect(testDouble.implementation.projectAccessLevel)
+      .toHaveBeenLastCalledWith("project-access-token-secret", "42");
+    expect((await auth.authorize(session.session_id, "push")).accessToken)
+      .toBe("project-access-token-secret");
   });
 
   it("rejects missing state and non-members", async () => {
@@ -98,7 +143,12 @@ describe("GitLab HTTP protocol", () => {
       const url = String(input);
       requests.push({ url, init });
       if (url.endsWith("/oauth/token")) return new Response(JSON.stringify({ access_token: "token", expires_in: 3600 }), { status: 200 });
-      if (url.endsWith("/api/v4/user")) return new Response(JSON.stringify({ id: 42, username: "developer" }), { status: 200 });
+      if (url.endsWith("/api/v4/user")) return new Response(JSON.stringify({
+        id: 42,
+        username: "developer",
+        name: "Dev User",
+        public_email: "dev@example.test",
+      }), { status: 200 });
       if (url.includes("/members/all/42")) return new Response(JSON.stringify({ access_level: 30 }), { status: 200 });
       if (url.endsWith("/merge_requests")) return new Response(JSON.stringify({ iid: 7, state: "opened", source_branch: "feature", target_branch: "main", web_url: "https://gitlab.example.test/group/project/-/merge_requests/7" }), { status: 200 });
       throw new Error(`Unexpected request: ${url}`);
@@ -111,22 +161,27 @@ describe("GitLab HTTP protocol", () => {
     });
 
     await protocol.exchangeAuthorizationCode({ code: "code", codeVerifier: "verifier", redirectUri: "http://127.0.0.1:3000/api/auth/callback" });
-    expect(await protocol.projectAccessLevel("secret-token")).toBe(30);
+    expect(await protocol.currentUser("oauth-user-token")).toMatchObject({
+      id: "42",
+      name: "Dev User",
+      email: "dev@example.test",
+    });
+    expect(await protocol.projectAccessLevel("secret-token", "42")).toBe(30);
     expect((await protocol.createMergeRequest("secret-token", { source_branch: "feature", target_branch: "main", title: "Feature" })).iid).toBe(7);
     expect(requests.some((request) => request.url.includes("projects/group%2Fproject/members/all/42"))).toBe(true);
     const authenticated = requests.find((request) => request.url.endsWith("/api/v4/user"));
-    expect(new Headers(authenticated?.init?.headers).get("authorization")).toBe("Bearer secret-token");
+    expect(new Headers(authenticated?.init?.headers).get("authorization")).toBe("Bearer oauth-user-token");
+    const membership = requests.find((request) => request.url.includes("/members/all/42"));
+    expect(new Headers(membership?.init?.headers).get("authorization")).toBe("Bearer secret-token");
     const tokenBody = String(requests[0]?.init?.body);
     expect(tokenBody).toContain("code_verifier=verifier");
     expect(requests.map((request) => request.url).join(" ")).not.toContain("secret-token");
   });
 
   it("maps a missing membership to no access and accepts HTTP for local-network instances", async () => {
-    const fetchImplementation = vi.fn(async (input: string | URL | Request) => String(input).endsWith("/api/v4/user")
-      ? new Response(JSON.stringify({ id: 42, username: "developer" }), { status: 200 })
-      : new Response("not found", { status: 404 }));
+    const fetchImplementation = vi.fn(async () => new Response("not found", { status: 404 }));
     const protocol = new GitLabHttpProtocol({ baseUrl: "https://gitlab.example.test", clientId: "client", project: "group/project", fetch: fetchImplementation as typeof fetch });
-    expect(await protocol.projectAccessLevel("token")).toBeNull();
+    expect(await protocol.projectAccessLevel("token", "42")).toBeNull();
     expect(() => new GitLabHttpProtocol({ baseUrl: "http://gitlab.local", clientId: "client", project: "group/project" })).not.toThrow();
     for (const baseUrl of [
       "ftp://gitlab.local",

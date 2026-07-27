@@ -77,7 +77,16 @@ Role is refreshed before mutation, commit, push and MR. GitLab remains final con
 
 ## 11. OAuth and GitLab
 
-OAuth 2.0 Authorization Code with PKCE is the only login flow. Access token is memory-only. Webhook is absent; MR status is polled. Automated tests use local test doubles, not a live GitLab project.
+OAuth 2.0 Authorization Code with PKCE is the only login flow. The multi-user
+`oauth-identity-project-token` mode requests only `read_user`, keeps the
+GitLab profile and project role in the server session, and discards the user
+OAuth token after login. A single server-owned Project Access Token is used for
+membership checks, fetch, push, and Merge Request API calls for the configured
+project. The token is environment/Docker-Secret only and is excluded from
+browser input, HTTP responses, persisted config, Git URLs, sessions, and logs.
+The legacy user OAuth publication behavior remains a separate explicit
+`user-oauth-publication` mode. Webhook is absent; MR status is polled.
+Automated tests use local test doubles, not a live GitLab project.
 
 ## 12. Delete and restore
 

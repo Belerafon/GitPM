@@ -115,7 +115,15 @@ export interface GitProcessEnvironmentOptions {
 function stripInheritedGitConfig(baseEnvironment?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const environment: NodeJS.ProcessEnv = {};
   for (const [key, value] of Object.entries(baseEnvironment ?? {})) {
-    if (!key.toUpperCase().startsWith("GIT_") && value !== undefined) environment[key] = value;
+    const normalized = key.toUpperCase();
+    const gitPmCredential = [
+      "GITPM_ACCESS_TOKEN",
+      "GITPM_REMOTE_TOKEN",
+      "GITPM_GITLAB_PROJECT_TOKEN",
+      "GITPM_GITLAB_PROJECT_TOKEN_FILE",
+      "GITPM_ASKPASS_TOKEN",
+    ].includes(normalized);
+    if (!normalized.startsWith("GIT_") && !gitPmCredential && value !== undefined) environment[key] = value;
   }
   return environment;
 }

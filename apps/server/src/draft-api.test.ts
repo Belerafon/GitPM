@@ -64,6 +64,25 @@ describe("draft lifecycle API", () => {
     expect(response.body).not.toContain("worktree");
   });
 
+  it("does not let a Maintainer read another user's draft", async () => {
+    const other = { ...metadata, draft_id: "DRF-OTHER", owner_gitlab_user_id: "99" };
+    const draftManager = manager({
+      listDrafts: vi.fn(async () => [metadata, other]),
+      poll: vi.fn(async () => ({
+        metadata: other,
+        currentFingerprint: other.fingerprint,
+        changedExternally: false,
+      })),
+    });
+    const app = appFor({ userId: "42", role: "Maintainer" }, draftManager);
+
+    const listed = await app.inject({ method: "GET", url: "/api/drafts" });
+    expect(listed.json()).toEqual([expect.objectContaining({ draft_id: "DRF-API" })]);
+    const read = await app.inject({ method: "GET", url: "/api/drafts/DRF-OTHER" });
+    expect(read.statusCode).toBe(403);
+    expect(read.json()).toMatchObject({ error: { code: "DRAFT_FORBIDDEN" } });
+  });
+
   it("rejects mutation for a read-only role with a stable error", async () => {
     const app = appFor({ userId: "42", role: "Reporter" });
     const response = await app.inject({

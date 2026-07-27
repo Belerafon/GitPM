@@ -144,6 +144,13 @@ SSH or an HTTP(S) token GitPM pushes the branch to `origin` but cannot open an M
 Plain HTTP leaves tokens and repository contents unencrypted in transit and is
 intended only for trusted local-network deployments.
 
+For a multi-user GitLab server, `oauth-identity-project-token` requires
+`worktree` mode. Every draft is owned by the OAuth user's immutable GitLab user
+ID, and draft reads, writes, commits, and publication are restricted to that
+owner. The repository URL, GitLab origin, and `group/project` are supplied by
+the administrator and cannot be overridden through the API. See
+`docs/Deployment.md` for the complete environment and secret setup.
+
 ## Docker
 
 `compose.yaml` and `compose.server.yaml` default to `direct`. The selected checkout is mounted at
