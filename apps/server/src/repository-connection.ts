@@ -56,8 +56,8 @@ function optionalText(value: unknown): string | undefined {
 function normalizeBaseUrl(value: string): string {
   let parsed: URL;
   try { parsed = new URL(value); } catch { throw new RepositoryConnectionError("GITLAB_URL_INVALID", "GitLab base URL is invalid"); }
-  if (parsed.protocol !== "https:" && !["127.0.0.1", "localhost"].includes(parsed.hostname)) {
-    throw new RepositoryConnectionError("GITLAB_URL_INVALID", "GitLab must use HTTPS");
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new RepositoryConnectionError("GITLAB_URL_INVALID", "GitLab must use HTTP or HTTPS");
   }
   if (parsed.username || parsed.password || parsed.search || parsed.hash || (parsed.pathname !== "/" && parsed.pathname !== "")) {
     throw new RepositoryConnectionError("GITLAB_URL_INVALID", "GitLab base URL must contain only the instance origin");

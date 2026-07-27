@@ -40,9 +40,11 @@ class ChangesApi {
 afterEach(cleanup);
 
 describe("Changes workspace", () => {
-  it("allows only credential-free HTTPS links for untrusted Merge Request metadata", () => {
+  it("allows only credential-free HTTP(S) links for untrusted Merge Request metadata", () => {
+    expect(safeExternalUrl("http://gitlab.local/group/project/-/merge_requests/7")).toBe("http://gitlab.local/group/project/-/merge_requests/7");
     expect(safeExternalUrl("https://gitlab.example.test/group/project/-/merge_requests/7")).toBe("https://gitlab.example.test/group/project/-/merge_requests/7");
     expect(safeExternalUrl("javascript:alert(1)")).toBeUndefined();
+    expect(safeExternalUrl("http://token@gitlab.local/mr/7")).toBeUndefined();
     expect(safeExternalUrl("https://token@gitlab.example.test/mr/7")).toBeUndefined();
   });
 

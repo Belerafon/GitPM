@@ -41,6 +41,16 @@ describe("RepositoryConnectionSettings", () => {
     expect(screen.getByText(/Merge Requests are supported only for GitLab/)).toBeTruthy();
   });
 
+  it("shows a plain HTTP remote as the administrator-token provider", async () => {
+    const api = mockApi(baseStatus({
+      repository_url: "http://gitlab.local/group/portfolio.git",
+      transport: "http",
+    }));
+    render(<RepositoryConnectionSettings api={api} locale="en" maintainer={true} />);
+    expect(await screen.findByText("HTTP(S) (administrator token)")).toBeTruthy();
+    expect(screen.getByText(/Plain HTTP sends it without transport encryption/)).toBeTruthy();
+  });
+
   it("shows the GitLab provider and the OAuth credential note", async () => {
     const api = mockApi(baseStatus({
       repository_url: "https://gitlab.example/group/portfolio.git",
@@ -50,6 +60,17 @@ describe("RepositoryConnectionSettings", () => {
     render(<RepositoryConnectionSettings api={api} locale="en" maintainer={true} />);
     expect(await screen.findByText("GitLab (OAuth)")).toBeTruthy();
     expect(screen.getByText(/Do not enter passwords or tokens here/)).toBeTruthy();
+  });
+
+  it("shows an HTTP GitLab connection as the GitLab OAuth provider", async () => {
+    const api = mockApi(baseStatus({
+      repository_url: "http://gitlab.local/group/portfolio.git",
+      transport: "http",
+      gitlab: { configured: true, base_url: "http://gitlab.local", project: "group/portfolio", client_id: "app" },
+    }));
+    render(<RepositoryConnectionSettings api={api} locale="en" maintainer={true} />);
+    expect(await screen.findByText("GitLab (OAuth)")).toBeTruthy();
+    expect(screen.getByText(/Plain HTTP sends credentials and repository data without encryption/)).toBeTruthy();
   });
 
   it("shows the local provider with a disabled test button when no remote is configured", async () => {

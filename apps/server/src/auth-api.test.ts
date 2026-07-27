@@ -110,7 +110,7 @@ describe("optional GitLab repository session", () => {
     expect(publishing.commit).toHaveBeenCalledWith(localContext, { draftId: "DRF-LOCAL" }, "Local commit");
 
     // Without GitLab, publication authenticates at the transport layer (SSH key or
-    // HTTPS token) rather than an OAuth session, so push delegates to the local
+    // HTTP(S) token) rather than an OAuth session, so push delegates to the local
     // maintainer context with the environment token accessor.
     const push = await app.inject({ method: "POST", url: "/api/drafts/DRF-LOCAL/push" });
     expect(push.statusCode).toBe(200);
@@ -122,7 +122,7 @@ describe("optional GitLab repository session", () => {
     expect(pushContext.accessToken()).toBeUndefined();
   });
 
-  it("routes a non-GitLab HTTPS push through the GITPM_REMOTE_TOKEN accessor", async () => {
+  it("routes a non-GitLab HTTP(S) push through the GITPM_REMOTE_TOKEN accessor", async () => {
     const previousToken = process.env.GITPM_REMOTE_TOKEN;
     process.env.GITPM_REMOTE_TOKEN = "pat-admin-token";
     try {

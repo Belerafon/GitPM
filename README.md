@@ -54,7 +54,7 @@ Launcher подготовит актуальный русскоязычный de
 публикуются fast-forward push в её единственный `origin`. Локальные изменения и
 коммиты не требуют входа.
 
-Credential-free HTTPS URL `origin`, GitLab project и OAuth Application ID можно
+Credential-free HTTP(S) URL `origin`, GitLab project и OAuth Application ID можно
 настроить в «Администрирование → Настройки репозитория», если их не зафиксировали
 переменные окружения. OAuth token после входа хранится только в памяти процесса и
 передаётся Git через controlled ASKPASS; в URL и Git config он не записывается.

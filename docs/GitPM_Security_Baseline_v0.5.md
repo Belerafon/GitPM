@@ -80,7 +80,7 @@ Webhook secret, backup assets, safety refs, token keyring, quota state and MCP c
 - project membership and role refreshed before publish operations;
 - token absent from URL, argv, Git config, temp files, logs and metrics.
 
-### 7.1. Non-GitLab transports (SSH, HTTPS token)
+### 7.1. Non-GitLab transports (SSH, HTTP(S) token)
 
 The origin may point at any git host. When GitLab is not configured, publication
 authenticates at the transport layer instead of OAuth:
@@ -90,12 +90,14 @@ authenticates at the transport layer instead of OAuth:
   (`SSH_AUTH_SOCK`). GitPM builds a `GIT_SSH_COMMAND` from an allowlist of options
   and never reads, copies, or logs the key; the host/user/path reach ssh only as
   Git-passed arguments without a shell.
-- **HTTPS token**: `origin` is an HTTPS URL; a PAT/deploy token
+- **HTTP(S) token**: `origin` is an HTTP or HTTPS URL; a PAT/deploy token
   (`GITPM_REMOTE_TOKEN`) flows through the same controlled `GIT_ASKPASS` path as
   the OAuth token and stays in process memory only.
 
 In both cases the memory-only credential invariant (no URL/argv/config/temp/log
-leakage) is preserved. Merge Requests remain GitLab-only.
+leakage) is preserved. Merge Requests remain GitLab-only. Plain HTTP provides no
+transport encryption and is supported only for trusted local-network deployments;
+OAuth tokens, PATs, and repository contents can otherwise be observed in transit.
 
 ## 8. Authorization
 

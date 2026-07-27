@@ -69,7 +69,7 @@ Push always performs a `fetch` first and only allows a safe fast-forward. GitPM
 never does rebase, merge commit, hard reset, stash, or force push. When the local
 and remote branches have diverged, GitPM returns a clear error.
 
-For an HTTPS origin, login supplies the OAuth access token only to the controlled
+For an HTTP(S) origin, login supplies the OAuth access token only to the controlled
 ASKPASS child environment. The token is not placed in the origin URL, Git config,
 command arguments, files, or logs.
 
@@ -126,7 +126,7 @@ GITPM_REPOSITORY_MODE=worktree
 | --- | --- | --- |
 | `repositoryMode` | `GITPM_REPOSITORY_MODE` | `direct` (default) or `worktree`. Env wins. |
 | `repository` | `GITPM_REPOSITORY_PATH` | Existing checkout used directly by `direct` mode. |
-| `repositoryUrl` | `GITPM_PUSH_REMOTE_URL` | Credential-free HTTPS or SSH URL applied as the checkout's `origin` (`https://...`, `ssh://...`, or `git@host:path`). No embedded username/password/token. |
+| `repositoryUrl` | `GITPM_PUSH_REMOTE_URL` | Credential-free HTTP(S) or SSH URL applied as the checkout's `origin` (`http://...`, `https://...`, `ssh://...`, or `git@host:path`). No embedded username/password/token. Plain HTTP is for trusted local networks only. |
 | `defaultBranch` | `GITPM_DEFAULT_BRANCH` | Default branch; `main` when unset. |
 
 Maintainers can edit `repositoryUrl` and the non-secret GitLab connection fields in the web
@@ -135,12 +135,14 @@ an existing `origin` requires exact confirmation. GitPM verifies that the origin
 project identify the same host and project path.
 
 The connection page groups fields into the remote `origin` and an optional GitLab integration
-block, and shows the active connection method: GitLab (OAuth), SSH (administrator key), HTTPS
+block, and shows the active connection method: GitLab (OAuth), SSH (administrator key), HTTP(S)
 (administrator token), or Local (no remote). Any git host is accepted as `origin`; when GitLab is
 not configured, publication runs over SSH (key provisioned via `GITPM_SSH_KEY_PATH` or an
-ssh-agent) or HTTPS (token via `GITPM_REMOTE_TOKEN`). These credentials live only in process
+ssh-agent) or HTTP(S) (token via `GITPM_REMOTE_TOKEN`). These credentials live only in process
 memory and never enter the URL, argv, Git config, or logs. Merge Requests are GitLab-only; over
-SSH or an HTTPS token GitPM pushes the branch to `origin` but cannot open an MR.
+SSH or an HTTP(S) token GitPM pushes the branch to `origin` but cannot open an MR.
+Plain HTTP leaves tokens and repository contents unencrypted in transit and is
+intended only for trusted local-network deployments.
 
 ## Docker
 
