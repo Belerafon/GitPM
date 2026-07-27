@@ -11,6 +11,9 @@ export default defineConfig({
     testTimeout: 60_000,
     maxWorkers,
     maxConcurrency: 2,
+    env: {
+      LOG_LEVEL: process.env.LOG_LEVEL ?? "silent",
+    },
     coverage: {
       enabled: false,
     },

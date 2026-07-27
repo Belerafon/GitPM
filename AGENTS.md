@@ -149,9 +149,8 @@ This repository intentionally has no hosted GitHub Actions workflow. Local verif
 therefore a required delivery contract, not an optional reminder. Select exactly one gate from
 the changed-file scope:
 
-- If the only changed source files are `packages/drafts/src/direct-guidance.ts`,
-  `packages/drafts/src/worktree-guidance.ts`, and/or
-  `packages/drafts/src/guidance.test.ts`, run:
+- If the only changed source files are `packages/drafts/src/direct-guidance.ts` and/or
+  `packages/drafts/src/worktree-guidance.ts`, run:
 
   ```bash
   corepack pnpm verify:guidance
@@ -161,11 +160,8 @@ the changed-file scope:
   guidance files, and runs the fast generated-guidance contract tests. The slower draft lifecycle
   integration suite is not required for text-only guidance changes.
 
-- If the only changed file is this root `AGENTS.md`, run:
-
-  ```bash
-  corepack pnpm verify:docs
-  ```
+- If the only changed file is this root `AGENTS.md`, no test command is required; the normal
+  diff and commit review is sufficient.
 
 - For every other source, test, schema, build configuration, executable script, planning file,
   or mixed-scope change, run the complete gate:

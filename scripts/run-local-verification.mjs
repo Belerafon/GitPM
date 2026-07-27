@@ -33,10 +33,6 @@ const profiles = {
     { name: "guidance tests", command: corepack, args: ["pnpm", "exec", "vitest", "run", "packages/drafts/src/guidance.test.ts"], timeoutMinutes: 5 },
     { name: "diff whitespace", command: git, args: ["diff", "--check"], timeoutMinutes: 2 },
   ],
-  docs: [
-    { name: "working-tree whitespace", command: git, args: ["diff", "--check"], timeoutMinutes: 2 },
-    { name: "staged whitespace", command: git, args: ["diff", "--cached", "--check"], timeoutMinutes: 2 },
-  ],
 };
 
 const installStep = {

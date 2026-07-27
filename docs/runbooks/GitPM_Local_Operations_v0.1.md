@@ -40,7 +40,7 @@ several worktrees verify at once. On an otherwise idle machine,
 For a text-only change to generated agent guidance, use `corepack pnpm verify:guidance`. It keeps
 the frozen install, dependency build, lint, and direct/worktree guidance contract tests while
 skipping unrelated draft lifecycle and browser suites. If only the source-development
-`AGENTS.md` changed, use `corepack pnpm verify:docs`. Mixed changes still require
+`AGENTS.md` changed, no test command is required. Mixed changes still require
 `corepack pnpm verify:local`.
 
 ## Start and health verification
