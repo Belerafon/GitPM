@@ -16,10 +16,10 @@ const task = (suffix: string, title: string, extra: Record<string, unknown>) => 
 const calendar = result({ schema: "gitpm/calendar@1", id: calendarId, name: "Engineering", working_weekdays: [1, 2, 3, 4, 5], holidays: ["2026-07-08"], lifecycle: "active" });
 const ada = result({ schema: "gitpm/person@1", id: adaId, name: "Ada", weekly_capacity_hours: 40, calendar: calendarId, lifecycle: "active" });
 const linus = result({ schema: "gitpm/person@1", id: linusId, name: "Linus", weekly_capacity_hours: 32, calendar: calendarId, lifecycle: "active" });
-const shared = task("5", "Shared", { estimate_hours: 40, start: "2026-07-06", due: "2026-07-10", assignees: [adaId, linusId] });
-const span = task("6", "Span", { estimate_hours: 30, start: "2026-07-09", due: "2026-07-15", assignees: [adaId] });
-const undated = task("7", "Undated", { estimate_hours: 10, assignees: [adaId] });
-const archived = result({ ...task("8", "Archived", { estimate_hours: 10, start: "2026-07-06", due: "2026-07-10", assignees: [adaId] }).document, lifecycle: "archived" });
+const shared = task("5", "Shared", { schedules: { plan: { effort_hours: 40, start: "2026-07-06", finish: "2026-07-10" } }, assignees: [adaId, linusId] });
+const span = task("6", "Span", { schedules: { plan: { effort_hours: 30, start: "2026-07-09", finish: "2026-07-15" } }, assignees: [adaId] });
+const undated = task("7", "Undated", { schedules: { plan: { effort_hours: 10 } }, assignees: [adaId] });
+const archived = result({ ...task("8", "Archived", { schedules: { plan: { effort_hours: 10, start: "2026-07-06", finish: "2026-07-10" } }, assignees: [adaId] }).document, lifecycle: "archived" });
 const project = result({ schema: "gitpm/project@2", id: projectId, name: "Platform", status: "backlog", lifecycle: "active" });
 const reviewers = result({ schema: "gitpm/team@1", id: "G-26-555555", name: "Reviewers", members: [linusId], lifecycle: "active" });
 

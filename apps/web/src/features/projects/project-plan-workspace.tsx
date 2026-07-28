@@ -1,4 +1,5 @@
 import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
+import { scheduleText, scheduleEffort, buildSchedule } from "../../schedules.js";
 import { buildTaskHierarchy } from "@gitpm/task-hierarchy";
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type FormEvent } from "react";
 import { ApiError, deleteRestrictionLabels, formatApiError, type GitPmApi } from "../../api.js";
@@ -31,8 +32,8 @@ const readTaskFields = (): TaskFieldVisibility => {
 };
 const writeTaskFields = (fields: TaskFieldVisibility) => { try { localStorage.setItem(TASK_FIELDS_STORAGE_KEY, JSON.stringify(fields)); } catch { /* Browser storage may be unavailable. */ } };
 
-const text = (document: Readonly<Record<string, unknown>>, key: string): string => typeof document[key] === "string" ? document[key] as string : "";
-const number = (document: Readonly<Record<string, unknown>>, key: string): number | undefined => typeof document[key] === "number" ? document[key] as number : undefined;
+const text = (document: Readonly<Record<string, unknown>>, key: string): string => key === "start" || key === "due" ? scheduleText(document, key) : typeof document[key] === "string" ? document[key] as string : "";
+const number = (document: Readonly<Record<string, unknown>>, key: string): number | undefined => key === "estimate_hours" ? scheduleEffort(document) : typeof document[key] === "number" ? document[key] as number : undefined;
 const strings = (document: Readonly<Record<string, unknown>>, key: string): string[] => Array.isArray(document[key]) ? (document[key] as unknown[]).filter((item): item is string => typeof item === "string") : [];
 const configValues = (document: Readonly<Record<string, unknown>>, key: "statuses" | "issue_types"): ConfigValue[] => Array.isArray(document[key])
   ? (document[key] as unknown[]).filter((item): item is ConfigValue => typeof item === "object" && item !== null && typeof (item as ConfigValue).slug === "string" && typeof (item as ConfigValue).title === "string" && (item as ConfigValue).active === true)
@@ -282,8 +283,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
       status: String(data.get("status")),
       description_markdown: String(data.get("description")),
       owner: owner || undefined,
-      start: start || undefined,
-      due: due || undefined,
+      schedules: buildSchedule(start, due, ""),
     } as EntityDocument;
     const writableDocument = document as unknown as Record<string, unknown>;
     if (selectedGroup.group === "") delete writableDocument.group;
@@ -296,7 +296,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     if (workspace === null) return;
     const data = new FormData(event.currentTarget);
     const id = newUniqueEntityId(ENTITY_ID_PREFIX.milestone, new Set(workspace.milestones.map((item) => item.document.id)));
-    const document = { schema: "gitpm/milestone@2", id, project: projectId, name: String(data.get("name")).trim(), lifecycle: "active", description_markdown: String(data.get("description")), ...(data.get("due") ? { due: String(data.get("due")) } : {}) } as EntityDocument;
+    const document = { schema: "gitpm/milestone@2", id, project: projectId, name: String(data.get("name")).trim(), lifecycle: "active", description_markdown: String(data.get("description")), ...(buildSchedule("", String(data.get("due") ?? ""), "") ? { schedules: buildSchedule("", String(data.get("due") ?? ""), "") } : {}) } as EntityDocument;
     void mutate(async () => await api.createEntity(draft.draft_id, "milestones", workspace.draft_fingerprint, document));
   };
 
@@ -307,7 +307,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     if (stage === undefined) return;
     const data = new FormData(event.currentTarget);
     const due = String(data.get("due"));
-    const document = { ...stage.document, name: String(data.get("name")).trim(), description_markdown: String(data.get("description")), ...(due ? { due } : { due: undefined }) } as EntityDocument;
+    const document = { ...stage.document, name: String(data.get("name")).trim(), description_markdown: String(data.get("description")), schedules: buildSchedule("", due, "") } as EntityDocument;
     void mutate(async () => await api.updateEntity(draft.draft_id, "milestones", stage, workspace.draft_fingerprint, document));
   };
 
@@ -330,9 +330,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
       assignees: data.getAll("assignees").map(String),
       ...(editor.parentId === undefined ? {} : { parent: editor.parentId }),
       ...(editor.stageId === undefined ? {} : { milestone: editor.stageId }),
-      ...(start ? { start } : {}),
-      ...(due ? { due } : {}),
-      ...(estimate ? { estimate_hours: Number(estimate) } : {}),
+      ...(buildSchedule(start, due, estimate) ? { schedules: buildSchedule(start, due, estimate) } : {}),
     } as EntityDocument;
     void mutate(async () => await api.createEntity(draft.draft_id, "tasks", workspace.draft_fingerprint, document));
   };

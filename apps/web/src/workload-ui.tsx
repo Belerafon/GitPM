@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { scheduleText, scheduleEffort } from "./schedules.js";
 import { calculateWorkload, type WorkloadCalendar, type WorkloadPerson, type WorkloadTask } from "@gitpm/workload";
 import type { GitPmApi } from "./api.js";
 import { formatDateOnly, formatNumber, message, type Locale, type MessageKey } from "./i18n.js";
@@ -7,8 +8,8 @@ import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
 import type { WorkspaceNavigate } from "./workspace-navigation.js";
 import { EntityCatalog } from "./entity-catalog.js";
 
-const text = (document: GitPmDocument, key: string) => typeof document[key] === "string" ? document[key] as string : undefined;
-const number = (document: GitPmDocument, key: string) => typeof document[key] === "number" ? document[key] as number : undefined;
+const text = (document: GitPmDocument, key: string) => key === "start" || key === "due" ? scheduleText(document, key) : typeof document[key] === "string" ? document[key] as string : undefined;
+const number = (document: GitPmDocument, key: string) => key === "estimate_hours" ? scheduleEffort(document) : typeof document[key] === "number" ? document[key] as number : undefined;
 const strings = (document: Readonly<Record<string, unknown>>, key: string) => Array.isArray(document[key]) ? (document[key] as unknown[]).filter((item): item is string => typeof item === "string") : [];
 const numbers = (document: GitPmDocument, key: string) => Array.isArray(document[key]) ? (document[key] as unknown[]).filter((item): item is number => typeof item === "number") : [];
 

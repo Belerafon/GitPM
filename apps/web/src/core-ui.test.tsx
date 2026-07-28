@@ -193,7 +193,7 @@ describe("core UI", () => {
     await waitFor(() => expect(rendered.container.querySelector(".task-milestone")?.textContent).toBe("M1"));
     expect(entityApi.entities.find((item) => item.document.schema === "gitpm/task@2")?.document.milestone).toBe(entityApi.entities.find((item) => item.document.schema === "gitpm/milestone@2")?.document.id);
     expect(entityApi.entities.find((item) => item.document.schema === "gitpm/task@2")?.document.assignees).toEqual([person.document.id]);
-    expect(entityApi.entities.find((item) => item.document.schema === "gitpm/task@2")?.document).toMatchObject({ start: "2026-07-20", due: "2026-07-24", estimate_hours: 20 });
+    expect(entityApi.entities.find((item) => item.document.schema === "gitpm/task@2")?.document).toMatchObject({ schedules: { plan: { start: "2026-07-20", finish: "2026-07-24", effort_hours: 20 } } });
 
     const createdTask = entityApi.entities.find((item) => item.document.schema === "gitpm/task@2")!;
     const createdProject = entityApi.entities.find((item) => item.document.schema === "gitpm/project@2")!;
@@ -209,7 +209,7 @@ describe("core UI", () => {
     fireEvent.click(within(editDialog).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(entityApi.entities.find((item) => item.document.schema === "gitpm/task@2")?.document.status).toBe("done"));
     expect(entityApi.entities.find((item) => item.document.schema === "gitpm/task@2")?.document.assignees).toEqual([]);
-    expect(entityApi.entities.find((item) => item.document.schema === "gitpm/task@2")?.document.estimate_hours).toBe(24);
+    expect(entityApi.entities.find((item) => item.document.schema === "gitpm/task@2")?.document.schedules?.plan?.effort_hours).toBe(24);
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     const archiveDialog = screen.getByRole("dialog", { name: "Edit: First task" });
     fireEvent.click(within(archiveDialog).getByText("More actions"));
@@ -262,8 +262,8 @@ describe("core UI", () => {
     const milestone = await entityApi.createEntity("DRF-CORE", "milestones", "", { schema: "gitpm/milestone@2", id: "M-26-222222", project: project.document.id, name: "Beta", lifecycle: "active" });
     const rootTitle = "Root task with a deliberately long title that must stay inside the task editor";
     const root = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-333333", project: project.document.id, milestone: milestone.document.id, title: rootTitle, type: "task", status: "backlog", lifecycle: "active" });
-    const child = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-444444", parent: root.document.id, project: project.document.id, milestone: milestone.document.id, title: "Child", type: "task", status: "backlog", lifecycle: "active", estimate_hours: 3 });
-    const grandchild = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-555555", parent: child.document.id, project: project.document.id, milestone: milestone.document.id, title: "Grandchild", type: "task", status: "done", lifecycle: "active", estimate_hours: 5 });
+    const child = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-444444", parent: root.document.id, project: project.document.id, milestone: milestone.document.id, title: "Child", type: "task", status: "backlog", lifecycle: "active", schedules: { plan: { effort_hours: 3 } } });
+    const grandchild = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-555555", parent: child.document.id, project: project.document.id, milestone: milestone.document.id, title: "Grandchild", type: "task", status: "done", lifecycle: "active", schedules: { plan: { effort_hours: 5 } } });
 
     const { container } = render(<CoreWorkspace api={api} draft={draft} initialProjectId={project.document.id} initialTaskId={child.document.id} locale="en" surface="tasks" onChanged={vi.fn(async () => undefined)} />);
     await screen.findByRole("heading", { name: "Child" });
