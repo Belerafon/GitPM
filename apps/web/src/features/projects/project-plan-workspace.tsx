@@ -1,5 +1,6 @@
 import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
 import { scheduleText, scheduleEffort, buildSchedule } from "../../schedules.js";
+import { ProjectSnapshot } from "./project-snapshot.js";
 import { buildTaskHierarchy } from "@gitpm/task-hierarchy";
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type FormEvent } from "react";
 import { ApiError, deleteRestrictionLabels, formatApiError, type GitPmApi } from "../../api.js";
@@ -399,6 +400,8 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
               <div><dt>{t("core.due")}</dt><dd>{dateLabel(text(workspace.project.document, "due"))}</dd></div>
             </dl>
           </header>
+
+          <ProjectSnapshot project={workspace.project.document} locale={locale} />
 
           <dl className="project-plan-summary">
             <div><dt>{t("projectPlan.progress")}</dt><dd>{progress}% <small>{t("stages.progress", { completed, count: activeTasks.length })}</small></dd></div>

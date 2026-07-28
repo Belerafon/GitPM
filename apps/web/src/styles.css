@@ -263,6 +263,9 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .project-plan-meta dt { color: #68706b; font-size: .72rem; }
 .project-plan-meta dd { margin: 0; font-size: .8rem; font-weight: 650; }
 .project-plan-summary { display: flex; flex-wrap: wrap; gap: 1.5rem; margin: 0; border-bottom: 1px solid #d9ddd6; padding: 0 0 .65rem; }
+.project-snapshot dl { display: flex; flex-wrap: wrap; gap: 1.25rem; margin: 0; }
+.project-snapshot dt { font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; color: #647068; }
+.project-snapshot dd { margin: 0; font-weight: 600; }
 .project-plan-summary div { display: flex; gap: .4rem; align-items: baseline; }
 .project-plan-summary dt { color: #68706b; font-size: .72rem; }
 .project-plan-summary dd { margin: 0; color: #244c3b; font-weight: 700; }
