@@ -142,7 +142,7 @@ export class CommentStore {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new CommentOperationError("ENTITY_NOT_FOUND", `tasks/${taskId} not found`);
       throw error;
     }
-    if (document.schema !== "gitpm/task@1" || document.id !== taskId || document.project !== projectId) throw new CommentOperationError("ENTITY_NOT_FOUND", `tasks/${taskId} not found`);
+    if (document.schema !== "gitpm/task@2" || document.id !== taskId || document.project !== projectId) throw new CommentOperationError("ENTITY_NOT_FOUND", `tasks/${taskId} not found`);
     return document;
   }
 

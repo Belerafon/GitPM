@@ -23,7 +23,7 @@ describe("safe YAML profile", () => {
   it("formats every demo document idempotently and removes comments", async () => {
     const fixtureRoot = path.join(process.cwd(), "fixtures", "schema-v1", "demo");
     const files = await yamlFiles(fixtureRoot);
-    expect(files).toHaveLength(14);
+    expect(files).toHaveLength(17);
     for (const file of files) {
       const original = `# removed by formatter\n${await readFile(file, "utf8")}`;
       const once = formatYamlText(original, file);
@@ -35,11 +35,11 @@ describe("safe YAML profile", () => {
   });
 
   it.each([
-    ["YAML_DUPLICATE_KEY", "schema: gitpm/project@1\nid: one\nid: two\n"],
-    ["YAML_ANCHOR", "schema: gitpm/project@1\nvalue: &shared text\n"],
-    ["YAML_ALIAS", "schema: gitpm/project@1\nvalue: *shared\n"],
-    ["YAML_CUSTOM_TAG", "schema: gitpm/project@1\nvalue: !custom text\n"],
-    ["YAML_LINE_ENDING", "schema: gitpm/project@1\r\n"],
+    ["YAML_DUPLICATE_KEY", "schema: gitpm/project@2\nid: one\nid: two\n"],
+    ["YAML_ANCHOR", "schema: gitpm/project@2\nvalue: &shared text\n"],
+    ["YAML_ALIAS", "schema: gitpm/project@2\nvalue: *shared\n"],
+    ["YAML_CUSTOM_TAG", "schema: gitpm/project@2\nvalue: !custom text\n"],
+    ["YAML_LINE_ENDING", "schema: gitpm/project@2\r\n"],
   ])("rejects unsafe YAML with %s", (code, text) => {
     try {
       parseYamlDocument(text);
@@ -51,20 +51,20 @@ describe("safe YAML profile", () => {
   });
 
   it("enforces static line and depth limits", () => {
-    expect(() => parseYamlDocument(`schema: gitpm/project@1\nvalue: ${"x".repeat(20_001)}\n`))
+    expect(() => parseYamlDocument(`schema: gitpm/project@2\nvalue: ${"x".repeat(20_001)}\n`))
       .toThrowError(expect.objectContaining({ code: "YAML_LINE_LIMIT" }));
     const nested = `${Array.from({ length: 70 }, (_, index) => `${"  ".repeat(index)}level${index}:`).join("\n")}\n${"  ".repeat(70)}value\n`;
-    expect(() => parseYamlDocument(`schema: gitpm/project@1\nnested:\n${nested}`))
+    expect(() => parseYamlDocument(`schema: gitpm/project@2\nnested:\n${nested}`))
       .toThrowError(expect.objectContaining({ code: "YAML_DEPTH_LIMIT" }));
   });
 
   it("adds reproducible human-readable comments to every entity reference", () => {
-    const project = { schema: "gitpm/project@1", id: "P-26-111111", name: "Payments", lifecycle: "active" };
-    const milestone = { schema: "gitpm/milestone@1", id: "M-26-222222", project: project.id, name: "Public launch", lifecycle: "active" };
+    const project = { schema: "gitpm/project@2", id: "P-26-111111", name: "Payments", lifecycle: "active" };
+    const milestone = { schema: "gitpm/milestone@2", id: "M-26-222222", project: project.id, name: "Public launch", lifecycle: "active" };
     const person = { schema: "gitpm/person@1", id: "U-26-333333", name: "Ada\nLovelace", lifecycle: "active" };
-    const dependency = { schema: "gitpm/task@1", id: "T-26-444444", project: project.id, title: "Approve API", lifecycle: "active" };
+    const dependency = { schema: "gitpm/task@2", id: "T-26-444444", project: project.id, title: "Approve API", lifecycle: "active" };
     const task = {
-      schema: "gitpm/task@1", id: "T-26-555555", project: project.id, title: "Ship checkout", lifecycle: "active",
+      schema: "gitpm/task@2", id: "T-26-555555", project: project.id, title: "Ship checkout", lifecycle: "active",
       milestone: milestone.id, assignees: [person.id], depends_on: [dependency.id],
     };
     const labels = referenceLabelsForDocuments([project, milestone, person, dependency, task]);
@@ -88,7 +88,7 @@ describe("safe YAML profile", () => {
 
   it("places an optional Project group after lifecycle and preserves it idempotently", () => {
     const grouped = {
-      schema: "gitpm/project@1",
+      schema: "gitpm/project@2",
       id: "P-26-111111",
       name: "Payments",
       status: "backlog",
@@ -99,7 +99,7 @@ describe("safe YAML profile", () => {
     const formatted = formatYamlDocument(grouped);
 
     expect(formatted).toBe([
-      "schema: gitpm/project@1",
+      "schema: gitpm/project@2",
       "id: P-26-111111",
       "name: Payments",
       "status: backlog",

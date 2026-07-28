@@ -1,4 +1,4 @@
-schema: gitpm/task@1
+schema: gitpm/task@2
 id: T-26-GHW0CW # task: Обучить операторов и запустить портал
 project: P-26-ZMBJVA # project: Портал поддержки клиентов
 title: Обучить операторов и запустить портал
@@ -14,11 +14,13 @@ assignees:
   - U-26-2SRX95 # person: Анна Волкова
   - U-26-J4FH55 # person: Сергей Лебедев
   - U-26-0225HT # person: Наталья Павлова
-estimate_hours: 40
-start: 2026-10-19
-due: 2026-10-30
-depends_on:
-  - T-26-Z7YTG4 # task: Провести регрессионное тестирование
+schedules:
+  plan:
+    start: 2026-10-19
+    finish: 2026-10-30
+    effort_hours: 40
+    depends_on:
+      - T-26-Z7YTG4 # task: Провести регрессионное тестирование
 labels:
   - обучение
   - релиз

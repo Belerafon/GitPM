@@ -121,9 +121,9 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     setWorkspace((current) => {
       if (current === null) return current;
       const schema = result.document.schema;
-      if (result.document.id === current.project.document.id || schema === "gitpm/project@1") return { ...current, project: result, draft_fingerprint: result.draft_fingerprint };
-      if (schema === "gitpm/milestone@1") return { ...current, milestones: upsertEntity(current.milestones, result), draft_fingerprint: result.draft_fingerprint };
-      if (schema === "gitpm/task@1") return { ...current, tasks: upsertEntity(current.tasks, result), draft_fingerprint: result.draft_fingerprint };
+      if (result.document.id === current.project.document.id || schema === "gitpm/project@2") return { ...current, project: result, draft_fingerprint: result.draft_fingerprint };
+      if (schema === "gitpm/milestone@2") return { ...current, milestones: upsertEntity(current.milestones, result), draft_fingerprint: result.draft_fingerprint };
+      if (schema === "gitpm/task@2") return { ...current, tasks: upsertEntity(current.tasks, result), draft_fingerprint: result.draft_fingerprint };
       return current;
     });
   };
@@ -296,7 +296,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     if (workspace === null) return;
     const data = new FormData(event.currentTarget);
     const id = newUniqueEntityId(ENTITY_ID_PREFIX.milestone, new Set(workspace.milestones.map((item) => item.document.id)));
-    const document = { schema: "gitpm/milestone@1", id, project: projectId, name: String(data.get("name")).trim(), lifecycle: "active", description_markdown: String(data.get("description")), ...(data.get("due") ? { due: String(data.get("due")) } : {}) } as EntityDocument;
+    const document = { schema: "gitpm/milestone@2", id, project: projectId, name: String(data.get("name")).trim(), lifecycle: "active", description_markdown: String(data.get("description")), ...(data.get("due") ? { due: String(data.get("due")) } : {}) } as EntityDocument;
     void mutate(async () => await api.createEntity(draft.draft_id, "milestones", workspace.draft_fingerprint, document));
   };
 
@@ -325,7 +325,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     const id = newUniqueEntityId(ENTITY_ID_PREFIX.task, new Set(workspace.tasks.map((item) => item.document.id)));
     const start = String(data.get("start")); const due = String(data.get("due")); const estimate = String(data.get("estimate"));
     const document = {
-      schema: "gitpm/task@1", id, project: projectId, title: String(data.get("title")).trim(), type: String(data.get("type")), status: String(data.get("status")), lifecycle: "active",
+      schema: "gitpm/task@2", id, project: projectId, title: String(data.get("title")).trim(), type: String(data.get("type")), status: String(data.get("status")), lifecycle: "active",
       description_markdown: String(data.get("description")),
       assignees: data.getAll("assignees").map(String),
       ...(editor.parentId === undefined ? {} : { parent: editor.parentId }),

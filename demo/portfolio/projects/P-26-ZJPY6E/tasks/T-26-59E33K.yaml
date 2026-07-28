@@ -1,4 +1,4 @@
-schema: gitpm/task@1
+schema: gitpm/task@2
 id: T-26-59E33K # task: Подключить push-уведомления и предпочтения
 project: P-26-ZJPY6E # project: Мобильный банк 2.0
 title: Подключить push-уведомления и предпочтения
@@ -14,11 +14,13 @@ assignees:
   - U-26-RKTV2A # person: Дмитрий Орлов
   - U-26-FSB3GM # person: Илья Кузнецов
   - U-26-0225HT # person: Наталья Павлова
-estimate_hours: 64
-start: 2026-09-21
-due: 2026-10-16
-depends_on:
-  - T-26-7XAJ1Q # task: Реализовать API-агрегатор продуктов
+schedules:
+  plan:
+    start: 2026-09-21
+    finish: 2026-10-16
+    effort_hours: 64
+    depends_on:
+      - T-26-7XAJ1Q # task: Реализовать API-агрегатор продуктов
 labels:
   - интеграция
   - уведомления

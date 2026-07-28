@@ -53,7 +53,7 @@ class FakeApi implements GitPmApi {
   async reopenDraft(draftId: string) { return this.replace(draftId, { state: "open" }); }
   async cleanupDraft(draftId: string) { this.drafts = this.drafts.filter((item) => item.draft_id !== draftId); }
   async listEntities(_draftId: string, type: string, project?: string) {
-    const schemas: Record<string, string> = { projects: "gitpm/project@1", milestones: "gitpm/milestone@1", tasks: "gitpm/task@1", people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1" };
+    const schemas: Record<string, string> = { projects: "gitpm/project@2", milestones: "gitpm/milestone@2", tasks: "gitpm/task@2", people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1" };
     return this.entities.filter((item) => item.document.schema === schemas[type] && (project === undefined || item.document.project === project));
   }
   async projectWorkspace(draftId: string, projectId: string) {
@@ -68,7 +68,7 @@ class FakeApi implements GitPmApi {
   async deleteEntity() { /* not used */ }
   async getConfiguration(_draftId: string, kind: "statuses" | "issue-types"): Promise<ConfigurationResult> {
     const document = (kind === "statuses"
-      ? { schema: "gitpm/statuses@1", statuses: [{ slug: "backlog", title: "Backlog", active: true }] }
+      ? { schema: "gitpm/statuses@2", statuses: [{ slug: "backlog", title: "Backlog", active: true }] }
       : { schema: "gitpm/issue-types@1", issue_types: [{ slug: "task", title: "Task", active: true }] }) as ConfigurationDocument;
     return { document, path: kind, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) };
   }
@@ -176,9 +176,9 @@ describe("frontend draft lifecycle", () => {
     api.currentSession = { ...session, mode: "repository", repository: { name: "portfolio", path: "D:\\portfolio", has_remote: false }, gitlab: { configured: false } };
     api.drafts = [draft({ draft_id: "DRF-LOCAL" })];
     api.entities = [
-      { document: { schema: "gitpm/project@1", id: "P-26-7K4M9Q", name: "Alpha", status: "backlog", lifecycle: "active" }, path: "project.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) },
-      { document: { schema: "gitpm/milestone@1", id: "M-26-3RC7NA", project: "P-26-7K4M9Q", name: "Launch", lifecycle: "active", due: "2026-08-01" }, path: "milestone.yaml", blob_id: "c".repeat(40), draft_fingerprint: "b".repeat(64) },
-      { document: { schema: "gitpm/task@1", id: "T-26-X8D2FW", project: "P-26-7K4M9Q", milestone: "M-26-3RC7NA", title: "First task", type: "task", status: "backlog", lifecycle: "active" }, path: "task.yaml", blob_id: "d".repeat(40), draft_fingerprint: "b".repeat(64) },
+      { document: { schema: "gitpm/project@2", id: "P-26-7K4M9Q", name: "Alpha", status: "backlog", lifecycle: "active" }, path: "project.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) },
+      { document: { schema: "gitpm/milestone@2", id: "M-26-3RC7NA", project: "P-26-7K4M9Q", name: "Launch", lifecycle: "active", due: "2026-08-01" }, path: "milestone.yaml", blob_id: "c".repeat(40), draft_fingerprint: "b".repeat(64) },
+      { document: { schema: "gitpm/task@2", id: "T-26-X8D2FW", project: "P-26-7K4M9Q", milestone: "M-26-3RC7NA", title: "First task", type: "task", status: "backlog", lifecycle: "active" }, path: "task.yaml", blob_id: "d".repeat(40), draft_fingerprint: "b".repeat(64) },
     ];
     window.history.replaceState({}, "", "/projects/P-26-7K4M9Q/stages/M-26-3RC7NA");
     render(<App api={api} browserLanguages={["en"]} />);
@@ -235,7 +235,7 @@ describe("frontend draft lifecycle", () => {
     const api = new DelayedApi();
     api.drafts = [draft()];
     api.entities = [{
-      document: { schema: "gitpm/project@1", id: "P-26-7K4M9Q", name: "Alpha", status: "backlog", lifecycle: "active" },
+      document: { schema: "gitpm/project@2", id: "P-26-7K4M9Q", name: "Alpha", status: "backlog", lifecycle: "active" },
       path: "projects/P-26-7K4M9Q/project.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64),
     }];
     render(<App api={api} browserLanguages={["en"]} />);
@@ -264,15 +264,15 @@ describe("frontend draft lifecycle", () => {
     api.drafts = [draft({ draft_id: "DRF-LOCAL", owner_gitlab_user_id: "local-user" })];
     api.entities = [
       {
-        document: { schema: "gitpm/project@1", id: "P-26-7K4M9Q", name: "Alpha", status: "backlog", lifecycle: "active" },
+        document: { schema: "gitpm/project@2", id: "P-26-7K4M9Q", name: "Alpha", status: "backlog", lifecycle: "active" },
         path: "projects/P-26-7K4M9Q/project.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64),
       },
       {
-        document: { schema: "gitpm/milestone@1", id: "M-26-3RC7NA", project: "P-26-7K4M9Q", name: "Launch", lifecycle: "active" },
+        document: { schema: "gitpm/milestone@2", id: "M-26-3RC7NA", project: "P-26-7K4M9Q", name: "Launch", lifecycle: "active" },
         path: "projects/P-26-7K4M9Q/milestones/M-26-3RC7NA.yaml", blob_id: "c".repeat(40), draft_fingerprint: "b".repeat(64),
       },
       {
-        document: { schema: "gitpm/task@1", id: "T-26-X8D2FW", project: "P-26-7K4M9Q", title: "First task", type: "task", status: "backlog", lifecycle: "active" },
+        document: { schema: "gitpm/task@2", id: "T-26-X8D2FW", project: "P-26-7K4M9Q", title: "First task", type: "task", status: "backlog", lifecycle: "active" },
         path: "projects/P-26-7K4M9Q/tasks/T-26-X8D2FW.yaml", blob_id: "d".repeat(40), draft_fingerprint: "b".repeat(64),
       },
     ];

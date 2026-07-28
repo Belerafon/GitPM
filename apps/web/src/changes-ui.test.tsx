@@ -16,14 +16,14 @@ class ChangesApi {
     { path: "projects/P-26-111111/tasks/T-26-222222.yaml", kind: "Deleted", diff_token: "three", diff: "@@ -1,1 +0,0 @@\n-old\n", hunks: [{ old_start: 1, old_count: 1, new_start: 0, new_count: 0, lines: ["-old"] }] },
   ] };
   semantic: SemanticDiff = {
-    created: [{ id: "T-26-111111", path: "projects/P-26-111111/tasks/T-26-111111.yaml", schema: "gitpm/task@1", project: "P-26-111111", fields: [{ field: "title", after: "New task" }] }],
-    updated: [{ id: "P-26-111111", path: "projects/P-26-111111/project.yaml", schema: "gitpm/project@1", project: "P-26-111111", fields: [{ field: "status", before: "backlog", after: "active" }] }],
-    archived: [], deleted: [{ id: "T-26-222222", path: "projects/P-26-111111/tasks/T-26-222222.yaml", schema: "gitpm/task@1", project: "P-26-111111", fields: [{ field: "title", before: "Old task" }] }],
+    created: [{ id: "T-26-111111", path: "projects/P-26-111111/tasks/T-26-111111.yaml", schema: "gitpm/task@2", project: "P-26-111111", fields: [{ field: "title", after: "New task" }] }],
+    updated: [{ id: "P-26-111111", path: "projects/P-26-111111/project.yaml", schema: "gitpm/project@2", project: "P-26-111111", fields: [{ field: "status", before: "backlog", after: "active" }] }],
+    archived: [], deleted: [{ id: "T-26-222222", path: "projects/P-26-111111/tasks/T-26-222222.yaml", schema: "gitpm/task@2", project: "P-26-111111", fields: [{ field: "title", before: "Old task" }] }],
     counts: { created: 1, updated: 1, archived: 0, deleted: 1 }, affected_projects: ["P-26-111111"], unclassified_files: [],
     file_entities: [
-      { path: "projects/P-26-111111/project.yaml", schema: "gitpm/project@1", id: "P-26-111111", display_name: "Alpha project" },
-      { path: "projects/P-26-111111/tasks/T-26-111111.yaml", schema: "gitpm/task@1", id: "T-26-111111", display_name: "New task" },
-      { path: "projects/P-26-111111/tasks/T-26-222222.yaml", schema: "gitpm/task@1", id: "T-26-222222", display_name: "Old task" },
+      { path: "projects/P-26-111111/project.yaml", schema: "gitpm/project@2", id: "P-26-111111", display_name: "Alpha project" },
+      { path: "projects/P-26-111111/tasks/T-26-111111.yaml", schema: "gitpm/task@2", id: "T-26-111111", display_name: "New task" },
+      { path: "projects/P-26-111111/tasks/T-26-222222.yaml", schema: "gitpm/task@2", id: "T-26-222222", display_name: "Old task" },
     ],
   };
   listChanges = vi.fn(async () => this.committed ? { changed_files_count: 0, affected_projects: [], files: [] } : this.changes);

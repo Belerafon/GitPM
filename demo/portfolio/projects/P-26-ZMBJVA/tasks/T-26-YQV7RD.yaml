@@ -1,4 +1,4 @@
-schema: gitpm/task@1
+schema: gitpm/task@2
 id: T-26-YQV7RD # task: Интегрировать портал с CRM и телефонией
 project: P-26-ZMBJVA # project: Портал поддержки клиентов
 title: Интегрировать портал с CRM и телефонией
@@ -14,12 +14,14 @@ assignees:
   - U-26-RKTV2A # person: Дмитрий Орлов
   - U-26-FSB3GM # person: Илья Кузнецов
   - U-26-0225HT # person: Наталья Павлова
-estimate_hours: 88
-start: 2026-09-14
-due: 2026-10-09
-depends_on:
-  - T-26-CMQ19E # task: Подключить единый вход клиента
-  - T-26-F6QFVC # task: Реализовать форму обращения с вложениями
+schedules:
+  plan:
+    start: 2026-09-14
+    finish: 2026-10-09
+    effort_hours: 88
+    depends_on:
+      - T-26-CMQ19E # task: Подключить единый вход клиента
+      - T-26-F6QFVC # task: Реализовать форму обращения с вложениями
 labels:
   - интеграция
   - crm

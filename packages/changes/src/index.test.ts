@@ -128,7 +128,7 @@ describe("changes and restore service", () => {
     await writeFile(archivedAbsolute, (await readFile(archivedAbsolute, "utf8")).replace("lifecycle: active", "lifecycle: archived"), "utf8");
     await rm(deletedAbsolute);
     await writeFile(path.join(draft.worktree_path, ...createdTask.split("/")), [
-      "schema: gitpm/task@1", "id: T-26-9NJTEF", "project: P-26-MGP84K",
+      "schema: gitpm/task@2", "id: T-26-9NJTEF", "project: P-26-MGP84K",
       "title: New task", "type: task", "status: todo", "lifecycle: active", "description_markdown: New", "acceptance_criteria_markdown: Done", "assignees: []", "depends_on: []", "labels: []", "",
     ].join("\n"), "utf8");
 
@@ -137,9 +137,9 @@ describe("changes and restore service", () => {
     expect(semantic.updated[0]).toMatchObject({ id: "P-26-MGP84K", fields: expect.arrayContaining([expect.objectContaining({ field: "name", before: "GitPM launch", after: "GitPM alpha" })]) });
     expect(semantic.archived[0]).toMatchObject({ fields: expect.arrayContaining([expect.objectContaining({ field: "lifecycle", before: "active", after: "archived" })]) });
     expect(semantic.file_entities).toEqual(expect.arrayContaining([
-      expect.objectContaining({ path: projectFile, schema: "gitpm/project@1", id: "P-26-MGP84K", display_name: "GitPM alpha" }),
-      expect.objectContaining({ path: archivedTask, schema: "gitpm/task@1", display_name: expect.any(String) }),
-      expect.objectContaining({ path: deletedTask, schema: "gitpm/task@1", display_name: expect.any(String) }),
+      expect.objectContaining({ path: projectFile, schema: "gitpm/project@2", id: "P-26-MGP84K", display_name: "GitPM alpha" }),
+      expect.objectContaining({ path: archivedTask, schema: "gitpm/task@2", display_name: expect.any(String) }),
+      expect.objectContaining({ path: deletedTask, schema: "gitpm/task@2", display_name: expect.any(String) }),
     ]));
     expect(semantic.affected_projects).toEqual(["P-26-MGP84K"]);
     expect((await service.list("DRF-CHANGES")).files.find((file) => file.kind === "Added")?.diff).toContain("--- /dev/null");

@@ -111,7 +111,7 @@ function documentIdentity(document: GitPmDocument): { id: string; schema: string
   if (typeof id !== "string") return undefined;
   const project = typeof document.project === "string"
     ? document.project
-    : document.schema === "gitpm/project@1" ? id : undefined;
+    : document.schema === "gitpm/project@2" ? id : undefined;
   return { id, schema: document.schema, ...(project === undefined ? {} : { project }) };
 }
 

@@ -1,7 +1,9 @@
-schema: gitpm/milestone@1
+schema: gitpm/milestone@2
 id: M-26-T4JTV6 # milestone: Первые витрины в новой платформе
 project: P-26-7VWANM # project: Переезд аналитической платформы
 name: Первые витрины в новой платформе
 lifecycle: active
 description_markdown: Критичные продуктовые витрины работают параллельно со старой системой.
-due: 2026-10-30
+schedules:
+  plan:
+    finish: 2026-10-30

@@ -1,4 +1,4 @@
-schema: gitpm/task@1
+schema: gitpm/task@2
 id: T-26-T7STGV # task: Собрать единую витрину продуктов
 project: P-26-ZJPY6E # project: Мобильный банк 2.0
 title: Собрать единую витрину продуктов
@@ -14,12 +14,14 @@ assignees:
   - U-26-RKTV2A # person: Дмитрий Орлов
   - U-26-NEDN00 # person: Мария Соколова
   - U-26-ETKSWS # person: Ольга Новикова
-estimate_hours: 80
-start: 2026-09-07
-due: 2026-10-02
-depends_on:
-  - T-26-ZQFF0R # task: Подготовить дизайн-систему мобильного приложения
-  - T-26-7XAJ1Q # task: Реализовать API-агрегатор продуктов
+schedules:
+  plan:
+    start: 2026-09-07
+    finish: 2026-10-02
+    effort_hours: 80
+    depends_on:
+      - T-26-ZQFF0R # task: Подготовить дизайн-систему мобильного приложения
+      - T-26-7XAJ1Q # task: Реализовать API-агрегатор продуктов
 labels:
   - frontend
   - продукты

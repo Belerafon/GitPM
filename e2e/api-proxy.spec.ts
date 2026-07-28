@@ -162,7 +162,7 @@ test.describe("GitPM API through the Vite proxy", () => {
       const configuration = await request.get(`/api/drafts/DRF-API-HISTORY/config/${kind}`);
       expect(configuration.status(), await configuration.text()).toBe(200);
       expect(await configuration.json()).toMatchObject({
-        document: { schema: kind === "statuses" ? "gitpm/statuses@1" : "gitpm/issue-types@1" },
+        document: { schema: kind === "statuses" ? "gitpm/statuses@2" : "gitpm/issue-types@1" },
       });
     }
 

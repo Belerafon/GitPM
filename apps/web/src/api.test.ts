@@ -100,7 +100,7 @@ describe("HttpGitPmApi request bodies", () => {
       headers: { "content-type": "application/json" },
     }));
     vi.stubGlobal("fetch", fetchMock);
-    const entity = { document: { schema: "gitpm/project@1", id: "P-26-111111" }, path: "projects/P-26-111111/project.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) } as EntityResult;
+    const entity = { document: { schema: "gitpm/project@2", id: "P-26-111111" }, path: "projects/P-26-111111/project.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) } as EntityResult;
 
     await new HttpGitPmApi().deleteEntity("DRF-1", "projects", entity, entity.draft_fingerprint, false, true);
 
@@ -135,8 +135,8 @@ describe("HttpGitPmApi request bodies", () => {
   it("accepts configuration documents without entity identity fields", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
       document: {
-        schema: "gitpm/statuses@1",
-        statuses: [{ slug: "backlog", title: "Backlog", color: "gray", active: true }],
+        schema: "gitpm/statuses@2",
+        statuses: [{ slug: "backlog", title: "Backlog", color: "gray", active: true, category: "backlog" }],
       },
       path: ".gitpm/statuses.yaml",
       blob_id: "a".repeat(40),
@@ -146,14 +146,14 @@ describe("HttpGitPmApi request bodies", () => {
     const result = await new HttpGitPmApi().getConfiguration("DRF-1", "statuses");
 
     expect(result.document).toEqual({
-      schema: "gitpm/statuses@1",
-      statuses: [{ slug: "backlog", title: "Backlog", color: "gray", active: true }],
+      schema: "gitpm/statuses@2",
+      statuses: [{ slug: "backlog", title: "Backlog", color: "gray", active: true, category: "backlog" }],
     });
   });
 
   it("rejects entity responses that violate the shared runtime contract", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify([{
-      document: { schema: "gitpm/statuses@1", statuses: [] },
+      document: { schema: "gitpm/statuses@2", statuses: [] },
       path: ".gitpm/statuses.yaml",
       blob_id: "a".repeat(40),
       draft_fingerprint: "b".repeat(64),

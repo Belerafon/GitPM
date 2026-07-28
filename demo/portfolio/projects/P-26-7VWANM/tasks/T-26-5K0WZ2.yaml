@@ -1,4 +1,4 @@
-schema: gitpm/task@1
+schema: gitpm/task@2
 id: T-26-5K0WZ2 # task: Развернуть контуры разработки и эксплуатации
 project: P-26-7VWANM # project: Переезд аналитической платформы
 title: Развернуть контуры разработки и эксплуатации
@@ -13,11 +13,13 @@ milestone: M-26-9HGQWY # milestone: Отключение старого хран
 assignees:
   - U-26-FSB3GM # person: Илья Кузнецов
   - U-26-1MV0QD # person: Максим Фёдоров
-estimate_hours: 72
-start: 2026-09-07
-due: 2026-09-30
-depends_on:
-  - T-26-ZDA1WV # task: Спроектировать целевую архитектуру хранилища
+schedules:
+  plan:
+    start: 2026-09-07
+    finish: 2026-09-30
+    effort_hours: 72
+    depends_on:
+      - T-26-ZDA1WV # task: Спроектировать целевую архитектуру хранилища
 labels:
   - devops
   - инфраструктура

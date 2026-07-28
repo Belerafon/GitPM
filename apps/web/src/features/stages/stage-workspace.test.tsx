@@ -11,15 +11,15 @@ const draft: DraftStatus = { draft_id: "DRF-STAGES", owner_gitlab_user_id: "42",
 const result = (document: EntityDocument): EntityResult => ({ document, path: `${document.id}.yaml`, blob_id: "a".repeat(40), draft_fingerprint: fingerprint });
 const configuration = (document: ConfigurationDocument): ConfigurationResult => ({ document, path: document.schema, blob_id: "a".repeat(40), draft_fingerprint: fingerprint });
 
-const project = result({ schema: "gitpm/project@1", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
-const archivedProject = result({ schema: "gitpm/project@1", id: "P-26-999999", name: "Archived", status: "backlog", lifecycle: "archived", group: "Research" });
+const project = result({ schema: "gitpm/project@2", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
+const archivedProject = result({ schema: "gitpm/project@2", id: "P-26-999999", name: "Archived", status: "backlog", lifecycle: "archived", group: "Research" });
 const person = result({ schema: "gitpm/person@1", id: "U-26-888888", name: "Ada", weekly_capacity_hours: 40, calendar: "C-26-999999", lifecycle: "active" });
-const stage = result({ schema: "gitpm/milestone@1", id: "M-26-222222", project: project.document.id, name: "Launch", lifecycle: "active", due: "2026-08-01" });
-const laterStage = result({ schema: "gitpm/milestone@1", id: "M-26-777777", project: project.document.id, name: "Follow-up", lifecycle: "active", due: "2026-09-01" });
-const linked = result({ schema: "gitpm/task@1", id: "T-26-333333", project: project.document.id, milestone: stage.document.id, title: "Linked task", type: "task", status: "done", lifecycle: "active", estimate_hours: 20, assignees: [person.document.id] });
-const other = result({ schema: "gitpm/task@1", id: "T-26-444444", project: project.document.id, title: "Without stage", type: "task", status: "backlog", lifecycle: "active" });
-const urgent = result({ schema: "gitpm/task@1", id: "T-26-555555", project: project.document.id, milestone: stage.document.id, title: "Zebra task", type: "task", status: "backlog", lifecycle: "active", due: "2026-07-20", estimate_hours: 2 });
-const large = result({ schema: "gitpm/task@1", id: "T-26-666666", project: project.document.id, milestone: stage.document.id, title: "Alpha task", type: "task", status: "backlog", lifecycle: "active", due: "2026-09-01", estimate_hours: 13 });
+const stage = result({ schema: "gitpm/milestone@2", id: "M-26-222222", project: project.document.id, name: "Launch", lifecycle: "active", due: "2026-08-01" });
+const laterStage = result({ schema: "gitpm/milestone@2", id: "M-26-777777", project: project.document.id, name: "Follow-up", lifecycle: "active", due: "2026-09-01" });
+const linked = result({ schema: "gitpm/task@2", id: "T-26-333333", project: project.document.id, milestone: stage.document.id, title: "Linked task", type: "task", status: "done", lifecycle: "active", estimate_hours: 20, assignees: [person.document.id] });
+const other = result({ schema: "gitpm/task@2", id: "T-26-444444", project: project.document.id, title: "Without stage", type: "task", status: "backlog", lifecycle: "active" });
+const urgent = result({ schema: "gitpm/task@2", id: "T-26-555555", project: project.document.id, milestone: stage.document.id, title: "Zebra task", type: "task", status: "backlog", lifecycle: "active", due: "2026-07-20", estimate_hours: 2 });
+const large = result({ schema: "gitpm/task@2", id: "T-26-666666", project: project.document.id, milestone: stage.document.id, title: "Alpha task", type: "task", status: "backlog", lifecycle: "active", due: "2026-09-01", estimate_hours: 13 });
 
 function api(
   initialTasks: readonly EntityResult[] = [linked, other, large, urgent],
@@ -40,7 +40,7 @@ function api(
   return {
     projectWorkspace: vi.fn(async () => ({ project: currentProject, milestones: currentStages, tasks: currentTasks, draft_fingerprint: fingerprint })),
     getConfiguration: vi.fn(async (_draftId: string, kind: "statuses" | "issue-types") => configuration(kind === "statuses"
-      ? { schema: "gitpm/statuses@1", statuses: [{ slug: "backlog", title: "Backlog", active: true }, { slug: "done", title: "Done", active: true }] }
+      ? { schema: "gitpm/statuses@2", statuses: [{ slug: "backlog", title: "Backlog", color: "gray", active: true, category: "backlog" }, { slug: "done", title: "Done", color: "green", active: true, category: "done" }] }
       : { schema: "gitpm/issue-types@1", issue_types: [{ slug: "task", title: "Task", active: true }] })),
     listEntities: vi.fn(async (_draftId: string, type: string) => type === "people" ? [person] : type === "projects" ? [currentProject, archivedProject] : []),
     createEntity,
@@ -238,16 +238,16 @@ describe("project plan and stage workspace", () => {
 
   it("renders milestone task_order directly even when tasks from other milestones interleave by due date", async () => {
     const orderedTasks = [
-      result({ schema: "gitpm/task@1", id: "T-26-AAAAAA", project: project.document.id, milestone: stage.document.id, title: "Ordered A", type: "task", status: "backlog", lifecycle: "active", due: "2026-08-01" }),
-      result({ schema: "gitpm/task@1", id: "T-26-BBBBBB", project: project.document.id, milestone: stage.document.id, title: "Ordered B", type: "task", status: "backlog", lifecycle: "active", due: "2026-08-04" }),
-      result({ schema: "gitpm/task@1", id: "T-26-CCCCCC", project: project.document.id, milestone: stage.document.id, title: "Ordered C", type: "task", status: "backlog", lifecycle: "active", due: "2026-08-02" }),
-      result({ schema: "gitpm/task@1", id: "T-26-DDDDDD", project: project.document.id, milestone: stage.document.id, title: "Ordered D", type: "task", status: "backlog", lifecycle: "active", due: "2026-08-03" }),
+      result({ schema: "gitpm/task@2", id: "T-26-AAAAAA", project: project.document.id, milestone: stage.document.id, title: "Ordered A", type: "task", status: "backlog", lifecycle: "active", due: "2026-08-01" }),
+      result({ schema: "gitpm/task@2", id: "T-26-BBBBBB", project: project.document.id, milestone: stage.document.id, title: "Ordered B", type: "task", status: "backlog", lifecycle: "active", due: "2026-08-04" }),
+      result({ schema: "gitpm/task@2", id: "T-26-CCCCCC", project: project.document.id, milestone: stage.document.id, title: "Ordered C", type: "task", status: "backlog", lifecycle: "active", due: "2026-08-02" }),
+      result({ schema: "gitpm/task@2", id: "T-26-DDDDDD", project: project.document.id, milestone: stage.document.id, title: "Ordered D", type: "task", status: "backlog", lifecycle: "active", due: "2026-08-03" }),
     ];
     const distractors = [
-      result({ schema: "gitpm/task@1", id: "T-26-XXXXXX", project: project.document.id, milestone: laterStage.document.id, title: "Distractor 0", type: "task", status: "backlog", lifecycle: "active", due: "2026-08-01" }),
-      result({ schema: "gitpm/task@1", id: "T-26-YYYYYY", project: project.document.id, milestone: laterStage.document.id, title: "Distractor 1", type: "task", status: "backlog", lifecycle: "active", due: "2026-08-02" }),
-      result({ schema: "gitpm/task@1", id: "T-26-ZZZZZZ", project: project.document.id, milestone: laterStage.document.id, title: "Distractor 2", type: "task", status: "backlog", lifecycle: "active", due: "2026-08-03" }),
-      result({ schema: "gitpm/task@1", id: "T-26-WWWWWW", project: project.document.id, milestone: laterStage.document.id, title: "Distractor 3", type: "task", status: "backlog", lifecycle: "active", due: "2026-08-05" }),
+      result({ schema: "gitpm/task@2", id: "T-26-XXXXXX", project: project.document.id, milestone: laterStage.document.id, title: "Distractor 0", type: "task", status: "backlog", lifecycle: "active", due: "2026-08-01" }),
+      result({ schema: "gitpm/task@2", id: "T-26-YYYYYY", project: project.document.id, milestone: laterStage.document.id, title: "Distractor 1", type: "task", status: "backlog", lifecycle: "active", due: "2026-08-02" }),
+      result({ schema: "gitpm/task@2", id: "T-26-ZZZZZZ", project: project.document.id, milestone: laterStage.document.id, title: "Distractor 2", type: "task", status: "backlog", lifecycle: "active", due: "2026-08-03" }),
+      result({ schema: "gitpm/task@2", id: "T-26-WWWWWW", project: project.document.id, milestone: laterStage.document.id, title: "Distractor 3", type: "task", status: "backlog", lifecycle: "active", due: "2026-08-05" }),
     ];
     const orderedStage = result({ ...stage.document, task_order: orderedTasks.map((task) => task.document.id) });
     const client = api(

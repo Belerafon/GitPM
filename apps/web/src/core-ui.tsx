@@ -200,10 +200,10 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
     setError(null); setFeedback({ kind: "saving", text: t("feedback.saving") });
     try {
       const result = await operation(); setFingerprint(result.draft_fingerprint);
-      if (result.document.schema === "gitpm/project@1") setProjects((current) => upsertEntity(current, result));
+      if (result.document.schema === "gitpm/project@2") setProjects((current) => upsertEntity(current, result));
       if (result.document.schema === "gitpm/person@1") setPeople((current) => upsertEntity(current, result));
-      if (result.document.schema === "gitpm/milestone@1") setMilestones((current) => upsertEntity(current, result));
-      if (result.document.schema === "gitpm/task@1") setTasks((current) => upsertEntity(current, result));
+      if (result.document.schema === "gitpm/milestone@2") setMilestones((current) => upsertEntity(current, result));
+      if (result.document.schema === "gitpm/task@2") setTasks((current) => upsertEntity(current, result));
       markLocal({ [result.document.id]: ["$local"] }); await onChanged(); await load(preferredProject); setFeedback({ kind: "saved", text: t("feedback.saved") }); return result;
     }
     catch (caught) { setFeedback(null); setError(formatApiError(caught)); return null; }
@@ -264,17 +264,17 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
       if (selectedGroup.duplicate) setError(t("core.groupAlreadyExists"));
       return;
     }
-    const document = { schema: "gitpm/project@1", id, name: String(data.get("name")), status: statusOptions[0]?.slug ?? "backlog", lifecycle: "active", ...(selectedGroup.group === "" ? {} : { group: selectedGroup.group }), description_markdown: String(data.get("description")) } as EntityDocument;
+    const document = { schema: "gitpm/project@2", id, name: String(data.get("name")), status: statusOptions[0]?.slug ?? "backlog", lifecycle: "active", ...(selectedGroup.group === "" ? {} : { group: selectedGroup.group }), description_markdown: String(data.get("description")) } as EntityDocument;
     void mutate(async () => await api.createEntity(draft.draft_id, "projects", fingerprint, document), id).then((result) => { if (result !== null) { setCreateEditor(null); onNavigate("projects", { projectId: id }); } });
   };
   const createMilestone = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); const data = new FormData(event.currentTarget);
-    const document = { schema: "gitpm/milestone@1", id: newUniqueEntityId(ENTITY_ID_PREFIX.milestone, new Set(milestones.map((item) => item.document.id))), project: projectId, name: String(data.get("name")), lifecycle: "active", description_markdown: String(data.get("description")), ...(data.get("due") ? { due: String(data.get("due")) } : {}) } as EntityDocument;
+    const document = { schema: "gitpm/milestone@2", id: newUniqueEntityId(ENTITY_ID_PREFIX.milestone, new Set(milestones.map((item) => item.document.id))), project: projectId, name: String(data.get("name")), lifecycle: "active", description_markdown: String(data.get("description")), ...(data.get("due") ? { due: String(data.get("due")) } : {}) } as EntityDocument;
     void mutate(async () => await api.createEntity(draft.draft_id, "milestones", fingerprint, document)).then((result) => { if (result !== null) setCreateEditor(null); });
   };
   const createTask = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); const data = new FormData(event.currentTarget); const milestone = String(data.get("milestone")); const start = String(data.get("start")); const due = String(data.get("due")); const estimate = String(data.get("estimate"));
-    const document = { schema: "gitpm/task@1", id: newUniqueEntityId(ENTITY_ID_PREFIX.task, new Set(tasks.map((item) => item.document.id))), project: projectId, title: String(data.get("title")), type: typeOptions[0]?.slug ?? "task", status: String(data.get("status")), lifecycle: "active", description_markdown: String(data.get("description")), assignees: data.getAll("assignees").map(String), ...(milestone ? { milestone } : {}), ...(start ? { start } : {}), ...(due ? { due } : {}), ...(estimate ? { estimate_hours: Number(estimate) } : {}) } as EntityDocument;
+    const document = { schema: "gitpm/task@2", id: newUniqueEntityId(ENTITY_ID_PREFIX.task, new Set(tasks.map((item) => item.document.id))), project: projectId, title: String(data.get("title")), type: typeOptions[0]?.slug ?? "task", status: String(data.get("status")), lifecycle: "active", description_markdown: String(data.get("description")), assignees: data.getAll("assignees").map(String), ...(milestone ? { milestone } : {}), ...(start ? { start } : {}), ...(due ? { due } : {}), ...(estimate ? { estimate_hours: Number(estimate) } : {}) } as EntityDocument;
     void mutate(async () => await api.createEntity(draft.draft_id, "tasks", fingerprint, document)).then((result) => { if (result !== null) setCreateEditor(null); });
   };
 
@@ -461,7 +461,7 @@ export function TaskPanel({ api, catalog, draft, entity, fingerprint, milestones
     const data = new FormData(event.currentTarget);
     const start = String(data.get("start")); const due = String(data.get("due")); const estimate = String(data.get("estimate"));
     const document = {
-      schema: "gitpm/task@1",
+      schema: "gitpm/task@2",
       id: newUniqueEntityId(ENTITY_ID_PREFIX.task, new Set(tasks.map((item) => item.document.id))),
       project: entity.document.project,
       parent: entity.document.id,

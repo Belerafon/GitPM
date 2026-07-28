@@ -741,19 +741,62 @@ allowed_top_level_directories:
 ui_poll_interval_seconds: 5
 `;
 
-const INIT_STATUSES_YAML = `schema: gitpm/statuses@1
+const INIT_STATUSES_YAML = `schema: gitpm/statuses@2
 statuses:
   - slug: backlog
     title: Backlog
     color: gray
     active: true
+    category: backlog
   - slug: in-progress
     title: In progress
     color: blue
     active: true
+    category: active
   - slug: done
     title: Done
     color: green
+    active: true
+    category: done
+`;
+
+const INIT_SCHEDULE_TRACKS_YAML = `schema: gitpm/schedule-tracks@1
+tracks:
+  - slug: plan
+    title: Working plan
+    kind: manual
+    capabilities:
+      - dates
+      - effort
+      - dependencies
+  - slug: actual
+    title: Actual activity
+    kind: actual
+    source: time_entries
+defaults:
+  enabled_tracks:
+    - plan
+    - actual
+  primary_track: plan
+  workload_track: plan
+  dashboard_tracks:
+    - plan
+    - actual
+`;
+
+const INIT_WORK_CATEGORIES_YAML = `schema: gitpm/work-categories@1
+categories:
+  - slug: regular
+    title: Regular work
+    active: true
+  - slug: rework
+    title: Rework
+    active: true
+  - slug: warranty
+    title: Warranty
+    active: true
+  - slug: support
+    title: Support
     active: true
 `;
 
@@ -840,6 +883,8 @@ async function runInit(args: readonly string[], cwd: string, dependencies: NonNu
   await writeFile(path.join(target, ".gitpm", "repository.yaml"), initRepositoryYaml(calendarId), "utf8");
   await writeFile(path.join(target, ".gitpm", "statuses.yaml"), INIT_STATUSES_YAML, "utf8");
   await writeFile(path.join(target, ".gitpm", "issue-types.yaml"), INIT_ISSUE_TYPES_YAML, "utf8");
+  await writeFile(path.join(target, ".gitpm", "schedule-tracks.yaml"), INIT_SCHEDULE_TRACKS_YAML, "utf8");
+  await writeFile(path.join(target, ".gitpm", "work-categories.yaml"), INIT_WORK_CATEGORIES_YAML, "utf8");
   await writeFile(path.join(target, "calendars", `${calendarId}.yaml`), initCalendarYaml(calendarId), "utf8");
   await writeFile(path.join(target, "README.md"), INIT_README_MD, "utf8");
   await writeFile(path.join(target, ".gitignore"), INIT_GITIGNORE, "utf8");

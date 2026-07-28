@@ -1,4 +1,4 @@
-schema: gitpm/task@1
+schema: gitpm/task@2
 id: T-26-SQ5YK5 # task: Перевести аналитику на новую платформу
 project: P-26-7VWANM # project: Переезд аналитической платформы
 title: Перевести аналитику на новую платформу
@@ -14,9 +14,11 @@ assignees:
   - U-26-FSB3GM # person: Илья Кузнецов
   - U-26-ETKSWS # person: Ольга Новикова
   - U-26-AD9KDK # person: Алексей Виноградов
-estimate_hours: 120
-start: 2026-08-10
-due: 2027-01-29
+schedules:
+  plan:
+    start: 2026-08-10
+    finish: 2027-01-29
+    effort_hours: 120
 labels:
   - миграция
   - управление

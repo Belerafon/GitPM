@@ -76,9 +76,9 @@ describe("entity create planning", () => {
 
 describe("entity update planning", () => {
   const documents: GitPmDocument[] = [
-    { schema: "gitpm/project@1", id: "P-26-Y9S1D8", name: "Project", status: "backlog", lifecycle: "active" },
-    { schema: "gitpm/task@1", id: "T-26-FM5Q4W", project: "P-26-Y9S1D8", title: "Task", type: "task", status: "backlog", lifecycle: "active" },
-    { schema: "gitpm/milestone@1", id: "M-26-KK4VXH", project: "P-26-Y9S1D8", name: "Milestone", lifecycle: "active" },
+    { schema: "gitpm/project@2", id: "P-26-Y9S1D8", name: "Project", status: "backlog", lifecycle: "active" },
+    { schema: "gitpm/task@2", id: "T-26-FM5Q4W", project: "P-26-Y9S1D8", title: "Task", type: "task", status: "backlog", lifecycle: "active" },
+    { schema: "gitpm/milestone@2", id: "M-26-KK4VXH", project: "P-26-Y9S1D8", name: "Milestone", lifecycle: "active" },
     { schema: "gitpm/person@1", id: "U-26-KB9RXB", name: "Person", email: "old@example.test", weekly_capacity_hours: 40, calendar: "C-26-7GQW87", lifecycle: "active" },
     { schema: "gitpm/team@1", id: "G-26-22K88P", name: "Team", members: [], lifecycle: "active" },
     { schema: "gitpm/calendar@1", id: "C-26-7GQW87", name: "Calendar", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" },
@@ -198,7 +198,7 @@ describe("domain entity store", () => {
     await manager.createDraft("DRF-WORKSPACE", "42");
     const workspace = await store.projectWorkspace("DRF-WORKSPACE", "P-26-MGP84K");
 
-    expect(workspace.project.document).toMatchObject({ id: "P-26-MGP84K", schema: "gitpm/project@1" });
+    expect(workspace.project.document).toMatchObject({ id: "P-26-MGP84K", schema: "gitpm/project@2" });
     expect(workspace.milestones.every((item) => item.document.project === "P-26-MGP84K")).toBe(true);
     expect(workspace.tasks.every((item) => item.document.project === "P-26-MGP84K")).toBe(true);
     expect(workspace.draft_fingerprint).toBe(workspace.project.draft_fingerprint);
@@ -220,8 +220,8 @@ describe("domain entity store", () => {
     const { manager, store, comments } = await runtime();
     const draft = await manager.createDraft("DRF-MOVE", "42");
     const task = await store.get("DRF-MOVE", "tasks", "T-26-G2TG9R");
-    const child = await store.create("DRF-MOVE", "42", draft.fingerprint, { schema: "gitpm/task@1", id: "T-26-ABCDEF", project: task.document.project, parent: task.document.id, title: "Child task", type: "task", status: "backlog", lifecycle: "active" });
-    const grandchild = await store.create("DRF-MOVE", "42", child.draft_fingerprint, { schema: "gitpm/task@1", id: "T-26-BCDEFG", project: task.document.project, parent: child.document.id, title: "Grandchild task", type: "task", status: "backlog", lifecycle: "active" });
+    const child = await store.create("DRF-MOVE", "42", draft.fingerprint, { schema: "gitpm/task@2", id: "T-26-ABCDEF", project: task.document.project, parent: task.document.id, title: "Child task", type: "task", status: "backlog", lifecycle: "active" });
+    const grandchild = await store.create("DRF-MOVE", "42", child.draft_fingerprint, { schema: "gitpm/task@2", id: "T-26-BCDEFG", project: task.document.project, parent: child.document.id, title: "Grandchild task", type: "task", status: "backlog", lifecycle: "active" });
     const comment = await comments.create("DRF-MOVE", String(task.document.project), String(grandchild.document.id), grandchild.draft_fingerprint, "Moves with the subtree", { userId: "42", role: "Developer", identity: { provider: "git", subject: "author@example.test", display_name: "Author" } });
     const moved = await store.moveTask("DRF-MOVE", "42", String(task.document.id), comment.draft_fingerprint, task.blob_id, "P-26-MGP84K", "M-26-461GDJ");
 
@@ -241,9 +241,9 @@ describe("domain entity store", () => {
     const { manager, store } = await runtime();
     const draft = await manager.createDraft("DRF-REPARENT", "42");
     const root = await store.get("DRF-REPARENT", "tasks", "T-26-RHBNH8");
-    const child = await store.create("DRF-REPARENT", "42", draft.fingerprint, { schema: "gitpm/task@1", id: "T-26-ABCDEF", project: root.document.project, parent: root.document.id, milestone: root.document.milestone, title: "Nested parser work", type: "task", status: "backlog", lifecycle: "active" });
-    const targetMilestone = await store.create("DRF-REPARENT", "42", child.draft_fingerprint, { schema: "gitpm/milestone@1", id: "M-26-ABCDEF", project: root.document.project, name: "Follow-up", lifecycle: "active" });
-    const targetParent = await store.create("DRF-REPARENT", "42", targetMilestone.draft_fingerprint, { schema: "gitpm/task@1", id: "T-26-BCDEFG", project: root.document.project, milestone: targetMilestone.document.id, title: "New parent", type: "task", status: "backlog", lifecycle: "active" });
+    const child = await store.create("DRF-REPARENT", "42", draft.fingerprint, { schema: "gitpm/task@2", id: "T-26-ABCDEF", project: root.document.project, parent: root.document.id, milestone: root.document.milestone, title: "Nested parser work", type: "task", status: "backlog", lifecycle: "active" });
+    const targetMilestone = await store.create("DRF-REPARENT", "42", child.draft_fingerprint, { schema: "gitpm/milestone@2", id: "M-26-ABCDEF", project: root.document.project, name: "Follow-up", lifecycle: "active" });
+    const targetParent = await store.create("DRF-REPARENT", "42", targetMilestone.draft_fingerprint, { schema: "gitpm/task@2", id: "T-26-BCDEFG", project: root.document.project, milestone: targetMilestone.document.id, title: "New parent", type: "task", status: "backlog", lifecycle: "active" });
 
     const moved = await store.moveTask("DRF-REPARENT", "42", String(root.document.id), targetParent.draft_fingerprint, root.blob_id, String(root.document.project), String(targetMilestone.document.id), String(targetParent.document.id));
 
@@ -373,7 +373,7 @@ describe("domain entity store", () => {
     expect(personPlan.cascaded_comments).toEqual([]);
 
     const taskPlan = await store.planDelete("DRF-PLAN-DELETE", "tasks", "T-26-P9G3P8");
-    expect(taskPlan.schema).toBe("gitpm/task@1");
+    expect(taskPlan.schema).toBe("gitpm/task@2");
     expect(taskPlan.cascaded_comments.map((item) => item.id)).toEqual(expect.arrayContaining([String(comment.document.id)]));
     expect(taskPlan.supports_unlink).toBe(false);
     expect(taskPlan.supports_cascade).toBe(false);
@@ -403,9 +403,9 @@ describe("domain entity store", () => {
       { schema: "gitpm/calendar@1", id: "C-26-7GQW87", name: "Second calendar", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" },
       { schema: "gitpm/person@1", id: "U-26-KB9RXB", name: "New person", weekly_capacity_hours: 40, calendar: "C-26-7GQW87", lifecycle: "active" },
       { schema: "gitpm/team@1", id: "G-26-22K88P", name: "New team", members: ["U-26-KB9RXB"], lifecycle: "active" },
-      { schema: "gitpm/project@1", id: "P-26-Y9S1D8", name: "New project", status: "backlog", lifecycle: "active" },
-      { schema: "gitpm/milestone@1", id: "M-26-KK4VXH", project: "P-26-Y9S1D8", name: "New milestone", lifecycle: "active" },
-      { schema: "gitpm/task@1", id: "T-26-FM5Q4W", project: "P-26-Y9S1D8", title: "New task", type: "task", status: "backlog", lifecycle: "active" },
+      { schema: "gitpm/project@2", id: "P-26-Y9S1D8", name: "New project", status: "backlog", lifecycle: "active" },
+      { schema: "gitpm/milestone@2", id: "M-26-KK4VXH", project: "P-26-Y9S1D8", name: "New milestone", lifecycle: "active" },
+      { schema: "gitpm/task@2", id: "T-26-FM5Q4W", project: "P-26-Y9S1D8", title: "New task", type: "task", status: "backlog", lifecycle: "active" },
       { schema: "gitpm/saved-view@1", id: "V-26-B0C5A1", project: "P-26-Y9S1D8", name: "New view", kind: "list", filters: {}, lifecycle: "active" },
     ];
     const paths: string[] = [];

@@ -1,4 +1,4 @@
-schema: gitpm/task@1
+schema: gitpm/task@2
 id: T-26-AVEPT4 # task: Запустить портал клиентской поддержки
 project: P-26-ZMBJVA # project: Портал поддержки клиентов
 title: Запустить портал клиентской поддержки
@@ -14,9 +14,11 @@ assignees:
   - U-26-9C1ZR4 # person: Елена Морозова
   - U-26-RKTV2A # person: Дмитрий Орлов
   - U-26-NEDN00 # person: Мария Соколова
-estimate_hours: 88
-start: 2026-07-13
-due: 2026-10-30
+schedules:
+  plan:
+    start: 2026-07-13
+    finish: 2026-10-30
+    effort_hours: 88
 labels:
   - портал
   - управление

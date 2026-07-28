@@ -82,7 +82,7 @@ export function BoardWorkspace({ api, draft, locale, initialProjectId = "", init
     try {
       const result = await operation();
       setFingerprint(result.draft_fingerprint);
-      if (result.document.schema === "gitpm/task@1") setTasks((current) => upsertEntity(current, result));
+      if (result.document.schema === "gitpm/task@2") setTasks((current) => upsertEntity(current, result));
       if (result.document.schema === "gitpm/saved-view@1") setViews((current) => upsertEntity(current, result));
       mark({ [result.document.id]: ["$entity"] });
       await onChanged(); await load();

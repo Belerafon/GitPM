@@ -65,9 +65,9 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
     setError(null);
     try {
       const result = await operation();
-      setWorkspace((current) => current === null ? current : result.document.schema === "gitpm/milestone@1"
+      setWorkspace((current) => current === null ? current : result.document.schema === "gitpm/milestone@2"
         ? { ...current, milestones: upsertEntity(current.milestones, result), draft_fingerprint: result.draft_fingerprint }
-        : result.document.schema === "gitpm/task@1"
+        : result.document.schema === "gitpm/task@2"
           ? { ...current, tasks: upsertEntity(current.tasks, result), draft_fingerprint: result.draft_fingerprint }
           : current);
       mark({ [result.document.id]: ["$local"] });
@@ -104,7 +104,7 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
     const data = new FormData(event.currentTarget);
     const id = newUniqueEntityId(ENTITY_ID_PREFIX.task, new Set(workspace.tasks.map((item) => item.document.id)));
     const start = String(data.get("start")); const due = String(data.get("due")); const estimate = String(data.get("estimate"));
-    const document = { schema: "gitpm/task@1", id, project: projectId, milestone: selectedStage.document.id, title: String(data.get("title")).trim(), type: String(data.get("type")), status: String(data.get("status")), lifecycle: "active", description_markdown: String(data.get("description")), assignees: data.getAll("assignees").map(String), ...(start ? { start } : {}), ...(due ? { due } : {}), ...(estimate ? { estimate_hours: Number(estimate) } : {}) } as EntityDocument;
+    const document = { schema: "gitpm/task@2", id, project: projectId, milestone: selectedStage.document.id, title: String(data.get("title")).trim(), type: String(data.get("type")), status: String(data.get("status")), lifecycle: "active", description_markdown: String(data.get("description")), assignees: data.getAll("assignees").map(String), ...(start ? { start } : {}), ...(due ? { due } : {}), ...(estimate ? { estimate_hours: Number(estimate) } : {}) } as EntityDocument;
     void mutate(async () => await api.createEntity(draft.draft_id, "tasks", workspace.draft_fingerprint, document));
   };
 

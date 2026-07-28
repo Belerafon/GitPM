@@ -112,7 +112,7 @@ describe("CLI P02 commands", () => {
   it("returns a neutral JSON validation report with stable codes", async () => {
     const valid = await run(["validate", "--json", "--root", demo]);
     expect(valid.exitCode).toBe(0);
-    expect(JSON.parse(valid.output)).toMatchObject({ ok: true, code: "OK", documentCount: 14 });
+    expect(JSON.parse(valid.output)).toMatchObject({ ok: true, code: "OK", documentCount: 17 });
 
     const root = await fixture();
     const calendar = path.join(root, "calendars", "C-26-QD7FJ4.yaml");
@@ -182,7 +182,7 @@ describe("CLI P12 agent commands", () => {
       createEntity: async (_draftId: string, document: GitPmDocument) => ({ path: `people/${String(document.id)}.yaml`, draft_fingerprint: "f".repeat(64), document }),
       updateEntity: async (_draftId: string, patch: GitPmDocument, type: string, id: string) => ({ path: `${type}/${id}.yaml`, draft_fingerprint: "e".repeat(64), document: { ...patch, id } }),
       assertScope: async () => ({ affected_projects: [metadata.draft_id], changed_files: [] }),
-      semanticDiff: async () => ({ created: [], updated: [{ id: "P-26-111111", schema: "gitpm/project@1", path: "project.yaml", fields: [{ field: "name", before: "Old", after: "New" }] }], archived: [], deleted: [], counts: { created: 0, updated: 1, archived: 0, deleted: 0 }, affected_projects: ["P-26-111111"], unclassified_files: [] }),
+      semanticDiff: async () => ({ created: [], updated: [{ id: "P-26-111111", schema: "gitpm/project@2", path: "project.yaml", fields: [{ field: "name", before: "Old", after: "New" }] }], archived: [], deleted: [], counts: { created: 0, updated: 1, archived: 0, deleted: 0 }, affected_projects: ["P-26-111111"], unclassified_files: [] }),
       commitAll: async () => ({ commit: "c".repeat(40), branch: metadata.branch, draft_fingerprint: "d".repeat(64) }),
       push: async () => ({ branch: metadata.branch, commit: "c".repeat(40) }),
       createMergeRequest: async () => ({ iid: 7, state: "opened" as const, source_branch: metadata.branch, target_branch: "main", web_url: "https://gitlab.example.test/mr/7" }),
@@ -240,7 +240,7 @@ describe("CLI init command", () => {
 
     const validate = await run(["validate", "--json", "--root", target]);
     expect(validate.exitCode).toBe(0);
-    expect(JSON.parse(validate.output)).toMatchObject({ ok: true, code: "OK", documentCount: 4 });
+    expect(JSON.parse(validate.output)).toMatchObject({ ok: true, code: "OK", documentCount: 6 });
 
     const doctor = await run(["doctor", "--json", "--root", target]);
     expect(JSON.parse(doctor.output)).toMatchObject({ ok: true, checks: { repository_valid: true, schemas_loaded: true } });
@@ -405,7 +405,7 @@ describe.concurrent("CLI direct mode", () => {
     removeAfterTest(inputRoot);
     const entityFile = path.join(inputRoot, "task.yaml");
     await writeFile(entityFile, [
-      "schema: gitpm/task@1",
+      "schema: gitpm/task@2",
       "id: T-26-FM5Q4W",
       "project: P-26-MGP84K",
       "title: Direct CLI task",
@@ -491,7 +491,7 @@ describe.concurrent("CLI direct mode", () => {
 
     const invalidEntity = path.join(inputRoot, "invalid-task.yaml");
     await writeFile(invalidEntity, [
-      "schema: gitpm/task@1",
+      "schema: gitpm/task@2",
       "id: T-26-FM5Q4W",
       "project: P-26-MGP84K",
       "title: Invalid direct task",
@@ -532,11 +532,11 @@ describe.concurrent("CLI direct mode", () => {
     const allowedUpdate = await run([...updateArgs, "--allow-delete", "--json"], process.cwd(), { direct });
     expect(JSON.parse(allowedUpdate.output)).toMatchObject({ ok: true, document: { name: "Updated after deletion" } });
 
-    const configArgs = ["config", "update", "--kind", "statuses", "--set", "schema=gitpm/statuses@1"];
+    const configArgs = ["config", "update", "--kind", "statuses", "--set", "schema=gitpm/statuses@2"];
     const blockedConfig = await run([...configArgs, "--json"], process.cwd(), { direct });
     expect(JSON.parse(blockedConfig.output)).toMatchObject({ ok: false, code: "AGENT_DELETE_CONFIRMATION_REQUIRED" });
     const allowedConfig = await run([...configArgs, "--allow-delete", "--json"], process.cwd(), { direct });
-    expect(JSON.parse(allowedConfig.output)).toMatchObject({ ok: true, document: { schema: "gitpm/statuses@1" } });
+    expect(JSON.parse(allowedConfig.output)).toMatchObject({ ok: true, document: { schema: "gitpm/statuses@2" } });
   });
 
   it("requires direct runtime configuration for direct commands", async () => {
@@ -679,7 +679,7 @@ describe.concurrent("CLI direct mode", () => {
     const { direct, checkout } = await directFixture();
     const shown = await run(["config", "show", "--kind", "statuses", "--json"], process.cwd(), { direct });
     expect(shown.exitCode).toBe(0);
-    expect(JSON.parse(shown.output)).toMatchObject({ ok: true, document: { schema: "gitpm/statuses@1" } });
+    expect(JSON.parse(shown.output)).toMatchObject({ ok: true, document: { schema: "gitpm/statuses@2" } });
 
     const updated = await run(["config", "update", "--kind", "issue-types", "--set", "issue_types=[{slug: task, title: Task, color: blue, active: true}, {slug: bug, title: Defect, color: red, active: true}]", "--json"], process.cwd(), { direct });
     expect(updated.exitCode).toBe(0);

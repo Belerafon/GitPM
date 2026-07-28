@@ -1,4 +1,4 @@
-schema: gitpm/task@1
+schema: gitpm/task@2
 id: T-26-VMXXK9 # task: Пересобрать продуктовые дашборды
 project: P-26-7VWANM # project: Переезд аналитической платформы
 title: Пересобрать продуктовые дашборды
@@ -14,12 +14,14 @@ assignees:
   - U-26-NEDN00 # person: Мария Соколова
   - U-26-ETKSWS # person: Ольга Новикова
   - U-26-1MV0QD # person: Максим Фёдоров
-estimate_hours: 88
-start: 2026-10-26
-due: 2026-11-27
-depends_on:
-  - T-26-5ZH6NH # task: Перенести загрузку транзакционных данных
-  - T-26-C9N14V # task: Настроить проверки качества данных
+schedules:
+  plan:
+    start: 2026-10-26
+    finish: 2026-11-27
+    effort_hours: 88
+    depends_on:
+      - T-26-5ZH6NH # task: Перенести загрузку транзакционных данных
+      - T-26-C9N14V # task: Настроить проверки качества данных
 labels:
   - bi
   - frontend

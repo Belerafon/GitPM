@@ -61,8 +61,8 @@ describe("normal repository runtime", () => {
       const projects = await app.inject({ method: "GET", url: "/api/drafts/DRF-LOCAL/entities/projects" });
       expect(projects.statusCode).toBe(200);
       expect(projects.json()).toEqual(expect.arrayContaining([
-        expect.objectContaining({ document: expect.objectContaining({ schema: "gitpm/project@1", name: "GitPM launch" }) }),
-        expect.objectContaining({ document: expect.objectContaining({ schema: "gitpm/project@1", name: "Operations" }) }),
+        expect.objectContaining({ document: expect.objectContaining({ schema: "gitpm/project@2", name: "GitPM launch" }) }),
+        expect.objectContaining({ document: expect.objectContaining({ schema: "gitpm/project@2", name: "Operations" }) }),
       ]));
       const draft = await app.inject({ method: "POST", url: "/api/drafts", payload: { draft_id: "DRF-REAL-REPOSITORY" } });
       expect(draft.statusCode).toBe(409);

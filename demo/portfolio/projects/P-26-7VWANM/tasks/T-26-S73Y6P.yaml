@@ -1,4 +1,4 @@
-schema: gitpm/task@1
+schema: gitpm/task@2
 id: T-26-S73Y6P # task: Вывести старое хранилище из эксплуатации
 project: P-26-7VWANM # project: Переезд аналитической платформы
 title: Вывести старое хранилище из эксплуатации
@@ -15,11 +15,13 @@ assignees:
   - U-26-1MV0QD # person: Максим Фёдоров
   - U-26-0225HT # person: Наталья Павлова
   - U-26-AD9KDK # person: Алексей Виноградов
-estimate_hours: 52
-start: 2027-01-11
-due: 2027-01-29
-depends_on:
-  - T-26-TSD15E # task: Провести параллельный расчёт отчётности
+schedules:
+  plan:
+    start: 2027-01-11
+    finish: 2027-01-29
+    effort_hours: 52
+    depends_on:
+      - T-26-TSD15E # task: Провести параллельный расчёт отчётности
 labels:
   - вывод
   - эксплуатация

@@ -836,22 +836,28 @@ Worktree: `D:\other_projects\GitPM-worktrees\feat-multi-track-scheduling`
 
 ### Этап 1. Новая схема данных
 
-- [ ] JSON Schema: `gitpm/project@2` (planning, schedules)
-- [ ] JSON Schema: `gitpm/task@2` (schedules per track)
-- [ ] JSON Schema: `gitpm/milestone@2` (schedules per track)
-- [ ] JSON Schema: `gitpm/statuses@2` (semantic category)
-- [ ] JSON Schema: `gitpm/schedule-tracks@1`
-- [ ] JSON Schema: `gitpm/work-categories@1`
-- [ ] JSON Schema: `gitpm/time-entry@1`
-- [ ] Обновить `common.schema.json` (entryId, track capabilities, statusCategory)
-- [ ] Удалить старые корневые поля `start`/`due`/`estimate_hours`/`depends_on` из схем
-- [ ] Обновить generation pipeline (`scripts/generate-contract-document-schemas.mjs`, verifier)
-- [ ] Обновить `packages/contracts` (типы, декодеры, ENTITY_TYPE_SCHEMAS)
-- [ ] Обновить `packages/repository-format` (field order для v2-схем)
-- [ ] Обновить `packages/validation` (пути, ссылки, capabilities, per-track циклы, time-entry, конфиги)
-- [ ] Перевести `demo/portfolio` на v2
-- [ ] Перевести `fixtures/schema-v1/demo` на v2
-- [ ] Адаптировать потребителей для компиляции (workload/gantt/forms/server/cli/changes/export)
+- [x] JSON Schema: `gitpm/project@2` (planning, schedules)
+- [x] JSON Schema: `gitpm/task@2` (schedules per track)
+- [x] JSON Schema: `gitpm/milestone@2` (schedules per track)
+- [x] JSON Schema: `gitpm/statuses@2` (semantic category)
+- [x] JSON Schema: `gitpm/schedule-tracks@1`
+- [x] JSON Schema: `gitpm/work-categories@1`
+- [x] JSON Schema: `gitpm/time-entry@1`
+- [x] Обновить `common.schema.json` (entryId, track capabilities, statusCategory)
+- [x] Удалить старые корневые поля `start`/`due`/`estimate_hours`/`depends_on` из схем
+- [x] Обновить generation pipeline (`scripts/generate-contract-document-schemas.mjs`, verifier)
+- [x] Обновить `packages/contracts` (типы, декодеры, ENTITY_TYPE_SCHEMAS)
+- [x] Обновить `packages/repository-format` (field order для v2-схем)
+- [x] Обновить `packages/validation` (пути, ссылки, capabilities, per-track циклы, time-entry, конфиги)
+- [x] Перевести `demo/portfolio` на v2
+- [x] Перевести `fixtures/schema-v1/demo` на v2
+- [~] Адаптировать потребителей для компиляции (workload/gantt/forms/server/cli/changes/export)
+
+> Cutover на v2 выполнен: репозиторий валидируется только в новой модели; v1 больше не принимается.
+> Потребители компилируются и unit-тесты зелёные, НО web-формы/Gantt/workload-display всё ещё
+> читают/пишут старые корневые поля (`start`/`due`/`estimate_hours`) — для реальных v2-документов
+> эти поля пусты, поэтому UI дат/оценок/Ганта и создание задач с датами требуют переноса на
+> `schedules.<track>` (Этапы 4–6). Это зафиксированная функция-разрыв, а не ошибка сборки.
 
 ### Этап 2. Scheduling domain
 
@@ -918,11 +924,11 @@ Worktree: `D:\other_projects\GitPM-worktrees\feat-multi-track-scheduling`
 - [ ] 7. Агрегация факта по задаче/этапу/проекту
 - [ ] 8. Часы после окончания графика
 - [ ] 9. Workload по выбранному контуру
-- [ ] 10. Нет старых корневых полей
-- [ ] 11. Нет compatibility layer / v1
+- [x] 10. Нет старых корневых полей
+- [x] 11. Нет compatibility layer / v1
 - [ ] 12. Web UI и CLI
 - [ ] 13. build/typecheck/validation/unit/E2E проходят
-- [ ] Локальный гейт `corepack pnpm verify:local` зелёный
+- [~] Локальный гейт `corepack pnpm verify:local` зелёный (lint/typecheck/unit/schema зелёны; E2E пока не запускался)
 
 ### Журнал изменений
 
@@ -931,6 +937,10 @@ Worktree: `D:\other_projects\GitPM-worktrees\feat-multi-track-scheduling`
 - (инкремент 1) Создан пакет `packages/scheduling` (Этап 2, чистая логика): разрешение контуров и capabilities, чтота ScheduleWindow, rollup (min start / max finish / sum effort), declared vs effective + overflow-предупреждения, variance/overdue, per-track циклы зависимостей, resolvePlanning/validatePlanning, buildGanttModel. 17 unit-тестов.
 - (инкремент 1) Создан пакет `packages/time-entries` (Этап 3, чистая логика): фильтр active/voided, sumHours, группировки по дате/неделе/сотруднику/категории/задаче/проекту, actualWindow (дискретная активность), actualSegments, hoursAfterDate, validateEntry, валидация календарной даты. 11 unit-тестов.
 - (инкремент 1) Проверка: `pnpm lint` чисто; `pnpm build` OK; `pnpm typecheck` OK; `pnpm test` — 67 файлов, 463 теста (включая 28 новых) зелёные; `pnpm schema:verify` OK. Существующее поведение v1 не затронуто (новые пакеты никем не импортируются).
+- (инкремент 2) **Cutover на v2 (Этап 1)**: v2 JSON-схемы (project/task/milestone/statuses@2, schedule-tracks/work-categories/time-entry@1) + расширение `common.schema`; перегенерация контрактов; `packages/contracts` (типы ScheduleWindow/ScheduleMap/ProjectPlanning/TrackDefinition/TimeEntryDocument/ScheduleTracks/WorkCategories, декодеры, ENTITY_TYPE_SCHEMAS→@2); `packages/repository-format` (field order и нормализация schedules/planning/statuses/tracks); `packages/validation` (пути time-entries и новых конфигов, required schedule-tracks/work-categories, capabilities, per-track циклы зависимостей, planning-валидация, time-entry refs+category); миграция `fixtures/schema-v1/demo` и `demo/portfolio` на v2 (старые поля → `schedules.plan.*`); `gitpm init` пишет statuses@2 + schedule-tracks + work-categories; `verify-schema-v1.mjs` переписан под v2 (5 invalid-cases).
+- (инкремент 2) Потребители: `packages/export` переведён на чтение дат из основного окна расписания (windowField/scheduleWindow); тесты потребителей (cli/server/web) обновлены под v2 (схемы-моки, статусы с category, документ-каунты 14→17). Механическая замена `gitpm/{project,task,milestone,statuses}@1`→`@2` в 43 файлах.
+- (инкремент 2) Проверка: `pnpm lint` чисто; `pnpm build` OK; `pnpm typecheck` OK; `pnpm test` — 463/463 зелёные; `pnpm schema:verify` OK.
+- (инкремент 2) **Известный разрыв (не блокирует сборку)**: web-формы/Gantt/workload-display всё ещё читают/пишут старые корневые поля `start`/`due`/`estimate_hours` через индекс-сигнатуру `EntityDocument`; для реальных v2-документов эти значения пусты, поэтому UI дат/оценок/Ганта и создание задач с датами требуют переноса на `schedules.<track>` (Этапы 4–6). E2E не запускались.
 
 ### Реализовано в текущем инкременте (чистая логика)
 

@@ -29,7 +29,7 @@ afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recur
 describe("repository validation", () => {
   it("accepts the deterministic demo", async () => {
     const report = await validateRepository(demo);
-    expect(report).toMatchObject({ valid: true, documentCount: 14, errors: [], warnings: [] });
+    expect(report).toMatchObject({ valid: true, documentCount: 17, errors: [], warnings: [] });
   });
 
   it("rejects an empty directory and missing required repository layout", async () => {
@@ -134,19 +134,19 @@ describe("repository validation", () => {
     const root = await fixture();
     const outside = await mkdtemp(path.join(os.tmpdir(), "gitpm-validation-outside-"));
     roots.push(outside);
-    await writeFile(path.join(outside, "external.yaml"), "schema: gitpm/project@1\n", "utf8");
+    await writeFile(path.join(outside, "external.yaml"), "schema: gitpm/project@2\n", "utf8");
     await symlink(outside, path.join(root, "projects", "linked"), process.platform === "win32" ? "junction" : "dir");
     const report = await validateRepository(root);
     expect(report.errors).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: "FS_SYMLINK", path: "projects/linked" }),
     ]));
-    expect(report.documentCount).toBe(14);
+    expect(report.documentCount).toBe(17);
   });
 
   it("accepts saved milestone and task order", async () => {
     const root = await fixture();
     await replace(root, `projects/${project}/project.yaml`, "labels:", "milestone_order:\n  - M-26-461GDJ\nlabels:");
-    await replace(root, `projects/${project}/milestones/M-26-461GDJ.yaml`, "due: 2026-08-31", `due: 2026-08-31\ntask_order:\n  - ${taskTwo}\n  - ${taskOne}`);
+    await replace(root, `projects/${project}/milestones/M-26-461GDJ.yaml`, "finish: 2026-08-31", `finish: 2026-08-31\ntask_order:\n  - ${taskTwo}\n  - ${taskOne}`);
     const report = await validateRepository(root);
     expect(report).toMatchObject({ valid: true, errors: [] });
   });
@@ -160,7 +160,7 @@ describe("repository validation", () => {
 
   it("rejects schema violations and missing references", async () => {
     const root = await fixture();
-    await replace(root, `projects/${project}/tasks/${taskTwo}.yaml`, "estimate_hours: 24.25", "estimate_hours: 1.1");
+    await replace(root, `projects/${project}/tasks/${taskTwo}.yaml`, "effort_hours: 24.25", "effort_hours: 1.1");
     await replace(root, `projects/${project}/tasks/${taskOne}.yaml`, "U-26-5EBAE3", "U-26-KB9RXB");
     const report = await validateRepository(root);
     expect(report.errors).toEqual(expect.arrayContaining([
@@ -190,7 +190,7 @@ describe("repository validation", () => {
 
   it("detects dependency cycles", async () => {
     const root = await fixture();
-    await replace(root, `projects/${project}/tasks/${taskOne}.yaml`, "labels:\n  - architecture", `depends_on:\n  - ${taskTwo}\nlabels:\n  - architecture`);
+    await replace(root, `projects/${project}/tasks/${taskOne}.yaml`, "    effort_hours: 8\nlabels:", `    effort_hours: 8\n    depends_on:\n      - ${taskTwo}\nlabels:`);
     const report = await validateRepository(root);
     expect(report.errors).toEqual(expect.arrayContaining([expect.objectContaining({ code: "TASK_DEPENDENCY_CYCLE" })]));
   });

@@ -12,13 +12,13 @@ class EntityApi {
   entities: EntityResult[] = [];
   revision = 0;
   private result(document: EntityDocument): EntityResult { this.revision += 1; return { document, path: `${document.id}.yaml`, blob_id: String(this.revision).padStart(40, "a"), draft_fingerprint: String(this.revision).padStart(64, "b") }; }
-  async listEntities(_draftId: string, type: string, project?: string) { const schemaName = type === "people" ? "person" : type.slice(0, -1); return this.entities.filter((item) => item.document.schema === `gitpm/${schemaName}@1` && (project === undefined || item.document.project === project)); }
+  async listEntities(_draftId: string, type: string, project?: string) { const schemas: Record<string, string> = { people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1", projects: "gitpm/project@2", tasks: "gitpm/task@2", milestones: "gitpm/milestone@2" }; return this.entities.filter((item) => item.document.schema === schemas[type] && (project === undefined || item.document.project === project)); }
   async createEntity(_draftId: string, _type: string, _fingerprint: string, document: EntityDocument) { const next = this.result(document); this.entities.push(next); return next; }
   async updateEntity(_draftId: string, _type: string, entity: EntityResult, _fingerprint: string, document: EntityDocument) { const next = this.result(document); this.entities = this.entities.map((item) => item === entity ? next : item); return next; }
   async moveTask(_draftId: string, entity: EntityResult, _fingerprint: string, targetProject: string, targetMilestone?: string, targetParent?: string) { return await this.updateEntity(_draftId, "tasks", entity, _fingerprint, { ...entity.document, project: targetProject, milestone: targetMilestone, parent: targetParent }); }
   async archiveEntity(_draftId: string, type: string, entity: EntityResult, fingerprint: string) { return await this.updateEntity(_draftId, type, entity, fingerprint, { ...entity.document, lifecycle: "archived" }); }
   async deleteEntity(_draftId: string, _type: string, entity: EntityResult) { this.entities = this.entities.filter((item) => item !== entity); }
-  async getConfiguration(_draftId: string, kind: "statuses" | "issue-types"): Promise<ConfigurationResult> { const document = (kind === "statuses" ? { schema: "gitpm/statuses@1", statuses: [{ slug: "backlog", title: "Backlog", active: true }, { slug: "done", title: "Done", active: true }] } : { schema: "gitpm/issue-types@1", issue_types: [{ slug: "task", title: "Task", active: true }] }) as ConfigurationDocument; return { document, path: kind, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) }; }
+  async getConfiguration(_draftId: string, kind: "statuses" | "issue-types"): Promise<ConfigurationResult> { const document = (kind === "statuses" ? { schema: "gitpm/statuses@2", statuses: [{ slug: "backlog", title: "Backlog", active: true }, { slug: "done", title: "Done", active: true }] } : { schema: "gitpm/issue-types@1", issue_types: [{ slug: "task", title: "Task", active: true }] }) as ConfigurationDocument; return { document, path: kind, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) }; }
   async updateConfiguration(): Promise<ConfigurationResult> { throw new Error("not used"); }
 }
 
@@ -43,8 +43,8 @@ describe("core UI", () => {
 
   it("does not turn the global task entry point into an all-project task stream", async () => {
     const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
-    const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
-    await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@1", id: "T-26-222222", project: project.document.id, title: "Must stay scoped", type: "task", status: "backlog", lifecycle: "active" });
+    const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
+    await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-222222", project: project.document.id, title: "Must stay scoped", type: "task", status: "backlog", lifecycle: "active" });
 
     render(<CoreWorkspace api={api} draft={draft} locale="en" surface="tasks" onChanged={vi.fn(async () => undefined)} />);
     expect(await screen.findByRole("heading", { name: "Choose a project" })).toBeTruthy();
@@ -54,8 +54,8 @@ describe("core UI", () => {
 
   it("animates the task row while an inline status change is being saved", async () => {
     const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
-    const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
-    await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@1", id: "T-26-222222", project: project.document.id, title: "Animated task", type: "task", status: "backlog", lifecycle: "active" });
+    const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
+    await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-222222", project: project.document.id, title: "Animated task", type: "task", status: "backlog", lifecycle: "active" });
     let finishRefresh: () => void = () => undefined;
     const onChanged = vi.fn(() => new Promise<void>((resolve) => { finishRefresh = resolve; }));
 
@@ -81,11 +81,11 @@ describe("core UI", () => {
   it("derives exact group options and sorts named groups, projects, and the ungrouped section", async () => {
     const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
     const projects = [
-      await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-111111", name: "Zulu project", status: "backlog", lifecycle: "active", group: "Delivery" }),
-      await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-222222", name: "Alpha project", status: "backlog", lifecycle: "active", group: "Delivery" }),
-      await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-333333", name: "Research project", status: "backlog", lifecycle: "active", group: "Research" }),
-      await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-444444", name: "Loose project", status: "backlog", lifecycle: "active" }),
-      await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-555555", name: "Archived project", status: "backlog", lifecycle: "archived", group: "Archive only" }),
+      await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-111111", name: "Zulu project", status: "backlog", lifecycle: "active", group: "Delivery" }),
+      await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-222222", name: "Alpha project", status: "backlog", lifecycle: "active", group: "Delivery" }),
+      await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-333333", name: "Research project", status: "backlog", lifecycle: "active", group: "Research" }),
+      await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-444444", name: "Loose project", status: "backlog", lifecycle: "active" }),
+      await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-555555", name: "Archived project", status: "backlog", lifecycle: "archived", group: "Archive only" }),
     ];
     expect(existingProjectGroups(projects, "en")).toEqual(["Archive only", "Delivery", "Research"]);
     expect(groupProjects(projects.slice(0, 4), "en", "Ungrouped").map((section) => [section.title, section.projects.map((project) => project.document.name)]))
@@ -109,8 +109,8 @@ describe("core UI", () => {
 
   it("creates, changes, and removes a Project group while validating new group names", async () => {
     const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
-    await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-111111", name: "Existing", status: "backlog", lifecycle: "active", group: "Platform" });
-    await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-222222", name: "Archived", status: "backlog", lifecycle: "archived", group: "Research" });
+    await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-111111", name: "Existing", status: "backlog", lifecycle: "active", group: "Platform" });
+    await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-222222", name: "Archived", status: "backlog", lifecycle: "archived", group: "Research" });
     const onChanged = vi.fn(async () => undefined);
     const rendered = render(<CoreWorkspace api={api} draft={draft} locale="en" surface="projects" onChanged={onChanged} />);
 
@@ -176,11 +176,11 @@ describe("core UI", () => {
     fireEvent.submit(milestoneForm);
     expect(await screen.findByText("M1")).toBeTruthy();
 
-    rendered.rerender(<CoreWorkspace api={api} draft={draft} initialProjectId={entityApi.entities.find((item) => item.document.schema === "gitpm/project@1")?.document.id} locale="en" surface="tasks" onChanged={onChanged} />);
+    rendered.rerender(<CoreWorkspace api={api} draft={draft} initialProjectId={entityApi.entities.find((item) => item.document.schema === "gitpm/project@2")?.document.id} locale="en" surface="tasks" onChanged={onChanged} />);
     fireEvent.click(await screen.findByRole("button", { name: /New task/u }));
     const taskForm = within(screen.getByRole("dialog", { name: "New task" })).getByRole("button", { name: "Create task" }).closest("form")!;
     fireEvent.change(within(taskForm).getByLabelText("Title"), { target: { value: "First task" } });
-    fireEvent.change(within(taskForm).getByLabelText("Milestone"), { target: { value: entityApi.entities.find((item) => item.document.schema === "gitpm/milestone@1")?.document.id } });
+    fireEvent.change(within(taskForm).getByLabelText("Milestone"), { target: { value: entityApi.entities.find((item) => item.document.schema === "gitpm/milestone@2")?.document.id } });
     fireEvent.click(within(taskForm).getByRole("button", { name: /Add assignee/u }));
     fireEvent.change(within(taskForm).getByLabelText("Search people"), { target: { value: "Ada" } });
     fireEvent.click(within(taskForm).getByRole("button", { name: "Ada" }));
@@ -191,12 +191,12 @@ describe("core UI", () => {
     fireEvent.submit(taskForm);
     expect(await screen.findByText("First task")).toBeTruthy();
     await waitFor(() => expect(rendered.container.querySelector(".task-milestone")?.textContent).toBe("M1"));
-    expect(entityApi.entities.find((item) => item.document.schema === "gitpm/task@1")?.document.milestone).toBe(entityApi.entities.find((item) => item.document.schema === "gitpm/milestone@1")?.document.id);
-    expect(entityApi.entities.find((item) => item.document.schema === "gitpm/task@1")?.document.assignees).toEqual([person.document.id]);
-    expect(entityApi.entities.find((item) => item.document.schema === "gitpm/task@1")?.document).toMatchObject({ start: "2026-07-20", due: "2026-07-24", estimate_hours: 20 });
+    expect(entityApi.entities.find((item) => item.document.schema === "gitpm/task@2")?.document.milestone).toBe(entityApi.entities.find((item) => item.document.schema === "gitpm/milestone@2")?.document.id);
+    expect(entityApi.entities.find((item) => item.document.schema === "gitpm/task@2")?.document.assignees).toEqual([person.document.id]);
+    expect(entityApi.entities.find((item) => item.document.schema === "gitpm/task@2")?.document).toMatchObject({ start: "2026-07-20", due: "2026-07-24", estimate_hours: 20 });
 
-    const createdTask = entityApi.entities.find((item) => item.document.schema === "gitpm/task@1")!;
-    const createdProject = entityApi.entities.find((item) => item.document.schema === "gitpm/project@1")!;
+    const createdTask = entityApi.entities.find((item) => item.document.schema === "gitpm/task@2")!;
+    const createdProject = entityApi.entities.find((item) => item.document.schema === "gitpm/project@2")!;
     rendered.unmount();
     render(<CoreWorkspace api={api} draft={draft} initialProjectId={createdProject.document.id} initialTaskId={createdTask.document.id} locale="en" surface="tasks" onChanged={onChanged} />);
     await screen.findByRole("heading", { name: "First task" });
@@ -207,20 +207,20 @@ describe("core UI", () => {
     fireEvent.click(within(editDialog).getByRole("button", { name: "Remove Ada" }));
     fireEvent.change(within(editDialog).getByLabelText("Estimate (hours)"), { target: { value: "24" } });
     fireEvent.click(within(editDialog).getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(entityApi.entities.find((item) => item.document.schema === "gitpm/task@1")?.document.status).toBe("done"));
-    expect(entityApi.entities.find((item) => item.document.schema === "gitpm/task@1")?.document.assignees).toEqual([]);
-    expect(entityApi.entities.find((item) => item.document.schema === "gitpm/task@1")?.document.estimate_hours).toBe(24);
+    await waitFor(() => expect(entityApi.entities.find((item) => item.document.schema === "gitpm/task@2")?.document.status).toBe("done"));
+    expect(entityApi.entities.find((item) => item.document.schema === "gitpm/task@2")?.document.assignees).toEqual([]);
+    expect(entityApi.entities.find((item) => item.document.schema === "gitpm/task@2")?.document.estimate_hours).toBe(24);
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     const archiveDialog = screen.getByRole("dialog", { name: "Edit: First task" });
     fireEvent.click(within(archiveDialog).getByText("More actions"));
     fireEvent.click(within(archiveDialog).getByRole("button", { name: "Archive" }));
-    await waitFor(() => expect(entityApi.entities.find((item) => item.document.schema === "gitpm/task@1")?.document.lifecycle).toBe("archived"));
+    await waitFor(() => expect(entityApi.entities.find((item) => item.document.schema === "gitpm/task@2")?.document.lifecycle).toBe("archived"));
   });
 
   it("uses configured status titles and requires confirmation before permanent deletion", async () => {
     const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
-    const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
-    await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@1", id: "T-26-222222", project: project.document.id, title: "Localized task", type: "task", status: "backlog", lifecycle: "active" });
+    const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
+    await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-222222", project: project.document.id, title: "Localized task", type: "task", status: "backlog", lifecycle: "active" });
     const confirmAction = vi.fn(() => false);
     const rendered = render(<CoreWorkspace api={api} confirmAction={confirmAction} draft={draft} locale="en" surface="portfolio" onChanged={vi.fn(async () => undefined)} />);
 
@@ -240,9 +240,9 @@ describe("core UI", () => {
 
   it("shows resolved project and archived milestone names in task details", async () => {
     const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
-    const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
-    const milestone = await entityApi.createEntity("DRF-CORE", "milestones", "", { schema: "gitpm/milestone@1", id: "M-26-222222", project: project.document.id, name: "Archived stage", lifecycle: "archived" });
-    const task = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@1", id: "T-26-333333", project: project.document.id, milestone: milestone.document.id, title: "Linked task", type: "task", status: "backlog", lifecycle: "active" });
+    const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
+    const milestone = await entityApi.createEntity("DRF-CORE", "milestones", "", { schema: "gitpm/milestone@2", id: "M-26-222222", project: project.document.id, name: "Archived stage", lifecycle: "archived" });
+    const task = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-333333", project: project.document.id, milestone: milestone.document.id, title: "Linked task", type: "task", status: "backlog", lifecycle: "active" });
 
     const onNavigate = vi.fn();
     const { container } = render(<CoreWorkspace api={api} draft={draft} initialProjectId={project.document.id} initialTaskId={task.document.id} locale="en" surface="tasks" onNavigate={onNavigate} onChanged={vi.fn(async () => undefined)} />);
@@ -258,12 +258,12 @@ describe("core UI", () => {
 
   it("shows task ancestry and rollups and creates a same-milestone subtask from task details", async () => {
     const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
-    const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
-    const milestone = await entityApi.createEntity("DRF-CORE", "milestones", "", { schema: "gitpm/milestone@1", id: "M-26-222222", project: project.document.id, name: "Beta", lifecycle: "active" });
+    const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
+    const milestone = await entityApi.createEntity("DRF-CORE", "milestones", "", { schema: "gitpm/milestone@2", id: "M-26-222222", project: project.document.id, name: "Beta", lifecycle: "active" });
     const rootTitle = "Root task with a deliberately long title that must stay inside the task editor";
-    const root = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@1", id: "T-26-333333", project: project.document.id, milestone: milestone.document.id, title: rootTitle, type: "task", status: "backlog", lifecycle: "active" });
-    const child = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@1", id: "T-26-444444", parent: root.document.id, project: project.document.id, milestone: milestone.document.id, title: "Child", type: "task", status: "backlog", lifecycle: "active", estimate_hours: 3 });
-    const grandchild = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@1", id: "T-26-555555", parent: child.document.id, project: project.document.id, milestone: milestone.document.id, title: "Grandchild", type: "task", status: "done", lifecycle: "active", estimate_hours: 5 });
+    const root = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-333333", project: project.document.id, milestone: milestone.document.id, title: rootTitle, type: "task", status: "backlog", lifecycle: "active" });
+    const child = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-444444", parent: root.document.id, project: project.document.id, milestone: milestone.document.id, title: "Child", type: "task", status: "backlog", lifecycle: "active", estimate_hours: 3 });
+    const grandchild = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-555555", parent: child.document.id, project: project.document.id, milestone: milestone.document.id, title: "Grandchild", type: "task", status: "done", lifecycle: "active", estimate_hours: 5 });
 
     const { container } = render(<CoreWorkspace api={api} draft={draft} initialProjectId={project.document.id} initialTaskId={child.document.id} locale="en" surface="tasks" onChanged={vi.fn(async () => undefined)} />);
     await screen.findByRole("heading", { name: "Child" });
@@ -292,10 +292,10 @@ describe("core UI", () => {
 
   it("filters tasks by milestone and links project milestone progress to that filter", async () => {
     const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
-    const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
-    const milestone = await entityApi.createEntity("DRF-CORE", "milestones", "", { schema: "gitpm/milestone@1", id: "M-26-222222", project: project.document.id, name: "Beta", lifecycle: "active" });
-    await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@1", id: "T-26-333333", project: project.document.id, milestone: milestone.document.id, title: "Linked", type: "task", status: "done", lifecycle: "active" });
-    await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@1", id: "T-26-444444", project: project.document.id, title: "Unlinked", type: "task", status: "backlog", lifecycle: "active" });
+    const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
+    const milestone = await entityApi.createEntity("DRF-CORE", "milestones", "", { schema: "gitpm/milestone@2", id: "M-26-222222", project: project.document.id, name: "Beta", lifecycle: "active" });
+    await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-333333", project: project.document.id, milestone: milestone.document.id, title: "Linked", type: "task", status: "done", lifecycle: "active" });
+    await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-444444", project: project.document.id, title: "Unlinked", type: "task", status: "backlog", lifecycle: "active" });
     const onNavigate = vi.fn();
 
     const rendered = render(<CoreWorkspace api={api} draft={draft} initialProjectId={project.document.id} locale="en" surface="projects" onNavigate={onNavigate} onChanged={vi.fn(async () => undefined)} />);
@@ -313,12 +313,12 @@ describe("core UI", () => {
 
   it("moves a task through the explicit project transfer workflow", async () => {
     const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
-    const source = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-111111", name: "Source", status: "backlog", lifecycle: "active" });
-    const target = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-222222", name: "Target", status: "backlog", lifecycle: "active" });
-    const milestone = await entityApi.createEntity("DRF-CORE", "milestones", "", { schema: "gitpm/milestone@1", id: "M-26-333333", project: target.document.id, name: "Target stage", lifecycle: "active" });
+    const source = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-111111", name: "Source", status: "backlog", lifecycle: "active" });
+    const target = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-222222", name: "Target", status: "backlog", lifecycle: "active" });
+    const milestone = await entityApi.createEntity("DRF-CORE", "milestones", "", { schema: "gitpm/milestone@2", id: "M-26-333333", project: target.document.id, name: "Target stage", lifecycle: "active" });
     const targetParentTitle = "Target parent with a deliberately long title that must stay inside the move editor";
-    const targetParent = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@1", id: "T-26-555555", project: target.document.id, milestone: milestone.document.id, title: targetParentTitle, type: "task", status: "backlog", lifecycle: "active" });
-    const task = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@1", id: "T-26-444444", project: source.document.id, title: "Move me", type: "task", status: "backlog", lifecycle: "active" });
+    const targetParent = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-555555", project: target.document.id, milestone: milestone.document.id, title: targetParentTitle, type: "task", status: "backlog", lifecycle: "active" });
+    const task = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-444444", project: source.document.id, title: "Move me", type: "task", status: "backlog", lifecycle: "active" });
     const onNavigate = vi.fn();
     render(<CoreWorkspace api={api} draft={draft} initialProjectId={source.document.id} initialTaskId={task.document.id} locale="en" surface="tasks" onNavigate={onNavigate} onChanged={vi.fn(async () => undefined)} />);
     await screen.findByRole("heading", { name: "Move me" });
@@ -338,8 +338,8 @@ describe("core UI", () => {
 
   it("reloads external changes, marks only changed fields, and keeps the focused read control", async () => {
     const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
-    const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@1", id: "P-26-111111", name: "External project", status: "backlog", lifecycle: "active" });
-    const task = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@1", id: "T-26-222222", project: project.document.id, title: "Before agent", type: "task", status: "backlog", lifecycle: "active" });
+    const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-111111", name: "External project", status: "backlog", lifecycle: "active" });
+    const task = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-222222", project: project.document.id, title: "Before agent", type: "task", status: "backlog", lifecycle: "active" });
     const external = { ...draft, writer_mode: "external" as const, changed_externally: false, external_fingerprint: "1".repeat(64) };
     const rendered = render(<CoreWorkspace api={api} draft={external} initialProjectId={project.document.id} locale="en" surface="tasks" onChanged={vi.fn(async () => undefined)} />);
     const readButton = await screen.findByRole("button", { name: /Before agent/u }); readButton.focus(); expect(document.activeElement).toBe(readButton);

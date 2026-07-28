@@ -1,4 +1,4 @@
-schema: gitpm/task@1
+schema: gitpm/task@2
 id: T-26-PHR2RZ # task: Перенести статьи в базу знаний
 project: P-26-ZMBJVA # project: Портал поддержки клиентов
 title: Перенести статьи в базу знаний
@@ -13,11 +13,13 @@ milestone: M-26-QP6SH8 # milestone: Открытие портала клиент
 assignees:
   - U-26-ETKSWS # person: Ольга Новикова
   - U-26-0225HT # person: Наталья Павлова
-estimate_hours: 72
-start: 2026-08-03
-due: 2026-08-28
-depends_on:
-  - T-26-VWWHC6 # task: Провести интервью с операторами поддержки
+schedules:
+  plan:
+    start: 2026-08-03
+    finish: 2026-08-28
+    effort_hours: 72
+    depends_on:
+      - T-26-VWWHC6 # task: Провести интервью с операторами поддержки
 labels:
   - контент
   - база-знаний
