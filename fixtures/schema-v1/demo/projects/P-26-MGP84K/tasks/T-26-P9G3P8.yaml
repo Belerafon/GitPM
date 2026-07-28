@@ -13,5 +13,8 @@ schedules:
     start: 2026-07-01
     finish: 2026-07-02
     effort_hours: 8
+  target:
+    start: 2026-07-01
+    finish: 2026-07-05
 labels:
   - architecture

@@ -190,7 +190,7 @@ describe("repository validation", () => {
 
   it("detects dependency cycles", async () => {
     const root = await fixture();
-    await replace(root, `projects/${project}/tasks/${taskOne}.yaml`, "    effort_hours: 8\nlabels:", `    effort_hours: 8\n    depends_on:\n      - ${taskTwo}\nlabels:`);
+    await replace(root, `projects/${project}/tasks/${taskOne}.yaml`, "    effort_hours: 8\n  target:", `    effort_hours: 8\n    depends_on:\n      - ${taskTwo}\n  target:`);
     const report = await validateRepository(root);
     expect(report.errors).toEqual(expect.arrayContaining([expect.objectContaining({ code: "TASK_DEPENDENCY_CYCLE" })]));
   });

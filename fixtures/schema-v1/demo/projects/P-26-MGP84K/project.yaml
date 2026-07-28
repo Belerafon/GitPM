@@ -7,16 +7,22 @@ description_markdown: Build the first useful GitPM workflow.
 owner: U-26-5EBAE3 # person: Anna Petrova
 planning:
   enabled_tracks:
+    - target
     - plan
     - actual
   primary_track: plan
   workload_track: plan
+  comparison_track: target
   dashboard_tracks:
+    - target
     - plan
     - actual
 schedules:
   plan:
     start: 2026-07-01
     finish: 2026-09-30
+  target:
+    start: 2026-07-01
+    finish: 2026-09-15
 labels:
   - product

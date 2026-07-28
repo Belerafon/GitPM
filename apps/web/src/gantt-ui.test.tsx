@@ -39,6 +39,14 @@ describe("read-only Gantt", () => {
     expect(model.dependencies).toEqual([{ from: child.document.id, to: dependent.document.id }, { from: dependent.document.id, to: review.document.id }, { from: review.document.id, to: launch.document.id }, { from: dependent.document.id, to: launch.document.id }]);
   });
 
+  it("overlays secondary schedule tracks as thin bars under the primary bar", () => {
+    const primary = task("P", "Primary", "2026-07-01", "2026-07-10", { schedules: { plan: { start: "2026-07-01", finish: "2026-07-10" }, target: { start: "2026-07-03", finish: "2026-07-07" } } });
+    const model = buildGanttModel([primary], [])!;
+    const row = model.rows.find((item) => item.id === primary.document.id)!;
+    expect(row.start).toBe("2026-07-01");
+    expect(row.overlays).toEqual([{ track: "target", start: "2026-07-03", finish: "2026-07-07", startOffset: 2, duration: 5 }]);
+  });
+
   it("renders six bars and cannot mutate repository data", async () => {
     const updateEntity = vi.fn(); const createEntity = vi.fn(); const deleteEntity = vi.fn();
     const onNavigate = vi.fn();
