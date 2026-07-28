@@ -18,6 +18,45 @@ function rememberActiveId(draftId: string | null): void {
   } catch { /* storage can be disabled */ }
 }
 
+/**
+ * Builds a stable signature for the UI-relevant fields of a draft. Intentionally ignores
+ * server timestamps (e.g. `updated_at`) that may change on every poll even when nothing the
+ * user can see has changed, so periodic polling does not trigger redundant React renders.
+ */
+export function draftSignature(draft: DraftStatus): string {
+  return [
+    draft.draft_id, draft.owner_gitlab_user_id, draft.branch, draft.base_commit,
+    draft.writer_mode, draft.state, draft.fingerprint, draft.external_fingerprint ?? "",
+    draft.changed_externally ? "1" : "0", draft.merge_request_iid ?? "",
+  ].join("|");
+}
+
+/**
+ * Compares two snapshots by their UI-relevant signature. Used to skip state updates when a
+ * periodic poll returns content-equivalent data, which otherwise causes needless re-renders
+ * of workspaces (and the FLIP animation hook that reacts to them).
+ */
+export function isSameSnapshot(prev: DraftSnapshot, next: DraftSnapshot): boolean {
+  const a = snapshotSignature(prev);
+  const b = snapshotSignature(next);
+  return a === b;
+}
+
+function snapshotSignature(snapshot: DraftSnapshot): string {
+  const mergeRequest = snapshot.mergeRequest;
+  return [
+    draftSignature(snapshot.draft),
+    snapshot.changes.changed_files_count,
+    snapshot.validation.valid ? "1" : "0",
+    snapshot.validation.error_count,
+    snapshot.validation.warning_count,
+    snapshot.validation.document_count,
+    mergeRequest?.iid ?? "",
+    mergeRequest?.state ?? "",
+    mergeRequest?.web_url ?? "",
+  ].join("|");
+}
+
 interface DraftContextValue {
   readonly session: PublicSession | null | undefined;
   readonly drafts: readonly DraftStatus[];
@@ -63,8 +102,12 @@ export function DraftProvider({ api, children }: { readonly api: GitPmApi; reado
     if (draftId === null) return;
     try {
       const next = await api.snapshot(draftId);
-      setSnapshot(next);
-      setDrafts((current) => current.map((draft) => draft.draft_id === draftId ? next.draft : draft));
+      setSnapshot((prev) => prev !== null && isSameSnapshot(prev, next) ? prev : next);
+      setDrafts((current) => {
+        const existing = current.find((draft) => draft.draft_id === draftId);
+        if (existing !== undefined && draftSignature(existing) === draftSignature(next.draft)) return current;
+        return current.map((draft) => draft.draft_id === draftId ? next.draft : draft);
+      });
       setError(null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
