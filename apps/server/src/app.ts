@@ -3,12 +3,12 @@ import type { IncomingMessage } from "node:http";
 import { createLogger } from "@gitpm/logging";
 import type { HealthPayload } from "@gitpm/shared";
 import type { DraftManager } from "@gitpm/drafts";
-import type { CommentStore, EntityStore } from "@gitpm/domain";
+import type { CommentStore, EntityStore, TimeEntryStore } from "@gitpm/domain";
 import type { ChangesService } from "@gitpm/changes";
 import type { HistoryService } from "@gitpm/history";
 import type { ExportProvider } from "./export-api.js";
 import Fastify, { LogController, type FastifyBaseLogger } from "fastify";
-import { registerChangesApi, registerCommentApi, registerDraftApi, registerEntityApi, registerHistoryApi } from "./draft-api.js";
+import { registerChangesApi, registerCommentApi, registerDraftApi, registerEntityApi, registerHistoryApi, registerTimeEntryApi } from "./draft-api.js";
 import { registerExportApi } from "./export-api.js";
 import type { Authenticate } from "./draft-api.js";
 import { registerWorktreeApi, type WorktreeApiOptions } from "./worktree-api.js";
@@ -40,6 +40,7 @@ export interface AppOptions {
   exportService?: ExportProvider;
   isReady?: () => boolean | Promise<boolean>;
   historyService?: HistoryService;
+  timeEntryStore?: TimeEntryStore;
   logger?: FastifyBaseLogger;
   worktreeApiOptions?: WorktreeApiOptions;
 }
@@ -179,6 +180,7 @@ export function buildApp(options: AppOptions = {}) {
     if (options.entityStore) registerEntityApi(app, options.draftManager, options.entityStore, authenticate);
     if (options.exportService) registerExportApi(app, options.draftManager, options.exportService, authenticate);
     if (options.commentStore) registerCommentApi(app, options.draftManager, options.commentStore, authenticate);
+    if (options.timeEntryStore) registerTimeEntryApi(app, options.draftManager, options.timeEntryStore, authenticate);
     if (options.changesService) registerChangesApi(app, options.draftManager, options.changesService, authenticate);
     if (options.historyService) registerHistoryApi(app, options.draftManager, options.historyService, authenticate);
   }

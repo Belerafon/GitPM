@@ -2,8 +2,8 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { DraftRuntimeError } from "@gitpm/drafts";
 import type { DraftManager, DraftMetadata, WriterMode } from "@gitpm/drafts";
 import { GitCommandError } from "@gitpm/git-client";
-import { assertEntityType, CommentOperationError, DomainOperationError } from "@gitpm/domain";
-import type { CommentActor, CommentStore, EntityStore } from "@gitpm/domain";
+import { assertEntityType, CommentOperationError, DomainOperationError, TimeEntryOperationError } from "@gitpm/domain";
+import type { CommentActor, CommentStore, EntityStore, TimeEntryActor, TimeEntryStore } from "@gitpm/domain";
 import {
   HTTP_REQUEST_BODY_SCHEMAS,
   ApiContractError,
@@ -98,6 +98,18 @@ function asCommentActor(actor: RequestActor): CommentActor {
   };
 }
 
+function asTimeEntryActor(actor: RequestActor): TimeEntryActor {
+  return {
+    userId: actor.userId,
+    identity: {
+      provider: actor.provider ?? "gitlab",
+      ...(actor.instance === undefined ? {} : { instance: actor.instance }),
+      subject: actor.provider === "git" && actor.email !== undefined ? actor.email.trim().toLocaleLowerCase() : actor.userId,
+      display_name: actor.displayName?.trim() || actor.userId,
+    },
+  };
+}
+
 function requireEntityMutationRole(actor: RequestActor, entityType: string): void {
   requireMutationRole(actor);
   if (["people", "teams", "calendars"].includes(entityType) && actor.role !== "Maintainer") {
@@ -157,6 +169,14 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
       code = error.code;
       message = error.message;
       status = error.code === "CHANGE_PATH_INVALID" ? 400 : 409;
+    } else if (error instanceof TimeEntryOperationError) {
+      code = error.code;
+      message = error.message;
+      details = error.details;
+      if (["TIME_ENTRY_NOT_FOUND", "ENTITY_NOT_FOUND"].includes(error.code)) status = 404;
+      else if (["ENTITY_ID_INVALID", "ENTITY_PROJECT_INVALID", "REF_MISSING", "TIME_ENTRY_VOIDED"].includes(error.code)) status = 400;
+      else if (error.code === "VALIDATION_FAILED") status = 422;
+      else status = 409;
     } else if (error instanceof AuthError) {
       code = error.code;
       message = error.message;
@@ -331,6 +351,65 @@ export function registerCommentApi(
     await requireDraftRead(manager, actor, request.params.draftId);
     return await comments.notifications(request.params.draftId, asCommentActor(actor));
   });
+}
+
+export function registerTimeEntryApi(
+  app: FastifyInstance,
+  manager: DraftManager,
+  timeEntries: TimeEntryStore,
+  authenticate: Authenticate,
+): void {
+  app.get<{ Params: { draftId: string; projectId: string; taskId: string } }>(
+    "/api/drafts/:draftId/projects/:projectId/tasks/:taskId/time-entries",
+    async (request) => {
+      const actor = await authenticate(request);
+      await requireDraftRead(manager, actor, request.params.draftId);
+      return await timeEntries.list(request.params.draftId, request.params.projectId, request.params.taskId);
+    },
+  );
+
+  app.post<{ Params: { draftId: string; projectId: string; taskId: string }; Body: { expected_fingerprint: string; person: string; performed_on: string; hours: number; category: string; note_markdown?: string } }>(
+    "/api/drafts/:draftId/projects/:projectId/tasks/:taskId/time-entries",
+    { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.createTimeEntry } },
+    async (request, reply) => {
+      const actor = await authenticate(request);
+      requireMutationRole(actor);
+      const result = await timeEntries.create(request.params.draftId, request.params.projectId, request.params.taskId, request.body.expected_fingerprint, {
+        person: request.body.person,
+        performed_on: request.body.performed_on,
+        hours: request.body.hours,
+        category: request.body.category,
+        ...(request.body.note_markdown === undefined ? {} : { note_markdown: request.body.note_markdown }),
+      }, asTimeEntryActor(actor));
+      await reply.code(201).send(result);
+    },
+  );
+
+  app.post<{ Params: { draftId: string; projectId: string; taskId: string; entryId: string }; Body: { expected_fingerprint: string; expected_blob_id: string } }>(
+    "/api/drafts/:draftId/projects/:projectId/tasks/:taskId/time-entries/:entryId/void",
+    { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.voidTimeEntry } },
+    async (request) => {
+      const actor = await authenticate(request);
+      requireMutationRole(actor);
+      return await timeEntries.void(request.params.draftId, request.params.projectId, request.params.taskId, request.params.entryId, request.body.expected_fingerprint, request.body.expected_blob_id, asTimeEntryActor(actor));
+    },
+  );
+
+  app.post<{ Params: { draftId: string; projectId: string; taskId: string; entryId: string }; Body: { expected_fingerprint: string; expected_blob_id: string; person: string; performed_on: string; hours: number; category: string; note_markdown?: string } }>(
+    "/api/drafts/:draftId/projects/:projectId/tasks/:taskId/time-entries/:entryId/replace",
+    { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.replaceTimeEntry } },
+    async (request) => {
+      const actor = await authenticate(request);
+      requireMutationRole(actor);
+      return await timeEntries.replace(request.params.draftId, request.params.projectId, request.params.taskId, request.params.entryId, request.body.expected_fingerprint, request.body.expected_blob_id, {
+        person: request.body.person,
+        performed_on: request.body.performed_on,
+        hours: request.body.hours,
+        category: request.body.category,
+        ...(request.body.note_markdown === undefined ? {} : { note_markdown: request.body.note_markdown }),
+      }, asTimeEntryActor(actor));
+    },
+  );
 }
 
 export function registerHistoryApi(

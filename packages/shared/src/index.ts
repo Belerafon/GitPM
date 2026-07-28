@@ -11,11 +11,12 @@ export const ENTITY_ID_PREFIX = {
   calendar: "C",
   view: "V",
   comment: "N",
+  entry: "E",
 } as const;
 
 export type EntityIdPrefix = typeof ENTITY_ID_PREFIX[keyof typeof ENTITY_ID_PREFIX];
 
-export const ENTITY_ID_PATTERN = /^(?:P|T|M|U|G|C|V|N)-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}$/u;
+export const ENTITY_ID_PATTERN = /^(?:P|T|M|U|G|C|V|N|E)-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}$/u;
 export const PROJECT_ID_PATTERN = /^P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}$/u;
 
 export const isEntityId = (value: string, prefix?: EntityIdPrefix): boolean => (

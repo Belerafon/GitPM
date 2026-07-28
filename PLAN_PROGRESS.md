@@ -874,11 +874,11 @@ Worktree: `D:\other_projects\GitPM-worktrees\feat-multi-track-scheduling`
 ### Этап 3. TimeEntry
 
 - [~] Пакет `packages/time-entries` (расчёты, actual-контур)
-- [ ] `TimeEntryStore` в `packages/domain` (list/create/void/replace)
-- [ ] API (server) и CLI
-- [ ] Категории, void и replacement
-- [ ] Разрешить запись в завершённую задачу
-- [ ] Запрет удаления Task при наличии TimeEntry
+- [x] `TimeEntryStore` в `packages/domain` (list/create/void/replace)
+- [~] API (server) и CLI
+- [x] Категории, void и replacement
+- [x] Разрешить запись в завершённую задачу
+- [x] Запрет удаления Task при наличии TimeEntry
 
 > Расчётный движок `packages/time-entries` готов и покрыт тестами; файловые операции/Store/API/CLI ожидают cutover на v2.
 
@@ -945,6 +945,7 @@ Worktree: `D:\other_projects\GitPM-worktrees\feat-multi-track-scheduling`
 - (инкремент 3) **UI-cutover на schedules**: общий резолвер `apps/web/src/schedules.ts` (scheduleStart/Finish/Effort/Text, buildSchedule); хелперы `text`/`value`/`number` в core-ui/project-plan/stage/gantt/people-profile/workload маршрутизируют ключи `start`/`due`/`estimate_hours` в основное окно расписания (контур `plan` по умолчанию); все формы (создание/редактирование task/milestone/project, subtask) пишут `schedules.plan.{start,finish,effort_hours}` вместо корневых полей. Тесты web переведены на `schedules.plan`.
 - (инкремент 3) Проверка: `pnpm lint` чисто; `pnpm build` OK; `pnpm typecheck` OK; `pnpm test` — 463/463 (web 153/153) зелёные.
 - (инкремент 3) **Осталось**: мульти-контурный UI (Этап 4: несколько полос, выбор контура, actual-сегменты, tooltip/сравнение дат, per-track зависимости), блок фактических трудозатрат + форма TimeEntry (Этап 5), отчёты факта/plan-vs-actual (Этап 6), категорийный расчёт статусов (раздел 17), интеграция scheduling/time-entries + TimeEntryStore/API/CLI (Этап 2/3), semantic diff/export/E2E/perf/docs (Этап 7). E2E пока не запускались.
+- (инкремент 4) **TimeEntry backend**: `packages/domain` `TimeEntryStore` (list/create/void/replace, mutation boundary, fingerprint, atomic write, validation, rollback) по образцу `CommentStore`; префикс ID `E`; server API `registerTimeEntryApi` (GET/POST time-entries, POST `:entryId/void`, `:entryId/replace`) + body-схемы + маппинг ошибок; wiring в `app.ts`/`repository-runtime.ts`. Запрет удаления Task при наличии TimeEntry уже обеспечен через `validateDelete` (time-entry в directReferences). Интеграционный тест API зелёный (list/create/void + reject bad category/hours). Проверка: lint чисто, build/typecheck OK, 464/464 тестов.
 
 ### Реализовано в текущем инкременте (чистая логика)
 

@@ -10,6 +10,7 @@ import { discoverRepositoryFiles, validateDelete, validateRepository } from "@gi
 import { ENTITY_TYPE_SCHEMAS } from "@gitpm/contracts";
 
 export * from "./comments.js";
+export * from "./time-entries.js";
 export { ENTITY_TYPE_SCHEMAS } from "@gitpm/contracts";
 
 const entityTypeSchemas: Readonly<Record<string, string>> = ENTITY_TYPE_SCHEMAS;
@@ -77,6 +78,7 @@ const schemaIdPrefixes = {
   "gitpm/calendar@1": ENTITY_ID_PREFIX.calendar,
   "gitpm/saved-view@1": ENTITY_ID_PREFIX.view,
   "gitpm/comment@1": ENTITY_ID_PREFIX.comment,
+  "gitpm/time-entry@1": ENTITY_ID_PREFIX.entry,
 } as const;
 
 export interface EntityCreatePlanItem {
