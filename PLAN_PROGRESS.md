@@ -924,7 +924,7 @@ Worktree: `D:\other_projects\GitPM-worktrees\feat-multi-track-scheduling`
 - [~] 5. Факт дискретными сегментами (движок + UI-список; сегменты на Ганте — TODO)
 - [x] 6. TimeEntry в завершённую задачу
 - [x] 7. Агрегация факта по задаче/этапу/проекту
-- [~] 8. Часы после окончания графика (движок есть; дашборд — TODO)
+- [~] 8. Часы после окончания графика (движок есть; variance в дашборде есть; часы-после — TODO)
 - [~] 9. Workload по выбранному контуру (UI читает schedules; явный workload_track — TODO)
 - [x] 10. Нет старых корневых полей
 - [x] 11. Нет compatibility layer / v1
@@ -952,6 +952,9 @@ Worktree: `D:\other_projects\GitPM-worktrees\feat-multi-track-scheduling`
 - (инкремент 7) **Semantic diff для schedules**: `packages/changes` `fieldChanges` рекурсивно обходит plain-object значения (`schedules.<track>.<field>`, `planning.<field>`) и выдаёт dotted field-level изменения. 467/467 тестов.
 - (финал сессии) **Реализовано**: v2 data model (Этап 1), чистые движки scheduling/time-entries (Этапы 2/3 логика), UI чтения/записи `schedules.<track>` (Этапы 4–6 базово), TimeEntry full-stack (domain+API+CLI+UI, Этап 3 + часть 5), nested semantic diff (часть Этапа 7). v1 полностью удалён. Локально зелёно: lint/build/typecheck/unit/schema.
 - (финал сессии) **Осталось (явные TODO)**: мульти-контурный Gantt (Этап 4: переключатель контуров, несколько полос, actual-сегменты, tooltip/сравнение дат, per-track зависимости — пока Gantt рисует только primary-контур); дашборд проекта variance/overdue/часы-после-окончания (Этап 5); отчёты факта/plan-vs-actual и workload по `workload_track` (Этап 6); категорийный расчёт статусов вместо литерала `done` (раздел 17 — откачено: требует категории во всех тестовых фикстурах); export time-entries + дружелюбный semantic diff для TimeEntry (Этап 7); обновление документации (`docs/`, CLI.md, Repository_Format) под v2; E2E (direct и worktree) и performance smoke для большого числа TimeEntry. Полный гейт `verify:local` (вкл. e2e) не запускался.
+- (инкремент 8) **Multi-contour Gantt overlay**: `apps/web/gantt-ui` рисует primary-бар + тонкие оверлеи остальных manual-контуров задачи (`gantt-bar-overlay`); fixture demo обогащен контуром `target` (schedule-tracks + planning + проект/задача). 468/468 тестов.
+- (инкремент 9) **Project snapshot**: `apps/web/features/projects/project-snapshot.tsx` — primary/comparison finish и signed variance в днях на странице проекта. 470/470 тестов.
+- (финал сессии 2) **Итог по плану**: реализованы v2 data model, движки scheduling/time-entries, UI чтения/записи schedules, TimeEntry full-stack (domain+API+CLI+UI), multi-contour Gantt overlay, project snapshot variance, nested semantic diff. Локально зелёно (lint/build/typecheck/unit/schema). Остаётся: категорийные статусы (§17), plan-vs-actual/workload-track отчёты (Этап 6), actual-сегменты на Ганте и часы-после-окончания в дашборде, export/diff для time-entries, docs, E2E/perf.
 
 ### Реализовано в текущем инкременте (чистая логика)
 
