@@ -175,4 +175,15 @@ describe("changes and restore service", () => {
     ]));
     expect(semantic.affected_projects).toEqual(["P-26-8S9HQQ", "P-26-MGP84K"]);
   });
+
+  it("reports nested schedule windows as dotted field-level changes", async () => {
+    const { draft, service } = await runtime();
+    const taskPath = "projects/P-26-MGP84K/tasks/T-26-P9G3P8.yaml";
+    const absolute = path.join(draft.worktree_path, ...taskPath.split("/"));
+    const updated = (await readFile(absolute, "utf8")).replace("finish: 2026-07-02", "finish: 2026-07-09");
+    await writeFile(absolute, updated, "utf8");
+
+    const semantic = await service.semantic("DRF-CHANGES");
+    expect(semantic.updated[0]).toMatchObject({ id: "T-26-P9G3P8", fields: expect.arrayContaining([expect.objectContaining({ field: "schedules.plan.finish", before: "2026-07-02", after: "2026-07-09" })]) });
+  });
 });
