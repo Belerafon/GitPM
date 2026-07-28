@@ -46,7 +46,7 @@ export function EditorDrawer({ open, title, closeLabel, onClose, children }: {
     <aside aria-labelledby={titleId} aria-modal="true" className="editor-drawer" ref={drawer} role="dialog">
       <header className="editor-drawer-header">
         <h2 id={titleId}>{title}</h2>
-        <button aria-label={closeLabel} className="editor-drawer-close" onClick={onClose} ref={closeButton} type="button">×</button>
+        <button aria-label={closeLabel} className="editor-drawer-close" onClick={onClose} ref={closeButton} title={closeLabel} type="button">×</button>
       </header>
       <div className="editor-drawer-body">{children}</div>
     </aside>
