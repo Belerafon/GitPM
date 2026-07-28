@@ -399,6 +399,24 @@ describe.concurrent("CLI direct mode", () => {
     expect(diff.exitCode).toBe(0);
   });
 
+  it("lists, creates and voids a time entry through the CLI", async () => {
+    const { direct } = await directFixture();
+    const listBefore = await run(["time-entry", "list", "--project", "P-26-MGP84K", "--task", "T-26-P9G3P8", "--json"], process.cwd(), { direct });
+    expect(listBefore.exitCode).toBe(0);
+    expect(JSON.parse(listBefore.output).items.map((item: { id: string }) => item.id)).toContain("E-26-AAAAAA");
+
+    const created = await run([
+      "time-entry", "create", "--project", "P-26-MGP84K", "--task", "T-26-P9G3P8",
+      "--person", "U-26-5EBAE3", "--date", "2026-09-01", "--hours", "2", "--category", "regular", "--json",
+    ], process.cwd(), { direct });
+    expect(created.exitCode).toBe(0);
+    const createdId = JSON.parse(created.output).document.id as string;
+
+    const voided = await run(["time-entry", "void", "--project", "P-26-MGP84K", "--task", "T-26-P9G3P8", "--id", createdId, "--json"], process.cwd(), { direct });
+    expect(voided.exitCode).toBe(0);
+    expect(JSON.parse(voided.output).document.state).toBe("voided");
+  });
+
   it("creates an entity, reports its semantic diff and commits it without --draft", async () => {
     const { direct, checkout } = await directFixture();
     const inputRoot = await mkdtemp(path.join(os.tmpdir(), "gitpm-cli-direct-entity-"));

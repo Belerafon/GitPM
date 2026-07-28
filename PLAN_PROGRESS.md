@@ -875,15 +875,13 @@ Worktree: `D:\other_projects\GitPM-worktrees\feat-multi-track-scheduling`
 
 - [~] Пакет `packages/time-entries` (расчёты, actual-контур)
 - [x] `TimeEntryStore` в `packages/domain` (list/create/void/replace)
-- [~] API (server) и CLI
+- [x] API (server) и CLI
 - [x] Категории, void и replacement
 - [x] Разрешить запись в завершённую задачу
 - [x] Запрет удаления Task при наличии TimeEntry
 
 > Расчётный движок `packages/time-entries` готов и покрыт тестами; `TimeEntryStore` + server API готовы.
-> Web-блок фактических трудозатрат (список, сумма/первая/последняя активность, форма добавления, void) реализован
-> в `apps/web/src/task-time-entries.tsx` и встроен в `TaskPanel`; server отдаёт `work-categories`/`schedule-tracks`
-> через `GET /config/:kind`. CLI-команды для time-entry пока не добавлены.
+> Web-блок фактических трудозатрат и CLI-команды `time-entry list/create/void` готовы.
 
 ### Этап 4. Gantt
 

@@ -113,7 +113,7 @@ function render(json: boolean, payload: Record<string, unknown>, human: string):
 }
 
 const SCHEMA_DIRECTORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../schemas/v1");
-const ROOT_USAGE = "Usage: gitpm <init|status|draft|entity create|entity update|entity import|entity list|entity show|entity delete|entity archive|entity move|comment|config|schema|format|validate|diff --semantic|export|commit --all|push|mr create|doctor> [options]";
+const ROOT_USAGE = "Usage: gitpm <init|status|draft|entity create|entity update|entity import|entity list|entity show|entity delete|entity archive|entity move|comment|time-entry|config|schema|format|validate|diff --semantic|export|commit --all|push|mr create|doctor> [options]";
 
 const commandHelp: Readonly<Record<string, string>> = {
   root: [
@@ -181,6 +181,15 @@ const commandHelp: Readonly<Record<string, string>> = {
     "Comments support Markdown with @[Name](person:U-...) mentions.",
     "Delete is a soft-delete (tombstone remains in Git history). Available in direct mode.",
   ].join("\n"),
+  "time-entry": [
+    "Usage:",
+    "  gitpm time-entry list --project <id> --task <id> [--json]",
+    "  gitpm time-entry create --project <id> --task <id> --person <id> --date <yyyy-mm-dd> --hours <n> --category <slug> [--note <text>] [--json]",
+    "  gitpm time-entry void --project <id> --task <id> --id <entry-id> [--json]",
+    "",
+    "Actual effort is stored independently of task status and plan windows.",
+    "Void marks an entry voided (kept in history); available in direct mode.",
+  ].join("\n"),
   config: [
     "Usage:",
     "  gitpm config show --kind statuses|issue-types [--json]",
@@ -225,6 +234,7 @@ function commandArgumentSpec(command: string | undefined, args: readonly string[
   if (command === "push") return { values: ["--draft"], booleans: ["--json"], minPositionals: 0, maxPositionals: 0 };
   if (command === "mr") return { values: ["--draft", "--owner", "--title", "--description"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
   if (command === "comment") return { values: ["--project", "--task", "--id", "--body", "--file", "--path"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
+  if (command === "time-entry") return { values: ["--project", "--task", "--id", "--person", "--date", "--hours", "--category", "--note"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
   if (command === "config") {
     return action === "update"
       ? { values: ["--kind", "--file", "--path"], repeatable: ["--set", "--unset"], booleans: ["--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 }
@@ -688,6 +698,34 @@ async function runComment(args: readonly string[], cwd: string, dependencies: Cl
   return { exitCode: 0, output: render(json, { ok: true, code: "OK", document: updated.document, path: updated.path }, `Updated ${updated.path}`) };
 }
 
+async function runTimeEntry(args: readonly string[], cwd: string, dependencies: CliDependencies): Promise<CliResult> {
+  const action = args[0];
+  const validActions = ["list", "create", "void"];
+  if (typeof action !== "string" || !validActions.includes(action)) throw new RepositoryFormatError("CLI_USAGE", "time-entry requires list, create or void");
+  const direct = requireDirect(dependencies);
+  const projectId = required(flagValue(args, "--project"), "--project");
+  const taskId = required(flagValue(args, "--task"), "--task");
+  const json = args.includes("--json");
+  if (action === "list") {
+    const result = await direct.listTimeEntries(projectId, taskId);
+    const items = result.map((item) => ({ id: String(item.document.id), state: item.document.state, person: item.document.person, performed_on: item.document.performed_on, hours: item.document.hours, category: item.document.category, path: item.path }));
+    return { exitCode: 0, output: render(json, { ok: true, code: "OK", items }, `${items.length} time entry/entries`) };
+  }
+  const entryId = flagValue(args, "--id");
+  if (action === "void") {
+    const voided = await direct.voidTimeEntry(projectId, taskId, required(entryId, "--id"));
+    return { exitCode: 0, output: render(json, { ok: true, code: "OK", document: voided.document, path: voided.path }, `Voided ${voided.path}`) };
+  }
+  const person = required(flagValue(args, "--person"), "--person");
+  const performedOn = required(flagValue(args, "--date"), "--date");
+  const hours = Number(required(flagValue(args, "--hours"), "--hours"));
+  const category = required(flagValue(args, "--category"), "--category");
+  if (!Number.isFinite(hours) || hours <= 0) throw new RepositoryFormatError("CLI_USAGE", "--hours must be a positive number");
+  const note = flagValue(args, "--note");
+  const created = await direct.createTimeEntry(projectId, taskId, { person, performed_on: performedOn, hours, category, ...(note === undefined ? {} : { note_markdown: note }) });
+  return { exitCode: 0, output: render(json, { ok: true, code: "OK", document: created.document, path: created.path }, `Created ${created.path}`) };
+}
+
 async function runConfig(args: readonly string[], cwd: string, dependencies: CliDependencies): Promise<CliResult> {
   const action = args[0];
   if (action !== "show" && action !== "update") throw new RepositoryFormatError("CLI_USAGE", "config requires show or update");
@@ -1025,6 +1063,7 @@ export async function run(args: readonly string[], cwd = process.cwd(), dependen
     }
     if (command === "mr") return await runMr(commandArgs, dependencies);
     if (command === "comment") return await runComment(commandArgs, cwd, dependencies);
+    if (command === "time-entry") return await runTimeEntry(commandArgs, cwd, dependencies);
     if (command === "config") return await runConfig(commandArgs, cwd, dependencies);
     if (command === "doctor" && direct !== undefined) { await direct.prepare(); return await runDoctor([...directRootArgs, ...commandArgs], cwd); }
     if (command === "doctor") return await runDoctor(commandArgs, cwd);
