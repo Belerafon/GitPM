@@ -10,22 +10,38 @@ export function upsertEntity(items: readonly EntityResult[], result: EntityResul
 /** Animates keyed elements from their previous layout position to the new one. */
 export function useFlipList<T extends HTMLElement = HTMLElement>(reducedMotion: boolean) {
   const container = useRef<T>(null);
-  const positions = useRef(new Map<string, DOMRect>());
+  const positions = useRef(new Map<string, FlipPosition>());
 
   useLayoutEffect(() => {
-    const elements = Array.from(container.current?.querySelectorAll<HTMLElement>("[data-flip-key]") ?? []);
-    const next = new Map(elements.flatMap((element) => {
+    const host = container.current;
+    if (host === null) return;
+    // Measure each key relative to the container's content box so that scrolling the
+    // container itself or any ancestor (the common cause of the "scroll jump" flicker)
+    // does not register as a positional change between renders.
+    const hostRect = host.getBoundingClientRect();
+    const scrollLeft = host.scrollLeft;
+    const scrollTop = host.scrollTop;
+    const elements = Array.from(host.querySelectorAll<HTMLElement>("[data-flip-key]"));
+    const next = new Map<string, FlipPosition>();
+    for (const element of elements) {
       const key = element.dataset.flipKey;
-      return key === undefined ? [] : [[key, element.getBoundingClientRect()] as const];
-    }));
+      if (key === undefined) continue;
+      const rect = element.getBoundingClientRect();
+      next.set(key, { x: rect.left - hostRect.left + scrollLeft, y: rect.top - hostRect.top + scrollTop });
+    }
     if (!reducedMotion) {
-      const moved = new Set(elements.flatMap((element) => {
-        const key = element.dataset.flipKey; const before = key === undefined ? undefined : positions.current.get(key); const after = key === undefined ? undefined : next.get(key);
-        return before !== undefined && after !== undefined && (before.x !== after.x || before.y !== after.y) ? [key] : [];
-      }));
+      const moved = new Set<string>();
       for (const element of elements) {
-        const key = element.dataset.flipKey; const before = key === undefined ? undefined : positions.current.get(key); const after = key === undefined ? undefined : next.get(key);
-        if (key === undefined || before === undefined || after === undefined) continue;
+        const key = element.dataset.flipKey;
+        if (key === undefined) continue;
+        const before = positions.current.get(key); const after = next.get(key);
+        if (before !== undefined && after !== undefined && (before.x !== after.x || before.y !== after.y)) moved.add(key);
+      }
+      for (const element of elements) {
+        const key = element.dataset.flipKey;
+        if (key === undefined) continue;
+        const before = positions.current.get(key); const after = next.get(key);
+        if (before === undefined || after === undefined) continue;
         const ancestor = element.parentElement?.closest<HTMLElement>("[data-flip-key]");
         if (ancestor?.dataset.flipKey !== undefined && moved.has(ancestor.dataset.flipKey)) continue;
         const x = before.x - after.x; const y = before.y - after.y;
@@ -38,4 +54,9 @@ export function useFlipList<T extends HTMLElement = HTMLElement>(reducedMotion: 
   });
 
   return container;
+}
+
+interface FlipPosition {
+  readonly x: number;
+  readonly y: number;
 }
