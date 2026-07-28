@@ -335,11 +335,15 @@ importers:
         specifier: 2.8.3
         version: 2.8.3
 
+  packages/scheduling: {}
+
   packages/security: {}
 
   packages/shared: {}
 
   packages/task-hierarchy: {}
+
+  packages/time-entries: {}
 
   packages/validation:
     dependencies:
