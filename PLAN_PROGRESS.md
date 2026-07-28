@@ -880,7 +880,10 @@ Worktree: `D:\other_projects\GitPM-worktrees\feat-multi-track-scheduling`
 - [x] Разрешить запись в завершённую задачу
 - [x] Запрет удаления Task при наличии TimeEntry
 
-> Расчётный движок `packages/time-entries` готов и покрыт тестами; файловые операции/Store/API/CLI ожидают cutover на v2.
+> Расчётный движок `packages/time-entries` готов и покрыт тестами; `TimeEntryStore` + server API готовы.
+> Web-блок фактических трудозатрат (список, сумма/первая/последняя активность, форма добавления, void) реализован
+> в `apps/web/src/task-time-entries.tsx` и встроен в `TaskPanel`; server отдаёт `work-categories`/`schedule-tracks`
+> через `GET /config/:kind`. CLI-команды для time-entry пока не добавлены.
 
 ### Этап 4. Gantt
 
@@ -893,9 +896,9 @@ Worktree: `D:\other_projects\GitPM-worktrees\feat-multi-track-scheduling`
 
 ### Этап 5. Формы и обзор проекта
 
-- [ ] Редакторы Project/Milestone/Task под v2
+- [x] Редакторы Project/Milestone/Task под v2
 - [ ] Переключение контуров
-- [ ] Блок фактической работы + форма TimeEntry
+- [x] Блок фактической работы + форма TimeEntry
 - [ ] Проектные показатели и отклонения
 
 ### Этап 6. Workload и отчеты

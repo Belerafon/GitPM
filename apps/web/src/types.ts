@@ -35,6 +35,7 @@ export type {
   SemanticDiff,
   SemanticFileEntity,
   SemanticFieldChange,
+  TimeEntryDocument,
   ValidationSummary,
   WorktreeDirectory,
   WorktreeEntry,

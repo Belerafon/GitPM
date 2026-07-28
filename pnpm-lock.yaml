@@ -144,6 +144,9 @@ importers:
       '@gitpm/task-hierarchy':
         specifier: workspace:*
         version: link:../../packages/task-hierarchy
+      '@gitpm/time-entries':
+        specifier: workspace:*
+        version: link:../../packages/time-entries
       '@gitpm/workload':
         specifier: workspace:*
         version: link:../../packages/workload

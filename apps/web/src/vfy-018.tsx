@@ -159,6 +159,9 @@ class BrowserAcceptanceApi implements GitPmApi {
   async createComment(): Promise<never> { throw new Error("not used in acceptance fixture"); }
   async updateComment(): Promise<never> { throw new Error("not used in acceptance fixture"); }
   async deleteComment(): Promise<never> { throw new Error("not used in acceptance fixture"); }
+  async listTimeEntries(): Promise<readonly never[]> { return []; }
+  async createTimeEntry(): Promise<never> { throw new Error("not used in acceptance fixture"); }
+  async voidTimeEntry(): Promise<never> { throw new Error("not used in acceptance fixture"); }
   async notifications() { return { items: [] }; }
   private entityResult(document: EntityDocument): EntityResult { const project = String(document.project ?? ""); const paths: Record<string, string> = { "gitpm/calendar@1": `calendars/${document.id}.yaml`, "gitpm/person@1": `people/${document.id}.yaml`, "gitpm/team@1": `teams/${document.id}.yaml`, "gitpm/saved-view@1": `projects/${project}/views/${document.id}.yaml` }; const path = document.schema === "gitpm/project@2" ? `projects/${document.id}/project.yaml` : document.schema === "gitpm/task@2" ? `projects/${project}/tasks/${document.id}.yaml` : document.schema === "gitpm/milestone@2" ? `projects/${project}/milestones/${document.id}.yaml` : paths[document.schema] ?? `${document.id}.yaml`; return { document, path, blob_id: "c".repeat(40), draft_fingerprint: "d".repeat(64) }; }
   private capture(path: string) { this.changedPaths.add(path); document.documentElement.dataset.gitDiff = JSON.stringify([...this.changedPaths].sort()); }

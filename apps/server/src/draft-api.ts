@@ -634,7 +634,7 @@ export function registerEntityApi(
     },
   );
 
-  app.get<{ Params: { draftId: string; kind: "statuses" | "issue-types" } }>(
+  app.get<{ Params: { draftId: string; kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks" } }>(
     "/api/drafts/:draftId/config/:kind",
     async (request) => {
       const actor = await authenticate(request);

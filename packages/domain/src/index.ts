@@ -452,9 +452,12 @@ export class EntityStore {
     return { project, milestones, tasks, draft_fingerprint: project.draft_fingerprint };
   }
 
-  async getConfiguration(draftId: string, kind: "statuses" | "issue-types"): Promise<EntityResult> {
+  async getConfiguration(draftId: string, kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks"): Promise<EntityResult> {
     const metadata = await this.drafts.getWorkspace(draftId);
-    const relative = kind === "statuses" ? ".gitpm/statuses.yaml" : ".gitpm/issue-types.yaml";
+    const relative = kind === "statuses" ? ".gitpm/statuses.yaml"
+      : kind === "issue-types" ? ".gitpm/issue-types.yaml"
+        : kind === "work-categories" ? ".gitpm/work-categories.yaml"
+          : ".gitpm/schedule-tracks.yaml";
     const absolute = await resolveDomainPath(metadata.worktree_path, relative);
     const document = parseYamlDocument(await readFile(absolute, "utf8"), relative);
     return {

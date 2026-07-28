@@ -97,6 +97,9 @@ class FakeApi implements GitPmApi {
   async createComment(): Promise<never> { throw new Error("not used"); }
   async updateComment(): Promise<never> { throw new Error("not used"); }
   async deleteComment(): Promise<never> { throw new Error("not used"); }
+  async listTimeEntries(): Promise<readonly never[]> { return []; }
+  async createTimeEntry(): Promise<never> { throw new Error("not used"); }
+  async voidTimeEntry(): Promise<never> { throw new Error("not used"); }
   async notifications() { return { items: [] }; }
   private replace(draftId: string, values: Partial<DraftStatus>) { const next = { ...(this.drafts.find((item) => item.draft_id === draftId) ?? draft({ draft_id: draftId })), ...values }; this.drafts = [next]; return next; }
 }
