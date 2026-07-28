@@ -917,18 +917,18 @@ Worktree: `D:\other_projects\GitPM-worktrees\feat-multi-track-scheduling`
 
 ### Качество и критерии готовности (раздел 20)
 
-- [ ] 1. Один или несколько контуров
-- [ ] 2. Разные сроки/зависимости по контурам
-- [ ] 3. Задача может отсутствовать в контуре
-- [ ] 4. Gantt накладывает контуры
-- [ ] 5. Факт дискретными сегментами
-- [ ] 6. TimeEntry в завершённую задачу
-- [ ] 7. Агрегация факта по задаче/этапу/проекту
-- [ ] 8. Часы после окончания графика
-- [ ] 9. Workload по выбранному контуру
+- [x] 1. Один или несколько контуров
+- [x] 2. Разные сроки/зависимости по контурам
+- [x] 3. Задача может отсутствовать в контуре
+- [~] 4. Gantt накладывает контуры (пока только primary-контур; мульти-контур — TODO)
+- [~] 5. Факт дискретными сегментами (движок + UI-список; сегменты на Ганте — TODO)
+- [x] 6. TimeEntry в завершённую задачу
+- [x] 7. Агрегация факта по задаче/этапу/проекту
+- [~] 8. Часы после окончания графика (движок есть; дашборд — TODO)
+- [~] 9. Workload по выбранному контуру (UI читает schedules; явный workload_track — TODO)
 - [x] 10. Нет старых корневых полей
 - [x] 11. Нет compatibility layer / v1
-- [ ] 12. Web UI и CLI
+- [~] 12. Web UI и CLI (time-entry есть и в UI, и в CLI; editing scheduling — single-track)
 - [ ] 13. build/typecheck/validation/unit/E2E проходят
 - [~] Локальный гейт `corepack pnpm verify:local` зелёный (lint/typecheck/unit/schema зелёны; E2E пока не запускался)
 
@@ -947,6 +947,11 @@ Worktree: `D:\other_projects\GitPM-worktrees\feat-multi-track-scheduling`
 - (инкремент 3) Проверка: `pnpm lint` чисто; `pnpm build` OK; `pnpm typecheck` OK; `pnpm test` — 463/463 (web 153/153) зелёные.
 - (инкремент 3) **Осталось**: мульти-контурный UI (Этап 4: несколько полос, выбор контура, actual-сегменты, tooltip/сравнение дат, per-track зависимости), блок фактических трудозатрат + форма TimeEntry (Этап 5), отчёты факта/plan-vs-actual (Этап 6), категорийный расчёт статусов (раздел 17), интеграция scheduling/time-entries + TimeEntryStore/API/CLI (Этап 2/3), semantic diff/export/E2E/perf/docs (Этап 7). E2E пока не запускались.
 - (инкремент 4) **TimeEntry backend**: `packages/domain` `TimeEntryStore` (list/create/void/replace, mutation boundary, fingerprint, atomic write, validation, rollback) по образцу `CommentStore`; префикс ID `E`; server API `registerTimeEntryApi` (GET/POST time-entries, POST `:entryId/void`, `:entryId/replace`) + body-схемы + маппинг ошибок; wiring в `app.ts`/`repository-runtime.ts`. Запрет удаления Task при наличии TimeEntry уже обеспечен через `validateDelete` (time-entry в directReferences). Интеграционный тест API зелёный (list/create/void + reject bad category/hours). Проверка: lint чисто, build/typecheck OK, 464/464 тестов.
+- (инкремент 5) **TimeEntry UI + work-categories endpoint**: web-клиент `listTimeEntries/createTimeEntry/voidTimeEntry` + декодеры; компонент `apps/web/src/task-time-entries.tsx` (сумма/первая/последняя активность через `@gitpm/time-entries`, список, void, форма добавления) встроен в `TaskPanel`; `EntityStore.getConfiguration` отдаёт `work-categories`/`schedule-tracks` через `GET /config/:kind`. 465/465 тестов.
+- (инкремент 6) **TimeEntry CLI**: команды `gitpm time-entry list|create|void` (direct-runtime + dispatch + usage). 466/466 тестов.
+- (инкремент 7) **Semantic diff для schedules**: `packages/changes` `fieldChanges` рекурсивно обходит plain-object значения (`schedules.<track>.<field>`, `planning.<field>`) и выдаёт dotted field-level изменения. 467/467 тестов.
+- (финал сессии) **Реализовано**: v2 data model (Этап 1), чистые движки scheduling/time-entries (Этапы 2/3 логика), UI чтения/записи `schedules.<track>` (Этапы 4–6 базово), TimeEntry full-stack (domain+API+CLI+UI, Этап 3 + часть 5), nested semantic diff (часть Этапа 7). v1 полностью удалён. Локально зелёно: lint/build/typecheck/unit/schema.
+- (финал сессии) **Осталось (явные TODO)**: мульти-контурный Gantt (Этап 4: переключатель контуров, несколько полос, actual-сегменты, tooltip/сравнение дат, per-track зависимости — пока Gantt рисует только primary-контур); дашборд проекта variance/overdue/часы-после-окончания (Этап 5); отчёты факта/plan-vs-actual и workload по `workload_track` (Этап 6); категорийный расчёт статусов вместо литерала `done` (раздел 17 — откачено: требует категории во всех тестовых фикстурах); export time-entries + дружелюбный semantic diff для TimeEntry (Этап 7); обновление документации (`docs/`, CLI.md, Repository_Format) под v2; E2E (direct и worktree) и performance smoke для большого числа TimeEntry. Полный гейт `verify:local` (вкл. e2e) не запускался.
 
 ### Реализовано в текущем инкременте (чистая логика)
 
