@@ -6,11 +6,11 @@ import { AdminWorkspace } from "./admin-ui.js";
 import type { ConfigurationDocument, ConfigurationResult, DraftStatus, EntityDocument, EntityResult } from "./types.js";
 
 const draft: DraftStatus = { draft_id: "DRF-ADMIN", owner_gitlab_user_id: "42", branch: "gitpm/42/DRF-ADMIN", base_commit: "a".repeat(40), writer_mode: "ui", state: "open", fingerprint: "b".repeat(64), created_at: "2026-07-10T00:00:00.000Z", updated_at: "2026-07-10T00:00:00.000Z" };
-const configDocument = (kind: "statuses" | "issue-types") => (kind === "statuses" ? { schema: "gitpm/statuses@2", statuses: [{ slug: "backlog", title: "Backlog", color: "gray", active: true }, { slug: "done", title: "Done", color: "green", active: true }] } : { schema: "gitpm/issue-types@1", issue_types: [{ slug: "task", title: "Task", color: "blue", active: true }] }) as ConfigurationDocument;
+const configDocument = (kind: "statuses" | "issue-types" | "work-categories") => (kind === "statuses" ? { schema: "gitpm/statuses@2", statuses: [{ slug: "backlog", title: "Backlog", color: "gray", active: true }, { slug: "done", title: "Done", color: "green", active: true }] } : kind === "work-categories" ? { schema: "gitpm/work-categories@1", categories: [{ slug: "regular", title: "Regular work", active: true }, { slug: "rework", title: "Rework", active: true }] } : { schema: "gitpm/issue-types@1", issue_types: [{ slug: "task", title: "Task", color: "blue", active: true }] }) as ConfigurationDocument;
 
 class AdminApi {
   entities: EntityResult[] = [];
-  configurations = new Map<"statuses" | "issue-types", ConfigurationResult>([["statuses", this.config("statuses")], ["issue-types", this.config("issue-types")]]);
+  configurations = new Map<"statuses" | "issue-types" | "work-categories", ConfigurationResult>([["statuses", this.config("statuses")], ["issue-types", this.config("issue-types")], ["work-categories", this.config("work-categories")]]);
   mutations = 0;
   private config(kind: "statuses" | "issue-types"): ConfigurationResult { return { document: configDocument(kind), path: `.gitpm/${kind}.yaml`, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) }; }
   private result(document: EntityDocument): EntityResult { this.mutations += 1; return { document, path: `${document.id}.yaml`, blob_id: String(this.mutations).padStart(40, "a"), draft_fingerprint: String(this.mutations).padStart(64, "b") }; }
@@ -19,7 +19,7 @@ class AdminApi {
   async updateEntity(_draftId: string, _type: string, entity: EntityResult, _fingerprint: string, document: EntityDocument) { const result = this.result(document); this.entities = this.entities.map((item) => item === entity ? result : item); return result; }
   async archiveEntity(draftId: string, type: string, entity: EntityResult, fingerprint: string) { return await this.updateEntity(draftId, type, entity, fingerprint, { ...entity.document, lifecycle: "archived" }); }
   async deleteEntity(_draftId: string, _type: string, entity: EntityResult) { this.mutations += 1; this.entities = this.entities.filter((item) => item !== entity); }
-  async getConfiguration(_draftId: string, kind: "statuses" | "issue-types") { return this.configurations.get(kind)!; }
+  async getConfiguration(_draftId: string, kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks") { return this.configurations.get(kind as "statuses" | "issue-types" | "work-categories")!; }
   async updateConfiguration(_draftId: string, kind: "statuses" | "issue-types", entity: ConfigurationResult, _fingerprint: string, document: ConfigurationDocument) { const result: ConfigurationResult = { ...entity, document }; this.configurations.set(kind, result); return result; }
 }
 
