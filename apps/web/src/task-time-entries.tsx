@@ -117,7 +117,7 @@ export function TaskTimeEntries(props: {
     <section className="task-time-entries">
       <div className="task-time-entries-heading">
         <h3><button aria-controls={`time-entry-body-${taskId}`} aria-expanded={open} className="section-toggle" onClick={() => setOpen((value) => !value)} type="button"><span aria-hidden="true" className="section-toggle-chevron">▾</span>{t("timeEffort.heading")}</button></h3>
-        <span className="task-time-entries-count">{activeCount}</span>
+        {activeCount > 0 && <span className="task-time-entries-count">{activeCount}</span>}
       </div>
       {open && (
         <>
