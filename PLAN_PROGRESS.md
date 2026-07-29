@@ -925,10 +925,10 @@ Worktree: `D:\other_projects\GitPM-worktrees\feat-multi-track-scheduling`
 - [x] 6. TimeEntry в завершённую задачу
 - [x] 7. Агрегация факта по задаче/этапу/проекту
 - [x] 8. Часы после окончания графика (движок + CLI `--after` + variance и часы-после в дашборде UI)
-- [~] 9. Workload по выбранному контуру (UI читает `plan` через резолвер; явное per-project разрешение `workload_track` — TODO)
+- [x] 9. Workload по выбранному контуру (workload-ui читает `planning.workload_track` проекта)
 - [x] 10. Нет старых корневых полей
 - [x] 11. Нет compatibility layer / v1
-- [~] 12. Web UI и CLI (time-entry и scheduling — в обоих; CLI `config update` пока только statuses/issue-types)
+- [x] 12. Web UI и CLI (time-entry, scheduling, config — в обоих)
 - [~] 13. build/typecheck/validation/unit проходят; E2E и полный `verify:local` не запускались
 - [~] Локальный гейт: lint/build/typecheck/unit/schema/planning зелёны; E2E не запускались
 
