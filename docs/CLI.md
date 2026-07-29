@@ -6,7 +6,7 @@ CLI живёт в `apps/cli` и собирается в `apps/cli/dist/index.js`
 ## Команды
 
 ```
-gitpm init [path]                    Создать skeleton схемы v1 в path (по умолчанию cwd)
+gitpm init [path]                    Создать skeleton схемы v2 (schedules, schedule-tracks, work-categories) в path (по умолчанию cwd)
 gitpm status [--draft <id>]
 gitpm draft create|open|status --draft <id> [--owner <id>]
 gitpm draft set-writer ui|external --draft <id> [--owner <id>]
@@ -22,7 +22,11 @@ gitpm comment list --project <id> --task <id>
 gitpm comment create --project <id> --task <id> (--body <text> | --file <path>)
 gitpm comment update --project <id> --task <id> --id <comment-id> (--body <text> | --file <path>)
 gitpm comment delete --project <id> --task <id> --id <comment-id>
-gitpm config show --kind statuses|issue-types
+gitpm time-entry list --project <id> --task <id> [--json]
+gitpm time-entry summary --project <id> --task <id> [--after <yyyy-mm-dd>] [--json]
+gitpm time-entry create --project <id> --task <id> --person <id> --date <yyyy-mm-dd> --hours <n> --category <slug> [--note <text>] [--json]
+gitpm time-entry void --project <id> --task <id> --id <entry-id> [--json]
+gitpm config show --kind statuses|issue-types|work-categories|schedule-tracks
 gitpm config update --kind statuses|issue-types [--file <yaml>] [--set <field>=<yaml-value>]... [--unset <field>] [--allow-delete]
 gitpm schema list
 gitpm schema show <type> [--example]
@@ -62,7 +66,7 @@ repository schema, repository ZIP — без `.git` по умолчанию ил
 `entity import` (alias: `entity bulk-import`) выполняет пакет атомарно: сначала планирует все ID, затем записывает пакет,
 один раз валидирует полный репозиторий и откатывает все файлы при любой ошибке. `--dry-run`
 выполняет тот же pipeline без сохранения изменений. CSV использует строку заголовков;
-числовые поля (`weekly_capacity_hours`, `estimate_hours`) разбираются как числа, а списочные
+числовые поля (`weekly_capacity_hours`, а также `effort_hours` внутри `schedules.<track>`) разбираются как числа, а списочные
 поля задаются JSON-массивами. YAML import содержит массив mappings, JSONL — один object на
 строку. В JSON-результате элементы содержат `source_index`, `row`, сгенерированный `id` и
 канонический `path`.
@@ -94,7 +98,7 @@ Project (поддерживается только для `project`; други�
 и опционально другой Milestone. `--to-parent` прикрепляет корень перемещаемого поддерева
 к Task целевого Project и Milestone; циклы запрещены. Все потомки получают целевые
 `project` и `milestone`, а их внутренние связи `parent` сохраняются. Cross-project
-зависимости `depends_on` блокируются validation.
+зависимости `schedules.<track>.depends_on` блокируются validation.
 
 `comment` управляет комментариями к Task: Markdown с упоминаниями `@[Name](person:U-...)`,
 soft-delete (tombstone остаётся в Git history). Доступно в direct mode.
@@ -133,7 +137,7 @@ business changes принадлежат указанному Project, а физ�
 | `GITPM_INIT_AUTHOR_EMAIL` | `gitpm@localhost` | `user.email` для initial commit. |
 | `GITPM_INIT_MESSAGE` | `Initialise GitPM repository` | Текст initial commit. |
 
-`gitpm init` создаёт валидный schema-v1 skeleton, корневой `.gitignore`,
+`gitpm init` создаёт валидный schema-v2 skeleton (включая `.gitpm/schedule-tracks.yaml` и `.gitpm/work-categories.yaml`), корневой `.gitignore`,
 корневой `.ignore` и `uploads/.gitkeep`. Входные файлы под `uploads/`
 игнорируются Git; каталог разрешён через `allowed_top_level_directories` и не
 является domain storage. `.ignore` возвращает `uploads/` в область поиска
