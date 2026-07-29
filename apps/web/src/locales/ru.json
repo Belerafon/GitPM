@@ -295,6 +295,7 @@
   ,"admin.editConfig": "Редактировать: {name}"
   ,"admin.statuses": "Статусы"
   ,"admin.issueTypes": "Типы задач"
+  ,"admin.workCategories": "Категории работ"
   ,"admin.noServerConfig": "Настройки сервера и OAuth намеренно не представлены в этом интерфейсе."
   ,"admin.editPerson": "Редактировать сотрудника"
   ,"admin.editTeam": "Редактировать команду"

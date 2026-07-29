@@ -295,6 +295,7 @@
   ,"admin.editConfig": "Edit {name}"
   ,"admin.statuses": "Statuses"
   ,"admin.issueTypes": "Issue types"
+  ,"admin.workCategories": "Work categories"
   ,"admin.noServerConfig": "Server and OAuth configuration is intentionally not exposed here."
   ,"admin.editPerson": "Edit person"
   ,"admin.editTeam": "Edit team"

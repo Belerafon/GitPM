@@ -133,7 +133,7 @@ export interface GitPmApi {
   archiveEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string): Promise<EntityResult>;
   deleteEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string, unlinkReferences?: boolean, cascadeReferences?: boolean): Promise<void>;
   getConfiguration(draftId: string, kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks"): Promise<ConfigurationResult>;
-  updateConfiguration(draftId: string, kind: "statuses" | "issue-types", entity: ConfigurationResult, fingerprint: string, document: ConfigurationDocument): Promise<ConfigurationResult>;
+  updateConfiguration(draftId: string, kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks", entity: ConfigurationResult, fingerprint: string, document: ConfigurationDocument): Promise<ConfigurationResult>;
   listChanges(draftId: string): Promise<ChangesList>;
   listWorktree(draftId: string, path?: string): Promise<WorktreeDirectory>;
   readWorktreeFile(draftId: string, path: string): Promise<WorktreeFile>;
@@ -294,7 +294,7 @@ export class HttpGitPmApi implements GitPmApi {
   async getConfiguration(draftId: string, kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks"): Promise<ConfigurationResult> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/config/${kind}`, decodeConfigurationResult);
   }
-  async updateConfiguration(draftId: string, kind: "statuses" | "issue-types", entity: ConfigurationResult, expected_fingerprint: string, document: ConfigurationDocument): Promise<ConfigurationResult> {
+  async updateConfiguration(draftId: string, kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks", entity: ConfigurationResult, expected_fingerprint: string, document: ConfigurationDocument): Promise<ConfigurationResult> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/config/${kind}`, decodeConfigurationResult, { method: "PUT", body: JSON.stringify({ expected_fingerprint, expected_blob_id: entity.blob_id, document }) });
   }
   async listChanges(draftId: string): Promise<ChangesList> {
