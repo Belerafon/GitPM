@@ -57,11 +57,7 @@ describe("task comments", () => {
     } as unknown as GitPmApi;
 
     render(<TaskComments api={api} confirmDelete={() => true} draft={draft} fingerprint={draft.fingerprint} locale="en" onFingerprintChange={async () => undefined} onNavigate={() => undefined} people={[anna]} projectId="P-26-MGP84K" readOnly={false} taskId="T-26-P9G3P8" />);
-    const revealComposer = await screen.findByRole("button", { name: "Add comment" });
-    expect(revealComposer.getAttribute("aria-expanded")).toBe("false");
-    expect(screen.queryByLabelText("Add comment")).toBeNull();
-    fireEvent.click(revealComposer);
-    const composer = screen.getByLabelText("Add comment");
+    const composer = await screen.findByLabelText("Add comment");
     fireEvent.change(composer, { target: { value: "Please review @Ann", selectionStart: 18 } });
     fireEvent.click(await screen.findByRole("option", { name: /Anna Petrova/iu }));
     expect(composer).toHaveProperty("value", "Please review @[Anna Petrova](person:U-26-5EBAE3) ");

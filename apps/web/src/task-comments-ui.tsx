@@ -67,7 +67,6 @@ export function TaskComments({ api, draft, projectId, taskId, people, fingerprin
   const draftKey = `gitpm.comment-draft:${draft.draft_id}:${taskId}`;
   const [comments, setComments] = useState<readonly CommentResult[]>([]);
   const [body, setBody] = useState(() => window.sessionStorage.getItem(draftKey) ?? "");
-  const [composerOpen, setComposerOpen] = useState(() => body !== "");
   const [currentFingerprint, setCurrentFingerprint] = useState(fingerprint);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -156,11 +155,11 @@ export function TaskComments({ api, draft, projectId, taskId, people, fingerprin
     if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void create(); }
   };
 
-  const showComposer = !readOnly && !loading && (comments.length > 0 || composerOpen);
+  const showComposer = open && !readOnly && !loading;
   const activeCommentCount = comments.filter((comment) => comment.document.state === "active").length;
 
   return <section className="task-comments" aria-labelledby="task-comments-heading">
-    <div className="task-comments-heading"><h3 id="task-comments-heading"><button aria-controls={`task-comments-body-${taskId}`} aria-expanded={open} className="section-toggle" onClick={() => setOpen((value) => !value)} type="button"><span aria-hidden="true" className="section-toggle-chevron">▾</span>{t("comments.heading")}</button></h3><span>{activeCommentCount}</span>{open && !readOnly && !loading && comments.length === 0 && !composerOpen && <button aria-controls={`comment-composer-${taskId}`} aria-expanded={false} className="text-link" onClick={() => setComposerOpen(true)} type="button">{t("comments.add")}</button>}</div>
+    <div className="task-comments-heading"><h3 id="task-comments-heading"><button aria-controls={`task-comments-body-${taskId}`} aria-expanded={open} className="section-toggle" onClick={() => setOpen((value) => !value)} type="button"><span aria-hidden="true" className="section-toggle-chevron">▾</span>{t("comments.heading")}</button></h3>{activeCommentCount > 0 && <span>{activeCommentCount}</span>}</div>
     {open && (<>
       {loading && <p className="empty-copy">{t("status.loading")}</p>}
       <div className="comment-list">{comments.map((comment) => <article className={`task-comment${comment.document.state === "deleted" ? " deleted" : ""}${comment.document.id === focusCommentId ? " focused" : ""}`} id={`comment-${comment.document.id}`} key={comment.document.id}>
