@@ -1,0 +1,31 @@
+schema: gitpm/schedule-tracks@1
+tracks:
+  - slug: plan
+    title: Working plan
+    kind: manual
+    capabilities:
+      - dates
+      - effort
+      - dependencies
+  - slug: target
+    title: Target
+    kind: manual
+    capabilities:
+      - dates
+      - effort
+  - slug: actual
+    title: Actual activity
+    kind: actual
+    source: time_entries
+defaults:
+  enabled_tracks:
+    - plan
+    - target
+    - actual
+  primary_track: plan
+  workload_track: plan
+  comparison_track: target
+  dashboard_tracks:
+    - plan
+    - target
+    - actual
