@@ -18,7 +18,7 @@ schedules:
   plan:
     start: 2026-07-27
     finish: 2026-08-14
-    effort_hours: 48
+    effort_hours: 72
     depends_on:
       - T-26-VWWHC6 # task: Провести интервью с операторами поддержки
 labels:

@@ -17,7 +17,7 @@ schedules:
   plan:
     start: 2026-08-10
     finish: 2026-09-04
-    effort_hours: 56
+    effort_hours: 96
     depends_on:
       - T-26-FZHVK3 # task: Подготовить интерактивный прототип
 labels:

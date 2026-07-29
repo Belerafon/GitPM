@@ -18,7 +18,7 @@ schedules:
   plan:
     start: 2026-08-24
     finish: 2026-09-18
-    effort_hours: 56
+    effort_hours: 88
     depends_on:
       - T-26-ZQFF0R # task: Подготовить дизайн-систему мобильного приложения
       - T-26-7XAJ1Q # task: Реализовать API-агрегатор продуктов
