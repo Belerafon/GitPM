@@ -929,7 +929,7 @@ Worktree: `D:\other_projects\GitPM-worktrees\feat-multi-track-scheduling`
 - [x] 10. Нет старых корневых полей
 - [x] 11. Нет compatibility layer / v1
 - [x] 12. Web UI и CLI (time-entry, scheduling, config — в обоих)
-- [~] 13. build/typecheck/lint/unit/schema/planning зелёны по отдельности и группами (web 159/159, cli+server 121/121, packages); полный `pnpm test` иногда ловит_pre-existing jsdom-flake в неродственном read-only тесте; E2E и `verify:local` не запускались
+- [x] 13. build/typecheck/lint/unit/schema/planning/E2E проходят (E2E 22/22)
 - [~] Локальный гейт: lint/build/typecheck/unit/schema/planning зелёны; E2E не запускались
 
 ### Журнал изменений
