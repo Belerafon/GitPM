@@ -1,0 +1,12 @@
+schema: gitpm/comment@1
+id: N-26-000005
+project: P-26-7VWANM # project: Переезд аналитической платформы
+task: T-26-5ZH6NH # task: Перенести загрузку транзакционных данных
+author:
+  provider: git
+  subject: sergey.lebedev@example.test
+  display_name: Сергей Лебедев
+created_at: 2026-09-25T11:00:00.000Z
+state: active
+body_markdown: Посмотрю логику водяного знака. Предварительно — расширение окна до 24 часов должно снять дубли.
+mentions: []

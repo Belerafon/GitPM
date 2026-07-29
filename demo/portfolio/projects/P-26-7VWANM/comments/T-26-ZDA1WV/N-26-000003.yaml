@@ -1,0 +1,12 @@
+schema: gitpm/comment@1
+id: N-26-000003
+project: P-26-7VWANM # project: Переезд аналитической платформы
+task: T-26-ZDA1WV # task: Спроектировать целевую архитектуру хранилища
+author:
+  provider: git
+  subject: ilya.kuznetsov@example.test
+  display_name: Илья Кузнецов
+created_at: 2026-09-04T09:40:00.000Z
+state: active
+body_markdown: "Подтверждаю: TDE покрывает требование. Готовлю уточнённую схему к ревью."
+mentions: []

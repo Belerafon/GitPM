@@ -1,0 +1,16 @@
+schema: gitpm/time-entry@1
+id: E-26-00000D
+project: P-26-7VWANM # project: Переезд аналитической платформы
+task: T-26-ZDA1WV # task: Спроектировать целевую архитектуру хранилища
+person: U-26-FSB3GM # person: Илья Кузнецов
+performed_on: 2026-09-10
+hours: 4
+category: regular
+note_markdown: Дубль учёта — запись аннулирована.
+created_at: 2026-09-10T17:30:00.000Z
+state: voided
+voided_at: 2026-09-11T09:15:00.000Z
+voided_by:
+  provider: git
+  subject: ilya.kuznetsov@example.test
+  display_name: Илья Кузнецов

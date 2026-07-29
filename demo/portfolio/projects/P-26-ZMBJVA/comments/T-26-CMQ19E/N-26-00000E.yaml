@@ -1,0 +1,12 @@
+schema: gitpm/comment@1
+id: N-26-00000E
+project: P-26-ZMBJVA # project: Портал поддержки клиентов
+task: T-26-CMQ19E # task: Подключить единый вход клиента
+author:
+  provider: git
+  subject: aleksey.vinogradov@example.test
+  display_name: Алексей Виноградов
+created_at: 2026-08-26T10:00:00.000Z
+state: active
+body_markdown: Эскалация заведена, SLA ответа — 3 рабочих дня. Параллельно прорабатываем fallback через логин и пароль.
+mentions: []

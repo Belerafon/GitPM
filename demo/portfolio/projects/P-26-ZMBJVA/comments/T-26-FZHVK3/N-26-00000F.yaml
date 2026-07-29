@@ -1,0 +1,14 @@
+schema: gitpm/comment@1
+id: N-26-00000F
+project: P-26-ZMBJVA # project: Портал поддержки клиентов
+task: T-26-FZHVK3 # task: Подготовить интерактивный прототип
+author:
+  provider: git
+  subject: maria.sokolova@example.test
+  display_name: Мария Соколова
+created_at: 2026-08-13T12:00:00.000Z
+state: active
+body_markdown: Структура статей согласована с поддержкой. Нужно решение по набору тегов — @[Наталья Павлова](person:U-26-0225HT)?
+mentions:
+  - person: U-26-0225HT # person: Наталья Павлова
+    mentioned_at: 2026-08-13T12:00:00.000Z

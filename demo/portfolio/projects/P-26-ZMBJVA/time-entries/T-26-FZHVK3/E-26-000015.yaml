@@ -1,0 +1,11 @@
+schema: gitpm/time-entry@1
+id: E-26-000015
+project: P-26-ZMBJVA # project: Портал поддержки клиентов
+task: T-26-FZHVK3 # task: Подготовить интерактивный прототип
+person: U-26-NEDN00 # person: Мария Соколова
+performed_on: 2026-07-28
+hours: 6
+category: regular
+note_markdown: Структура базы знаний.
+created_at: 2026-07-28T17:30:00.000Z
+state: active

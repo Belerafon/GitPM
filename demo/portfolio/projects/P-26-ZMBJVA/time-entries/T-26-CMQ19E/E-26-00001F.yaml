@@ -1,0 +1,11 @@
+schema: gitpm/time-entry@1
+id: E-26-00001F
+project: P-26-ZMBJVA # project: Портал поддержки клиентов
+task: T-26-CMQ19E # task: Подключить единый вход клиента
+person: U-26-AD9KDK # person: Алексей Виноградов
+performed_on: 2026-08-19
+hours: 4
+category: regular
+note_markdown: Анализ claim IdP заказчика.
+created_at: 2026-08-19T17:30:00.000Z
+state: active

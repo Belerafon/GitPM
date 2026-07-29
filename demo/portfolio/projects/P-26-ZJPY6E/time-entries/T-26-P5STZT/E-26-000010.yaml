@@ -1,0 +1,11 @@
+schema: gitpm/time-entry@1
+id: E-26-000010
+project: P-26-ZJPY6E # project: Мобильный банк 2.0
+task: T-26-P5STZT # task: Добавить биометрический вход
+person: U-26-AD9KDK # person: Алексей Виноградов
+performed_on: 2026-09-02
+hours: 6
+category: regular
+note_markdown: Сквозное тестирование ленты.
+created_at: 2026-09-02T17:30:00.000Z
+state: active

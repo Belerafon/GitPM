@@ -1,0 +1,11 @@
+schema: gitpm/time-entry@1
+id: E-26-000006
+project: P-26-7VWANM # project: Переезд аналитической платформы
+task: T-26-XQRKPB # task: Инвентаризировать источники и потребителей данных
+person: U-26-ETKSWS # person: Ольга Новикова
+performed_on: 2026-08-26
+hours: 6
+category: rework
+note_markdown: Доработка реестра после проверки данными.
+created_at: 2026-08-26T17:30:00.000Z
+state: active

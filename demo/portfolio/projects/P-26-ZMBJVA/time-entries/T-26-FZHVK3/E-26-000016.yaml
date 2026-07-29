@@ -1,0 +1,11 @@
+schema: gitpm/time-entry@1
+id: E-26-000016
+project: P-26-ZMBJVA # project: Портал поддержки клиентов
+task: T-26-FZHVK3 # task: Подготовить интерактивный прототип
+person: U-26-9C1ZR4 # person: Елена Морозова
+performed_on: 2026-08-04
+hours: 6
+category: regular
+note_markdown: Шаблоны и типы статей.
+created_at: 2026-08-04T17:30:00.000Z
+state: active

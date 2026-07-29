@@ -1,0 +1,11 @@
+schema: gitpm/time-entry@1
+id: E-26-000005
+project: P-26-7VWANM # project: Переезд аналитической платформы
+task: T-26-XQRKPB # task: Инвентаризировать источники и потребителей данных
+person: U-26-1MV0QD # person: Максим Фёдоров
+performed_on: 2026-08-21
+hours: 4
+category: regular
+note_markdown: Приоритизация источников по критичности.
+created_at: 2026-08-21T17:30:00.000Z
+state: active

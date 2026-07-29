@@ -1,0 +1,11 @@
+schema: gitpm/time-entry@1
+id: E-26-00000E
+project: P-26-7VWANM # project: Переезд аналитической платформы
+task: T-26-5K0WZ2 # task: Развернуть контуры разработки и эксплуатации
+person: U-26-FSB3GM # person: Илья Кузнецов
+performed_on: 2026-09-08
+hours: 6
+category: regular
+note_markdown: Развертывание dev-контура.
+created_at: 2026-09-08T17:30:00.000Z
+state: active

@@ -1,0 +1,11 @@
+schema: gitpm/time-entry@1
+id: E-26-000018
+project: P-26-ZMBJVA # project: Портал поддержки клиентов
+task: T-26-F6QFVC # task: Реализовать форму обращения с вложениями
+person: U-26-RKTV2A # person: Дмитрий Орлов
+performed_on: 2026-08-19
+hours: 6
+category: regular
+note_markdown: "Каталог услуг: фронтенд."
+created_at: 2026-08-19T17:30:00.000Z
+state: active
