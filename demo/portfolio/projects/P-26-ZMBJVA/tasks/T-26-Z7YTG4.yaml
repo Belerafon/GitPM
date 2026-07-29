@@ -1,4 +1,4 @@
-schema: gitpm/task@1
+schema: gitpm/task@2
 id: T-26-Z7YTG4 # task: Провести регрессионное тестирование
 project: P-26-ZMBJVA # project: Портал поддержки клиентов
 title: Провести регрессионное тестирование
@@ -14,15 +14,17 @@ assignees:
   - U-26-FSB3GM # person: Илья Кузнецов
   - U-26-J4FH55 # person: Сергей Лебедев
   - U-26-AD9KDK # person: Алексей Виноградов
-estimate_hours: 48
-start: 2026-10-05
-due: 2026-10-16
-depends_on:
-  - T-26-PHR2RZ # task: Перенести статьи в базу знаний
-  - T-26-CMQ19E # task: Подключить единый вход клиента
-  - T-26-F6QFVC # task: Реализовать форму обращения с вложениями
-  - T-26-4T9WV1 # task: Настроить маршрутизацию и контроль SLA
-  - T-26-YQV7RD # task: Интегрировать портал с CRM и телефонией
+schedules:
+  plan:
+    start: 2026-10-05
+    finish: 2026-10-16
+    effort_hours: 48
+    depends_on:
+      - T-26-PHR2RZ # task: Перенести статьи в базу знаний
+      - T-26-CMQ19E # task: Подключить единый вход клиента
+      - T-26-F6QFVC # task: Реализовать форму обращения с вложениями
+      - T-26-4T9WV1 # task: Настроить маршрутизацию и контроль SLA
+      - T-26-YQV7RD # task: Интегрировать портал с CRM и телефонией
 labels:
   - qa
   - регресс

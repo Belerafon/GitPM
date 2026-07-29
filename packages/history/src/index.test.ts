@@ -22,9 +22,9 @@ describe("history and revert drafts", () => {
     await mkdir(path.join(source, "projects", "P-26-H1ST0R"), { recursive: true });
     await git(source, "init", "-b", "main");
     const file = path.join(source, "projects", "P-26-H1ST0R", "project.yaml");
-    await writeFile(file, "schema: gitpm/project@1\nid: P-26-H1ST0R\nname: Before\nlifecycle: active\n", "utf8");
+    await writeFile(file, "schema: gitpm/project@2\nid: P-26-H1ST0R\nname: Before\nlifecycle: active\n", "utf8");
     await git(source, "add", "."); await git(source, "-c", "user.name=GitPM Test", "-c", "user.email=gitpm@example.test", "commit", "-m", "Initial project");
-    await writeFile(file, "schema: gitpm/project@1\nid: P-26-H1ST0R\nname: After\nlifecycle: active\n", "utf8");
+    await writeFile(file, "schema: gitpm/project@2\nid: P-26-H1ST0R\nname: After\nlifecycle: active\n", "utf8");
     await git(source, "add", "."); await git(source, "-c", "user.name=GitPM Test", "-c", "user.email=gitpm@example.test", "commit", "-m", "Merged project update");
     const revertedCommit = await git(source, "rev-parse", "HEAD");
     await git(root, "init", "--bare", remote); await git(source, "remote", "add", "origin", remote); await git(source, "push", "origin", "main");

@@ -1,4 +1,4 @@
-schema: gitpm/task@1
+schema: gitpm/task@2
 id: T-26-MMEAX4 # task: Провести нагрузочное тестирование API
 project: P-26-ZJPY6E # project: Мобильный банк 2.0
 title: Провести нагрузочное тестирование API
@@ -13,12 +13,14 @@ milestone: M-26-SY14EX # milestone: Публикация в магазинах
 assignees:
   - U-26-FSB3GM # person: Илья Кузнецов
   - U-26-J4FH55 # person: Сергей Лебедев
-estimate_hours: 40
-start: 2026-10-05
-due: 2026-10-16
-depends_on:
-  - T-26-7XAJ1Q # task: Реализовать API-агрегатор продуктов
-  - T-26-T7STGV # task: Собрать единую витрину продуктов
+schedules:
+  plan:
+    start: 2026-10-05
+    finish: 2026-10-16
+    effort_hours: 40
+    depends_on:
+      - T-26-7XAJ1Q # task: Реализовать API-агрегатор продуктов
+      - T-26-T7STGV # task: Собрать единую витрину продуктов
 labels:
   - qa
   - производительность

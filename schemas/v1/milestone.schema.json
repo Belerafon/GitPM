@@ -5,13 +5,13 @@
   "additionalProperties": false,
   "required": ["schema", "id", "project", "name", "lifecycle"],
   "properties": {
-    "schema": {"const": "gitpm/milestone@1"},
+    "schema": {"const": "gitpm/milestone@2"},
     "id": {"$ref": "common.schema.json#/$defs/milestoneId"},
     "project": {"$ref": "common.schema.json#/$defs/projectId"},
     "name": {"type": "string", "minLength": 1},
     "lifecycle": {"$ref": "common.schema.json#/$defs/lifecycle"},
     "description_markdown": {"type": "string"},
-    "due": {"$ref": "common.schema.json#/$defs/date"},
+    "schedules": {"$ref": "common.schema.json#/$defs/scheduleMap"},
     "task_order": {
       "type": "array",
       "items": {"$ref": "common.schema.json#/$defs/taskId"},

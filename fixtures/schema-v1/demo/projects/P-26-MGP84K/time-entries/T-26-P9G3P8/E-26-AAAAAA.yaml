@@ -1,0 +1,11 @@
+schema: gitpm/time-entry@1
+id: E-26-AAAAAA
+project: P-26-MGP84K # project: GitPM launch
+task: T-26-P9G3P8 # task: Approve schema v1
+person: U-26-5EBAE3 # person: Anna Petrova
+performed_on: 2026-08-10
+hours: 1.5
+category: warranty
+note_markdown: Follow-up fix after acceptance
+created_at: 2026-08-10T12:00:00Z
+state: active

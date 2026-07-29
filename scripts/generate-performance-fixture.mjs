@@ -43,7 +43,7 @@ export async function generatePerformanceFixture(root) {
     "",
   ].join("\n"));
   await put(root, ".gitpm/statuses.yaml", [
-    "schema: gitpm/statuses@1",
+    "schema: gitpm/statuses@2",
     "statuses:",
     "  - slug: backlog",
     "    title: Backlog",
@@ -94,7 +94,7 @@ export async function generatePerformanceFixture(root) {
   for (let projectIndex = 1; projectIndex <= PROJECT_COUNT; projectIndex += 1) {
     const project = projectId(projectIndex);
     await put(root, `projects/${project}/project.yaml`, [
-      "schema: gitpm/project@1",
+      "schema: gitpm/project@2",
       `id: ${project}`,
       `name: Performance Project ${String(projectIndex).padStart(2, "0")}`,
       "status: in-progress",
@@ -107,7 +107,7 @@ export async function generatePerformanceFixture(root) {
     for (let offset = 0; offset < TASKS_PER_PROJECT; offset += 1) {
       const index = firstTask + offset;
       writes.push(put(root, taskRelativePath(index), [
-        "schema: gitpm/task@1",
+        "schema: gitpm/task@2",
         `id: ${taskId(index)}`,
         `project: ${project}`,
         `title: Task ${String(index).padStart(4, "0")}`,

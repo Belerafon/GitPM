@@ -1,4 +1,4 @@
-schema: gitpm/task@1
+schema: gitpm/task@2
 id: T-26-VWWHC6 # task: Провести интервью с операторами поддержки
 project: P-26-ZMBJVA # project: Портал поддержки клиентов
 title: Провести интервью с операторами поддержки
@@ -14,9 +14,11 @@ assignees:
   - U-26-9C1ZR4 # person: Елена Морозова
   - U-26-ETKSWS # person: Ольга Новикова
   - U-26-0225HT # person: Наталья Павлова
-estimate_hours: 32
-start: 2026-07-13
-due: 2026-07-24
+schedules:
+  plan:
+    start: 2026-07-13
+    finish: 2026-07-24
+    effort_hours: 32
 labels:
   - исследование
   - процессы

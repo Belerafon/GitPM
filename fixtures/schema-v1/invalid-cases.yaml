@@ -8,11 +8,22 @@ cases:
     expected_code: PATH_PROJECT_DIRECTORY
   - name: cross-project-dependency
     file: projects/P-26-MGP84K/tasks/T-26-RHBNH8.yaml
-    field: depends_on.0
+    field: schedules.plan.depends_on.0
     value: T-26-G2TG9R
     expected_code: REF_CROSS_PROJECT
   - name: invalid-estimate-step
     file: projects/P-26-MGP84K/tasks/T-26-RHBNH8.yaml
-    field: estimate_hours
+    field: schedules.plan.effort_hours
     value: 1.1
     expected_code: SCHEMA_INVALID
+  - name: unknown-schedule-track
+    file: projects/P-26-MGP84K/tasks/T-26-RHBNH8.yaml
+    field: schedules.ghost
+    value:
+      effort_hours: 8
+    expected_code: SCHEDULE_TRACK_UNKNOWN
+  - name: time-entry-unknown-category
+    file: projects/P-26-MGP84K/time-entries/T-26-P9G3P8/E-26-AAAAAA.yaml
+    field: category
+    value: nonexistent
+    expected_code: CONFIG_REFERENCE

@@ -1,4 +1,4 @@
-schema: gitpm/task@1
+schema: gitpm/task@2
 id: T-26-TSD15E # task: Провести параллельный расчёт отчётности
 project: P-26-7VWANM # project: Переезд аналитической платформы
 title: Провести параллельный расчёт отчётности
@@ -14,13 +14,15 @@ assignees:
   - U-26-J4FH55 # person: Сергей Лебедев
   - U-26-ETKSWS # person: Ольга Новикова
   - U-26-0225HT # person: Наталья Павлова
-estimate_hours: 80
-start: 2026-11-30
-due: 2027-01-08
-depends_on:
-  - T-26-C9N14V # task: Настроить проверки качества данных
-  - T-26-VMXXK9 # task: Пересобрать продуктовые дашборды
-  - T-26-R1JFHC # task: Внедрить ролевую модель доступа
+schedules:
+  plan:
+    start: 2026-11-30
+    finish: 2027-01-08
+    effort_hours: 80
+    depends_on:
+      - T-26-C9N14V # task: Настроить проверки качества данных
+      - T-26-VMXXK9 # task: Пересобрать продуктовые дашборды
+      - T-26-R1JFHC # task: Внедрить ролевую модель доступа
 labels:
   - приёмка
   - отчётность

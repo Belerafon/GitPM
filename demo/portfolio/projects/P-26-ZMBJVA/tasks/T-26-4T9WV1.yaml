@@ -1,4 +1,4 @@
-schema: gitpm/task@1
+schema: gitpm/task@2
 id: T-26-4T9WV1 # task: Настроить маршрутизацию и контроль SLA
 project: P-26-ZMBJVA # project: Портал поддержки клиентов
 title: Настроить маршрутизацию и контроль SLA
@@ -14,11 +14,13 @@ assignees:
   - U-26-RKTV2A # person: Дмитрий Орлов
   - U-26-ETKSWS # person: Ольга Новикова
   - U-26-0225HT # person: Наталья Павлова
-estimate_hours: 72
-start: 2026-09-07
-due: 2026-10-02
-depends_on:
-  - T-26-F6QFVC # task: Реализовать форму обращения с вложениями
+schedules:
+  plan:
+    start: 2026-09-07
+    finish: 2026-10-02
+    effort_hours: 72
+    depends_on:
+      - T-26-F6QFVC # task: Реализовать форму обращения с вложениями
 labels:
   - sla
   - автоматизация

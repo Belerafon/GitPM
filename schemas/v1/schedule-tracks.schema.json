@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gitpm.dev/schemas/v1/schedule-tracks.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "tracks", "defaults"],
+  "properties": {
+    "schema": {"const": "gitpm/schedule-tracks@1"},
+    "tracks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["slug", "title", "kind"],
+        "properties": {
+          "slug": {"$ref": "common.schema.json#/$defs/slug"},
+          "title": {"type": "string", "minLength": 1},
+          "kind": {"$ref": "common.schema.json#/$defs/trackKind"},
+          "capabilities": {
+            "type": "array",
+            "items": {"$ref": "common.schema.json#/$defs/trackCapability"},
+            "uniqueItems": true
+          },
+          "source": {"$ref": "common.schema.json#/$defs/trackSource"}
+        }
+      }
+    },
+    "defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled_tracks": {
+          "type": "array",
+          "items": {"$ref": "common.schema.json#/$defs/slug"},
+          "uniqueItems": true
+        },
+        "primary_track": {"$ref": "common.schema.json#/$defs/slug"},
+        "workload_track": {"$ref": "common.schema.json#/$defs/slug"},
+        "comparison_track": {"$ref": "common.schema.json#/$defs/slug"},
+        "dashboard_tracks": {
+          "type": "array",
+          "items": {"$ref": "common.schema.json#/$defs/slug"},
+          "uniqueItems": true
+        }
+      }
+    }
+  }
+}

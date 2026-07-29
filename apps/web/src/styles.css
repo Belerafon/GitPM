@@ -263,6 +263,9 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .project-plan-meta dt { color: #68706b; font-size: .72rem; }
 .project-plan-meta dd { margin: 0; font-size: .8rem; font-weight: 650; }
 .project-plan-summary { display: flex; flex-wrap: wrap; gap: 1.5rem; margin: 0; border-bottom: 1px solid #d9ddd6; padding: 0 0 .65rem; }
+.project-snapshot dl { display: flex; flex-wrap: wrap; gap: 1.25rem; margin: 0; }
+.project-snapshot dt { font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; color: #647068; }
+.project-snapshot dd { margin: 0; font-weight: 600; }
 .project-plan-summary div { display: flex; gap: .4rem; align-items: baseline; }
 .project-plan-summary dt { color: #68706b; font-size: .72rem; }
 .project-plan-summary dd { margin: 0; color: #244c3b; font-weight: 700; }
@@ -975,6 +978,10 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
 .gantt-grid { position: absolute; inset: 42px 0 0; background-image: linear-gradient(to right, #eceee9 1px, transparent 1px); }
 .gantt-today { position: absolute; z-index: 1; top: 42px; bottom: 0; width: 2px; background: #d94d43; pointer-events: none; }
 .gantt-bar { position: absolute; z-index: 2; display: flex; align-items: center; overflow: hidden; height: 36px; border: 1px solid #3f7967; border-radius: 7px; background: #68a18e; box-shadow: 0 3px 9px rgba(35,83,67,.16); color: #fff; padding: 0 .55rem; font-size: .7rem; white-space: nowrap; user-select: none; }
+.gantt-bar-overlay { position: absolute; z-index: 2; height: 7px; border-radius: 4px; background: #2f6f9f; opacity: .85; pointer-events: none; }
+.gantt-track-toggle { display: flex; flex-wrap: wrap; gap: .75rem; margin: 0 0 .5rem; font-size: .72rem; color: #46504a; }
+.gantt-track-toggle label { display: inline-flex; align-items: center; gap: .25rem; }
+.gantt-actual-marker { position: absolute; z-index: 2; width: 6px; height: 6px; border-radius: 50%; background: #b24c63; opacity: .9; pointer-events: none; }
 .gantt-milestone { position: absolute; z-index: 3; top: 30px; width: 18px; height: 18px; transform: rotate(45deg); border: 2px solid #8a5b22; background: #f1b966; padding: 0; cursor: pointer; }
 .gantt-milestone span { position: absolute; top: -18px; left: 12px; width: max-content; transform: rotate(-45deg); color: #79542b; font-size: .62rem; }
 .gantt-dependencies { position: absolute; z-index: 1; top: 42px; left: 0; overflow: visible; pointer-events: none; }

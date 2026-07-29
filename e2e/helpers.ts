@@ -17,7 +17,7 @@ export const E2E_TASK_ID = "T-26-9NJTEF";
 
 export function taskDocument(id = E2E_TASK_ID) {
   return {
-    schema: "gitpm/task@1",
+    schema: "gitpm/task@2",
     id,
     project: FIXTURE_PROJECT_ID,
     title: "E2E task",

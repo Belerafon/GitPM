@@ -61,7 +61,7 @@ export function AdminWorkspace({ api, draft, role, locale, surface, confirmActio
     if (result.document.schema === "gitpm/calendar@1") setCalendars((current) => upsertEntity(current, result as EntityResult));
     if (result.document.schema === "gitpm/person@1") setPeople((current) => upsertEntity(current, result as EntityResult));
     if (result.document.schema === "gitpm/team@1") setTeams((current) => upsertEntity(current, result as EntityResult));
-    if (result.document.schema === "gitpm/statuses@1") setStatuses(result as ConfigurationResult);
+    if (result.document.schema === "gitpm/statuses@2") setStatuses(result as ConfigurationResult);
     if (result.document.schema === "gitpm/issue-types@1") setIssueTypes(result as ConfigurationResult);
     if ("id" in result.document && typeof result.document.id === "string") mark({ [result.document.id]: ["$local"] }); await onChanged(); await load(); return result;
   } catch (caught) { setError(caught instanceof Error ? caught.message : String(caught)); return null; } };

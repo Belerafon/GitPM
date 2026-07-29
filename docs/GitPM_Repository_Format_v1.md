@@ -36,8 +36,15 @@ JSON Schema 2020-12. Этот документ фиксирует правила
 Конфигурационные пути фиксированы:
 
 - `.gitpm/repository.yaml` — `gitpm/repository@1`;
-- `.gitpm/statuses.yaml` — `gitpm/statuses@1`;
-- `.gitpm/issue-types.yaml` — `gitpm/issue-types@1`.
+- `.gitpm/statuses.yaml` — `gitpm/statuses@2`;
+- `.gitpm/issue-types.yaml` — `gitpm/issue-types@1`;
+- `.gitpm/schedule-tracks.yaml` — `gitpm/schedule-tracks@1`;
+- `.gitpm/work-categories.yaml` — `gitpm/work-categories@1`.
+
+Сущности используют схему v2: `gitpm/project@2`, `gitpm/task@2`, `gitpm/milestone@2`.
+Сроки и оценки больше не хранятся в корне документа — они вынесены в
+`schedules.<track>` (см. ниже); `gitpm/time-entry@1` хранит фактические
+трудозатраты в `projects/<project>/time-entries/<task>/<entry>.yaml`.
 
 Validation возвращает `REPOSITORY_DIRECTORY_REQUIRED`, если обязательный каталог
 отсутствует или не является каталогом, `REPOSITORY_DOCUMENT_REQUIRED`, если отсутствует
@@ -71,7 +78,7 @@ ID имеет форму `<type>-<YY>-<random>`, где type — один из `
 
 - Project owner, Task assignees, Team members и Saved View assignees ссылаются на Person.
 - Person и repository default calendar ссылаются на Calendar.
-- Task `project`, `parent`, `milestone`, `depends_on` и Saved View/Milestone
+- Task `project`, `parent`, `milestone`, `schedules.<track>.depends_on` и Saved View/Milestone
   `project` не могут пересекать границу Project.
 - Task `parent` образует ациклическое дерево произвольной глубины. Родитель и все потомки
   имеют одинаковый `milestone`; отсутствие `milestone` также считается значением.
@@ -111,9 +118,25 @@ Web UI предлагает редактируемые предустановк�
 
 ## Scalar rules
 
-Date-only имеет форму `YYYY-MM-DD`; календарная корректность и `start <= due`
-проверяются domain validator. `estimate_hours` неотрицателен и кратен 0.25.
+Date-only имеет форму `YYYY-MM-DD`; календарная корректность и
+`schedules.<track>.start <= schedules.<track>.finish` проверяются domain
+validator. `schedules.<track>.effort_hours` неотрицателен и кратен 0.25.
 Project может содержать необязательную строку `group` длиной до 100 символов.
+
+## Schedule tracks и фактические трудозатраты
+
+`.gitpm/schedule-tracks.yaml` описывает именованные контуры (`manual` с
+`capabilities`: `dates`, `effort`, `dependencies`; либо `actual` с
+`source: time_entries`) и репозиторные defaults (`primary_track`,
+`workload_track`, `comparison_track`, `enabled_tracks`, `dashboard_tracks`).
+Project переопределяет их полем `planning` и хранит окна в `schedules` —
+отображение `track -> { start, finish, effort_hours, depends_on }`.
+`.gitpm/work-categories.yaml` задаёт категории фактической работы.
+`gitpm/time-entry@1` (`projects/<project>/time-entries/<task>/<entry>.yaml`)
+фиксирует: `person`, `performed_on`, `hours` (положителен, кратен 0.25),
+`category`, `state` (`active`/`voided`); actual-контур вычисляется по
+активным записям, а не хранится явно. Циклы зависимостей проверяются
+отдельно по каждому контуру.
 Группа хранится непосредственно в `project.yaml`, не является ссылкой или
 отдельной сущностью; пробелы по краям удаляются на границе UI-мутации.
 Списки ссылок и labels не содержат повторов. Project `milestone_order` задаёт

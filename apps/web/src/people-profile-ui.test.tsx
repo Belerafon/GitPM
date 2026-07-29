@@ -14,7 +14,7 @@ const statusesConfig = (slugs: readonly { slug: string; title: string }[] = [
   { slug: "review", title: "Review" },
   { slug: "blocked", title: "Blocked" },
   { slug: "done", title: "Done" },
-]) => ({ document: { schema: "gitpm/statuses@1", id: "statuses", lifecycle: "active", statuses: slugs.map((status) => ({ ...status, active: true, color: "gray" })) }, path: ".gitpm/statuses.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) });
+]) => ({ document: { schema: "gitpm/statuses@2", id: "statuses", lifecycle: "active", statuses: slugs.map((status) => ({ ...status, active: true, color: "gray" })) }, path: ".gitpm/statuses.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) });
 
 afterEach(() => { cleanup(); localStorage.clear(); });
 
@@ -28,12 +28,12 @@ describe("person profile", () => {
       result({ schema: "gitpm/person@1", id: personId, name: "Ada Lovelace", email: "ada@example.test", weekly_capacity_hours: 32, calendar: "C-26-DEFAULT", lifecycle: "active" }),
       result({ schema: "gitpm/calendar@1", id: "C-26-DEFAULT", name: "Default", working_weekdays: [1, 2, 3, 4, 5], holidays: ["2026-08-03"], lifecycle: "active" }),
       result({ schema: "gitpm/team@1", id: "TEAM-26-CORE", name: "Core", members: [personId], lifecycle: "active" }),
-      result({ schema: "gitpm/project@1", id: projectId, name: "Alpha", owner: personId, status: "in-progress", lifecycle: "active" }),
-      result({ schema: "gitpm/project@1", id: contributingProjectId, name: "Beta", owner: "U-26-GRACE", status: "planned", lifecycle: "active" }),
-      result({ schema: "gitpm/task@1", id: taskId, project: projectId, title: "Ship profile", status: "in-progress", assignees: [personId], start: "2026-07-20", due: "2026-07-24", lifecycle: "active" }),
-      result({ schema: "gitpm/task@1", id: "T-26-SECOND", project: contributingProjectId, title: "Review calendar", status: "planned", assignees: [personId], start: "2026-07-22", due: "2026-07-23", lifecycle: "active" }),
+      result({ schema: "gitpm/project@2", id: projectId, name: "Alpha", owner: personId, status: "in-progress", lifecycle: "active" }),
+      result({ schema: "gitpm/project@2", id: contributingProjectId, name: "Beta", owner: "U-26-GRACE", status: "planned", lifecycle: "active" }),
+      result({ schema: "gitpm/task@2", id: taskId, project: projectId, title: "Ship profile", status: "in-progress", assignees: [personId], schedules: { plan: { start: "2026-07-20", finish: "2026-07-24" } }, lifecycle: "active" }),
+      result({ schema: "gitpm/task@2", id: "T-26-SECOND", project: contributingProjectId, title: "Review calendar", status: "planned", assignees: [personId], schedules: { plan: { start: "2026-07-22", finish: "2026-07-23" } }, lifecycle: "active" }),
     ];
-    const schemaByType: Record<string, string> = { people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1", projects: "gitpm/project@1", tasks: "gitpm/task@1" };
+    const schemaByType: Record<string, string> = { people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1", projects: "gitpm/project@2", tasks: "gitpm/task@2" };
     const api = { listEntities: vi.fn(async (_draftId: string, type: string) => entities.filter((item) => item.document.schema === schemaByType[type])), getConfiguration: vi.fn(async () => statusesConfig()) } as unknown as GitPmApi;
     const onNavigate = vi.fn();
 
@@ -67,11 +67,11 @@ describe("person profile", () => {
     const projectId = "P-26-ALPHA";
     const entities = [
       result({ schema: "gitpm/person@1", id: personId, name: "Ada Lovelace", weekly_capacity_hours: 32, lifecycle: "active" }),
-      result({ schema: "gitpm/project@1", id: projectId, name: "Alpha", owner: personId, status: "in-progress", lifecycle: "active" }),
-      result({ schema: "gitpm/task@1", id: "T-OPEN", project: projectId, title: "Open work", status: "in-progress", assignees: [personId], lifecycle: "active" }),
-      result({ schema: "gitpm/task@1", id: "T-DONE", project: projectId, title: "Finished work", status: "done", assignees: [personId], lifecycle: "active" }),
+      result({ schema: "gitpm/project@2", id: projectId, name: "Alpha", owner: personId, status: "in-progress", lifecycle: "active" }),
+      result({ schema: "gitpm/task@2", id: "T-OPEN", project: projectId, title: "Open work", status: "in-progress", assignees: [personId], lifecycle: "active" }),
+      result({ schema: "gitpm/task@2", id: "T-DONE", project: projectId, title: "Finished work", status: "done", assignees: [personId], lifecycle: "active" }),
     ];
-    const schemaByType: Record<string, string> = { people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1", projects: "gitpm/project@1", tasks: "gitpm/task@1" };
+    const schemaByType: Record<string, string> = { people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1", projects: "gitpm/project@2", tasks: "gitpm/task@2" };
     const api = { listEntities: vi.fn(async (_draftId: string, type: string) => entities.filter((item) => item.document.schema === schemaByType[type])), getConfiguration: vi.fn(async () => statusesConfig()) } as unknown as GitPmApi;
 
     render(<PeopleProfileWorkspace api={api} draft={draft} locale="en" onNavigate={vi.fn()} personId={personId} />);
@@ -95,13 +95,13 @@ describe("person profile", () => {
     const contributingProjectId = "P-26-BETA";
     const entities = [
       result({ schema: "gitpm/person@1", id: personId, name: "Ada Lovelace", weekly_capacity_hours: 32, lifecycle: "active" }),
-      result({ schema: "gitpm/project@1", id: projectId, name: "Alpha", owner: personId, status: "in-progress", lifecycle: "active" }),
-      result({ schema: "gitpm/project@1", id: contributingProjectId, name: "Beta", owner: "U-26-GRACE", status: "planned", lifecycle: "active" }),
-      result({ schema: "gitpm/task@1", id: "T-ALPHA-OPEN", project: projectId, title: "Alpha open", status: "in-progress", assignees: [personId], lifecycle: "active" }),
-      result({ schema: "gitpm/task@1", id: "T-ALPHA-DONE", project: projectId, title: "Alpha done", status: "done", assignees: [personId], lifecycle: "active" }),
-      result({ schema: "gitpm/task@1", id: "T-BETA-PLANNED", project: contributingProjectId, title: "Beta planned", status: "planned", assignees: [personId], lifecycle: "active" }),
+      result({ schema: "gitpm/project@2", id: projectId, name: "Alpha", owner: personId, status: "in-progress", lifecycle: "active" }),
+      result({ schema: "gitpm/project@2", id: contributingProjectId, name: "Beta", owner: "U-26-GRACE", status: "planned", lifecycle: "active" }),
+      result({ schema: "gitpm/task@2", id: "T-ALPHA-OPEN", project: projectId, title: "Alpha open", status: "in-progress", assignees: [personId], lifecycle: "active" }),
+      result({ schema: "gitpm/task@2", id: "T-ALPHA-DONE", project: projectId, title: "Alpha done", status: "done", assignees: [personId], lifecycle: "active" }),
+      result({ schema: "gitpm/task@2", id: "T-BETA-PLANNED", project: contributingProjectId, title: "Beta planned", status: "planned", assignees: [personId], lifecycle: "active" }),
     ];
-    const schemaByType: Record<string, string> = { people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1", projects: "gitpm/project@1", tasks: "gitpm/task@1" };
+    const schemaByType: Record<string, string> = { people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1", projects: "gitpm/project@2", tasks: "gitpm/task@2" };
     const buildApi = () => ({ listEntities: vi.fn(async (_draftId: string, type: string) => entities.filter((item) => item.document.schema === schemaByType[type])), getConfiguration: vi.fn(async () => statusesConfig()) } as unknown as GitPmApi);
 
     const { unmount } = render(<PeopleProfileWorkspace api={buildApi()} draft={draft} locale="en" onNavigate={vi.fn()} personId={personId} />);
@@ -134,11 +134,11 @@ describe("person profile", () => {
     const projectId = "P-26-ALPHA";
     const entities = [
       result({ schema: "gitpm/person@1", id: personId, name: "Ada Lovelace", weekly_capacity_hours: 32, lifecycle: "active" }),
-      result({ schema: "gitpm/project@1", id: projectId, name: "Alpha", owner: personId, status: "in-progress", lifecycle: "active" }),
-      result({ schema: "gitpm/task@1", id: "T-1", project: projectId, title: "Open work", status: "in-progress", assignees: [personId], lifecycle: "active" }),
-      result({ schema: "gitpm/task@1", id: "T-2", project: projectId, title: "Finished work", status: "done", assignees: [personId], lifecycle: "active" }),
+      result({ schema: "gitpm/project@2", id: projectId, name: "Alpha", owner: personId, status: "in-progress", lifecycle: "active" }),
+      result({ schema: "gitpm/task@2", id: "T-1", project: projectId, title: "Open work", status: "in-progress", assignees: [personId], lifecycle: "active" }),
+      result({ schema: "gitpm/task@2", id: "T-2", project: projectId, title: "Finished work", status: "done", assignees: [personId], lifecycle: "active" }),
     ];
-    const schemaByType: Record<string, string> = { people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1", projects: "gitpm/project@1", tasks: "gitpm/task@1" };
+    const schemaByType: Record<string, string> = { people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1", projects: "gitpm/project@2", tasks: "gitpm/task@2" };
     const api = { listEntities: vi.fn(async (_draftId: string, type: string) => entities.filter((item) => item.document.schema === schemaByType[type])), getConfiguration: vi.fn(async () => statusesConfig()) } as unknown as GitPmApi;
 
     render(<PeopleProfileWorkspace api={api} draft={draft} locale="en" onNavigate={vi.fn()} personId={personId} />);
@@ -156,7 +156,7 @@ describe("person profile", () => {
     const calendar = result({ schema: "gitpm/calendar@1", id: "C-26-DEFAULT", name: "Default", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
     let person = result({ schema: "gitpm/person@1", id: personId, name: "Ada", email: "ada@example.test", weekly_capacity_hours: 32, calendar: calendar.document.id, lifecycle: "active" });
     let revision = 0;
-    const schemaByType: Record<string, string> = { people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1", projects: "gitpm/project@1", tasks: "gitpm/task@1" };
+    const schemaByType: Record<string, string> = { people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1", projects: "gitpm/project@2", tasks: "gitpm/task@2" };
     const updateEntity = vi.fn(async (_draftId: string, _type: string, _entity: EntityResult, _fingerprint: string, document: EntityDocument) => {
       revision += 1;
       person = { ...result(document), draft_fingerprint: (revision === 1 ? "c" : "d").repeat(64) };
@@ -193,7 +193,7 @@ describe("person profile", () => {
     const personId = "U-26-ADA";
     const person = result({ schema: "gitpm/person@1", id: personId, name: "Ada", weekly_capacity_hours: 32, calendar: "C-26-DEFAULT", lifecycle: "active" });
     const calendar = result({ schema: "gitpm/calendar@1", id: "C-26-DEFAULT", name: "Default", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
-    const schemaByType: Record<string, string> = { people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1", projects: "gitpm/project@1", tasks: "gitpm/task@1" };
+    const schemaByType: Record<string, string> = { people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1", projects: "gitpm/project@2", tasks: "gitpm/task@2" };
     const deleteEntity = vi.fn(async () => undefined);
     const confirmAction = vi.fn(() => false);
     const onNavigate = vi.fn();
@@ -215,7 +215,7 @@ describe("person profile", () => {
     const personId = "U-26-ADA";
     const person = result({ schema: "gitpm/person@1", id: personId, name: "Ada", weekly_capacity_hours: 32, calendar: "C-26-DEFAULT", lifecycle: "active" });
     const calendar = result({ schema: "gitpm/calendar@1", id: "C-26-DEFAULT", name: "Default", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
-    const schemaByType: Record<string, string> = { people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1", projects: "gitpm/project@1", tasks: "gitpm/task@1" };
+    const schemaByType: Record<string, string> = { people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1", projects: "gitpm/project@2", tasks: "gitpm/task@2" };
     const deleteEntity = vi.fn()
       .mockRejectedValueOnce(new ApiError("DELETE_RESTRICTED", `${personId} is referenced`, [
         { path: "teams/G-26-CORE.yaml", label: "Core team" },
@@ -241,7 +241,7 @@ describe("person profile", () => {
     const personId = "U-26-ADA";
     const person = result({ schema: "gitpm/person@1", id: personId, name: "Ada", weekly_capacity_hours: 32, calendar: "C-26-DEFAULT", lifecycle: "active" });
     const calendar = result({ schema: "gitpm/calendar@1", id: "C-26-DEFAULT", name: "Default", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
-    const schemaByType: Record<string, string> = { people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1", projects: "gitpm/project@1", tasks: "gitpm/task@1" };
+    const schemaByType: Record<string, string> = { people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1", projects: "gitpm/project@2", tasks: "gitpm/task@2" };
     const api = { listEntities: vi.fn(async (_draftId: string, type: string) => [person, calendar].filter((item) => item.document.schema === schemaByType[type])), getConfiguration: vi.fn(async () => statusesConfig()) } as unknown as GitPmApi;
 
     render(<PeopleProfileWorkspace api={api} draft={draft} locale="en" onNavigate={vi.fn()} personId={personId} role="Developer" />);

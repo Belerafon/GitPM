@@ -5,7 +5,7 @@ import { changedEntityFields, useExternalHighlights } from "./external-updates.j
 import type { EntityDocument, EntityResult } from "./types.js";
 
 const entity = (document: EntityDocument): EntityResult => ({ document, path: `${document.id}.yaml`, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) });
-const before = entity({ schema: "gitpm/task@1", id: "T-26-111111", lifecycle: "active", title: "Before", status: "backlog" });
+const before = entity({ schema: "gitpm/task@2", id: "T-26-111111", lifecycle: "active", title: "Before", status: "backlog" });
 afterEach(() => vi.useRealTimers());
 
 describe("external update reconciliation", () => {

@@ -113,7 +113,7 @@ function render(json: boolean, payload: Record<string, unknown>, human: string):
 }
 
 const SCHEMA_DIRECTORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../schemas/v1");
-const ROOT_USAGE = "Usage: gitpm <init|status|draft|entity create|entity update|entity import|entity list|entity show|entity delete|entity archive|entity move|comment|config|schema|format|validate|diff --semantic|export|commit --all|push|mr create|doctor> [options]";
+const ROOT_USAGE = "Usage: gitpm <init|status|draft|entity create|entity update|entity import|entity list|entity show|entity delete|entity archive|entity move|comment|time-entry|config|schema|format|validate|diff --semantic|export|commit --all|push|mr create|doctor> [options]";
 
 const commandHelp: Readonly<Record<string, string>> = {
   root: [
@@ -181,6 +181,16 @@ const commandHelp: Readonly<Record<string, string>> = {
     "Comments support Markdown with @[Name](person:U-...) mentions.",
     "Delete is a soft-delete (tombstone remains in Git history). Available in direct mode.",
   ].join("\n"),
+  "time-entry": [
+    "Usage:",
+    "  gitpm time-entry list --project <id> --task <id> [--json]",
+    "  gitpm time-entry summary --project <id> --task <id> [--after <yyyy-mm-dd>] [--json]",
+    "  gitpm time-entry create --project <id> --task <id> --person <id> --date <yyyy-mm-dd> --hours <n> --category <slug> [--note <text>] [--json]",
+    "  gitpm time-entry void --project <id> --task <id> --id <entry-id> [--json]",
+    "",
+    "Actual effort is stored independently of task status and plan windows.",
+    "Void marks an entry voided (kept in history); available in direct mode.",
+  ].join("\n"),
   config: [
     "Usage:",
     "  gitpm config show --kind statuses|issue-types [--json]",
@@ -225,6 +235,7 @@ function commandArgumentSpec(command: string | undefined, args: readonly string[
   if (command === "push") return { values: ["--draft"], booleans: ["--json"], minPositionals: 0, maxPositionals: 0 };
   if (command === "mr") return { values: ["--draft", "--owner", "--title", "--description"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
   if (command === "comment") return { values: ["--project", "--task", "--id", "--body", "--file", "--path"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
+  if (command === "time-entry") return { values: ["--project", "--task", "--id", "--person", "--date", "--hours", "--category", "--note", "--after"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
   if (command === "config") {
     return action === "update"
       ? { values: ["--kind", "--file", "--path"], repeatable: ["--set", "--unset"], booleans: ["--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 }
@@ -688,12 +699,58 @@ async function runComment(args: readonly string[], cwd: string, dependencies: Cl
   return { exitCode: 0, output: render(json, { ok: true, code: "OK", document: updated.document, path: updated.path }, `Updated ${updated.path}`) };
 }
 
+async function runTimeEntry(args: readonly string[], cwd: string, dependencies: CliDependencies): Promise<CliResult> {
+  const action = args[0];
+  const validActions = ["list", "create", "void", "summary"];
+  if (typeof action !== "string" || !validActions.includes(action)) throw new RepositoryFormatError("CLI_USAGE", "time-entry requires list, create, void or summary");
+  const direct = requireDirect(dependencies);
+  const projectId = required(flagValue(args, "--project"), "--project");
+  const taskId = required(flagValue(args, "--task"), "--task");
+  const json = args.includes("--json");
+  if (action === "list") {
+    const result = await direct.listTimeEntries(projectId, taskId);
+    const items = result.map((item) => ({ id: String(item.document.id), state: item.document.state, person: item.document.person, performed_on: item.document.performed_on, hours: item.document.hours, category: item.document.category, path: item.path }));
+    return { exitCode: 0, output: render(json, { ok: true, code: "OK", items }, `${items.length} time entry/entries`) };
+  }
+  if (action === "summary") {
+    const { actualWindow, groupByCategory, groupByPerson, hoursAfterDate, sumHours } = await import("@gitpm/time-entries");
+    const entries = (await direct.listTimeEntries(projectId, taskId)).map((entry) => ({
+      id: entry.document.id, project: projectId, task: taskId, person: entry.document.person,
+      performed_on: entry.document.performed_on, hours: entry.document.hours, category: entry.document.category, state: entry.document.state,
+    }));
+    const cutoff = flagValue(args, "--after");
+    const summary = {
+      total_hours: sumHours(entries),
+      active_entries: entries.filter((entry) => entry.state !== "voided").length,
+      voided_entries: entries.filter((entry) => entry.state === "voided").length,
+      by_category: [...groupByCategory(entries).entries()].sort(),
+      by_person: [...groupByPerson(entries).entries()].sort(),
+      actual: actualWindow(entries) ?? null,
+      ...(cutoff === undefined ? {} : { hours_after: hoursAfterDate(entries, cutoff) }),
+    };
+    return { exitCode: 0, output: render(json, { ok: true, code: "OK", summary }, `${summary.total_hours} h actual`) };
+  }
+  const entryId = flagValue(args, "--id");
+  if (action === "void") {
+    const voided = await direct.voidTimeEntry(projectId, taskId, required(entryId, "--id"));
+    return { exitCode: 0, output: render(json, { ok: true, code: "OK", document: voided.document, path: voided.path }, `Voided ${voided.path}`) };
+  }
+  const person = required(flagValue(args, "--person"), "--person");
+  const performedOn = required(flagValue(args, "--date"), "--date");
+  const hours = Number(required(flagValue(args, "--hours"), "--hours"));
+  const category = required(flagValue(args, "--category"), "--category");
+  if (!Number.isFinite(hours) || hours <= 0) throw new RepositoryFormatError("CLI_USAGE", "--hours must be a positive number");
+  const note = flagValue(args, "--note");
+  const created = await direct.createTimeEntry(projectId, taskId, { person, performed_on: performedOn, hours, category, ...(note === undefined ? {} : { note_markdown: note }) });
+  return { exitCode: 0, output: render(json, { ok: true, code: "OK", document: created.document, path: created.path }, `Created ${created.path}`) };
+}
+
 async function runConfig(args: readonly string[], cwd: string, dependencies: CliDependencies): Promise<CliResult> {
   const action = args[0];
   if (action !== "show" && action !== "update") throw new RepositoryFormatError("CLI_USAGE", "config requires show or update");
   const direct = requireDirect(dependencies);
   const kind = required(flagValue(args, "--kind"), "--kind");
-  if (kind !== "statuses" && kind !== "issue-types") throw new RepositoryFormatError("CLI_USAGE", "--kind must be statuses or issue-types");
+  if (kind !== "statuses" && kind !== "issue-types" && kind !== "work-categories" && kind !== "schedule-tracks") throw new RepositoryFormatError("CLI_USAGE", "--kind must be statuses, issue-types, work-categories or schedule-tracks");
   const json = args.includes("--json");
   if (action === "show") {
     const result = await direct.getConfiguration(kind);
@@ -741,19 +798,62 @@ allowed_top_level_directories:
 ui_poll_interval_seconds: 5
 `;
 
-const INIT_STATUSES_YAML = `schema: gitpm/statuses@1
+const INIT_STATUSES_YAML = `schema: gitpm/statuses@2
 statuses:
   - slug: backlog
     title: Backlog
     color: gray
     active: true
+    category: backlog
   - slug: in-progress
     title: In progress
     color: blue
     active: true
+    category: active
   - slug: done
     title: Done
     color: green
+    active: true
+    category: done
+`;
+
+const INIT_SCHEDULE_TRACKS_YAML = `schema: gitpm/schedule-tracks@1
+tracks:
+  - slug: plan
+    title: Working plan
+    kind: manual
+    capabilities:
+      - dates
+      - effort
+      - dependencies
+  - slug: actual
+    title: Actual activity
+    kind: actual
+    source: time_entries
+defaults:
+  enabled_tracks:
+    - plan
+    - actual
+  primary_track: plan
+  workload_track: plan
+  dashboard_tracks:
+    - plan
+    - actual
+`;
+
+const INIT_WORK_CATEGORIES_YAML = `schema: gitpm/work-categories@1
+categories:
+  - slug: regular
+    title: Regular work
+    active: true
+  - slug: rework
+    title: Rework
+    active: true
+  - slug: warranty
+    title: Warranty
+    active: true
+  - slug: support
+    title: Support
     active: true
 `;
 
@@ -840,6 +940,8 @@ async function runInit(args: readonly string[], cwd: string, dependencies: NonNu
   await writeFile(path.join(target, ".gitpm", "repository.yaml"), initRepositoryYaml(calendarId), "utf8");
   await writeFile(path.join(target, ".gitpm", "statuses.yaml"), INIT_STATUSES_YAML, "utf8");
   await writeFile(path.join(target, ".gitpm", "issue-types.yaml"), INIT_ISSUE_TYPES_YAML, "utf8");
+  await writeFile(path.join(target, ".gitpm", "schedule-tracks.yaml"), INIT_SCHEDULE_TRACKS_YAML, "utf8");
+  await writeFile(path.join(target, ".gitpm", "work-categories.yaml"), INIT_WORK_CATEGORIES_YAML, "utf8");
   await writeFile(path.join(target, "calendars", `${calendarId}.yaml`), initCalendarYaml(calendarId), "utf8");
   await writeFile(path.join(target, "README.md"), INIT_README_MD, "utf8");
   await writeFile(path.join(target, ".gitignore"), INIT_GITIGNORE, "utf8");
@@ -980,6 +1082,7 @@ export async function run(args: readonly string[], cwd = process.cwd(), dependen
     }
     if (command === "mr") return await runMr(commandArgs, dependencies);
     if (command === "comment") return await runComment(commandArgs, cwd, dependencies);
+    if (command === "time-entry") return await runTimeEntry(commandArgs, cwd, dependencies);
     if (command === "config") return await runConfig(commandArgs, cwd, dependencies);
     if (command === "doctor" && direct !== undefined) { await direct.prepare(); return await runDoctor([...directRootArgs, ...commandArgs], cwd); }
     if (command === "doctor") return await runDoctor(commandArgs, cwd);

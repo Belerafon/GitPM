@@ -6,7 +6,7 @@ import {
 import { ChangesService, type SemanticDiff } from "@gitpm/changes";
 import { GitClient, GitCommandError } from "@gitpm/git-client";
 import { DirectRepositoryBackend, directPushStrategy, DraftManager, GITPM_GUIDANCE_PATHS } from "@gitpm/drafts";
-import { CommentStore, type CommentActor, type CommentResult, type DeletePlan, type EntityCreateBatchResult, type EntityResult } from "@gitpm/domain";
+import { CommentStore, TimeEntryStore, type CommentActor, type CommentResult, type DeletePlan, type EntityCreateBatchResult, type EntityResult, type TimeEntryActor, type TimeEntryResult } from "@gitpm/domain";
 import type { GitPmDocument } from "@gitpm/repository-format";
 import { ExportService, type ExportArtifact, type ExportRequest } from "@gitpm/export";
 
@@ -50,6 +50,7 @@ export class DirectCliRuntime {
   private readonly backend: DirectRepositoryBackend;
   private readonly drafts: DraftManager;
   private readonly comments: CommentStore;
+  private readonly timeEntries: TimeEntryStore;
   private readonly repository: RepositoryWorkflow;
   private readonly authorName: string;
   private readonly authorEmail: string;
@@ -74,6 +75,7 @@ export class DirectCliRuntime {
     });
     const changes = new ChangesService(this.drafts, this.git);
     this.comments = new CommentStore(this.drafts, () => new Date(), "repository");
+    this.timeEntries = new TimeEntryStore(this.drafts, () => new Date(), "repository");
     this.authorName = options.authorName;
     this.authorEmail = options.authorEmail;
     this.pushAccessToken = options.pushAccessToken;
@@ -189,11 +191,11 @@ export class DirectCliRuntime {
     );
   }
 
-  async getConfiguration(kind: "statuses" | "issue-types"): Promise<EntityResult> {
+  async getConfiguration(kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks"): Promise<EntityResult> {
     return await this.repository.getConfiguration(DIRECT_WORKSPACE_ID, kind);
   }
 
-  async updateConfiguration(kind: "statuses" | "issue-types", document: Record<string, unknown>, scope: AgentScope = {}): Promise<EntityResult> {
+  async updateConfiguration(kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks", document: Record<string, unknown>, scope: AgentScope = {}): Promise<EntityResult> {
     return await this.repository.updateConfiguration(
       DIRECT_WORKSPACE_ID,
       kind,
@@ -227,6 +229,30 @@ export class DirectCliRuntime {
     const relative = `projects/${projectId}/comments/${taskId}/${commentId}.yaml`;
     const blob_id = await this.drafts.fileBlobId(draftId, relative);
     return await this.comments.delete(draftId, projectId, taskId, commentId, metadata.fingerprint, blob_id, this.directActor());
+  }
+
+  private timeEntryActor(): TimeEntryActor {
+    const actor = this.directActor();
+    return { userId: actor.userId, identity: actor.identity };
+  }
+
+  async listTimeEntries(projectId: string, taskId: string): Promise<readonly TimeEntryResult[]> {
+    const draftId = await this.draftId();
+    return await this.timeEntries.list(draftId, projectId, taskId);
+  }
+
+  async createTimeEntry(projectId: string, taskId: string, input: { readonly person: string; readonly performed_on: string; readonly hours: number; readonly category: string; readonly note_markdown?: string }): Promise<TimeEntryResult> {
+    const draftId = await this.draftId();
+    const metadata = await this.drafts.refreshWorkspaceFingerprint(draftId);
+    return await this.timeEntries.create(draftId, projectId, taskId, metadata.fingerprint, input, this.timeEntryActor());
+  }
+
+  async voidTimeEntry(projectId: string, taskId: string, entryId: string): Promise<TimeEntryResult> {
+    const draftId = await this.draftId();
+    const metadata = await this.drafts.refreshWorkspaceFingerprint(draftId);
+    const relative = `projects/${projectId}/time-entries/${taskId}/${entryId}.yaml`;
+    const blob_id = await this.drafts.fileBlobId(draftId, relative);
+    return await this.timeEntries.void(draftId, projectId, taskId, entryId, metadata.fingerprint, blob_id, this.timeEntryActor());
   }
 
   async semanticDiff(scope: AgentScope = {}): Promise<SemanticDiff> {

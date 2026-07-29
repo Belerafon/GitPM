@@ -6,7 +6,7 @@ import { AdminWorkspace } from "./admin-ui.js";
 import type { ConfigurationDocument, ConfigurationResult, DraftStatus, EntityDocument, EntityResult } from "./types.js";
 
 const draft: DraftStatus = { draft_id: "DRF-ADMIN", owner_gitlab_user_id: "42", branch: "gitpm/42/DRF-ADMIN", base_commit: "a".repeat(40), writer_mode: "ui", state: "open", fingerprint: "b".repeat(64), created_at: "2026-07-10T00:00:00.000Z", updated_at: "2026-07-10T00:00:00.000Z" };
-const configDocument = (kind: "statuses" | "issue-types") => (kind === "statuses" ? { schema: "gitpm/statuses@1", statuses: [{ slug: "backlog", title: "Backlog", color: "gray", active: true }, { slug: "done", title: "Done", color: "green", active: true }] } : { schema: "gitpm/issue-types@1", issue_types: [{ slug: "task", title: "Task", color: "blue", active: true }] }) as ConfigurationDocument;
+const configDocument = (kind: "statuses" | "issue-types") => (kind === "statuses" ? { schema: "gitpm/statuses@2", statuses: [{ slug: "backlog", title: "Backlog", color: "gray", active: true }, { slug: "done", title: "Done", color: "green", active: true }] } : { schema: "gitpm/issue-types@1", issue_types: [{ slug: "task", title: "Task", color: "blue", active: true }] }) as ConfigurationDocument;
 
 class AdminApi {
   entities: EntityResult[] = [];
@@ -14,7 +14,7 @@ class AdminApi {
   mutations = 0;
   private config(kind: "statuses" | "issue-types"): ConfigurationResult { return { document: configDocument(kind), path: `.gitpm/${kind}.yaml`, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) }; }
   private result(document: EntityDocument): EntityResult { this.mutations += 1; return { document, path: `${document.id}.yaml`, blob_id: String(this.mutations).padStart(40, "a"), draft_fingerprint: String(this.mutations).padStart(64, "b") }; }
-  async listEntities(_draftId: string, type: string) { const names: Record<string, string> = { calendars: "calendar", people: "person", teams: "team" }; return this.entities.filter((item) => item.document.schema === `gitpm/${names[type] ?? type.slice(0, -1)}@1`); }
+  async listEntities(_draftId: string, type: string) { const schemas: Record<string, string> = { calendars: "gitpm/calendar@1", people: "gitpm/person@1", teams: "gitpm/team@1", projects: "gitpm/project@2", tasks: "gitpm/task@2", milestones: "gitpm/milestone@2" }; return this.entities.filter((item) => item.document.schema === schemas[type]); }
   async createEntity(_draftId: string, _type: string, _fingerprint: string, document: EntityDocument) { const result = this.result(document); this.entities.push(result); return result; }
   async updateEntity(_draftId: string, _type: string, entity: EntityResult, _fingerprint: string, document: EntityDocument) { const result = this.result(document); this.entities = this.entities.map((item) => item === entity ? result : item); return result; }
   async archiveEntity(draftId: string, type: string, entity: EntityResult, fingerprint: string) { return await this.updateEntity(draftId, type, entity, fingerprint, { ...entity.document, lifecycle: "archived" }); }
@@ -156,9 +156,9 @@ describe("administration UI", () => {
     const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
     await admin.createEntity("DRF-ADMIN", "calendars", "", { schema: "gitpm/calendar@1", id: "CAL-26-DEFAULT", name: "Default", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
     await admin.createEntity("DRF-ADMIN", "people", "", { schema: "gitpm/person@1", id: personId, name: "Ada", weekly_capacity_hours: 32, calendar: "CAL-26-DEFAULT", lifecycle: "active" });
-    await admin.createEntity("DRF-ADMIN", "projects", "", { schema: "gitpm/project@1", id: ownedProjectId, name: "Alpha", owner: personId, status: "in-progress", lifecycle: "active" });
-    await admin.createEntity("DRF-ADMIN", "projects", "", { schema: "gitpm/project@1", id: taskProjectId, name: "Beta", owner: "U-26-OTHER", status: "planned", lifecycle: "active" });
-    await admin.createEntity("DRF-ADMIN", "tasks", "", { schema: "gitpm/task@1", id: "T-26-REVIEW", project: taskProjectId, title: "Review", status: "planned", assignees: [personId], lifecycle: "active" });
+    await admin.createEntity("DRF-ADMIN", "projects", "", { schema: "gitpm/project@2", id: ownedProjectId, name: "Alpha", owner: personId, status: "in-progress", lifecycle: "active" });
+    await admin.createEntity("DRF-ADMIN", "projects", "", { schema: "gitpm/project@2", id: taskProjectId, name: "Beta", owner: "U-26-OTHER", status: "planned", lifecycle: "active" });
+    await admin.createEntity("DRF-ADMIN", "tasks", "", { schema: "gitpm/task@2", id: "T-26-REVIEW", project: taskProjectId, title: "Review", status: "planned", assignees: [personId], lifecycle: "active" });
     const onOpenProject = vi.fn();
     render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="people" onOpenProject={onOpenProject} onChanged={vi.fn(async () => undefined)} />);
 

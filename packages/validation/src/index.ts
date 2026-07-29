@@ -63,6 +63,8 @@ const REQUIRED_DOCUMENTS = [
   ".gitpm/repository.yaml",
   ".gitpm/statuses.yaml",
   ".gitpm/issue-types.yaml",
+  ".gitpm/schedule-tracks.yaml",
+  ".gitpm/work-categories.yaml",
 ] as const;
 
 export interface RepositoryFileDiscovery {
@@ -109,8 +111,9 @@ async function filesUnder(
 
 function isAllowedDomainDirectory(relative: string): boolean {
   return /^projects\/P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}$/u.test(relative)
-    || /^projects\/P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}\/(?:milestones|tasks|views|comments)$/u.test(relative)
-    || /^projects\/P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}\/comments\/T-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}$/u.test(relative);
+    || /^projects\/P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}\/(?:milestones|tasks|views|comments|time-entries)$/u.test(relative)
+    || /^projects\/P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}\/comments\/T-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}$/u.test(relative)
+    || /^projects\/P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}\/time-entries\/T-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}$/u.test(relative);
 }
 
 function isAllowedDomainKeeper(relative: string): boolean {
@@ -118,11 +121,12 @@ function isAllowedDomainKeeper(relative: string): boolean {
 }
 
 function isAllowedYamlContainer(relative: string): boolean {
-  return /^\.gitpm\/(?:repository|statuses|issue-types)\.yaml$/u.test(relative)
+  return /^\.gitpm\/(?:repository|statuses|issue-types|schedule-tracks|work-categories)\.yaml$/u.test(relative)
     || /^(?:people|teams|calendars)\/[^/]+\.yaml$/u.test(relative)
     || /^projects\/P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}\/project\.yaml$/u.test(relative)
     || /^projects\/P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}\/(?:milestones|tasks|views)\/[^/]+\.yaml$/u.test(relative)
-    || /^projects\/P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}\/comments\/T-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}\/[^/]+\.yaml$/u.test(relative);
+    || /^projects\/P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}\/comments\/T-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}\/[^/]+\.yaml$/u.test(relative)
+    || /^projects\/P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}\/time-entries\/T-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}\/E-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}\.yaml$/u.test(relative);
 }
 
 function cachedDocuments(root: string): Map<string, CachedDocument> {
@@ -197,18 +201,22 @@ async function schemaValidators(): Promise<Map<string, ValidateFunction>> {
 function expectedPath(document: GitPmDocument): string | undefined {
   const id = String(document.id ?? "");
   const project = String(document.project ?? "");
+  const task = String(document.task ?? "");
   switch (document.schema) {
-    case "gitpm/project@1": return `projects/${id}/project.yaml`;
-    case "gitpm/task@1": return `projects/${project}/tasks/${id}.yaml`;
-    case "gitpm/milestone@1": return `projects/${project}/milestones/${id}.yaml`;
+    case "gitpm/project@2": return `projects/${id}/project.yaml`;
+    case "gitpm/task@2": return `projects/${project}/tasks/${id}.yaml`;
+    case "gitpm/milestone@2": return `projects/${project}/milestones/${id}.yaml`;
     case "gitpm/saved-view@1": return `projects/${project}/views/${id}.yaml`;
-    case "gitpm/comment@1": return `projects/${project}/comments/${String(document.task ?? "")}/${id}.yaml`;
+    case "gitpm/comment@1": return `projects/${project}/comments/${task}/${id}.yaml`;
+    case "gitpm/time-entry@1": return `projects/${project}/time-entries/${task}/${id}.yaml`;
     case "gitpm/person@1": return `people/${id}.yaml`;
     case "gitpm/team@1": return `teams/${id}.yaml`;
     case "gitpm/calendar@1": return `calendars/${id}.yaml`;
     case "gitpm/repository@1": return ".gitpm/repository.yaml";
-    case "gitpm/statuses@1": return ".gitpm/statuses.yaml";
+    case "gitpm/statuses@2": return ".gitpm/statuses.yaml";
     case "gitpm/issue-types@1": return ".gitpm/issue-types.yaml";
+    case "gitpm/schedule-tracks@1": return ".gitpm/schedule-tracks.yaml";
+    case "gitpm/work-categories@1": return ".gitpm/work-categories.yaml";
     default: return undefined;
   }
 }
@@ -217,19 +225,25 @@ function values(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
+function scheduleWindows(document: GitPmDocument): Record<string, unknown>[] {
+  const schedules = document.schedules as Record<string, unknown> | undefined;
+  if (schedules === undefined || typeof schedules !== "object" || Array.isArray(schedules)) return [];
+  return Object.values(schedules).filter((window): window is Record<string, unknown> => window !== null && typeof window === "object" && !Array.isArray(window));
+}
+
 function directReferences(document: GitPmDocument): string[] {
   switch (document.schema) {
     case "gitpm/repository@1": return values([document.default_calendar]);
-    case "gitpm/project@1": return values([document.owner]);
+    case "gitpm/project@2": return values([document.owner]);
     case "gitpm/person@1": return values([document.calendar]);
     case "gitpm/team@1": return values(document.members);
-    case "gitpm/milestone@1": return values([document.project]);
-    case "gitpm/task@1": return values([
+    case "gitpm/milestone@2": return values([document.project]);
+    case "gitpm/task@2": return values([
       document.project,
       document.parent,
       document.milestone,
       ...values(document.assignees),
-      ...values(document.depends_on),
+      ...scheduleWindows(document).flatMap((window) => values(window.depends_on)),
     ]);
     case "gitpm/saved-view@1": {
       const filters = document.filters as Record<string, unknown> | undefined;
@@ -244,6 +258,7 @@ function directReferences(document: GitPmDocument): string[] {
       document.task,
       ...((document.mentions as Array<{ person?: unknown }> | undefined) ?? []).map((item) => item.person),
     ]);
+    case "gitpm/time-entry@1": return values([document.project, document.task, document.person]);
     default: return [];
   }
 }
@@ -323,7 +338,7 @@ export async function validateRepository(repositoryRoot: string): Promise<Valida
       if (expected && expected !== relative) {
         loadedIssues.push({
           severity: "error",
-          code: value.schema === "gitpm/project@1" ? "PATH_PROJECT_DIRECTORY" : "PATH_ENTITY_FILENAME",
+          code: value.schema === "gitpm/project@2" ? "PATH_PROJECT_DIRECTORY" : "PATH_ENTITY_FILENAME",
           path: relative,
           message: `Expected ${expected}`,
         });
@@ -372,10 +387,18 @@ export async function validateRepository(repositoryRoot: string): Promise<Valida
   }
 
   const repository = validDocuments.find((document) => document.value.schema === "gitpm/repository@1");
-  const statusDocument = validDocuments.find((document) => document.value.schema === "gitpm/statuses@1");
+  const statusDocument = validDocuments.find((document) => document.value.schema === "gitpm/statuses@2");
   const typeDocument = validDocuments.find((document) => document.value.schema === "gitpm/issue-types@1");
+  const tracksDocument = validDocuments.find((document) => document.value.schema === "gitpm/schedule-tracks@1");
+  const categoriesDocument = validDocuments.find((document) => document.value.schema === "gitpm/work-categories@1");
   const statuses = new Set(((statusDocument?.value.statuses as Array<{ slug: string }> | undefined) ?? []).map((item) => item.slug));
   const issueTypes = new Set(((typeDocument?.value.issue_types as Array<{ slug: string }> | undefined) ?? []).map((item) => item.slug));
+  const categories = new Set(((categoriesDocument?.value.categories as Array<{ slug: string }> | undefined) ?? []).map((item) => item.slug));
+  const tracks = new Map<string, { readonly kind: string; readonly capabilities: ReadonlySet<string> }>();
+  for (const track of ((tracksDocument?.value.tracks as Array<Record<string, unknown>>) ?? [])) {
+    const slug = typeof track.slug === "string" ? track.slug : "";
+    if (slug !== "") tracks.set(slug, { kind: typeof track.kind === "string" ? track.kind : "", capabilities: new Set(Array.isArray(track.capabilities) ? track.capabilities.filter((c): c is string => typeof c === "string") : []) });
+  }
 
   const allowedTop = new Set([
     ".git",
@@ -419,19 +442,45 @@ export async function validateRepository(repositoryRoot: string): Promise<Valida
     return target;
   };
 
+  const validateWindowDates = (owner: LoadedDocument, window: Record<string, unknown>, fieldPath: string): void => {
+    for (const field of ["start", "finish"] as const) {
+      if (typeof window[field] === "string") {
+        try { parseDateOnly(window[field] as string); } catch (error) {
+          add({ severity: "error", code: "DATE_INVALID", path: `${owner.path}#${fieldPath}.${field}`, message: error instanceof Error ? error.message : String(error) });
+        }
+      }
+    }
+    if (typeof window.start === "string" && typeof window.finish === "string" && window.start > window.finish) {
+      add({ severity: "error", code: "DATE_RANGE", path: `${owner.path}#${fieldPath}`, message: "start must not be after finish" });
+    }
+  };
+
+  const validateScheduleWindows = (owner: LoadedDocument): void => {
+    const windows = scheduleWindows(owner.value);
+    if (owner.value.schedules === undefined || windows.length === 0) return;
+    const schedules = owner.value.schedules as Record<string, Record<string, unknown>>;
+    for (const [trackSlug, window] of Object.entries(schedules)) {
+      const track = tracks.get(trackSlug);
+      if (track === undefined) {
+        add({ severity: "error", code: "SCHEDULE_TRACK_UNKNOWN", path: owner.path, field: `schedules.${trackSlug}`, message: `Unknown schedule track ${trackSlug}` });
+        continue;
+      }
+      if (track.kind === "actual") {
+        add({ severity: "error", code: "SCHEDULE_ACTUAL_NOT_EDITABLE", path: owner.path, field: `schedules.${trackSlug}`, message: `Actual track ${trackSlug} is computed and cannot be stored` });
+      }
+      validateWindowDates(owner, window, `schedules.${trackSlug}`);
+      if (window.effort_hours !== undefined && !track.capabilities.has("effort")) {
+        add({ severity: "error", code: "CAPABILITY_EFFORT_NOT_ALLOWED", path: owner.path, field: `schedules.${trackSlug}.effort_hours`, message: `Track ${trackSlug} does not allow effort` });
+      }
+      if (Array.isArray(window.depends_on) && window.depends_on.length > 0 && !track.capabilities.has("dependencies")) {
+        add({ severity: "error", code: "CAPABILITY_DEPENDENCIES_NOT_ALLOWED", path: owner.path, field: `schedules.${trackSlug}.depends_on`, message: `Track ${trackSlug} does not allow dependencies` });
+      }
+    }
+  };
+
   if (repository) reference(repository.value.default_calendar, "gitpm/calendar@1", repository);
   for (const document of validDocuments) {
     const value = document.value;
-    const validateDate = (field: string): void => {
-      if (typeof value[field] !== "string") return;
-      try { parseDateOnly(value[field]); } catch (error) {
-        add({ severity: "error", code: "DATE_INVALID", path: document.path, message: error instanceof Error ? error.message : String(error) });
-      }
-    };
-    validateDate("start"); validateDate("due");
-    if (typeof value.start === "string" && typeof value.due === "string" && value.start > value.due) {
-      add({ severity: "error", code: "DATE_RANGE", path: document.path, message: "start must not be after due" });
-    }
     if (value.schema === "gitpm/calendar@1") {
       try {
         validateCalendar({ working_weekdays: value.working_weekdays as number[], holidays: value.holidays as string[] });
@@ -439,48 +488,75 @@ export async function validateRepository(repositoryRoot: string): Promise<Valida
         const code = error instanceof CalendarError ? error.code : "CALENDAR_INVALID";
         add({ severity: "error", code, path: document.path, message: error instanceof Error ? error.message : String(error) });
       }
-    } else if (value.schema === "gitpm/project@1") {
+    } else if (value.schema === "gitpm/project@2") {
       if (!statuses.has(String(value.status))) add({ severity: "error", code: "CONFIG_REFERENCE", path: document.path, message: `Unknown status ${String(value.status)}` });
       reference(value.owner, "gitpm/person@1", document);
+      validateScheduleWindows(document);
+      const planning = value.planning as Record<string, unknown> | undefined;
+      if (planning !== undefined) {
+        const enabled = new Set(values(planning.enabled_tracks));
+        for (const slug of [...values(planning.enabled_tracks), ...values(planning.dashboard_tracks)]) {
+          if (!tracks.has(slug)) add({ severity: "error", code: "PLANNING_UNKNOWN_TRACK", path: document.path, field: "planning", message: `Unknown schedule track ${slug}` });
+        }
+        const primary = typeof planning.primary_track === "string" ? planning.primary_track : undefined;
+        if (primary !== undefined && !enabled.has(primary)) add({ severity: "error", code: "PLANNING_PRIMARY_NOT_ENABLED", path: document.path, field: "planning.primary_track", message: `primary_track ${primary} is not enabled` });
+        const workload = typeof planning.workload_track === "string" ? planning.workload_track : undefined;
+        if (workload !== undefined) {
+          if (!enabled.has(workload)) add({ severity: "error", code: "PLANNING_WORKLOAD_NOT_ENABLED", path: document.path, field: "planning.workload_track", message: `workload_track ${workload} is not enabled` });
+          const workloadTrack = tracks.get(workload);
+          if (workloadTrack !== undefined && (workloadTrack.kind !== "manual" || !workloadTrack.capabilities.has("dates") || !workloadTrack.capabilities.has("effort"))) {
+            add({ severity: "error", code: "PLANNING_WORKLOAD_MISSING_EFFORT", path: document.path, field: "planning.workload_track", message: `workload_track ${workload} needs manual dates and effort capabilities` });
+          }
+        }
+        const comparison = typeof planning.comparison_track === "string" ? planning.comparison_track : undefined;
+        if (comparison !== undefined && !enabled.has(comparison)) add({ severity: "error", code: "PLANNING_COMPARISON_NOT_ENABLED", path: document.path, field: "planning.comparison_track", message: `comparison_track ${comparison} is not enabled` });
+        for (const slug of values(planning.dashboard_tracks)) if (!enabled.has(slug)) add({ severity: "error", code: "PLANNING_DASHBOARD_UNKNOWN", path: document.path, field: "planning.dashboard_tracks", message: `dashboard track ${slug} is not enabled` });
+      }
     } else if (value.schema === "gitpm/person@1") {
       reference(value.calendar, "gitpm/calendar@1", document);
     } else if (value.schema === "gitpm/team@1") {
       for (const member of values(value.members)) reference(member, "gitpm/person@1", document);
-    } else if (value.schema === "gitpm/milestone@1") {
-      reference(value.project, "gitpm/project@1", document);
-    } else if (value.schema === "gitpm/task@1") {
-      reference(value.project, "gitpm/project@1", document);
+    } else if (value.schema === "gitpm/milestone@2") {
+      reference(value.project, "gitpm/project@2", document);
+      validateScheduleWindows(document);
+    } else if (value.schema === "gitpm/task@2") {
+      reference(value.project, "gitpm/project@2", document);
       if (!statuses.has(String(value.status))) add({ severity: "error", code: "CONFIG_REFERENCE", path: document.path, message: `Unknown status ${String(value.status)}` });
       if (!issueTypes.has(String(value.type))) add({ severity: "error", code: "CONFIG_REFERENCE", path: document.path, message: `Unknown type ${String(value.type)}` });
       for (const assignee of values(value.assignees)) reference(assignee, "gitpm/person@1", document);
       if (typeof value.parent === "string") {
-        const parent = reference(value.parent, "gitpm/task@1", document);
+        const parent = reference(value.parent, "gitpm/task@2", document);
         if (parent && parent.value.project !== value.project) {
           add({ severity: "error", code: "REF_CROSS_PROJECT", path: document.path, message: `${value.parent} belongs to another project` });
         } else if (parent && (typeof parent.value.milestone === "string" ? parent.value.milestone : undefined) !== (typeof value.milestone === "string" ? value.milestone : undefined)) {
           add({ severity: "error", code: "TASK_PARENT_MILESTONE_MISMATCH", path: document.path, message: `${value.id} and parent ${value.parent} must belong to the same milestone` });
         }
       }
-      for (const [id, schema] of [
-        ...(typeof value.milestone === "string" ? [[value.milestone, "gitpm/milestone@1"]] : []),
-        ...values(value.depends_on).map((id) => [id, "gitpm/task@1"]),
-      ] as Array<[string, string]>) {
-        const target = reference(id, schema, document);
-        if (target && target.value.project !== value.project) add({ severity: "error", code: "REF_CROSS_PROJECT", path: document.path, message: `${id} belongs to another project` });
+      if (typeof value.milestone === "string") {
+        const target = reference(value.milestone, "gitpm/milestone@2", document);
+        if (target && target.value.project !== value.project) add({ severity: "error", code: "REF_CROSS_PROJECT", path: document.path, message: `${value.milestone} belongs to another project` });
+      }
+      validateScheduleWindows(document);
+      for (const [trackSlug, window] of Object.entries((value.schedules as Record<string, Record<string, unknown>> | undefined) ?? {})) {
+        for (const dependency of values(window?.depends_on)) {
+          const target = reference(dependency, "gitpm/task@2", document);
+          if (target && target.value.project !== value.project) add({ severity: "error", code: "REF_CROSS_PROJECT", path: document.path, message: `${dependency} belongs to another project` });
+          void trackSlug;
+        }
       }
     } else if (value.schema === "gitpm/saved-view@1") {
-      reference(value.project, "gitpm/project@1", document);
+      reference(value.project, "gitpm/project@2", document);
       const filters = value.filters as Record<string, unknown>;
       for (const assignee of values(filters.assignees)) reference(assignee, "gitpm/person@1", document);
       for (const milestone of values(filters.milestones)) {
-        const target = reference(milestone, "gitpm/milestone@1", document);
+        const target = reference(milestone, "gitpm/milestone@2", document);
         if (target && target.value.project !== value.project) add({ severity: "error", code: "REF_CROSS_PROJECT", path: document.path, message: `${milestone} belongs to another project` });
       }
       for (const status of values(filters.statuses)) if (!statuses.has(status)) add({ severity: "error", code: "CONFIG_REFERENCE", path: document.path, message: `Unknown status ${status}` });
       for (const issueType of values(filters.types)) if (!issueTypes.has(issueType)) add({ severity: "error", code: "CONFIG_REFERENCE", path: document.path, message: `Unknown type ${issueType}` });
     } else if (value.schema === "gitpm/comment@1") {
-      reference(value.project, "gitpm/project@1", document);
-      const task = reference(value.task, "gitpm/task@1", document);
+      reference(value.project, "gitpm/project@2", document);
+      const task = reference(value.task, "gitpm/task@2", document);
       if (task && task.value.project !== value.project) add({ severity: "error", code: "REF_CROSS_PROJECT", path: document.path, message: `${String(value.task)} belongs to another project` });
       const mentions = (value.mentions as Array<{ person?: unknown; mentioned_at?: unknown }> | undefined) ?? [];
       const mentionedPeople = mentions.map((mention) => mention.person).filter((person): person is string => typeof person === "string");
@@ -494,12 +570,28 @@ export async function validateRepository(repositoryRoot: string): Promise<Valida
       for (const mention of mentions) if (typeof mention.mentioned_at === "string" && typeof value.created_at === "string" && mention.mentioned_at < value.created_at) add({ severity: "error", code: "COMMENT_TIMESTAMP_ORDER", path: document.path, message: "mentioned_at must not be before created_at" });
       if (typeof value.updated_at === "string" && typeof value.created_at === "string" && value.updated_at < value.created_at) add({ severity: "error", code: "COMMENT_TIMESTAMP_ORDER", path: document.path, message: "updated_at must not be before created_at" });
       if (typeof value.deleted_at === "string" && typeof value.created_at === "string" && value.deleted_at < value.created_at) add({ severity: "error", code: "COMMENT_TIMESTAMP_ORDER", path: document.path, message: "deleted_at must not be before created_at" });
+    } else if (value.schema === "gitpm/time-entry@1") {
+      reference(value.project, "gitpm/project@2", document);
+      const task = reference(value.task, "gitpm/task@2", document);
+      if (task && task.value.project !== value.project) add({ severity: "error", code: "REF_CROSS_PROJECT", path: document.path, message: `${String(value.task)} belongs to another project` });
+      reference(value.person, "gitpm/person@1", document);
+      if (!categories.has(String(value.category))) add({ severity: "error", code: "CONFIG_REFERENCE", path: document.path, field: "category", message: `Unknown work category ${String(value.category)}` });
+      if (typeof value.performed_on === "string") {
+        try { parseDateOnly(value.performed_on); } catch (error) {
+          add({ severity: "error", code: "DATE_INVALID", path: document.path, field: "performed_on", message: error instanceof Error ? error.message : String(error) });
+        }
+      }
+      if (typeof value.voided_at === "string" && typeof value.created_at === "string" && value.voided_at < value.created_at) add({ severity: "error", code: "TIME_ENTRY_TIMESTAMP_ORDER", path: document.path, message: "voided_at must not be before created_at" });
     }
   }
 
-  const tasks = validDocuments.filter((document) => document.value.schema === "gitpm/task@1");
+  const tasks = validDocuments.filter((document) => document.value.schema === "gitpm/task@2");
   detectCycles(tasks, (value) => typeof value.parent === "string" ? [value.parent] : [], "TASK_PARENT_CYCLE", add);
-  detectCycles(tasks, (value) => values(value.depends_on), "TASK_DEPENDENCY_CYCLE", add);
+  const dependencyTracks = new Set<string>();
+  for (const task of tasks) for (const trackSlug of Object.keys((task.value.schedules as Record<string, Record<string, unknown>> | undefined) ?? {})) dependencyTracks.add(trackSlug);
+  for (const track of dependencyTracks) {
+    detectCycles(tasks, (value) => values((value.schedules as Record<string, Record<string, unknown>> | undefined)?.[track]?.depends_on), "TASK_DEPENDENCY_CYCLE", add);
+  }
 
   const errors = issues.filter((issue) => issue.severity === "error");
   const warnings = issues.filter((issue) => issue.severity === "warning");

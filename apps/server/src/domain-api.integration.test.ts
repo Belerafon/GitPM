@@ -105,9 +105,9 @@ describe("domain API integration", () => {
       { type: "calendars", document: { schema: "gitpm/calendar@1", id: "C-26-7GQW87", name: "HTTP calendar", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" } },
       { type: "people", document: { schema: "gitpm/person@1", id: "U-26-KB9RXB", name: "HTTP person", weekly_capacity_hours: 40, calendar: "C-26-7GQW87", lifecycle: "active" } },
       { type: "teams", document: { schema: "gitpm/team@1", id: "G-26-22K88P", name: "HTTP team", members: ["U-26-KB9RXB"], lifecycle: "active" } },
-      { type: "projects", document: { schema: "gitpm/project@1", id: "P-26-Y9S1D8", name: "HTTP project", status: "backlog", lifecycle: "active" } },
-      { type: "milestones", document: { schema: "gitpm/milestone@1", id: "M-26-KK4VXH", project: "P-26-Y9S1D8", name: "HTTP milestone", lifecycle: "active" } },
-      { type: "tasks", document: { schema: "gitpm/task@1", id: "T-26-FM5Q4W", project: "P-26-Y9S1D8", title: "HTTP task", type: "task", status: "backlog", lifecycle: "active" } },
+      { type: "projects", document: { schema: "gitpm/project@2", id: "P-26-Y9S1D8", name: "HTTP project", status: "backlog", lifecycle: "active" } },
+      { type: "milestones", document: { schema: "gitpm/milestone@2", id: "M-26-KK4VXH", project: "P-26-Y9S1D8", name: "HTTP milestone", lifecycle: "active" } },
+      { type: "tasks", document: { schema: "gitpm/task@2", id: "T-26-FM5Q4W", project: "P-26-Y9S1D8", title: "HTTP task", type: "task", status: "backlog", lifecycle: "active" } },
       { type: "views", document: { schema: "gitpm/saved-view@1", id: "V-26-B0C5A1", project: "P-26-Y9S1D8", name: "HTTP view", kind: "list", filters: {}, lifecycle: "active" } },
     ];
     const current = new Map<string, ApiEntityResult>();

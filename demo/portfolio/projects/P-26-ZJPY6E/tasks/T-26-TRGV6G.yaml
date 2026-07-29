@@ -1,4 +1,4 @@
-schema: gitpm/task@1
+schema: gitpm/task@2
 id: T-26-TRGV6G # task: Подготовить релиз в App Store и RuStore
 project: P-26-ZJPY6E # project: Мобильный банк 2.0
 title: Подготовить релиз в App Store и RuStore
@@ -14,11 +14,13 @@ assignees:
   - U-26-NEDN00 # person: Мария Соколова
   - U-26-FSB3GM # person: Илья Кузнецов
   - U-26-J4FH55 # person: Сергей Лебедев
-estimate_hours: 36
-start: 2026-11-09
-due: 2026-11-27
-depends_on:
-  - T-26-7RF20T # task: Организовать пилот для сотрудников банка
+schedules:
+  plan:
+    start: 2026-11-09
+    finish: 2026-11-27
+    effort_hours: 36
+    depends_on:
+      - T-26-7RF20T # task: Организовать пилот для сотрудников банка
 labels:
   - релиз
   - эксплуатация

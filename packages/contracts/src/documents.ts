@@ -48,10 +48,8 @@ export interface EntityDocument extends Readonly<Record<string, unknown>> {
   readonly parent?: string;
   readonly milestone?: string;
   readonly assignees?: readonly string[];
-  readonly estimate_hours?: number;
-  readonly start?: string;
-  readonly due?: string;
-  readonly depends_on?: readonly string[];
+  readonly planning?: ProjectPlanning;
+  readonly schedules?: ScheduleMap;
   readonly milestone_order?: readonly string[];
   readonly task_order?: readonly string[];
   readonly labels?: readonly string[];
@@ -67,6 +65,71 @@ export interface EntityDocument extends Readonly<Record<string, unknown>> {
 }
 
 type SchemaReferences = { readonly references: [typeof commonSchema] };
+
+export interface ScheduleWindow {
+  readonly start?: string;
+  readonly finish?: string;
+  readonly effort_hours?: number;
+  readonly depends_on?: readonly string[];
+}
+
+export type ScheduleMap = Readonly<Record<string, ScheduleWindow>>;
+
+export interface ProjectPlanning {
+  readonly enabled_tracks?: readonly string[];
+  readonly primary_track?: string;
+  readonly workload_track?: string;
+  readonly comparison_track?: string;
+  readonly dashboard_tracks?: readonly string[];
+}
+
+export type StatusCategory = "backlog" | "active" | "done" | "cancelled";
+
+export interface StatusEntry extends ConfigValue {
+  readonly category: StatusCategory;
+}
+
+export interface TrackDefinition {
+  readonly slug: string;
+  readonly title: string;
+  readonly kind: "manual" | "actual";
+  readonly capabilities?: readonly ("dates" | "effort" | "dependencies")[];
+  readonly source?: "time_entries";
+}
+
+export interface ScheduleTracksDocument extends Readonly<Record<string, unknown>> {
+  readonly schema: "gitpm/schedule-tracks@1";
+  readonly tracks: readonly TrackDefinition[];
+  readonly defaults: ProjectPlanning;
+}
+
+export interface WorkCategoryEntry {
+  readonly slug: string;
+  readonly title: string;
+  readonly active: boolean;
+}
+
+export interface WorkCategoriesDocument extends Readonly<Record<string, unknown>> {
+  readonly schema: "gitpm/work-categories@1";
+  readonly categories: readonly WorkCategoryEntry[];
+}
+
+export interface TimeEntryDocument extends Readonly<Record<string, unknown>> {
+  readonly schema: "gitpm/time-entry@1";
+  readonly id: string;
+  readonly project: string;
+  readonly task: string;
+  readonly person: string;
+  readonly performed_on: string;
+  readonly hours: number;
+  readonly category: string;
+  readonly created_at: string;
+  readonly state: "active" | "voided";
+  readonly note_markdown?: string;
+  readonly voided_at?: string;
+  readonly voided_by?: ActorSnapshot;
+  readonly replacement?: string;
+}
 
 export type ProjectDocument = FromSchema<typeof projectSchema, SchemaReferences> & EntityDocument;
 export type TaskDocument = FromSchema<typeof taskSchema, SchemaReferences> & EntityDocument;
@@ -108,17 +171,20 @@ export interface StrictConfigValue extends ConfigValue {
 }
 
 export interface ConfigurationDocument extends Readonly<Record<string, unknown>> {
-  readonly schema: "gitpm/statuses@1" | "gitpm/issue-types@1";
-  readonly statuses?: readonly ConfigValue[];
+  readonly schema: "gitpm/statuses@2" | "gitpm/issue-types@1" | "gitpm/schedule-tracks@1" | "gitpm/work-categories@1";
+  readonly statuses?: readonly StatusEntry[];
   readonly issue_types?: readonly ConfigValue[];
+  readonly tracks?: readonly TrackDefinition[];
+  readonly defaults?: ProjectPlanning;
+  readonly categories?: readonly WorkCategoryEntry[];
 }
 
 export type StatusesDocument = FromSchema<typeof statusesSchema, SchemaReferences> & ConfigurationDocument;
 export type IssueTypesDocument = FromSchema<typeof issueTypesSchema, SchemaReferences> & ConfigurationDocument;
 
-export type StatusValue = ConfigValue;
+export type StatusValue = StatusEntry;
 export type IssueTypeValue = ConfigValue;
-export type StrictConfigurationDocument = StatusesDocument | IssueTypesDocument;
+export type StrictConfigurationDocument = StatusesDocument | IssueTypesDocument | ScheduleTracksDocument | WorkCategoriesDocument;
 
 export interface ActorSnapshot {
   readonly provider: "gitlab" | "git";
@@ -166,13 +232,13 @@ export interface RepositoryDocument {
 
 export type GitPmDocument = EntityDocument | ConfigurationDocument;
 export type StrictGitPmDocument = StrictEntityDocument | StrictConfigurationDocument;
-export type RepositoryGitPmDocument = GitPmDocument | CommentDocument | RepositoryDocument;
+export type RepositoryGitPmDocument = GitPmDocument | CommentDocument | RepositoryDocument | TimeEntryDocument;
 export type HttpDocument = StrictGitPmDocument;
 
 export const ENTITY_TYPE_SCHEMAS = {
-  projects: "gitpm/project@1",
-  tasks: "gitpm/task@1",
-  milestones: "gitpm/milestone@1",
+  projects: "gitpm/project@2",
+  tasks: "gitpm/task@2",
+  milestones: "gitpm/milestone@2",
   people: "gitpm/person@1",
   teams: "gitpm/team@1",
   calendars: "gitpm/calendar@1",
@@ -229,8 +295,9 @@ function decodeDocument(input: unknown, allowedSchemas: ReadonlySet<string>, con
 }
 
 const entitySchemas = new Set<string>(ENTITY_DOCUMENT_SCHEMAS);
-const configurationSchemas = new Set<string>(["gitpm/statuses@1", "gitpm/issue-types@1"]);
+const configurationSchemas = new Set<string>(["gitpm/statuses@2", "gitpm/issue-types@1", "gitpm/schedule-tracks@1", "gitpm/work-categories@1"]);
 const commentSchemas = new Set<string>(["gitpm/comment@1"]);
+const timeEntrySchemas = new Set<string>(["gitpm/time-entry@1"]);
 
 export const decodeEntityDocument: Decoder<StrictEntityDocument> = (input) =>
   decodeDocument(input, entitySchemas, "EntityDocument") as StrictEntityDocument;
@@ -240,3 +307,6 @@ export const decodeConfigurationDocument: Decoder<StrictConfigurationDocument> =
 
 export const decodeCommentDocument: Decoder<CommentDocument> = (input) =>
   decodeDocument(input, commentSchemas, "CommentDocument") as CommentDocument;
+
+export const decodeTimeEntryDocument: Decoder<TimeEntryDocument> = (input) =>
+  decodeDocument(input, timeEntrySchemas, "TimeEntryDocument") as TimeEntryDocument;

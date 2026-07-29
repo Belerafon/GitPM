@@ -180,8 +180,8 @@ describe("filesystem boundary", () => {
     const root = await temporaryRoot();
     const worktree = path.join(root, "worktree");
     await mkdir(path.join(worktree, "projects"), { recursive: true });
-    await atomicWriteDomainFile(worktree, "projects/task.yaml", "schema: gitpm/task@1\n");
-    expect(await readFile(path.join(worktree, "projects", "task.yaml"), "utf8")).toBe("schema: gitpm/task@1\n");
+    await atomicWriteDomainFile(worktree, "projects/task.yaml", "schema: gitpm/task@2\n");
+    expect(await readFile(path.join(worktree, "projects", "task.yaml"), "utf8")).toBe("schema: gitpm/task@2\n");
   });
 
   it("detects a parent symlink swap before rename and does not write outside", async () => {

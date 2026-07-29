@@ -45,7 +45,7 @@ describe("P13A malicious repository boundary", () => {
     await mkdir(hooks);
     await writeFile(path.join(source, ".gitattributes"), "*.yaml diff=owned filter=owned\n", "utf8");
     await writeFile(path.join(source, ".gitmodules"), "[submodule \"owned\"]\n\tpath = owned\n\turl = file:///tmp/owned.git\n", "utf8");
-    await writeFile(path.join(source, "project.yaml"), "schema: gitpm/project@1\nname: Safe\n", "utf8");
+    await writeFile(path.join(source, "project.yaml"), "schema: gitpm/project@2\nname: Safe\n", "utf8");
     await writeFile(attackScript, `import { appendFileSync } from "node:fs"; appendFileSync(${JSON.stringify(marker)}, "executed\\n"); process.stdin.pipe(process.stdout);\n`, "utf8");
     await writeFile(path.join(hooks, "post-commit"), `#!${process.execPath}\nimport(${JSON.stringify(new URL(`file:///${attackScript.replaceAll("\\", "/")}`).toString())});\n`, "utf8");
     await git(source, "init", "-b", "main");

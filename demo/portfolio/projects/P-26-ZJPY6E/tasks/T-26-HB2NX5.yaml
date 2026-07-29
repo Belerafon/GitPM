@@ -1,4 +1,4 @@
-schema: gitpm/task@1
+schema: gitpm/task@2
 id: T-26-HB2NX5 # task: Запустить программу обновления мобильного банка
 project: P-26-ZJPY6E # project: Мобильный банк 2.0
 title: Запустить программу обновления мобильного банка
@@ -15,9 +15,11 @@ assignees:
   - U-26-RKTV2A # person: Дмитрий Орлов
   - U-26-NEDN00 # person: Мария Соколова
   - U-26-9C1ZR4 # person: Елена Морозова
-estimate_hours: 80
-start: 2026-07-20
-due: 2026-11-27
+schedules:
+  plan:
+    start: 2026-07-20
+    finish: 2026-11-27
+    effort_hours: 80
 labels:
   - управление
   - релиз

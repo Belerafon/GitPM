@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gitpm.dev/schemas/v1/work-categories.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "categories"],
+  "properties": {
+    "schema": {"const": "gitpm/work-categories@1"},
+    "categories": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["slug", "title", "active"],
+        "properties": {
+          "slug": {"$ref": "common.schema.json#/$defs/slug"},
+          "title": {"type": "string", "minLength": 1},
+          "active": {"type": "boolean"}
+        }
+      }
+    }
+  }
+}

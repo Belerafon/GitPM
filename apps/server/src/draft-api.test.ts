@@ -140,7 +140,7 @@ describe("entity API contract", () => {
 
   it("lists entities through an owner-checked read model", async () => {
     const entityStore = {
-      list: vi.fn(async () => [{ document: { schema: "gitpm/project@1", id: "P-26-MGP84K" }, path: "projects/P-26-MGP84K/project.yaml", blob_id: "a".repeat(40), draft_fingerprint: metadata.fingerprint }]),
+      list: vi.fn(async () => [{ document: { schema: "gitpm/project@2", id: "P-26-MGP84K" }, path: "projects/P-26-MGP84K/project.yaml", blob_id: "a".repeat(40), draft_fingerprint: metadata.fingerprint }]),
     } as unknown as EntityStore;
     const app = buildApp({ authenticate: () => ({ userId: "42", role: "Developer" }), draftManager: manager(), entityStore });
     apps.push(app);
@@ -151,7 +151,7 @@ describe("entity API contract", () => {
   });
 
   it("returns one project workspace through the scoped read model", async () => {
-    const project = { document: { schema: "gitpm/project@1", id: "P-26-MGP84K" }, path: "projects/P-26-MGP84K/project.yaml", blob_id: "a".repeat(40), draft_fingerprint: metadata.fingerprint };
+    const project = { document: { schema: "gitpm/project@2", id: "P-26-MGP84K" }, path: "projects/P-26-MGP84K/project.yaml", blob_id: "a".repeat(40), draft_fingerprint: metadata.fingerprint };
     const entityStore = {
       projectWorkspace: vi.fn(async () => ({ project, milestones: [], tasks: [], draft_fingerprint: metadata.fingerprint })),
     } as unknown as EntityStore;
@@ -167,7 +167,7 @@ describe("entity API contract", () => {
   it("creates an entity through the domain store", async () => {
     const entityStore = {
       create: vi.fn(async () => ({
-        document: { schema: "gitpm/project@1", id: "P-26-MGP84K", name: "Project", status: "active", lifecycle: "active" },
+        document: { schema: "gitpm/project@2", id: "P-26-MGP84K", name: "Project", status: "active", lifecycle: "active" },
         path: "projects/P-26-MGP84K/project.yaml",
         blob_id: "a".repeat(40),
         draft_fingerprint: "b".repeat(64),
@@ -184,7 +184,7 @@ describe("entity API contract", () => {
       url: "/api/drafts/DRF-API/entities/projects",
       payload: {
         expected_fingerprint: metadata.fingerprint,
-        document: { schema: "gitpm/project@1", id: "P-26-MGP84K", name: "Project", status: "active", lifecycle: "active" },
+        document: { schema: "gitpm/project@2", id: "P-26-MGP84K", name: "Project", status: "active", lifecycle: "active" },
       },
     });
     expect(response.statusCode).toBe(201);
@@ -204,7 +204,7 @@ describe("entity API contract", () => {
       url: "/api/drafts/DRF-API/entities/projects",
       payload: {
         expected_fingerprint: metadata.fingerprint,
-        document: { schema: "gitpm/project@1", id: "P-26-MGP84K" },
+        document: { schema: "gitpm/project@2", id: "P-26-MGP84K" },
       },
     });
     expect(response.statusCode).toBe(400);
@@ -279,7 +279,7 @@ describe("entity API contract", () => {
       payload: {
         expected_fingerprint: metadata.fingerprint,
         expected_blob_id: "a".repeat(40),
-        document: { schema: "gitpm/statuses@1", statuses: [{ slug: "backlog", title: "Backlog", color: "gray", active: true }] },
+        document: { schema: "gitpm/statuses@2", statuses: [{ slug: "backlog", title: "Backlog", color: "gray", active: true, category: "backlog" }] },
       },
     });
     expect(response.statusCode).toBe(403);

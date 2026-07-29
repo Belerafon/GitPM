@@ -1,4 +1,4 @@
-schema: gitpm/task@1
+schema: gitpm/task@2
 id: T-26-FZHVK3 # task: Подготовить интерактивный прототип
 project: P-26-ZMBJVA # project: Портал поддержки клиентов
 title: Подготовить интерактивный прототип
@@ -14,11 +14,13 @@ assignees:
   - U-26-NEDN00 # person: Мария Соколова
   - U-26-9C1ZR4 # person: Елена Морозова
   - U-26-0225HT # person: Наталья Павлова
-estimate_hours: 48
-start: 2026-07-27
-due: 2026-08-14
-depends_on:
-  - T-26-VWWHC6 # task: Провести интервью с операторами поддержки
+schedules:
+  plan:
+    start: 2026-07-27
+    finish: 2026-08-14
+    effort_hours: 48
+    depends_on:
+      - T-26-VWWHC6 # task: Провести интервью с операторами поддержки
 labels:
   - ux
   - прототип

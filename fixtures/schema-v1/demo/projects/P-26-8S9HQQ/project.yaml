@@ -1,6 +1,15 @@
-schema: gitpm/project@1
+schema: gitpm/project@2
 id: P-26-8S9HQQ # project: Operations
 name: Operations
 status: backlog
 lifecycle: active
 owner: U-26-15QJP8 # person: Boris Sokolov
+planning:
+  enabled_tracks:
+    - plan
+    - actual
+  primary_track: plan
+  workload_track: plan
+  dashboard_tracks:
+    - plan
+    - actual

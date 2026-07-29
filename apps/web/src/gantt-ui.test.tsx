@@ -8,7 +8,7 @@ import type { DraftStatus, EntityDocument, EntityResult } from "./types.js";
 const projectId = "P-26-111111";
 const draft: DraftStatus = { draft_id: "DRF-GANTT", owner_gitlab_user_id: "42", branch: "gitpm/42/DRF-GANTT", base_commit: "a".repeat(40), writer_mode: "ui", state: "open", fingerprint: "b".repeat(64), created_at: "2026-07-11T00:00:00.000Z", updated_at: "2026-07-11T00:00:00.000Z" };
 const result = (document: EntityDocument): EntityResult => ({ document, path: `${document.id}.yaml`, blob_id: "c".repeat(40), draft_fingerprint: "d".repeat(64) });
-const task = (suffix: string, title: string, start?: string, due?: string, extra: Record<string, unknown> = {}) => result({ schema: "gitpm/task@1", id: `T-26-${suffix.repeat(6)}`, project: projectId, title, type: "task", status: "backlog", lifecycle: "active", ...(start === undefined ? {} : { start }), ...(due === undefined ? {} : { due }), ...extra });
+const task = (suffix: string, title: string, start?: string, due?: string, extra: Record<string, unknown> = {}) => result({ schema: "gitpm/task@2", id: `T-26-${suffix.repeat(6)}`, project: projectId, title, type: "task", status: "backlog", lifecycle: "active", ...(start === undefined && due === undefined ? {} : { schedules: { plan: { ...(start === undefined ? {} : { start }), ...(due === undefined ? {} : { finish: due }) } } }), ...extra });
 
 const parent = task("2", "Plan release", "2026-07-01", "2026-07-05");
 const child = task("3", "Build API", "2026-07-02", "2026-07-03", { parent: parent.document.id, milestone: "M-26-888888" });
@@ -18,7 +18,7 @@ const review = task("5", "Review", "2026-07-06", "2026-07-07", { depends_on: [de
 const launch = task("6", "Launch", "2026-07-08", "2026-07-08", { depends_on: [review.document.id, dependent.document.id] });
 const undated = task("7", "Undated");
 const archived = task("9", "Archived", "2026-07-01", "2026-07-02", { lifecycle: "archived" });
-const milestone = result({ schema: "gitpm/milestone@1", id: "M-26-888888", project: projectId, name: "Beta", due: "2026-07-08", lifecycle: "active" });
+const milestone = result({ schema: "gitpm/milestone@2", id: "M-26-888888", project: projectId, name: "Beta", lifecycle: "active", schedules: { plan: { finish: "2026-07-08" } } });
 
 afterEach(cleanup);
 describe("read-only Gantt", () => {
@@ -39,12 +39,27 @@ describe("read-only Gantt", () => {
     expect(model.dependencies).toEqual([{ from: child.document.id, to: dependent.document.id }, { from: dependent.document.id, to: review.document.id }, { from: review.document.id, to: launch.document.id }, { from: dependent.document.id, to: launch.document.id }]);
   });
 
+  it("overlays secondary schedule tracks as thin bars under the primary bar", () => {
+    const primary = task("P", "Primary", "2026-07-01", "2026-07-10", { schedules: { plan: { start: "2026-07-01", finish: "2026-07-10" }, target: { start: "2026-07-03", finish: "2026-07-07" } } });
+    const model = buildGanttModel([primary], [])!;
+    const row = model.rows.find((item) => item.id === primary.document.id)!;
+    expect(row.start).toBe("2026-07-01");
+    expect(row.overlays).toEqual([{ track: "target", start: "2026-07-03", finish: "2026-07-07", startOffset: 2, duration: 5 }]);
+  });
+
+  it("renders discrete actual-activity markers from time entries", () => {
+    const task1 = task("A", "Active", "2026-07-01", "2026-07-10");
+    const actual = new Map<string, readonly { readonly date: string; readonly hours: number }[]>([[task1.document.id, [{ date: "2026-07-02", hours: 3 }, { date: "2026-07-09", hours: 5 }]]]);
+    const model = buildGanttModel([task1], [], actual)!;
+    expect(model.rows[0]!.actual).toEqual([{ date: "2026-07-02", hours: 3, offset: 1 }, { date: "2026-07-09", hours: 5, offset: 8 }]);
+  });
+
   it("renders six bars and cannot mutate repository data", async () => {
     const updateEntity = vi.fn(); const createEntity = vi.fn(); const deleteEntity = vi.fn();
     const onNavigate = vi.fn();
-    const entities = [result({ schema: "gitpm/project@1", id: projectId, name: "Beta portfolio", status: "backlog", lifecycle: "active" }), parent, child, grandchild, dependent, review, launch, undated, archived, milestone];
+    const entities = [result({ schema: "gitpm/project@2", id: projectId, name: "Beta portfolio", status: "backlog", lifecycle: "active" }), parent, child, grandchild, dependent, review, launch, undated, archived, milestone];
     const api = { listEntities: vi.fn(async (_draftId: string, type: string, project?: string) => entities.filter((item) => {
-      const schemas: Record<string, string> = { projects: "gitpm/project@1", tasks: "gitpm/task@1", milestones: "gitpm/milestone@1" };
+      const schemas: Record<string, string> = { projects: "gitpm/project@2", tasks: "gitpm/task@2", milestones: "gitpm/milestone@2" };
       return item.document.schema === schemas[type] && (project === undefined || item.document.project === project);
     })), updateEntity, createEntity, deleteEntity } as unknown as GitPmApi;
     const { container } = render(<GanttWorkspace api={api} draft={draft} locale="en" onNavigate={onNavigate} />);

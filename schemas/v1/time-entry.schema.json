@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gitpm.dev/schemas/v1/time-entry.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "id", "project", "task", "person", "performed_on", "hours", "category", "created_at", "state"],
+  "properties": {
+    "schema": {"const": "gitpm/time-entry@1"},
+    "id": {"$ref": "common.schema.json#/$defs/entryId"},
+    "project": {"$ref": "common.schema.json#/$defs/projectId"},
+    "task": {"$ref": "common.schema.json#/$defs/taskId"},
+    "person": {"$ref": "common.schema.json#/$defs/personId"},
+    "performed_on": {"$ref": "common.schema.json#/$defs/date"},
+    "hours": {"type": "number", "exclusiveMinimum": 0, "multipleOf": 0.25},
+    "category": {"$ref": "common.schema.json#/$defs/slug"},
+    "note_markdown": {"type": "string"},
+    "created_at": {"$ref": "common.schema.json#/$defs/timestamp"},
+    "state": {"enum": ["active", "voided"]},
+    "voided_at": {"$ref": "common.schema.json#/$defs/timestamp"},
+    "voided_by": {"$ref": "common.schema.json#/$defs/actor"},
+    "replacement": {"$ref": "common.schema.json#/$defs/entryId"}
+  }
+}

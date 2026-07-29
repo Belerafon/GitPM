@@ -1,4 +1,4 @@
-schema: gitpm/task@1
+schema: gitpm/task@2
 id: T-26-ZQFF0R # task: Подготовить дизайн-систему мобильного приложения
 project: P-26-ZJPY6E # project: Мобильный банк 2.0
 title: Подготовить дизайн-систему мобильного приложения
@@ -13,11 +13,13 @@ milestone: M-26-SY14EX # milestone: Публикация в магазинах
 assignees:
   - U-26-NEDN00 # person: Мария Соколова
   - U-26-9C1ZR4 # person: Елена Морозова
-estimate_hours: 72
-start: 2026-08-03
-due: 2026-08-28
-depends_on:
-  - T-26-8D0SHE # task: Исследовать ключевые клиентские сценарии
+schedules:
+  plan:
+    start: 2026-08-03
+    finish: 2026-08-28
+    effort_hours: 72
+    depends_on:
+      - T-26-8D0SHE # task: Исследовать ключевые клиентские сценарии
 labels:
   - frontend
   - дизайн

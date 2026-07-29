@@ -71,6 +71,9 @@ importers:
       '@gitpm/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@gitpm/time-entries':
+        specifier: workspace:*
+        version: link:../../packages/time-entries
       '@gitpm/validation':
         specifier: workspace:*
         version: link:../../packages/validation
@@ -144,6 +147,9 @@ importers:
       '@gitpm/task-hierarchy':
         specifier: workspace:*
         version: link:../../packages/task-hierarchy
+      '@gitpm/time-entries':
+        specifier: workspace:*
+        version: link:../../packages/time-entries
       '@gitpm/workload':
         specifier: workspace:*
         version: link:../../packages/workload
@@ -335,11 +341,15 @@ importers:
         specifier: 2.8.3
         version: 2.8.3
 
+  packages/scheduling: {}
+
   packages/security: {}
 
   packages/shared: {}
 
   packages/task-hierarchy: {}
+
+  packages/time-entries: {}
 
   packages/validation:
     dependencies:

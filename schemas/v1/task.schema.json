@@ -5,7 +5,7 @@
   "additionalProperties": false,
   "required": ["schema", "id", "project", "title", "type", "status", "lifecycle"],
   "properties": {
-    "schema": {"const": "gitpm/task@1"},
+    "schema": {"const": "gitpm/task@2"},
     "id": {"$ref": "common.schema.json#/$defs/taskId"},
     "project": {"$ref": "common.schema.json#/$defs/projectId"},
     "title": {"type": "string", "minLength": 1},
@@ -24,14 +24,7 @@
       "items": {"$ref": "common.schema.json#/$defs/personId"},
       "uniqueItems": true
     },
-    "estimate_hours": {"type": "number", "minimum": 0, "multipleOf": 0.25},
-    "start": {"$ref": "common.schema.json#/$defs/date"},
-    "due": {"$ref": "common.schema.json#/$defs/date"},
-    "depends_on": {
-      "type": "array",
-      "items": {"$ref": "common.schema.json#/$defs/taskId"},
-      "uniqueItems": true
-    },
+    "schedules": {"$ref": "common.schema.json#/$defs/scheduleMap"},
     "labels": {"$ref": "common.schema.json#/$defs/labels"}
   }
 }

@@ -11,16 +11,16 @@ const emptySemantic: SemanticDiff = {
 };
 
 const entityTypeKeys: Readonly<Record<string, MessageKey>> = {
-  "gitpm/project@1": "changes.entityProject",
-  "gitpm/task@1": "changes.entityTask",
-  "gitpm/milestone@1": "changes.entityMilestone",
+  "gitpm/project@2": "changes.entityProject",
+  "gitpm/task@2": "changes.entityTask",
+  "gitpm/milestone@2": "changes.entityMilestone",
   "gitpm/person@1": "changes.entityPerson",
   "gitpm/team@1": "changes.entityTeam",
   "gitpm/calendar@1": "changes.entityCalendar",
   "gitpm/saved-view@1": "changes.entityView",
   "gitpm/comment@1": "changes.entityComment",
   "gitpm/repository@1": "changes.entityRepository",
-  "gitpm/statuses@1": "changes.entityStatuses",
+  "gitpm/statuses@2": "changes.entityStatuses",
   "gitpm/issue-types@1": "changes.entityIssueTypes",
 };
 

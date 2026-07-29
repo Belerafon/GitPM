@@ -1,4 +1,4 @@
-schema: gitpm/task@1
+schema: gitpm/task@2
 id: T-26-XQRKPB # task: Инвентаризировать источники и потребителей данных
 project: P-26-7VWANM # project: Переезд аналитической платформы
 title: Инвентаризировать источники и потребителей данных
@@ -13,9 +13,11 @@ milestone: M-26-9HGQWY # milestone: Отключение старого хран
 assignees:
   - U-26-ETKSWS # person: Ольга Новикова
   - U-26-1MV0QD # person: Максим Фёдоров
-estimate_hours: 56
-start: 2026-08-10
-due: 2026-08-28
+schedules:
+  plan:
+    start: 2026-08-10
+    finish: 2026-08-28
+    effort_hours: 56
 labels:
   - аудит
   - данные

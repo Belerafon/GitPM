@@ -222,6 +222,98 @@ export const commonSchema = {
       "type": "string",
       "pattern": "^N-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}$"
     },
+    "entryId": {
+      "type": "string",
+      "pattern": "^E-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}$"
+    },
+    "statusCategory": {
+      "enum": [
+        "backlog",
+        "active",
+        "done",
+        "cancelled"
+      ]
+    },
+    "trackKind": {
+      "enum": [
+        "manual",
+        "actual"
+      ]
+    },
+    "trackCapability": {
+      "enum": [
+        "dates",
+        "effort",
+        "dependencies"
+      ]
+    },
+    "trackSource": {
+      "enum": [
+        "time_entries"
+      ]
+    },
+    "scheduleWindow": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "$ref": "#/$defs/date"
+        },
+        "finish": {
+          "$ref": "#/$defs/date"
+        },
+        "effort_hours": {
+          "type": "number",
+          "minimum": 0,
+          "multipleOf": 0.25
+        },
+        "depends_on": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/taskId"
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "scheduleMap": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$": {
+          "$ref": "#/$defs/scheduleWindow"
+        }
+      }
+    },
+    "statusConfigValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "slug",
+        "title",
+        "color",
+        "active",
+        "category"
+      ],
+      "properties": {
+        "slug": {
+          "$ref": "#/$defs/slug"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "color": {
+          "$ref": "#/$defs/colorToken"
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "category": {
+          "$ref": "#/$defs/statusCategory"
+        }
+      }
+    },
     "timestamp": {
       "type": "string",
       "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]{3})?Z$"
@@ -328,7 +420,7 @@ export const milestoneSchema = {
   ],
   "properties": {
     "schema": {
-      "const": "gitpm/milestone@1"
+      "const": "gitpm/milestone@2"
     },
     "id": {
       "$ref": "common.schema.json#/$defs/milestoneId"
@@ -346,8 +438,8 @@ export const milestoneSchema = {
     "description_markdown": {
       "type": "string"
     },
-    "due": {
-      "$ref": "common.schema.json#/$defs/date"
+    "schedules": {
+      "$ref": "common.schema.json#/$defs/scheduleMap"
     },
     "task_order": {
       "type": "array",
@@ -416,7 +508,7 @@ export const projectSchema = {
   ],
   "properties": {
     "schema": {
-      "const": "gitpm/project@1"
+      "const": "gitpm/project@2"
     },
     "id": {
       "$ref": "common.schema.json#/$defs/projectId"
@@ -443,11 +535,37 @@ export const projectSchema = {
     "owner": {
       "$ref": "common.schema.json#/$defs/personId"
     },
-    "start": {
-      "$ref": "common.schema.json#/$defs/date"
+    "planning": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled_tracks": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/slug"
+          },
+          "uniqueItems": true
+        },
+        "primary_track": {
+          "$ref": "common.schema.json#/$defs/slug"
+        },
+        "workload_track": {
+          "$ref": "common.schema.json#/$defs/slug"
+        },
+        "comparison_track": {
+          "$ref": "common.schema.json#/$defs/slug"
+        },
+        "dashboard_tracks": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/slug"
+          },
+          "uniqueItems": true
+        }
+      }
     },
-    "due": {
-      "$ref": "common.schema.json#/$defs/date"
+    "schedules": {
+      "$ref": "common.schema.json#/$defs/scheduleMap"
     },
     "milestone_order": {
       "type": "array",
@@ -594,6 +712,87 @@ export const savedViewSchema = {
   }
 } as const;
 
+export const scheduleTracksSchema = {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gitpm.dev/schemas/v1/schedule-tracks.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "tracks",
+    "defaults"
+  ],
+  "properties": {
+    "schema": {
+      "const": "gitpm/schedule-tracks@1"
+    },
+    "tracks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "slug",
+          "title",
+          "kind"
+        ],
+        "properties": {
+          "slug": {
+            "$ref": "common.schema.json#/$defs/slug"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "$ref": "common.schema.json#/$defs/trackKind"
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "$ref": "common.schema.json#/$defs/trackCapability"
+            },
+            "uniqueItems": true
+          },
+          "source": {
+            "$ref": "common.schema.json#/$defs/trackSource"
+          }
+        }
+      }
+    },
+    "defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled_tracks": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/slug"
+          },
+          "uniqueItems": true
+        },
+        "primary_track": {
+          "$ref": "common.schema.json#/$defs/slug"
+        },
+        "workload_track": {
+          "$ref": "common.schema.json#/$defs/slug"
+        },
+        "comparison_track": {
+          "$ref": "common.schema.json#/$defs/slug"
+        },
+        "dashboard_tracks": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/slug"
+          },
+          "uniqueItems": true
+        }
+      }
+    }
+  }
+} as const;
+
 export const statusesSchema = {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://gitpm.dev/schemas/v1/statuses.schema.json",
@@ -605,13 +804,13 @@ export const statusesSchema = {
   ],
   "properties": {
     "schema": {
-      "const": "gitpm/statuses@1"
+      "const": "gitpm/statuses@2"
     },
     "statuses": {
       "type": "array",
       "minItems": 1,
       "items": {
-        "$ref": "common.schema.json#/$defs/configValue"
+        "$ref": "common.schema.json#/$defs/statusConfigValue"
       }
     }
   }
@@ -633,7 +832,7 @@ export const taskSchema = {
   ],
   "properties": {
     "schema": {
-      "const": "gitpm/task@1"
+      "const": "gitpm/task@2"
     },
     "id": {
       "$ref": "common.schema.json#/$defs/taskId"
@@ -676,23 +875,8 @@ export const taskSchema = {
       },
       "uniqueItems": true
     },
-    "estimate_hours": {
-      "type": "number",
-      "minimum": 0,
-      "multipleOf": 0.25
-    },
-    "start": {
-      "$ref": "common.schema.json#/$defs/date"
-    },
-    "due": {
-      "$ref": "common.schema.json#/$defs/date"
-    },
-    "depends_on": {
-      "type": "array",
-      "items": {
-        "$ref": "common.schema.json#/$defs/taskId"
-      },
-      "uniqueItems": true
+    "schedules": {
+      "$ref": "common.schema.json#/$defs/scheduleMap"
     },
     "labels": {
       "$ref": "common.schema.json#/$defs/labels"
@@ -736,46 +920,164 @@ export const teamSchema = {
   }
 } as const;
 
-export const DOCUMENT_SCHEMA_DEFINITIONS = [calendarSchema, commentSchema, commonSchema, issueTypesSchema, milestoneSchema, personSchema, projectSchema, repositorySchema, savedViewSchema, statusesSchema, taskSchema, teamSchema] as const;
+export const timeEntrySchema = {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gitpm.dev/schemas/v1/time-entry.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "id",
+    "project",
+    "task",
+    "person",
+    "performed_on",
+    "hours",
+    "category",
+    "created_at",
+    "state"
+  ],
+  "properties": {
+    "schema": {
+      "const": "gitpm/time-entry@1"
+    },
+    "id": {
+      "$ref": "common.schema.json#/$defs/entryId"
+    },
+    "project": {
+      "$ref": "common.schema.json#/$defs/projectId"
+    },
+    "task": {
+      "$ref": "common.schema.json#/$defs/taskId"
+    },
+    "person": {
+      "$ref": "common.schema.json#/$defs/personId"
+    },
+    "performed_on": {
+      "$ref": "common.schema.json#/$defs/date"
+    },
+    "hours": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "multipleOf": 0.25
+    },
+    "category": {
+      "$ref": "common.schema.json#/$defs/slug"
+    },
+    "note_markdown": {
+      "type": "string"
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    },
+    "state": {
+      "enum": [
+        "active",
+        "voided"
+      ]
+    },
+    "voided_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    },
+    "voided_by": {
+      "$ref": "common.schema.json#/$defs/actor"
+    },
+    "replacement": {
+      "$ref": "common.schema.json#/$defs/entryId"
+    }
+  }
+} as const;
+
+export const workCategoriesSchema = {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gitpm.dev/schemas/v1/work-categories.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "categories"
+  ],
+  "properties": {
+    "schema": {
+      "const": "gitpm/work-categories@1"
+    },
+    "categories": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "slug",
+          "title",
+          "active"
+        ],
+        "properties": {
+          "slug": {
+            "$ref": "common.schema.json#/$defs/slug"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "active": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  }
+} as const;
+
+export const DOCUMENT_SCHEMA_DEFINITIONS = [calendarSchema, commentSchema, commonSchema, issueTypesSchema, milestoneSchema, personSchema, projectSchema, repositorySchema, savedViewSchema, scheduleTracksSchema, statusesSchema, taskSchema, teamSchema, timeEntrySchema, workCategoriesSchema] as const;
 
 export const DOCUMENT_SCHEMAS = {
   "gitpm/calendar@1": calendarSchema,
   "gitpm/comment@1": commentSchema,
   "gitpm/issue-types@1": issueTypesSchema,
-  "gitpm/milestone@1": milestoneSchema,
+  "gitpm/milestone@2": milestoneSchema,
   "gitpm/person@1": personSchema,
-  "gitpm/project@1": projectSchema,
+  "gitpm/project@2": projectSchema,
   "gitpm/repository@1": repositorySchema,
   "gitpm/saved-view@1": savedViewSchema,
-  "gitpm/statuses@1": statusesSchema,
-  "gitpm/task@1": taskSchema,
+  "gitpm/schedule-tracks@1": scheduleTracksSchema,
+  "gitpm/statuses@2": statusesSchema,
+  "gitpm/task@2": taskSchema,
   "gitpm/team@1": teamSchema,
+  "gitpm/time-entry@1": timeEntrySchema,
+  "gitpm/work-categories@1": workCategoriesSchema,
 } as const;
 
 export const DOCUMENT_SCHEMA_IDS = {
   "gitpm/calendar@1": "https://gitpm.dev/schemas/v1/calendar.schema.json",
   "gitpm/comment@1": "https://gitpm.dev/schemas/v1/comment.schema.json",
   "gitpm/issue-types@1": "https://gitpm.dev/schemas/v1/issue-types.schema.json",
-  "gitpm/milestone@1": "https://gitpm.dev/schemas/v1/milestone.schema.json",
+  "gitpm/milestone@2": "https://gitpm.dev/schemas/v1/milestone.schema.json",
   "gitpm/person@1": "https://gitpm.dev/schemas/v1/person.schema.json",
-  "gitpm/project@1": "https://gitpm.dev/schemas/v1/project.schema.json",
+  "gitpm/project@2": "https://gitpm.dev/schemas/v1/project.schema.json",
   "gitpm/repository@1": "https://gitpm.dev/schemas/v1/repository.schema.json",
   "gitpm/saved-view@1": "https://gitpm.dev/schemas/v1/saved-view.schema.json",
-  "gitpm/statuses@1": "https://gitpm.dev/schemas/v1/statuses.schema.json",
-  "gitpm/task@1": "https://gitpm.dev/schemas/v1/task.schema.json",
+  "gitpm/schedule-tracks@1": "https://gitpm.dev/schemas/v1/schedule-tracks.schema.json",
+  "gitpm/statuses@2": "https://gitpm.dev/schemas/v1/statuses.schema.json",
+  "gitpm/task@2": "https://gitpm.dev/schemas/v1/task.schema.json",
   "gitpm/team@1": "https://gitpm.dev/schemas/v1/team.schema.json",
+  "gitpm/time-entry@1": "https://gitpm.dev/schemas/v1/time-entry.schema.json",
+  "gitpm/work-categories@1": "https://gitpm.dev/schemas/v1/work-categories.schema.json",
 } as const;
 
 export const DOCUMENT_SCHEMA_FILES = {
   "calendar": "gitpm/calendar@1",
   "comment": "gitpm/comment@1",
   "issue-types": "gitpm/issue-types@1",
-  "milestone": "gitpm/milestone@1",
+  "milestone": "gitpm/milestone@2",
   "person": "gitpm/person@1",
-  "project": "gitpm/project@1",
+  "project": "gitpm/project@2",
   "repository": "gitpm/repository@1",
   "saved-view": "gitpm/saved-view@1",
-  "statuses": "gitpm/statuses@1",
-  "task": "gitpm/task@1",
+  "schedule-tracks": "gitpm/schedule-tracks@1",
+  "statuses": "gitpm/statuses@2",
+  "task": "gitpm/task@2",
   "team": "gitpm/team@1",
+  "time-entry": "gitpm/time-entry@1",
+  "work-categories": "gitpm/work-categories@1",
 } as const;

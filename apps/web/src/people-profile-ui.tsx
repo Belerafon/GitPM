@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { scheduleText, scheduleEffort } from "./schedules.js";
 import { ApiError, deleteRestrictionLabels, type GitPmApi } from "./api.js";
 import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
 import type { ConfigValue } from "./core-ui.js";
@@ -8,8 +9,8 @@ import type { DraftStatus, EntityResult, GitPmDocument, GitPmRole } from "./type
 import type { WorkspaceNavigate } from "./workspace-navigation.js";
 import { draftReadOnlyReason } from "./draft-read-only.js";
 
-const text = (document: GitPmDocument, key: string) => typeof document[key] === "string" ? document[key] as string : "";
-const number = (document: GitPmDocument, key: string) => typeof document[key] === "number" ? document[key] as number : 0;
+const text = (document: GitPmDocument, key: string) => key === "start" || key === "due" ? scheduleText(document, key) : typeof document[key] === "string" ? document[key] as string : "";
+const number = (document: GitPmDocument, key: string) => key === "estimate_hours" ? scheduleEffort(document) ?? 0 : typeof document[key] === "number" ? document[key] as number : 0;
 const strings = (document: GitPmDocument, key: string) => Array.isArray(document[key]) ? (document[key] as unknown[]).filter((item): item is string => typeof item === "string") : [];
 const numbers = (document: GitPmDocument, key: string) => Array.isArray(document[key]) ? (document[key] as unknown[]).filter((item): item is number => typeof item === "number") : [];
 const validDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/u.test(value);

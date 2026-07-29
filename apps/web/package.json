@@ -14,6 +14,7 @@
     "@gitpm/contracts": "workspace:*",
     "@gitpm/shared": "workspace:*",
     "@gitpm/task-hierarchy": "workspace:*",
+    "@gitpm/time-entries": "workspace:*",
     "@gitpm/workload": "workspace:*",
     "react": "19.2.0",
     "react-dom": "19.2.0"

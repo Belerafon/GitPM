@@ -12,7 +12,7 @@ import {
 describe("@gitpm/contracts runtime contracts", () => {
   it("decodes every field of a concrete task document", () => {
     const task = decodeEntityDocument({
-      schema: "gitpm/task@1",
+      schema: "gitpm/task@2",
       id: "T-26-P9G3P8",
       project: "P-26-MGP84K",
       title: "Typed task",
@@ -20,20 +20,21 @@ describe("@gitpm/contracts runtime contracts", () => {
       status: "backlog",
       lifecycle: "active",
       assignees: ["U-26-5EBAE3"],
-      estimate_hours: 2.5,
+      schedules: { plan: { start: "2026-07-01", finish: "2026-07-02", effort_hours: 2.5 } },
     });
 
-    expect(task).toMatchObject({ title: "Typed task", estimate_hours: 2.5 });
+    expect(task).toMatchObject({ title: "Typed task" });
+    expect(task.schedules?.plan?.effort_hours).toBe(2.5);
   });
 
   it("rejects missing required entity fields and unknown properties", () => {
     expect(() => decodeEntityDocument({
-      schema: "gitpm/project@1",
+      schema: "gitpm/project@2",
       id: "P-26-MGP84K",
       lifecycle: "active",
     })).toThrow(ApiContractError);
     expect(() => decodeEntityDocument({
-      schema: "gitpm/project@1",
+      schema: "gitpm/project@2",
       id: "P-26-MGP84K",
       name: "Project",
       status: "active",
@@ -45,7 +46,7 @@ describe("@gitpm/contracts runtime contracts", () => {
   it("rejects malformed result metadata and DTO responses", () => {
     expect(() => decodeEntityResult({
       document: {
-        schema: "gitpm/project@1",
+        schema: "gitpm/project@2",
         id: "P-26-MGP84K",
         name: "Project",
         status: "active",

@@ -77,17 +77,20 @@ export function parseYamlDocument(text: string, source?: string): GitPmDocument 
 }
 
 const fieldOrder: Record<string, readonly string[]> = {
-  "gitpm/project@1": ["schema", "id", "name", "status", "lifecycle", "group", "description_markdown", "owner", "start", "due", "milestone_order", "labels"],
-  "gitpm/task@1": ["schema", "id", "project", "title", "type", "status", "lifecycle", "description_markdown", "acceptance_criteria_markdown", "parent", "milestone", "assignees", "estimate_hours", "start", "due", "depends_on", "labels"],
-  "gitpm/milestone@1": ["schema", "id", "project", "name", "lifecycle", "description_markdown", "due", "task_order"],
+  "gitpm/project@2": ["schema", "id", "name", "status", "lifecycle", "group", "description_markdown", "owner", "planning", "schedules", "milestone_order", "labels"],
+  "gitpm/task@2": ["schema", "id", "project", "title", "type", "status", "lifecycle", "description_markdown", "acceptance_criteria_markdown", "parent", "milestone", "assignees", "schedules", "labels"],
+  "gitpm/milestone@2": ["schema", "id", "project", "name", "lifecycle", "description_markdown", "schedules", "task_order"],
   "gitpm/person@1": ["schema", "id", "name", "weekly_capacity_hours", "calendar", "lifecycle", "email"],
   "gitpm/team@1": ["schema", "id", "name", "members", "lifecycle"],
   "gitpm/calendar@1": ["schema", "id", "name", "working_weekdays", "holidays", "lifecycle"],
   "gitpm/saved-view@1": ["schema", "id", "project", "name", "kind", "filters", "group_by", "lifecycle"],
   "gitpm/comment@1": ["schema", "id", "project", "task", "author", "created_at", "updated_at", "state", "body_markdown", "mentions", "deleted_at", "deleted_by"],
   "gitpm/repository@1": ["schema", "default_branch", "default_calendar", "allowed_top_level_files", "allowed_top_level_directories", "ui_poll_interval_seconds"],
-  "gitpm/statuses@1": ["schema", "statuses"],
+  "gitpm/statuses@2": ["schema", "statuses"],
   "gitpm/issue-types@1": ["schema", "issue_types"],
+  "gitpm/schedule-tracks@1": ["schema", "tracks", "defaults"],
+  "gitpm/work-categories@1": ["schema", "categories"],
+  "gitpm/time-entry@1": ["schema", "id", "project", "task", "person", "performed_on", "hours", "category", "note_markdown", "created_at", "state", "voided_at", "voided_by", "replacement"],
 };
 
 function orderedRecord(value: Record<string, unknown>, order: readonly string[]): Record<string, unknown> {
@@ -111,18 +114,41 @@ function normalizeNested(document: GitPmDocument): Record<string, unknown> {
     if (result.deleted_by && typeof result.deleted_by === "object") result.deleted_by = orderedRecord(result.deleted_by as Record<string, unknown>, ["provider", "instance", "subject", "display_name"]);
     if (Array.isArray(result.mentions)) result.mentions = (result.mentions as Record<string, unknown>[]).map((item) => orderedRecord(item, ["person", "mentioned_at"]));
   }
-  const listKey = document.schema === "gitpm/statuses@1" ? "statuses" : document.schema === "gitpm/issue-types@1" ? "issue_types" : undefined;
-  if (listKey && Array.isArray(result[listKey])) {
-    result[listKey] = (result[listKey] as Record<string, unknown>[]).map((item) =>
-      orderedRecord(item, ["slug", "title", "color", "active"]));
+  if (result.planning && typeof result.planning === "object") {
+    result.planning = orderedRecord(result.planning as Record<string, unknown>, ["enabled_tracks", "primary_track", "workload_track", "comparison_track", "dashboard_tracks"]);
+  }
+  if (result.schedules && typeof result.schedules === "object") {
+    const schedules = result.schedules as Record<string, unknown>;
+    const normalized: Record<string, unknown> = {};
+    for (const key of Object.keys(schedules).sort()) {
+      const window = schedules[key];
+      normalized[key] = window && typeof window === "object" ? orderedRecord(window as Record<string, unknown>, ["start", "finish", "effort_hours", "depends_on"]) : window;
+    }
+    result.schedules = normalized;
+  }
+  if (document.schema === "gitpm/statuses@2" && Array.isArray(result.statuses)) {
+    result.statuses = (result.statuses as Record<string, unknown>[]).map((item) => orderedRecord(item, ["slug", "title", "color", "active", "category"]));
+  }
+  if (document.schema === "gitpm/issue-types@1" && Array.isArray(result.issue_types)) {
+    result.issue_types = (result.issue_types as Record<string, unknown>[]).map((item) => orderedRecord(item, ["slug", "title", "color", "active"]));
+  }
+  if (document.schema === "gitpm/schedule-tracks@1") {
+    if (Array.isArray(result.tracks)) result.tracks = (result.tracks as Record<string, unknown>[]).map((item) => orderedRecord(item, ["slug", "title", "kind", "capabilities", "source"]));
+    if (result.defaults && typeof result.defaults === "object") result.defaults = orderedRecord(result.defaults as Record<string, unknown>, ["enabled_tracks", "primary_track", "workload_track", "comparison_track", "dashboard_tracks"]);
+  }
+  if (document.schema === "gitpm/work-categories@1" && Array.isArray(result.categories)) {
+    result.categories = (result.categories as Record<string, unknown>[]).map((item) => orderedRecord(item, ["slug", "title", "active"]));
+  }
+  if (document.schema === "gitpm/time-entry@1" && result.voided_by && typeof result.voided_by === "object") {
+    result.voided_by = orderedRecord(result.voided_by as Record<string, unknown>, ["provider", "instance", "subject", "display_name"]);
   }
   return result;
 }
 
 const schemaKinds: Readonly<Record<string, string>> = {
-  "gitpm/project@1": "project",
-  "gitpm/task@1": "task",
-  "gitpm/milestone@1": "milestone",
+  "gitpm/project@2": "project",
+  "gitpm/task@2": "task",
+  "gitpm/milestone@2": "milestone",
   "gitpm/person@1": "person",
   "gitpm/team@1": "team",
   "gitpm/calendar@1": "calendar",

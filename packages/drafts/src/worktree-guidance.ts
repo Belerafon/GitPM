@@ -238,10 +238,10 @@ The repository-wide documents are \`.gitpm/repository.yaml\`,
 
 Core schemas and relations:
 
-- \`gitpm/project@1\`: status, lifecycle, optional owner, dates, milestone order, labels.
-- \`gitpm/task@1\`: owning Project, title, type, status, lifecycle, optional parent and
+- \`gitpm/project@2\`: status, lifecycle, optional owner, dates, milestone order, labels.
+- \`gitpm/task@2\`: owning Project, title, type, status, lifecycle, optional parent and
   milestone, assignees, estimate, dates, dependencies, labels, Markdown fields.
-- \`gitpm/milestone@1\`: owning Project, name, lifecycle, due date, task order.
+- \`gitpm/milestone@2\`: owning Project, name, lifecycle, due date, task order.
 - \`gitpm/person@1\`: name, weekly capacity, Calendar, lifecycle, optional email.
 - \`gitpm/team@1\`: name, Person members, lifecycle.
 - \`gitpm/calendar@1\`: working weekdays, holidays, lifecycle.

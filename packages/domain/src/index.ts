@@ -10,6 +10,7 @@ import { discoverRepositoryFiles, validateDelete, validateRepository } from "@gi
 import { ENTITY_TYPE_SCHEMAS } from "@gitpm/contracts";
 
 export * from "./comments.js";
+export * from "./time-entries.js";
 export { ENTITY_TYPE_SCHEMAS } from "@gitpm/contracts";
 
 const entityTypeSchemas: Readonly<Record<string, string>> = ENTITY_TYPE_SCHEMAS;
@@ -69,14 +70,15 @@ const entityTypeAliases: Readonly<Record<string, string>> = {
 };
 
 const schemaIdPrefixes = {
-  "gitpm/project@1": ENTITY_ID_PREFIX.project,
-  "gitpm/task@1": ENTITY_ID_PREFIX.task,
-  "gitpm/milestone@1": ENTITY_ID_PREFIX.milestone,
+  "gitpm/project@2": ENTITY_ID_PREFIX.project,
+  "gitpm/task@2": ENTITY_ID_PREFIX.task,
+  "gitpm/milestone@2": ENTITY_ID_PREFIX.milestone,
   "gitpm/person@1": ENTITY_ID_PREFIX.person,
   "gitpm/team@1": ENTITY_ID_PREFIX.team,
   "gitpm/calendar@1": ENTITY_ID_PREFIX.calendar,
   "gitpm/saved-view@1": ENTITY_ID_PREFIX.view,
   "gitpm/comment@1": ENTITY_ID_PREFIX.comment,
+  "gitpm/time-entry@1": ENTITY_ID_PREFIX.entry,
 } as const;
 
 export interface EntityCreatePlanItem {
@@ -240,14 +242,14 @@ export function entityPathForDocument(document: GitPmDocument): string {
   if (expectedPrefix === undefined || !isEntityId(id, expectedPrefix)) {
     throw new DomainOperationError("ENTITY_ID_INVALID", "Entity ID is invalid");
   }
-  const projectBound = ["gitpm/task@1", "gitpm/milestone@1", "gitpm/saved-view@1"].includes(document.schema);
+  const projectBound = ["gitpm/task@2", "gitpm/milestone@2", "gitpm/saved-view@1"].includes(document.schema);
   if (projectBound && !isEntityId(project, ENTITY_ID_PREFIX.project)) {
     throw new DomainOperationError("ENTITY_PROJECT_INVALID", "Owning Project ID is invalid");
   }
   switch (document.schema) {
-    case "gitpm/project@1": return `projects/${id}/project.yaml`;
-    case "gitpm/task@1": return `projects/${project}/tasks/${id}.yaml`;
-    case "gitpm/milestone@1": return `projects/${project}/milestones/${id}.yaml`;
+    case "gitpm/project@2": return `projects/${id}/project.yaml`;
+    case "gitpm/task@2": return `projects/${project}/tasks/${id}.yaml`;
+    case "gitpm/milestone@2": return `projects/${project}/milestones/${id}.yaml`;
     case "gitpm/saved-view@1": return `projects/${project}/views/${id}.yaml`;
     case "gitpm/comment@1": {
       const task = String(document.task ?? "");
@@ -283,7 +285,7 @@ export function entityDisplayLabel(document: GitPmDocument): string | undefined 
 }
 
 export function unlinkPersonReference(document: GitPmDocument, personId: string): GitPmDocument | undefined {
-  if (document.schema === "gitpm/project@1" && document.owner === personId) {
+  if (document.schema === "gitpm/project@2" && document.owner === personId) {
     const project: Record<string, unknown> = { ...document };
     delete project.owner;
     return project as GitPmDocument;
@@ -291,7 +293,7 @@ export function unlinkPersonReference(document: GitPmDocument, personId: string)
   if (document.schema === "gitpm/team@1" && Array.isArray(document.members) && document.members.includes(personId)) {
     return { ...document, members: document.members.filter((member) => member !== personId) };
   }
-  if (document.schema === "gitpm/task@1" && Array.isArray(document.assignees) && document.assignees.includes(personId)) {
+  if (document.schema === "gitpm/task@2" && Array.isArray(document.assignees) && document.assignees.includes(personId)) {
     return { ...document, assignees: document.assignees.filter((assignee) => assignee !== personId) };
   }
   if (document.schema === "gitpm/saved-view@1" && document.filters !== null && typeof document.filters === "object") {
@@ -439,10 +441,10 @@ export class EntityStore {
   async projectWorkspace(draftId: string, projectId: string): Promise<ProjectWorkspaceResult> {
     const metadata = await this.drafts.getWorkspace(draftId);
     const repository = await this.index(draftId, metadata);
-    const indexedProject = repository.bySchemaAndId.get(`gitpm/project@1:${projectId}`);
+    const indexedProject = repository.bySchemaAndId.get(`gitpm/project@2:${projectId}`);
     if (indexedProject === undefined) throw new DomainOperationError("ENTITY_NOT_FOUND", `projects/${projectId} not found`);
-    const indexedMilestones = repository.entities.filter((entity) => entity.document.schema === "gitpm/milestone@1" && entity.document.project === projectId);
-    const indexedTasks = repository.entities.filter((entity) => entity.document.schema === "gitpm/task@1" && entity.document.project === projectId);
+    const indexedMilestones = repository.entities.filter((entity) => entity.document.schema === "gitpm/milestone@2" && entity.document.project === projectId);
+    const indexedTasks = repository.entities.filter((entity) => entity.document.schema === "gitpm/task@2" && entity.document.project === projectId);
     const results = await this.results(draftId, metadata, [indexedProject, ...indexedMilestones, ...indexedTasks]);
     const project = results[0]!;
     const milestones = results.slice(1, 1 + indexedMilestones.length);
@@ -450,9 +452,12 @@ export class EntityStore {
     return { project, milestones, tasks, draft_fingerprint: project.draft_fingerprint };
   }
 
-  async getConfiguration(draftId: string, kind: "statuses" | "issue-types"): Promise<EntityResult> {
+  async getConfiguration(draftId: string, kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks"): Promise<EntityResult> {
     const metadata = await this.drafts.getWorkspace(draftId);
-    const relative = kind === "statuses" ? ".gitpm/statuses.yaml" : ".gitpm/issue-types.yaml";
+    const relative = kind === "statuses" ? ".gitpm/statuses.yaml"
+      : kind === "issue-types" ? ".gitpm/issue-types.yaml"
+        : kind === "work-categories" ? ".gitpm/work-categories.yaml"
+          : ".gitpm/schedule-tracks.yaml";
     const absolute = await resolveDomainPath(metadata.worktree_path, relative);
     const document = parseYamlDocument(await readFile(absolute, "utf8"), relative);
     return {
@@ -466,13 +471,19 @@ export class EntityStore {
   async updateConfiguration(
     draftId: string,
     owner: string,
-    kind: "statuses" | "issue-types",
+    kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks",
     expectedFingerprint: string,
     expectedBlobId: string,
     document: GitPmDocument,
   ): Promise<EntityResult> {
-    const relative = kind === "statuses" ? ".gitpm/statuses.yaml" : ".gitpm/issue-types.yaml";
-    const expectedSchema = kind === "statuses" ? "gitpm/statuses@1" : "gitpm/issue-types@1";
+    const relative = kind === "statuses" ? ".gitpm/statuses.yaml"
+      : kind === "issue-types" ? ".gitpm/issue-types.yaml"
+        : kind === "work-categories" ? ".gitpm/work-categories.yaml"
+          : ".gitpm/schedule-tracks.yaml";
+    const expectedSchema = kind === "statuses" ? "gitpm/statuses@2"
+      : kind === "issue-types" ? "gitpm/issue-types@1"
+        : kind === "work-categories" ? "gitpm/work-categories@1"
+          : "gitpm/schedule-tracks@1";
     if (document.schema !== expectedSchema) throw new DomainOperationError("ENTITY_IDENTITY_IMMUTABLE", "Configuration schema is immutable");
     const mutation = await this.drafts.withRepositoryMutation(draftId, owner, expectedFingerprint, this.mutationMode, async (metadata) => {
       const referenceLabels = this.labels(await this.index(draftId, metadata));
@@ -664,14 +675,14 @@ export class EntityStore {
       const found = await this.find(draftId, metadata, "tasks", id);
       await this.drafts.assertFileBlobId(draftId, found.relative, expectedBlobId);
       const repository = await this.index(draftId, metadata);
-      if (repository.bySchemaAndId.get(`gitpm/project@1:${targetProject}`) === undefined) throw new DomainOperationError("REF_MISSING", `${targetProject} does not reference a Project`);
-      const targetMilestoneEntity = targetMilestone === undefined ? undefined : repository.bySchemaAndId.get(`gitpm/milestone@1:${targetMilestone}`);
+      if (repository.bySchemaAndId.get(`gitpm/project@2:${targetProject}`) === undefined) throw new DomainOperationError("REF_MISSING", `${targetProject} does not reference a Project`);
+      const targetMilestoneEntity = targetMilestone === undefined ? undefined : repository.bySchemaAndId.get(`gitpm/milestone@2:${targetMilestone}`);
       if (targetMilestone !== undefined && (targetMilestoneEntity === undefined || targetMilestoneEntity.document.project !== targetProject)) {
         throw new DomainOperationError("REF_CROSS_PROJECT", `${targetMilestone} does not belong to ${targetProject}`);
       }
-      const taskEntities = repository.entities.filter((entity) => entity.document.schema === "gitpm/task@1");
+      const taskEntities = repository.entities.filter((entity) => entity.document.schema === "gitpm/task@2");
       const sourceMilestone = typeof found.document.milestone === "string"
-        ? repository.bySchemaAndId.get(`gitpm/milestone@1:${found.document.milestone}`)
+        ? repository.bySchemaAndId.get(`gitpm/milestone@2:${found.document.milestone}`)
         : undefined;
       const sourceOrder = Array.isArray(sourceMilestone?.document.task_order)
         ? sourceMilestone.document.task_order.filter((taskId): taskId is string => typeof taskId === "string")
@@ -685,7 +696,7 @@ export class EntityStore {
       if (root === undefined) throw new DomainOperationError("ENTITY_NOT_FOUND", `tasks/${id} not found`);
       const subtree = [root, ...hierarchy.descendantsOf(id)];
       const subtreeIds = new Set(subtree.map((item) => item.id));
-      const targetParentEntity = targetParent === undefined ? undefined : repository.bySchemaAndId.get(`gitpm/task@1:${targetParent}`);
+      const targetParentEntity = targetParent === undefined ? undefined : repository.bySchemaAndId.get(`gitpm/task@2:${targetParent}`);
       if (targetParent !== undefined && targetParentEntity === undefined) throw new DomainOperationError("REF_MISSING", `${targetParent} does not reference a Task`);
       if (targetParent !== undefined && subtreeIds.has(targetParent)) throw new DomainOperationError("TASK_PARENT_CYCLE", `${targetParent} belongs to the moved subtree`);
       if (targetParentEntity !== undefined && targetParentEntity.document.project !== targetProject) throw new DomainOperationError("REF_CROSS_PROJECT", `${targetParent} does not belong to ${targetProject}`);
@@ -794,7 +805,7 @@ export class EntityStore {
     const metadata = await this.drafts.getWorkspace(draftId);
     const found = await this.find(draftId, metadata, entityType, id);
     const repository = await this.index(draftId, metadata);
-    const cascadedComments = found.document.schema === "gitpm/task@1"
+    const cascadedComments = found.document.schema === "gitpm/task@2"
       ? repository.entities.filter((entity) => entity.document.schema === "gitpm/comment@1" && entity.document.task === id)
       : [];
     const commentPaths = new Set(cascadedComments.map((comment) => comment.relative));
@@ -811,7 +822,7 @@ export class EntityStore {
         };
       });
     const supportsUnlink = found.document.schema === "gitpm/person@1";
-    const supportsCascade = found.document.schema === "gitpm/project@1";
+    const supportsCascade = found.document.schema === "gitpm/project@2";
     const cascadedEntities: DeleteRestriction[] = supportsCascade
       ? repository.entities.flatMap((entity) => entity.relative === found.relative || entity.document.project !== id ? [] : [{
         path: entity.relative,
@@ -866,13 +877,13 @@ export class EntityStore {
       if (unlinkReferences && found.document.schema !== "gitpm/person@1") {
         throw new DomainOperationError("DELETE_UNLINK_UNSUPPORTED", "Automatic reference removal is supported only for people");
       }
-      if (cascadeReferences && found.document.schema !== "gitpm/project@1") {
+      if (cascadeReferences && found.document.schema !== "gitpm/project@2") {
         throw new DomainOperationError("DELETE_CASCADE_UNSUPPORTED", "Reference cascade deletion is supported only for projects");
       }
-      const cascadedComments = found.document.schema === "gitpm/task@1"
+      const cascadedComments = found.document.schema === "gitpm/task@2"
         ? repository.entities.filter((entity) => entity.document.schema === "gitpm/comment@1" && entity.document.task === id)
         : [];
-      const cascadedEntities = found.document.schema === "gitpm/project@1" && cascadeReferences
+      const cascadedEntities = found.document.schema === "gitpm/project@2" && cascadeReferences
         ? repository.entities.filter((entity) => entity.relative !== found.relative && entity.document.project === id)
         : [];
       const commentPaths = new Set(cascadedComments.map((comment) => comment.relative));

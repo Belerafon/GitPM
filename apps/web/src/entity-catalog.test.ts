@@ -6,9 +6,9 @@ const entity = (document: EntityDocument): EntityResult => ({ document, path: ""
 
 describe("EntityCatalog", () => {
   it("resolves task references and preserves archived milestones", () => {
-    const project = entity({ schema: "gitpm/project@1", id: "P-26-111111", name: "Alpha", lifecycle: "active" });
-    const milestone = entity({ schema: "gitpm/milestone@1", id: "M-26-222222", project: project.document.id, name: "Beta", lifecycle: "archived" });
-    const task = entity({ schema: "gitpm/task@1", id: "T-26-333333", project: project.document.id, milestone: milestone.document.id, title: "Task", lifecycle: "active" });
+    const project = entity({ schema: "gitpm/project@2", id: "P-26-111111", name: "Alpha", lifecycle: "active" });
+    const milestone = entity({ schema: "gitpm/milestone@2", id: "M-26-222222", project: project.document.id, name: "Beta", lifecycle: "archived" });
+    const task = entity({ schema: "gitpm/task@2", id: "T-26-333333", project: project.document.id, milestone: milestone.document.id, title: "Task", lifecycle: "active" });
 
     expect(new EntityCatalog({ projects: [project], milestones: [milestone] }).referencesForTask(task.document)).toEqual({
       project: { id: "P-26-111111", name: "Alpha", lifecycle: "active" },
@@ -18,7 +18,7 @@ describe("EntityCatalog", () => {
   });
 
   it("keeps an unresolved ID visible instead of treating it as no milestone", () => {
-    const task = entity({ schema: "gitpm/task@1", id: "T-26-333333", project: "P-26-111111", milestone: "M-26-222222", title: "Task", lifecycle: "active" });
+    const task = entity({ schema: "gitpm/task@2", id: "T-26-333333", project: "P-26-111111", milestone: "M-26-222222", title: "Task", lifecycle: "active" });
     const references = new EntityCatalog({}).referencesForTask(task.document);
 
     expect(references.project.name).toBe("P-26-111111");

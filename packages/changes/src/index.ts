@@ -111,7 +111,7 @@ function documentIdentity(document: GitPmDocument): { id: string; schema: string
   if (typeof id !== "string") return undefined;
   const project = typeof document.project === "string"
     ? document.project
-    : document.schema === "gitpm/project@1" ? id : undefined;
+    : document.schema === "gitpm/project@2" ? id : undefined;
   return { id, schema: document.schema, ...(project === undefined ? {} : { project }) };
 }
 
@@ -122,6 +122,27 @@ function documentDisplayName(document: GitPmDocument): string | undefined {
   return displayName === "" ? undefined : displayName;
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function nestedLeafChanges(path: string, before: Record<string, unknown> | undefined, after: Record<string, unknown> | undefined): SemanticFieldChange[] {
+  const keys = new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})]);
+  const changes: SemanticFieldChange[] = [];
+  for (const key of [...keys].sort()) {
+    const beforeValue = before?.[key];
+    const afterValue = after?.[key];
+    if (JSON.stringify(beforeValue) === JSON.stringify(afterValue)) continue;
+    const fieldPath = `${path}.${key}`;
+    if (isPlainObject(beforeValue) && isPlainObject(afterValue)) {
+      changes.push(...nestedLeafChanges(fieldPath, beforeValue, afterValue));
+    } else {
+      changes.push({ field: fieldPath, ...(beforeValue === undefined ? {} : { before: beforeValue }), ...(afterValue === undefined ? {} : { after: afterValue }) });
+    }
+  }
+  return changes;
+}
+
 function fieldChanges(before: GitPmDocument | undefined, after: GitPmDocument | undefined): SemanticFieldChange[] {
   const fields = new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})]);
   fields.delete("schema");
@@ -130,7 +151,10 @@ function fieldChanges(before: GitPmDocument | undefined, after: GitPmDocument | 
   for (const field of [...fields].sort()) {
     const beforeValue = before?.[field];
     const afterValue = after?.[field];
-    if (JSON.stringify(beforeValue) !== JSON.stringify(afterValue)) {
+    if (JSON.stringify(beforeValue) === JSON.stringify(afterValue)) continue;
+    if (isPlainObject(beforeValue) && isPlainObject(afterValue)) {
+      changes.push(...nestedLeafChanges(field, beforeValue, afterValue));
+    } else {
       changes.push({ field, ...(beforeValue === undefined ? {} : { before: beforeValue }), ...(afterValue === undefined ? {} : { after: afterValue }) });
     }
   }

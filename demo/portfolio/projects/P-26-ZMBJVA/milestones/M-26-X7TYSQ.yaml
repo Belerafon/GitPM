@@ -1,7 +1,9 @@
-schema: gitpm/milestone@1
+schema: gitpm/milestone@2
 id: M-26-X7TYSQ # milestone: Внутренняя приёмка портала
 project: P-26-ZMBJVA # project: Портал поддержки клиентов
 name: Внутренняя приёмка портала
 lifecycle: active
 description_markdown: Служба поддержки проверяет основные потоки на тестовом контуре.
-due: 2026-09-11
+schedules:
+  plan:
+    finish: 2026-09-11
