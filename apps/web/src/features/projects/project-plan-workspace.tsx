@@ -1,5 +1,6 @@
 import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
 import { scheduleText, scheduleEffort, buildSchedule } from "../../schedules.js";
+import { isCompletedStatus } from "../../status-categories.js";
 import { ProjectSnapshot } from "./project-snapshot.js";
 import { buildTaskHierarchy } from "@gitpm/task-hierarchy";
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type FormEvent } from "react";
@@ -192,8 +193,8 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   const visibleTasks = useMemo(() => activeTasks.filter((task) =>
     (statusFilter === "" || text(task.document, "status") === statusFilter)
     && (milestoneFilter === "" || (milestoneFilter === "none" ? text(task.document, "milestone") === "" : text(task.document, "milestone") === milestoneFilter))), [activeTasks, milestoneFilter, statusFilter]);
-  const completed = activeTasks.filter((task) => text(task.document, "status") === "done").length;
-  const overdue = activeTasks.filter((task) => text(task.document, "status") !== "done" && /^\d{4}-\d{2}-\d{2}$/u.test(text(task.document, "due")) && text(task.document, "due") < new Date().toISOString().slice(0, 10)).length;
+  const completed = activeTasks.filter((task) => isCompletedStatus(statuses, text(task.document, "status"))).length;
+  const overdue = activeTasks.filter((task) => !isCompletedStatus(statuses, text(task.document, "status")) && /^\d{4}-\d{2}-\d{2}$/u.test(text(task.document, "due")) && text(task.document, "due") < new Date().toISOString().slice(0, 10)).length;
   const activeStageIds = new Set(activeStages.map((stage) => stage.document.id));
   const visibleStages = milestoneFilter === "" ? activeStages : activeStages.filter((stage) => stage.document.id === milestoneFilter);
   const outsideStages = activeTasks.filter((task) => !activeStageIds.has(text(task.document, "milestone")));
@@ -459,7 +460,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
         {selectedStage !== undefined && <aside className="project-plan-inspector" aria-label={t("core.milestone")}>
           <button aria-label={t("core.closeEditor")} className="inspector-close" onClick={closeInspector} title={t("core.closeEditor")} type="button">×</button>
           <span className="eyebrow">{t("core.milestone")}</span><h2>{text(selectedStage.document, "name")}</h2><code className="project-plan-inspector-id">{selectedStage.document.id}</code><p>{text(selectedStage.document, "description_markdown") || t("core.noDescription")}</p>
-          <dl className="project-plan-inspector-stats"><div><dt>{t("stages.progressLabel")}</dt><dd>{activeTasks.filter((task) => task.document.milestone === selectedStage.document.id && text(task.document, "status") === "done").length}/{activeTasks.filter((task) => task.document.milestone === selectedStage.document.id).length}</dd></div><div><dt>{t("stages.estimate")}</dt><dd>{formatDurationHours(locale, activeTasks.filter((task) => task.document.milestone === selectedStage.document.id).reduce((sum, task) => sum + (number(task.document, "estimate_hours") ?? 0), 0))}</dd></div><div><dt>{t("core.due")}</dt><dd>{dateLabel(text(selectedStage.document, "due"))}</dd></div></dl>
+          <dl className="project-plan-inspector-stats"><div><dt>{t("stages.progressLabel")}</dt><dd>{activeTasks.filter((task) => task.document.milestone === selectedStage.document.id && isCompletedStatus(statuses, text(task.document, "status"))).length}/{activeTasks.filter((task) => task.document.milestone === selectedStage.document.id).length}</dd></div><div><dt>{t("stages.estimate")}</dt><dd>{formatDurationHours(locale, activeTasks.filter((task) => task.document.milestone === selectedStage.document.id).reduce((sum, task) => sum + (number(task.document, "estimate_hours") ?? 0), 0))}</dd></div><div><dt>{t("core.due")}</dt><dd>{dateLabel(text(selectedStage.document, "due"))}</dd></div></dl>
           <div className="inspector-actions"><button disabled={readOnly} onClick={() => setEditor({ kind: "edit-stage", stageId: selectedStage.document.id })}>{t("core.edit")}</button><button disabled={readOnly} onClick={() => archiveStage(selectedStage)}>{t("core.archive")}</button><button className="primary" disabled={readOnly} onClick={() => setEditor({ kind: "task", stageId: selectedStage.document.id })}>+ {t("core.createTaskAction")}</button></div>
         </aside>}
 
@@ -551,7 +552,7 @@ function StageSection({ stage, tasks, allTasks, stageIndex, stageCount, projectI
   readonly onNavigate: WorkspaceNavigate;
   readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string;
 }) {
-  const completed = allTasks.filter((task) => text(task.document, "status") === "done").length;
+  const completed = allTasks.filter((task) => isCompletedStatus(statusOptions, text(task.document, "status"))).length;
   const progress = allTasks.length === 0 ? 0 : Math.round(completed / allTasks.length * 100);
   const stageAssigneeIds = [...new Set(allTasks.flatMap((task) => strings(task.document, "assignees")))];
   return <article className={`project-plan-stage${selected ? " selected" : ""}${changed ? " recently-changed" : ""}${saving ? " is-saving" : ""}`} data-flip-key={`stage:${stage.document.id}`}>
@@ -617,7 +618,7 @@ function TaskRows({ tasks, allTasks, projectId, query = {}, locale, people, numb
     const isLastVisibleSibling = visibleSiblings.at(-1)?.id === task.document.id;
     const children = hierarchy.childrenOf(task.document.id);
     const hasVisibleChildren = children.some((child) => visibleEntryIds.has(child.id));
-    const completedChildren = children.filter((child) => text(child.entity.document, "status") === "done").length;
+    const completedChildren = children.filter((child) => isCompletedStatus(statusOptions, text(child.entity.document, "status"))).length;
     const isContextOnly = !tasks.some((visible) => visible.document.id === task.document.id);
     const ancestorRailLevels = taskPath.slice(1, -1).flatMap((pathTask, level) => {
       const visiblePathSiblings = hierarchy.childrenOf(pathTask.parent).filter((item) => visibleEntryIds.has(item.id));

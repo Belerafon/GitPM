@@ -293,6 +293,15 @@ function statusTitles(statusDocuments: readonly GitPmDocument[]): ReadonlyMap<st
   }));
 }
 
+function completedStatusSlugs(statusDocuments: readonly GitPmDocument[]): ReadonlySet<string> {
+  const values = statusDocuments.flatMap((document) => Array.isArray(document.statuses) ? document.statuses : []);
+  return new Set(values.flatMap((value) => {
+    if (typeof value !== "object" || value === null) return [];
+    const candidate = value as Readonly<Record<string, unknown>>;
+    return candidate.category === "done" && typeof candidate.slug === "string" ? [candidate.slug] : [];
+  }));
+}
+
 function projectRisk(project: GitPmDocument, generatedAt: string): "onTrack" | "near" | "overdue" | "unknown" {
   const due = windowField(project, "finish");
   if (!/^\d{4}-\d{2}-\d{2}$/u.test(due)) return "unknown";
@@ -394,6 +403,7 @@ async function renderPdf(snapshot: ExportSnapshot, locale: ExportLocale, selecte
   const projectNames = namesById(projects);
   const calendarNames = namesById(calendars);
   const titlesByStatus = statusTitles(groups.statuses);
+  const doneStatusSlugs = completedStatusSlugs(groups.statuses);
   const content: unknown[] = [
     { text: t.title, style: "title" },
     { text: `${t.commit}: ${snapshot.shortCommit} · ${t.generated}: ${snapshot.generatedAt}`, style: "meta" },
@@ -404,7 +414,7 @@ async function renderPdf(snapshot: ExportSnapshot, locale: ExportLocale, selecte
       { label: t.activeProjects, value: projects.length },
       { label: t.activeTasks, value: tasks.length },
       { label: t.activeMilestones, value: milestones.length },
-      { label: t.completedTasks, value: tasks.filter((task) => text(task, "status") === "done").length },
+      { label: t.completedTasks, value: tasks.filter((task) => doneStatusSlugs.has(text(task, "status"))).length },
     ]));
     const groupedProjects = projectGroups(projects, locale, t.ungrouped);
     if (groupedProjects.length === 0) content.push({ text: t.noData });

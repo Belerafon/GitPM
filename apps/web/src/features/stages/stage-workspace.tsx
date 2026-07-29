@@ -1,5 +1,6 @@
 import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
 import { scheduleText, scheduleEffort, buildSchedule } from "../../schedules.js";
+import { isCompletedStatus } from "../../status-categories.js";
 import { buildTaskHierarchy } from "@gitpm/task-hierarchy";
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type FormEvent } from "react";
 import type { GitPmApi } from "../../api.js";
@@ -14,7 +15,7 @@ import type { WorkspaceNavigate } from "../../workspace-navigation.js";
 import { PersonLinks } from "../../person-link.js";
 import { draftReadOnlyReason } from "../../draft-read-only.js";
 
-interface ConfigValue { readonly slug: string; readonly title: string; readonly active: boolean }
+interface ConfigValue { readonly slug: string; readonly title: string; readonly active: boolean; readonly category?: "backlog" | "active" | "done" | "cancelled" }
 const text = (document: GitPmDocument, key: string): string => key === "start" || key === "due" ? scheduleText(document, key) : typeof document[key] === "string" ? document[key] as string : "";
 const strings = (document: GitPmDocument, key: string): string[] => Array.isArray(document[key]) ? (document[key] as unknown[]).filter((item): item is string => typeof item === "string") : [];
 const configValues = (document: GitPmDocument, key: "statuses" | "issue_types"): ConfigValue[] => Array.isArray(document[key])
@@ -85,7 +86,7 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
   const activeTasks = useMemo(() => workspace?.tasks.filter((item) => item.document.lifecycle === "active") ?? [], [workspace]);
   const selectedStage = workspace?.milestones.find((item) => item.document.id === stageId);
   const stageTasks = stageId === "" ? [] : activeTasks.filter((item) => item.document.milestone === stageId).sort((left, right) => {
-    const byCompletion = Number(text(left.document, "status") === "done") - Number(text(right.document, "status") === "done");
+    const byCompletion = Number(isCompletedStatus(statuses, text(left.document, "status"))) - Number(isCompletedStatus(statuses, text(right.document, "status")));
     const byDue = (text(left.document, "due") || "9999-12-31").localeCompare(text(right.document, "due") || "9999-12-31");
     return byCompletion !== 0 ? byCompletion : byDue !== 0 ? byDue : text(left.document, "title").localeCompare(text(right.document, "title"));
   });
@@ -192,8 +193,8 @@ function StageDetails({ stage, tasks, projectId, locale, people, readOnly, chang
   readonly onNavigate: WorkspaceNavigate;
   readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string;
 }) {
-  const completed = tasks.filter((task) => text(task.document, "status") === "done").length;
-  const overdue = tasks.filter((task) => text(task.document, "status") !== "done" && /^\d{4}-\d{2}-\d{2}$/u.test(text(task.document, "due")) && text(task.document, "due") < new Date().toISOString().slice(0, 10)).length;
+  const completed = tasks.filter((task) => isCompletedStatus(statusOptions, text(task.document, "status"))).length;
+  const overdue = tasks.filter((task) => !isCompletedStatus(statusOptions, text(task.document, "status")) && /^\d{4}-\d{2}-\d{2}$/u.test(text(task.document, "due")) && text(task.document, "due") < new Date().toISOString().slice(0, 10)).length;
   const estimate = tasks.reduce((sum, task) => sum + (scheduleEffort(task.document) ?? 0), 0);
   const stageAssignees = [...new Set(tasks.flatMap((task) => Array.isArray(task.document.assignees) ? task.document.assignees.filter((id): id is string => typeof id === "string") : []))];
   const hierarchy = buildTaskHierarchy(
