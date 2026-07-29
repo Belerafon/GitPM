@@ -71,6 +71,9 @@ importers:
       '@gitpm/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@gitpm/time-entries':
+        specifier: workspace:*
+        version: link:../../packages/time-entries
       '@gitpm/validation':
         specifier: workspace:*
         version: link:../../packages/validation

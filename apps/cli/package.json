@@ -23,6 +23,7 @@
     "@gitpm/repository-format": "workspace:*",
     "@gitpm/security": "workspace:*",
     "@gitpm/shared": "workspace:*",
+    "@gitpm/time-entries": "workspace:*",
     "@gitpm/validation": "workspace:*"
   }
 }

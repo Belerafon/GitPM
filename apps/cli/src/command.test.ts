@@ -415,6 +415,13 @@ describe.concurrent("CLI direct mode", () => {
     const voided = await run(["time-entry", "void", "--project", "P-26-MGP84K", "--task", "T-26-P9G3P8", "--id", createdId, "--json"], process.cwd(), { direct });
     expect(voided.exitCode).toBe(0);
     expect(JSON.parse(voided.output).document.state).toBe("voided");
+
+    const summary = await run(["time-entry", "summary", "--project", "P-26-MGP84K", "--task", "T-26-P9G3P8", "--after", "2026-09-01", "--json"], process.cwd(), { direct });
+    expect(summary.exitCode).toBe(0);
+    const payload = JSON.parse(summary.output).summary as { total_hours: number; hours_after: number; by_category: readonly (readonly [string, number])[] };
+    expect(payload.total_hours).toBeGreaterThan(0);
+    expect(payload.hours_after).toBeGreaterThanOrEqual(0);
+    expect(payload.by_category.map(([slug]) => slug)).toContain("warranty");
   });
 
   it("creates an entity, reports its semantic diff and commits it without --draft", async () => {

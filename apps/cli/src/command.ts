@@ -184,6 +184,7 @@ const commandHelp: Readonly<Record<string, string>> = {
   "time-entry": [
     "Usage:",
     "  gitpm time-entry list --project <id> --task <id> [--json]",
+    "  gitpm time-entry summary --project <id> --task <id> [--after <yyyy-mm-dd>] [--json]",
     "  gitpm time-entry create --project <id> --task <id> --person <id> --date <yyyy-mm-dd> --hours <n> --category <slug> [--note <text>] [--json]",
     "  gitpm time-entry void --project <id> --task <id> --id <entry-id> [--json]",
     "",
@@ -234,7 +235,7 @@ function commandArgumentSpec(command: string | undefined, args: readonly string[
   if (command === "push") return { values: ["--draft"], booleans: ["--json"], minPositionals: 0, maxPositionals: 0 };
   if (command === "mr") return { values: ["--draft", "--owner", "--title", "--description"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
   if (command === "comment") return { values: ["--project", "--task", "--id", "--body", "--file", "--path"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
-  if (command === "time-entry") return { values: ["--project", "--task", "--id", "--person", "--date", "--hours", "--category", "--note"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
+  if (command === "time-entry") return { values: ["--project", "--task", "--id", "--person", "--date", "--hours", "--category", "--note", "--after"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
   if (command === "config") {
     return action === "update"
       ? { values: ["--kind", "--file", "--path"], repeatable: ["--set", "--unset"], booleans: ["--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 }
@@ -700,8 +701,8 @@ async function runComment(args: readonly string[], cwd: string, dependencies: Cl
 
 async function runTimeEntry(args: readonly string[], cwd: string, dependencies: CliDependencies): Promise<CliResult> {
   const action = args[0];
-  const validActions = ["list", "create", "void"];
-  if (typeof action !== "string" || !validActions.includes(action)) throw new RepositoryFormatError("CLI_USAGE", "time-entry requires list, create or void");
+  const validActions = ["list", "create", "void", "summary"];
+  if (typeof action !== "string" || !validActions.includes(action)) throw new RepositoryFormatError("CLI_USAGE", "time-entry requires list, create, void or summary");
   const direct = requireDirect(dependencies);
   const projectId = required(flagValue(args, "--project"), "--project");
   const taskId = required(flagValue(args, "--task"), "--task");
@@ -710,6 +711,24 @@ async function runTimeEntry(args: readonly string[], cwd: string, dependencies: 
     const result = await direct.listTimeEntries(projectId, taskId);
     const items = result.map((item) => ({ id: String(item.document.id), state: item.document.state, person: item.document.person, performed_on: item.document.performed_on, hours: item.document.hours, category: item.document.category, path: item.path }));
     return { exitCode: 0, output: render(json, { ok: true, code: "OK", items }, `${items.length} time entry/entries`) };
+  }
+  if (action === "summary") {
+    const { actualWindow, groupByCategory, groupByPerson, hoursAfterDate, sumHours } = await import("@gitpm/time-entries");
+    const entries = (await direct.listTimeEntries(projectId, taskId)).map((entry) => ({
+      id: entry.document.id, project: projectId, task: taskId, person: entry.document.person,
+      performed_on: entry.document.performed_on, hours: entry.document.hours, category: entry.document.category, state: entry.document.state,
+    }));
+    const cutoff = flagValue(args, "--after");
+    const summary = {
+      total_hours: sumHours(entries),
+      active_entries: entries.filter((entry) => entry.state !== "voided").length,
+      voided_entries: entries.filter((entry) => entry.state === "voided").length,
+      by_category: [...groupByCategory(entries).entries()].sort(),
+      by_person: [...groupByPerson(entries).entries()].sort(),
+      actual: actualWindow(entries) ?? null,
+      ...(cutoff === undefined ? {} : { hours_after: hoursAfterDate(entries, cutoff) }),
+    };
+    return { exitCode: 0, output: render(json, { ok: true, code: "OK", summary }, `${summary.total_hours} h actual`) };
   }
   const entryId = flagValue(args, "--id");
   if (action === "void") {
