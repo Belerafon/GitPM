@@ -265,6 +265,62 @@ export class ApiContractError extends Error {
   }
 }
 
+function formatPropertyName(name: string | undefined): string {
+  return name === undefined ? "'<unknown>'" : `'${name}'`;
+}
+
+function formatDataPath(instancePath: string): string {
+  if (instancePath === "") return "response";
+  const segments = instancePath.split("/").slice(1);
+  let path = "";
+  for (const raw of segments) {
+    const segment = raw.replace(/~1/gu, "/").replace(/~0/gu, "~");
+    path += /^[0-9]+$/u.test(segment) ? `[${segment}]` : path === "" ? segment : `.${segment}`;
+  }
+  return path;
+}
+
+export function describeAjvError(error: ErrorObject): string {
+  const location = formatDataPath(error.instancePath);
+  switch (error.keyword) {
+    case "required": {
+      const missing = (error.params as { missingProperty?: string }).missingProperty;
+      return `${location} is missing required property ${formatPropertyName(missing)}`;
+    }
+    case "additionalProperties": {
+      const extra = (error.params as { additionalProperty?: string }).additionalProperty;
+      return `${location} has unexpected property ${formatPropertyName(extra)}`;
+    }
+    case "type": {
+      const type = (error.params as { type?: string }).type;
+      return `${location} must be ${type ?? "valid"}`;
+    }
+    case "enum": {
+      const allowed = (error.params as { allowedValues?: readonly unknown[] }).allowedValues;
+      return `${location} must be one of ${JSON.stringify(allowed ?? [])}`;
+    }
+    case "const": {
+      const value = (error.params as { allowedValue?: unknown }).allowedValue;
+      return `${location} must equal ${JSON.stringify(value)}`;
+    }
+    case "pattern": {
+      const pattern = (error.params as { pattern?: string }).pattern;
+      return `${location} must match pattern ${JSON.stringify(pattern ?? "")}`;
+    }
+    default:
+      return error.message !== undefined && error.message !== ""
+        ? `${location}: ${error.message}`
+        : `${location}: failed ${error.keyword}`;
+  }
+}
+
+export function summarizeAjvErrors(errors: readonly ErrorObject[], limit = 5): string {
+  if (errors.length === 0) return "no validation errors reported";
+  const visible = errors.slice(0, limit).map(describeAjvError);
+  const remainder = errors.length - limit;
+  return remainder > 0 ? `${visible.join("; ")}; and ${remainder} more` : visible.join("; ");
+}
+
 const ajv = new Ajv2020({ allErrors: true, strict: true });
 for (const schema of DOCUMENT_SCHEMA_DEFINITIONS) ajv.addSchema(schema);
 
@@ -289,7 +345,11 @@ function decodeDocument(input: unknown, allowedSchemas: ReadonlySet<string>, con
   }
   const validate = validators.get(value.schema);
   if (validate === undefined || !validate(value)) {
-    throw new ApiContractError(contract, "document does not match its JSON Schema", validate?.errors ?? undefined);
+    throw new ApiContractError(
+      contract,
+      `document does not match its JSON Schema: ${summarizeAjvErrors(validate?.errors ?? [])}`,
+      validate?.errors ?? undefined,
+    );
   }
   return value as unknown as RepositoryGitPmDocument;
 }

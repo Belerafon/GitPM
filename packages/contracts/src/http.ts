@@ -3,6 +3,7 @@ import type { ValidateFunction } from "ajv";
 import {
   ApiContractError,
   DOCUMENT_SCHEMA_DEFINITIONS,
+  summarizeAjvErrors,
   type ActorSnapshot,
   type CommentDocument,
   type ConfigurationDocument,
@@ -576,7 +577,11 @@ function createDecoder<T>(contract: string, schema: object): Decoder<T> {
   const validate: ValidateFunction = responseAjv.compile(schema);
   return (input) => {
     if (!validate(input)) {
-      throw new ApiContractError(contract, "response does not match the shared HTTP contract", validate.errors ?? undefined);
+      throw new ApiContractError(
+        contract,
+        `response does not match the shared HTTP contract: ${summarizeAjvErrors(validate.errors ?? [])}`,
+        validate.errors ?? undefined,
+      );
     }
     return input as T;
   };
