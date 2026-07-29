@@ -12,7 +12,7 @@ class AdminApi {
   entities: EntityResult[] = [];
   configurations = new Map<"statuses" | "issue-types" | "work-categories", ConfigurationResult>([["statuses", this.config("statuses")], ["issue-types", this.config("issue-types")], ["work-categories", this.config("work-categories")]]);
   mutations = 0;
-  private config(kind: "statuses" | "issue-types"): ConfigurationResult { return { document: configDocument(kind), path: `.gitpm/${kind}.yaml`, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) }; }
+  private config(kind: "statuses" | "issue-types" | "work-categories"): ConfigurationResult { return { document: configDocument(kind), path: `.gitpm/${kind}.yaml`, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) }; }
   private result(document: EntityDocument): EntityResult { this.mutations += 1; return { document, path: `${document.id}.yaml`, blob_id: String(this.mutations).padStart(40, "a"), draft_fingerprint: String(this.mutations).padStart(64, "b") }; }
   async listEntities(_draftId: string, type: string) { const schemas: Record<string, string> = { calendars: "gitpm/calendar@1", people: "gitpm/person@1", teams: "gitpm/team@1", projects: "gitpm/project@2", tasks: "gitpm/task@2", milestones: "gitpm/milestone@2" }; return this.entities.filter((item) => item.document.schema === schemas[type]); }
   async createEntity(_draftId: string, _type: string, _fingerprint: string, document: EntityDocument) { const result = this.result(document); this.entities.push(result); return result; }

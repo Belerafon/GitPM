@@ -1,0 +1,14 @@
+schema: gitpm/work-categories@1
+categories:
+  - slug: regular
+    title: Regular work
+    active: true
+  - slug: rework
+    title: Rework
+    active: true
+  - slug: warranty
+    title: Warranty
+    active: true
+  - slug: support
+    title: Support
+    active: true
