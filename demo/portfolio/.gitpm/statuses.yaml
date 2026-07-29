@@ -1,0 +1,32 @@
+schema: gitpm/statuses@2
+statuses:
+  - slug: backlog
+    title: Бэклог
+    color: gray
+    active: true
+    category: backlog
+  - slug: planned
+    title: Запланировано
+    color: violet
+    active: true
+    category: backlog
+  - slug: in-progress
+    title: В работе
+    color: blue
+    active: true
+    category: active
+  - slug: review
+    title: На проверке
+    color: orange
+    active: true
+    category: active
+  - slug: blocked
+    title: Заблокировано
+    color: red
+    active: true
+    category: active
+  - slug: done
+    title: Готово
+    color: green
+    active: true
+    category: done

@@ -1,0 +1,10 @@
+schema: gitpm/repository@1
+default_branch: main
+default_calendar: C-26-G1AADY # calendar: Производственный календарь России
+allowed_top_level_files:
+  - README.md
+  - .gitignore
+  - .ignore
+allowed_top_level_directories:
+  - uploads
+ui_poll_interval_seconds: 5

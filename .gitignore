@@ -13,6 +13,11 @@ build-version.json
 .tmp/
 .gitpm-local/
 .gitpm/
+# The bundled demo portfolio template ships its own version-controlled
+# .gitpm/ configuration so the runtime copy in .gitpm/demo-repository is
+# reproducible; re-include only that template path, not the root .gitpm/.
+!demo/portfolio/.gitpm/
+!demo/portfolio/.gitpm/**
 playwright-report/
 test-results/
 
