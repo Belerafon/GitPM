@@ -297,7 +297,7 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .plan-order-controls { display: inline-flex; gap: .2rem; align-items: center; }
 .plan-order-controls button { display: inline-grid; place-items: center; width: 30px; height: 30px; padding: 0; }
 .project-plan-stage-progress { display: grid; grid-template-columns: minmax(140px, 1fr) auto; gap: .75rem; align-items: center; margin: 0 .8rem; color: #68706b; font-size: .75rem; }
-.project-plan-task-list { display: grid; margin: 0 .8rem .7rem 1.4rem; padding-left: .75rem; }
+.project-plan-task-list { display: grid; margin: 0 .8rem .7rem; }
 .project-plan-task-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .5rem; align-items: center; width: 100%; border: 0; border-top: 1px solid #e5e7e1; border-left: 3px solid transparent; border-radius: 0; background: transparent; padding: .48rem .4rem .48rem .6rem; text-align: left; }
 .project-plan-task-row.filter-context { opacity: .7; }
 .project-plan-task-tree { position: relative; align-self: stretch; width: var(--task-tree-width, 1.5rem); margin-block: -.48rem; }
@@ -325,14 +325,12 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .project-plan-task-row code { color: #777e79; font-size: .66rem; }
 .project-plan-task-meta { display: flex; gap: .65rem; align-items: center; color: #69716c; font-size: .72rem; }
 .task-assignees { max-width: 240px; overflow: hidden; color: #315f50; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
-.project-plan-empty-tasks { margin: 0 .8rem .75rem 1.4rem; color: #747a76; font-size: .82rem; }
+.project-plan-empty-tasks { margin: 0 .8rem .75rem; color: #747a76; font-size: .82rem; }
 .project-plan-unassigned { border-style: dashed; background: #fffdf8; box-shadow: none; }
 .project-plan-unassigned > header { grid-template-columns: minmax(0, 1fr) auto; background: #fbf7ed; }
 .project-plan-unassigned > header h3 { margin: .15rem 0 0; font-size: 1rem; }
 .project-plan-unassigned > header p { margin: .2rem 0 0; color: #68706b; font-size: .76rem; }
 .project-plan-unassigned.has-work { border-left: 4px solid #d09b45; }
-.project-plan-unassigned .project-plan-task-list { margin-left: .8rem; }
-.project-plan-unassigned .project-plan-empty-tasks { margin-left: .8rem; }
 .project-plan-inspector { position: sticky; top: .75rem; display: grid; align-content: start; max-height: calc(100vh - 1.5rem); gap: .75rem; overflow-y: auto; border-left: 1px solid #d9ddd6; background: #fff; padding: .5rem 0 .5rem 1rem; }
 .project-plan-inspector h2, .project-plan-inspector h3, .project-plan-inspector p { margin: 0; }
 .project-plan-inspector > p { color: #68706b; font-size: .82rem; line-height: 1.45; }
@@ -399,7 +397,6 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
   .project-plan-stage-actions { grid-column: 1; flex-direction: row; justify-content: space-between; align-items: center; }
   .project-plan-stage-description { white-space: normal; }
   .project-plan-stage-progress { margin-left: .8rem; }
-  .project-plan-task-list { margin-left: .8rem; }
   .project-plan-unassigned > header { grid-template-columns: 1fr; }
   .project-plan-unassigned .project-plan-stage-actions { grid-column: 1; }
   .project-plan-inspector { position: fixed; z-index: 50; inset: 0; max-height: none; border: 0; border-radius: 0; background: #fff; padding: 1rem; }
