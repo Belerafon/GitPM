@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { actualWindow, hoursAfterDate, sumHours } from "@gitpm/time-entries";
-import { formatDateOnly, type Locale } from "../../i18n.js";
+import { formatDateOnly, message, type Locale, type MessageKey } from "../../i18n.js";
 import type { GitPmApi } from "../../api.js";
 import type { DraftStatus, EntityDocument, EntityResult } from "../../types.js";
 
@@ -50,17 +50,18 @@ export function ProjectSnapshot({ project, locale, api, draft, tasks, comparison
 
   if (primaryFinish === undefined && comparisonFinish === undefined && actual === null) return null;
   const variance = primaryFinish !== undefined && comparisonFinish !== undefined ? varianceDays(primaryFinish, comparisonFinish) : undefined;
+  const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
   return (
     <section className="card project-snapshot">
-      <h3>Project snapshot</h3>
+      <h3>{t("snapshot.heading")}</h3>
       <dl>
-        {primaryFinish !== undefined && <div><dt>Primary finish</dt><dd>{formatDateOnly(locale, primaryFinish)}</dd></div>}
-        {comparison !== undefined && comparisonFinish !== undefined && <div><dt>Comparison finish</dt><dd>{formatDateOnly(locale, comparisonFinish)}</dd></div>}
-        {variance !== undefined && <div><dt>Variance</dt><dd data-variance={variance}>{variance === 0 ? "on time" : variance > 0 ? `+${variance} d` : `${variance} d`}</dd></div>}
+        {primaryFinish !== undefined && <div><dt>{t("snapshot.primaryFinish")}</dt><dd>{formatDateOnly(locale, primaryFinish)}</dd></div>}
+        {comparison !== undefined && comparisonFinish !== undefined && <div><dt>{t("snapshot.comparisonFinish")}</dt><dd>{formatDateOnly(locale, comparisonFinish)}</dd></div>}
+        {variance !== undefined && <div><dt>{t("snapshot.variance")}</dt><dd data-variance={variance}>{variance === 0 ? t("snapshot.onTime") : variance > 0 ? `+${variance} d` : `${variance} d`}</dd></div>}
         {actual !== null && <>
-          <div><dt>Actual hours</dt><dd>{actual.total || "—"}</dd></div>
-          {actual.lastActivity !== undefined && <div><dt>Last activity</dt><dd>{formatDateOnly(locale, actual.lastActivity)}</dd></div>}
-          {actual.hoursAfter !== undefined && comparisonFinish !== undefined && <div><dt>Hours after {comparisonFinish}</dt><dd>{actual.hoursAfter}</dd></div>}
+          <div><dt>{t("snapshot.actualHours")}</dt><dd>{actual.total || "—"}</dd></div>
+          {actual.lastActivity !== undefined && <div><dt>{t("timeEffort.lastActivity")}</dt><dd>{formatDateOnly(locale, actual.lastActivity)}</dd></div>}
+          {actual.hoursAfter !== undefined && comparisonFinish !== undefined && <div><dt>{t("snapshot.hoursAfter", { date: comparisonFinish })}</dt><dd>{actual.hoursAfter}</dd></div>}
         </>}
       </dl>
     </section>

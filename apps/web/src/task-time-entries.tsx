@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { actualWindow, sumHours } from "@gitpm/time-entries";
 import { formatApiError, type GitPmApi } from "./api.js";
-import { formatDateOnly, type Locale } from "./i18n.js";
+import { formatDateOnly, message, type Locale, type MessageKey } from "./i18n.js";
 import type { DraftStatus, EntityResult } from "./types.js";
 import type { TimeEntryResult } from "./api.js";
 
@@ -19,6 +19,7 @@ export function TaskTimeEntries(props: {
   readonly onFingerprintChange: (fingerprint: string) => Promise<void>;
 }) {
   const { api, draft, projectId, taskId, people, readOnly, locale } = props;
+  const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
   const [entries, setEntries] = useState<readonly TimeEntryResult[]>([]);
   const [categories, setCategories] = useState<readonly WorkCategory[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -100,11 +101,11 @@ export function TaskTimeEntries(props: {
 
   return (
     <section className="card task-time-entries">
-      <h3>Actual effort</h3>
+      <h3>{t("timeEffort.heading")}</h3>
       <dl className="time-entry-summary">
-        <div><dt>Total hours</dt><dd>{totalHours || "—"}</dd></div>
-        <div><dt>First activity</dt><dd>{actual?.start ? formatDateOnly(locale, actual.start) : "—"}</dd></div>
-        <div><dt>Last activity</dt><dd>{actual?.finish ? formatDateOnly(locale, actual.finish) : "—"}</dd></div>
+        <div><dt>{t("timeEffort.totalHours")}</dt><dd>{totalHours || "—"}</dd></div>
+        <div><dt>{t("timeEffort.firstActivity")}</dt><dd>{actual?.start ? formatDateOnly(locale, actual.start) : "—"}</dd></div>
+        <div><dt>{t("timeEffort.lastActivity")}</dt><dd>{actual?.finish ? formatDateOnly(locale, actual.finish) : "—"}</dd></div>
       </dl>
       {error !== null && <p className="error-text">{error}</p>}
       <ul className="time-entry-list">
@@ -115,19 +116,19 @@ export function TaskTimeEntries(props: {
             <span className="time-entry-person">{personName(entry.document.person)}</span>
             <span className="time-entry-category">{categories.find((category) => category.slug === entry.document.category)?.title ?? entry.document.category}</span>
             {typeof entry.document.note_markdown === "string" && entry.document.note_markdown !== "" && <span className="time-entry-note">{entry.document.note_markdown}</span>}
-            {entry.document.state === "active" && !readOnly && <button className="text-link" disabled={busy} onClick={() => void voidEntry(entry)} type="button">Void</button>}
+            {entry.document.state === "active" && !readOnly && <button className="text-link" disabled={busy} onClick={() => void voidEntry(entry)} type="button">{t("timeEffort.void")}</button>}
           </li>
         ))}
-        {entries.length === 0 && <li className="empty-copy">No actual effort recorded.</li>}
+        {entries.length === 0 && <li className="empty-copy">{t("timeEffort.empty")}</li>}
       </ul>
       {!readOnly && (
         <form className="time-entry-form" onSubmit={createEntry}>
-          <label>Person<select disabled={busy} name="person" required>{activePeople.map((person) => <option key={person.document.id} value={person.document.id}>{person.document.name}</option>)}</select></label>
-          <label>Date<input disabled={busy} name="performed_on" required type="date" /></label>
-          <label>Hours<input disabled={busy} min="0.25" name="hours" required step="0.25" type="number" /></label>
-          <label>Category<select disabled={busy} name="category" required>{categories.map((category) => <option key={category.slug} value={category.slug}>{category.title}</option>)}</select></label>
-          <label>Note<input disabled={busy} name="note" type="text" /></label>
-          <button className="primary" disabled={busy} type="submit">Add effort</button>
+          <label>{t("timeEffort.person")}<select disabled={busy} name="person" required>{activePeople.map((person) => <option key={person.document.id} value={person.document.id}>{person.document.name}</option>)}</select></label>
+          <label>{t("timeEffort.date")}<input disabled={busy} name="performed_on" required type="date" /></label>
+          <label>{t("timeEffort.hours")}<input disabled={busy} min="0.25" name="hours" required step="0.25" type="number" /></label>
+          <label>{t("timeEffort.category")}<select disabled={busy} name="category" required>{categories.map((category) => <option key={category.slug} value={category.slug}>{category.title}</option>)}</select></label>
+          <label>{t("timeEffort.note")}<input disabled={busy} name="note" type="text" /></label>
+          <button className="primary" disabled={busy} type="submit">{t("timeEffort.add")}</button>
         </form>
       )}
     </section>
