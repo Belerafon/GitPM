@@ -1,0 +1,22 @@
+schema: gitpm/issue-types@1
+issue_types:
+  - slug: epic
+    title: Эпик
+    color: violet
+    active: true
+  - slug: feature
+    title: Функциональность
+    color: blue
+    active: true
+  - slug: task
+    title: Задача
+    color: gray
+    active: true
+  - slug: bug
+    title: Ошибка
+    color: red
+    active: true
+  - slug: research
+    title: Исследование
+    color: teal
+    active: true
