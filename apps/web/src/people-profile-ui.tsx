@@ -295,14 +295,15 @@ const isoDate = (date: Date) => date.toISOString().slice(0, 10);
 const monthKey = (date: Date) => date.toISOString().slice(0, 7);
 const monthDate = (value: string) => new Date(`${value}-01T00:00:00.000Z`);
 const moveMonth = (value: string, offset: number) => { const date = monthDate(value); date.setUTCMonth(date.getUTCMonth() + offset); return monthKey(date); };
-const taskCoversDate = (task: EntityResult, date: string) => {
+type TaskFieldReader = (document: Readonly<Record<string, unknown>>, key: string) => string;
+const taskCoversDate = (task: EntityResult, date: string, text: TaskFieldReader) => {
   const start = text(task.document, "start"); const due = text(task.document, "due");
   if (validDate(start) && validDate(due)) return start <= due && start <= date && date <= due;
   return (validDate(start) && start === date) || (validDate(due) && due === date);
 };
-const initialTaskMonth = (tasks: readonly EntityResult[]) => {
+const initialTaskMonth = (tasks: readonly EntityResult[], text: TaskFieldReader) => {
   const today = new Date().toISOString().slice(0, 10);
-  if (tasks.some((task) => taskCoversDate(task, today))) return today.slice(0, 7);
+  if (tasks.some((task) => taskCoversDate(task, today, text))) return today.slice(0, 7);
   const dates = tasks.flatMap((task) => [text(task.document, "start"), text(task.document, "due")]).filter(validDate).sort();
   return (dates.find((date) => date >= today) ?? dates.at(-1) ?? today).slice(0, 7);
 };
@@ -315,12 +316,12 @@ const calendarDates = (value: string) => {
 };
 
 function TaskCalendar({ tasks, calendar, projectNames, locale, onNavigate, text, t }: { readonly tasks: readonly EntityResult[]; readonly calendar?: EntityResult; readonly projectNames: ReadonlyMap<string, string>; readonly locale: Locale; readonly onNavigate: WorkspaceNavigate; readonly text: (document: Readonly<Record<string, unknown>>, key: string) => string; readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string }) {
-  const [month, setMonth] = useState(() => initialTaskMonth(tasks));
+  const [month, setMonth] = useState(() => initialTaskMonth(tasks, text));
   const dates = calendarDates(month);
   const workingWeekdays = new Set(calendar === undefined ? [1, 2, 3, 4, 5] : numbers(calendar.document, "working_weekdays"));
   const holidays = new Set(calendar === undefined ? [] : strings(calendar.document, "holidays").filter(validDate));
   const monthDays = dates.filter((date) => monthKey(date) === month);
-  const dayTasks = (date: Date) => tasks.filter((task) => taskCoversDate(task, isoDate(date)));
+  const dayTasks = (date: Date) => tasks.filter((task) => taskCoversDate(task, isoDate(date), text));
   const isWorking = (date: Date) => workingWeekdays.has(date.getUTCDay() === 0 ? 7 : date.getUTCDay()) && !holidays.has(isoDate(date));
   const workdays = monthDays.filter(isWorking);
   const freeDays = workdays.filter((date) => dayTasks(date).length === 0).length;

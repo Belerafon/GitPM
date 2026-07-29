@@ -22,7 +22,6 @@ const SCHEDULE_COLUMNS: Readonly<Record<string, "start" | "finish" | "effort_hou
 };
 
 export function nestScheduleColumns(record: Readonly<Record<string, unknown>>, track: string): Readonly<Record<string, unknown>> {
-  if (track === "") return record;
   const window: Record<string, unknown> = {};
   const next: Record<string, unknown> = {};
   let scheduled = false;
@@ -32,6 +31,7 @@ export function nestScheduleColumns(record: Readonly<Record<string, unknown>>, t
     else next[key] = value;
   }
   if (!scheduled) return next;
+  if (track === "") return next;
   const existingSchedules = typeof next.schedules === "object" && next.schedules !== null && !Array.isArray(next.schedules)
     ? next.schedules as Record<string, unknown>
     : {};
