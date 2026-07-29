@@ -30,8 +30,8 @@ describe("person profile", () => {
       result({ schema: "gitpm/team@1", id: "TEAM-26-CORE", name: "Core", members: [personId], lifecycle: "active" }),
       result({ schema: "gitpm/project@2", id: projectId, name: "Alpha", owner: personId, status: "in-progress", lifecycle: "active" }),
       result({ schema: "gitpm/project@2", id: contributingProjectId, name: "Beta", owner: "U-26-GRACE", status: "planned", lifecycle: "active" }),
-      result({ schema: "gitpm/task@2", id: taskId, project: projectId, title: "Ship profile", status: "in-progress", assignees: [personId], start: "2026-07-20", due: "2026-07-24", lifecycle: "active" }),
-      result({ schema: "gitpm/task@2", id: "T-26-SECOND", project: contributingProjectId, title: "Review calendar", status: "planned", assignees: [personId], start: "2026-07-22", due: "2026-07-23", lifecycle: "active" }),
+      result({ schema: "gitpm/task@2", id: taskId, project: projectId, title: "Ship profile", status: "in-progress", assignees: [personId], schedules: { plan: { start: "2026-07-20", finish: "2026-07-24" } }, lifecycle: "active" }),
+      result({ schema: "gitpm/task@2", id: "T-26-SECOND", project: contributingProjectId, title: "Review calendar", status: "planned", assignees: [personId], schedules: { plan: { start: "2026-07-22", finish: "2026-07-23" } }, lifecycle: "active" }),
     ];
     const schemaByType: Record<string, string> = { people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1", projects: "gitpm/project@2", tasks: "gitpm/task@2" };
     const api = { listEntities: vi.fn(async (_draftId: string, type: string) => entities.filter((item) => item.document.schema === schemaByType[type])), getConfiguration: vi.fn(async () => statusesConfig()) } as unknown as GitPmApi;
