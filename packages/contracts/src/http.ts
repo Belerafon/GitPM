@@ -336,6 +336,8 @@ const configurationDocumentSchema = {
   oneOf: [
     { $ref: "https://gitpm.dev/schemas/v1/statuses.schema.json" },
     { $ref: "https://gitpm.dev/schemas/v1/issue-types.schema.json" },
+    { $ref: "https://gitpm.dev/schemas/v1/work-categories.schema.json" },
+    { $ref: "https://gitpm.dev/schemas/v1/schedule-tracks.schema.json" },
   ],
 } as const;
 

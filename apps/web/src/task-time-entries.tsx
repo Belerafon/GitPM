@@ -29,17 +29,19 @@ export function TaskTimeEntries(props: {
   const personName = useCallback((id: string): string => people.find((person) => person.document.id === id)?.document.name ?? id, [people]);
 
   useEffect(() => { void (async () => {
+    let loadError: string | null = null;
     try {
-      const [entryList, config] = await Promise.all([
-        api.listTimeEntries(draft.draft_id, projectId, taskId),
-        api.getConfiguration(draft.draft_id, "work-categories"),
-      ]);
-      setEntries(entryList);
-      setCategories((config.document.categories as readonly WorkCategory[] | undefined)?.filter((category) => category.active) ?? []);
-      setError(null);
+      setEntries(await api.listTimeEntries(draft.draft_id, projectId, taskId));
     } catch (candidate) {
-      setError(formatApiError(candidate));
+      loadError = formatApiError(candidate);
     }
+    try {
+      const config = await api.getConfiguration(draft.draft_id, "work-categories");
+      setCategories((config.document.categories as readonly WorkCategory[] | undefined)?.filter((category) => category.active) ?? []);
+    } catch {
+      setCategories([]);
+    }
+    setError(loadError);
   })(); }, [api, draft.draft_id, projectId, taskId]);
 
   useEffect(() => { setFingerprint(props.fingerprint); }, [props.fingerprint]);
@@ -101,13 +103,13 @@ export function TaskTimeEntries(props: {
 
   return (
     <section className="card task-time-entries">
+      {error !== null && <div className="alert error">{error}</div>}
       <h3>{t("timeEffort.heading")}</h3>
       <dl className="time-entry-summary">
         <div><dt>{t("timeEffort.totalHours")}</dt><dd>{totalHours || "—"}</dd></div>
         <div><dt>{t("timeEffort.firstActivity")}</dt><dd>{actual?.start ? formatDateOnly(locale, actual.start) : "—"}</dd></div>
         <div><dt>{t("timeEffort.lastActivity")}</dt><dd>{actual?.finish ? formatDateOnly(locale, actual.finish) : "—"}</dd></div>
       </dl>
-      {error !== null && <p className="error-text">{error}</p>}
       <ul className="time-entry-list">
         {entries.map((entry) => (
           <li key={entry.document.id} className={`time-entry-row${entry.document.state === "voided" ? " voided" : ""}`}>
