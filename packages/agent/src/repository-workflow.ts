@@ -289,7 +289,7 @@ export class RepositoryWorkflow {
 
   async getConfiguration(
     workspaceId: string,
-    kind: "statuses" | "issue-types",
+    kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks",
   ): Promise<EntityResult> {
     await this.workspace(workspaceId);
     return await this.entities.getConfiguration(workspaceId, kind);
@@ -297,12 +297,15 @@ export class RepositoryWorkflow {
 
   async updateConfiguration(
     workspaceId: string,
-    kind: "statuses" | "issue-types",
+    kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks",
     document: Record<string, unknown>,
     scope: AgentScope = {},
   ): Promise<EntityResult> {
     const workspace = await this.beginMutation(workspaceId, scope);
-    const relative = kind === "statuses" ? ".gitpm/statuses.yaml" : ".gitpm/issue-types.yaml";
+    const relative = kind === "statuses" ? ".gitpm/statuses.yaml"
+      : kind === "issue-types" ? ".gitpm/issue-types.yaml"
+        : kind === "work-categories" ? ".gitpm/work-categories.yaml"
+          : ".gitpm/schedule-tracks.yaml";
     this.assertPlannedPaths([{ path: relative, kind: "Modified" }], scope);
     const current = await this.entities.getConfiguration(workspaceId, kind);
     return await this.entities.updateConfiguration(

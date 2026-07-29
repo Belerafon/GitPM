@@ -471,13 +471,19 @@ export class EntityStore {
   async updateConfiguration(
     draftId: string,
     owner: string,
-    kind: "statuses" | "issue-types",
+    kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks",
     expectedFingerprint: string,
     expectedBlobId: string,
     document: GitPmDocument,
   ): Promise<EntityResult> {
-    const relative = kind === "statuses" ? ".gitpm/statuses.yaml" : ".gitpm/issue-types.yaml";
-    const expectedSchema = kind === "statuses" ? "gitpm/statuses@2" : "gitpm/issue-types@1";
+    const relative = kind === "statuses" ? ".gitpm/statuses.yaml"
+      : kind === "issue-types" ? ".gitpm/issue-types.yaml"
+        : kind === "work-categories" ? ".gitpm/work-categories.yaml"
+          : ".gitpm/schedule-tracks.yaml";
+    const expectedSchema = kind === "statuses" ? "gitpm/statuses@2"
+      : kind === "issue-types" ? "gitpm/issue-types@1"
+        : kind === "work-categories" ? "gitpm/work-categories@1"
+          : "gitpm/schedule-tracks@1";
     if (document.schema !== expectedSchema) throw new DomainOperationError("ENTITY_IDENTITY_IMMUTABLE", "Configuration schema is immutable");
     const mutation = await this.drafts.withRepositoryMutation(draftId, owner, expectedFingerprint, this.mutationMode, async (metadata) => {
       const referenceLabels = this.labels(await this.index(draftId, metadata));

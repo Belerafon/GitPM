@@ -191,11 +191,11 @@ export class DirectCliRuntime {
     );
   }
 
-  async getConfiguration(kind: "statuses" | "issue-types"): Promise<EntityResult> {
+  async getConfiguration(kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks"): Promise<EntityResult> {
     return await this.repository.getConfiguration(DIRECT_WORKSPACE_ID, kind);
   }
 
-  async updateConfiguration(kind: "statuses" | "issue-types", document: Record<string, unknown>, scope: AgentScope = {}): Promise<EntityResult> {
+  async updateConfiguration(kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks", document: Record<string, unknown>, scope: AgentScope = {}): Promise<EntityResult> {
     return await this.repository.updateConfiguration(
       DIRECT_WORKSPACE_ID,
       kind,

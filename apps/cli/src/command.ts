@@ -750,7 +750,7 @@ async function runConfig(args: readonly string[], cwd: string, dependencies: Cli
   if (action !== "show" && action !== "update") throw new RepositoryFormatError("CLI_USAGE", "config requires show or update");
   const direct = requireDirect(dependencies);
   const kind = required(flagValue(args, "--kind"), "--kind");
-  if (kind !== "statuses" && kind !== "issue-types") throw new RepositoryFormatError("CLI_USAGE", "--kind must be statuses or issue-types");
+  if (kind !== "statuses" && kind !== "issue-types" && kind !== "work-categories" && kind !== "schedule-tracks") throw new RepositoryFormatError("CLI_USAGE", "--kind must be statuses, issue-types, work-categories or schedule-tracks");
   const json = args.includes("--json");
   if (action === "show") {
     const result = await direct.getConfiguration(kind);

@@ -562,6 +562,10 @@ describe.concurrent("CLI direct mode", () => {
     expect(JSON.parse(blockedConfig.output)).toMatchObject({ ok: false, code: "AGENT_DELETE_CONFIRMATION_REQUIRED" });
     const allowedConfig = await run([...configArgs, "--allow-delete", "--json"], process.cwd(), { direct });
     expect(JSON.parse(allowedConfig.output)).toMatchObject({ ok: true, document: { schema: "gitpm/statuses@2" } });
+
+    const categoriesArgs = ["config", "update", "--kind", "work-categories", "--set", "schema=gitpm/work-categories@1"];
+    const updatedCategories = await run([...categoriesArgs, "--allow-delete", "--json"], process.cwd(), { direct });
+    expect(JSON.parse(updatedCategories.output)).toMatchObject({ ok: true, document: { schema: "gitpm/work-categories@1" } });
   });
 
   it("requires direct runtime configuration for direct commands", async () => {

@@ -27,7 +27,7 @@ gitpm time-entry summary --project <id> --task <id> [--after <yyyy-mm-dd>] [--js
 gitpm time-entry create --project <id> --task <id> --person <id> --date <yyyy-mm-dd> --hours <n> --category <slug> [--note <text>] [--json]
 gitpm time-entry void --project <id> --task <id> --id <entry-id> [--json]
 gitpm config show --kind statuses|issue-types|work-categories|schedule-tracks
-gitpm config update --kind statuses|issue-types [--file <yaml>] [--set <field>=<yaml-value>]... [--unset <field>] [--allow-delete]
+gitpm config update --kind statuses|issue-types|work-categories|schedule-tracks [--file <yaml>] [--set <field>=<yaml-value>]... [--unset <field>] [--allow-delete]
 gitpm schema list
 gitpm schema show <type> [--example]
 gitpm format [--draft <id>] [--project <id>] [--check] [--allow-delete]

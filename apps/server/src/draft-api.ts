@@ -643,7 +643,7 @@ export function registerEntityApi(
     },
   );
 
-  app.put<{ Params: { draftId: string; kind: "statuses" | "issue-types" }; Body: { expected_fingerprint: string; expected_blob_id: string; document: ConfigurationDocument } }>(
+  app.put<{ Params: { draftId: string; kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks" }; Body: { expected_fingerprint: string; expected_blob_id: string; document: ConfigurationDocument } }>(
     "/api/drafts/:draftId/config/:kind",
     {
       schema: { body: HTTP_REQUEST_BODY_SCHEMAS.updateConfiguration },
