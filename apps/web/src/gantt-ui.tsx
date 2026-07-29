@@ -52,6 +52,7 @@ export function dependencyPath(x1: number, y1: number, x2: number, y2: number): 
 }
 
 export interface GanttOverlay { readonly track: string; readonly start: string; readonly finish: string; readonly startOffset: number; readonly duration: number }
+export interface GanttActualMarker { readonly date: string; readonly hours: number; readonly offset: number }
 
 export interface GanttRow {
   readonly entity: EntityResult;
@@ -65,6 +66,7 @@ export interface GanttRow {
   readonly milestone?: string;
   readonly dependencies: readonly string[];
   readonly overlays: readonly GanttOverlay[];
+  readonly actual: readonly GanttActualMarker[];
 }
 
 export interface GanttModel {
@@ -76,7 +78,7 @@ export interface GanttModel {
   readonly dependencies: readonly { readonly from: string; readonly to: string }[];
 }
 
-export function buildGanttModel(tasks: readonly EntityResult[], milestones: readonly EntityResult[]): GanttModel | null {
+export function buildGanttModel(tasks: readonly EntityResult[], milestones: readonly EntityResult[], actual: ReadonlyMap<string, readonly { readonly date: string; readonly hours: number }[]> = new Map()): GanttModel | null {
   const dated = tasks.filter((item) => item.document.lifecycle === "active" && /^\d{4}-\d{2}-\d{2}$/u.test(text(item.document, "start")) && /^\d{4}-\d{2}-\d{2}$/u.test(text(item.document, "due")) && dayNumber(text(item.document, "start")) <= dayNumber(text(item.document, "due")));
   if (dated.length === 0) return null;
   const byId = new Map(dated.map((item) => [item.document.id, item]));
@@ -103,6 +105,7 @@ export function buildGanttModel(tasks: readonly EntityResult[], milestones: read
       startOffset: dayNumber(text(entity.document, "start")) - first, duration: dayNumber(text(entity.document, "due")) - dayNumber(text(entity.document, "start")) + 1,
       depth: hierarchy.depthOf(entity.document.id), milestone: text(entity.document, "milestone") || undefined, dependencies: strings(entity.document.depends_on).filter((id) => byId.has(id)),
       overlays,
+      actual: (actual.get(entity.document.id) ?? []).filter((segment) => ISO_DATE.test(segment.date) && dayNumber(segment.date) >= first && dayNumber(segment.date) <= last).map((segment): GanttActualMarker => ({ date: segment.date, hours: segment.hours, offset: dayNumber(segment.date) - first })),
     };
   });
   return {
@@ -121,6 +124,7 @@ export function GanttWorkspace({ api, draft, locale, initialProjectId = "", onNa
   const [projectId, setProjectId] = useState(initialProjectId);
   const [dayWidth, setDayWidth] = useState(36);
   const [error, setError] = useState<string | null>(null);
+  const [actual, setActual] = useState<ReadonlyMap<string, readonly { readonly date: string; readonly hours: number }[]>>(new Map());
   const loadRequest = useAsyncLoad();
   const load = useCallback(async (preferredProject = projectId) => {
     await loadRequest.run(async () => {
@@ -130,10 +134,26 @@ export function GanttWorkspace({ api, draft, locale, initialProjectId = "", onNa
       return { nextProjects, nextProject, nextTasks, nextMilestones };
     }, ({ nextProjects, nextProject, nextTasks, nextMilestones }) => {
       setProjects(nextProjects); setProjectId(nextProject); setTasks(nextTasks); setMilestones(nextMilestones); setError(null);
+      void loadActual(nextProject, nextTasks);
     });
   }, [api, draft.draft_id, loadRequest.run, projectId]);
+  const loadActual = useCallback(async (project: string, taskList: readonly EntityResult[]) => {
+    if (project === "" || taskList.length === 0) { setActual(new Map()); return; }
+    try {
+      const segments = new Map<string, readonly { readonly date: string; readonly hours: number }[]>();
+      const results = await Promise.all(taskList.map(async (task) => [task.document.id, (await api.listTimeEntries(draft.draft_id, project, task.document.id))] as const));
+      for (const [taskId, entries] of results) {
+        segments.set(taskId, entries
+          .filter((entry) => entry.document.state !== "voided")
+          .flatMap((entry) => [{ date: entry.document.performed_on, hours: entry.document.hours }]));
+      }
+      setActual(segments);
+    } catch {
+      setActual(new Map());
+    }
+  }, [api, draft.draft_id]);
   useEffect(() => { void load(initialProjectId); }, [draft.draft_id, draft.external_fingerprint]);
-  const model = useMemo(() => buildGanttModel(tasks, milestones), [tasks, milestones]);
+  const model = useMemo(() => buildGanttModel(tasks, milestones, actual), [tasks, milestones, actual]);
   const rowIndex = new Map(model?.rows.map((row, index) => [row.id, index]) ?? []);
   const outgoingCounts = new Map<string, number>();
   for (const dependency of model?.dependencies ?? []) outgoingCounts.set(dependency.from, (outgoingCounts.get(dependency.from) ?? 0) + 1);
@@ -158,6 +178,7 @@ export function GanttWorkspace({ api, draft, locale, initialProjectId = "", onNa
         {todayOffset >= 0 && <div aria-label={t("gantt.legendToday")} className="gantt-today" style={{ left: `${todayOffset * dayWidth + dayWidth / 2}px` }} />}
         {model.rows.map((row, index) => <button className="gantt-bar" data-task-id={row.id} data-start={row.start} data-due={row.due} key={row.id} title={`${row.title}: ${row.start} — ${row.due}`} style={{ left: `${row.startOffset * dayWidth + 4}px`, top: `${index * GANTT_ROW_HEIGHT + GANTT_BAR_TOP}px`, width: `${Math.max(28, row.duration * dayWidth - 8)}px` }} onClick={() => onNavigate("tasks", { projectId, taskId: row.id })}><span>{row.title}</span></button>)}
         {model.rows.flatMap((row, index) => row.overlays.map((overlay) => <div aria-hidden="true" className="gantt-bar-overlay" data-task-id={row.id} data-track={overlay.track} key={`${row.id}-${overlay.track}`} title={`${row.title} · ${overlay.track}: ${overlay.start} — ${overlay.finish}`} style={{ left: `${overlay.startOffset * dayWidth + 4}px`, top: `${index * GANTT_ROW_HEIGHT + GANTT_BAR_TOP + GANTT_BAR_HEIGHT + 4}px`, width: `${Math.max(6, overlay.duration * dayWidth - 8)}px` }} data-start={overlay.start} data-finish={overlay.finish} />))}
+        {model.rows.flatMap((row, index) => row.actual.map((marker) => <div aria-hidden="true" className="gantt-actual-marker" data-task-id={row.id} data-date={marker.date} key={`${row.id}-actual-${marker.date}`} title={`${row.title} · ${marker.date}: ${marker.hours} h`} style={{ left: `${marker.offset * dayWidth + dayWidth / 2 - 3}px`, top: `${index * GANTT_ROW_HEIGHT + GANTT_BAR_TOP + GANTT_BAR_HEIGHT + 14}px` }} />))}
         {model.milestones.map((milestone) => <button type="button" className="gantt-milestone" data-milestone-id={milestone.id} key={milestone.id} onClick={() => onNavigate("stages", { projectId, stageId: milestone.id })} title={`${milestone.name}: ${milestone.due}`} style={{ left: `${milestone.offset * dayWidth + 13}px` }}><span>{milestone.name}</span></button>)}
         <svg className="gantt-dependencies" aria-label={t("gantt.dependencies")} height={model.rows.length * GANTT_ROW_HEIGHT + 48} width={timelineWidth}>{model.dependencies.map((dependency, index) => {
           const from = model.rows.find((row) => row.id === dependency.from)!; const to = model.rows.find((row) => row.id === dependency.to)!;

@@ -47,6 +47,13 @@ describe("read-only Gantt", () => {
     expect(row.overlays).toEqual([{ track: "target", start: "2026-07-03", finish: "2026-07-07", startOffset: 2, duration: 5 }]);
   });
 
+  it("renders discrete actual-activity markers from time entries", () => {
+    const task1 = task("A", "Active", "2026-07-01", "2026-07-10");
+    const actual = new Map<string, readonly { readonly date: string; readonly hours: number }[]>([[task1.document.id, [{ date: "2026-07-02", hours: 3 }, { date: "2026-07-09", hours: 5 }]]]);
+    const model = buildGanttModel([task1], [], actual)!;
+    expect(model.rows[0]!.actual).toEqual([{ date: "2026-07-02", hours: 3, offset: 1 }, { date: "2026-07-09", hours: 5, offset: 8 }]);
+  });
+
   it("renders six bars and cannot mutate repository data", async () => {
     const updateEntity = vi.fn(); const createEntity = vi.fn(); const deleteEntity = vi.fn();
     const onNavigate = vi.fn();
