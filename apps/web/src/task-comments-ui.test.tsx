@@ -101,6 +101,39 @@ describe("task comments", () => {
     expect(screen.getByLabelText("Add comment")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Add comment" })).toBeNull();
   });
+
+  it("collapses and expands via the heading toggle", async () => {
+    const existing: CommentResult = {
+      document: {
+        schema: "gitpm/comment@1",
+        id: "N-26-COLLAP",
+        project: "P-26-MGP84K",
+        task: "T-26-P9G3P8",
+        author: { provider: "git", subject: "boris@example.test", display_name: "Boris" },
+        created_at: "2026-07-20T10:05:00.000Z",
+        state: "active",
+        body_markdown: "Keep this visible",
+        mentions: [],
+      },
+      path: "projects/P-26-MGP84K/comments/T-26-P9G3P8/N-26-COLLAP.yaml",
+      blob_id: "d".repeat(40),
+      draft_fingerprint: "e".repeat(64),
+      can_edit: true,
+      can_delete: true,
+    };
+    const api = { listComments: vi.fn(async () => [existing]) } as unknown as GitPmApi;
+
+    render(<TaskComments api={api} confirmDelete={() => true} draft={draft} fingerprint={draft.fingerprint} locale="en" onFingerprintChange={async () => undefined} onNavigate={() => undefined} people={[]} projectId="P-26-MGP84K" readOnly={false} taskId="T-26-P9G3P8" />);
+
+    const toggle = await screen.findByRole("button", { name: /^Discussion$/iu });
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText("Keep this visible")).toBeTruthy();
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByText("Keep this visible")).toBeNull();
+    fireEvent.click(toggle);
+    expect(await screen.findByText("Keep this visible")).toBeTruthy();
+  });
 });
 
 describe("mention notifications", () => {

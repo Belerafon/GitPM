@@ -50,4 +50,37 @@ describe("TaskTimeEntries", () => {
     await waitFor(() => expect(voidTimeEntry).toHaveBeenCalled());
     await waitFor(() => expect(screen.queryAllByRole("button", { name: "Void" })).toHaveLength(1));
   });
+
+  it("defaults the date to today and the person to the first active assignee", async () => {
+    const api = {
+      listTimeEntries: vi.fn(async (): Promise<readonly TimeEntryResult[]> => []),
+      getConfiguration: vi.fn(async (_draftId: string, kind: string) => ({ document: { schema: "gitpm/work-categories@1", categories: [{ slug: "regular", title: "Regular", active: true }] }, path: kind, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) })),
+    } as unknown as GitPmApi;
+    const other = { document: { schema: "gitpm/person@1", id: "U-26-LIN", name: "Linus", lifecycle: "active" }, path: "p.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) } as EntityResult;
+
+    render(<TaskTimeEntries api={api} draft={draft} fingerprint={draft.fingerprint} projectId="P-26-1" taskId="T-26-1" people={[other, person]} assigneeIds={[person.document.id]} readOnly={false} locale="en" onFingerprintChange={vi.fn(async () => undefined)} />);
+
+    const dateInput = await screen.findByLabelText("Date");
+    const expected = (() => { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`; })();
+    expect((dateInput as HTMLInputElement).value).toBe(expected);
+    expect((screen.getByLabelText("Person") as HTMLSelectElement).value).toBe(person.document.id);
+  });
+
+  it("collapses and expands via the heading toggle", async () => {
+    const api = {
+      listTimeEntries: vi.fn(async (): Promise<readonly TimeEntryResult[]> => []),
+      getConfiguration: vi.fn(async (_draftId: string, kind: string) => ({ document: { schema: "gitpm/work-categories@1", categories: [{ slug: "regular", title: "Regular", active: true }] }, path: kind, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) })),
+    } as unknown as GitPmApi;
+
+    render(<TaskTimeEntries api={api} draft={draft} fingerprint={draft.fingerprint} projectId="P-26-1" taskId="T-26-1" people={[person]} readOnly={false} locale="en" onFingerprintChange={vi.fn(async () => undefined)} />);
+
+    const toggle = await screen.findByRole("button", { name: /Actual effort/iu });
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByLabelText("Date")).toBeNull();
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByLabelText("Date")).toBeTruthy();
+  });
 });

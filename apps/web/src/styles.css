@@ -1070,6 +1070,34 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
 .mention-suggestions button { display: grid; gap: .15rem; border: 0; padding: .5rem .6rem; text-align: left; }
 .mention-suggestions button:hover { background: #edf3ee; }
 .mention-suggestions span { color: #747974; font-size: .7rem; }
+.section-toggle { display: flex; align-items: center; gap: .4rem; width: 100%; border: 0; background: transparent; color: inherit; padding: 0; font: inherit; font-weight: inherit; text-align: left; cursor: pointer; }
+.section-toggle:hover { color: #244f3a; }
+.section-toggle-chevron { display: inline-grid; place-items: center; width: .9rem; color: #6f7972; font-size: .65rem; line-height: 1; transition: transform .15s ease; }
+.section-toggle[aria-expanded="false"] .section-toggle-chevron { transform: rotate(-90deg); }
+@media (prefers-reduced-motion: reduce) { .section-toggle-chevron { transition: none; } }
+.task-time-entries { display: grid; gap: .8rem; margin-top: 1.2rem; border-top: 1px solid #dedfd9; padding-top: 1.1rem; }
+.task-time-entries-heading { display: flex; align-items: center; gap: .55rem; }
+.task-time-entries-heading h3 { margin: 0; font-size: 1rem; }
+.task-time-entries-count { display: grid; place-items: center; min-width: 1.5rem; height: 1.5rem; border-radius: 999px; background: #e5ece7; color: #31584c; padding: 0 .35rem; font-size: .7rem; font-weight: 700; }
+.time-entry-summary { display: flex; flex-wrap: wrap; gap: 1rem 1.5rem; margin: .35rem 0 .2rem; }
+.time-entry-summary div { display: grid; gap: .15rem; }
+.time-entry-summary dt { color: #686e69; font-size: .72rem; }
+.time-entry-summary dd { margin: 0; color: #244c3b; font-weight: 700; }
+.time-entry-list { display: grid; margin: 0; padding: 0; list-style: none; }
+.time-entry-row { display: grid; grid-template-columns: minmax(110px, auto) auto minmax(0, 1fr) minmax(0, 1fr) auto; align-items: baseline; gap: .55rem .7rem; border-top: 1px solid #eceee9; padding: .5rem 0; }
+.time-entry-row:last-child { border-bottom: 1px solid #eceee9; }
+.time-entry-date { color: #343936; font-size: .8rem; font-weight: 650; white-space: nowrap; }
+.time-entry-hours { color: #31584c; font-size: .8rem; font-weight: 700; white-space: nowrap; }
+.time-entry-person { overflow: hidden; color: #315f50; font-size: .78rem; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.time-entry-category { overflow: hidden; color: #686e69; font-size: .76rem; text-overflow: ellipsis; white-space: nowrap; }
+.time-entry-note { grid-column: 1 / -1; color: #5d625f; font-size: .8rem; font-style: italic; overflow-wrap: anywhere; }
+.time-entry-row.voided { opacity: .55; }
+.time-entry-row.voided > span { text-decoration: line-through; }
+.time-entry-form { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(120px, .8fr) 84px minmax(0, 1fr) minmax(0, 1.5fr) auto; align-items: end; gap: .5rem; margin-top: .35rem; }
+.time-entry-form label { display: grid; gap: .25rem; margin-bottom: 0; color: #5d625f; font-size: .78rem; }
+.time-entry-form input, .time-entry-form select { min-width: 0; width: 100%; border: 1px solid #c9cbc5; border-radius: 8px; background: #fff; padding: .5rem; }
+.time-entry-form .primary { align-self: end; }
+@media (max-width: 700px) { .time-entry-form { grid-template-columns: 1fr 1fr; } .time-entry-form .primary { grid-column: 1 / -1; } }
 .notifications-menu { position: relative; align-self: end; }
 .notifications-menu > summary { position: relative; display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid #c9cbc5; border-radius: 8px; background: #fff; color: #455048; cursor: pointer; list-style: none; }
 .notifications-menu > summary::-webkit-details-marker { display: none; }

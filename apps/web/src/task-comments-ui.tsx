@@ -75,6 +75,7 @@ export function TaskComments({ api, draft, projectId, taskId, people, fingerprin
   const [editing, setEditing] = useState<string | null>(null);
   const [editBody, setEditBody] = useState("");
   const [mentionQuery, setMentionQuery] = useState<{ start: number; query: string } | null>(null);
+  const [open, setOpen] = useState(true);
   const textarea = useRef<HTMLTextAreaElement>(null);
   const activePeople = useMemo(() => people.filter((person) => person.document.lifecycle === "active"), [people]);
   const suggestions = mentionQuery === null ? [] : activePeople.filter((person) => {
@@ -156,24 +157,27 @@ export function TaskComments({ api, draft, projectId, taskId, people, fingerprin
   };
 
   const showComposer = !readOnly && !loading && (comments.length > 0 || composerOpen);
+  const activeCommentCount = comments.filter((comment) => comment.document.state === "active").length;
 
   return <section className="task-comments" aria-labelledby="task-comments-heading">
-    <div className="task-comments-heading"><h3 id="task-comments-heading">{t("comments.heading")}</h3><span>{comments.filter((comment) => comment.document.state === "active").length}</span>{!readOnly && !loading && comments.length === 0 && !composerOpen && <button aria-controls={`comment-composer-${taskId}`} aria-expanded={false} className="text-link" onClick={() => setComposerOpen(true)} type="button">{t("comments.add")}</button>}</div>
-    {loading && <p className="empty-copy">{t("status.loading")}</p>}
-    <div className="comment-list">{comments.map((comment) => <article className={`task-comment${comment.document.state === "deleted" ? " deleted" : ""}${comment.document.id === focusCommentId ? " focused" : ""}`} id={`comment-${comment.document.id}`} key={comment.document.id}>
-      <div className="comment-avatar" aria-hidden="true">{initials(comment.document.author.display_name)}</div>
-      <div className="comment-content">
-        <header><div><strong>{comment.document.author.display_name}</strong><time dateTime={comment.document.updated_at ?? comment.document.created_at} title={formatDateTime(locale, comment.document.updated_at ?? comment.document.created_at)}>{relativeTime(locale, comment.document.updated_at ?? comment.document.created_at)}</time>{comment.document.updated_at !== undefined && <span>{t("comments.edited")}</span>}</div>{comment.document.state === "active" && (comment.can_edit || comment.can_delete) && <details className="comment-actions"><summary aria-label={t("comments.actions")} title={t("comments.actions")}>…</summary><div>{comment.can_edit && <button disabled={busy} onClick={() => { setEditing(comment.document.id); setEditBody(comment.document.body_markdown ?? ""); }} type="button">{t("comments.edit")}</button>}{comment.can_delete && <button className="danger" disabled={busy} onClick={() => { void remove(comment); }} type="button">{t("comments.delete")}</button>}</div></details>}</header>
-        {comment.document.state === "deleted" ? <p className="comment-deleted">{t("comments.deleted")}</p> : editing === comment.document.id ? <div className="comment-edit"><textarea autoFocus disabled={busy} onChange={(event) => setEditBody(event.target.value)} onKeyDown={(event) => { if (event.key === "Escape") setEditing(null); else if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void saveEdit(comment); } }} value={editBody} /><div><button disabled={busy} onClick={() => setEditing(null)} type="button">{t("core.cancel")}</button><button className="primary" disabled={busy || editBody.trim() === ""} onClick={() => { void saveEdit(comment); }} type="button">{t("core.save")}</button></div></div> : <CommentMarkdown onNavigate={onNavigate} people={people} source={comment.document.body_markdown ?? ""} />}
-      </div>
-    </article>)}</div>
-    {error !== null && <div className="alert error">{error}<button onClick={() => { void load(); }}>{t("status.retry")}</button></div>}
-    {showComposer && <div className="comment-composer" id={`comment-composer-${taskId}`}>
-      <label htmlFor={`comment-body-${taskId}`}>{t("comments.add")}</label>
-      <textarea aria-describedby={`comment-help-${taskId}`} autoFocus={comments.length === 0} disabled={busy} id={`comment-body-${taskId}`} onChange={(event) => { setBody(event.target.value); detectMention(event.target.value, event.target.selectionStart); }} onClick={(event) => detectMention(event.currentTarget.value, event.currentTarget.selectionStart)} onKeyDown={composerKey} placeholder={t("comments.placeholder")} ref={textarea} rows={4} value={body} />
-      {suggestions.length > 0 && <div className="mention-suggestions" role="listbox" aria-label={t("comments.mentionSuggestions")}>{suggestions.map((person) => <button key={person.document.id} onClick={() => chooseMention(person)} role="option" type="button"><strong>{text(person.document, "name")}</strong>{text(person.document, "email") !== "" && <span>{text(person.document, "email")}</span>}</button>)}</div>}
-      <div className="comment-composer-actions"><span className="field-hint" id={`comment-help-${taskId}`}>{t("comments.draftHint", { draft: draft.draft_id })}</span><button className="primary" disabled={busy || body.trim() === ""} onClick={() => { void create(); }} type="button">{busy ? t("feedback.saving") : t("comments.submit")}</button></div>
-    </div>}
-    {readOnly && <p className="field-hint">{t("comments.readOnly")}</p>}
+    <div className="task-comments-heading"><h3 id="task-comments-heading"><button aria-controls={`task-comments-body-${taskId}`} aria-expanded={open} className="section-toggle" onClick={() => setOpen((value) => !value)} type="button"><span aria-hidden="true" className="section-toggle-chevron">▾</span>{t("comments.heading")}</button></h3><span>{activeCommentCount}</span>{open && !readOnly && !loading && comments.length === 0 && !composerOpen && <button aria-controls={`comment-composer-${taskId}`} aria-expanded={false} className="text-link" onClick={() => setComposerOpen(true)} type="button">{t("comments.add")}</button>}</div>
+    {open && (<>
+      {loading && <p className="empty-copy">{t("status.loading")}</p>}
+      <div className="comment-list">{comments.map((comment) => <article className={`task-comment${comment.document.state === "deleted" ? " deleted" : ""}${comment.document.id === focusCommentId ? " focused" : ""}`} id={`comment-${comment.document.id}`} key={comment.document.id}>
+        <div className="comment-avatar" aria-hidden="true">{initials(comment.document.author.display_name)}</div>
+        <div className="comment-content">
+          <header><div><strong>{comment.document.author.display_name}</strong><time dateTime={comment.document.updated_at ?? comment.document.created_at} title={formatDateTime(locale, comment.document.updated_at ?? comment.document.created_at)}>{relativeTime(locale, comment.document.updated_at ?? comment.document.created_at)}</time>{comment.document.updated_at !== undefined && <span>{t("comments.edited")}</span>}</div>{comment.document.state === "active" && (comment.can_edit || comment.can_delete) && <details className="comment-actions"><summary aria-label={t("comments.actions")} title={t("comments.actions")}>…</summary><div>{comment.can_edit && <button disabled={busy} onClick={() => { setEditing(comment.document.id); setEditBody(comment.document.body_markdown ?? ""); }} type="button">{t("comments.edit")}</button>}{comment.can_delete && <button className="danger" disabled={busy} onClick={() => { void remove(comment); }} type="button">{t("comments.delete")}</button>}</div></details>}</header>
+          {comment.document.state === "deleted" ? <p className="comment-deleted">{t("comments.deleted")}</p> : editing === comment.document.id ? <div className="comment-edit"><textarea autoFocus disabled={busy} onChange={(event) => setEditBody(event.target.value)} onKeyDown={(event) => { if (event.key === "Escape") setEditing(null); else if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void saveEdit(comment); } }} value={editBody} /><div><button disabled={busy} onClick={() => setEditing(null)} type="button">{t("core.cancel")}</button><button className="primary" disabled={busy || editBody.trim() === ""} onClick={() => { void saveEdit(comment); }} type="button">{t("core.save")}</button></div></div> : <CommentMarkdown onNavigate={onNavigate} people={people} source={comment.document.body_markdown ?? ""} />}
+        </div>
+      </article>)}</div>
+      {error !== null && <div className="alert error">{error}<button onClick={() => { void load(); }}>{t("status.retry")}</button></div>}
+      {showComposer && <div className="comment-composer" id={`comment-composer-${taskId}`}>
+        <label htmlFor={`comment-body-${taskId}`}>{t("comments.add")}</label>
+        <textarea aria-describedby={`comment-help-${taskId}`} autoFocus={comments.length === 0} disabled={busy} id={`comment-body-${taskId}`} onChange={(event) => { setBody(event.target.value); detectMention(event.target.value, event.target.selectionStart); }} onClick={(event) => detectMention(event.currentTarget.value, event.currentTarget.selectionStart)} onKeyDown={composerKey} placeholder={t("comments.placeholder")} ref={textarea} rows={4} value={body} />
+        {suggestions.length > 0 && <div className="mention-suggestions" role="listbox" aria-label={t("comments.mentionSuggestions")}>{suggestions.map((person) => <button key={person.document.id} onClick={() => chooseMention(person)} role="option" type="button"><strong>{text(person.document, "name")}</strong>{text(person.document, "email") !== "" && <span>{text(person.document, "email")}</span>}</button>)}</div>}
+        <div className="comment-composer-actions"><span className="field-hint" id={`comment-help-${taskId}`}>{t("comments.draftHint", { draft: draft.draft_id })}</span><button className="primary" disabled={busy || body.trim() === ""} onClick={() => { void create(); }} type="button">{busy ? t("feedback.saving") : t("comments.submit")}</button></div>
+      </div>}
+      {readOnly && <p className="field-hint">{t("comments.readOnly")}</p>}
+    </>)}
   </section>;
 }

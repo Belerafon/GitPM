@@ -7,6 +7,13 @@ import type { TimeEntryResult } from "./api.js";
 
 interface WorkCategory { readonly slug: string; readonly title: string; readonly active: boolean }
 
+const NO_ASSIGNEES: readonly string[] = [];
+
+function todayISODate(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
 export function TaskTimeEntries(props: {
   readonly api: GitPmApi;
   readonly draft: DraftStatus;
@@ -16,9 +23,10 @@ export function TaskTimeEntries(props: {
   readonly people: readonly EntityResult[];
   readonly readOnly: boolean;
   readonly locale: Locale;
+  readonly assigneeIds?: readonly string[];
   readonly onFingerprintChange: (fingerprint: string) => Promise<void>;
 }) {
-  const { api, draft, projectId, taskId, people, readOnly, locale } = props;
+  const { api, draft, projectId, taskId, people, readOnly, locale, assigneeIds = NO_ASSIGNEES } = props;
   const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
   const [entries, setEntries] = useState<readonly TimeEntryResult[]>([]);
   const [categories, setCategories] = useState<readonly WorkCategory[]>([]);
@@ -60,6 +68,10 @@ export function TaskTimeEntries(props: {
   const actual = useMemo(() => actualWindow(records.map((record) => ({ id: record.id, project: projectId, task: taskId, person: record.person, performed_on: record.performed_on, hours: record.hours, category: record.category, state: record.state }))), [records, projectId, taskId]);
   const totalHours = useMemo(() => sumHours(records.map((record) => ({ id: record.id, project: projectId, task: taskId, person: record.person, performed_on: record.performed_on, hours: record.hours, category: record.category, state: record.state }))), [records, projectId, taskId]);
   const activePeople = useMemo(() => people.filter((person) => person.document.lifecycle === "active"), [people]);
+  const [open, setOpen] = useState(true);
+  const defaultPersonId = useMemo(() => assigneeIds.find((id) => activePeople.some((person) => person.document.id === id)), [assigneeIds, activePeople]);
+  const today = useMemo(() => todayISODate(), []);
+  const activeCount = entries.filter((entry) => entry.document.state === "active").length;
 
   const createEntry = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -102,36 +114,43 @@ export function TaskTimeEntries(props: {
   };
 
   return (
-    <section className="card task-time-entries">
-      {error !== null && <div className="alert error">{error}</div>}
-      <h3>{t("timeEffort.heading")}</h3>
-      <dl className="time-entry-summary">
-        <div><dt>{t("timeEffort.totalHours")}</dt><dd>{totalHours || "—"}</dd></div>
-        <div><dt>{t("timeEffort.firstActivity")}</dt><dd>{actual?.start ? formatDateOnly(locale, actual.start) : "—"}</dd></div>
-        <div><dt>{t("timeEffort.lastActivity")}</dt><dd>{actual?.finish ? formatDateOnly(locale, actual.finish) : "—"}</dd></div>
-      </dl>
-      <ul className="time-entry-list">
-        {entries.map((entry) => (
-          <li key={entry.document.id} className={`time-entry-row${entry.document.state === "voided" ? " voided" : ""}`}>
-            <span className="time-entry-date">{formatDateOnly(locale, entry.document.performed_on)}</span>
-            <span className="time-entry-hours">{entry.document.hours} h</span>
-            <span className="time-entry-person">{personName(entry.document.person)}</span>
-            <span className="time-entry-category">{categories.find((category) => category.slug === entry.document.category)?.title ?? entry.document.category}</span>
-            {typeof entry.document.note_markdown === "string" && entry.document.note_markdown !== "" && <span className="time-entry-note">{entry.document.note_markdown}</span>}
-            {entry.document.state === "active" && !readOnly && <button className="text-link" disabled={busy} onClick={() => void voidEntry(entry)} type="button">{t("timeEffort.void")}</button>}
-          </li>
-        ))}
-        {entries.length === 0 && <li className="empty-copy">{t("timeEffort.empty")}</li>}
-      </ul>
-      {!readOnly && (
-        <form className="time-entry-form" onSubmit={createEntry}>
-          <label>{t("timeEffort.person")}<select disabled={busy} name="person" required>{activePeople.map((person) => <option key={person.document.id} value={person.document.id}>{person.document.name}</option>)}</select></label>
-          <label>{t("timeEffort.date")}<input disabled={busy} name="performed_on" required type="date" /></label>
-          <label>{t("timeEffort.hours")}<input disabled={busy} min="0.25" name="hours" required step="0.25" type="number" /></label>
-          <label>{t("timeEffort.category")}<select disabled={busy} name="category" required>{categories.map((category) => <option key={category.slug} value={category.slug}>{category.title}</option>)}</select></label>
-          <label>{t("timeEffort.note")}<input disabled={busy} name="note" type="text" /></label>
-          <button className="primary" disabled={busy} type="submit">{t("timeEffort.add")}</button>
-        </form>
+    <section className="task-time-entries">
+      <div className="task-time-entries-heading">
+        <h3><button aria-controls={`time-entry-body-${taskId}`} aria-expanded={open} className="section-toggle" onClick={() => setOpen((value) => !value)} type="button"><span aria-hidden="true" className="section-toggle-chevron">▾</span>{t("timeEffort.heading")}</button></h3>
+        <span className="task-time-entries-count">{activeCount}</span>
+      </div>
+      {open && (
+        <>
+          {error !== null && <div className="alert error">{error}</div>}
+          <dl className="time-entry-summary">
+            <div><dt>{t("timeEffort.totalHours")}</dt><dd>{totalHours || "—"}</dd></div>
+            <div><dt>{t("timeEffort.firstActivity")}</dt><dd>{actual?.start ? formatDateOnly(locale, actual.start) : "—"}</dd></div>
+            <div><dt>{t("timeEffort.lastActivity")}</dt><dd>{actual?.finish ? formatDateOnly(locale, actual.finish) : "—"}</dd></div>
+          </dl>
+          <ul className="time-entry-list">
+            {entries.map((entry) => (
+              <li key={entry.document.id} className={`time-entry-row${entry.document.state === "voided" ? " voided" : ""}`}>
+                <span className="time-entry-date">{formatDateOnly(locale, entry.document.performed_on)}</span>
+                <span className="time-entry-hours">{entry.document.hours} h</span>
+                <span className="time-entry-person">{personName(entry.document.person)}</span>
+                <span className="time-entry-category">{categories.find((category) => category.slug === entry.document.category)?.title ?? entry.document.category}</span>
+                {typeof entry.document.note_markdown === "string" && entry.document.note_markdown !== "" && <span className="time-entry-note">{entry.document.note_markdown}</span>}
+                {entry.document.state === "active" && !readOnly && <button className="text-link" disabled={busy} onClick={() => void voidEntry(entry)} type="button">{t("timeEffort.void")}</button>}
+              </li>
+            ))}
+            {entries.length === 0 && <li className="empty-copy">{t("timeEffort.empty")}</li>}
+          </ul>
+          {!readOnly && (
+            <form className="time-entry-form" onSubmit={createEntry}>
+              <label>{t("timeEffort.person")}<select defaultValue={defaultPersonId} disabled={busy} name="person" required>{activePeople.map((person) => <option key={person.document.id} value={person.document.id}>{person.document.name}</option>)}</select></label>
+              <label>{t("timeEffort.date")}<input defaultValue={today} disabled={busy} name="performed_on" required type="date" /></label>
+              <label>{t("timeEffort.hours")}<input disabled={busy} min="0.25" name="hours" required step="0.25" type="number" /></label>
+              <label>{t("timeEffort.category")}<select disabled={busy} name="category" required>{categories.map((category) => <option key={category.slug} value={category.slug}>{category.title}</option>)}</select></label>
+              <label>{t("timeEffort.note")}<input disabled={busy} name="note" type="text" /></label>
+              <button className="primary" disabled={busy} type="submit">{t("timeEffort.add")}</button>
+            </form>
+          )}
+        </>
       )}
     </section>
   );
