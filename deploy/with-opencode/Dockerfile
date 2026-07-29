@@ -15,6 +15,8 @@ FROM node:20.19.2-alpine
 
 RUN apk add --no-cache \
     bash \
+    bash-completion \
+    build-base \
     ca-certificates \
     caddy \
     coreutils \
@@ -24,22 +26,31 @@ RUN apk add --no-cache \
     gawk \
     git \
     grep \
+    htop \
     jq \
     less \
+    make \
     nano \
     openssh-client \
     openssl \
     procps \
+    py3-pip \
+    py3-virtualenv \
+    py3-yaml \
+    python3 \
     ripgrep \
     sed \
     sqlite \
     tar \
+    tmux \
     tree \
     tini \
     tzdata \
+    unzip \
     util-linux \
     vim \
     wget \
+    zip \
  && git config --system --add safe.directory /repository \
  && git config --system --add safe.directory /data/repository \
  && ln -sf /bin/true /usr/local/bin/xdg-open \

@@ -1,7 +1,22 @@
 FROM node:20.19.2-bookworm-slim
 
 RUN apt-get update \
-    && apt-get install --no-install-recommends -y ca-certificates git \
+    && apt-get install --no-install-recommends -y \
+       bash-completion \
+       build-essential \
+       ca-certificates \
+       git \
+       htop \
+       jq \
+       make \
+       python3 \
+       python3-pip \
+       python3-venv \
+       python3-yaml \
+       tmux \
+       tree \
+       unzip \
+       zip \
     && git config --system --add safe.directory /repository \
     && git config --system --add safe.directory /data/repository \
     && rm -rf /var/lib/apt/lists/*
