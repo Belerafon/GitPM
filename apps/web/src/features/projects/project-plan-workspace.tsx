@@ -402,7 +402,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
             </dl>
           </header>
 
-          <ProjectSnapshot project={workspace.project.document} locale={locale} />
+          <ProjectSnapshot project={workspace.project.document} locale={locale} api={api} draft={draft} tasks={workspace.tasks} />
 
           <dl className="project-plan-summary">
             <div><dt>{t("projectPlan.progress")}</dt><dd>{progress}% <small>{t("stages.progress", { completed, count: activeTasks.length })}</small></dd></div>

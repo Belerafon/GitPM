@@ -924,7 +924,7 @@ Worktree: `D:\other_projects\GitPM-worktrees\feat-multi-track-scheduling`
 - [x] 5. Факт дискретными сегментами (движок + UI-список + маркеры на Ганте)
 - [x] 6. TimeEntry в завершённую задачу
 - [x] 7. Агрегация факта по задаче/этапу/проекту
-- [~] 8. Часы после окончания графика (движок + CLI `--after` + variance; в дашборде UI — TODO)
+- [x] 8. Часы после окончания графика (движок + CLI `--after` + variance и часы-после в дашборде UI)
 - [~] 9. Workload по выбранному контуру (UI читает schedules; явный workload_track — TODO)
 - [x] 10. Нет старых корневых полей
 - [x] 11. Нет compatibility layer / v1

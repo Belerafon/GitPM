@@ -1,5 +1,8 @@
+import { useEffect, useState } from "react";
+import { actualWindow, hoursAfterDate, sumHours } from "@gitpm/time-entries";
 import { formatDateOnly, type Locale } from "../../i18n.js";
-import type { EntityDocument } from "../../types.js";
+import type { GitPmApi } from "../../api.js";
+import type { DraftStatus, EntityDocument, EntityResult } from "../../types.js";
 
 const DAY_MS = 86_400_000;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/u;
@@ -14,21 +17,51 @@ function varianceDays(primary: string, comparison: string): number {
   return Math.round((Date.parse(`${primary}T00:00:00Z`) - Date.parse(`${comparison}T00:00:00Z`)) / DAY_MS);
 }
 
-export function ProjectSnapshot({ project, locale, comparisonTrack }: { readonly project: EntityDocument; readonly locale: Locale; readonly comparisonTrack?: string }) {
+export function ProjectSnapshot({ project, locale, api, draft, tasks, comparisonTrack }: { readonly project: EntityDocument; readonly locale: Locale; readonly api?: GitPmApi; readonly draft?: DraftStatus; readonly tasks?: readonly EntityResult[]; readonly comparisonTrack?: string }) {
   const planning = project.planning as { readonly primary_track?: string; readonly comparison_track?: string } | undefined;
   const primaryTrack = planning?.primary_track ?? "plan";
   const comparison = comparisonTrack ?? planning?.comparison_track;
   const primaryFinish = finishOf(project, primaryTrack);
   const comparisonFinish = finishOf(project, comparison);
-  if (primaryFinish === undefined && comparisonFinish === undefined) return null;
+  const [actual, setActual] = useState<{ total: number; lastActivity?: string; hoursAfter?: number } | null>(null);
+
+  useEffect(() => {
+    if (api === undefined || draft === undefined || tasks === undefined || tasks.length === 0) { setActual(null); return; }
+    let active = true;
+    void (async () => {
+      try {
+        const records = (await Promise.all(tasks.map(async (task) => (await api.listTimeEntries(draft.draft_id, String(project.id), String(task.document.id))).map((entry) => ({
+          id: entry.document.id, project: String(project.id), task: String(task.document.id), person: entry.document.person,
+          performed_on: entry.document.performed_on, hours: entry.document.hours, category: entry.document.category, state: entry.document.state,
+        }))))).flat();
+        if (!active) return;
+        const window = actualWindow(records);
+        setActual({
+          total: sumHours(records),
+          lastActivity: window?.finish,
+          hoursAfter: comparisonFinish !== undefined ? hoursAfterDate(records, comparisonFinish) : undefined,
+        });
+      } catch {
+        if (active) setActual(null);
+      }
+    })();
+    return () => { active = false; };
+  }, [api, draft, project.id, tasks, comparisonFinish]);
+
+  if (primaryFinish === undefined && comparisonFinish === undefined && actual === null) return null;
   const variance = primaryFinish !== undefined && comparisonFinish !== undefined ? varianceDays(primaryFinish, comparisonFinish) : undefined;
   return (
     <section className="card project-snapshot">
       <h3>Project snapshot</h3>
       <dl>
-        <div><dt>Primary finish</dt><dd>{primaryFinish ? formatDateOnly(locale, primaryFinish) : "—"}</dd></div>
-        {comparison !== undefined && <div><dt>Comparison finish</dt><dd>{comparisonFinish ? formatDateOnly(locale, comparisonFinish) : "—"}</dd></div>}
+        {primaryFinish !== undefined && <div><dt>Primary finish</dt><dd>{formatDateOnly(locale, primaryFinish)}</dd></div>}
+        {comparison !== undefined && comparisonFinish !== undefined && <div><dt>Comparison finish</dt><dd>{formatDateOnly(locale, comparisonFinish)}</dd></div>}
         {variance !== undefined && <div><dt>Variance</dt><dd data-variance={variance}>{variance === 0 ? "on time" : variance > 0 ? `+${variance} d` : `${variance} d`}</dd></div>}
+        {actual !== null && <>
+          <div><dt>Actual hours</dt><dd>{actual.total || "—"}</dd></div>
+          {actual.lastActivity !== undefined && <div><dt>Last activity</dt><dd>{formatDateOnly(locale, actual.lastActivity)}</dd></div>}
+          {actual.hoursAfter !== undefined && comparisonFinish !== undefined && <div><dt>Hours after {comparisonFinish}</dt><dd>{actual.hoursAfter}</dd></div>}
+        </>}
       </dl>
     </section>
   );
