@@ -25,6 +25,7 @@ export type {
   MergeRequestStatus,
   NotificationsResult,
   ProjectWorkspaceResult,
+  ProjectPlanning,
   PublicSession,
   PushResult,
   RepositoryConnectionStatus,

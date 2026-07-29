@@ -11,7 +11,7 @@ import { discoverRepositoryFiles, validateRepository } from "@gitpm/validation";
 import { atomicWriteDomainFile } from "@gitpm/security";
 import type { AgentScope, AgentScopeReport, AgentWorkflow } from "@gitpm/agent";
 import type { DirectCliRuntime } from "./direct-runtime.js";
-import { parseCsvEntities, parseEntityMapping, parseJsonLinesEntities, parseYamlEntities } from "./entity-input.js";
+import { parseCsvEntities, parseEntityMapping, parseJsonLinesEntities, parseYamlEntities, nestScheduleColumns } from "./entity-input.js";
 import type { ExportFormat, ExportProvider, ExportRequest, ExportSection } from "@gitpm/export";
 
 export interface CliResult {
@@ -625,13 +625,15 @@ async function runEntity(args: readonly string[], cwd: string, dependencies: Cli
     const requestedType = required(entityType, "--type");
     const dryRun = args.includes("--dry-run");
     const rowOffset = format === "csv" ? 2 : 1;
+    const scheduleTrack = direct === undefined ? "" : await readDefaultPrimaryTrack(direct);
+    const preparedDocuments = scheduleTrack === "" ? documents : documents.map((document) => nestScheduleColumns(document, scheduleTrack));
     let imported;
     try {
       imported = agent === undefined
-        ? await direct!.createEntities(documents, requestedType, agentScope(args), dryRun)
+        ? await direct!.createEntities(preparedDocuments, requestedType, agentScope(args), dryRun)
         : agent.createEntities === undefined
           ? (() => { throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Atomic entity import is unavailable"); })()
-          : await agent.createEntities(required(draftId, "--draft"), documents, requestedType, agentScope(args), dryRun);
+          : await agent.createEntities(required(draftId, "--draft"), preparedDocuments, requestedType, agentScope(args), dryRun);
     } catch (error) {
       if (error !== null && typeof error === "object" && "details" in error && Array.isArray(error.details)) {
         error.details = error.details.map((detail) => detail !== null && typeof detail === "object" && "source_index" in detail && typeof detail.source_index === "number"
@@ -654,6 +656,17 @@ async function runEntity(args: readonly string[], cwd: string, dependencies: Cli
     exitCode: 0,
     output: render(json, { ok: true, code: "OK", ...created }, `Created ${created.path}`),
   };
+}
+
+async function readDefaultPrimaryTrack(direct: DirectCliRuntime): Promise<string> {
+  try {
+    const result = await direct.getConfiguration("schedule-tracks");
+    const defaults = (result.document as { defaults?: { primary_track?: unknown } | null }).defaults;
+    const primaryTrack = defaults?.primary_track;
+    return typeof primaryTrack === "string" ? primaryTrack : "";
+  } catch {
+    return "";
+  }
 }
 
 async function runPush(args: readonly string[], dependencies: CliDependencies): Promise<CliResult> {

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
-import { scheduleText, scheduleEffort } from "./schedules.js";
+import { scheduleText, scheduleWindows, scheduleDependencies, ScheduleResolver, scheduleTracksConfig } from "./schedules.js";
 import type { GitPmApi } from "./api.js";
 import { buildTaskHierarchy } from "@gitpm/task-hierarchy";
 import { formatDateOnly, message, type Locale, type MessageKey } from "./i18n.js";
-import type { DraftStatus, EntityResult, GitPmDocument } from "./types.js";
+import type { ConfigurationResult, DraftStatus, EntityResult, GitPmDocument } from "./types.js";
 import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
 import type { WorkspaceNavigate } from "./workspace-navigation.js";
 
@@ -14,32 +14,22 @@ const GANTT_BAR_TOP = 51;
 const GANTT_BAR_HEIGHT = 36;
 const DEPENDENCY_CLEARANCE = 16;
 const DEPENDENCY_COLORS = ["#6c5c91", "#b24c63", "#2f6f9f", "#9a5b13", "#8a4f9e", "#c2410c", "#4361a3", "#39796b", "#8b3a3a", "#7a5c00", "#ad3f8c", "#3e6f2b"] as const;
-const text = (document: GitPmDocument, key: string) => key === "start" || key === "due" ? scheduleText(document, key) : typeof document[key] === "string" ? document[key] as string : "";
-const strings = (value: unknown): readonly string[] => Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+const textReader = (track: string) => (document: GitPmDocument, key: string) => key === "start" || key === "due" ? scheduleText(document, key, track) : typeof document[key] === "string" ? document[key] as string : "";
 const dayNumber = (value: string) => Math.floor(Date.parse(`${value}T00:00:00Z`) / DAY_MS);
 const isoDate = (day: number) => new Date(day * DAY_MS).toISOString().slice(0, 10);
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/u;
 
-interface TrackWindow { readonly track: string; readonly start: string; readonly finish: string }
-
-function scheduleWindows(document: GitPmDocument): readonly TrackWindow[] {
-  const schedules = document.schedules as Readonly<Record<string, { readonly start?: string; readonly finish?: string }>> | undefined;
-  if (schedules === undefined) return [];
-  const windows: TrackWindow[] = [];
-  for (const [track, window] of Object.entries(schedules)) {
-    if (window === null || typeof window !== "object") continue;
-    const start = typeof window.start === "string" ? window.start : undefined;
-    const finish = typeof window.finish === "string" ? window.finish : undefined;
-    if (start !== undefined && finish !== undefined && ISO_DATE.test(start) && ISO_DATE.test(finish) && dayNumber(start) <= dayNumber(finish)) {
-      windows.push({ track, start, finish });
-    }
-  }
-  return windows;
-}
-
-function primaryTrackOf(document: GitPmDocument): string | undefined {
-  const windows = scheduleWindows(document);
-  return windows.find((window) => window.track === "plan")?.track ?? windows[0]?.track;
+function datedWindows(document: GitPmDocument): readonly { readonly track: string; readonly start: string; readonly finish: string }[] {
+  return scheduleWindows(document)
+    .map((window) => {
+      const start = typeof window.start === "string" ? window.start : undefined;
+      const finish = typeof window.finish === "string" ? window.finish : undefined;
+      if (start !== undefined && finish !== undefined && ISO_DATE.test(start) && ISO_DATE.test(finish) && dayNumber(start) <= dayNumber(finish)) {
+        return { track: window.track, start, finish };
+      }
+      return undefined;
+    })
+    .filter((window): window is { readonly track: string; readonly start: string; readonly finish: string } => window !== undefined);
 }
 
 export function dependencyPath(x1: number, y1: number, x2: number, y2: number): string {
@@ -78,7 +68,8 @@ export interface GanttModel {
   readonly dependencies: readonly { readonly from: string; readonly to: string }[];
 }
 
-export function buildGanttModel(tasks: readonly EntityResult[], milestones: readonly EntityResult[], actual: ReadonlyMap<string, readonly { readonly date: string; readonly hours: number }[]> = new Map()): GanttModel | null {
+export function buildGanttModel(tasks: readonly EntityResult[], milestones: readonly EntityResult[], actual: ReadonlyMap<string, readonly { readonly date: string; readonly hours: number }[]> = new Map(), primaryTrack = ""): GanttModel | null {
+  const text = textReader(primaryTrack);
   const dated = tasks.filter((item) => item.document.lifecycle === "active" && /^\d{4}-\d{2}-\d{2}$/u.test(text(item.document, "start")) && /^\d{4}-\d{2}-\d{2}$/u.test(text(item.document, "due")) && dayNumber(text(item.document, "start")) <= dayNumber(text(item.document, "due")));
   if (dated.length === 0) return null;
   const byId = new Map(dated.map((item) => [item.document.id, item]));
@@ -96,14 +87,13 @@ export function buildGanttModel(tasks: readonly EntityResult[], milestones: read
   const last = Math.max(...dated.map((item) => dayNumber(text(item.document, "due"))), ...activeMilestones.map((item) => dayNumber(text(item.document, "due"))));
   const days = Array.from({ length: last - first + 1 }, (_, index) => isoDate(first + index));
   const rows = ordered.map((entity): GanttRow => {
-    const primaryTrack = primaryTrackOf(entity.document);
-    const overlays = scheduleWindows(entity.document)
+    const overlays = datedWindows(entity.document)
       .filter((window) => window.track !== primaryTrack)
       .map((window): GanttOverlay => ({ track: window.track, start: window.start, finish: window.finish, startOffset: dayNumber(window.start) - first, duration: dayNumber(window.finish) - dayNumber(window.start) + 1 }));
     return {
       entity, id: entity.document.id, title: text(entity.document, "title"), start: text(entity.document, "start"), due: text(entity.document, "due"),
       startOffset: dayNumber(text(entity.document, "start")) - first, duration: dayNumber(text(entity.document, "due")) - dayNumber(text(entity.document, "start")) + 1,
-      depth: hierarchy.depthOf(entity.document.id), milestone: text(entity.document, "milestone") || undefined, dependencies: strings(entity.document.depends_on).filter((id) => byId.has(id)),
+      depth: hierarchy.depthOf(entity.document.id), milestone: text(entity.document, "milestone") || undefined, dependencies: scheduleDependencies(entity.document, primaryTrack).filter((id) => byId.has(id)),
       overlays,
       actual: (actual.get(entity.document.id) ?? []).filter((segment) => ISO_DATE.test(segment.date) && dayNumber(segment.date) >= first && dayNumber(segment.date) <= last).map((segment): GanttActualMarker => ({ date: segment.date, hours: segment.hours, offset: dayNumber(segment.date) - first })),
     };
@@ -125,15 +115,17 @@ export function GanttWorkspace({ api, draft, locale, initialProjectId = "", onNa
   const [dayWidth, setDayWidth] = useState(36);
   const [error, setError] = useState<string | null>(null);
   const [actual, setActual] = useState<ReadonlyMap<string, readonly { readonly date: string; readonly hours: number }[]>>(new Map());
+  const [tracksConfig, setTracksConfig] = useState<ConfigurationResult | null>(null);
   const loadRequest = useAsyncLoad();
   const load = useCallback(async (preferredProject = projectId) => {
     await loadRequest.run(async () => {
-      const nextProjects = (await api.listEntities(draft.draft_id, "projects")).filter((item) => item.document.lifecycle === "active");
+      const [allProjects, tracksDocument] = await Promise.all([api.listEntities(draft.draft_id, "projects"), api.getConfiguration(draft.draft_id, "schedule-tracks")]);
+      const nextProjects = allProjects.filter((item) => item.document.lifecycle === "active");
       const nextProject = nextProjects.some((item) => item.document.id === preferredProject) ? preferredProject : nextProjects[0]?.document.id ?? "";
       const [nextTasks, nextMilestones] = nextProject === "" ? [[], []] : await Promise.all([api.listEntities(draft.draft_id, "tasks", nextProject), api.listEntities(draft.draft_id, "milestones", nextProject)]);
-      return { nextProjects, nextProject, nextTasks, nextMilestones };
-    }, ({ nextProjects, nextProject, nextTasks, nextMilestones }) => {
-      setProjects(nextProjects); setProjectId(nextProject); setTasks(nextTasks); setMilestones(nextMilestones); setError(null);
+      return { nextProjects, nextProject, nextTasks, nextMilestones, tracksDocument };
+    }, ({ nextProjects, nextProject, nextTasks, nextMilestones, tracksDocument }) => {
+      setProjects(nextProjects); setProjectId(nextProject); setTasks(nextTasks); setMilestones(nextMilestones); setError(null); setTracksConfig(tracksDocument);
       void loadActual(nextProject, nextTasks);
     });
   }, [api, draft.draft_id, loadRequest.run, projectId]);
@@ -153,7 +145,10 @@ export function GanttWorkspace({ api, draft, locale, initialProjectId = "", onNa
     }
   }, [api, draft.draft_id]);
   useEffect(() => { void load(initialProjectId); }, [draft.draft_id, draft.external_fingerprint]);
-  const model = useMemo(() => buildGanttModel(tasks, milestones, actual), [tasks, milestones, actual]);
+  const scheduling = useMemo(() => new ScheduleResolver(scheduleTracksConfig(tracksConfig?.document)), [tracksConfig]);
+  const primaryTrack = scheduling.primaryTrack(projects.find((item) => item.document.id === projectId)?.document.planning);
+  const text = useMemo(() => textReader(primaryTrack), [primaryTrack]);
+  const model = useMemo(() => buildGanttModel(tasks, milestones, actual, primaryTrack), [tasks, milestones, actual, primaryTrack]);
   const secondaryTracks = useMemo(() => [...new Set(model?.rows.flatMap((row) => row.overlays.map((overlay) => overlay.track)) ?? [])].sort(), [model]);
   const [hiddenTracks, setHiddenTracks] = useState<ReadonlySet<string>>(new Set());
   const visibleOverlays = (row: GanttRow) => row.overlays.filter((overlay) => !hiddenTracks.has(overlay.track));

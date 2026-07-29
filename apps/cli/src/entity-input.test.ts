@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseCsvEntities, parseJsonLinesEntities, parseYamlEntities } from "./entity-input.js";
+import { nestScheduleColumns, parseCsvEntities, parseJsonLinesEntities, parseYamlEntities } from "./entity-input.js";
 
 describe("CLI entity import parsers", () => {
   it("parses UTF-8 CSV, quoted commas, CRLF and numeric fields", () => {
@@ -17,5 +17,14 @@ describe("CLI entity import parsers", () => {
   it("parses YAML arrays and JSON Lines mappings", () => {
     expect(parseYamlEntities("- name: Ada\n- name: Grace\n", "people.yaml")).toEqual([{ name: "Ada" }, { name: "Grace" }]);
     expect(parseJsonLinesEntities('{"name":"Ada"}\n{"name":"Grace"}\n', "people.jsonl")).toEqual([{ name: "Ada" }, { name: "Grace" }]);
+  });
+
+  it("nests legacy schedule columns under the resolved track instead of the document root", () => {
+    expect(nestScheduleColumns({ title: "Ship", start: "2026-08-01", due: "2026-08-05", estimate_hours: 12, depends_on: ["T-1"], assignees: [] }, "working"))
+      .toEqual({ title: "Ship", assignees: [], schedules: { working: { start: "2026-08-01", finish: "2026-08-05", effort_hours: 12, depends_on: ["T-1"] } } });
+  });
+
+  it("leaves records unchanged when no track is resolved and never invents a plan track", () => {
+    expect(nestScheduleColumns({ title: "Ship", start: "2026-08-01" }, "")).toEqual({ title: "Ship" });
   });
 });

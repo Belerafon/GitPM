@@ -12,6 +12,7 @@
   "dependencies": {
     "@gitpm/calendar": "workspace:*",
     "@gitpm/contracts": "workspace:*",
+    "@gitpm/scheduling": "workspace:*",
     "@gitpm/shared": "workspace:*",
     "@gitpm/task-hierarchy": "workspace:*",
     "@gitpm/time-entries": "workspace:*",

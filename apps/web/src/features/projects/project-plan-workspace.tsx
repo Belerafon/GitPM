@@ -1,5 +1,5 @@
 import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
-import { scheduleText, scheduleEffort, buildSchedule } from "../../schedules.js";
+import { buildSchedule, ScheduleResolver, scheduleTracksConfig, scheduleTextReader, scheduleEffortReader } from "../../schedules.js";
 import { isCompletedStatus } from "../../status-categories.js";
 import { ProjectSnapshot } from "./project-snapshot.js";
 import { buildTaskHierarchy } from "@gitpm/task-hierarchy";
@@ -12,7 +12,7 @@ import { EntityCatalog } from "../../entity-catalog.js";
 import { useExternalHighlights, useReducedMotion } from "../../external-updates.js";
 import { formatDateOnly, formatDurationHours, message, type Locale, type MessageKey } from "../../i18n.js";
 import { upsertEntity, useFlipList } from "../../optimistic-ui.js";
-import type { DraftStatus, EntityDocument, EntityResult, GitPmDocument, ProjectWorkspaceResult } from "../../types.js";
+import type { ConfigurationResult, DraftStatus, EntityDocument, EntityResult, GitPmDocument, ProjectWorkspaceResult } from "../../types.js";
 import type { WorkspaceNavigate } from "../../workspace-navigation.js";
 import { PersonLinks } from "../../person-link.js";
 import { DraftReadOnlyAlert, draftReadOnlyReason } from "../../draft-read-only.js";
@@ -34,8 +34,7 @@ const readTaskFields = (): TaskFieldVisibility => {
 };
 const writeTaskFields = (fields: TaskFieldVisibility) => { try { localStorage.setItem(TASK_FIELDS_STORAGE_KEY, JSON.stringify(fields)); } catch { /* Browser storage may be unavailable. */ } };
 
-const text = (document: Readonly<Record<string, unknown>>, key: string): string => key === "start" || key === "due" ? scheduleText(document, key) : typeof document[key] === "string" ? document[key] as string : "";
-const number = (document: Readonly<Record<string, unknown>>, key: string): number | undefined => key === "estimate_hours" ? scheduleEffort(document) : typeof document[key] === "number" ? document[key] as number : undefined;
+const parentOf = (document: Readonly<Record<string, unknown>>): string | undefined => typeof document.parent === "string" ? document.parent : undefined;
 const strings = (document: Readonly<Record<string, unknown>>, key: string): string[] => Array.isArray(document[key]) ? (document[key] as unknown[]).filter((item): item is string => typeof item === "string") : [];
 const configValues = (document: Readonly<Record<string, unknown>>, key: "statuses" | "issue_types"): ConfigValue[] => Array.isArray(document[key])
   ? (document[key] as unknown[]).filter((item): item is ConfigValue => typeof item === "object" && item !== null && typeof (item as ConfigValue).slug === "string" && typeof (item as ConfigValue).title === "string" && (item as ConfigValue).active === true)
@@ -52,14 +51,14 @@ const moveId = (ids: readonly string[], id: string, offset: -1 | 1): string[] | 
   const next = [...ids]; [next[from], next[to]] = [next[to]!, next[from]!];
   return next;
 };
-const compareTasks = (left: EntityResult, right: EntityResult, locale: Locale) => {
+const compareTasks = (left: EntityResult, right: EntityResult, locale: Locale, text: (document: Readonly<Record<string, unknown>>, key: string) => string) => {
   const byTitle = text(left.document, "title").localeCompare(text(right.document, "title"), locale) || left.document.id.localeCompare(right.document.id);
   const byCompletion = Number(text(left.document, "status") === "done") - Number(text(right.document, "status") === "done");
   const byDue = (text(left.document, "due") || "9999-12-31").localeCompare(text(right.document, "due") || "9999-12-31");
   return byCompletion || byDue || byTitle;
 };
 const taskHierarchy = (tasks: readonly EntityResult[], order: readonly string[] = []) => buildTaskHierarchy(
-  tasks.map((entity) => ({ id: entity.document.id, parent: text(entity.document, "parent") || undefined, entity })),
+  tasks.map((entity) => ({ id: entity.document.id, parent: parentOf(entity.document), entity })),
   { order },
 );
 
@@ -84,6 +83,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   const [people, setPeople] = useState<readonly EntityResult[]>([]);
   const [statuses, setStatuses] = useState<readonly ConfigValue[]>([]);
   const [types, setTypes] = useState<readonly ConfigValue[]>([]);
+  const [tracksConfig, setTracksConfig] = useState<ConfigurationResult | null>(null);
   const [editor, setEditor] = useState<PlanEditor>(null);
   const [statusFilter, setStatusFilter] = useState(initialStatusFilter);
   const [milestoneFilter, setMilestoneFilter] = useState(initialMilestoneFilter);
@@ -96,23 +96,31 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   const animatedList = useFlipList(reducedMotion);
   const readOnly = draftReadOnlyReason(draft) !== null;
 
+  const scheduling = useMemo(() => new ScheduleResolver(scheduleTracksConfig(tracksConfig?.document)), [tracksConfig]);
+  const primaryTrack = scheduling.primaryTrack(workspace?.project.document.planning);
+  const text = useMemo(() => scheduleTextReader(primaryTrack), [primaryTrack]);
+  const effortOf = useMemo(() => scheduleEffortReader(primaryTrack), [primaryTrack]);
+  const number = useMemo(() => (document: Readonly<Record<string, unknown>>, key: string): number | undefined => key === "estimate_hours" ? effortOf(document) : typeof document[key] === "number" ? document[key] as number : undefined, [effortOf]);
+
   const load = useCallback(async () => {
     await loader.run(async () => {
-      const [nextWorkspace, nextProjects, nextPeople, statusConfig, typeConfig] = await Promise.all([
+      const [nextWorkspace, nextProjects, nextPeople, statusConfig, typeConfig, tracksDocument] = await Promise.all([
         api.projectWorkspace(draft.draft_id, projectId),
         api.listEntities(draft.draft_id, "projects"),
         api.listEntities(draft.draft_id, "people"),
         api.getConfiguration(draft.draft_id, "statuses"),
         api.getConfiguration(draft.draft_id, "issue-types"),
+        api.getConfiguration(draft.draft_id, "schedule-tracks"),
       ]);
-      return { nextWorkspace, nextProjects, nextPeople, statusConfig, typeConfig };
-    }, ({ nextWorkspace, nextProjects, nextPeople, statusConfig, typeConfig }) => {
+      return { nextWorkspace, nextProjects, nextPeople, statusConfig, typeConfig, tracksDocument };
+    }, ({ nextWorkspace, nextProjects, nextPeople, statusConfig, typeConfig, tracksDocument }) => {
       setWorkspace(nextWorkspace);
       setProjects(nextProjects.filter((item) => item.document.lifecycle === "active"));
       setAvailableProjectGroups(existingProjectGroups(nextProjects, locale));
       setPeople(nextPeople.filter((item) => item.document.lifecycle === "active"));
       setStatuses(configValues(statusConfig.document, "statuses"));
       setTypes(configValues(typeConfig.document, "issue_types"));
+      setTracksConfig(tracksDocument);
     });
   }, [api, draft.draft_id, draft.fingerprint, loader.run, locale, projectId]);
 
@@ -187,8 +195,8 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     return byOrder || byDue || text(left.document, "name").localeCompare(text(right.document, "name"), locale);
   }), [locale, workspace]);
   const activeTasks = useMemo(
-    () => [...(workspace?.tasks.filter((item) => item.document.lifecycle === "active") ?? [])].sort((left, right) => compareTasks(left, right, locale)),
-    [locale, workspace],
+    () => [...(workspace?.tasks.filter((item) => item.document.lifecycle === "active") ?? [])].sort((left, right) => compareTasks(left, right, locale, text)),
+    [locale, text, workspace],
   );
   const visibleTasks = useMemo(() => activeTasks.filter((task) =>
     (statusFilter === "" || text(task.document, "status") === statusFilter)
@@ -285,7 +293,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
       status: String(data.get("status")),
       description_markdown: String(data.get("description")),
       owner: owner || undefined,
-      schedules: buildSchedule(start, due, ""),
+      schedules: buildSchedule(primaryTrack, start, due, ""),
     } as EntityDocument;
     const writableDocument = document as unknown as Record<string, unknown>;
     if (selectedGroup.group === "") delete writableDocument.group;
@@ -298,7 +306,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     if (workspace === null) return;
     const data = new FormData(event.currentTarget);
     const id = newUniqueEntityId(ENTITY_ID_PREFIX.milestone, new Set(workspace.milestones.map((item) => item.document.id)));
-    const document = { schema: "gitpm/milestone@2", id, project: projectId, name: String(data.get("name")).trim(), lifecycle: "active", description_markdown: String(data.get("description")), ...(buildSchedule("", String(data.get("due") ?? ""), "") ? { schedules: buildSchedule("", String(data.get("due") ?? ""), "") } : {}) } as EntityDocument;
+    const document = { schema: "gitpm/milestone@2", id, project: projectId, name: String(data.get("name")).trim(), lifecycle: "active", description_markdown: String(data.get("description")), ...(buildSchedule(primaryTrack, "", String(data.get("due") ?? ""), "") ? { schedules: buildSchedule(primaryTrack, "", String(data.get("due") ?? ""), "") } : {}) } as EntityDocument;
     void mutate(async () => await api.createEntity(draft.draft_id, "milestones", workspace.draft_fingerprint, document));
   };
 
@@ -309,7 +317,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     if (stage === undefined) return;
     const data = new FormData(event.currentTarget);
     const due = String(data.get("due"));
-    const document = { ...stage.document, name: String(data.get("name")).trim(), description_markdown: String(data.get("description")), schedules: buildSchedule("", due, "") } as EntityDocument;
+    const document = { ...stage.document, name: String(data.get("name")).trim(), description_markdown: String(data.get("description")), schedules: buildSchedule(primaryTrack, "", due, "") } as EntityDocument;
     void mutate(async () => await api.updateEntity(draft.draft_id, "milestones", stage, workspace.draft_fingerprint, document));
   };
 
@@ -332,7 +340,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
       assignees: data.getAll("assignees").map(String),
       ...(editor.parentId === undefined ? {} : { parent: editor.parentId }),
       ...(editor.stageId === undefined ? {} : { milestone: editor.stageId }),
-      ...(buildSchedule(start, due, estimate) ? { schedules: buildSchedule(start, due, estimate) } : {}),
+      ...(buildSchedule(primaryTrack, start, due, estimate) ? { schedules: buildSchedule(primaryTrack, start, due, estimate) } : {}),
     } as EntityDocument;
     void mutate(async () => await api.createEntity(draft.draft_id, "tasks", workspace.draft_fingerprint, document));
   };
@@ -402,7 +410,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
             </dl>
           </header>
 
-          <ProjectSnapshot project={workspace.project.document} locale={locale} api={api} draft={draft} tasks={workspace.tasks} />
+          <ProjectSnapshot project={workspace.project.document} locale={locale} api={api} draft={draft} tasks={workspace.tasks} scheduling={scheduling} />
 
           <dl className="project-plan-summary">
             <div><dt>{t("projectPlan.progress")}</dt><dd>{progress}% <small>{t("stages.progress", { completed, count: activeTasks.length })}</small></dd></div>
@@ -448,11 +456,13 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
               tasks={visibleTasks.filter((task) => task.document.milestone === stage.document.id)}
               taskFields={taskFields}
               changedTaskIds={new Set(Object.keys(recentChanges))}
+              text={text}
+              number={number}
               t={t}
             />)}
             {(milestoneFilter === "" || milestoneFilter === "none") && <section className={`project-plan-stage project-plan-unassigned${visibleOutsideStages.length > 0 ? " has-work" : ""}`}>
               <header><div><span className="project-plan-stage-kind">{t("projectPlan.systemGroup")}</span><h3>{t("projectPlan.unassignedHeading")}</h3><p>{t("projectPlan.unassignedDescription")}</p></div><div className="project-plan-stage-actions"><button disabled={readOnly} onClick={() => setEditor({ kind: "task" })}>+ {t("core.createTaskAction")}</button></div></header>
-              <TaskRows allTasks={outsideStages} locale={locale} onNavigate={onNavigate} onNewSubtask={(parentId) => setEditor({ kind: "task", parentId })} onStatusChange={changeTaskStatus} people={people} projectId={projectId} query={navigationQuery} readOnly={readOnly} savingTaskIds={new Set([...(orderPending ?? []), ...(statusPending === null ? [] : [statusPending])])} selectedTaskId={selectedTaskId} statusBusy={statusPending !== null} statusOptions={statuses} statusTitle={statusTitle} taskFields={taskFields} tasks={visibleOutsideStages} t={t} />
+              <TaskRows allTasks={outsideStages} locale={locale} onNavigate={onNavigate} onNewSubtask={(parentId) => setEditor({ kind: "task", parentId })} onStatusChange={changeTaskStatus} people={people} projectId={projectId} query={navigationQuery} readOnly={readOnly} savingTaskIds={new Set([...(orderPending ?? []), ...(statusPending === null ? [] : [statusPending])])} selectedTaskId={selectedTaskId} statusBusy={statusPending !== null} statusOptions={statuses} statusTitle={statusTitle} taskFields={taskFields} tasks={visibleOutsideStages} text={text} number={number} t={t} />
             </section>}
           </section>
         </div>
@@ -466,7 +476,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
 
         {selectedTask !== undefined && <aside className="project-plan-inspector task-inspector" aria-label={t("core.details")}>
           <button aria-label={t("core.closeEditor")} className="inspector-close" onClick={closeInspector} title={t("core.closeEditor")} type="button">×</button>
-          <TaskPanel api={api} catalog={catalog} confirmCommentDelete={() => confirmAction(t("comments.deleteConfirm"))} confirmDelete={(name) => confirmAction(t("core.deleteConfirm", { name }))} draft={draft} entity={selectedTask} fingerprint={workspace.draft_fingerprint} key={selectedTask.document.id} locale={locale} milestones={workspace.milestones} onCommentChanged={async (nextFingerprint) => { setWorkspace((current) => current === null ? current : { ...current, draft_fingerprint: nextFingerprint }); await onChanged(); }} onDeleted={closeInspector} onNavigate={onNavigate} onStatusChange={(status) => changeTaskStatus(selectedTask, status)} people={people} projects={projects} readOnly={readOnly} remove={removeEntity} save={saveEntity} statusBusy={statusPending !== null} statusOptions={statuses} tasks={workspace.tasks} typeOptions={types} />
+          <TaskPanel api={api} catalog={catalog} confirmCommentDelete={() => confirmAction(t("comments.deleteConfirm"))} confirmDelete={(name) => confirmAction(t("core.deleteConfirm", { name }))} draft={draft} entity={selectedTask} fingerprint={workspace.draft_fingerprint} key={selectedTask.document.id} locale={locale} milestones={workspace.milestones} onCommentChanged={async (nextFingerprint) => { setWorkspace((current) => current === null ? current : { ...current, draft_fingerprint: nextFingerprint }); await onChanged(); }} onDeleted={closeInspector} onNavigate={onNavigate} onStatusChange={(status) => changeTaskStatus(selectedTask, status)} people={people} projects={projects} readOnly={readOnly} remove={removeEntity} save={saveEntity} statusBusy={statusPending !== null} statusOptions={statuses} tasks={workspace.tasks} typeOptions={types} value={text} effortString={(document) => { const e = effortOf(document); return typeof e === "number" ? String(e) : ""; }} track={primaryTrack} />
         </aside>}
       </div>}
     </AsyncBoundary>
@@ -522,7 +532,10 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   </section>;
 }
 
-function StageSection({ stage, tasks, allTasks, stageIndex, stageCount, projectId, query, locale, people, readOnly, orderBusy, selected, changed, saving, selectedTaskId, changedTaskIds, savingTaskIds, statusTitle, statusOptions, statusBusy, taskFields, onNewTask, onNewSubtask, onMoveStage, onMoveTask, onStatusChange, onNavigate, t }: {
+type ScheduleTextReader = (document: Readonly<Record<string, unknown>>, key: string) => string;
+type ScheduleNumberReader = (document: Readonly<Record<string, unknown>>, key: string) => number | undefined;
+
+function StageSection({ stage, tasks, allTasks, stageIndex, stageCount, projectId, query, locale, people, readOnly, orderBusy, selected, changed, saving, selectedTaskId, changedTaskIds, savingTaskIds, statusTitle, statusOptions, statusBusy, taskFields, text, number, onNewTask, onNewSubtask, onMoveStage, onMoveTask, onStatusChange, onNavigate, t }: {
   readonly stage: EntityResult;
   readonly tasks: readonly EntityResult[];
   readonly allTasks: readonly EntityResult[];
@@ -544,6 +557,8 @@ function StageSection({ stage, tasks, allTasks, stageIndex, stageCount, projectI
   readonly statusOptions: readonly ConfigValue[];
   readonly statusBusy: boolean;
   readonly taskFields: TaskFieldVisibility;
+  readonly text: ScheduleTextReader;
+  readonly number: ScheduleNumberReader;
   readonly onNewTask: () => void;
   readonly onNewSubtask: (parentId: string) => void;
   readonly onMoveStage: (offset: -1 | 1) => void;
@@ -566,11 +581,11 @@ function StageSection({ stage, tasks, allTasks, stageIndex, stageCount, projectI
       <div className="project-plan-stage-actions"><span className="plan-order-controls"><button aria-label={t("projectPlan.moveStageUp", { number: stageIndex + 1 })} disabled={readOnly || orderBusy || stageIndex === 0} onClick={() => onMoveStage(-1)} title={t("projectPlan.moveStageUp", { number: stageIndex + 1 })} type="button">↑</button><button aria-label={t("projectPlan.moveStageDown", { number: stageIndex + 1 })} disabled={readOnly || orderBusy || stageIndex === stageCount - 1} onClick={() => onMoveStage(1)} title={t("projectPlan.moveStageDown", { number: stageIndex + 1 })} type="button">↓</button></span><time dateTime={text(stage.document, "due")}>{text(stage.document, "due") ? formatDateOnly(locale, text(stage.document, "due")) : "—"}</time><button disabled={readOnly} onClick={onNewTask}>+ {t("core.createTaskAction")}</button></div>
     </header>
     <div className="project-plan-stage-progress"><progress aria-label={t("stages.progressLabel")} max="100" value={progress}>{progress}%</progress><span>{t("stages.progress", { completed, count: allTasks.length })}</span></div>
-    <TaskRows allTasks={allTasks} changedTaskIds={changedTaskIds} locale={locale} numberPrefix={stageIndex + 1} onMoveTask={onMoveTask} onNavigate={onNavigate} onNewSubtask={onNewSubtask} onStatusChange={onStatusChange} order={strings(stage.document, "task_order")} orderBusy={orderBusy} people={people} projectId={projectId} query={query} readOnly={readOnly} savingTaskIds={savingTaskIds} selectedTaskId={selectedTaskId} statusBusy={statusBusy} statusOptions={statusOptions} statusTitle={statusTitle} taskFields={taskFields} tasks={tasks} t={t} />
+    <TaskRows allTasks={allTasks} changedTaskIds={changedTaskIds} locale={locale} numberPrefix={stageIndex + 1} onMoveTask={onMoveTask} onNavigate={onNavigate} onNewSubtask={onNewSubtask} onStatusChange={onStatusChange} order={strings(stage.document, "task_order")} orderBusy={orderBusy} people={people} projectId={projectId} query={query} readOnly={readOnly} savingTaskIds={savingTaskIds} selectedTaskId={selectedTaskId} statusBusy={statusBusy} statusOptions={statusOptions} statusTitle={statusTitle} taskFields={taskFields} tasks={tasks} text={text} number={number} t={t} />
   </article>;
 }
 
-function TaskRows({ tasks, allTasks, projectId, query = {}, locale, people, numberPrefix, readOnly = true, order = [], orderBusy = false, selectedTaskId, changedTaskIds = new Set<string>(), savingTaskIds = new Set<string>(), statusTitle, statusOptions = [], statusBusy = false, taskFields, onMoveTask, onNewSubtask, onStatusChange, onNavigate, t }: {
+function TaskRows({ tasks, allTasks, projectId, query = {}, locale, people, numberPrefix, readOnly = true, order = [], orderBusy = false, selectedTaskId, changedTaskIds = new Set<string>(), savingTaskIds = new Set<string>(), statusTitle, statusOptions = [], statusBusy = false, taskFields, text, number, onMoveTask, onNewSubtask, onStatusChange, onNavigate, t }: {
   readonly tasks: readonly EntityResult[];
   readonly allTasks: readonly EntityResult[];
   readonly projectId: string;
@@ -588,6 +603,8 @@ function TaskRows({ tasks, allTasks, projectId, query = {}, locale, people, numb
   readonly statusOptions?: readonly ConfigValue[];
   readonly statusBusy?: boolean;
   readonly taskFields: TaskFieldVisibility;
+  readonly text: ScheduleTextReader;
+  readonly number: ScheduleNumberReader;
   readonly onMoveTask?: (taskId: string, offset: -1 | 1) => void;
   readonly onNewSubtask?: (parentId: string) => void;
   readonly onStatusChange?: (task: EntityResult, status: string) => void;

@@ -1,5 +1,5 @@
 import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
-import { scheduleText, scheduleEffort, buildSchedule } from "../../schedules.js";
+import { buildSchedule, ScheduleResolver, scheduleTracksConfig, scheduleTextReader, scheduleEffortReader } from "../../schedules.js";
 import { isCompletedStatus } from "../../status-categories.js";
 import { buildTaskHierarchy } from "@gitpm/task-hierarchy";
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type FormEvent } from "react";
@@ -10,13 +10,13 @@ import { EditorDrawer } from "../../editor-drawer.js";
 import { useExternalHighlights } from "../../external-updates.js";
 import { formatDateOnly, formatDurationHours, message, type Locale, type MessageKey } from "../../i18n.js";
 import { upsertEntity } from "../../optimistic-ui.js";
-import type { DraftStatus, EntityDocument, EntityResult, GitPmDocument, ProjectWorkspaceResult } from "../../types.js";
+import type { ConfigurationResult, DraftStatus, EntityDocument, EntityResult, GitPmDocument, ProjectWorkspaceResult } from "../../types.js";
 import type { WorkspaceNavigate } from "../../workspace-navigation.js";
 import { PersonLinks } from "../../person-link.js";
 import { draftReadOnlyReason } from "../../draft-read-only.js";
 
 interface ConfigValue { readonly slug: string; readonly title: string; readonly active: boolean; readonly category?: "backlog" | "active" | "done" | "cancelled" }
-const text = (document: GitPmDocument, key: string): string => key === "start" || key === "due" ? scheduleText(document, key) : typeof document[key] === "string" ? document[key] as string : "";
+type ScheduleTextReader = (document: Readonly<Record<string, unknown>>, key: string) => string;
 const strings = (document: GitPmDocument, key: string): string[] => Array.isArray(document[key]) ? (document[key] as unknown[]).filter((item): item is string => typeof item === "string") : [];
 const configValues = (document: GitPmDocument, key: "statuses" | "issue_types"): ConfigValue[] => Array.isArray(document[key])
   ? (document[key] as unknown[]).filter((item): item is ConfigValue => typeof item === "object" && item !== null && typeof (item as ConfigValue).slug === "string" && typeof (item as ConfigValue).title === "string" && (item as ConfigValue).active === true)
@@ -37,6 +37,7 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
   const [workspace, setWorkspace] = useState<ProjectWorkspaceResult | null>(null);
   const [statuses, setStatuses] = useState<readonly ConfigValue[]>([]);
   const [types, setTypes] = useState<readonly ConfigValue[]>([]);
+  const [tracksConfig, setTracksConfig] = useState<ConfigurationResult | null>(null);
   const [people, setPeople] = useState<readonly EntityResult[]>([]);
   const [editor, setEditor] = useState<"stage" | "task" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -46,18 +47,20 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
 
   const load = useCallback(async () => {
     await loader.run(async () => {
-      const [nextWorkspace, nextPeople, statusConfig, typeConfig] = await Promise.all([
+      const [nextWorkspace, nextPeople, statusConfig, typeConfig, tracksDocument] = await Promise.all([
         api.projectWorkspace(draft.draft_id, projectId),
         api.listEntities(draft.draft_id, "people"),
         api.getConfiguration(draft.draft_id, "statuses"),
         api.getConfiguration(draft.draft_id, "issue-types"),
+        api.getConfiguration(draft.draft_id, "schedule-tracks"),
       ]);
-      return { nextWorkspace, nextPeople, statusConfig, typeConfig };
-    }, ({ nextWorkspace, nextPeople, statusConfig, typeConfig }) => {
+      return { nextWorkspace, nextPeople, statusConfig, typeConfig, tracksDocument };
+    }, ({ nextWorkspace, nextPeople, statusConfig, typeConfig, tracksDocument }) => {
       setWorkspace(nextWorkspace);
       setPeople(nextPeople.filter((item) => item.document.lifecycle === "active"));
       setStatuses(configValues(statusConfig.document, "statuses"));
       setTypes(configValues(typeConfig.document, "issue_types"));
+      setTracksConfig(tracksDocument);
     });
   }, [api, draft.draft_id, draft.fingerprint, loader.run, projectId]);
 
@@ -83,6 +86,11 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
     }
   };
 
+  const scheduling = useMemo(() => new ScheduleResolver(scheduleTracksConfig(tracksConfig?.document)), [tracksConfig]);
+  const primaryTrack = scheduling.primaryTrack(workspace?.project.document.planning);
+  const text = useMemo(() => scheduleTextReader(primaryTrack), [primaryTrack]);
+  const effortOf = useMemo(() => scheduleEffortReader(primaryTrack), [primaryTrack]);
+
   const activeTasks = useMemo(() => workspace?.tasks.filter((item) => item.document.lifecycle === "active") ?? [], [workspace]);
   const selectedStage = workspace?.milestones.find((item) => item.document.id === stageId);
   const stageTasks = stageId === "" ? [] : activeTasks.filter((item) => item.document.milestone === stageId).sort((left, right) => {
@@ -96,7 +104,7 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
     if (workspace === null || selectedStage === undefined) return;
     const data = new FormData(event.currentTarget);
     const due = String(data.get("due"));
-    const document = { ...selectedStage.document, name: String(data.get("name")).trim(), description_markdown: String(data.get("description")), schedules: buildSchedule("", due, "") } as EntityDocument;
+    const document = { ...selectedStage.document, name: String(data.get("name")).trim(), description_markdown: String(data.get("description")), schedules: buildSchedule(primaryTrack, "", due, "") } as EntityDocument;
     void mutate(async () => await api.updateEntity(draft.draft_id, "milestones", selectedStage, workspace.draft_fingerprint, document));
   };
 
@@ -106,7 +114,7 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
     const data = new FormData(event.currentTarget);
     const id = newUniqueEntityId(ENTITY_ID_PREFIX.task, new Set(workspace.tasks.map((item) => item.document.id)));
     const start = String(data.get("start")); const due = String(data.get("due")); const estimate = String(data.get("estimate"));
-    const document = { schema: "gitpm/task@2", id, project: projectId, milestone: selectedStage.document.id, title: String(data.get("title")).trim(), type: String(data.get("type")), status: String(data.get("status")), lifecycle: "active", description_markdown: String(data.get("description")), assignees: data.getAll("assignees").map(String), ...(buildSchedule(start, due, estimate) ? { schedules: buildSchedule(start, due, estimate) } : {}) } as EntityDocument;
+    const document = { schema: "gitpm/task@2", id, project: projectId, milestone: selectedStage.document.id, title: String(data.get("title")).trim(), type: String(data.get("type")), status: String(data.get("status")), lifecycle: "active", description_markdown: String(data.get("description")), assignees: data.getAll("assignees").map(String), ...(buildSchedule(primaryTrack, start, due, estimate) ? { schedules: buildSchedule(primaryTrack, start, due, estimate) } : {}) } as EntityDocument;
     void mutate(async () => await api.createEntity(draft.draft_id, "tasks", workspace.draft_fingerprint, document));
   };
 
@@ -145,6 +153,8 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
         statusOptions={statuses}
         statusBusy={statusPending !== null}
         statusSavingId={statusPending}
+        text={text}
+        effortOf={effortOf}
         t={t}
       />)}
     </AsyncBoundary>
@@ -174,7 +184,7 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
   </section>;
 }
 
-function StageDetails({ stage, tasks, projectId, locale, people, readOnly, changed, changedTaskIds, statusOptions, statusBusy, statusSavingId, onArchive, onEdit, onNewTask, onStatusChange, onNavigate, t }: {
+function StageDetails({ stage, tasks, projectId, locale, people, readOnly, changed, changedTaskIds, statusOptions, statusBusy, statusSavingId, text, effortOf, onArchive, onEdit, onNewTask, onStatusChange, onNavigate, t }: {
   readonly stage: EntityResult;
   readonly tasks: readonly EntityResult[];
   readonly projectId: string;
@@ -186,6 +196,8 @@ function StageDetails({ stage, tasks, projectId, locale, people, readOnly, chang
   readonly statusOptions: readonly ConfigValue[];
   readonly statusBusy: boolean;
   readonly statusSavingId: string | null;
+  readonly text: ScheduleTextReader;
+  readonly effortOf: (document: Readonly<Record<string, unknown>>) => number | undefined;
   readonly onArchive: () => void;
   readonly onEdit: () => void;
   readonly onNewTask: () => void;
@@ -195,7 +207,7 @@ function StageDetails({ stage, tasks, projectId, locale, people, readOnly, chang
 }) {
   const completed = tasks.filter((task) => isCompletedStatus(statusOptions, text(task.document, "status"))).length;
   const overdue = tasks.filter((task) => !isCompletedStatus(statusOptions, text(task.document, "status")) && /^\d{4}-\d{2}-\d{2}$/u.test(text(task.document, "due")) && text(task.document, "due") < new Date().toISOString().slice(0, 10)).length;
-  const estimate = tasks.reduce((sum, task) => sum + (scheduleEffort(task.document) ?? 0), 0);
+  const estimate = tasks.reduce((sum, task) => sum + (effortOf(task.document) ?? 0), 0);
   const stageAssignees = [...new Set(tasks.flatMap((task) => Array.isArray(task.document.assignees) ? task.document.assignees.filter((id): id is string => typeof id === "string") : []))];
   const hierarchy = buildTaskHierarchy(
     tasks.map((entity) => ({ id: entity.document.id, parent: text(entity.document, "parent") || undefined, entity })),

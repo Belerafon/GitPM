@@ -9,7 +9,7 @@ export interface WorkloadTask {
   readonly lifecycle: "active" | "archived";
   readonly estimate_hours?: number;
   readonly start?: string;
-  readonly due?: string;
+  readonly finish?: string;
   readonly assignees?: readonly string[];
 }
 
@@ -61,9 +61,9 @@ export function isoWeekStart(value: string): string {
   return formatDateOnly(date);
 }
 
-function weekStartsBetween(start: string, due: string): string[] {
+function weekStartsBetween(start: string, finish: string): string[] {
   const first = dayTime(isoWeekStart(start));
-  const last = dayTime(isoWeekStart(due));
+  const last = dayTime(isoWeekStart(finish));
   const result: string[] = [];
   for (let time = first; time <= last; time += 7 * DAY_MS) result.push(formatDateOnly(new Date(time)));
   return result;
@@ -88,7 +88,7 @@ export function calculateWorkload(
 
   for (const task of tasks) {
     if (task.lifecycle !== "active") { exclusions.archived += 1; continue; }
-    if (task.start === undefined || task.due === undefined || !DATE_PATTERN.test(task.start) || !DATE_PATTERN.test(task.due) || dayTime(task.start) > dayTime(task.due)) { exclusions.undated += 1; continue; }
+    if (task.start === undefined || task.finish === undefined || !DATE_PATTERN.test(task.start) || !DATE_PATTERN.test(task.finish) || dayTime(task.start) > dayTime(task.finish)) { exclusions.undated += 1; continue; }
     if (task.estimate_hours === undefined || !Number.isFinite(task.estimate_hours) || task.estimate_hours < 0) { exclusions.unestimated += 1; continue; }
     if (task.assignees === undefined || task.assignees.length === 0) { exclusions.unassigned += 1; continue; }
     const assignees = task.assignees.flatMap((id) => { const person = activePeople.get(id); return person === undefined ? [] : [person]; });
@@ -99,7 +99,7 @@ export function calculateWorkload(
 
   if (included.length === 0) return { formula: "equal-assignee-share/equal-person-working-day/v1", weeks: [], rows: [], included_tasks: 0, exclusions };
   const first = included.reduce((value, item) => dayTime(item.task.start!) < dayTime(value) ? item.task.start! : value, included[0]!.task.start!);
-  const last = included.reduce((value, item) => dayTime(item.task.due!) > dayTime(value) ? item.task.due! : value, included[0]!.task.due!);
+  const last = included.reduce((value, item) => dayTime(item.task.finish!) > dayTime(value) ? item.task.finish! : value, included[0]!.task.finish!);
   const weeks = weekStartsBetween(first, last);
   const allocations = new Map<string, { hours: number; taskIds: Set<string> }>();
 
@@ -107,7 +107,7 @@ export function calculateWorkload(
     const personShare = task.estimate_hours! / assigneeCount;
     for (const person of assignees) {
       const calendar = activeCalendars.get(person.calendar)!;
-      const dates = workingDatesBetween(task.start!, task.due!, calendar);
+      const dates = workingDatesBetween(task.start!, task.finish!, calendar);
       if (dates.length === 0) continue;
       const dailyShare = personShare / dates.length;
       for (const date of dates) {

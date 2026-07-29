@@ -3,12 +3,13 @@ import { actualWindow, hoursAfterDate, sumHours } from "@gitpm/time-entries";
 import { formatDateOnly, message, type Locale, type MessageKey } from "../../i18n.js";
 import type { GitPmApi } from "../../api.js";
 import type { DraftStatus, EntityDocument, EntityResult } from "../../types.js";
+import type { ScheduleResolver } from "../../schedules.js";
 
 const DAY_MS = 86_400_000;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/u;
 
 function finishOf(document: EntityDocument, track: string | undefined): string | undefined {
-  if (track === undefined) return undefined;
+  if (track === undefined || track === "") return undefined;
   const finish = (document.schedules as Readonly<Record<string, { readonly finish?: string }>> | undefined)?.[track]?.finish;
   return typeof finish === "string" && ISO_DATE.test(finish) ? finish : undefined;
 }
@@ -17,10 +18,9 @@ function varianceDays(primary: string, comparison: string): number {
   return Math.round((Date.parse(`${primary}T00:00:00Z`) - Date.parse(`${comparison}T00:00:00Z`)) / DAY_MS);
 }
 
-export function ProjectSnapshot({ project, locale, api, draft, tasks, comparisonTrack }: { readonly project: EntityDocument; readonly locale: Locale; readonly api?: GitPmApi; readonly draft?: DraftStatus; readonly tasks?: readonly EntityResult[]; readonly comparisonTrack?: string }) {
-  const planning = project.planning as { readonly primary_track?: string; readonly comparison_track?: string } | undefined;
-  const primaryTrack = planning?.primary_track ?? "plan";
-  const comparison = comparisonTrack ?? planning?.comparison_track;
+export function ProjectSnapshot({ project, locale, api, draft, tasks, scheduling, comparisonTrack }: { readonly project: EntityDocument; readonly locale: Locale; readonly api?: GitPmApi; readonly draft?: DraftStatus; readonly tasks?: readonly EntityResult[]; readonly scheduling: ScheduleResolver; readonly comparisonTrack?: string }) {
+  const primaryTrack = scheduling.primaryTrack(project.planning);
+  const comparison = comparisonTrack ?? scheduling.comparisonTrack(project.planning);
   const primaryFinish = finishOf(project, primaryTrack);
   const comparisonFinish = finishOf(project, comparison);
   const [actual, setActual] = useState<{ total: number; lastActivity?: string; hoursAfter?: number } | null>(null);

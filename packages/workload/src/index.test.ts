@@ -8,8 +8,8 @@ const linus = { id: "U-26-11N0S0", name: "Linus", lifecycle: "active" as const, 
 describe("workload calculator", () => {
   it("splits estimates by assignee and their working dates, then compares holiday-adjusted capacity", () => {
     const report = calculateWorkload([
-      { id: "T-26-SHARED", title: "Shared", lifecycle: "active", estimate_hours: 40, start: "2026-07-06", due: "2026-07-10", assignees: [ada.id, linus.id] },
-      { id: "T-26-ADA000", title: "Ada only", lifecycle: "active", estimate_hours: 8, start: "2026-07-09", due: "2026-07-10", assignees: [ada.id] },
+      { id: "T-26-SHARED", title: "Shared", lifecycle: "active", estimate_hours: 40, start: "2026-07-06", finish: "2026-07-10", assignees: [ada.id, linus.id] },
+      { id: "T-26-ADA000", title: "Ada only", lifecycle: "active", estimate_hours: 8, start: "2026-07-09", finish: "2026-07-10", assignees: [ada.id] },
     ], [ada, linus], [calendar]);
     expect(report.weeks).toEqual(["2026-07-06"]);
     expect(report.rows).toEqual([
@@ -20,12 +20,12 @@ describe("workload calculator", () => {
 
   it("spreads a person share across ISO weeks and reports deterministic exclusions", () => {
     const report = calculateWorkload([
-      { id: "T-26-SPAN00", title: "Span", lifecycle: "active", estimate_hours: 36, start: "2026-07-09", due: "2026-07-15", assignees: [ada.id] },
-      { id: "T-26-ARCH1V", title: "Archived", lifecycle: "archived", estimate_hours: 10, start: "2026-07-06", due: "2026-07-10", assignees: [ada.id] },
+      { id: "T-26-SPAN00", title: "Span", lifecycle: "active", estimate_hours: 36, start: "2026-07-09", finish: "2026-07-15", assignees: [ada.id] },
+      { id: "T-26-ARCH1V", title: "Archived", lifecycle: "archived", estimate_hours: 10, start: "2026-07-06", finish: "2026-07-10", assignees: [ada.id] },
       { id: "T-26-VNDATD", title: "Undated", lifecycle: "active", estimate_hours: 10, assignees: [ada.id] },
-      { id: "T-26-VNESTM", title: "Unestimated", lifecycle: "active", start: "2026-07-06", due: "2026-07-10", assignees: [ada.id] },
-      { id: "T-26-VNASGN", title: "Unassigned", lifecycle: "active", estimate_hours: 10, start: "2026-07-06", due: "2026-07-10" },
-      { id: "T-26-M1SS1N", title: "Missing person", lifecycle: "active", estimate_hours: 10, start: "2026-07-06", due: "2026-07-10", assignees: ["U-26-M1SS1N"] },
+      { id: "T-26-VNESTM", title: "Unestimated", lifecycle: "active", start: "2026-07-06", finish: "2026-07-10", assignees: [ada.id] },
+      { id: "T-26-VNASGN", title: "Unassigned", lifecycle: "active", estimate_hours: 10, start: "2026-07-06", finish: "2026-07-10" },
+      { id: "T-26-M1SS1N", title: "Missing person", lifecycle: "active", estimate_hours: 10, start: "2026-07-06", finish: "2026-07-10", assignees: ["U-26-M1SS1N"] },
     ], [ada], [calendar]);
     expect(report.rows.filter((row) => row.person_id === ada.id).map((row) => [row.week, row.allocated_hours])).toEqual([["2026-07-06", 14.4], ["2026-07-13", 21.6]]);
     expect(report.exclusions).toEqual({ archived: 1, undated: 1, unestimated: 1, unassigned: 1, unavailable_assignees: 1 });
@@ -34,7 +34,7 @@ describe("workload calculator", () => {
   it("does not reassign an unavailable assignee share to active assignees", () => {
     const archived = { ...linus, lifecycle: "archived" as const };
     const report = calculateWorkload([
-      { id: "T-26-SHARED", title: "Shared", lifecycle: "active", estimate_hours: 40, start: "2026-07-06", due: "2026-07-10", assignees: [ada.id, archived.id] },
+      { id: "T-26-SHARED", title: "Shared", lifecycle: "active", estimate_hours: 40, start: "2026-07-06", finish: "2026-07-10", assignees: [ada.id, archived.id] },
     ], [ada, archived], [calendar]);
 
     expect(report.rows).toEqual([

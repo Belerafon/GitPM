@@ -1,18 +1,18 @@
-import { useCallback, useEffect, useState } from "react";
-import { scheduleText, scheduleEffort } from "./schedules.js";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { scheduleText, scheduleEffort, ScheduleResolver, scheduleTracksConfig } from "./schedules.js";
 import { ApiError, deleteRestrictionLabels, type GitPmApi } from "./api.js";
 import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
 import type { ConfigValue } from "./core-ui.js";
 import { EditorDrawer } from "./editor-drawer.js";
 import { formatDateOnly, formatNumber, message, type Locale, type MessageKey } from "./i18n.js";
-import type { DraftStatus, EntityResult, GitPmDocument, GitPmRole } from "./types.js";
+import type { ConfigurationResult, DraftStatus, EntityResult, GitPmDocument, GitPmRole } from "./types.js";
 import type { WorkspaceNavigate } from "./workspace-navigation.js";
 import { draftReadOnlyReason } from "./draft-read-only.js";
 
-const text = (document: GitPmDocument, key: string) => key === "start" || key === "due" ? scheduleText(document, key) : typeof document[key] === "string" ? document[key] as string : "";
-const number = (document: GitPmDocument, key: string) => key === "estimate_hours" ? scheduleEffort(document) ?? 0 : typeof document[key] === "number" ? document[key] as number : 0;
 const strings = (document: GitPmDocument, key: string) => Array.isArray(document[key]) ? (document[key] as unknown[]).filter((item): item is string => typeof item === "string") : [];
 const numbers = (document: GitPmDocument, key: string) => Array.isArray(document[key]) ? (document[key] as unknown[]).filter((item): item is number => typeof item === "number") : [];
+const text = (document: GitPmDocument, key: string): string => typeof document[key] === "string" ? document[key] as string : "";
+const number = (document: GitPmDocument, key: string): number => typeof document[key] === "number" ? document[key] as number : 0;
 const validDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/u.test(value);
 const configValues = (document: GitPmDocument, key: "statuses" | "issue_types"): ConfigValue[] => Array.isArray(document[key])
   ? (document[key] as unknown[]).filter((item): item is ConfigValue => typeof item === "object" && item !== null && typeof (item as ConfigValue).slug === "string" && typeof (item as ConfigValue).title === "string" && (item as ConfigValue).active === true)
@@ -25,6 +25,7 @@ interface ProfileData {
   readonly projects: readonly EntityResult[];
   readonly tasks: readonly EntityResult[];
   readonly statuses: readonly ConfigValue[];
+  readonly scheduling: ScheduleResolver;
 }
 
 const FILTERS_STORAGE_KEY = "gitpm.peopleProfile.taskFilters";
@@ -60,15 +61,16 @@ export function PeopleProfileWorkspace({ api, confirmAction = () => true, draft,
   const loadRequest = useAsyncLoad();
   const load = useCallback(async () => {
     await loadRequest.run(async () => {
-      const [people, calendars, teams, projects, tasks, statusConfig] = await Promise.all([
+      const [people, calendars, teams, projects, tasks, statusConfig, tracksDocument] = await Promise.all([
         api.listEntities(draft.draft_id, "people"),
         api.listEntities(draft.draft_id, "calendars"),
         api.listEntities(draft.draft_id, "teams"),
         api.listEntities(draft.draft_id, "projects"),
         api.listEntities(draft.draft_id, "tasks"),
         api.getConfiguration(draft.draft_id, "statuses"),
+        api.getConfiguration(draft.draft_id, "schedule-tracks"),
       ]);
-      return { people, calendars, teams, projects, tasks, statuses: configValues(statusConfig.document, "statuses") };
+      return { people, calendars, teams, projects, tasks, statuses: configValues(statusConfig.document, "statuses"), scheduling: new ScheduleResolver(scheduleTracksConfig(tracksDocument.document)) };
     }, setData);
   }, [api, draft.draft_id, draft.external_fingerprint, loadRequest.run]);
   useEffect(() => { void load(); }, [load]);
@@ -133,6 +135,10 @@ export function PeopleProfileWorkspace({ api, confirmAction = () => true, draft,
 }
 
 function PeopleProfile({ archivePerson, data, deletePerson, editorOpen, locale, onCloseEditor, onEdit, personId, readOnly, savePerson, onNavigate, t }: { readonly archivePerson: () => Promise<boolean>; readonly data: ProfileData; readonly deletePerson: () => Promise<boolean>; readonly editorOpen: boolean; readonly locale: Locale; readonly onCloseEditor: () => void; readonly onEdit: () => void; readonly personId: string; readonly readOnly: boolean; readonly savePerson: (document: GitPmDocument) => Promise<boolean>; readonly onNavigate: WorkspaceNavigate; readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string }) {
+  const primaryTrackByProject = useMemo(() => new Map(data.projects.map((item) => [item.document.id, data.scheduling.primaryTrack(item.document.planning)])), [data.projects, data.scheduling]);
+  const trackOf = useCallback((document: Readonly<Record<string, unknown>>): string => primaryTrackByProject.get(typeof document.project === "string" ? document.project : "") ?? "", [primaryTrackByProject]);
+  const text = useCallback((document: Readonly<Record<string, unknown>>, key: string): string => key === "start" || key === "due" ? scheduleText(document, key, trackOf(document)) : typeof document[key] === "string" ? document[key] as string : "", [trackOf]);
+  const number = useCallback((document: Readonly<Record<string, unknown>>, key: string): number => key === "estimate_hours" ? scheduleEffort(document, trackOf(document)) ?? 0 : typeof document[key] === "number" ? document[key] as number : 0, [trackOf]);
   const person = data.people.find((item) => item.document.id === personId);
   const projectNames = new Map(data.projects.map((item) => [item.document.id, text(item.document, "name")]));
   const assignedTasks = data.tasks
@@ -218,7 +224,7 @@ function PeopleProfile({ archivePerson, data, deletePerson, editorOpen, locale, 
 
     <dl className="people-profile-stats"><div className="card"><dt>{t("people.assignedTasks")}</dt><dd>{assignedTasks.length}</dd></div><div className="card"><dt>{t("people.responsibleProjects")}</dt><dd>{ownedProjects.length}</dd></div><div className="card"><dt>{t("people.participatingProjects")}</dt><dd>{contributingProjects.length}</dd></div><div className="card"><dt>{t("people.teams")}</dt><dd>{teams.length}</dd></div></dl>
 
-    <TaskCalendar calendar={calendar} key={personId} locale={locale} onNavigate={onNavigate} projectNames={projectNames} tasks={assignedTasks} t={t} />
+    <TaskCalendar calendar={calendar} key={personId} locale={locale} onNavigate={onNavigate} projectNames={projectNames} tasks={assignedTasks} text={text} t={t} />
 
     <div className="people-profile-layout">
       <main className="people-profile-main">
@@ -308,7 +314,7 @@ const calendarDates = (value: string) => {
   return result;
 };
 
-function TaskCalendar({ tasks, calendar, projectNames, locale, onNavigate, t }: { readonly tasks: readonly EntityResult[]; readonly calendar?: EntityResult; readonly projectNames: ReadonlyMap<string, string>; readonly locale: Locale; readonly onNavigate: WorkspaceNavigate; readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string }) {
+function TaskCalendar({ tasks, calendar, projectNames, locale, onNavigate, text, t }: { readonly tasks: readonly EntityResult[]; readonly calendar?: EntityResult; readonly projectNames: ReadonlyMap<string, string>; readonly locale: Locale; readonly onNavigate: WorkspaceNavigate; readonly text: (document: Readonly<Record<string, unknown>>, key: string) => string; readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string }) {
   const [month, setMonth] = useState(() => initialTaskMonth(tasks));
   const dates = calendarDates(month);
   const workingWeekdays = new Set(calendar === undefined ? [1, 2, 3, 4, 5] : numbers(calendar.document, "working_weekdays"));

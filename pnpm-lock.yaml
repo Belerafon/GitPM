@@ -141,6 +141,9 @@ importers:
       '@gitpm/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@gitpm/scheduling':
+        specifier: workspace:*
+        version: link:../../packages/scheduling
       '@gitpm/shared':
         specifier: workspace:*
         version: link:../../packages/shared

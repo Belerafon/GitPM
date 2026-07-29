@@ -14,6 +14,30 @@ export function parseEntityMapping(text: string, source: string): Readonly<Recor
   return parseYamlMapping(text, source);
 }
 
+const SCHEDULE_COLUMNS: Readonly<Record<string, "start" | "finish" | "effort_hours" | "depends_on">> = {
+  start: "start",
+  due: "finish",
+  estimate_hours: "effort_hours",
+  depends_on: "depends_on",
+};
+
+export function nestScheduleColumns(record: Readonly<Record<string, unknown>>, track: string): Readonly<Record<string, unknown>> {
+  if (track === "") return record;
+  const window: Record<string, unknown> = {};
+  const next: Record<string, unknown> = {};
+  let scheduled = false;
+  for (const [key, value] of Object.entries(record)) {
+    const field = SCHEDULE_COLUMNS[key];
+    if (field !== undefined) { window[field] = value; scheduled = true; }
+    else next[key] = value;
+  }
+  if (!scheduled) return next;
+  const existingSchedules = typeof next.schedules === "object" && next.schedules !== null && !Array.isArray(next.schedules)
+    ? next.schedules as Record<string, unknown>
+    : {};
+  return { ...next, schedules: { ...existingSchedules, [track]: window } };
+}
+
 function csvRows(text: string, source: string): string[][] {
   assertImportSize(text, source);
   const rows: string[][] = [];
