@@ -1,0 +1,12 @@
+schema: gitpm/comment@1
+id: N-26-00000G
+project: P-26-ZMBJVA # project: Портал поддержки клиентов
+task: T-26-PHR2RZ # task: Перенести статьи в базу знаний
+author:
+  provider: git
+  subject: olga.novikova@example.test
+  display_name: Ольга Новикова
+created_at: 2026-08-18T15:45:00.000Z
+state: active
+body_markdown: Конфигурация коннектора готова, тестируем импорт. Объём — порядка 2000 статей, укладываемся в окно.
+mentions: []

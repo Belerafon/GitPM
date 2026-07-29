@@ -1,0 +1,11 @@
+schema: gitpm/time-entry@1
+id: E-26-00000F
+project: P-26-7VWANM # project: Переезд аналитической платформы
+task: T-26-5K0WZ2 # task: Развернуть контуры разработки и эксплуатации
+person: U-26-1MV0QD # person: Максим Фёдоров
+performed_on: 2026-09-10
+hours: 4
+category: regular
+note_markdown: Настройка CI/CD-пайплайнов.
+created_at: 2026-09-10T17:30:00.000Z
+state: active

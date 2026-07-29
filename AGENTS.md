@@ -74,6 +74,14 @@ Use the narrowest relevant build and Vitest files while iterating, then widen ve
 proportion to risk. Build workspace dependencies before tests when package imports resolve from
 `dist`.
 
+## Temporary files
+
+Keep all throwaway files (generator scripts, scratch output, experiments) inside the active
+working directory (the worktree), never in an external or system temp location. Use a single
+scratch folder named `.tmp/` at the worktree root; create it if it does not already exist, and
+add it to `.gitignore` immediately so scratch files are never staged or committed. Node scripts
+placed there resolve workspace `node_modules` correctly, which an external temp path does not.
+
 ## Git worktree policy
 
 For each new task, create a separate branch and a separate git worktree.

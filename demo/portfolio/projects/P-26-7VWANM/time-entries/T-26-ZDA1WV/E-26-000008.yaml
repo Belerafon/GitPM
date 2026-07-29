@@ -1,0 +1,11 @@
+schema: gitpm/time-entry@1
+id: E-26-000008
+project: P-26-7VWANM # project: Переезд аналитической платформы
+task: T-26-ZDA1WV # task: Спроектировать целевую архитектуру хранилища
+person: U-26-FSB3GM # person: Илья Кузнецов
+performed_on: 2026-09-01
+hours: 6
+category: regular
+note_markdown: Эскиз целевой архитектуры хранилища.
+created_at: 2026-09-01T17:30:00.000Z
+state: active

@@ -1,0 +1,11 @@
+schema: gitpm/time-entry@1
+id: E-26-00001E
+project: P-26-ZMBJVA # project: Портал поддержки клиентов
+task: T-26-CMQ19E # task: Подключить единый вход клиента
+person: U-26-RKTV2A # person: Дмитрий Орлов
+performed_on: 2026-08-12
+hours: 6
+category: regular
+note_markdown: Прототип SSO-авторизации.
+created_at: 2026-08-12T17:30:00.000Z
+state: active

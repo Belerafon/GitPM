@@ -1,0 +1,11 @@
+schema: gitpm/time-entry@1
+id: E-26-00000X
+project: P-26-ZJPY6E # project: Мобильный банк 2.0
+task: T-26-ZQFF0R # task: Подготовить дизайн-систему мобильного приложения
+person: U-26-9C1ZR4 # person: Елена Морозова
+performed_on: 2026-08-13
+hours: 6
+category: regular
+note_markdown: Доработка визуала экранов.
+created_at: 2026-08-13T17:30:00.000Z
+state: active

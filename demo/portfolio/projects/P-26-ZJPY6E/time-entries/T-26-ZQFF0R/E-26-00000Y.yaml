@@ -1,0 +1,11 @@
+schema: gitpm/time-entry@1
+id: E-26-00000Y
+project: P-26-ZJPY6E # project: Мобильный банк 2.0
+task: T-26-ZQFF0R # task: Подготовить дизайн-систему мобильного приложения
+person: U-26-NEDN00 # person: Мария Соколова
+performed_on: 2026-08-25
+hours: 4
+category: rework
+note_markdown: Правки по итогам дизайн-ревью.
+created_at: 2026-08-25T17:30:00.000Z
+state: active

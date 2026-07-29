@@ -1,0 +1,16 @@
+schema: gitpm/comment@1
+id: N-26-000006
+project: P-26-7VWANM # project: Переезд аналитической платформы
+task: T-26-5ZH6NH # task: Перенести загрузку транзакционных данных
+author:
+  provider: git
+  subject: dmitry.orlov@example.test
+  display_name: Дмитрий Орлов
+created_at: 2026-09-24T16:30:00.000Z
+state: deleted
+mentions: []
+deleted_at: 2026-09-25T08:30:00.000Z
+deleted_by:
+  provider: git
+  subject: dmitry.orlov@example.test
+  display_name: Дмитрий Орлов

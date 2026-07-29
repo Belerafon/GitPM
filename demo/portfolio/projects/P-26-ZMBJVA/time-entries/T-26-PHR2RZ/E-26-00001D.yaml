@@ -1,0 +1,11 @@
+schema: gitpm/time-entry@1
+id: E-26-00001D
+project: P-26-ZMBJVA # project: Портал поддержки клиентов
+task: T-26-PHR2RZ # task: Перенести статьи в базу знаний
+person: U-26-ETKSWS # person: Ольга Новикова
+performed_on: 2026-08-20
+hours: 6
+category: rework
+note_markdown: Доработка маппинга разделов.
+created_at: 2026-08-20T17:30:00.000Z
+state: active
