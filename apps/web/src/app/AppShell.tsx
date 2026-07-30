@@ -7,6 +7,24 @@ export interface NavigationGroup {
   readonly items: readonly MessageKey[];
 }
 
+const SIDEBAR_COLLAPSED_STORAGE_KEY = "gitpm.navigation.sidebarCollapsed";
+
+function readSidebarCollapsed(): boolean {
+  if (typeof localStorage === "undefined") return false;
+  try { return localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === "true"; } catch { return false; }
+}
+
+function writeSidebarCollapsed(collapsed: boolean) {
+  try { localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, collapsed ? "true" : "false"); } catch { /* Browser storage may be unavailable. */ }
+}
+
+const NAVIGATION_ICON: Partial<Record<MessageKey, ReactNode>> = {
+  "nav.projects": <svg aria-hidden="true" viewBox="0 0 16 16"><path d="M1.5 4.5h4l1.4 1.4h7.6v8h-13z" /></svg>,
+  "nav.team": <svg aria-hidden="true" viewBox="0 0 16 16"><circle cx="6" cy="5.2" r="2.3" /><path d="M1.6 13.4c0-2.4 2-3.9 4.4-3.9s4.4 1.5 4.4 3.9" /><path d="M10.8 5.3a2.2 2.2 0 0 1 0 4.2" /><path d="M12.4 13.4c0-1.6-.9-2.9-2.3-3.5" /></svg>,
+  "nav.repository": <svg aria-hidden="true" viewBox="0 0 16 16"><circle cx="4" cy="3.5" r="1.3" /><circle cx="4" cy="12.5" r="1.3" /><circle cx="12" cy="3.5" r="1.3" /><path d="M4 4.8v6.4" /><path d="M12 4.8c0 3.8-8 1.8-8 5.7" /></svg>,
+  "nav.settings": <svg aria-hidden="true" viewBox="0 0 16 16"><path d="M2 4h12M2 8h12M2 12h12" /><circle cx="6" cy="4" r="1.5" /><circle cx="10.5" cy="8" r="1.5" /><circle cx="5" cy="12" r="1.5" /></svg>,
+};
+
 export function AppShell({ activeView, banner, breadcrumbs, children, headerMeta, headerTitle, navigationGroups, onNavigate, onOpenRepositoryStatus, repositoryMode, repositoryStatus, t, topActions }: {
   readonly activeView: MessageKey;
   readonly banner?: ReactNode;
@@ -23,9 +41,12 @@ export function AppShell({ activeView, banner, breadcrumbs, children, headerMeta
   readonly topActions: ReactNode;
 }) {
   const [navigationOpen, setNavigationOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed);
   const navigationButtonRef = useRef<HTMLButtonElement>(null);
   const sidebarRef = useRef<HTMLElement>(null);
   const workspaceRef = useRef<HTMLElement>(null);
+
+  useEffect(() => { writeSidebarCollapsed(sidebarCollapsed); }, [sidebarCollapsed]);
 
   useEffect(() => {
     document.documentElement.scrollTop = 0;
@@ -65,14 +86,14 @@ export function AppShell({ activeView, banner, breadcrumbs, children, headerMeta
   const closeNavigation = () => { setNavigationOpen(false); navigationButtonRef.current?.focus(); };
   const navigate = (key: MessageKey) => { onNavigate(key); setNavigationOpen(false); };
 
-  return <div className={`app-shell${repositoryMode ? " repository-mode" : ""}`}>
+  return <div className={`app-shell${repositoryMode ? " repository-mode" : ""}${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
     <button aria-label={t("nav.closeMenu")} className={`navigation-backdrop${navigationOpen ? " open" : ""}`} onClick={closeNavigation} tabIndex={navigationOpen ? 0 : -1} />
     <aside aria-label={t("nav.label")} className={`sidebar${navigationOpen ? " open" : ""}`} id="primary-navigation" ref={sidebarRef}>
-      <div className="sidebar-heading"><div className="brand"><img className="brand-mark" src="/gitpm-icon.svg" alt="" /><strong>{t("app.title")}</strong></div><button aria-label={t("nav.closeMenu")} className="navigation-close" onClick={closeNavigation} title={t("nav.closeMenu")} type="button">×</button></div>
+      <div className="sidebar-heading"><div className="brand"><img className="brand-mark" src="/gitpm-icon.svg" alt="" /><strong className="brand-title">{t("app.title")}</strong></div><button aria-label={sidebarCollapsed ? t("nav.expandSidebar") : t("nav.collapseSidebar")} className="sidebar-collapse-toggle" onClick={() => setSidebarCollapsed((collapsed) => !collapsed)} title={sidebarCollapsed ? t("nav.expandSidebar") : t("nav.collapseSidebar")} type="button"><svg aria-hidden="true" viewBox="0 0 16 16"><path d={sidebarCollapsed ? "M4 2.5 8 6 4 9.5" : "m2.5 4 3.5 4 3.5-4"} /></svg></button><button aria-label={t("nav.closeMenu")} className="navigation-close" onClick={closeNavigation} title={t("nav.closeMenu")} type="button">×</button></div>
       <nav className="navigation-groups">{navigationGroups.map((group) => <div className="navigation-group" key={group.label}>
         {group.items.length > 1 && <span className="navigation-group-label">{t(group.label)}</span>}
         <div className="navigation-group-items">{group.items.map((key) => <div className={`navigation-item${activeView === key ? " active" : ""}`} key={key}>
-          <button aria-current={activeView === key ? "page" : undefined} className={activeView === key ? "active" : ""} onClick={() => navigate(key)}>{t(key)}</button>
+          <button aria-current={activeView === key ? "page" : undefined} aria-label={sidebarCollapsed ? t(key) : undefined} className={activeView === key ? "active" : ""} onClick={() => navigate(key)} title={sidebarCollapsed ? t(key) : undefined}>{NAVIGATION_ICON[key] !== undefined && <span className="nav-icon">{NAVIGATION_ICON[key]}</span>}<span className="nav-label">{t(key)}</span></button>
           {key === "nav.repository" && repositoryStatus !== undefined && <button aria-label={repositoryStatus.description} className="repository-status navigation-repository-status" onClick={() => { onOpenRepositoryStatus?.(); setNavigationOpen(false); }} title={repositoryStatus.description}>{repositoryStatus.label}</button>}
         </div>)}</div>
       </div>)}</nav>

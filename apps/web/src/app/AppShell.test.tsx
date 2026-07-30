@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "./AppShell.js";
 import { navigationGroups } from "./navigation.js";
@@ -21,7 +21,7 @@ function shellProps() {
   };
 }
 
-afterEach(() => { cleanup(); vi.resetModules(); });
+afterEach(() => { cleanup(); localStorage.clear(); vi.resetModules(); });
 
 describe("AppShell version footer", () => {
   it("shows the build version at the sidebar bottom", async () => {
@@ -37,5 +37,33 @@ describe("AppShell version footer", () => {
     render(<AppShell {...shellProps()} />);
     const footer = screen.getByTestId("sidebar-version");
     expect(footer.textContent).toContain("Version —");
+  });
+});
+
+describe("AppShell collapsible navigation", () => {
+  it("renders navigation icons and collapses to icon-only mode, persisting the choice", () => {
+    render(<AppShell {...shellProps()} />);
+    const shell = document.querySelector(".app-shell")!;
+    expect(document.querySelectorAll(".nav-icon").length).toBe(navigationGroups.flatMap((group) => group.items).length);
+    expect(shell.classList.contains("sidebar-collapsed")).toBe(false);
+    expect(screen.getByRole("button", { name: "Collapse navigation" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Collapse navigation" }));
+
+    expect(shell.classList.contains("sidebar-collapsed")).toBe(true);
+    expect(localStorage.getItem("gitpm.navigation.sidebarCollapsed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Expand navigation" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Projects" }).getAttribute("title")).toBe("Projects");
+
+    fireEvent.click(screen.getByRole("button", { name: "Expand navigation" }));
+    expect(shell.classList.contains("sidebar-collapsed")).toBe(false);
+    expect(localStorage.getItem("gitpm.navigation.sidebarCollapsed")).toBe("false");
+  });
+
+  it("restores the collapsed state from storage on mount", () => {
+    localStorage.setItem("gitpm.navigation.sidebarCollapsed", "true");
+    render(<AppShell {...shellProps()} />);
+    expect(document.querySelector(".app-shell")!.classList.contains("sidebar-collapsed")).toBe(true);
+    expect(screen.getByRole("button", { name: "Expand navigation" })).toBeTruthy();
   });
 });

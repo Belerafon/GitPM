@@ -54,6 +54,8 @@
   "nav.groupGit": "Git",
   "nav.groupSettings": "Настройка",
   "nav.breadcrumbs": "Хлебные крошки",
+  "nav.collapseSidebar": "Свернуть меню",
+  "nav.expandSidebar": "Развернуть меню",
   "drafts.heading": "Рабочие копии",
   "drafts.description": "Каждая рабочая копия — отдельная Git-ветка и каталог изменений. Переключайтесь между ними, не смешивая независимую работу.",
   "drafts.current": "Текущая рабочая копия",
@@ -575,6 +577,7 @@
   ,"projectPlan.deleteRestrictedUnknown": "Не удалось удалить проект «{name}»: он всё ещё используется, но сервер не вернул список затрагиваемых объектов. Обновите страницу и повторите попытку."
   ,"projectPlan.deleteRestrictedChanged": "Не удалось удалить проект «{name}»: связанные объекты изменились во время подтверждения. Обновите страницу и повторите попытку."
   ,"projectPlan.deleteFailed": "Не удалось удалить проект «{name}»: {message}"
+  ,"projectPlan.resizeInspector": "Изменить ширину панели сведений"
   ,"stages.new": "Новый этап"
   ,"stages.edit": "Редактировать этап"
   ,"stages.open": "Открыть этап"

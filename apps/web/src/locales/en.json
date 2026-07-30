@@ -54,6 +54,8 @@
   "nav.groupGit": "Git",
   "nav.groupSettings": "Settings",
   "nav.breadcrumbs": "Breadcrumbs",
+  "nav.collapseSidebar": "Collapse navigation",
+  "nav.expandSidebar": "Expand navigation",
   "drafts.heading": "Working copies",
   "drafts.description": "Each working copy has its own Git branch and worktree, so independent changes stay separate.",
   "drafts.current": "Current working copy",
@@ -575,6 +577,7 @@
   ,"projectPlan.deleteRestrictedUnknown": "Cannot delete {name}: the project is still referenced, but the server did not return the affected items. Refresh the page and try again."
   ,"projectPlan.deleteRestrictedChanged": "Cannot delete {name}: the related items changed while deletion was being confirmed. Refresh the page and try again."
   ,"projectPlan.deleteFailed": "Could not delete {name}: {message}"
+  ,"projectPlan.resizeInspector": "Resize detail panel"
   ,"stages.new": "New milestone"
   ,"stages.edit": "Edit milestone"
   ,"stages.open": "Open milestone"
