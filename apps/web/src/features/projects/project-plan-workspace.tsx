@@ -3,7 +3,7 @@ import { buildSchedule, ScheduleResolver, scheduleTracksConfig, scheduleTextRead
 import { isCompletedStatus } from "../../status-categories.js";
 import { ProjectSnapshot } from "./project-snapshot.js";
 import { buildTaskHierarchy } from "@gitpm/task-hierarchy";
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { ApiError, deleteRestrictionLabels, formatApiError, type GitPmApi } from "../../api.js";
 import { AsyncBoundary, useAsyncLoad } from "../../async-data.js";
 import { AssigneeChecks, existingProjectGroups, projectGroupFromForm, ProjectGroupField, TaskPanel, type ConfigValue } from "../../core-ui.js";
@@ -35,6 +35,33 @@ const readTaskFields = (): TaskFieldVisibility => {
 const writeTaskFields = (fields: TaskFieldVisibility) => { try { localStorage.setItem(TASK_FIELDS_STORAGE_KEY, JSON.stringify(fields)); } catch { /* Browser storage may be unavailable. */ } };
 
 const parentOf = (document: Readonly<Record<string, unknown>>): string | undefined => typeof document.parent === "string" ? document.parent : undefined;
+const INSPECTOR_WIDTH_STORAGE_KEY = "gitpm.projectPlan.inspectorWidth";
+const DEFAULT_INSPECTOR_WIDTH = 410;
+const MIN_INSPECTOR_WIDTH = 340;
+const MAX_INSPECTOR_WIDTH = 760;
+
+function clampInspectorWidth(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_INSPECTOR_WIDTH;
+  return Math.min(MAX_INSPECTOR_WIDTH, Math.max(MIN_INSPECTOR_WIDTH, Math.round(value)));
+}
+
+function readInspectorWidth(): number {
+  if (typeof localStorage === "undefined") return DEFAULT_INSPECTOR_WIDTH;
+  try {
+    const value = Number(localStorage.getItem(INSPECTOR_WIDTH_STORAGE_KEY));
+    return value === 0 ? DEFAULT_INSPECTOR_WIDTH : clampInspectorWidth(value);
+  } catch {
+    return DEFAULT_INSPECTOR_WIDTH;
+  }
+}
+
+function writeInspectorWidth(value: number) { try { localStorage.setItem(INSPECTOR_WIDTH_STORAGE_KEY, String(value)); } catch { /* Browser storage may be unavailable. */ } }
+
+interface InspectorResize {
+  readonly pointerId: number;
+  readonly startX: number;
+  readonly startWidth: number;
+}
 const strings = (document: Readonly<Record<string, unknown>>, key: string): string[] => Array.isArray(document[key]) ? (document[key] as unknown[]).filter((item): item is string => typeof item === "string") : [];
 const configValues = (document: Readonly<Record<string, unknown>>, key: "statuses" | "issue_types"): ConfigValue[] => Array.isArray(document[key])
   ? (document[key] as unknown[]).filter((item): item is ConfigValue => typeof item === "object" && item !== null && typeof (item as ConfigValue).slug === "string" && typeof (item as ConfigValue).title === "string" && (item as ConfigValue).active === true)
@@ -91,10 +118,13 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   const [error, setError] = useState<string | null>(null);
   const [orderPending, setOrderPending] = useState<readonly string[] | null>(null);
   const [statusPending, setStatusPending] = useState<string | null>(null);
+  const [inspectorWidth, setInspectorWidth] = useState(readInspectorWidth);
+  const [inspectorResize, setInspectorResize] = useState<InspectorResize | null>(null);
   const { highlights: recentChanges, mark: markRecentChange } = useExternalHighlights(500);
   const reducedMotion = useReducedMotion();
   const animatedList = useFlipList(reducedMotion);
   const readOnly = draftReadOnlyReason(draft) !== null;
+  const inspectorPaneRef = useRef<HTMLElement | null>(null);
 
   const scheduling = useMemo(() => new ScheduleResolver(scheduleTracksConfig(tracksConfig?.document)), [tracksConfig]);
   const primaryTrack = scheduling.primaryTrack(workspace?.project.document.planning);
@@ -127,6 +157,46 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { setStatusFilter(initialStatusFilter); setMilestoneFilter(initialMilestoneFilter); }, [initialMilestoneFilter, initialStatusFilter]);
   useEffect(() => { writeTaskFields(taskFields); }, [taskFields]);
+  useEffect(() => { writeInspectorWidth(inspectorWidth); }, [inspectorWidth]);
+
+  const beginInspectorResize = (event: ReactPointerEvent<HTMLElement>) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    const inspector = inspectorPaneRef.current;
+    if (inspector === null) return;
+    const startWidth = inspector.getBoundingClientRect().width;
+    if (startWidth <= 0) return;
+    event.preventDefault();
+    try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* pointer capture unavailable */ }
+    setInspectorResize({ pointerId: event.pointerId, startX: event.clientX, startWidth });
+  };
+
+  const moveInspectorResize = (event: ReactPointerEvent<HTMLElement>) => {
+    if (inspectorResize === null || event.pointerId !== inspectorResize.pointerId) return;
+    setInspectorWidth(clampInspectorWidth(inspectorResize.startWidth - (event.clientX - inspectorResize.startX)));
+  };
+
+  const endInspectorResize = (event: ReactPointerEvent<HTMLElement>) => {
+    if (inspectorResize === null || event.pointerId !== inspectorResize.pointerId) return;
+    try { event.currentTarget.releasePointerCapture(event.pointerId); } catch { /* pointer capture unavailable */ }
+    setInspectorResize(null);
+  };
+
+  const resizeInspectorByKey = (event: ReactKeyboardEvent<HTMLElement>) => {
+    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+      event.preventDefault();
+      const step = event.shiftKey ? 40 : 16;
+      setInspectorWidth((current) => clampInspectorWidth(current + (event.key === "ArrowLeft" ? step : -step)));
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      setInspectorWidth(MIN_INSPECTOR_WIDTH);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      setInspectorWidth(MAX_INSPECTOR_WIDTH);
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      setInspectorWidth(DEFAULT_INSPECTOR_WIDTH);
+    }
+  };
 
   const applyResult = (result: EntityResult) => {
     setWorkspace((current) => {
@@ -396,7 +466,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     }} />
     {error !== null && <div className="alert error">{error}</div>}
     <AsyncBoundary state={loader.state} loading={t("status.loading")} retry={() => { void load(); }} error={(loadError, retry) => <div className="alert error">{loadError}<button onClick={retry}>{t("status.retry")}</button></div>}>
-      {workspace !== null && <div className={`project-plan-layout${selectedStage !== undefined || selectedTask !== undefined ? " with-inspector" : ""}`}>
+      {workspace !== null && <div className={`project-plan-layout${selectedStage !== undefined || selectedTask !== undefined ? " with-inspector" : ""}${inspectorResize === null ? "" : " resizing"}`} style={{ "--inspector-width": `${inspectorWidth}px` } as CSSProperties}>
         <div className="project-plan-main">
           <header className={`project-plan-header${recentChanges[workspace.project.document.id] ? " recently-changed" : ""}`}>
             <div className="project-plan-title"><span className="project-plan-project-kind">{t("core.project")} <code>{workspace.project.document.id}</code></span><h2>{text(workspace.project.document, "name")}</h2><p>{text(workspace.project.document, "description_markdown") || t("core.noDescription")}</p></div>
@@ -467,14 +537,32 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
           </section>
         </div>
 
-        {selectedStage !== undefined && <aside className="project-plan-inspector" aria-label={t("core.milestone")}>
+        {(selectedStage !== undefined || selectedTask !== undefined) && <div
+          aria-controls="project-plan-inspector-pane"
+          aria-label={t("projectPlan.resizeInspector")}
+          aria-orientation="vertical"
+          aria-valuemax={MAX_INSPECTOR_WIDTH}
+          aria-valuemin={MIN_INSPECTOR_WIDTH}
+          aria-valuenow={inspectorWidth}
+          className="plan-pane-resizer"
+          onKeyDown={resizeInspectorByKey}
+          onPointerCancel={endInspectorResize}
+          onPointerDown={beginInspectorResize}
+          onPointerMove={moveInspectorResize}
+          onPointerUp={endInspectorResize}
+          role="separator"
+          tabIndex={0}
+          title={t("projectPlan.resizeInspector")}
+        />}
+
+        {selectedStage !== undefined && <aside className="project-plan-inspector" aria-label={t("core.milestone")} id="project-plan-inspector-pane" ref={inspectorPaneRef}>
           <button aria-label={t("core.closeEditor")} className="inspector-close" onClick={closeInspector} title={t("core.closeEditor")} type="button">×</button>
           <span className="eyebrow">{t("core.milestone")}</span><h2>{text(selectedStage.document, "name")}</h2><code className="project-plan-inspector-id">{selectedStage.document.id}</code><p>{text(selectedStage.document, "description_markdown") || t("core.noDescription")}</p>
           <dl className="project-plan-inspector-stats"><div><dt>{t("stages.progressLabel")}</dt><dd>{activeTasks.filter((task) => task.document.milestone === selectedStage.document.id && isCompletedStatus(statuses, text(task.document, "status"))).length}/{activeTasks.filter((task) => task.document.milestone === selectedStage.document.id).length}</dd></div><div><dt>{t("stages.estimate")}</dt><dd>{formatDurationHours(locale, activeTasks.filter((task) => task.document.milestone === selectedStage.document.id).reduce((sum, task) => sum + (number(task.document, "estimate_hours") ?? 0), 0))}</dd></div><div><dt>{t("core.due")}</dt><dd>{dateLabel(text(selectedStage.document, "due"))}</dd></div></dl>
           <div className="inspector-actions"><button disabled={readOnly} onClick={() => setEditor({ kind: "edit-stage", stageId: selectedStage.document.id })}>{t("core.edit")}</button><button disabled={readOnly} onClick={() => archiveStage(selectedStage)}>{t("core.archive")}</button><button className="primary" disabled={readOnly} onClick={() => setEditor({ kind: "task", stageId: selectedStage.document.id })}>+ {t("core.createTaskAction")}</button></div>
         </aside>}
 
-        {selectedTask !== undefined && <aside className="project-plan-inspector task-inspector" aria-label={t("core.details")}>
+        {selectedTask !== undefined && <aside className="project-plan-inspector task-inspector" aria-label={t("core.details")} id="project-plan-inspector-pane" ref={inspectorPaneRef}>
           <button aria-label={t("core.closeEditor")} className="inspector-close" onClick={closeInspector} title={t("core.closeEditor")} type="button">×</button>
           <TaskPanel api={api} catalog={catalog} confirmCommentDelete={() => confirmAction(t("comments.deleteConfirm"))} confirmDelete={(name) => confirmAction(t("core.deleteConfirm", { name }))} draft={draft} entity={selectedTask} fingerprint={workspace.draft_fingerprint} key={selectedTask.document.id} locale={locale} milestones={workspace.milestones} onCommentChanged={async (nextFingerprint) => { setWorkspace((current) => current === null ? current : { ...current, draft_fingerprint: nextFingerprint }); await onChanged(); }} onDeleted={closeInspector} onNavigate={onNavigate} onStatusChange={(status) => changeTaskStatus(selectedTask, status)} people={people} projects={projects} readOnly={readOnly} remove={removeEntity} save={saveEntity} statusBusy={statusPending !== null} statusOptions={statuses} tasks={workspace.tasks} typeOptions={types} value={text} effortString={(document) => { const e = effortOf(document); return typeof e === "number" ? String(e) : ""; }} track={primaryTrack} />
         </aside>}

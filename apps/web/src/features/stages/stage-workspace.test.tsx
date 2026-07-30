@@ -203,6 +203,35 @@ describe("project plan and stage workspace", () => {
     expect(client.createEntity.mock.calls[0]?.[3]).toMatchObject({ project: project.document.id, milestone: stage.document.id, title: "Created from plan", assignees: [person.document.id], schedules: { plan: { start: "2026-07-20", finish: "2026-07-24", effort_hours: 20 } } });
   });
 
+  it("renders a resizable task inspector and persists the chosen width", async () => {
+    const client = api();
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} selectedTaskId={linked.document.id} />);
+
+    const resizer = await screen.findByRole("separator", { name: "Resize detail panel" });
+    expect(resizer.getAttribute("aria-valuemin")).toBe("340");
+    expect(resizer.getAttribute("aria-valuemax")).toBe("760");
+    expect(resizer.getAttribute("aria-valuenow")).toBe("410");
+    expect(document.querySelector(".project-plan-inspector.task-inspector")).toBeTruthy();
+
+    fireEvent.keyDown(resizer, { key: "ArrowLeft" });
+    await waitFor(() => expect(resizer.getAttribute("aria-valuenow")).toBe("426"));
+    expect(localStorage.getItem("gitpm.projectPlan.inspectorWidth")).toBe("426");
+
+    fireEvent.keyDown(resizer, { key: "ArrowRight", shiftKey: true });
+    await waitFor(() => expect(resizer.getAttribute("aria-valuenow")).toBe("386"));
+    expect(localStorage.getItem("gitpm.projectPlan.inspectorWidth")).toBe("386");
+
+    fireEvent.keyDown(resizer, { key: "Enter" });
+    await waitFor(() => expect(resizer.getAttribute("aria-valuenow")).toBe("410"));
+  });
+
+  it("does not render the inspector resizer when no task or milestone is selected", async () => {
+    const client = api();
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} />);
+    await screen.findByRole("heading", { name: "Alpha" });
+    expect(screen.queryByRole("separator", { name: "Resize detail panel" })).toBeNull();
+  });
+
   it("numbers milestones and tasks and persists their manual order", async () => {
     const client = api(); const onNavigate = vi.fn();
     render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={onNavigate} projectId={project.document.id} />);
