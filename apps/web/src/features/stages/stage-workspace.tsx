@@ -1,5 +1,5 @@
 import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
-import { buildSchedule, ScheduleResolver, scheduleTracksConfig, scheduleTextReader, scheduleEffortReader } from "../../schedules.js";
+import { buildSchedule, ScheduleResolver, scheduleTracksConfig, scheduleTextReader, scheduleEffortReader, withScheduleWindow } from "../../schedules.js";
 import { isCompletedStatus } from "../../status-categories.js";
 import { buildTaskHierarchy } from "@gitpm/task-hierarchy";
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type FormEvent } from "react";
@@ -104,7 +104,7 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
     if (workspace === null || selectedStage === undefined) return;
     const data = new FormData(event.currentTarget);
     const due = String(data.get("due"));
-    const document = { ...selectedStage.document, name: String(data.get("name")).trim(), description_markdown: String(data.get("description")), schedules: buildSchedule(primaryTrack, "", due, "") } as EntityDocument;
+    const document = withScheduleWindow({ ...selectedStage.document, name: String(data.get("name")).trim(), description_markdown: String(data.get("description")) }, primaryTrack, { finish: due }) as EntityDocument;
     void mutate(async () => await api.updateEntity(draft.draft_id, "milestones", selectedStage, workspace.draft_fingerprint, document));
   };
 
