@@ -1,4 +1,5 @@
 import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
+import type { ProjectPlanning } from "@gitpm/contracts";
 import { buildSchedule, ScheduleResolver, scheduleTracksConfig, scheduleTextReader, scheduleEffortReader, withScheduleWindow } from "../../schedules.js";
 import { isCompletedStatus } from "../../status-categories.js";
 import { ProjectSnapshot } from "./project-snapshot.js";
@@ -7,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import { ApiError, deleteRestrictionLabels, formatApiError, type GitPmApi } from "../../api.js";
 import { AsyncBoundary, useAsyncLoad } from "../../async-data.js";
 import { AssigneeChecks, existingProjectGroups, projectGroupFromForm, ProjectGroupField, TaskPanel, type ConfigValue } from "../../core-ui.js";
+import { ProjectPlanningEditor } from "../../project-planning-editor.js";
 import { EditorDrawer } from "../../editor-drawer.js";
 import { EntityCatalog } from "../../entity-catalog.js";
 import { useExternalHighlights, useReducedMotion } from "../../external-updates.js";
@@ -112,6 +114,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   const [types, setTypes] = useState<readonly ConfigValue[]>([]);
   const [tracksConfig, setTracksConfig] = useState<ConfigurationResult | null>(null);
   const [editor, setEditor] = useState<PlanEditor>(null);
+  const [projectPlanningDraft, setProjectPlanningDraft] = useState<ProjectPlanning | undefined>(undefined);
   const [statusFilter, setStatusFilter] = useState(initialStatusFilter);
   const [milestoneFilter, setMilestoneFilter] = useState(initialMilestoneFilter);
   const [taskFields, setTaskFields] = useState<TaskFieldVisibility>(readTaskFields);
@@ -363,6 +366,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
       status: String(data.get("status")),
       description_markdown: String(data.get("description")),
       owner: owner || undefined,
+      ...(projectPlanningDraft === undefined ? {} : { planning: projectPlanningDraft }),
     }, primaryTrack, { start, finish: due }) as EntityDocument;
     const writableDocument = document as unknown as Record<string, unknown>;
     if (selectedGroup.group === "") delete writableDocument.group;
@@ -469,7 +473,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
         <div className="project-plan-main">
           <header className={`project-plan-header${recentChanges[workspace.project.document.id] ? " recently-changed" : ""}`}>
             <div className="project-plan-title"><span className="project-plan-project-kind">{t("core.project")} <code>{workspace.project.document.id}</code></span><h2>{text(workspace.project.document, "name")}</h2><p>{text(workspace.project.document, "description_markdown") || t("core.noDescription")}</p></div>
-            <div className="project-plan-actions"><button disabled={readOnly} onClick={() => setEditor({ kind: "project" })}>{t("core.edit")}</button><button disabled={readOnly} onClick={() => setEditor({ kind: "new-stage" })}>+ {t("stages.new")}</button><button className="primary" disabled={readOnly} onClick={() => setEditor({ kind: "task" })}>+ {t("core.createTaskAction")}</button></div>
+            <div className="project-plan-actions"><button disabled={readOnly} onClick={() => { setProjectPlanningDraft(workspace?.project.document.planning as ProjectPlanning | undefined); setEditor({ kind: "project" }); }}>{t("core.edit")}</button><button disabled={readOnly} onClick={() => setEditor({ kind: "new-stage" })}>+ {t("stages.new")}</button><button className="primary" disabled={readOnly} onClick={() => setEditor({ kind: "task" })}>+ {t("core.createTaskAction")}</button></div>
             <dl className="project-plan-meta">
               <div><dt>{t("core.status")}</dt><dd><span className="state open">{statusTitle(text(workspace.project.document, "status"))}</span></dd></div>
               {text(workspace.project.document, "group").trim() !== "" && <div><dt>{t("core.group")}</dt><dd>{text(workspace.project.document, "group").trim()}</dd></div>}
@@ -563,7 +567,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
 
         {selectedTask !== undefined && <aside className="project-plan-inspector task-inspector" aria-label={t("core.details")} id="project-plan-inspector-pane" ref={inspectorPaneRef}>
           <button aria-label={t("core.closeEditor")} className="inspector-close" onClick={closeInspector} title={t("core.closeEditor")} type="button">×</button>
-          <TaskPanel api={api} catalog={catalog} confirmCommentDelete={() => confirmAction(t("comments.deleteConfirm"))} confirmDelete={(name) => confirmAction(t("core.deleteConfirm", { name }))} draft={draft} entity={selectedTask} fingerprint={workspace.draft_fingerprint} key={selectedTask.document.id} locale={locale} milestones={workspace.milestones} onCommentChanged={async (nextFingerprint) => { setWorkspace((current) => current === null ? current : { ...current, draft_fingerprint: nextFingerprint }); await onChanged(); }} onDeleted={closeInspector} onNavigate={onNavigate} onStatusChange={(status) => changeTaskStatus(selectedTask, status)} people={people} projects={projects} readOnly={readOnly} remove={removeEntity} save={saveEntity} statusBusy={statusPending !== null} statusOptions={statuses} tasks={workspace.tasks} typeOptions={types} value={text} effortString={(document) => { const e = effortOf(document); return typeof e === "number" ? String(e) : ""; }} track={primaryTrack} />
+          <TaskPanel api={api} catalog={catalog} confirmCommentDelete={() => confirmAction(t("comments.deleteConfirm"))} confirmDelete={(name) => confirmAction(t("core.deleteConfirm", { name }))} draft={draft} entity={selectedTask} fingerprint={workspace.draft_fingerprint} key={selectedTask.document.id} locale={locale} milestones={workspace.milestones} onCommentChanged={async (nextFingerprint) => { setWorkspace((current) => current === null ? current : { ...current, draft_fingerprint: nextFingerprint }); await onChanged(); }} onDeleted={closeInspector} onNavigate={onNavigate} onStatusChange={(status) => changeTaskStatus(selectedTask, status)} people={people} projects={projects} readOnly={readOnly} remove={removeEntity} save={saveEntity} statusBusy={statusPending !== null} statusOptions={statuses} tasks={workspace.tasks} typeOptions={types} value={text} effortString={(document) => { const e = effortOf(document); return typeof e === "number" ? String(e) : ""; }} track={primaryTrack} scheduling={scheduling} planning={workspace.project.document.planning as ProjectPlanning | undefined} />
         </aside>}
       </div>}
     </AsyncBoundary>
@@ -577,6 +581,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
         <label>{t("projectPlan.start")}<input defaultValue={text(workspace.project.document, "start")} disabled={readOnly} name="start" type="date" /></label>
         <label>{t("core.due")}<input defaultValue={text(workspace.project.document, "due")} disabled={readOnly} name="due" type="date" /></label>
         <label>{t("core.description")}<textarea defaultValue={text(workspace.project.document, "description_markdown")} disabled={readOnly} name="description" /></label>
+        <ProjectPlanningEditor planning={projectPlanningDraft} tracks={scheduling.raw?.tracks ?? []} disabled={readOnly} locale={locale} onChange={setProjectPlanningDraft} />
         <div className="editor-drawer-actions"><details className="more-actions"><summary>{t("core.moreActions")}</summary><div><button disabled={readOnly} onClick={archiveProject} type="button">{t("core.archive")}</button><button className="danger" disabled={readOnly} onClick={() => { void deleteProject(); }} type="button">{t("core.delete")}</button></div></details><button onClick={() => setEditor(null)} type="button">{t("core.cancel")}</button><button className="primary" disabled={readOnly}>{t("core.save")}</button></div>
       </form>
     </EditorDrawer>}
