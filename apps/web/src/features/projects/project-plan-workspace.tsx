@@ -1,5 +1,5 @@
 import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
-import { buildSchedule, ScheduleResolver, scheduleTracksConfig, scheduleTextReader, scheduleEffortReader } from "../../schedules.js";
+import { buildSchedule, ScheduleResolver, scheduleTracksConfig, scheduleTextReader, scheduleEffortReader, withScheduleWindow } from "../../schedules.js";
 import { isCompletedStatus } from "../../status-categories.js";
 import { ProjectSnapshot } from "./project-snapshot.js";
 import { buildTaskHierarchy } from "@gitpm/task-hierarchy";
@@ -357,14 +357,13 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
       if (selectedGroup.duplicate) setError(t("core.groupAlreadyExists"));
       return;
     }
-    const document = {
+    const document = withScheduleWindow({
       ...workspace.project.document,
       name: String(data.get("name")).trim(),
       status: String(data.get("status")),
       description_markdown: String(data.get("description")),
       owner: owner || undefined,
-      schedules: buildSchedule(primaryTrack, start, due, ""),
-    } as EntityDocument;
+    }, primaryTrack, { start, finish: due }) as EntityDocument;
     const writableDocument = document as unknown as Record<string, unknown>;
     if (selectedGroup.group === "") delete writableDocument.group;
     else writableDocument.group = selectedGroup.group;
@@ -387,7 +386,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     if (stage === undefined) return;
     const data = new FormData(event.currentTarget);
     const due = String(data.get("due"));
-    const document = { ...stage.document, name: String(data.get("name")).trim(), description_markdown: String(data.get("description")), schedules: buildSchedule(primaryTrack, "", due, "") } as EntityDocument;
+    const document = withScheduleWindow({ ...stage.document, name: String(data.get("name")).trim(), description_markdown: String(data.get("description")) }, primaryTrack, { finish: due }) as EntityDocument;
     void mutate(async () => await api.updateEntity(draft.draft_id, "milestones", stage, workspace.draft_fingerprint, document));
   };
 
