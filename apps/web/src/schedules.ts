@@ -1,4 +1,4 @@
-import { resolvePlanning, type PlanningSettings, type ScheduleTracksConfig } from "@gitpm/scheduling";
+import { resolvePlanning, type PlanningSettings, type ScheduleTracksConfig, type TrackCapability, type TrackDefinition } from "@gitpm/scheduling";
 import type { ConfigurationDocument, ProjectPlanning } from "@gitpm/contracts";
 
 export interface ScheduleWindowInput {
@@ -143,6 +143,8 @@ export function scheduleTracksConfig(document: ConfigurationDocument | Document 
 export class ScheduleResolver {
   constructor(private readonly config: ScheduleTracksConfig | null) {}
 
+  get raw(): ScheduleTracksConfig | null { return this.config; }
+
   planning(projectPlanning?: ProjectPlanning): PlanningSettings {
     return this.config === null ? EMPTY_PLANNING : resolvePlanning(this.config, projectPlanning as Partial<PlanningSettings> | undefined);
   }
@@ -158,9 +160,73 @@ export class ScheduleResolver {
   comparisonTrack(projectPlanning?: ProjectPlanning): string | undefined {
     return this.planning(projectPlanning).comparison_track;
   }
+
+  manualTracks(projectPlanning?: ProjectPlanning): readonly TrackDefinition[] {
+    return manualTrackDefinitions(this.config, this.planning(projectPlanning));
+  }
+
+  actualTrack(projectPlanning?: ProjectPlanning): TrackDefinition | undefined {
+    return actualTrackDefinition(this.config, this.planning(projectPlanning));
+  }
+
+  trackTitle(slug: string): string {
+    return trackTitle(this.config, slug);
+  }
 }
 
 export const EMPTY_RESOLVER = new ScheduleResolver(null);
+
+export function trackDefinitions(config: ScheduleTracksConfig | null): readonly TrackDefinition[] {
+  return config?.tracks ?? [];
+}
+
+export function resolveTrackDefinition(config: ScheduleTracksConfig | null, slug: string): TrackDefinition | undefined {
+  return trackDefinitions(config).find((track) => track.slug === slug);
+}
+
+export function trackTitle(config: ScheduleTracksConfig | null, slug: string): string {
+  const track = resolveTrackDefinition(config, slug);
+  return track !== undefined && track.title !== "" ? track.title : slug;
+}
+
+export function trackHasCapability(track: TrackDefinition, capability: TrackCapability): boolean {
+  return track.capabilities?.includes(capability) ?? false;
+}
+
+export function manualTrackDefinitions(config: ScheduleTracksConfig | null, planning: PlanningSettings): readonly TrackDefinition[] {
+  const enabled = new Set(planning.enabled_tracks);
+  return trackDefinitions(config).filter((track) => track.kind === "manual" && enabled.has(track.slug));
+}
+
+export function actualTrackDefinition(config: ScheduleTracksConfig | null, planning: PlanningSettings): TrackDefinition | undefined {
+  const enabled = new Set(planning.enabled_tracks);
+  return trackDefinitions(config).find((track) => track.kind === "actual" && enabled.has(track.slug));
+}
+
+export function setScheduleDependencies(existingSchedules: Readonly<Record<string, unknown>> | undefined, trackSlug: string, dependsOn: readonly string[]): ScheduleMap | undefined {
+  if (trackSlug === "") return existingSchedules === undefined || Object.keys(existingSchedules).length === 0 ? undefined : { ...existingSchedules } as ScheduleMap;
+  const source = existingSchedules ?? {};
+  const next: Record<string, ScheduleWindowInput> = {};
+  for (const [track, window] of Object.entries(source)) {
+    if (track === trackSlug) continue;
+    if (isWindow(window)) next[track] = { ...window };
+  }
+  const existing = isWindow(source[trackSlug]) ? { ...(source[trackSlug] as ScheduleWindowInput) } : undefined;
+  if (existing !== undefined) {
+    const window: Record<string, unknown> = { ...existing } as Record<string, unknown>;
+    delete window.depends_on;
+    if (dependsOn.length > 0) window.depends_on = [...dependsOn];
+    if (Object.keys(window).length > 0) next[trackSlug] = window as ScheduleWindowInput;
+  }
+  return Object.keys(next).length === 0 ? undefined : next;
+}
+
+export function withSchedulesMap<T extends Record<string, unknown>>(document: T, schedules: ScheduleMap | undefined): T {
+  const result = { ...document } as Record<string, unknown>;
+  if (schedules === undefined || Object.keys(schedules).length === 0) delete result.schedules;
+  else result.schedules = schedules;
+  return result as T;
+}
 
 export function scheduleTextReader(track: string): (document: Document, key: string) => string {
   return (document, key) => key === "start" || key === "due" ? scheduleText(document, key, track) : typeof document[key] === "string" ? document[key] as string : "";
