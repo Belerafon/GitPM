@@ -17,7 +17,7 @@ schedules:
   plan:
     start: 2026-08-03
     finish: 2026-08-28
-    effort_hours: 72
+    effort_hours: 144
     depends_on:
       - T-26-8D0SHE # task: Исследовать ключевые клиентские сценарии
 labels:
