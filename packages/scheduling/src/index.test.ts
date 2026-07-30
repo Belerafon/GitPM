@@ -197,4 +197,27 @@ describe("gantt model", () => {
     const model = buildGanttModel([schedulable("T-26-1", { plan: { start: "2026-08-01", finish: "2026-08-10" } })], { primaryTrack: "plan", visibleTracks: ["plan", "target"] });
     expect(model.rows[0]!.bars).toEqual([{ track: "plan", start: "2026-08-01", finish: "2026-08-10" }]);
   });
+
+  it("keeps a task whose only bar is in a secondary visible track", () => {
+    const subjects: readonly Schedulable[] = [schedulable("T-26-1", { target: { start: "2026-09-01", finish: "2026-09-30" } })];
+    const model = buildGanttModel(subjects, { primaryTrack: "plan", visibleTracks: ["plan", "target"] });
+    expect(model.rows[0]!.primary).toBeUndefined();
+    expect(model.rows[0]!.bars).toEqual([{ track: "target", start: "2026-09-01", finish: "2026-09-30" }]);
+  });
+
+  it("computes a range across visible tracks, actual activity and milestones", () => {
+    const subjects: readonly Schedulable[] = [
+      schedulable("T-26-1", { plan: { start: "2026-08-15", finish: "2026-09-20" }, target: { start: "2026-09-01", finish: "2026-09-30" } }),
+    ];
+    const actual = new Map<string, readonly { date: string; hours: number }[]>([["T-26-1", [{ date: "2026-12-18", hours: 4 }]]]);
+    const model = buildGanttModel(subjects, { primaryTrack: "plan", visibleTracks: ["plan", "target"], actual, milestones: [{ id: "M-1", finish: "2026-07-01" }] });
+    expect(model.range).toEqual({ start: "2026-07-01", finish: "2026-12-18" });
+  });
+
+  it("aggregates is the consumer's job; the builder carries the provided actual segments", () => {
+    const subjects: readonly Schedulable[] = [schedulable("T-26-1", { plan: { start: "2026-08-01", finish: "2026-08-10" } })];
+    const actual = new Map<string, readonly { date: string; hours: number }[]>([["T-26-1", [{ date: "2026-08-03", hours: 7 }]]]);
+    const model = buildGanttModel(subjects, { primaryTrack: "plan", actual });
+    expect(model.rows[0]!.actual).toEqual([{ date: "2026-08-03", hours: 7 }]);
+  });
 });

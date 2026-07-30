@@ -325,6 +325,12 @@ export interface GanttRow {
 
 export interface GanttModel {
   readonly rows: readonly GanttRow[];
+  readonly range?: { readonly start: string; readonly finish: string };
+}
+
+export interface GanttMilestone {
+  readonly id: string;
+  readonly finish?: string;
 }
 
 export interface BuildGanttOptions {
@@ -332,6 +338,7 @@ export interface BuildGanttOptions {
   readonly visibleTracks?: readonly string[];
   readonly dependencyTrack?: string;
   readonly actual?: ReadonlyMap<string, readonly GanttActualSegment[]>;
+  readonly milestones?: readonly GanttMilestone[];
 }
 
 function barFromWindow(track: string, window: ScheduleWindow | RolledWindow | undefined): GanttTrackBar | undefined {
@@ -343,9 +350,26 @@ function barFromWindow(track: string, window: ScheduleWindow | RolledWindow | un
   return { track, start, finish };
 }
 
+function ganttRange(rows: readonly GanttRow[], milestones: readonly GanttMilestone[]): { readonly start: string; readonly finish: string } | undefined {
+  let start: string | undefined;
+  let finish: string | undefined;
+  const consider = (value: string | undefined): void => {
+    if (typeof value !== "string") return;
+    if (start === undefined || value < start) start = value;
+    if (finish === undefined || value > finish) finish = value;
+  };
+  for (const row of rows) {
+    for (const bar of row.bars) { consider(bar.start); consider(bar.finish); }
+    for (const segment of row.actual) consider(segment.date);
+  }
+  for (const milestone of milestones) consider(milestone.finish);
+  return start === undefined || finish === undefined ? undefined : { start, finish };
+}
+
 export function buildGanttModel(subjects: readonly Schedulable[], options: BuildGanttOptions): GanttModel {
   const visible = options.visibleTracks ?? [options.primaryTrack];
   const dependencyTrack = options.dependencyTrack ?? options.primaryTrack;
+  const milestones = options.milestones ?? [];
   const rows = subjects.map((subject): GanttRow => {
     const bars = visible.flatMap((track) => {
       const bar = barFromWindow(track, subject.schedules?.[track]);
@@ -356,5 +380,5 @@ export function buildGanttModel(subjects: readonly Schedulable[], options: Build
     const dependencies = dependencyEdges(subject, dependencyTrack).map((from) => ({ track: dependencyTrack, from, to: subject.id }));
     return { id: subject.id, primary, bars, actual, dependencies };
   });
-  return { rows };
+  return { rows, range: ganttRange(rows, milestones) };
 }
