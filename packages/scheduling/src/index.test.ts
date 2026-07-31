@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildSchedulingReadModel,
   buildGanttModel,
   daysBetween,
   declaredWindow,
   dependencyEdges,
   detectCyclesPerTrack,
+  effectiveFinish,
   effectiveWindow,
   finishVarianceDays,
   hasCapability,
@@ -14,9 +16,11 @@ import {
   overdueDays,
   resolvePlanning,
   resolveTrack,
+  readModelTrack,
   rollupOverflowWarnings,
   rollupWindow,
   validatePlanning,
+  windowEffort,
   windowCapabilityViolations,
   windowDateRangeViolations,
   type PlanningSettings,
@@ -86,6 +90,13 @@ describe("rollup and effective windows", () => {
     expect(rollupWindow(children, "target")).toBeUndefined();
   });
 
+  it("distinguishes an absent estimate from an explicit zero estimate", () => {
+    const withoutEstimates = rollupWindow([schedulable("T-26-A", { plan: { start: "2026-09-01", finish: "2026-09-02" } })], "plan");
+    const zeroEstimate = rollupWindow([schedulable("T-26-B", { plan: { effort_hours: 0 } })], "plan");
+    expect(windowEffort(withoutEstimates)).toBeUndefined();
+    expect(windowEffort(zeroEstimate)).toBe(0);
+  });
+
   it("prefers declared window, otherwise falls back to rollup", () => {
     const parent = schedulable("T-26-P", { plan: { start: "2026-09-05", finish: "2026-09-15" } });
     expect(effectiveWindow(parent, "plan")).toEqual({ start: "2026-09-05", finish: "2026-09-15" });
@@ -99,6 +110,20 @@ describe("rollup and effective windows", () => {
     const warnings = rollupOverflowWarnings(parent, children, ["plan"]);
     expect(warnings).toContainEqual({ track: "plan", field: "start", declared: "2026-09-02", rolled: "2026-09-01" });
     expect(warnings).toContainEqual({ track: "plan", field: "finish", declared: "2026-09-18", rolled: "2026-09-25" });
+  });
+
+  it("builds declared, rolled, and effective windows for a parent", () => {
+    const parent = schedulable("T-26-P", { plan: { start: "2026-09-02", finish: "2026-09-18" } });
+    const model = buildSchedulingReadModel(parent, children, ["plan", "target"]);
+    const plan = readModelTrack(model, "plan")!;
+    expect(plan.declared).toEqual({ start: "2026-09-02", finish: "2026-09-18" });
+    expect(plan.rolled).toEqual({ start: "2026-09-01", finish: "2026-09-25", effort_hours: 100 });
+    expect(plan.effective).toEqual(plan.declared);
+    expect(effectiveFinish(model, "plan")).toBe("2026-09-18");
+    expect(model.overflowWarnings).toHaveLength(2);
+
+    const rolledOnly = buildSchedulingReadModel(schedulable("T-26-Q"), children, ["plan"]);
+    expect(readModelTrack(rolledOnly, "plan")?.effective).toEqual({ start: "2026-09-01", finish: "2026-09-25", effort_hours: 100 });
   });
 });
 

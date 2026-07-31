@@ -289,6 +289,12 @@ importers:
       '@gitpm/repository-format':
         specifier: workspace:*
         version: link:../repository-format
+      '@gitpm/scheduling':
+        specifier: workspace:*
+        version: link:../scheduling
+      '@gitpm/time-entries':
+        specifier: workspace:*
+        version: link:../time-entries
       '@gitpm/validation':
         specifier: workspace:*
         version: link:../validation

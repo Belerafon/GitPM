@@ -163,6 +163,7 @@ class BrowserAcceptanceApi implements GitPmApi {
   async updateComment(): Promise<never> { throw new Error("not used in acceptance fixture"); }
   async deleteComment(): Promise<never> { throw new Error("not used in acceptance fixture"); }
   async listTimeEntries(): Promise<readonly never[]> { return []; }
+  async listProjectTimeEntries() { return { items: [], total: 0, offset: 0, limit: 200 }; }
   async createTimeEntry(): Promise<never> { throw new Error("not used in acceptance fixture"); }
   async voidTimeEntry(): Promise<never> { throw new Error("not used in acceptance fixture"); }
   async notifications() { return { items: [] }; }

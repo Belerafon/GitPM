@@ -19,5 +19,37 @@
     "voided_at": {"$ref": "common.schema.json#/$defs/timestamp"},
     "voided_by": {"$ref": "common.schema.json#/$defs/actor"},
     "replacement": {"$ref": "common.schema.json#/$defs/entryId"}
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "type": "object",
+        "properties": {"state": {"const": "voided"}},
+        "required": ["state"]
+      },
+      "then": {
+        "type": "object",
+        "required": ["voided_at", "voided_by"],
+        "properties": {
+          "voided_at": {},
+          "voided_by": {}
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": {"state": {"const": "active"}},
+        "required": ["state"]
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "voided_at": false,
+          "voided_by": false,
+          "replacement": false
+        }
+      }
+    }
+  ]
 }

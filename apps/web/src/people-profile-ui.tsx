@@ -8,6 +8,7 @@ import { formatDateOnly, formatNumber, message, type Locale, type MessageKey } f
 import type { ConfigurationResult, DraftStatus, EntityResult, GitPmDocument, GitPmRole } from "./types.js";
 import type { WorkspaceNavigate } from "./workspace-navigation.js";
 import { draftReadOnlyReason } from "./draft-read-only.js";
+import { isCompletedStatus } from "./status-categories.js";
 
 const strings = (document: GitPmDocument, key: string) => Array.isArray(document[key]) ? (document[key] as unknown[]).filter((item): item is string => typeof item === "string") : [];
 const numbers = (document: GitPmDocument, key: string) => Array.isArray(document[key]) ? (document[key] as unknown[]).filter((item): item is number => typeof item === "number") : [];
@@ -29,7 +30,6 @@ interface ProfileData {
 }
 
 const FILTERS_STORAGE_KEY = "gitpm.peopleProfile.taskFilters";
-const DEFAULT_HIDDEN_STATUS_SLUGS = new Set(["done"]);
 type StoredEntry = Readonly<{ statuses: readonly string[]; projects: readonly string[] }>;
 type StoredFilters = Record<string, { statuses: readonly string[]; projects: readonly string[] }>;
 const stringArray = (value: unknown): readonly string[] | undefined => Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : undefined;
@@ -145,7 +145,7 @@ function PeopleProfile({ archivePerson, data, deletePerson, editorOpen, locale, 
     .filter((item) => item.document.lifecycle === "active" && strings(item.document, "assignees").includes(personId))
     .sort((left, right) => (text(left.document, "due") || "9999").localeCompare(text(right.document, "due") || "9999") || text(left.document, "title").localeCompare(text(right.document, "title"), locale));
   const statusOptions = (() => {
-    const configured = data.statuses.map((status) => ({ slug: status.slug, title: status.title }));
+    const configured = data.statuses.map((status) => ({ slug: status.slug, title: status.title, category: status.category }));
     const known = new Set(configured.map((status) => status.slug));
     const extras = assignedTasks
       .map((task) => text(task.document, "status"))
@@ -159,7 +159,7 @@ function PeopleProfile({ archivePerson, data, deletePerson, editorOpen, locale, 
     const stored = readStoredTaskFilters(personId).statuses;
     const known = statusOptions.map((option) => option.slug);
     if (stored !== undefined) return new Set(stored.filter((slug) => known.includes(slug)));
-    return new Set(known.filter((slug) => !DEFAULT_HIDDEN_STATUS_SLUGS.has(slug)));
+    return new Set(known.filter((slug) => !isCompletedStatus(data.statuses, slug)));
   };
   const initialProjectSelection = (): Set<string> => {
     const stored = readStoredTaskFilters(personId).projects;
@@ -184,7 +184,7 @@ function PeopleProfile({ archivePerson, data, deletePerson, editorOpen, locale, 
   };
   const resetFilters = () => {
     setFiltersDirty(true);
-    setStatusSelection(new Set(statusOptions.map((option) => option.slug).filter((slug) => !DEFAULT_HIDDEN_STATUS_SLUGS.has(slug))));
+    setStatusSelection(new Set(statusOptions.map((option) => option.slug).filter((slug) => !isCompletedStatus(data.statuses, slug))));
     setProjectSelection(new Set(projectOptions.map((option) => option.id)));
   };
   if (person === undefined) return <div className="card empty-workspace"><p>{t("people.notFound")}</p><button onClick={() => onNavigate("people")}>← {t("people.back")}</button></div>;

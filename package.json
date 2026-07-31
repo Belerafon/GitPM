@@ -34,7 +34,7 @@
     "security:p13a": "corepack pnpm build && vitest run apps/server/src/app.test.ts apps/web/src/core-ui.test.tsx apps/web/src/changes-ui.test.tsx apps/web/src/hostile-content.test.tsx packages/git-client/src/malicious-repository.test.ts packages/gitlab/src/index.test.ts packages/publishing/src/index.test.ts && corepack pnpm audit --prod --audit-level high",
     "security:verify": "corepack pnpm --filter @gitpm/security build && vitest run packages/security/src/security-boundary.test.ts && node scripts/security-spike-report.mjs",
     "smoke": "node scripts/smoke-health.mjs",
-    "test": "vitest run",
+    "test": "node scripts/check-scheduling-regressions.mjs && vitest run",
     "typecheck": "corepack pnpm -r --if-present typecheck && tsc -p e2e/tsconfig.json --noEmit",
     "typecheck:after-build": "corepack pnpm --filter @gitpm/web typecheck && tsc -p e2e/tsconfig.json --noEmit",
     "verify:guidance": "node scripts/run-local-verification.mjs --profile guidance --install",

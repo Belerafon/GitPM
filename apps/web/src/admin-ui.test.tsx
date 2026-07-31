@@ -6,7 +6,7 @@ import { AdminWorkspace } from "./admin-ui.js";
 import type { ConfigurationDocument, ConfigurationResult, DraftStatus, EntityDocument, EntityResult } from "./types.js";
 
 const draft: DraftStatus = { draft_id: "DRF-ADMIN", owner_gitlab_user_id: "42", branch: "gitpm/42/DRF-ADMIN", base_commit: "a".repeat(40), writer_mode: "ui", state: "open", fingerprint: "b".repeat(64), created_at: "2026-07-10T00:00:00.000Z", updated_at: "2026-07-10T00:00:00.000Z" };
-const configDocument = (kind: "statuses" | "issue-types" | "work-categories") => (kind === "statuses" ? { schema: "gitpm/statuses@2", statuses: [{ slug: "backlog", title: "Backlog", color: "gray", active: true }, { slug: "done", title: "Done", color: "green", active: true }] } : kind === "work-categories" ? { schema: "gitpm/work-categories@1", categories: [{ slug: "regular", title: "Regular work", active: true }, { slug: "rework", title: "Rework", active: true }] } : { schema: "gitpm/issue-types@1", issue_types: [{ slug: "task", title: "Task", color: "blue", active: true }] }) as ConfigurationDocument;
+const configDocument = (kind: "statuses" | "issue-types" | "work-categories") => (kind === "statuses" ? { schema: "gitpm/statuses@2", statuses: [{ slug: "backlog", title: "Backlog", color: "gray", active: true, category: "backlog" }, { slug: "accepted", title: "Accepted", color: "green", active: true, category: "done" }] } : kind === "work-categories" ? { schema: "gitpm/work-categories@1", categories: [{ slug: "regular", title: "Regular work", active: true }, { slug: "rework", title: "Rework", active: true }] } : { schema: "gitpm/issue-types@1", issue_types: [{ slug: "task", title: "Task", color: "blue", active: true }] }) as ConfigurationDocument;
 
 class AdminApi {
   entities: EntityResult[] = [];
@@ -66,6 +66,8 @@ describe("administration UI", () => {
     expect(within(dialog).getAllByText("Technical ID")).toHaveLength(2);
     expect(within(dialog).getByRole("switch", { name: "Active: Backlog" })).toBeTruthy();
     const statusTitle = within(dialog).getByLabelText("Statuses backlog");
+    expect((within(dialog).getByLabelText("Status category accepted") as HTMLSelectElement).value).toBe("done");
+    fireEvent.change(within(dialog).getByLabelText("Status category backlog"), { target: { value: "active" } });
     fireEvent.change(statusTitle, { target: { value: "Queue" } });
     const statusRow = statusTitle.closest<HTMLElement>(".config-row")!;
     expect(statusRow.querySelector(".config-preview")?.textContent).toBe("Queue");
@@ -79,7 +81,7 @@ describe("administration UI", () => {
     expect(statusRow.textContent).not.toContain("blue");
     fireEvent.click(within(dialog).getByRole("switch", { name: "Active: Queue" }));
     fireEvent.submit(statusTitle.closest("form")!);
-    await waitFor(() => expect((admin.configurations.get("statuses")!.document.statuses as readonly { title: string; color: string; active: boolean }[])[0]).toMatchObject({ title: "Queue", color: "blue", active: false }));
+    await waitFor(() => expect((admin.configurations.get("statuses")!.document.statuses as readonly { title: string; color: string; active: boolean; category: string }[])[0]).toMatchObject({ title: "Queue", color: "blue", active: false, category: "active" }));
     fireEvent.click(within(statusesCard).getByRole("button", { name: "Edit Statuses" }));
     fireEvent.change(screen.getByLabelText("Statuses backlog"), { target: { value: "Unsaved" } });
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
@@ -88,10 +90,10 @@ describe("administration UI", () => {
     expect((screen.getByLabelText("Statuses backlog") as HTMLInputElement).value).toBe("Queue");
     fireEvent.click(screen.getByRole("button", { name: "Move Queue down" }));
     expect(screen.getByLabelText("Statuses backlog").closest(".config-row")?.classList.contains("is-saving")).toBe(true);
-    expect(screen.getByLabelText("Statuses done").closest(".config-row")?.classList.contains("is-saving")).toBe(true);
+    expect(screen.getByLabelText("Statuses accepted").closest(".config-row")?.classList.contains("is-saving")).toBe(true);
     await waitFor(() => expect(screen.getByLabelText("Statuses backlog").closest(".config-row")?.classList.contains("recently-changed")).toBe(true));
-    expect(screen.getByLabelText("Statuses done").closest(".config-row")?.classList.contains("recently-changed")).toBe(true);
-    await waitFor(() => expect((admin.configurations.get("statuses")!.document.statuses as readonly { slug: string }[])[0]?.slug).toBe("done"));
+    expect(screen.getByLabelText("Statuses accepted").closest(".config-row")?.classList.contains("recently-changed")).toBe(true);
+    await waitFor(() => expect((admin.configurations.get("statuses")!.document.statuses as readonly { slug: string }[])[0]?.slug).toBe("accepted"));
     expect(changed).toHaveBeenCalled();
   });
 

@@ -242,7 +242,7 @@ export function entityPathForDocument(document: GitPmDocument): string {
   if (expectedPrefix === undefined || !isEntityId(id, expectedPrefix)) {
     throw new DomainOperationError("ENTITY_ID_INVALID", "Entity ID is invalid");
   }
-  const projectBound = ["gitpm/task@2", "gitpm/milestone@2", "gitpm/saved-view@1"].includes(document.schema);
+  const projectBound = ["gitpm/task@2", "gitpm/milestone@2", "gitpm/saved-view@1", "gitpm/comment@1", "gitpm/time-entry@1"].includes(document.schema);
   if (projectBound && !isEntityId(project, ENTITY_ID_PREFIX.project)) {
     throw new DomainOperationError("ENTITY_PROJECT_INVALID", "Owning Project ID is invalid");
   }
@@ -255,6 +255,11 @@ export function entityPathForDocument(document: GitPmDocument): string {
       const task = String(document.task ?? "");
       if (!isEntityId(task, ENTITY_ID_PREFIX.task)) throw new DomainOperationError("ENTITY_ID_INVALID", "Comment task ID is invalid");
       return `projects/${project}/comments/${task}/${id}.yaml`;
+    }
+    case "gitpm/time-entry@1": {
+      const task = String(document.task ?? "");
+      if (!isEntityId(task, ENTITY_ID_PREFIX.task)) throw new DomainOperationError("ENTITY_ID_INVALID", "Time entry task ID is invalid");
+      return `projects/${project}/time-entries/${task}/${id}.yaml`;
     }
     case "gitpm/person@1": return `people/${id}.yaml`;
     case "gitpm/team@1": return `teams/${id}.yaml`;
@@ -723,6 +728,8 @@ export class EntityStore {
       movedDocument = movedTasks[0]!.document;
       const comments = repository.entities.filter((entity) => entity.document.schema === "gitpm/comment@1" && typeof entity.document.task === "string" && subtreeIds.has(entity.document.task));
       const movedComments = comments.map((comment) => ({ source: comment, document: { ...comment.document, project: targetProject } as GitPmDocument }));
+      const timeEntries = repository.entities.filter((entity) => entity.document.schema === "gitpm/time-entry@1" && typeof entity.document.task === "string" && subtreeIds.has(entity.document.task));
+      const movedTimeEntries = timeEntries.map((entry) => ({ source: entry, document: { ...entry.document, project: targetProject } as GitPmDocument }));
       const orderUpdates: Array<{ source: IndexedEntity; document: GitPmDocument }> = [];
       const movedTaskDocuments = new Map(movedTasks.map((item) => [String(item.document.id), item.document]));
       const orderedTaskIds = (projectId: string, milestoneId: string, explicitOrder: string[]): string[] => {
@@ -758,7 +765,7 @@ export class EntityStore {
           } as GitPmDocument,
         });
       }
-      const targets = [...movedTasks, ...movedComments, ...orderUpdates].map((item) => ({
+      const targets = [...movedTasks, ...movedComments, ...movedTimeEntries, ...orderUpdates].map((item) => ({
         ...item,
         relative: entityPathForDocument(item.document),
       }));

@@ -20,6 +20,8 @@
     "@gitpm/drafts": "workspace:*",
     "@gitpm/git-client": "workspace:*",
     "@gitpm/repository-format": "workspace:*",
+    "@gitpm/scheduling": "workspace:*",
+    "@gitpm/time-entries": "workspace:*",
     "@gitpm/validation": "workspace:*",
     "pdfmake": "0.2.20"
   }

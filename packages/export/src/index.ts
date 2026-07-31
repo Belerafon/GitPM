@@ -5,6 +5,8 @@ import path from "node:path";
 import type { DraftManager } from "@gitpm/drafts";
 import type { GitClient } from "@gitpm/git-client";
 import { parseYamlDocument, type GitPmDocument } from "@gitpm/repository-format";
+import { buildGanttModel, buildSchedulingReadModel, resolvePlanning, type GanttModel, type ScheduleTracksConfig, type ScheduleWindow, type Schedulable } from "@gitpm/scheduling";
+import { actualSegments, actualWindow, type TimeEntryRecord } from "@gitpm/time-entries";
 import { discoverRepositoryFiles, validateRepository } from "@gitpm/validation";
 import pdfMake from "pdfmake/build/pdfmake.js";
 import pdfFonts from "pdfmake/build/vfs_fonts.js";
@@ -80,6 +82,7 @@ interface CopyText {
   readonly generated: string;
   readonly commit: string;
   readonly board: string;
+  readonly actual: string;
 }
 
 const COPY: Readonly<Record<ExportLocale, CopyText>> = {
@@ -90,7 +93,7 @@ const COPY: Readonly<Record<ExportLocale, CopyText>> = {
     riskOnTrack: "On track", riskNear: "Due soon", riskOverdue: "Overdue", riskUnknown: "No due date",
     unassigned: "Unassigned", ungrouped: "Ungrouped", activeProjects: "Active projects", activeTasks: "Active tasks",
     activeMilestones: "Active milestones", completedTasks: "Completed tasks",
-    assignees: "Assignees", schedule: "Schedule", noData: "No data", generated: "Generated", commit: "Commit", board: "Board",
+    assignees: "Assignees", schedule: "Schedule", actual: "Actual", noData: "No data", generated: "Generated", commit: "Commit", board: "Board",
   },
   ru: {
     title: "Портфель GitPM", projects: "Проекты", people: "Люди", person: "Сотрудник", projectDetails: "Подробности проектов", gantt: "Гант",
@@ -99,7 +102,7 @@ const COPY: Readonly<Record<ExportLocale, CopyText>> = {
     riskOnTrack: "По плану", riskNear: "Срок близко", riskOverdue: "Просрочен", riskUnknown: "Без срока",
     unassigned: "Не назначен", ungrouped: "Без группы", activeProjects: "Активных проектов", activeTasks: "Активных задач",
     activeMilestones: "Активных этапов", completedTasks: "Завершённых задач",
-    assignees: "Исполнители", schedule: "Сроки", noData: "Нет данных", generated: "Сформировано", commit: "Коммит", board: "Доска",
+    assignees: "Исполнители", schedule: "Сроки", actual: "Факт", noData: "Нет данных", generated: "Сформировано", commit: "Коммит", board: "Доска",
   },
 };
 
@@ -115,6 +118,8 @@ const schemaFileNames: Readonly<Record<string, string>> = {
   "gitpm/calendar@1": "calendars",
   "gitpm/saved-view@1": "saved-views",
   "gitpm/comment@1": "comments",
+  "gitpm/schedule-tracks@1": "schedule-tracks",
+  "gitpm/time-entry@1": "time-entries",
 };
 
 export class ExportError extends Error {
@@ -128,22 +133,106 @@ function text(document: GitPmDocument, key: string): string {
   return typeof document[key] === "string" ? String(document[key]) : "";
 }
 
-function scheduleWindow(document: GitPmDocument): Readonly<Record<string, unknown>> | undefined {
-  const schedules = document.schedules;
-  if (schedules === undefined || typeof schedules !== "object" || Array.isArray(schedules)) return undefined;
-  const map = schedules as Record<string, unknown>;
-  const preferred = map.plan;
-  if (preferred !== undefined && preferred !== null && typeof preferred === "object" && !Array.isArray(preferred)) {
-    return preferred as Readonly<Record<string, unknown>>;
-  }
-  for (const value of Object.values(map)) {
-    if (value !== null && typeof value === "object" && !Array.isArray(value)) return value as Readonly<Record<string, unknown>>;
-  }
-  return undefined;
+interface ProjectSchedulePlan {
+  readonly primary: string;
+  readonly visible: readonly string[];
 }
 
-function windowField(document: GitPmDocument, field: string): string {
-  const value = scheduleWindow(document)?.[field];
+interface ExportScheduling {
+  readonly plans: ReadonlyMap<string, ProjectSchedulePlan>;
+  readonly windows: ReadonlyMap<string, ReadonlyMap<string, ScheduleWindow>>;
+  readonly actual: ReadonlyMap<string, readonly { readonly date: string; readonly hours: number }[]>;
+  readonly actualWindows: ReadonlyMap<string, ReturnType<typeof actualWindow>>;
+}
+
+function scheduleMap(document: GitPmDocument): Readonly<Record<string, ScheduleWindow>> {
+  return document.schedules !== null && typeof document.schedules === "object" && !Array.isArray(document.schedules)
+    ? document.schedules as Readonly<Record<string, ScheduleWindow>>
+    : {};
+}
+
+function schedulable(document: GitPmDocument, schedules = scheduleMap(document)): Schedulable {
+  return { id: text(document, "id"), schedules };
+}
+
+function timeEntry(document: GitPmDocument): TimeEntryRecord | undefined {
+  return document.schema === "gitpm/time-entry@1"
+    && typeof document.id === "string"
+    && typeof document.project === "string"
+    && typeof document.task === "string"
+    && typeof document.person === "string"
+    && typeof document.performed_on === "string"
+    && typeof document.hours === "number"
+    && typeof document.category === "string"
+    ? { id: document.id, project: document.project, task: document.task, person: document.person, performed_on: document.performed_on, hours: document.hours, category: document.category, ...(document.state === "voided" ? { state: "voided" } : {}) }
+    : undefined;
+}
+
+function schedulingConfig(documents: readonly GitPmDocument[]): ScheduleTracksConfig | undefined {
+  const document = documents.find((item) => item.schema === "gitpm/schedule-tracks@1");
+  if (document === undefined || !Array.isArray(document.tracks) || document.defaults === null || typeof document.defaults !== "object" || Array.isArray(document.defaults)) return undefined;
+  const tracks = document.tracks.filter((track): track is ScheduleTracksConfig["tracks"][number] => track !== null && typeof track === "object" && typeof (track as Record<string, unknown>).slug === "string" && typeof (track as Record<string, unknown>).kind === "string" && typeof (track as Record<string, unknown>).title === "string")
+    .filter((track) => track.kind === "manual" || track.kind === "actual");
+  return tracks.length === 0 ? undefined : { schema: "gitpm/schedule-tracks@1", tracks, defaults: document.defaults as ScheduleTracksConfig["defaults"] };
+}
+
+function buildExportScheduling(snapshot: ExportSnapshot): ExportScheduling {
+  const groups = documentGroups(snapshot);
+  const config = schedulingConfig(snapshot.documents.map((item) => item.document));
+  const entries = groups.timeEntries.map(timeEntry).filter((entry): entry is TimeEntryRecord => entry !== undefined);
+  const actual = new Map<string, readonly { readonly date: string; readonly hours: number }[]>();
+  const actualWindows = new Map<string, ReturnType<typeof actualWindow>>();
+  for (const task of groups.tasks) {
+    const taskEntries = entries.filter((entry) => entry.task === text(task, "id"));
+    actual.set(text(task, "id"), actualSegments(taskEntries));
+    actualWindows.set(text(task, "id"), actualWindow(taskEntries));
+  }
+  if (config === undefined) return { plans: new Map(), windows: new Map(), actual, actualWindows };
+  const plans = new Map<string, ProjectSchedulePlan>();
+  const windows = new Map<string, ReadonlyMap<string, ScheduleWindow>>();
+  for (const project of groups.projects) {
+    const projectId = text(project, "id");
+    const planning = resolvePlanning(config, project.planning !== null && typeof project.planning === "object" && !Array.isArray(project.planning) ? project.planning as Parameters<typeof resolvePlanning>[1] : undefined);
+    const trackDefinitions = new Map(config.tracks.map((track) => [track.slug, track]));
+    const visible = planning.enabled_tracks.filter((track) => trackDefinitions.get(track)?.kind === "manual");
+    if (trackDefinitions.get(planning.primary_track)?.kind !== "manual" || !visible.includes(planning.primary_track)) continue;
+    plans.set(projectId, { primary: planning.primary_track, visible });
+    const tasks = groups.tasks.filter((task) => text(task, "project") === projectId);
+    const milestones = groups.milestones.filter((milestone) => text(milestone, "project") === projectId);
+    const effective = new Map<string, ReadonlyMap<string, ScheduleWindow>>();
+    const resolveTask = (task: GitPmDocument): ReadonlyMap<string, ScheduleWindow> => {
+      const id = text(task, "id");
+      const known = effective.get(id); if (known !== undefined) return known;
+      const children = tasks.filter((candidate) => text(candidate, "parent") === id).map((child) => schedulable(child, Object.fromEntries(resolveTask(child))));
+      const model = buildSchedulingReadModel(schedulable(task), children, visible);
+      const resolved = new Map(model.tracks.flatMap((summary) => summary.effective === undefined ? [] : [[summary.track, summary.effective as ScheduleWindow] as const]));
+      effective.set(id, resolved);
+      return resolved;
+    };
+    for (const task of tasks) resolveTask(task);
+    const resolvedMilestones = milestones.map((milestone) => {
+      const children = tasks.filter((task) => text(task, "milestone") === text(milestone, "id") && text(task, "parent") === "").map((task) => schedulable(task, Object.fromEntries(resolveTask(task))));
+      const model = buildSchedulingReadModel(schedulable(milestone), children, visible);
+      const resolved = new Map(model.tracks.flatMap((summary) => summary.effective === undefined ? [] : [[summary.track, summary.effective as ScheduleWindow] as const]));
+      effective.set(text(milestone, "id"), resolved);
+      return schedulable(milestone, Object.fromEntries(resolved));
+    });
+    const rootTasks = tasks.filter((task) => text(task, "milestone") === "" && text(task, "parent") === "").map((task) => schedulable(task, Object.fromEntries(resolveTask(task))));
+    const projectModel = buildSchedulingReadModel(schedulable(project), [...resolvedMilestones, ...rootTasks], visible);
+    effective.set(projectId, new Map(projectModel.tracks.flatMap((summary) => summary.effective === undefined ? [] : [[summary.track, summary.effective as ScheduleWindow] as const])));
+    for (const [id, value] of effective) windows.set(id, value);
+  }
+  return { plans, windows, actual, actualWindows };
+}
+
+function scheduleWindow(scheduling: ExportScheduling, document: GitPmDocument): ScheduleWindow | undefined {
+  const projectId = document.schema === "gitpm/project@2" ? text(document, "id") : text(document, "project");
+  const plan = scheduling.plans.get(projectId);
+  return plan === undefined ? undefined : scheduling.windows.get(text(document, "id"))?.get(plan.primary);
+}
+
+function windowField(scheduling: ExportScheduling, document: GitPmDocument, field: string): string {
+  const value = scheduleWindow(scheduling, document)?.[field as keyof ScheduleWindow];
   return typeof value === "string" ? value : "";
 }
 
@@ -182,7 +271,8 @@ function documentGroups(snapshot: ExportSnapshot) {
   const teams = bySchema("gitpm/team@1");
   const calendars = bySchema("gitpm/calendar@1");
   const statuses = bySchema("gitpm/statuses@2");
-  return { projects, people, tasks, milestones, teams, calendars, statuses };
+  const timeEntries = bySchema("gitpm/time-entry@1");
+  return { projects, people, tasks, milestones, teams, calendars, statuses, timeEntries };
 }
 
 function namesById(documents: readonly GitPmDocument[]): ReadonlyMap<string, string> {
@@ -205,29 +295,48 @@ function renderCsv(documents: readonly ExportDocument[]): string {
   return `\uFEFF${fields.map(csvValue).join(",")}\r\n${documents.map((item) => fields.map((field) => csvValue(item.document[field])).join(",")).join("\r\n")}\r\n`;
 }
 
-function taskSchedule(task: GitPmDocument): string {
-  const start = windowField(task, "start");
-  const finish = windowField(task, "finish");
+function taskSchedule(scheduling: ExportScheduling, task: GitPmDocument): string {
+  const start = windowField(scheduling, task, "start");
+  const finish = windowField(scheduling, task, "finish");
   return start && finish ? `${start} - ${finish}` : start || finish || "-";
 }
 
-function renderGanttHtml(tasks: readonly GitPmDocument[]): string {
-  const dated = tasks.filter((task) => /^\d{4}-\d{2}-\d{2}$/u.test(windowField(task, "start")) && /^\d{4}-\d{2}-\d{2}$/u.test(windowField(task, "finish")));
+function projectGantt(tasks: readonly GitPmDocument[], projectId: string, scheduling: ExportScheduling): GanttModel | undefined {
+  const plan = scheduling.plans.get(projectId);
+  if (plan === undefined) return undefined;
+  return buildGanttModel(tasks.map((task) => schedulable(task, Object.fromEntries(scheduling.windows.get(text(task, "id")) ?? []))), {
+    primaryTrack: plan.primary,
+    visibleTracks: plan.visible,
+    actual: scheduling.actual,
+  });
+}
+
+function renderGanttHtml(tasks: readonly GitPmDocument[], projectId: string, scheduling: ExportScheduling): string {
+  const model = projectGantt(tasks, projectId, scheduling);
+  if (model === undefined) return "";
+  const byId = new Map(tasks.map((task) => [text(task, "id"), task]));
+  const dated = model.rows.filter((row) => row.bars.some((bar) => /^\d{4}-\d{2}-\d{2}$/u.test(bar.start) && /^\d{4}-\d{2}-\d{2}$/u.test(bar.finish)));
   if (dated.length === 0) return "";
   const day = (value: string) => Math.floor(Date.parse(`${value}T00:00:00Z`) / 86_400_000);
-  const first = Math.min(...dated.map((task) => day(windowField(task, "start"))));
-  const last = Math.max(...dated.map((task) => day(windowField(task, "finish"))));
+  const first = Math.min(...dated.flatMap((row) => row.bars.map((bar) => day(bar.start))));
+  const last = Math.max(...dated.flatMap((row) => row.bars.map((bar) => day(bar.finish))));
   const span = Math.max(1, last - first + 1);
-  return `<div class="gantt">${dated.map((task) => {
-    const left = ((day(windowField(task, "start")) - first) / span) * 100;
-    const width = Math.max(1.5, ((day(windowField(task, "finish")) - day(windowField(task, "start")) + 1) / span) * 100);
-    return `<div class="gantt-row"><span>${escapeHtml(text(task, "title"))}</span><div class="gantt-track"><i style="left:${left.toFixed(3)}%;width:${width.toFixed(3)}%"></i></div><small>${escapeHtml(taskSchedule(task))}</small></div>`;
+  return `<div class="gantt">${dated.map((row) => {
+    const bars = row.bars.map((bar, index) => {
+      const left = ((day(bar.start) - first) / span) * 100;
+      const width = Math.max(1.5, ((day(bar.finish) - day(bar.start) + 1) / span) * 100);
+      return `<i class="track-${escapeHtml(bar.track)}" title="${escapeHtml(bar.track)}: ${bar.start} - ${bar.finish}" style="left:${left.toFixed(3)}%;width:${width.toFixed(3)}%;top:${4 + index * 7}px"></i>`;
+    }).join("");
+    const actual = row.actual.map((segment) => `${segment.date}: ${segment.hours}h`).join(", ");
+    const task = byId.get(row.id);
+    return `<div class="gantt-row"><span>${escapeHtml(text(task ?? { schema: "", id: "", lifecycle: "active" }, "title"))}</span><div class="gantt-track">${bars}</div><small>${escapeHtml(task === undefined ? "" : taskSchedule(scheduling, task))}${actual === "" ? "" : `<br>${escapeHtml(actual)}`}</small></div>`;
   }).join("")}</div>`;
 }
 
 function renderHtml(snapshot: ExportSnapshot, locale: ExportLocale): Buffer {
   const t = COPY[locale];
   const { projects, people, tasks, milestones, teams, calendars } = documentGroups(snapshot);
+  const scheduling = buildExportScheduling(snapshot);
   const peopleNames = namesById(people);
   const projectNames = namesById(projects);
   const navigation = [
@@ -245,8 +354,9 @@ function renderHtml(snapshot: ExportSnapshot, locale: ExportLocale): Buffer {
     const projectTasks = tasks.filter((task) => text(task, "project") === id);
     const projectMilestones = milestones.filter((milestone) => text(milestone, "project") === id);
     const statuses = [...new Set(projectTasks.map((task) => text(task, "status")))];
-    const board = statuses.map((status) => `<section><h4>${escapeHtml(status || "—")}</h4>${projectTasks.filter((task) => text(task, "status") === status).map((task) => `<article><strong>${escapeHtml(text(task, "title"))}</strong><small>${escapeHtml(taskSchedule(task))}</small></article>`).join("")}</section>`).join("");
-    return `<section class="page project-detail" id="project-${escapeHtml(id)}"><header><span>${escapeHtml(id)}</span><h2>${escapeHtml(text(project, "name"))}</h2><p>${escapeHtml(text(project, "description_markdown"))}</p></header><h3>${t.milestones}</h3><ul>${projectMilestones.map((milestone) => `<li><strong>${escapeHtml(text(milestone, "name"))}</strong> · ${escapeHtml(windowField(milestone, "finish") || "—")}</li>`).join("") || `<li>${t.noData}</li>`}</ul><h3>${t.tasks}</h3><table><thead><tr><th>${t.tasks}</th><th>${t.status}</th><th>${t.assignees}</th><th>${t.schedule}</th></tr></thead><tbody>${projectTasks.map((task) => `<tr><th>${escapeHtml(text(task, "title"))}</th><td>${escapeHtml(text(task, "status"))}</td><td>${strings(task.assignees).map((id) => escapeHtml(peopleNames.get(id) ?? id)).join(", ") || "—"}</td><td>${escapeHtml(taskSchedule(task))}</td></tr>`).join("")}</tbody></table><h3>${t.board}</h3><div class="board">${board}</div><h3>${t.gantt}</h3>${renderGanttHtml(projectTasks) || `<p>${t.noData}</p>`}</section>`;
+    const board = statuses.map((status) => `<section><h4>${escapeHtml(status || "—")}</h4>${projectTasks.filter((task) => text(task, "status") === status).map((task) => `<article><strong>${escapeHtml(text(task, "title"))}</strong><small>${escapeHtml(taskSchedule(scheduling, task))}</small></article>`).join("")}</section>`).join("");
+    const actual = (task: GitPmDocument) => scheduling.actualWindows.get(text(task, "id"));
+    return `<section class="page project-detail" id="project-${escapeHtml(id)}"><header><span>${escapeHtml(id)}</span><h2>${escapeHtml(text(project, "name"))}</h2><p>${escapeHtml(text(project, "description_markdown"))}</p></header><h3>${t.milestones}</h3><ul>${projectMilestones.map((milestone) => `<li><strong>${escapeHtml(text(milestone, "name"))}</strong> · ${escapeHtml(windowField(scheduling, milestone, "finish") || "—")}</li>`).join("") || `<li>${t.noData}</li>`}</ul><h3>${t.tasks}</h3><table><thead><tr><th>${t.tasks}</th><th>${t.status}</th><th>${t.assignees}</th><th>${t.schedule}</th><th>${t.actual}</th></tr></thead><tbody>${projectTasks.map((task) => `<tr><th>${escapeHtml(text(task, "title"))}</th><td>${escapeHtml(text(task, "status"))}</td><td>${strings(task.assignees).map((personId) => escapeHtml(peopleNames.get(personId) ?? personId)).join(", ") || "—"}</td><td>${escapeHtml(taskSchedule(scheduling, task))}</td><td>${actual(task) === undefined ? "—" : `${actual(task)!.effort_hours}h · ${escapeHtml(actual(task)!.start ?? "")} - ${escapeHtml(actual(task)!.finish ?? "")}`}</td></tr>`).join("")}</tbody></table><h3>${t.board}</h3><div class="board">${board}</div><h3>${t.gantt}</h3>${renderGanttHtml(projectTasks, id, scheduling) || `<p>${t.noData}</p>`}</section>`;
   }).join("");
   const html = `<!doctype html><html lang="${locale}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${t.title}</title><style>
 *{box-sizing:border-box}body{margin:0;background:#f4f5f1;color:#27322c;font:14px/1.5 system-ui,sans-serif}a{color:#245c42}aside{position:fixed;inset:0 auto 0 0;width:230px;overflow:auto;background:#173d2d;color:#fff;padding:24px 18px}aside h1{font-size:20px}aside a{display:block;color:#dce9e1;text-decoration:none;padding:7px 0}main{margin-left:230px;padding:32px;max-width:1500px}.meta{color:#647068}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}article,.page,table,.board section{background:#fff;border:1px solid #d9ddd6;border-radius:10px;padding:16px}dl div{display:flex;gap:8px}dt{font-weight:700}table{width:100%;border-collapse:collapse;margin:12px 0}th,td{text-align:left;border-bottom:1px solid #e3e6e0;padding:8px}.page{margin:28px 0}.board{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}.board article{margin:8px 0;padding:10px}.board small{display:block}.gantt{overflow:auto}.gantt-row{display:grid;grid-template-columns:180px minmax(420px,1fr) 190px;align-items:center;gap:10px;margin:8px 0}.gantt-track{position:relative;height:26px;background:repeating-linear-gradient(90deg,#edf0ea 0,#edf0ea calc(10% - 1px),#d7ddd5 10%)}.gantt-track i{position:absolute;top:4px;height:18px;border-radius:5px;background:#327454}@media(max-width:760px){aside{position:static;width:auto}main{margin:0;padding:18px}.gantt-row{grid-template-columns:130px 420px 170px}}@media print{aside{display:none}main{margin:0;padding:0}.page{break-before:page}}
@@ -302,8 +412,8 @@ function completedStatusSlugs(statusDocuments: readonly GitPmDocument[]): Readon
   }));
 }
 
-function projectRisk(project: GitPmDocument, generatedAt: string): "onTrack" | "near" | "overdue" | "unknown" {
-  const due = windowField(project, "finish");
+function projectRisk(scheduling: ExportScheduling, project: GitPmDocument, generatedAt: string): "onTrack" | "near" | "overdue" | "unknown" {
+  const due = windowField(scheduling, project, "finish");
   if (!/^\d{4}-\d{2}-\d{2}$/u.test(due)) return "unknown";
   const days = Math.ceil((Date.parse(`${due}T00:00:00Z`) - Date.parse(generatedAt)) / 86_400_000);
   return days < 0 ? "overdue" : days <= 14 ? "near" : "onTrack";
@@ -346,16 +456,19 @@ function summaryMetrics(items: readonly { readonly label: string; readonly value
   };
 }
 
-function renderGanttPdf(tasks: readonly GitPmDocument[], noData: string): unknown {
-  const dated = tasks.filter((task) =>
-    /^\d{4}-\d{2}-\d{2}$/u.test(windowField(task, "start"))
-    && /^\d{4}-\d{2}-\d{2}$/u.test(windowField(task, "finish"))
-    && Date.parse(`${windowField(task, "start")}T00:00:00Z`) <= Date.parse(`${windowField(task, "finish")}T00:00:00Z`),
+function renderGanttPdf(tasks: readonly GitPmDocument[], projectId: string, scheduling: ExportScheduling, noData: string): unknown {
+  const model = projectGantt(tasks, projectId, scheduling);
+  if (model === undefined) return { text: noData };
+  const titles = new Map(tasks.map((task) => [text(task, "id"), text(task, "title")]));
+  const dated = model.rows.flatMap((row) => row.bars.map((bar) => ({ ...bar, id: row.id }))).filter((bar) =>
+    /^\d{4}-\d{2}-\d{2}$/u.test(bar.start)
+    && /^\d{4}-\d{2}-\d{2}$/u.test(bar.finish)
+    && Date.parse(`${bar.start}T00:00:00Z`) <= Date.parse(`${bar.finish}T00:00:00Z`),
   );
   if (dated.length === 0) return { text: noData };
   const day = (value: string) => Math.floor(Date.parse(`${value}T00:00:00Z`) / 86_400_000);
-  const first = Math.min(...dated.map((task) => day(windowField(task, "start"))));
-  const last = Math.max(...dated.map((task) => day(windowField(task, "finish"))));
+  const first = Math.min(...dated.map((bar) => day(bar.start)));
+  const last = Math.max(...dated.map((bar) => day(bar.finish)));
   const total = Math.max(1, last - first + 1);
   const chartWidth = 330;
   const isoDay = (value: number) => new Date(value * 86_400_000).toISOString().slice(0, 10);
@@ -366,12 +479,12 @@ function renderGanttPdf(tasks: readonly GitPmDocument[], noData: string): unknow
     ],
     margin: [0, 0, 0, 5],
   }];
-  for (const task of dated) {
-    const left = ((day(windowField(task, "start")) - first) / total) * chartWidth;
-    const width = Math.max(3, ((day(windowField(task, "finish")) - day(windowField(task, "start")) + 1) / total) * chartWidth);
+  for (const bar of dated) {
+    const left = ((day(bar.start) - first) / total) * chartWidth;
+    const width = Math.max(3, ((day(bar.finish) - day(bar.start) + 1) / total) * chartWidth);
     rows.push({
       columns: [
-        { text: text(task, "title"), width: 145, fontSize: 8, margin: [0, 3, 6, 0] },
+        { text: `${titles.get(bar.id) ?? bar.id} (${bar.track})`, width: 145, fontSize: 8, margin: [0, 3, 6, 0] },
         {
           width: chartWidth,
           stack: [
@@ -379,7 +492,7 @@ function renderGanttPdf(tasks: readonly GitPmDocument[], noData: string): unknow
               { type: "rect", x: 0, y: 2, w: chartWidth, h: 12, color: "#edf0ea" },
               { type: "rect", x: left, y: 2, w: width, h: 12, r: 2, color: "#327454" },
             ] },
-            { text: taskSchedule(task), fontSize: 7, color: "#647068", margin: [0, 1, 0, 0] },
+            { text: `${bar.start} - ${bar.finish}`, fontSize: 7, color: "#647068", margin: [0, 1, 0, 0] },
           ],
         },
       ],
@@ -404,6 +517,7 @@ async function renderPdf(snapshot: ExportSnapshot, locale: ExportLocale, selecte
   const calendarNames = namesById(calendars);
   const titlesByStatus = statusTitles(groups.statuses);
   const doneStatusSlugs = completedStatusSlugs(groups.statuses);
+  const scheduling = buildExportScheduling(snapshot);
   const content: unknown[] = [
     { text: t.title, style: "title" },
     { text: `${t.commit}: ${snapshot.shortCommit} · ${t.generated}: ${snapshot.generatedAt}`, style: "meta" },
@@ -425,7 +539,7 @@ async function renderPdf(snapshot: ExportSnapshot, locale: ExportLocale, selecte
         group.projects.map((project) => {
           const projectId = text(project, "id");
           const description = compactDescription(project);
-          const risk = projectRisk(project, snapshot.generatedAt);
+          const risk = projectRisk(scheduling, project, snapshot.generatedAt);
           const projectCell: Readonly<Record<string, unknown>> = {
             stack: [
               { text: text(project, "name"), bold: true },
@@ -439,7 +553,7 @@ async function renderPdf(snapshot: ExportSnapshot, locale: ExportLocale, selecte
             (peopleNames.get(text(project, "owner")) ?? text(project, "owner")) || t.unassigned,
             String(tasks.filter((task) => text(task, "project") === projectId).length),
             String(milestones.filter((milestone) => text(milestone, "project") === projectId).length),
-            localizedDate(locale, windowField(project, "finish")),
+            localizedDate(locale, windowField(scheduling, project, "finish")),
             risk === "onTrack" ? t.riskOnTrack : risk === "near" ? t.riskNear : risk === "overdue" ? t.riskOverdue : t.riskUnknown,
           ];
         }),
@@ -491,15 +605,15 @@ async function renderPdf(snapshot: ExportSnapshot, locale: ExportLocale, selecte
       content.push({ text: text(project, "name"), style: "heading", pageBreak: "before" });
       content.push({ text: text(project, "description_markdown") || "-", margin: [0, 4, 0, 12] });
       content.push({ text: t.milestones, style: "subheading" });
-      content.push(pdfTable([t.milestones, t.schedule], projectMilestones.map((milestone) => [text(milestone, "name"), windowField(milestone, "finish") || "-"])));
+      content.push(pdfTable([t.milestones, t.schedule], projectMilestones.map((milestone) => [text(milestone, "name"), windowField(scheduling, milestone, "finish") || "-"])));
       content.push({ text: t.tasks, style: "subheading" });
-      content.push(pdfTable([t.tasks, t.status, t.assignees, t.schedule], projectTasks.map((task) => [
-        text(task, "title"), text(task, "status"), strings(task.assignees).map((id) => peopleNames.get(id) ?? id).join(", ") || "-", taskSchedule(task),
+      content.push(pdfTable([t.tasks, t.status, t.assignees, t.schedule, t.actual], projectTasks.map((task) => [
+        text(task, "title"), text(task, "status"), strings(task.assignees).map((id) => peopleNames.get(id) ?? id).join(", ") || "-", taskSchedule(scheduling, task), (() => { const actual = scheduling.actualWindows.get(text(task, "id")); return actual === undefined ? "-" : `${actual.effort_hours}h (${actual.start ?? ""} - ${actual.finish ?? ""})`; })(),
       ])));
     }
     if (selected.has("gantt")) {
       content.push({ text: `${t.gantt}: ${text(project, "name")}`, style: "heading", pageBreak: "before" });
-      content.push(renderGanttPdf(projectTasks, t.noData));
+      content.push(renderGanttPdf(projectTasks, projectId, scheduling, t.noData));
     }
   }
   const definition = {

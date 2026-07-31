@@ -98,6 +98,7 @@ class FakeApi implements GitPmApi {
   async updateComment(): Promise<never> { throw new Error("not used"); }
   async deleteComment(): Promise<never> { throw new Error("not used"); }
   async listTimeEntries(): Promise<readonly never[]> { return []; }
+  async listProjectTimeEntries() { return { items: [], total: 0, offset: 0, limit: 200 }; }
   async createTimeEntry(): Promise<never> { throw new Error("not used"); }
   async voidTimeEntry(): Promise<never> { throw new Error("not used"); }
   async notifications() { return { items: [] }; }

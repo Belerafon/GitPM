@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GitPmApi } from "./api.js";
-import { buildGanttView, dependencyPath, GanttWorkspace } from "./gantt-ui.js";
+import { projectTimelineProjection, dependencyPath, GanttWorkspace } from "./gantt-ui.js";
 import type { DraftStatus, EntityDocument, EntityResult } from "./types.js";
 import type { TrackDefinition } from "@gitpm/scheduling";
 
@@ -39,7 +39,7 @@ describe("read-only Gantt", () => {
   });
 
   it("builds deterministic bars, hierarchy, milestones, and dependency edges", () => {
-    const model = buildGanttView([parent, child, grandchild, dependent, review, launch, undated, archived], [milestone], new Map(), [planTrack], { primaryTrack: "plan", visibleTracks: ["plan"], dependencyTrack: "plan" })!;
+    const model = projectTimelineProjection([parent, child, grandchild, dependent, review, launch, undated, archived], [milestone], new Map(), [planTrack], { primaryTrack: "plan", visibleTracks: ["plan"], dependencyTrack: "plan" })!;
     expect(model.rows).toHaveLength(6);
     expect(model.rows.map((row) => row.title)).not.toContain("Undated");
     expect(model.rows.map((row) => row.title)).not.toContain("Archived");
@@ -52,16 +52,23 @@ describe("read-only Gantt", () => {
 
   it("keeps a task whose only bar is in an additional visible track", () => {
     const onlyTarget = result({ schema: "gitpm/task@2", id: "T-26-TARGET", project: projectId, title: "Target only", type: "task", status: "backlog", lifecycle: "active", schedules: { target: { start: "2026-09-01", finish: "2026-09-30" } } });
-    const model = buildGanttView([onlyTarget], [], new Map(), [planTrack, targetTrack], { primaryTrack: "plan", visibleTracks: ["plan", "target"], dependencyTrack: "plan" })!;
+    const model = projectTimelineProjection([onlyTarget], [], new Map(), [planTrack, targetTrack], { primaryTrack: "plan", visibleTracks: ["plan", "target"], dependencyTrack: "plan" })!;
     expect(model.rows).toHaveLength(1);
     expect(model.rows[0]!.bars.map((bar) => bar.track)).toEqual(["target"]);
     expect(model.start).toBe("2026-09-01");
     expect(model.due).toBe("2026-09-30");
   });
 
+  it("rolls up a milestone finish when the milestone has no declared schedule", () => {
+    const rolledMilestone = result({ schema: "gitpm/milestone@2", id: "M-26-ROLLED", project: projectId, name: "Rolled", lifecycle: "active" });
+    const rolledTask = task("R", "Milestone child", "2026-09-01", "2026-09-17", { milestone: rolledMilestone.document.id });
+    const model = projectTimelineProjection([rolledTask], [rolledMilestone], new Map(), [planTrack], { primaryTrack: "plan", visibleTracks: ["plan"], dependencyTrack: "plan" })!;
+    expect(model.milestones).toEqual([{ id: rolledMilestone.document.id, name: "Rolled", due: "2026-09-17", offset: 16 }]);
+  });
+
   it("overlays secondary schedule tracks with their titles under the primary bar", () => {
     const primary = task("P", "Primary", "2026-07-01", "2026-07-10", { schedules: { target: { start: "2026-07-03", finish: "2026-07-07" } } });
-    const model = buildGanttView([primary], [], new Map(), [planTrack, targetTrack], { primaryTrack: "plan", visibleTracks: ["plan", "target"], dependencyTrack: "plan" })!;
+    const model = projectTimelineProjection([primary], [], new Map(), [planTrack, targetTrack], { primaryTrack: "plan", visibleTracks: ["plan", "target"], dependencyTrack: "plan" })!;
     const row = model.rows.find((item) => item.id === primary.document.id)!;
     expect(row.bar?.start).toBe("2026-07-01");
     expect(row.bars.find((bar) => !bar.primary)).toMatchObject({ track: "target", title: "Target", start: "2026-07-03", finish: "2026-07-07", offset: 2, duration: 5 });
@@ -70,7 +77,7 @@ describe("read-only Gantt", () => {
   it("aggregates actual-activity markers per date and extends the range past the plan", () => {
     const task1 = task("A", "Active", "2026-07-01", "2026-07-10");
     const actual = new Map<string, readonly { readonly date: string; readonly hours: number }[]>([[task1.document.id, [{ date: "2026-07-02", hours: 3 }, { date: "2026-07-02", hours: 5 }, { date: "2026-12-20", hours: 2 }]]]);
-    const model = buildGanttView([task1], [], actual, [planTrack], { primaryTrack: "plan", visibleTracks: ["plan"], dependencyTrack: "plan" })!;
+    const model = projectTimelineProjection([task1], [], actual, [planTrack], { primaryTrack: "plan", visibleTracks: ["plan"], dependencyTrack: "plan" })!;
     expect(model.rows[0]!.actual).toEqual([{ date: "2026-07-02", hours: 8, offset: 1 }, { date: "2026-12-20", hours: 2, offset: dayOffset("2026-07-01", "2026-12-20") }]);
     expect(model.due).toBe("2026-12-20");
   });
@@ -79,10 +86,12 @@ describe("read-only Gantt", () => {
     const updateEntity = vi.fn(); const createEntity = vi.fn(); const deleteEntity = vi.fn();
     const onNavigate = vi.fn();
     const entities = [result({ schema: "gitpm/project@2", id: projectId, name: "Beta portfolio", status: "backlog", lifecycle: "active" }), parent, child, grandchild, dependent, review, launch, undated, archived, milestone];
+    const listProjectTimeEntries = vi.fn(async () => ({ total: 0, offset: 0, limit: 100, items: [] }));
+    const listTimeEntries = vi.fn(async () => []);
     const api = { listEntities: vi.fn(async (_draftId: string, type: string, project?: string) => entities.filter((item) => {
       const schemas: Record<string, string> = { projects: "gitpm/project@2", tasks: "gitpm/task@2", milestones: "gitpm/milestone@2" };
       return item.document.schema === schemas[type] && (project === undefined || item.document.project === project);
-    })), getConfiguration: vi.fn(async (_draftId: string, kind: string) => ({ document: kind === "schedule-tracks" ? { schema: "gitpm/schedule-tracks@1", tracks: [{ slug: "plan", title: "Plan", kind: "manual", capabilities: ["dates", "effort", "dependencies"] }], defaults: { enabled_tracks: ["plan"], primary_track: "plan", workload_track: "plan", dashboard_tracks: ["plan"] } } : { schema: "gitpm/statuses@2", statuses: [] }, path: kind, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) })), listTimeEntries: vi.fn(async () => []), updateEntity, createEntity, deleteEntity } as unknown as GitPmApi;
+    })), getConfiguration: vi.fn(async (_draftId: string, kind: string) => ({ document: kind === "schedule-tracks" ? { schema: "gitpm/schedule-tracks@1", tracks: [{ slug: "plan", title: "Plan", kind: "manual", capabilities: ["dates", "effort", "dependencies"] }], defaults: { enabled_tracks: ["plan"], primary_track: "plan", workload_track: "plan", dashboard_tracks: ["plan"] } } : { schema: "gitpm/statuses@2", statuses: [] }, path: kind, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) })), listProjectTimeEntries, listTimeEntries, updateEntity, createEntity, deleteEntity } as unknown as GitPmApi;
     const { container } = render(<GanttWorkspace api={api} draft={draft} locale="en" onNavigate={onNavigate} />);
     await waitFor(() => expect(container.querySelectorAll(".gantt-bar")).toHaveLength(6));
     expect(screen.queryByText("Undated")).toBeNull(); expect(screen.queryByText("Archived")).toBeNull();
@@ -103,6 +112,7 @@ describe("read-only Gantt", () => {
     expect(onNavigate).toHaveBeenCalledWith("tasks", { projectId, taskId: child.document.id });
     fireEvent.pointerDown(bar); fireEvent.pointerMove(bar, { clientX: 400 }); fireEvent.pointerUp(bar);
     expect(updateEntity).not.toHaveBeenCalled(); expect(createEntity).not.toHaveBeenCalled(); expect(deleteEntity).not.toHaveBeenCalled();
+    expect(listProjectTimeEntries).toHaveBeenCalledTimes(1); expect(listTimeEntries).not.toHaveBeenCalled();
   });
 });
 

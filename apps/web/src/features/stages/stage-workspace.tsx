@@ -1,5 +1,6 @@
 import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
-import { buildSchedule, ScheduleResolver, scheduleTracksConfig, scheduleTextReader, scheduleEffortReader, withScheduleWindow } from "../../schedules.js";
+import { buildSchedulingReadModel, windowEffort } from "@gitpm/scheduling";
+import { buildSchedule, ScheduleResolver, scheduleTracksConfig, scheduleTextReader, withScheduleWindow } from "../../schedules.js";
 import { isCompletedStatus } from "../../status-categories.js";
 import { buildTaskHierarchy } from "@gitpm/task-hierarchy";
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type FormEvent } from "react";
@@ -89,7 +90,6 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
   const scheduling = useMemo(() => new ScheduleResolver(scheduleTracksConfig(tracksConfig?.document)), [tracksConfig]);
   const primaryTrack = scheduling.primaryTrack(workspace?.project.document.planning);
   const text = useMemo(() => scheduleTextReader(primaryTrack), [primaryTrack]);
-  const effortOf = useMemo(() => scheduleEffortReader(primaryTrack), [primaryTrack]);
 
   const activeTasks = useMemo(() => workspace?.tasks.filter((item) => item.document.lifecycle === "active") ?? [], [workspace]);
   const selectedStage = workspace?.milestones.find((item) => item.document.id === stageId);
@@ -154,7 +154,7 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
         statusBusy={statusPending !== null}
         statusSavingId={statusPending}
         text={text}
-        effortOf={effortOf}
+        primaryTrack={primaryTrack}
         t={t}
       />)}
     </AsyncBoundary>
@@ -184,7 +184,7 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
   </section>;
 }
 
-function StageDetails({ stage, tasks, projectId, locale, people, readOnly, changed, changedTaskIds, statusOptions, statusBusy, statusSavingId, text, effortOf, onArchive, onEdit, onNewTask, onStatusChange, onNavigate, t }: {
+function StageDetails({ stage, tasks, projectId, locale, people, readOnly, changed, changedTaskIds, statusOptions, statusBusy, statusSavingId, text, primaryTrack, onArchive, onEdit, onNewTask, onStatusChange, onNavigate, t }: {
   readonly stage: EntityResult;
   readonly tasks: readonly EntityResult[];
   readonly projectId: string;
@@ -197,7 +197,7 @@ function StageDetails({ stage, tasks, projectId, locale, people, readOnly, chang
   readonly statusBusy: boolean;
   readonly statusSavingId: string | null;
   readonly text: ScheduleTextReader;
-  readonly effortOf: (document: Readonly<Record<string, unknown>>) => number | undefined;
+  readonly primaryTrack: string;
   readonly onArchive: () => void;
   readonly onEdit: () => void;
   readonly onNewTask: () => void;
@@ -207,7 +207,9 @@ function StageDetails({ stage, tasks, projectId, locale, people, readOnly, chang
 }) {
   const completed = tasks.filter((task) => isCompletedStatus(statusOptions, text(task.document, "status"))).length;
   const overdue = tasks.filter((task) => !isCompletedStatus(statusOptions, text(task.document, "status")) && /^\d{4}-\d{2}-\d{2}$/u.test(text(task.document, "due")) && text(task.document, "due") < new Date().toISOString().slice(0, 10)).length;
-  const estimate = tasks.reduce((sum, task) => sum + (effortOf(task.document) ?? 0), 0);
+  const track = buildSchedulingReadModel(stage.document, tasks.map((task) => task.document), [primaryTrack]).tracks[0];
+  const estimate = windowEffort(track?.rolled);
+  const due = typeof track?.effective?.finish === "string" ? track.effective.finish : undefined;
   const stageAssignees = [...new Set(tasks.flatMap((task) => Array.isArray(task.document.assignees) ? task.document.assignees.filter((id): id is string => typeof id === "string") : []))];
   const hierarchy = buildTaskHierarchy(
     tasks.map((entity) => ({ id: entity.document.id, parent: text(entity.document, "parent") || undefined, entity })),
@@ -222,8 +224,8 @@ function StageDetails({ stage, tasks, projectId, locale, people, readOnly, chang
     <div className="stage-stats">
       <div className="card"><span>{t("stages.progressLabel")}</span><strong>{completed}/{tasks.length}</strong></div>
       <div className="card"><span>{t("stages.overdue")}</span><strong>{overdue}</strong></div>
-      <div className="card"><span>{t("stages.estimate")}</span><strong>{formatDurationHours(locale, estimate)}</strong></div>
-      <div className="card"><span>{t("core.due")}</span><strong>{text(stage.document, "due") ? formatDateOnly(locale, text(stage.document, "due")) : "—"}</strong></div>
+      <div className="card"><span>{t("stages.estimate")}</span><strong>{estimate === undefined ? "—" : formatDurationHours(locale, estimate)}</strong></div>
+      <div className="card"><span>{t("core.due")}</span><strong>{due === undefined ? "—" : formatDateOnly(locale, due)}</strong></div>
     </div>
     <section className="card stage-task-list"><div className="card-heading"><div><h3>{t("stages.tasks")}</h3><p>{t("stages.tasksDescription")}</p></div><button onClick={() => onNavigate("board", { projectId, query: { milestone: [stage.document.id] } })}>{t("stages.openBoard")}</button></div>
       {tasks.length === 0 ? <p>{t("stages.emptyTasks")}</p> : taskEntries.map((entry) => { const task = entry.task.entity; const assignees = Array.isArray(task.document.assignees) ? task.document.assignees.filter((id): id is string => typeof id === "string") : []; return <div className={`stage-task-row${changedTaskIds.has(task.document.id) ? " recently-changed" : ""}${statusSavingId === task.document.id ? " is-saving" : ""}`} data-depth={entry.depth} key={task.document.id} style={{ "--task-depth": entry.depth } as CSSProperties}>

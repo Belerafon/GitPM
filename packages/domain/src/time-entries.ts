@@ -43,6 +43,25 @@ export interface TimeEntryResult {
   readonly draft_fingerprint: string;
 }
 
+export interface TimeEntryProjectFilters {
+  readonly task?: string;
+  readonly milestone?: string;
+  readonly person?: string;
+  readonly category?: string;
+  readonly performed_from?: string;
+  readonly performed_to?: string;
+  readonly state?: "active" | "voided";
+  readonly offset?: number;
+  readonly limit?: number;
+}
+
+export interface TimeEntryProjectList {
+  readonly items: readonly TimeEntryResult[];
+  readonly total: number;
+  readonly offset: number;
+  readonly limit: number;
+}
+
 export class TimeEntryOperationError extends Error {
   constructor(public readonly code: string, message: string, public readonly details?: unknown) {
     super(message);
@@ -69,6 +88,16 @@ function entryPath(projectId: string, taskId: string, entryId: string): string {
   return `projects/${projectId}/time-entries/${taskId}/${entryId}.yaml`;
 }
 
+function isDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(value)) return false;
+  const timestamp = Date.parse(`${value}T00:00:00Z`);
+  return Number.isFinite(timestamp) && new Date(timestamp).toISOString().slice(0, 10) === value;
+}
+
+function isSlug(value: string): boolean {
+  return /^[a-z][a-z0-9-]{0,62}$/u.test(value);
+}
+
 export class TimeEntryStore {
   constructor(
     private readonly drafts: DraftManager,
@@ -87,6 +116,61 @@ export class TimeEntryStore {
     }
     if (document.schema !== "gitpm/task@2" || document.id !== taskId || document.project !== projectId) throw new TimeEntryOperationError("ENTITY_NOT_FOUND", `tasks/${taskId} not found`);
     return document;
+  }
+
+  private async project(metadata: RepositoryWorkspace, projectId: string): Promise<GitPmDocument> {
+    if (!isEntityId(projectId, ENTITY_ID_PREFIX.project)) throw new TimeEntryOperationError("ENTITY_PROJECT_INVALID", "Project ID is invalid");
+    const relative = `projects/${projectId}/project.yaml`;
+    const absolute = await resolveDomainPath(metadata.worktree_path, relative);
+    try {
+      const document = parseYamlDocument(await readFile(absolute, "utf8"), relative);
+      if (document.schema === "gitpm/project@2" && document.id === projectId) return document;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+    throw new TimeEntryOperationError("ENTITY_NOT_FOUND", `projects/${projectId} not found`);
+  }
+
+  private async assertWritableTask(metadata: RepositoryWorkspace, projectId: string, taskId: string): Promise<GitPmDocument> {
+    const task = await this.task(metadata, projectId, taskId);
+    if (task.lifecycle === "archived") throw new TimeEntryOperationError("TIME_ENTRY_TASK_ARCHIVED", "Archived tasks cannot receive new time entries");
+    return task;
+  }
+
+  private async assertActiveCategory(metadata: RepositoryWorkspace, category: string): Promise<void> {
+    const relative = ".gitpm/work-categories.yaml";
+    const absolute = await resolveDomainPath(metadata.worktree_path, relative);
+    const document = parseYamlDocument(await readFile(absolute, "utf8"), relative);
+    const categories = Array.isArray(document.categories) ? document.categories : [];
+    const found = categories.find((candidate) => candidate !== null && typeof candidate === "object" && (candidate as Record<string, unknown>).slug === category) as Record<string, unknown> | undefined;
+    if (found?.active === false) throw new TimeEntryOperationError("TIME_ENTRY_CATEGORY_INACTIVE", `Work category ${category} is inactive`);
+  }
+
+  private async assertReplacement(metadata: RepositoryWorkspace, projectId: string, taskId: string, entryId: string, replacement: string): Promise<void> {
+    if (!isEntityId(replacement, ENTITY_ID_PREFIX.entry)) throw new TimeEntryOperationError("TIME_ENTRY_REPLACEMENT_INVALID", "Replacement time entry ID is invalid");
+    if (replacement === entryId) throw new TimeEntryOperationError("TIME_ENTRY_REPLACEMENT_SELF", "A time entry cannot replace itself");
+    const projects = await resolveDomainPath(metadata.worktree_path, "projects");
+    let projectDirectories: string[] = [];
+    try { projectDirectories = (await readdir(projects, { withFileTypes: true })).filter((entry) => entry.isDirectory() && isEntityId(entry.name, ENTITY_ID_PREFIX.project)).map((entry) => entry.name); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+    let target: TimeEntryDocument | undefined;
+    for (const candidateProject of projectDirectories) {
+      const entries = await resolveDomainPath(metadata.worktree_path, `projects/${candidateProject}/time-entries`);
+      let taskDirectories: string[] = [];
+      try { taskDirectories = (await readdir(entries, { withFileTypes: true })).filter((entry) => entry.isDirectory() && isEntityId(entry.name, ENTITY_ID_PREFIX.task)).map((entry) => entry.name); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+      for (const candidateTask of taskDirectories) {
+        const relative = entryPath(candidateProject, candidateTask, replacement);
+        const absolute = await resolveDomainPath(metadata.worktree_path, relative);
+        if (!await exists(absolute)) continue;
+        const document = parseYamlDocument(await readFile(absolute, "utf8"), relative);
+        if (document.schema === "gitpm/time-entry@1" && document.id === replacement) target = document as TimeEntryDocument;
+      }
+    }
+    if (target === undefined) throw new TimeEntryOperationError("TIME_ENTRY_REPLACEMENT_MISSING", `${replacement} does not reference a time entry`);
+    if (target.task !== taskId || target.project !== projectId) {
+      throw new TimeEntryOperationError("TIME_ENTRY_REPLACEMENT_TASK_MISMATCH", `${replacement} belongs to another task`);
+    }
   }
 
   private async readEntry(metadata: RepositoryWorkspace, projectId: string, taskId: string, entryId: string): Promise<{ relative: string; absolute: string; document: TimeEntryDocument }> {
@@ -140,12 +224,69 @@ export class TimeEntryStore {
       .sort((left, right) => left.document.created_at.localeCompare(right.document.created_at) || left.document.id.localeCompare(right.document.id));
   }
 
+  async listProject(draftId: string, projectId: string, filters: TimeEntryProjectFilters = {}): Promise<TimeEntryProjectList> {
+    const metadata = await this.drafts.getWorkspace(draftId);
+    await this.project(metadata, projectId);
+    const limit = filters.limit ?? 100;
+    const offset = filters.offset ?? 0;
+    if (!Number.isInteger(offset) || offset < 0 || !Number.isInteger(limit) || limit < 1 || limit > 200) throw new TimeEntryOperationError("TIME_ENTRY_FILTER_INVALID", "Pagination values are invalid");
+    if (filters.task !== undefined && !isEntityId(filters.task, ENTITY_ID_PREFIX.task)) throw new TimeEntryOperationError("TIME_ENTRY_FILTER_INVALID", "Task filter is invalid");
+    if (filters.milestone !== undefined && !isEntityId(filters.milestone, ENTITY_ID_PREFIX.milestone)) throw new TimeEntryOperationError("TIME_ENTRY_FILTER_INVALID", "Milestone filter is invalid");
+    if (filters.person !== undefined && !isEntityId(filters.person, ENTITY_ID_PREFIX.person)) throw new TimeEntryOperationError("TIME_ENTRY_FILTER_INVALID", "Person filter is invalid");
+    if (filters.category !== undefined && !isSlug(filters.category)) throw new TimeEntryOperationError("TIME_ENTRY_FILTER_INVALID", "Category filter is invalid");
+    if (filters.state !== undefined && filters.state !== "active" && filters.state !== "voided") throw new TimeEntryOperationError("TIME_ENTRY_FILTER_INVALID", "State filter is invalid");
+    if (filters.performed_from !== undefined && !isDate(filters.performed_from) || filters.performed_to !== undefined && !isDate(filters.performed_to)) throw new TimeEntryOperationError("TIME_ENTRY_FILTER_INVALID", "Date filter is invalid");
+    if (filters.performed_from !== undefined && filters.performed_to !== undefined && filters.performed_from > filters.performed_to) throw new TimeEntryOperationError("TIME_ENTRY_FILTER_INVALID", "Date range is invalid");
+
+    const tasksDirectory = await resolveDomainPath(metadata.worktree_path, `projects/${projectId}/tasks`);
+    const tasks = new Map<string, GitPmDocument>();
+    for (const file of await yamlFiles(tasksDirectory)) {
+      const relative = path.relative(metadata.worktree_path, file).split(path.sep).join("/");
+      const document = parseYamlDocument(await readFile(file, "utf8"), relative);
+      if (document.schema === "gitpm/task@2" && document.project === projectId && typeof document.id === "string") tasks.set(document.id, document);
+    }
+    if (filters.task !== undefined && !tasks.has(filters.task)) throw new TimeEntryOperationError("REF_CROSS_PROJECT", `${filters.task} does not belong to ${projectId}`);
+    if (filters.milestone !== undefined) {
+      const milestone = await resolveDomainPath(metadata.worktree_path, `projects/${projectId}/milestones/${filters.milestone}.yaml`);
+      try {
+        const document = parseYamlDocument(await readFile(milestone, "utf8"), `projects/${projectId}/milestones/${filters.milestone}.yaml`);
+        if (document.schema !== "gitpm/milestone@2" || document.project !== projectId) throw new Error();
+      } catch {
+        throw new TimeEntryOperationError("REF_CROSS_PROJECT", `${filters.milestone} does not belong to ${projectId}`);
+      }
+    }
+    const directory = await resolveDomainPath(metadata.worktree_path, `projects/${projectId}/time-entries`);
+    let taskDirectories: string[] = [];
+    try { taskDirectories = (await readdir(directory, { withFileTypes: true })).filter((entry) => entry.isDirectory() && isEntityId(entry.name, ENTITY_ID_PREFIX.task)).map((entry) => entry.name).sort(); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+    const entries: Array<{ relative: string; document: TimeEntryDocument }> = [];
+    for (const taskId of taskDirectories) {
+      const taskDocument = tasks.get(taskId);
+      if (taskDocument === undefined) continue;
+      if (filters.task !== undefined && taskId !== filters.task || filters.milestone !== undefined && taskDocument.milestone !== filters.milestone) continue;
+      const taskDirectory = await resolveDomainPath(metadata.worktree_path, `projects/${projectId}/time-entries/${taskId}`);
+      for (const file of await yamlFiles(taskDirectory)) {
+        const relative = path.relative(metadata.worktree_path, file).split(path.sep).join("/");
+        const document = parseYamlDocument(await readFile(file, "utf8"), relative) as TimeEntryDocument;
+        if (document.schema !== "gitpm/time-entry@1" || document.project !== projectId || document.task !== taskId) continue;
+        if (filters.person !== undefined && document.person !== filters.person || filters.category !== undefined && document.category !== filters.category || filters.state !== undefined && document.state !== filters.state || filters.performed_from !== undefined && document.performed_on < filters.performed_from || filters.performed_to !== undefined && document.performed_on > filters.performed_to) continue;
+        entries.push({ relative, document });
+      }
+    }
+    entries.sort((left, right) => left.document.performed_on.localeCompare(right.document.performed_on) || left.document.created_at.localeCompare(right.document.created_at) || left.document.id.localeCompare(right.document.id));
+    const total = entries.length;
+    const page = entries.slice(offset, offset + limit);
+    const blobIds = await this.drafts.fileBlobIds(draftId, page.map((entry) => entry.relative));
+    return { items: page.map((entry) => ({ document: entry.document, path: entry.relative, blob_id: blobIds.get(entry.relative)!, draft_fingerprint: metadata.fingerprint })), total, offset, limit };
+  }
+
   async create(draftId: string, projectId: string, taskId: string, expectedFingerprint: string, input: TimeEntryInput, actor: TimeEntryActor): Promise<TimeEntryResult> {
     if (!isEntityId(input.person, ENTITY_ID_PREFIX.person)) throw new TimeEntryOperationError("REF_MISSING", `${input.person} does not reference a person`);
     let created: TimeEntryDocument | undefined;
     let relative = "";
     const mutation = await this.drafts.withRepositoryMutation(draftId, actor.userId, expectedFingerprint, this.mutationMode, async (metadata) => {
-      const task = await this.task(metadata, projectId, taskId);
+      const task = await this.assertWritableTask(metadata, projectId, taskId);
+      await this.assertActiveCategory(metadata, input.category);
       const id = newUniqueEntityId(ENTITY_ID_PREFIX.entry, await this.allEntryIds(metadata));
       relative = entryPath(projectId, taskId, id);
       const absolute = path.join(metadata.worktree_path, ...relative.split("/"));
@@ -172,6 +313,7 @@ export class TimeEntryStore {
       const task = await this.task(metadata, projectId, taskId);
       const current = await this.readEntry(metadata, projectId, taskId, entryId);
       if (current.document.state !== "active") throw new TimeEntryOperationError("TIME_ENTRY_VOIDED", "Time entry is already voided");
+      if (replacement !== undefined) await this.assertReplacement(metadata, projectId, taskId, entryId, replacement);
       await this.drafts.assertFileBlobId(draftId, current.relative, expectedBlobId);
       relative = current.relative;
       voided = { ...current.document, state: "voided", voided_at: this.now().toISOString(), voided_by: actor.identity, ...(replacement === undefined ? {} : { replacement }) };
@@ -191,7 +333,8 @@ export class TimeEntryStore {
     let voidedRelative = "";
     let createdRelative = "";
     const mutation = await this.drafts.withRepositoryMutation(draftId, actor.userId, expectedFingerprint, this.mutationMode, async (metadata) => {
-      const task = await this.task(metadata, projectId, taskId);
+      const task = await this.assertWritableTask(metadata, projectId, taskId);
+      await this.assertActiveCategory(metadata, input.category);
       const current = await this.readEntry(metadata, projectId, taskId, entryId);
       if (current.document.state !== "active") throw new TimeEntryOperationError("TIME_ENTRY_VOIDED", "Time entry is already voided");
       await this.drafts.assertFileBlobId(draftId, current.relative, expectedBlobId);

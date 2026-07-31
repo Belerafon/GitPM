@@ -258,7 +258,7 @@ function directReferences(document: GitPmDocument): string[] {
       document.task,
       ...((document.mentions as Array<{ person?: unknown }> | undefined) ?? []).map((item) => item.person),
     ]);
-    case "gitpm/time-entry@1": return values([document.project, document.task, document.person]);
+    case "gitpm/time-entry@1": return values([document.project, document.task, document.person, document.replacement]);
     default: return [];
   }
 }
@@ -285,6 +285,91 @@ function detectCycles(
     visited.add(id);
   };
   for (const id of byId.keys()) walk(id);
+}
+
+type TrackInfo = { readonly kind: string; readonly capabilities: ReadonlySet<string>; readonly source?: string };
+
+interface PlanningSettingsInput {
+  readonly enabled: ReadonlySet<string>;
+  readonly primary?: string;
+  readonly workload?: string;
+  readonly comparison?: string;
+  readonly dashboard: readonly string[];
+}
+
+function validateScheduleTrackDefinitions(document: LoadedDocument, add: (issue: ValidationIssue) => void): void {
+  const tracks = (document.value.tracks as Array<Record<string, unknown>>) ?? [];
+  for (const [index, track] of tracks.entries()) {
+    const slug = typeof track.slug === "string" ? track.slug : `#${index}`;
+    const kind = typeof track.kind === "string" ? track.kind : "";
+    const field = `tracks.${slug}`;
+    if (kind === "manual") {
+      if (track.source !== undefined) add({ severity: "error", code: "TRACK_KIND_SOURCE_MISMATCH", path: document.path, field: `${field}.source`, message: `Manual track ${slug} must not define source` });
+      const capabilities = Array.isArray(track.capabilities) ? track.capabilities : [];
+      if (capabilities.length === 0) add({ severity: "error", code: "TRACK_CAPABILITY_REQUIRED", path: document.path, field: `${field}.capabilities`, message: `Manual track ${slug} must declare at least one capability` });
+    } else if (kind === "actual") {
+      if (track.source !== "time_entries") add({ severity: "error", code: "TRACK_KIND_SOURCE_MISMATCH", path: document.path, field: `${field}.source`, message: `Actual track ${slug} must define source: time_entries` });
+      if (track.capabilities !== undefined) add({ severity: "error", code: "TRACK_CAPABILITY_NOT_ALLOWED", path: document.path, field: `${field}.capabilities`, message: `Actual track ${slug} must not declare capabilities` });
+    }
+  }
+}
+
+function validatePlanningSettings(
+  path: string,
+  fieldPrefix: string,
+  settings: PlanningSettingsInput,
+  tracks: ReadonlyMap<string, TrackInfo>,
+  add: (issue: ValidationIssue) => void,
+): void {
+  const referenced = [...settings.enabled, ...settings.dashboard];
+  if (settings.primary !== undefined) referenced.push(settings.primary);
+  if (settings.workload !== undefined) referenced.push(settings.workload);
+  if (settings.comparison !== undefined) referenced.push(settings.comparison);
+  for (const slug of [...new Set(referenced)]) {
+    if (!tracks.has(slug)) add({ severity: "error", code: "PLANNING_UNKNOWN_TRACK", path, field: fieldPrefix, message: `Unknown schedule track ${slug}` });
+  }
+  if (settings.primary !== undefined) {
+    const primary = settings.primary;
+    if (!settings.enabled.has(primary)) add({ severity: "error", code: "PLANNING_PRIMARY_NOT_ENABLED", path, field: `${fieldPrefix}.primary_track`, message: `primary_track ${primary} is not enabled` });
+    const primaryTrack = tracks.get(primary);
+    if (primaryTrack !== undefined) {
+      if (primaryTrack.kind !== "manual") add({ severity: "error", code: "PLANNING_PRIMARY_NOT_MANUAL", path, field: `${fieldPrefix}.primary_track`, message: `primary_track ${primary} must be a manual track` });
+      if (!primaryTrack.capabilities.has("dates")) add({ severity: "error", code: "PLANNING_PRIMARY_MISSING_DATES", path, field: `${fieldPrefix}.primary_track`, message: `primary_track ${primary} needs dates capability` });
+    }
+  }
+  if (settings.workload !== undefined) {
+    const workload = settings.workload;
+    if (!settings.enabled.has(workload)) add({ severity: "error", code: "PLANNING_WORKLOAD_NOT_ENABLED", path, field: `${fieldPrefix}.workload_track`, message: `workload_track ${workload} is not enabled` });
+    const workloadTrack = tracks.get(workload);
+    if (workloadTrack !== undefined) {
+      if (workloadTrack.kind !== "manual") add({ severity: "error", code: "PLANNING_WORKLOAD_NOT_MANUAL", path, field: `${fieldPrefix}.workload_track`, message: `workload_track ${workload} must be a manual track` });
+      if (!workloadTrack.capabilities.has("dates") || !workloadTrack.capabilities.has("effort")) add({ severity: "error", code: "PLANNING_WORKLOAD_MISSING_EFFORT", path, field: `${fieldPrefix}.workload_track`, message: `workload_track ${workload} needs manual dates and effort capabilities` });
+    }
+  }
+  if (settings.comparison !== undefined && !settings.enabled.has(settings.comparison)) add({ severity: "error", code: "PLANNING_COMPARISON_NOT_ENABLED", path, field: `${fieldPrefix}.comparison_track`, message: `comparison_track ${settings.comparison} is not enabled` });
+  for (const slug of settings.dashboard) if (!settings.enabled.has(slug)) add({ severity: "error", code: "PLANNING_DASHBOARD_UNKNOWN", path, field: `${fieldPrefix}.dashboard_tracks`, message: `dashboard track ${slug} is not enabled` });
+}
+
+function resolveProjectPlanning(
+  defaults: PlanningSettingsInput,
+  planning: Record<string, unknown> | undefined,
+  tracks: ReadonlyMap<string, TrackInfo>,
+): PlanningSettingsInput {
+  const projectEnabled = values(planning?.enabled_tracks);
+  const enabled = projectEnabled.length > 0 ? new Set(projectEnabled) : defaults.enabled.size > 0 ? defaults.enabled : new Set([...tracks.keys()].filter((slug) => tracks.get(slug)?.kind === "manual"));
+  const primary = typeof planning?.primary_track === "string" ? planning.primary_track : defaults.primary;
+  const workload = typeof planning?.workload_track === "string" ? planning.workload_track : defaults.workload ?? primary;
+  const defaultComparison = defaults.comparison;
+  const comparison = typeof planning?.comparison_track === "string"
+    ? planning.comparison_track
+    : defaultComparison !== undefined && enabled.has(defaultComparison) ? defaultComparison : undefined;
+  const projectDashboard = values(planning?.dashboard_tracks);
+  const dashboard = projectDashboard.length > 0
+    ? projectDashboard
+    : defaults.dashboard.filter((slug) => enabled.has(slug)).length > 0
+      ? defaults.dashboard.filter((slug) => enabled.has(slug))
+      : [...enabled];
+  return { enabled, primary, workload, comparison, dashboard };
 }
 
 export async function validateRepository(repositoryRoot: string): Promise<ValidationReport> {
@@ -362,6 +447,17 @@ export async function validateRepository(repositoryRoot: string): Promise<Valida
   }
 
   const validDocuments = documents.filter((document) => structurallyValid.has(document.path));
+  for (const document of documents) {
+    if (document.value.schema !== "gitpm/time-entry@1") continue;
+    const value = document.value;
+    if (value.state === "voided") {
+      if (value.voided_at === undefined || value.voided_by === undefined) {
+        add({ severity: "error", code: "TIME_ENTRY_VOID_METADATA_REQUIRED", path: document.path, message: "Voided time entries require voided_at and voided_by" });
+      }
+    } else if (value.state === "active" && (value.voided_at !== undefined || value.voided_by !== undefined || value.replacement !== undefined)) {
+      add({ severity: "error", code: "TIME_ENTRY_VOID_FIELDS_FORBIDDEN", path: document.path, message: "Active time entries cannot contain voiding fields" });
+    }
+  }
   const byId = new Map<string, LoadedDocument>();
   for (const document of validDocuments) {
     if (typeof document.value.id !== "string") continue;
@@ -394,10 +490,41 @@ export async function validateRepository(repositoryRoot: string): Promise<Valida
   const statuses = new Set(((statusDocument?.value.statuses as Array<{ slug: string }> | undefined) ?? []).map((item) => item.slug));
   const issueTypes = new Set(((typeDocument?.value.issue_types as Array<{ slug: string }> | undefined) ?? []).map((item) => item.slug));
   const categories = new Set(((categoriesDocument?.value.categories as Array<{ slug: string }> | undefined) ?? []).map((item) => item.slug));
-  const tracks = new Map<string, { readonly kind: string; readonly capabilities: ReadonlySet<string> }>();
+  const tracks = new Map<string, { readonly kind: string; readonly capabilities: ReadonlySet<string>; readonly source?: string }>();
+  let actualTrackCount = 0;
   for (const track of ((tracksDocument?.value.tracks as Array<Record<string, unknown>>) ?? [])) {
     const slug = typeof track.slug === "string" ? track.slug : "";
-    if (slug !== "") tracks.set(slug, { kind: typeof track.kind === "string" ? track.kind : "", capabilities: new Set(Array.isArray(track.capabilities) ? track.capabilities.filter((c): c is string => typeof c === "string") : []) });
+    if (slug === "") continue;
+    if (tracks.has(slug)) {
+      add({ severity: "error", code: "TRACK_SLUG_DUPLICATE", path: tracksDocument?.path ?? ".gitpm/schedule-tracks.yaml", field: `tracks.${slug}`, message: `Duplicate schedule track slug ${slug}` });
+      continue;
+    }
+    const kind = typeof track.kind === "string" ? track.kind : "";
+    if (kind === "actual") actualTrackCount += 1;
+    tracks.set(slug, { kind, capabilities: new Set(Array.isArray(track.capabilities) ? track.capabilities.filter((c): c is string => typeof c === "string") : []), source: typeof track.source === "string" ? track.source : undefined });
+  }
+  if (actualTrackCount > 1) {
+    add({ severity: "error", code: "TRACK_ACTUAL_COUNT", path: tracksDocument?.path ?? ".gitpm/schedule-tracks.yaml", field: "tracks", message: `At most one actual track is allowed (found ${actualTrackCount})` });
+  }
+  if (tracksDocument !== undefined) validateScheduleTrackDefinitions(tracksDocument, add);
+  const tracksDefaults = tracksDocument?.value.defaults as Record<string, unknown> | undefined;
+  const defaultSettings: PlanningSettingsInput = {
+    enabled: new Set(values(tracksDefaults?.enabled_tracks)),
+    primary: typeof tracksDefaults?.primary_track === "string" ? tracksDefaults.primary_track : undefined,
+    workload: typeof tracksDefaults?.workload_track === "string" ? tracksDefaults.workload_track : undefined,
+    comparison: typeof tracksDefaults?.comparison_track === "string" ? tracksDefaults.comparison_track : undefined,
+    dashboard: values(tracksDefaults?.dashboard_tracks),
+  };
+  if (tracksDocument !== undefined && (defaultSettings.enabled.size > 0 || defaultSettings.primary !== undefined || defaultSettings.workload !== undefined || defaultSettings.comparison !== undefined || defaultSettings.dashboard.length > 0)) {
+    validatePlanningSettings(tracksDocument.path, "defaults", defaultSettings, tracks, add);
+  }
+
+  const projectsById = new Map<string, LoadedDocument>();
+  for (const document of validDocuments) if (document.value.schema === "gitpm/project@2" && typeof document.value.id === "string") projectsById.set(document.value.id, document);
+  const projectEnabledTracks = new Map<string, ReadonlySet<string>>();
+  for (const [projectId, document] of projectsById) {
+    const planning = document.value.planning as Record<string, unknown> | undefined;
+    projectEnabledTracks.set(projectId, resolveProjectPlanning(defaultSettings, planning, tracks).enabled);
   }
 
   const allowedTop = new Set([
@@ -455,11 +582,11 @@ export async function validateRepository(repositoryRoot: string): Promise<Valida
     }
   };
 
-  const validateScheduleWindows = (owner: LoadedDocument): void => {
-    const windows = scheduleWindows(owner.value);
-    if (owner.value.schedules === undefined || windows.length === 0) return;
-    const schedules = owner.value.schedules as Record<string, Record<string, unknown>>;
+  const validateScheduleWindows = (owner: LoadedDocument, enabledTracks?: ReadonlySet<string>): void => {
+    const schedules = owner.value.schedules as Record<string, Record<string, unknown>> | undefined;
+    if (schedules === undefined || typeof schedules !== "object" || Array.isArray(schedules)) return;
     for (const [trackSlug, window] of Object.entries(schedules)) {
+      if (window === null || typeof window !== "object" || Array.isArray(window)) continue;
       const track = tracks.get(trackSlug);
       if (track === undefined) {
         add({ severity: "error", code: "SCHEDULE_TRACK_UNKNOWN", path: owner.path, field: `schedules.${trackSlug}`, message: `Unknown schedule track ${trackSlug}` });
@@ -467,6 +594,16 @@ export async function validateRepository(repositoryRoot: string): Promise<Valida
       }
       if (track.kind === "actual") {
         add({ severity: "error", code: "SCHEDULE_ACTUAL_NOT_EDITABLE", path: owner.path, field: `schedules.${trackSlug}`, message: `Actual track ${trackSlug} is computed and cannot be stored` });
+      }
+      if (enabledTracks !== undefined && !enabledTracks.has(trackSlug)) {
+        add({ severity: "error", code: "SCHEDULE_TRACK_NOT_ENABLED", path: owner.path, field: `schedules.${trackSlug}`, message: `Schedule track ${trackSlug} is not enabled in the owning project` });
+      }
+      const hasContent = (window.start !== undefined && window.start !== "") || (window.finish !== undefined && window.finish !== "") || window.effort_hours !== undefined || (Array.isArray(window.depends_on) && window.depends_on.length > 0);
+      if (!hasContent) {
+        add({ severity: "error", code: "SCHEDULE_WINDOW_EMPTY", path: owner.path, field: `schedules.${trackSlug}`, message: `Schedule window ${trackSlug} must not be empty` });
+      }
+      if ((window.start !== undefined || window.finish !== undefined) && !track.capabilities.has("dates")) {
+        add({ severity: "error", code: "CAPABILITY_DATES_NOT_ALLOWED", path: owner.path, field: `schedules.${trackSlug}`, message: `Track ${trackSlug} does not allow dates` });
       }
       validateWindowDates(owner, window, `schedules.${trackSlug}`);
       if (window.effort_hours !== undefined && !track.capabilities.has("effort")) {
@@ -491,26 +628,12 @@ export async function validateRepository(repositoryRoot: string): Promise<Valida
     } else if (value.schema === "gitpm/project@2") {
       if (!statuses.has(String(value.status))) add({ severity: "error", code: "CONFIG_REFERENCE", path: document.path, message: `Unknown status ${String(value.status)}` });
       reference(value.owner, "gitpm/person@1", document);
-      validateScheduleWindows(document);
       const planning = value.planning as Record<string, unknown> | undefined;
-      if (planning !== undefined) {
-        const enabled = new Set(values(planning.enabled_tracks));
-        for (const slug of [...values(planning.enabled_tracks), ...values(planning.dashboard_tracks)]) {
-          if (!tracks.has(slug)) add({ severity: "error", code: "PLANNING_UNKNOWN_TRACK", path: document.path, field: "planning", message: `Unknown schedule track ${slug}` });
-        }
-        const primary = typeof planning.primary_track === "string" ? planning.primary_track : undefined;
-        if (primary !== undefined && !enabled.has(primary)) add({ severity: "error", code: "PLANNING_PRIMARY_NOT_ENABLED", path: document.path, field: "planning.primary_track", message: `primary_track ${primary} is not enabled` });
-        const workload = typeof planning.workload_track === "string" ? planning.workload_track : undefined;
-        if (workload !== undefined) {
-          if (!enabled.has(workload)) add({ severity: "error", code: "PLANNING_WORKLOAD_NOT_ENABLED", path: document.path, field: "planning.workload_track", message: `workload_track ${workload} is not enabled` });
-          const workloadTrack = tracks.get(workload);
-          if (workloadTrack !== undefined && (workloadTrack.kind !== "manual" || !workloadTrack.capabilities.has("dates") || !workloadTrack.capabilities.has("effort"))) {
-            add({ severity: "error", code: "PLANNING_WORKLOAD_MISSING_EFFORT", path: document.path, field: "planning.workload_track", message: `workload_track ${workload} needs manual dates and effort capabilities` });
-          }
-        }
-        const comparison = typeof planning.comparison_track === "string" ? planning.comparison_track : undefined;
-        if (comparison !== undefined && !enabled.has(comparison)) add({ severity: "error", code: "PLANNING_COMPARISON_NOT_ENABLED", path: document.path, field: "planning.comparison_track", message: `comparison_track ${comparison} is not enabled` });
-        for (const slug of values(planning.dashboard_tracks)) if (!enabled.has(slug)) add({ severity: "error", code: "PLANNING_DASHBOARD_UNKNOWN", path: document.path, field: "planning.dashboard_tracks", message: `dashboard track ${slug} is not enabled` });
+      const resolved = resolveProjectPlanning(defaultSettings, planning, tracks);
+      validateScheduleWindows(document, resolved.enabled);
+      const hasOverride = planning !== undefined && Object.keys(planning).length > 0;
+      if (hasOverride || resolved.primary !== undefined || resolved.workload !== undefined) {
+        validatePlanningSettings(document.path, "planning", resolved, tracks, add);
       }
     } else if (value.schema === "gitpm/person@1") {
       reference(value.calendar, "gitpm/calendar@1", document);
@@ -518,7 +641,7 @@ export async function validateRepository(repositoryRoot: string): Promise<Valida
       for (const member of values(value.members)) reference(member, "gitpm/person@1", document);
     } else if (value.schema === "gitpm/milestone@2") {
       reference(value.project, "gitpm/project@2", document);
-      validateScheduleWindows(document);
+      validateScheduleWindows(document, typeof value.project === "string" ? projectEnabledTracks.get(value.project) : undefined);
     } else if (value.schema === "gitpm/task@2") {
       reference(value.project, "gitpm/project@2", document);
       if (!statuses.has(String(value.status))) add({ severity: "error", code: "CONFIG_REFERENCE", path: document.path, message: `Unknown status ${String(value.status)}` });
@@ -536,7 +659,7 @@ export async function validateRepository(repositoryRoot: string): Promise<Valida
         const target = reference(value.milestone, "gitpm/milestone@2", document);
         if (target && target.value.project !== value.project) add({ severity: "error", code: "REF_CROSS_PROJECT", path: document.path, message: `${value.milestone} belongs to another project` });
       }
-      validateScheduleWindows(document);
+      validateScheduleWindows(document, typeof value.project === "string" ? projectEnabledTracks.get(value.project) : undefined);
       for (const [trackSlug, window] of Object.entries((value.schedules as Record<string, Record<string, unknown>> | undefined) ?? {})) {
         for (const dependency of values(window?.depends_on)) {
           const target = reference(dependency, "gitpm/task@2", document);
@@ -582,6 +705,18 @@ export async function validateRepository(repositoryRoot: string): Promise<Valida
         }
       }
       if (typeof value.voided_at === "string" && typeof value.created_at === "string" && value.voided_at < value.created_at) add({ severity: "error", code: "TIME_ENTRY_TIMESTAMP_ORDER", path: document.path, message: "voided_at must not be before created_at" });
+      if (typeof value.replacement === "string") {
+        if (value.replacement === value.id) {
+          add({ severity: "error", code: "TIME_ENTRY_REPLACEMENT_SELF", path: document.path, field: "replacement", message: "A time entry cannot replace itself" });
+        } else {
+          const replacement = byId.get(value.replacement);
+          if (replacement === undefined || replacement.value.schema !== "gitpm/time-entry@1") {
+            add({ severity: "error", code: "TIME_ENTRY_REPLACEMENT_MISSING", path: document.path, field: "replacement", message: `${value.replacement} does not reference a time entry` });
+          } else if (replacement.value.task !== value.task || replacement.value.project !== value.project) {
+            add({ severity: "error", code: "TIME_ENTRY_REPLACEMENT_TASK_MISMATCH", path: document.path, field: "replacement", message: `${value.replacement} belongs to another task` });
+          }
+        }
+      }
     }
   }
 

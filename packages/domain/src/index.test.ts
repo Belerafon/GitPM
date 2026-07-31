@@ -7,7 +7,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { DraftManager } from "@gitpm/drafts";
 import { GitClient } from "@gitpm/git-client";
 import type { GitPmDocument } from "@gitpm/repository-format";
-import { CommentStore, DomainOperationError, EntityStore, planEntityCreation, planEntityUpdate, type CommentActor } from "./index.js";
+import { CommentStore, DomainOperationError, EntityStore, TimeEntryStore, planEntityCreation, planEntityUpdate, type CommentActor } from "./index.js";
 
 const execFileAsync = promisify(execFile);
 const roots: string[] = [];
@@ -35,7 +35,7 @@ beforeAll(async () => {
 
 afterAll(async () => rm(templateRoot, { recursive: true, force: true }));
 
-async function runtime(): Promise<{ manager: DraftManager; store: EntityStore; comments: CommentStore }> {
+async function runtime(): Promise<{ manager: DraftManager; store: EntityStore; comments: CommentStore; timeEntries: TimeEntryStore }> {
   const root = await mkdtemp(path.join(os.tmpdir(), "gitpm-domain-"));
   roots.push(root);
   const remote = path.join(root, "remote.git");
@@ -43,7 +43,7 @@ async function runtime(): Promise<{ manager: DraftManager; store: EntityStore; c
   await cp(templateRemote, remote, { recursive: true });
   const client = new GitClient({ dataDirectory: data, remoteUrl: remote, defaultBranch: "main", allowLocalTestRemote: true });
   const manager = new DraftManager(client, data);
-  return { manager, store: new EntityStore(manager), comments: new CommentStore(manager) };
+  return { manager, store: new EntityStore(manager), comments: new CommentStore(manager), timeEntries: new TimeEntryStore(manager) };
 }
 
 afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))));
@@ -217,19 +217,24 @@ describe("domain entity store", () => {
   });
 
   it("moves a complete task subtree and its comments between projects and rejects broken external references", async () => {
-    const { manager, store, comments } = await runtime();
+    const { manager, store, comments, timeEntries } = await runtime();
     const draft = await manager.createDraft("DRF-MOVE", "42");
     const task = await store.get("DRF-MOVE", "tasks", "T-26-G2TG9R");
     const child = await store.create("DRF-MOVE", "42", draft.fingerprint, { schema: "gitpm/task@2", id: "T-26-ABCDEF", project: task.document.project, parent: task.document.id, title: "Child task", type: "task", status: "backlog", lifecycle: "active" });
     const grandchild = await store.create("DRF-MOVE", "42", child.draft_fingerprint, { schema: "gitpm/task@2", id: "T-26-BCDEFG", project: task.document.project, parent: child.document.id, title: "Grandchild task", type: "task", status: "backlog", lifecycle: "active" });
     const comment = await comments.create("DRF-MOVE", String(task.document.project), String(grandchild.document.id), grandchild.draft_fingerprint, "Moves with the subtree", { userId: "42", role: "Developer", identity: { provider: "git", subject: "author@example.test", display_name: "Author" } });
-    const moved = await store.moveTask("DRF-MOVE", "42", String(task.document.id), comment.draft_fingerprint, task.blob_id, "P-26-MGP84K", "M-26-461GDJ");
+    const rootEntry = await timeEntries.create("DRF-MOVE", String(task.document.project), String(task.document.id), comment.draft_fingerprint, { person: "U-26-5EBAE3", performed_on: "2026-09-01", hours: 1, category: "regular" }, { userId: "42", identity: { provider: "git", subject: "author@example.test", display_name: "Author" } });
+    const childEntry = await timeEntries.create("DRF-MOVE", String(task.document.project), String(grandchild.document.id), rootEntry.draft_fingerprint, { person: "U-26-5EBAE3", performed_on: "2026-09-02", hours: 1, category: "regular" }, { userId: "42", identity: { provider: "git", subject: "author@example.test", display_name: "Author" } });
+    const moved = await store.moveTask("DRF-MOVE", "42", String(task.document.id), childEntry.draft_fingerprint, task.blob_id, "P-26-MGP84K", "M-26-461GDJ");
 
     expect(moved.document).toMatchObject({ project: "P-26-MGP84K", milestone: "M-26-461GDJ" });
     expect(moved.path).toBe("projects/P-26-MGP84K/tasks/T-26-G2TG9R.yaml");
     expect((await store.get("DRF-MOVE", "tasks", String(child.document.id))).document).toMatchObject({ project: "P-26-MGP84K", milestone: "M-26-461GDJ", parent: task.document.id });
     expect((await store.get("DRF-MOVE", "tasks", String(grandchild.document.id))).document).toMatchObject({ project: "P-26-MGP84K", milestone: "M-26-461GDJ", parent: child.document.id });
     expect(await readFile(path.join(draft.worktree_path, "projects", "P-26-MGP84K", "comments", String(grandchild.document.id), `${comment.document.id}.yaml`), "utf8")).toContain("project: P-26-MGP84K");
+    expect(await readFile(path.join(draft.worktree_path, "projects", "P-26-MGP84K", "time-entries", String(task.document.id), `${rootEntry.document.id}.yaml`), "utf8")).toContain("project: P-26-MGP84K");
+    expect(await readFile(path.join(draft.worktree_path, "projects", "P-26-MGP84K", "time-entries", String(grandchild.document.id), `${childEntry.document.id}.yaml`), "utf8")).toContain("project: P-26-MGP84K");
+    await expect(readFile(path.join(draft.worktree_path, "projects", String(task.document.project), "time-entries", String(task.document.id), `${rootEntry.document.id}.yaml`), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
     expect((await store.get("DRF-MOVE", "milestones", "M-26-461GDJ")).document.task_order).toEqual(expect.arrayContaining([task.document.id, child.document.id, grandchild.document.id]));
     const dependent = await store.get("DRF-MOVE", "tasks", "T-26-P9G3P8");
     await expect(store.moveTask("DRF-MOVE", "42", String(dependent.document.id), moved.draft_fingerprint, dependent.blob_id, "P-26-8S9HQQ"))

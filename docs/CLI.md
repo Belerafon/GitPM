@@ -18,12 +18,15 @@ gitpm entity show [--draft <id>] --type <type> --id <entity-id>
 gitpm entity delete [--draft <id>] --type <type> --id <entity-id> [--unlink-references|--cascade-references] [--dry-run] [--allow-delete] [--project <id>]
 gitpm entity archive [--draft <id>] --type <type> --id <entity-id> [--project <id>] [--allow-delete]
 gitpm entity move [--draft <id>] --type task --id <entity-id> --to-project <id> [--to-milestone <id>] [--to-parent <task-id>] [--allow-delete] [--project <id>]
+gitpm schedule set --type project|task|milestone --id <entity-id> --track <slug> [--start <yyyy-mm-dd>] [--finish <yyyy-mm-dd>] [--effort-hours <n>] [--depends-on <task-id>]... [--clear-start] [--clear-finish] [--clear-effort] [--clear-dependencies] [--project <id>] [--allow-delete]
+gitpm planning show --project <id>
+gitpm planning set --project <id> [--primary-track <slug>] [--workload-track <slug>] [--comparison-track <slug>|--clear-comparison-track] [--enabled-track <slug>]... [--dashboard-track <slug>]... [--allow-delete]
 gitpm comment list --project <id> --task <id>
 gitpm comment create --project <id> --task <id> (--body <text> | --file <path>)
 gitpm comment update --project <id> --task <id> --id <comment-id> (--body <text> | --file <path>)
 gitpm comment delete --project <id> --task <id> --id <comment-id>
-gitpm time-entry list --project <id> --task <id> [--json]
-gitpm time-entry summary --project <id> --task <id> [--after <yyyy-mm-dd>] [--json]
+gitpm time-entry list --project <id> [--task <id>] [--milestone <id>] [--person <id>] [--category <slug>] [--state active|voided] [--from <yyyy-mm-dd>] [--to <yyyy-mm-dd>] [--offset <n>] [--limit <n>] [--json]
+gitpm time-entry summary --project <id> [--task <id>] [--milestone <id>] [--person <id>] [--category <slug>] [--state active|voided] [--from <yyyy-mm-dd>] [--to <yyyy-mm-dd>] [--after <yyyy-mm-dd>] [--json]
 gitpm time-entry create --project <id> --task <id> --person <id> --date <yyyy-mm-dd> --hours <n> --category <slug> [--note <text>] [--json]
 gitpm time-entry void --project <id> --task <id> --id <entry-id> [--json]
 gitpm config show --kind statuses|issue-types|work-categories|schedule-tracks
@@ -62,6 +65,12 @@ repository schema, repository ZIP — без `.git` по умолчанию ил
 комбинировать, inline-поля имеют приоритет. `schema`, `id` и владеющий Project неизменяемы; `null`
 в YAML patch и `--unset` удаляют необязательное поле. После записи CLI проверяет весь репозиторий и
 откатывает все затронутые файлы при ошибке validation или Project scope.
+
+`schedule set` является обычной командой для изменения одного окна `schedules.<track>`.
+Она сохраняет окна остальных tracks и изменяет dependencies только выбранного track; полный
+`schedules=` patch через `entity update` остаётся низкоуровневым вариантом. `planning show/set`
+читает и меняет Project Planning, при этом повторяемые `--enabled-track` и `--dashboard-track`
+заменяют только соответствующий список.
 
 `entity import` (alias: `entity bulk-import`) выполняет пакет атомарно: сначала планирует все ID, затем записывает пакет,
 один раз валидирует полный репозиторий и откатывает все файлы при любой ошибке. `--dry-run`
@@ -102,6 +111,10 @@ Project (поддерживается только для `project`; други�
 
 `comment` управляет комментариями к Task: Markdown с упоминаниями `@[Name](person:U-...)`,
 soft-delete (tombstone остаётся в Git history). Доступно в direct mode.
+
+`time-entry list` и `time-entry summary` работают на уровне Project; `--task` лишь сужает
+выборку. List возвращает `total`, `offset` и `limit`; фильтры Person, Milestone, category,
+state и диапазон фактической даты соответствуют project-level TimeEntry API.
 
 `config show/update` читает и обновляет конфигурацию репозитория (`.gitpm/statuses.yaml`,
 `.gitpm/issue-types.yaml`). Доступно в direct mode.

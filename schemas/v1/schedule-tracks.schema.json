@@ -23,7 +23,29 @@
             "uniqueItems": true
           },
           "source": {"$ref": "common.schema.json#/$defs/trackSource"}
-        }
+        },
+        "allOf": [
+          {
+            "if": {"properties": {"kind": {"const": "manual"}}, "required": ["kind"]},
+            "then": {
+              "required": ["capabilities"],
+              "properties": {
+                "source": false,
+                "capabilities": {"type": "array", "minItems": 1}
+              }
+            }
+          },
+          {
+            "if": {"properties": {"kind": {"const": "actual"}}, "required": ["kind"]},
+            "then": {
+              "required": ["source"],
+              "properties": {
+                "source": {"const": "time_entries"},
+                "capabilities": false
+              }
+            }
+          }
+        ]
       }
     },
     "defaults": {
