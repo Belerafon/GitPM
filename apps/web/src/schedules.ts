@@ -94,29 +94,25 @@ export function updateScheduleWindow(existingSchedules: Readonly<Record<string, 
     if (track === trackSlug) continue;
     if (isWindow(window)) next[track] = { ...window };
   }
-  const presentKeys = (["start", "finish", "effort_hours"] as const).filter((key) => key in patch);
-  const allCleared = presentKeys.length > 0 && presentKeys.every((key) => (patch[key] ?? "") === "");
-  if (!allCleared) {
-    const existing = isWindow(source[trackSlug]) ? { ...(source[trackSlug] as ScheduleWindowInput) } : {};
-    const window: Record<string, unknown> = existing as Record<string, unknown>;
-    if ("start" in patch) {
-      const value = patch.start ?? "";
-      if (value === "") delete window.start;
-      else window.start = value;
-    }
-    if ("finish" in patch) {
-      const value = patch.finish ?? "";
-      if (value === "") delete window.finish;
-      else window.finish = value;
-    }
-    if ("effort_hours" in patch) {
-      const value = patch.effort_hours ?? "";
-      const parsed = Number(value);
-      if (value === "" || !Number.isFinite(parsed)) delete window.effort_hours;
-      else window.effort_hours = parsed;
-    }
-    if (Object.keys(window).length > 0) next[trackSlug] = window as ScheduleWindowInput;
+  const existing = isWindow(source[trackSlug]) ? { ...(source[trackSlug] as ScheduleWindowInput) } : {};
+  const window: Record<string, unknown> = existing as Record<string, unknown>;
+  if ("start" in patch) {
+    const value = patch.start ?? "";
+    if (value === "") delete window.start;
+    else window.start = value;
   }
+  if ("finish" in patch) {
+    const value = patch.finish ?? "";
+    if (value === "") delete window.finish;
+    else window.finish = value;
+  }
+  if ("effort_hours" in patch) {
+    const value = patch.effort_hours ?? "";
+    const parsed = Number(value);
+    if (value === "" || !Number.isFinite(parsed)) delete window.effort_hours;
+    else window.effort_hours = parsed;
+  }
+  if (Object.keys(window).length > 0) next[trackSlug] = window as ScheduleWindowInput;
   return Object.keys(next).length === 0 ? undefined : next;
 }
 
@@ -211,13 +207,11 @@ export function setScheduleDependencies(existingSchedules: Readonly<Record<strin
     if (track === trackSlug) continue;
     if (isWindow(window)) next[track] = { ...window };
   }
-  const existing = isWindow(source[trackSlug]) ? { ...(source[trackSlug] as ScheduleWindowInput) } : undefined;
-  if (existing !== undefined) {
-    const window: Record<string, unknown> = { ...existing } as Record<string, unknown>;
-    delete window.depends_on;
-    if (dependsOn.length > 0) window.depends_on = [...dependsOn];
-    if (Object.keys(window).length > 0) next[trackSlug] = window as ScheduleWindowInput;
-  }
+  const existing = isWindow(source[trackSlug]) ? { ...(source[trackSlug] as ScheduleWindowInput) } : {};
+  const window: Record<string, unknown> = { ...existing } as Record<string, unknown>;
+  delete window.depends_on;
+  if (dependsOn.length > 0) window.depends_on = [...dependsOn];
+  if (Object.keys(window).length > 0) next[trackSlug] = window as ScheduleWindowInput;
   return Object.keys(next).length === 0 ? undefined : next;
 }
 

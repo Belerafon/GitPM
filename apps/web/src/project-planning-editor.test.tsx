@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProjectPlanningEditor } from "./project-planning-editor.js";
+import { ScheduleResolver, scheduleTracksConfig } from "./schedules.js";
 import type { TrackDefinition } from "@gitpm/scheduling";
+import type { ConfigurationDocument } from "@gitpm/contracts";
 
 afterEach(cleanup);
 
@@ -36,5 +38,44 @@ describe("ProjectPlanningEditor", () => {
     render(<ProjectPlanningEditor planning={{ enabled_tracks: ["plan", "target"], primary_track: "plan", workload_track: "plan", dashboard_tracks: ["plan", "target"] }} tracks={noEffort} disabled={false} locale="en" onChange={vi.fn()} />);
     const workload = screen.getByLabelText("Workload track") as HTMLSelectElement;
     expect(Array.from(workload.options).map((option) => option.textContent)).toEqual(["None", "Plan"]);
+  });
+
+  it("shows effective repository defaults when the project has no planning override", () => {
+    const config = {
+      schema: "gitpm/schedule-tracks@1",
+      tracks: [
+        { slug: "working", title: "Working", kind: "manual", capabilities: ["dates", "effort"] },
+        { slug: "target", title: "Target", kind: "manual", capabilities: ["dates", "effort"] },
+        { slug: "actual", title: "Actual", kind: "actual", source: "time_entries" },
+      ],
+      defaults: { enabled_tracks: ["working", "actual"], primary_track: "working", workload_track: "working", dashboard_tracks: ["working", "actual"] },
+    } as ConfigurationDocument;
+    const resolver = new ScheduleResolver(scheduleTracksConfig(config));
+
+    render(<ProjectPlanningEditor planning={resolver.planning(undefined)} tracks={resolver.raw?.tracks ?? []} disabled={false} locale="en" onChange={vi.fn()} />);
+
+    const enabled = screen.getByText("Enabled tracks").closest<HTMLElement>(".planning-field")!;
+    const checkboxes = within(enabled).getAllByRole("checkbox") as HTMLInputElement[];
+    expect(checkboxes.map((checkbox) => [checkbox.parentElement?.textContent, checkbox.checked])).toEqual([
+      ["Working", true],
+      ["Target", false],
+      ["Actual", true],
+    ]);
+    expect((screen.getByLabelText("Primary track") as HTMLSelectElement).value).toBe("working");
+    expect((screen.getByLabelText("Workload track") as HTMLSelectElement).value).toBe("working");
+  });
+
+  it("requires dates for primary and dates plus effort for workload choices", () => {
+    const capabilityTracks: readonly TrackDefinition[] = [
+      { slug: "working", title: "Working", kind: "manual", capabilities: ["dates", "effort"] },
+      { slug: "notes", title: "Notes", kind: "manual", capabilities: ["dependencies"] },
+      { slug: "forecast", title: "Forecast", kind: "manual", capabilities: ["dates"] },
+      { slug: "actual", title: "Actual", kind: "actual", source: "time_entries" },
+    ];
+    const planning = { enabled_tracks: ["working", "notes", "forecast", "actual"], primary_track: "working", workload_track: "working", dashboard_tracks: ["working", "actual"] };
+    render(<ProjectPlanningEditor planning={planning} tracks={capabilityTracks} disabled={false} locale="en" onChange={vi.fn()} />);
+
+    expect(Array.from((screen.getByLabelText("Primary track") as HTMLSelectElement).options).map((option) => option.textContent)).toEqual(["None", "Working", "Forecast"]);
+    expect(Array.from((screen.getByLabelText("Workload track") as HTMLSelectElement).options).map((option) => option.textContent)).toEqual(["None", "Working"]);
   });
 });

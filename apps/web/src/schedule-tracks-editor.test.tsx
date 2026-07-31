@@ -18,7 +18,7 @@ const actualTrack: TrackDefinition = { slug: "actual", title: "Actual activity",
 
 function StatefulEditor({ initial, tracks, primaryTrack, actual, dependencies }: { readonly initial: ScheduleMap | undefined; readonly tracks: readonly TrackDefinition[]; readonly primaryTrack: string; readonly actual?: TrackDefinition; readonly dependencies: readonly EntityResult[] }) {
   const [schedules, setSchedules] = useState<ScheduleMap | undefined>(initial);
-  return <ScheduleTracksEditor schedules={schedules} tracks={tracks} actualTrack={actual} primaryTrack={primaryTrack} dependencies={dependencies} disabled={false} locale="en" onChange={setSchedules} />;
+  return <><ScheduleTracksEditor schedules={schedules} tracks={tracks} actualTrack={actual} primaryTrack={primaryTrack} dependencies={dependencies} disabled={false} locale="en" onChange={setSchedules} /><output data-testid="schedules-state">{JSON.stringify(schedules)}</output></>;
 }
 
 describe("ScheduleTracksEditor", () => {
@@ -73,5 +73,18 @@ describe("ScheduleTracksEditor", () => {
     expect(screen.getByText("Parser")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /Remove dependency Parser/u }));
     expect(screen.getByText("No dependencies")).toBeTruthy();
+  });
+
+  it("creates and removes a dependency-only window without changing its neighboring track", () => {
+    const dep = task("T-26-AAAAAA", "Parser");
+    render(<StatefulEditor initial={{ target: { finish: "2026-08-30" } }} tracks={[workingTrack]} primaryTrack="working" dependencies={[dep]} />);
+    fireEvent.change(screen.getByLabelText("Add dependency"), { target: { value: dep.document.id } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    expect(JSON.parse(screen.getByTestId("schedules-state").textContent ?? "null")).toEqual({
+      target: { finish: "2026-08-30" },
+      working: { depends_on: [dep.document.id] },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Remove dependency Parser/u }));
+    expect(JSON.parse(screen.getByTestId("schedules-state").textContent ?? "null")).toEqual({ target: { finish: "2026-08-30" } });
   });
 });

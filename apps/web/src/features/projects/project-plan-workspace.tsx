@@ -479,7 +479,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
         <div className="project-plan-main">
           <header className={`project-plan-header${recentChanges[workspace.project.document.id] ? " recently-changed" : ""}`}>
             <div className="project-plan-title"><span className="project-plan-project-kind">{t("core.project")} <code>{workspace.project.document.id}</code></span><h2>{text(workspace.project.document, "name")}</h2><p>{text(workspace.project.document, "description_markdown") || t("core.noDescription")}</p></div>
-            <div className="project-plan-actions"><button disabled={readOnly} onClick={() => { setProjectPlanningDraft(workspace?.project.document.planning as ProjectPlanning | undefined); setEditor({ kind: "project" }); }}>{t("core.edit")}</button><button disabled={readOnly} onClick={() => setEditor({ kind: "new-stage" })}>+ {t("stages.new")}</button><button className="primary" disabled={readOnly} onClick={() => setEditor({ kind: "task" })}>+ {t("core.createTaskAction")}</button></div>
+            <div className="project-plan-actions"><button disabled={readOnly} onClick={() => { setProjectPlanningDraft(scheduling.planning(workspace.project.document.planning)); setEditor({ kind: "project" }); }}>{t("core.edit")}</button><button disabled={readOnly} onClick={() => setEditor({ kind: "new-stage" })}>+ {t("stages.new")}</button><button className="primary" disabled={readOnly} onClick={() => setEditor({ kind: "task" })}>+ {t("core.createTaskAction")}</button></div>
             <dl className="project-plan-meta">
               <div><dt>{t("core.status")}</dt><dd><span className="state open">{statusTitle(text(workspace.project.document, "status"))}</span></dd></div>
               {text(workspace.project.document, "group").trim() !== "" && <div><dt>{t("core.group")}</dt><dd>{text(workspace.project.document, "group").trim()}</dd></div>}
@@ -587,7 +587,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
         <label>{t("projectPlan.start")}<input defaultValue={text(workspace.project.document, "start")} disabled={readOnly} name="start" type="date" /></label>
         <label>{t("core.due")}<input defaultValue={text(workspace.project.document, "due")} disabled={readOnly} name="due" type="date" /></label>
         <label>{t("core.description")}<textarea defaultValue={text(workspace.project.document, "description_markdown")} disabled={readOnly} name="description" /></label>
-        <ProjectPlanningEditor planning={projectPlanningDraft} tracks={scheduling.raw?.tracks ?? []} disabled={readOnly} locale={locale} onChange={setProjectPlanningDraft} />
+        <ProjectPlanningEditor planning={projectPlanningDraft ?? scheduling.planning(workspace.project.document.planning)} tracks={scheduling.raw?.tracks ?? []} disabled={readOnly} locale={locale} onChange={setProjectPlanningDraft} />
         <div className="editor-drawer-actions"><details className="more-actions"><summary>{t("core.moreActions")}</summary><div><button disabled={readOnly} onClick={archiveProject} type="button">{t("core.archive")}</button><button className="danger" disabled={readOnly} onClick={() => { void deleteProject(); }} type="button">{t("core.delete")}</button></div></details><button onClick={() => setEditor(null)} type="button">{t("core.cancel")}</button><button className="primary" disabled={readOnly}>{t("core.save")}</button></div>
       </form>
     </EditorDrawer>}
