@@ -13,12 +13,13 @@ export interface ScheduleTracksEditorProps {
   readonly actualTrack?: TrackDefinition;
   readonly primaryTrack: string;
   readonly dependencies: readonly EntityResult[];
+  readonly showDependencies?: boolean;
   readonly disabled: boolean;
   readonly locale: Locale;
   readonly onChange: (next: ScheduleMap | undefined) => void;
 }
 
-export function ScheduleTracksEditor({ schedules, tracks, actualTrack, primaryTrack, dependencies, disabled, locale, onChange }: ScheduleTracksEditorProps) {
+export function ScheduleTracksEditor({ schedules, tracks, actualTrack, primaryTrack, dependencies, showDependencies = true, disabled, locale, onChange }: ScheduleTracksEditorProps) {
   const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>): string => message(locale, key, values);
   const editable = tracks.filter((track) => track.kind === "manual");
   const [active, setActive] = useState(primaryTrack || editable[0]?.slug || "");
@@ -35,7 +36,7 @@ export function ScheduleTracksEditor({ schedules, tracks, actualTrack, primaryTr
     {multi && <div className="schedule-tracks-tabs" role="tablist" aria-label={t("scheduleTracks.track")}>
       {editable.map((track) => <button type="button" role="tab" key={track.slug} aria-selected={activeTrack?.slug === track.slug} className={activeTrack?.slug === track.slug ? "is-active" : ""} onClick={() => setActive(track.slug)}>{track.title}{track.slug === primaryTrack ? ` · ${t("scheduleTracks.primary")}` : ""}</button>)}
     </div>}
-    {activeTrack !== undefined && <ScheduleTrackFields track={activeTrack} schedules={schedules} disabled={disabled} locale={locale} allTasks={dependencies} onPatch={(patch) => patchField(activeTrack.slug, patch)} onDependencies={(ids) => onChange(setScheduleDependencies(schedules, activeTrack.slug, ids))} />}
+    {activeTrack !== undefined && <ScheduleTrackFields track={activeTrack} schedules={schedules} disabled={disabled} locale={locale} allTasks={dependencies} showDependencies={showDependencies} onPatch={(patch) => patchField(activeTrack.slug, patch)} onDependencies={(ids) => onChange(setScheduleDependencies(schedules, activeTrack.slug, ids))} />}
     {actualTrack !== undefined && <p className="schedule-tracks-actual-note">{t("scheduleTracks.actualNote", { title: actualTrack.title })}</p>}
   </fieldset>;
 }
@@ -46,16 +47,17 @@ interface ScheduleTrackFieldsProps {
   readonly disabled: boolean;
   readonly locale: Locale;
   readonly allTasks: readonly EntityResult[];
+  readonly showDependencies: boolean;
   readonly onPatch: (patch: Partial<{ start: string; finish: string; effort_hours: string }>) => void;
   readonly onDependencies: (ids: readonly string[]) => void;
 }
 
-function ScheduleTrackFields({ track, schedules, disabled, locale, allTasks, onPatch, onDependencies }: ScheduleTrackFieldsProps) {
+function ScheduleTrackFields({ track, schedules, disabled, locale, allTasks, showDependencies, onPatch, onDependencies }: ScheduleTrackFieldsProps) {
   const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>): string => message(locale, key, values);
   const window = schedules?.[track.slug];
   const hasDates = track.capabilities?.includes("dates") ?? false;
   const hasEffort = track.capabilities?.includes("effort") ?? false;
-  const hasDependencies = track.capabilities?.includes("dependencies") ?? false;
+  const hasDependencies = showDependencies && (track.capabilities?.includes("dependencies") ?? false);
   const selectedDependencies = Array.isArray(window?.depends_on) ? window!.depends_on!.filter((item): item is string => typeof item === "string") : [];
   const [adding, setAdding] = useState("");
   const startValue = typeof window?.start === "string" ? window.start : "";

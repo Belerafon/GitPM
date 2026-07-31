@@ -63,6 +63,18 @@ export interface TimeEntryProjectList {
   readonly limit: number;
 }
 
+export type ProjectTimeEntryFilters = {
+  readonly task?: string;
+  readonly milestone?: string;
+  readonly person?: string;
+  readonly category?: string;
+  readonly performed_from?: string;
+  readonly performed_to?: string;
+  readonly state?: "active" | "voided";
+  readonly offset?: number;
+  readonly limit?: number;
+};
+
 function asTimeEntryProjectList(input: unknown): TimeEntryProjectList {
   if (input === null || typeof input !== "object" || Array.isArray(input)) throw new ApiError("API_RESPONSE_CONTRACT_INVALID", "TimeEntryProjectList: expected an object");
   const value = input as Record<string, unknown>;
@@ -176,9 +188,23 @@ export interface GitPmApi {
   deleteComment(draftId: string, projectId: string, taskId: string, comment: CommentResult, fingerprint: string): Promise<CommentResult>;
   notifications(draftId: string): Promise<NotificationsResult>;
   listTimeEntries(draftId: string, projectId: string, taskId: string): Promise<readonly TimeEntryResult[]>;
-  listProjectTimeEntries(draftId: string, projectId: string, filters?: { readonly task?: string; readonly milestone?: string; readonly person?: string; readonly category?: string; readonly performed_from?: string; readonly performed_to?: string; readonly state?: "active" | "voided"; readonly offset?: number; readonly limit?: number }): Promise<TimeEntryProjectList>;
+  listProjectTimeEntries(draftId: string, projectId: string, filters?: ProjectTimeEntryFilters): Promise<TimeEntryProjectList>;
   createTimeEntry(draftId: string, projectId: string, taskId: string, fingerprint: string, input: { readonly person: string; readonly performed_on: string; readonly hours: number; readonly category: string; readonly note_markdown?: string }): Promise<TimeEntryResult>;
   voidTimeEntry(draftId: string, projectId: string, taskId: string, entry: TimeEntryResult, fingerprint: string): Promise<TimeEntryResult>;
+}
+
+export async function listAllProjectTimeEntries(api: Pick<GitPmApi, "listProjectTimeEntries">, draftId: string, projectId: string, filters: ProjectTimeEntryFilters = {}): Promise<readonly TimeEntryResult[]> {
+  const items: TimeEntryResult[] = [];
+  const limit = filters.limit ?? 200;
+  let offset = filters.offset ?? 0;
+  while (true) {
+    const page = await api.listProjectTimeEntries(draftId, projectId, { ...filters, offset, limit });
+    items.push(...page.items);
+    const nextOffset = page.offset + page.items.length;
+    if (nextOffset >= page.total) return items;
+    if (page.items.length === 0 || nextOffset <= offset) throw new ApiError("TIME_ENTRY_PAGINATION_STALLED", "Project time-entry pagination did not advance");
+    offset = nextOffset;
+  }
 }
 
 interface ErrorBody { readonly error?: { readonly code?: string; readonly message?: string; readonly details?: unknown } }
@@ -393,7 +419,7 @@ export class HttpGitPmApi implements GitPmApi {
   async listTimeEntries(draftId: string, projectId: string, taskId: string): Promise<readonly TimeEntryResult[]> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}/time-entries`, decodeTimeEntryResults);
   }
-  async listProjectTimeEntries(draftId: string, projectId: string, filters: { readonly task?: string; readonly milestone?: string; readonly person?: string; readonly category?: string; readonly performed_from?: string; readonly performed_to?: string; readonly state?: "active" | "voided"; readonly offset?: number; readonly limit?: number } = {}): Promise<TimeEntryProjectList> {
+  async listProjectTimeEntries(draftId: string, projectId: string, filters: ProjectTimeEntryFilters = {}): Promise<TimeEntryProjectList> {
     const query = new URLSearchParams();
     for (const [key, value] of Object.entries(filters)) if (value !== undefined) query.set(key, String(value));
     const suffix = query.size === 0 ? "" : `?${query.toString()}`;

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { buildResolvedGanttModel, buildSchedulingReadModel, type GanttActualSegment, type GanttSchedulable, type TrackDefinition } from "@gitpm/scheduling";
 import { scheduleTracksConfig, ScheduleResolver } from "./schedules.js";
-import type { GitPmApi } from "./api.js";
+import { listAllProjectTimeEntries, type GitPmApi } from "./api.js";
 import { buildTaskHierarchy } from "@gitpm/task-hierarchy";
 import { formatDateOnly, message, type Locale, type MessageKey } from "./i18n.js";
 import type { ConfigurationResult, DraftStatus, EntityResult, GitPmDocument } from "./types.js";
@@ -139,12 +139,15 @@ export function GanttWorkspace({ api, draft, locale, initialProjectId = "", onNa
       const [allProjects, tracksDocument] = await Promise.all([api.listEntities(draft.draft_id, "projects"), api.getConfiguration(draft.draft_id, "schedule-tracks")]);
       const nextProjects = allProjects.filter((item) => item.document.lifecycle === "active");
       const nextProject = nextProjects.some((item) => item.document.id === preferredProject) ? preferredProject : nextProjects[0]?.document.id ?? "";
-      const [nextTasks, nextMilestones, nextActual] = nextProject === "" ? [[], [], undefined] : await Promise.all([api.listEntities(draft.draft_id, "tasks", nextProject), api.listEntities(draft.draft_id, "milestones", nextProject), api.listProjectTimeEntries(draft.draft_id, nextProject, { limit: 200 })]);
+      const resolver = new ScheduleResolver(scheduleTracksConfig(tracksDocument.document));
+      const nextProjectDocument = nextProjects.find((item) => item.document.id === nextProject)?.document;
+      const actualEnabled = resolver.actualTrack(nextProjectDocument?.planning)?.source === "time_entries";
+      const [nextTasks, nextMilestones, nextActual] = nextProject === "" ? [[], [], undefined] : await Promise.all([api.listEntities(draft.draft_id, "tasks", nextProject), api.listEntities(draft.draft_id, "milestones", nextProject), actualEnabled ? listAllProjectTimeEntries(api, draft.draft_id, nextProject) : Promise.resolve([])]);
       return { nextProjects, nextProject, nextTasks, nextMilestones, nextActual, tracksDocument };
     }, ({ nextProjects, nextProject, nextTasks, nextMilestones, nextActual, tracksDocument }) => {
       setProjects(nextProjects); setProjectId(nextProject); setTasks(nextTasks); setMilestones(nextMilestones); setError(null); setTracksConfig(tracksDocument);
       const segments = new Map<string, readonly GanttActualSegment[]>();
-      for (const entry of nextActual?.items ?? []) {
+      for (const entry of nextActual ?? []) {
         const taskId = entry.document.task;
         segments.set(taskId, [...(segments.get(taskId) ?? []), ...aggregateActual([entry])]);
       }
@@ -157,24 +160,29 @@ export function GanttWorkspace({ api, draft, locale, initialProjectId = "", onNa
   const projectPlanning = projects.find((item) => item.document.id === projectId)?.document.planning;
   const planning = useMemo(() => scheduling.planning(projectPlanning), [scheduling, projectPlanning]);
   const enabledManual = useMemo(() => tracks.filter((track) => track.kind === "manual" && planning.enabled_tracks.includes(track.slug)), [tracks, planning]);
+  const dateTracks = useMemo(() => enabledManual.filter((track) => track.capabilities?.includes("dates") ?? false), [enabledManual]);
+  const dependencyTracks = useMemo(() => enabledManual.filter((track) => track.capabilities?.includes("dependencies") ?? false), [enabledManual]);
+  const actualEnabled = useMemo(() => tracks.some((track) => track.kind === "actual" && track.source === "time_entries" && planning.enabled_tracks.includes(track.slug)), [tracks, planning.enabled_tracks]);
   useEffect(() => {
-    setPrimaryTrack(planning.primary_track);
-    setSelectedTracks(new Set(planning.dashboard_tracks.filter((slug) => slug !== planning.primary_track).filter((slug) => enabledManual.some((track) => track.slug === slug))));
-    setDependencyTrack(planning.primary_track);
-  }, [planning.primary_track, planning.dashboard_tracks, enabledManual]);
+    const nextPrimary = dateTracks.some((track) => track.slug === planning.primary_track) ? planning.primary_track : dateTracks[0]?.slug ?? "";
+    setPrimaryTrack(nextPrimary);
+    setSelectedTracks(new Set(planning.dashboard_tracks.filter((slug) => slug !== nextPrimary).filter((slug) => dateTracks.some((track) => track.slug === slug))));
+    setDependencyTrack(dependencyTracks.some((track) => track.slug === planning.primary_track) ? planning.primary_track : dependencyTracks[0]?.slug ?? "");
+  }, [planning.primary_track, planning.dashboard_tracks, dateTracks, dependencyTracks]);
   const visibleTracks = useMemo(() => {
-    const order = [primaryTrack, ...planning.dashboard_tracks, ...enabledManual.map((track) => track.slug)];
+    const order = [primaryTrack, ...planning.dashboard_tracks, ...dateTracks.map((track) => track.slug)];
     const seen = new Set<string>();
     const result: string[] = [];
     for (const slug of order) {
       if (slug === "" || seen.has(slug)) continue;
-      if (!enabledManual.some((track) => track.slug === slug)) continue;
+      if (!dateTracks.some((track) => track.slug === slug)) continue;
       if (slug !== primaryTrack && !selectedTracks.has(slug)) continue;
       seen.add(slug); result.push(slug);
     }
     return result;
-  }, [primaryTrack, selectedTracks, planning.dashboard_tracks, enabledManual]);
-  const model = useMemo(() => projectTimelineProjection(tasks, milestones, actual, tracks, { primaryTrack, visibleTracks, dependencyTrack }), [tasks, milestones, actual, tracks, primaryTrack, visibleTracks, dependencyTrack]);
+  }, [primaryTrack, selectedTracks, planning.dashboard_tracks, dateTracks]);
+  const visibleActual = useMemo(() => actualEnabled ? actual : new Map<string, readonly GanttActualSegment[]>(), [actualEnabled, actual]);
+  const model = useMemo(() => projectTimelineProjection(tasks, milestones, visibleActual, tracks, { primaryTrack, visibleTracks, dependencyTrack }), [tasks, milestones, visibleActual, tracks, primaryTrack, visibleTracks, dependencyTrack]);
   const rowIndex = new Map(model?.rows.map((row, index) => [row.id, index]) ?? []);
   const outgoingCounts = new Map<string, number>();
   for (const dependency of model?.dependencies ?? []) outgoingCounts.set(dependency.from, (outgoingCounts.get(dependency.from) ?? 0) + 1);
@@ -190,10 +198,10 @@ export function GanttWorkspace({ api, draft, locale, initialProjectId = "", onNa
     <AsyncBoundary state={loadRequest.state} loading={t("status.loading")} retry={() => { void load(); }} error={(loadError, retry) => <div className="alert error">{loadError}<button onClick={retry}>{t("status.retry")}</button></div>}>
     <>
     <section className="card gantt-toolbar">{initialProjectId === "" && <label>{t("gantt.project")}<select value={projectId} onChange={(event) => onNavigate("gantt", { projectId: event.target.value })}>{projects.map((project) => <option key={project.document.id} value={project.document.id}>{stringValue(project.document, "name")}</option>)}</select></label>}<span>{t("gantt.visible", { count: model?.rows.length ?? 0 })}</span>{model !== null && <time className="gantt-range">{t("gantt.range", { start: formatDateOnly(locale, model.start), due: formatDateOnly(locale, model.due) })}</time>}<label className="gantt-scale">{t("gantt.scale")}<select value={dayWidth} onChange={(event) => setDayWidth(Number(event.target.value))}><option value="24">{t("gantt.scaleMonth")}</option><option value="36">{t("gantt.scaleWeek")}</option><option value="60">{t("gantt.scaleDay")}</option></select></label><span className="state open">{t("gantt.readOnly")}</span></section>
-    {enabledManual.length > 1 && <section className="card gantt-track-controls">
-      <label>{t("gantt.primaryTrack")}<select aria-label={t("gantt.primaryTrack")} value={primaryTrack} onChange={(event) => setPrimaryTrack(event.target.value)}>{enabledManual.map((track) => <option key={track.slug} value={track.slug}>{track.title}</option>)}</select></label>
-      <fieldset className="gantt-additional-tracks"><legend>{t("gantt.additionalTracks")}</legend>{enabledManual.filter((track) => track.slug !== primaryTrack).map((track) => <label key={track.slug}><input checked={selectedTracks.has(track.slug)} onChange={(event) => setSelectedTracks((current) => { const next = new Set(current); if (event.target.checked) next.add(track.slug); else next.delete(track.slug); return next; })} type="checkbox" />{track.title}</label>)}</fieldset>
-      <label>{t("gantt.dependencyTrack")}<select aria-label={t("gantt.dependencyTrack")} value={dependencyTrack} onChange={(event) => setDependencyTrack(event.target.value)}>{planning.enabled_tracks.filter((slug) => tracks.some((track) => track.slug === slug)).map((slug) => <option key={slug} value={slug}>{trackTitle(tracks, slug)}</option>)}</select></label>
+    {(dateTracks.length > 1 || dependencyTracks.length > 0) && <section className="card gantt-track-controls">
+      {dateTracks.length > 1 && <label>{t("gantt.primaryTrack")}<select aria-label={t("gantt.primaryTrack")} value={primaryTrack} onChange={(event) => setPrimaryTrack(event.target.value)}>{dateTracks.map((track) => <option key={track.slug} value={track.slug}>{track.title}</option>)}</select></label>}
+      {dateTracks.length > 1 && <fieldset className="gantt-additional-tracks"><legend>{t("gantt.additionalTracks")}</legend>{dateTracks.filter((track) => track.slug !== primaryTrack).map((track) => <label key={track.slug}><input checked={selectedTracks.has(track.slug)} onChange={(event) => setSelectedTracks((current) => { const next = new Set(current); if (event.target.checked) next.add(track.slug); else next.delete(track.slug); return next; })} type="checkbox" />{track.title}</label>)}</fieldset>}
+      {dependencyTracks.length > 0 && <label>{t("gantt.dependencyTrack")}<select aria-label={t("gantt.dependencyTrack")} value={dependencyTrack} onChange={(event) => setDependencyTrack(event.target.value)}>{dependencyTracks.map((track) => <option key={track.slug} value={track.slug}>{trackTitle(tracks, track.slug)}</option>)}</select></label>}
     </section>}
     <div className="gantt-legend" aria-label={t("gantt.legend")}><span className="task">{t("gantt.legendTask")}</span><span className="milestone">{t("gantt.legendMilestone")}</span><span className="dependency">{t("gantt.legendDependency")}</span><span className="today">{t("gantt.legendToday")}</span></div>
     {model === null ? <section className="card empty-workspace"><strong>{t("gantt.empty")}</strong>{undatedCount > 0 && <span>{t("gantt.undatedHint", { count: undatedCount })}</span>}</section> : <section className="card gantt-scroll" aria-label={t("gantt.chart")} data-start={model.start} data-due={model.due}>

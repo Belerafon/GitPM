@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { buildSchedulingReadModel, finishVarianceDays } from "@gitpm/scheduling";
 import { actualWindow, hoursAfterDate, sumHours } from "@gitpm/time-entries";
 import { formatDateOnly, message, type Locale, type MessageKey } from "../../i18n.js";
-import type { GitPmApi } from "../../api.js";
+import { listAllProjectTimeEntries, type GitPmApi } from "../../api.js";
 import type { DraftStatus, EntityDocument, EntityResult } from "../../types.js";
 import type { ScheduleResolver } from "../../schedules.js";
 
@@ -19,7 +19,7 @@ export function ProjectSnapshot({ project, locale, api, draft, tasks, scheduling
     let active = true;
     void (async () => {
       try {
-        const records = (await api.listProjectTimeEntries(draft.draft_id, String(project.id), { limit: 200 })).items.map((entry) => ({
+        const records = (await listAllProjectTimeEntries(api, draft.draft_id, String(project.id))).map((entry) => ({
           id: entry.document.id, project: String(project.id), task: entry.document.task, person: entry.document.person,
           performed_on: entry.document.performed_on, hours: entry.document.hours, category: entry.document.category, state: entry.document.state,
         }));

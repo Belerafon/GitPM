@@ -157,6 +157,59 @@ describe("core UI", () => {
     expect(entityApi.entities.some((item) => item.document.name === "Invalid group project")).toBe(false);
   });
 
+  it("edits independent Project and Milestone schedule tracks without exposing task dependencies", async () => {
+    const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
+    const project = await entityApi.createEntity("DRF-CORE", "projects", "", {
+      schema: "gitpm/project@2", id: "P-26-111111", name: "Multitrack", status: "backlog", lifecycle: "active",
+      planning: { enabled_tracks: ["working", "target", "actual"], primary_track: "working", workload_track: "working", dashboard_tracks: ["working", "target", "actual"] },
+      schedules: { working: { finish: "2026-08-20" }, target: { finish: "2026-08-30" } },
+    });
+    const milestone = await entityApi.createEntity("DRF-CORE", "milestones", "", {
+      schema: "gitpm/milestone@2", id: "M-26-222222", project: project.document.id, name: "Release", lifecycle: "active",
+      schedules: { working: { finish: "2026-09-20" }, target: { finish: "2026-09-30" } },
+    });
+    const originalGetConfiguration = entityApi.getConfiguration.bind(entityApi);
+    vi.spyOn(entityApi, "getConfiguration").mockImplementation(async (draftId, kind) => kind === "schedule-tracks" ? ({
+      document: { schema: "gitpm/schedule-tracks@1", tracks: [
+        { slug: "working", title: "Working", kind: "manual", capabilities: ["dates", "effort", "dependencies"] },
+        { slug: "target", title: "Target", kind: "manual", capabilities: ["dates"] },
+        { slug: "actual", title: "Actual activity", kind: "actual", source: "time_entries" },
+      ], defaults: { enabled_tracks: ["working"], primary_track: "working", workload_track: "working", dashboard_tracks: ["working"] } },
+      path: ".gitpm/schedule-tracks.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64),
+    } as ConfigurationResult) : await originalGetConfiguration(draftId, kind));
+
+    const rendered = render(<CoreWorkspace api={api} draft={draft} initialProjectId={project.document.id} locale="en" surface="projects" onChanged={vi.fn(async () => undefined)} />);
+    await screen.findAllByText("Multitrack");
+    const projectCard = rendered.container.querySelector<HTMLElement>(".entity-detail-card")!;
+    fireEvent.click(within(projectCard).getByRole("button", { name: "Edit" }));
+    let dialog = screen.getByRole("dialog", { name: "Edit: Multitrack" });
+    expect(within(dialog).getByText(/Actual activity is recorded from time entries/u)).toBeTruthy();
+    expect(within(dialog).queryByText("Dependencies")).toBeNull();
+    fireEvent.change(within(dialog).getByLabelText("Due date"), { target: { value: "2026-08-25" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(entityApi.entities.find((item) => item.document.id === project.document.id)?.document.schedules).toEqual({
+      working: { finish: "2026-08-25" }, target: { finish: "2026-08-30" },
+    }));
+
+    const milestoneCard = (await screen.findByText("Release")).closest<HTMLElement>(".entity-card")!;
+    fireEvent.click(within(milestoneCard).getByRole("button", { name: "Edit" }));
+    dialog = screen.getByRole("dialog", { name: "Edit: Release" });
+    fireEvent.click(within(dialog).getByRole("tab", { name: "Target" }));
+    fireEvent.change(within(dialog).getByLabelText("Due date"), { target: { value: "2026-10-05" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(entityApi.entities.find((item) => item.document.id === milestone.document.id)?.document.schedules).toEqual({
+      working: { finish: "2026-09-20" }, target: { finish: "2026-10-05" },
+    }));
+
+    const refreshedMilestoneCard = (await screen.findByText("Release")).closest<HTMLElement>(".entity-card")!;
+    fireEvent.click(within(refreshedMilestoneCard).getByRole("button", { name: "Edit" }));
+    dialog = screen.getByRole("dialog", { name: "Edit: Release" });
+    fireEvent.click(within(dialog).getByRole("tab", { name: "Target" }));
+    fireEvent.change(within(dialog).getByLabelText("Due date"), { target: { value: "" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(entityApi.entities.find((item) => item.document.id === milestone.document.id)?.document.schedules).toEqual({ working: { finish: "2026-09-20" } }));
+  });
+
   it("creates Project, Milestone and Task, then edits and archives the Task in the drawer", async () => {
     const entityApi = new EntityApi();
     const api = entityApi as unknown as GitPmApi;
