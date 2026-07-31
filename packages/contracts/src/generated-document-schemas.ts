@@ -255,6 +255,7 @@ export const commonSchema = {
     "scheduleWindow": {
       "type": "object",
       "additionalProperties": false,
+      "minProperties": 1,
       "properties": {
         "start": {
           "$ref": "#/$defs/date"
@@ -758,7 +759,56 @@ export const scheduleTracksSchema = {
           "source": {
             "$ref": "common.schema.json#/$defs/trackSource"
           }
-        }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "manual"
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            "then": {
+              "required": [
+                "capabilities"
+              ],
+              "properties": {
+                "source": false,
+                "capabilities": {
+                  "type": "array",
+                  "minItems": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "actual"
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            "then": {
+              "required": [
+                "source"
+              ],
+              "properties": {
+                "source": {
+                  "const": "time_entries"
+                },
+                "capabilities": false
+              }
+            }
+          }
+        ]
       }
     },
     "defaults": {
@@ -985,7 +1035,54 @@ export const timeEntrySchema = {
     "replacement": {
       "$ref": "common.schema.json#/$defs/entryId"
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "const": "voided"
+          }
+        },
+        "required": [
+          "state"
+        ]
+      },
+      "then": {
+        "type": "object",
+        "required": [
+          "voided_at",
+          "voided_by"
+        ],
+        "properties": {
+          "voided_at": {},
+          "voided_by": {}
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "const": "active"
+          }
+        },
+        "required": [
+          "state"
+        ]
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "voided_at": false,
+          "voided_by": false,
+          "replacement": false
+        }
+      }
+    }
+  ]
 } as const;
 
 export const workCategoriesSchema = {

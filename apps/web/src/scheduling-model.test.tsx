@@ -40,6 +40,15 @@ describe("unified scheduling model", () => {
     expect(label.parentElement?.textContent).toMatch(/Sep|30/);
   });
 
+  it("project snapshot rolls up the primary finish when the project has no declared schedule", () => {
+    const projectId = "P-26-111111";
+    const project = result({ schema: "gitpm/project@2", id: projectId, name: "Rolled snapshot", status: "in-progress", lifecycle: "active", planning });
+    const task = result({ schema: "gitpm/task@2", id: "T-26-111111", project: projectId, title: "Child task", type: "task", status: "backlog", lifecycle: "active", schedules: { working: { start: "2026-09-01", finish: "2026-10-02" } } });
+    render(<ProjectSnapshot project={project.document} locale="en" scheduling={new ScheduleResolver(scheduleTracksConfig(tracksConfig()))} tasks={[task]} />);
+    const label = screen.getByText("Primary finish");
+    expect(label.parentElement?.textContent).toMatch(/Oct|2/);
+  });
+
   it("gantt reads working-track bars and dependencies", async () => {
     const projectId = "P-26-111111";
     const project = result({ schema: "gitpm/project@2", id: projectId, name: "Gantt project", status: "backlog", lifecycle: "active", planning });
@@ -47,7 +56,7 @@ describe("unified scheduling model", () => {
     const second = result({ schema: "gitpm/task@2", id: "T-26-222222", project: projectId, title: "Second task", type: "task", status: "backlog", lifecycle: "active", schedules: { working: { start: "2026-07-04", finish: "2026-07-06", depends_on: [first.document.id] } } });
     const milestone = result({ schema: "gitpm/milestone@2", id: "M-26-888888", project: projectId, name: "Release", lifecycle: "active", schedules: { working: { finish: "2026-07-06" } } });
     const entities = [project, first, second, milestone];
-    const api = { listEntities: listEntitiesMock(entities), getConfiguration: buildGetConfiguration(), listTimeEntries: vi.fn(async () => []) } as unknown as GitPmApi;
+    const api = { listEntities: listEntitiesMock(entities), getConfiguration: buildGetConfiguration(), listProjectTimeEntries: vi.fn(async () => ({ items: [], total: 0, offset: 0, limit: 200 })), listTimeEntries: vi.fn(async () => []) } as unknown as GitPmApi;
     const { container } = render(<GanttWorkspace api={api} draft={draft} locale="en" onNavigate={vi.fn()} />);
     await waitFor(() => expect(container.querySelectorAll(".gantt-bar")).toHaveLength(2));
     expect(container.querySelectorAll(".gantt-dependencies path[data-from]").length).toBeGreaterThan(0);

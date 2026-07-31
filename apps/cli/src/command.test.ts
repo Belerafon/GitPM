@@ -424,6 +424,28 @@ describe.concurrent("CLI direct mode", () => {
     expect(payload.by_category.map(([slug]) => slug)).toContain("warranty");
   });
 
+  it("updates one track, preserves neighboring windows, exposes project planning and lists project actuals", async () => {
+    const { direct } = await directFixture();
+    const scheduled = await run([
+      "schedule", "set", "--type", "task", "--id", "T-26-P9G3P8", "--track", "plan",
+      "--finish", "2026-07-03", "--clear-dependencies", "--json",
+    ], process.cwd(), { direct });
+    expect(scheduled.exitCode).toBe(0);
+    const task = JSON.parse(scheduled.output).document as { schedules: Record<string, { finish?: string; depends_on?: string[] }> };
+    const plan = task.schedules.plan!;
+    expect(plan).toMatchObject({ finish: "2026-07-03" });
+    expect(plan.depends_on).toBeUndefined();
+    expect(task.schedules.target).toMatchObject({ finish: "2026-07-05" });
+
+    const planning = await run(["planning", "set", "--project", "P-26-MGP84K", "--primary-track", "target", "--json"], process.cwd(), { direct });
+    expect(planning.exitCode).toBe(0);
+    expect(JSON.parse(planning.output).document.planning).toMatchObject({ primary_track: "target", workload_track: "plan" });
+
+    const entries = await run(["time-entry", "list", "--project", "P-26-MGP84K", "--category", "warranty", "--limit", "1", "--json"], process.cwd(), { direct });
+    expect(entries.exitCode).toBe(0);
+    expect(JSON.parse(entries.output)).toMatchObject({ total: 1, offset: 0, limit: 1, items: [expect.objectContaining({ category: "warranty" })] });
+  });
+
   it("creates an entity, reports its semantic diff and commits it without --draft", async () => {
     const { direct, checkout } = await directFixture();
     const inputRoot = await mkdtemp(path.join(os.tmpdir(), "gitpm-cli-direct-entity-"));

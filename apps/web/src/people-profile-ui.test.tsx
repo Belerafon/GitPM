@@ -7,13 +7,13 @@ import type { DraftStatus, EntityDocument, EntityResult } from "./types.js";
 
 const draft: DraftStatus = { draft_id: "DRF-PEOPLE", owner_gitlab_user_id: "42", branch: "gitpm/42/DRF-PEOPLE", base_commit: "a".repeat(40), writer_mode: "ui", state: "open", fingerprint: "b".repeat(64), created_at: "2026-07-10T00:00:00.000Z", updated_at: "2026-07-10T00:00:00.000Z" };
 const result = (document: EntityDocument): EntityResult => ({ document, path: `${document.id}.yaml`, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) });
-const statusesConfig = (slugs: readonly { slug: string; title: string }[] = [
-  { slug: "backlog", title: "Backlog" },
-  { slug: "planned", title: "Planned" },
-  { slug: "in-progress", title: "In Progress" },
-  { slug: "review", title: "Review" },
-  { slug: "blocked", title: "Blocked" },
-  { slug: "done", title: "Done" },
+const statusesConfig = (slugs: readonly { slug: string; title: string; category: "backlog" | "active" | "done" | "cancelled" }[] = [
+  { slug: "backlog", title: "Backlog", category: "backlog" },
+  { slug: "planned", title: "Planned", category: "backlog" },
+  { slug: "in-progress", title: "In Progress", category: "active" },
+  { slug: "review", title: "Review", category: "active" },
+  { slug: "blocked", title: "Blocked", category: "active" },
+  { slug: "done", title: "Done", category: "done" },
 ]) => ({ document: { schema: "gitpm/statuses@2", id: "statuses", lifecycle: "active", statuses: slugs.map((status) => ({ ...status, active: true, color: "gray" })) }, path: ".gitpm/statuses.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) });
 const tracksConfig = () => ({ document: { schema: "gitpm/schedule-tracks@1", tracks: [{ slug: "plan", title: "Plan", kind: "manual", capabilities: ["dates", "effort", "dependencies"] }], defaults: { enabled_tracks: ["plan"], primary_track: "plan", workload_track: "plan", dashboard_tracks: ["plan"] } }, path: ".gitpm/schedule-tracks.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) });
 

@@ -681,7 +681,7 @@ export const HTTP_REQUEST_BODY_SCHEMAS = {
     category: stringSchema,
     note_markdown: stringSchema,
   }, ["expected_fingerprint", "person", "performed_on", "hours", "category"]),
-  voidTimeEntry: objectSchema({ expected_fingerprint: stringSchema, expected_blob_id: stringSchema }),
+  voidTimeEntry: objectSchema({ expected_fingerprint: stringSchema, expected_blob_id: stringSchema, replacement: stringSchema }, ["expected_fingerprint", "expected_blob_id"]),
   replaceTimeEntry: objectSchema({
     expected_fingerprint: stringSchema,
     expected_blob_id: stringSchema,

@@ -829,148 +829,35 @@ schedules.plan.finish:
 
 ## 22. Прогресс реализации
 
-Worktree: `D:\other_projects\GitPM-worktrees\feat-multi-track-scheduling`
-Ветка: `feat/multi-track-scheduling`
+Worktree: `D:\other_projects\GitPM-worktrees\feat-semantic-tracks-and-rollup`
 
-Статусы: `[ ]` — не начато · `[~]` — в работе · `[x]` — выполнено · `[!]` — блокировка
+Статусы: `[ ]` — не начато · `[~]` — в работе · `[x]` — реализовано в исходном коде и покрыто указанными проверками.
 
-### Этап 1. Новая схема данных
+### Реализовано
 
-- [x] JSON Schema: `gitpm/project@2` (planning, schedules)
-- [x] JSON Schema: `gitpm/task@2` (schedules per track)
-- [x] JSON Schema: `gitpm/milestone@2` (schedules per track)
-- [x] JSON Schema: `gitpm/statuses@2` (semantic category)
-- [x] JSON Schema: `gitpm/schedule-tracks@1`
-- [x] JSON Schema: `gitpm/work-categories@1`
-- [x] JSON Schema: `gitpm/time-entry@1`
-- [x] Обновить `common.schema.json` (entryId, track capabilities, statusCategory)
-- [x] Удалить старые корневые поля `start`/`due`/`estimate_hours`/`depends_on` из схем
-- [x] Обновить generation pipeline (`scripts/generate-contract-document-schemas.mjs`, verifier)
-- [x] Обновить `packages/contracts` (типы, декодеры, ENTITY_TYPE_SCHEMAS)
-- [x] Обновить `packages/repository-format` (field order для v2-схем)
-- [x] Обновить `packages/validation` (пути, ссылки, capabilities, per-track циклы, time-entry, конфиги)
-- [x] Перевести `demo/portfolio` на v2
-- [x] Перевести `fixtures/schema-v1/demo` на v2
-- [x] Адаптировать потребителей для компиляции (workload/gantt/forms/server/cli/changes/export)
+- [x] Cutover на schema v2: `project`, `task`, `milestone`, `statuses`, schedule tracks, work categories и TimeEntry; старые корневые плановые поля не являются контрактом v2.
+- [x] Валидация tracks, capabilities, planning, зависимостей по контурам, ссылок TimeEntry и delete-restrict.
+- [x] `@gitpm/scheduling`: разрешение planning, declared/rollup окна, warnings, variance/overdue, per-track dependencies и экспортируемая модель Gantt.
+- [x] Web UI: редактор planning проекта, tabs ручных tracks в редакторе Task, primary/overlay/dependency-track controls и actual markers в Gantt.
+- [x] TimeEntry full stack: domain, API, CLI и Web UI; записи разрешены для задачи со статусом категории `done`.
+- [x] Project snapshot показывает total actual hours, последнюю активность, часы после comparison finish и отчёт с агрегацией по датам.
+- [x] Workload читает явно настроенный `workload_track`; semantic diff показывает вложенные поля schedules/planning.
+- [x] Регрессионный gate в `pnpm test` запрещает неявный `map.plan`, first-window fallback, literal `status === "done"`, локальный Gantt builder в Web UI и замену map schedules из формы.
 
-> Cutover на v2 выполнен: репозиторий валидируется только в новой модели; v1 больше не принимается.
-> Web-формы/Gantt/workload-display переведены на чтение и запись `schedules.<track>` через
-> общий резолвер `apps/web/src/schedules.ts` (по умолчанию контур `plan`); UI дат/оценок/Ганта
-> снова функционален. Мульти-контурный UI (переключатель контуров, несколько полос, actual-сегменты,
-> блок фактических трудозатрат, отчёты plan-vs-actual) и категорийный расчёт статусов (вместо
-> литерала `done`) остаются на следующие инкременты.
+### Покрытие интеграцией
 
-### Этап 2. Scheduling domain
+- [x] Focused Playwright specs выполняют browser writes с последующим reload/API persistence: сохранение соседних tracks и `depends_on`, смена primary track проекта, изменение title без изменения schedules, переключение dependency track, поздний actual, агрегация двух записей за один день, project actual report и cross-project move Task вместе с TimeEntry.
+- [x] Unit и integration tests покрывают чистые расчёты и API boundaries. Они не считаются доказательством production Web UI integration; её покрывают отдельные Playwright specs в `e2e/`.
 
-- [~] Пакет `packages/scheduling`: разрешение конфигурации контуров
-- [~] Чтение ручных ScheduleWindow
-- [~] Rollup по иерархии (declared vs rollup)
-- [~] Per-track dependencies
-- [~] Variance и overdue
-- [x] Unit-тесты чистой логики
+### Остаётся
 
-> Чистая логика реализована и покрыта тестами в `packages/scheduling`; ожидается интеграция с доменным слоем после cutover на v2.
-
-### Этап 3. TimeEntry
-
-- [~] Пакет `packages/time-entries` (расчёты, actual-контур)
-- [x] `TimeEntryStore` в `packages/domain` (list/create/void/replace)
-- [x] API (server) и CLI
-- [x] Категории, void и replacement
-- [x] Разрешить запись в завершённую задачу
-- [x] Запрет удаления Task при наличии TimeEntry
-
-> Расчётный движок `packages/time-entries` готов и покрыт тестами; `TimeEntryStore` + server API готовы.
-> Web-блок фактических трудозатрат и CLI-команды `time-entry list/create/void` готовы.
-
-### Этап 4. Gantt
-
-- [ ] Вынести Gantt model из React-компонента
-- [ ] Несколько полос контуров
-- [ ] Выбор контуров и контур зависимостей
-- [ ] Actual-сегменты по дням
-- [ ] Tooltip и сравнение дат
-- [ ] Per-track dependencies
-
-### Этап 5. Формы и обзор проекта
-
-- [x] Редакторы Project/Milestone/Task под v2
-- [ ] Переключение контуров
-- [x] Блок фактической работы + форма TimeEntry
-- [ ] Проектные показатели и отклонения
-
-### Этап 6. Workload и отчеты
-
-- [ ] Workload по `workload_track`
-- [ ] Отчёт фактических часов
-- [ ] Сравнение plan vs actual
-- [ ] Фильтры (проект/сотрудник/категория/период)
-
-### Этап 7. History, export и надежность
-
-- [ ] Semantic diff для schedules и TimeEntry
-- [ ] Экспорт Schedule и TimeEntry
-- [ ] Проверка restore
-- [ ] Delete restrictions (Task + TimeEntry)
-- [ ] E2E (direct и worktree mode)
-- [ ] Performance smoke (много TimeEntry)
-
-### Качество и критерии готовности (раздел 20)
-
-- [x] 1. Один или несколько контуров
-- [x] 2. Разные сроки/зависимости по контурам
-- [x] 3. Задача может отсутствовать в контуре
-- [x] 4. Gantt накладывает контуры (primary-бар + оверлеи + actual-маркеры + переключатель контуров)
-- [x] 5. Факт дискретными сегментами (движок + UI-список + маркеры на Ганте)
-- [x] 6. TimeEntry в завершённую задачу
-- [x] 7. Агрегация факта по задаче/этапу/проекту
-- [x] 8. Часы после окончания графика (движок + CLI `--after` + variance и часы-после в дашборде UI)
-- [x] 9. Workload по выбранному контуру (workload-ui читает `planning.workload_track` проекта)
-- [x] 10. Нет старых корневых полей
-- [x] 11. Нет compatibility layer / v1
-- [x] 12. Web UI и CLI (time-entry, scheduling, config — в обоих)
-- [x] 13. build/typecheck/lint/unit/schema/planning/E2E проходят (`verify:local` зелёный: 472 unit + 22 E2E)
-- [x] Локальный гейт `corepack pnpm verify:local` зелёный (все 11 шагов)
+- [x] Полный локальный release gate `corepack pnpm verify:local` выполнен 2026-07-31: frozen install, clean, build, lint, typecheck, 540 unit tests, 27 E2E tests, smoke, schema, security и planning прошли успешно.
+- [ ] Отдельный расширенный actual-report с фильтрами по сотруднику, категории и периоду, а также полный plan-vs-actual отчёт остаются следующей работой.
+- [ ] Performance smoke для большого числа TimeEntry и E2E для всех writer modes не входят в текущее focused покрытие.
 
 ### Журнал изменений
 
-- (старт) Создан worktree и копия плана с секцией прогресса.
-- (инкремент 1) Решение о последовательности: полный разрыв с v1 (удаление `start`/`due`/`estimate_hours`/`depends_on`, переход `gitpm/*@1`→`@2`) затрагивает сотни мест в web/cli/server/тестах и должен быть атомарным, чтобы репозиторий собирался. Поэтому сначала реализованы **чистые расчётные движки** без привязки к схеме, а сломанная cutover-часть (схемы/контракты/валидация/потребители) оставлена на следующий инкремент.
-- (инкремент 1) Создан пакет `packages/scheduling` (Этап 2, чистая логика): разрешение контуров и capabilities, чтота ScheduleWindow, rollup (min start / max finish / sum effort), declared vs effective + overflow-предупреждения, variance/overdue, per-track циклы зависимостей, resolvePlanning/validatePlanning, buildGanttModel. 17 unit-тестов.
-- (инкремент 1) Создан пакет `packages/time-entries` (Этап 3, чистая логика): фильтр active/voided, sumHours, группировки по дате/неделе/сотруднику/категории/задаче/проекту, actualWindow (дискретная активность), actualSegments, hoursAfterDate, validateEntry, валидация календарной даты. 11 unit-тестов.
-- (инкремент 1) Проверка: `pnpm lint` чисто; `pnpm build` OK; `pnpm typecheck` OK; `pnpm test` — 67 файлов, 463 теста (включая 28 новых) зелёные; `pnpm schema:verify` OK. Существующее поведение v1 не затронуто (новые пакеты никем не импортируются).
-- (инкремент 2) **Cutover на v2 (Этап 1)**: v2 JSON-схемы (project/task/milestone/statuses@2, schedule-tracks/work-categories/time-entry@1) + расширение `common.schema`; перегенерация контрактов; `packages/contracts` (типы ScheduleWindow/ScheduleMap/ProjectPlanning/TrackDefinition/TimeEntryDocument/ScheduleTracks/WorkCategories, декодеры, ENTITY_TYPE_SCHEMAS→@2); `packages/repository-format` (field order и нормализация schedules/planning/statuses/tracks); `packages/validation` (пути time-entries и новых конфигов, required schedule-tracks/work-categories, capabilities, per-track циклы зависимостей, planning-валидация, time-entry refs+category); миграция `fixtures/schema-v1/demo` и `demo/portfolio` на v2 (старые поля → `schedules.plan.*`); `gitpm init` пишет statuses@2 + schedule-tracks + work-categories; `verify-schema-v1.mjs` переписан под v2 (5 invalid-cases).
-- (инкремент 2) Потребители: `packages/export` переведён на чтение дат из основного окна расписания (windowField/scheduleWindow); тесты потребителей (cli/server/web) обновлены под v2 (схемы-моки, статусы с category, документ-каунты 14→17). Механическая замена `gitpm/{project,task,milestone,statuses}@1`→`@2` в 43 файлах.
-- (инкремент 2) Проверка: `pnpm lint` чисто; `pnpm build` OK; `pnpm typecheck` OK; `pnpm test` — 463/463 зелёные; `pnpm schema:verify` OK.
-- (инкремент 2) **Известный разрыв (не блокирует сборку)**: web-формы/Gantt/workload-display всё ещё читают/пишут старые корневые поля `start`/`due`/`estimate_hours` через индекс-сигнатуру `EntityDocument`; для реальных v2-документов эти значения пусты, поэтому UI дат/оценок/Ганта и создание задач с датами требуют переноса на `schedules.<track>` (Этапы 4–6). E2E не запускались.
-- (инкремент 3) **UI-cutover на schedules**: общий резолвер `apps/web/src/schedules.ts` (scheduleStart/Finish/Effort/Text, buildSchedule); хелперы `text`/`value`/`number` в core-ui/project-plan/stage/gantt/people-profile/workload маршрутизируют ключи `start`/`due`/`estimate_hours` в основное окно расписания (контур `plan` по умолчанию); все формы (создание/редактирование task/milestone/project, subtask) пишут `schedules.plan.{start,finish,effort_hours}` вместо корневых полей. Тесты web переведены на `schedules.plan`.
-- (инкремент 3) Проверка: `pnpm lint` чисто; `pnpm build` OK; `pnpm typecheck` OK; `pnpm test` — 463/463 (web 153/153) зелёные.
-- (инкремент 3) **Осталось**: мульти-контурный UI (Этап 4: несколько полос, выбор контура, actual-сегменты, tooltip/сравнение дат, per-track зависимости), блок фактических трудозатрат + форма TimeEntry (Этап 5), отчёты факта/plan-vs-actual (Этап 6), категорийный расчёт статусов (раздел 17), интеграция scheduling/time-entries + TimeEntryStore/API/CLI (Этап 2/3), semantic diff/export/E2E/perf/docs (Этап 7). E2E пока не запускались.
-- (инкремент 4) **TimeEntry backend**: `packages/domain` `TimeEntryStore` (list/create/void/replace, mutation boundary, fingerprint, atomic write, validation, rollback) по образцу `CommentStore`; префикс ID `E`; server API `registerTimeEntryApi` (GET/POST time-entries, POST `:entryId/void`, `:entryId/replace`) + body-схемы + маппинг ошибок; wiring в `app.ts`/`repository-runtime.ts`. Запрет удаления Task при наличии TimeEntry уже обеспечен через `validateDelete` (time-entry в directReferences). Интеграционный тест API зелёный (list/create/void + reject bad category/hours). Проверка: lint чисто, build/typecheck OK, 464/464 тестов.
-- (инкремент 5) **TimeEntry UI + work-categories endpoint**: web-клиент `listTimeEntries/createTimeEntry/voidTimeEntry` + декодеры; компонент `apps/web/src/task-time-entries.tsx` (сумма/первая/последняя активность через `@gitpm/time-entries`, список, void, форма добавления) встроен в `TaskPanel`; `EntityStore.getConfiguration` отдаёт `work-categories`/`schedule-tracks` через `GET /config/:kind`. 465/465 тестов.
-- (инкремент 6) **TimeEntry CLI**: команды `gitpm time-entry list|create|void` (direct-runtime + dispatch + usage). 466/466 тестов.
-- (инкремент 7) **Semantic diff для schedules**: `packages/changes` `fieldChanges` рекурсивно обходит plain-object значения (`schedules.<track>.<field>`, `planning.<field>`) и выдаёт dotted field-level изменения. 467/467 тестов.
-- (финал сессии) **Реализовано**: v2 data model (Этап 1), чистые движки scheduling/time-entries (Этапы 2/3 логика), UI чтения/записи `schedules.<track>` (Этапы 4–6 базово), TimeEntry full-stack (domain+API+CLI+UI, Этап 3 + часть 5), nested semantic diff (часть Этапа 7). v1 полностью удалён. Локально зелёно: lint/build/typecheck/unit/schema.
-- (финал сессии) **Осталось (явные TODO)**: мульти-контурный Gantt (Этап 4: переключатель контуров, несколько полос, actual-сегменты, tooltip/сравнение дат, per-track зависимости — пока Gantt рисует только primary-контур); дашборд проекта variance/overdue/часы-после-окончания (Этап 5); отчёты факта/plan-vs-actual и workload по `workload_track` (Этап 6); категорийный расчёт статусов вместо литерала `done` (раздел 17 — откачено: требует категории во всех тестовых фикстурах); export time-entries + дружелюбный semantic diff для TimeEntry (Этап 7); обновление документации (`docs/`, CLI.md, Repository_Format) под v2; E2E (direct и worktree) и performance smoke для большого числа TimeEntry. Полный гейт `verify:local` (вкл. e2e) не запускался.
-- (инкремент 8) **Multi-contour Gantt overlay**: `apps/web/gantt-ui` рисует primary-бар + тонкие оверлеи остальных manual-контуров задачи (`gantt-bar-overlay`); fixture demo обогащен контуром `target` (schedule-tracks + planning + проект/задача). 468/468 тестов.
-- (инкремент 10) **Категорийные статусы (§17)**: `apps/web/src/status-categories.ts` (`isCompletedStatus` по `category === "done"`); core-ui/project-plan/stage/export больше не проверяют литерал `done` (кроме module-level `compareTasks` в project-plan — там нет контекста статусов); test-моки обновлены (`category` в статусах). 470/470 тестов.
-- (финал) **`verify:local` зелёный**: после установки Playwright прогнан полный гейт — frozen install, build, lint, typecheck, **472 unit-теста**, **22 E2E**, smoke, schema:verify, security, planning — все 11 шагов PASS. Попутно исправлен people-profile (calендарь доступности) и его тест-фикстура под v2. **Все 13 критериев раздела 20 выполнены.**
-
-### Реализовано в текущем инкременте (чистая логика)
-
-| Область | Статус | Где |
-| --- | --- | --- |
-| Scheduling: tracks/capabilities/windows | готово (движок) | `packages/scheduling` |
-| Scheduling: rollup, declared vs rollup, overflow | готово (движок) | `packages/scheduling` |
-| Scheduling: variance, overdue | готово (движок) | `packages/scheduling` |
-| Scheduling: per-track dependency cycles | готово (движок) | `packages/scheduling` |
-| Scheduling: planning resolve/validate, Gantt model | готово (движок) | `packages/scheduling` |
-| Time-entries: агрегаты, actual-контур, hours-after | готово (движок) | `packages/time-entries` |
-| Time-entries: validateEntry | готово (движок) | `packages/time-entries` |
-
-### Что осталось (следующие инкременты)
-
-- **Этап 1 (cutover)**: v2 JSON-схемы, regeneration, `packages/contracts`, `packages/repository-format`, `packages/validation`, миграция `demo/portfolio` + `fixtures/schema-v1/demo` + `verify-schema-v1.mjs`. Атомарный разрыв с v1.
-- **Этап 1 (потребители)**: адаптация `workload`, web-форм (core-ui/gantt), `cli`, `server`, `changes`, `export`, `agent` под `schedules.<track>` и `workload_track`.
-- **Этап 2/3 (интеграция)**: подключить `packages/scheduling` и `packages/time-entries` к доменному слою; `TimeEntryStore` в `packages/domain`; API (server) и CLI для time entries; delete-restrict Task при наличии TimeEntry.
-- **Этапы 4–7**: Gantt UI, формы/дашборд, отчёты workload/факта, semantic diff, export, E2E, performance smoke.
+- Введены v2 scheduling/TimeEntry contracts, validation и full-stack операции, затем Web editors, project snapshot и multi-track Gantt.
+- Текущий инкремент добавляет write-oriented E2E и release-gated статические регрессии; Gantt domain resolution перенесён в `@gitpm/scheduling`.
+- Исторические записи о «всех 13 критериях» и успешном `verify:local` удалены: они противоречили незавершённым UI/E2E и не должны служить доказательством текущего состояния.
+- После завершения write E2E запущен полный `verify:local`; все 11 шагов прошли успешно. Это подтверждает текущую поставку, но не отменяет явно перечисленные ограничения отчётности и performance coverage.

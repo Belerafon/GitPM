@@ -32,6 +32,34 @@ describe("repository validation", () => {
     expect(report).toMatchObject({ valid: true, documentCount: 17, errors: [], warnings: [] });
   });
 
+  it("enforces time entry state and replacement integrity while retaining inactive-category history", async () => {
+    const root = await fixture();
+    const entries = path.join(root, "projects", project, "time-entries", taskOne);
+    const entry = (id: string, extra: string) => `schema: gitpm/time-entry@1\nid: ${id}\nproject: ${project}\ntask: ${taskOne}\nperson: U-26-5EBAE3\nperformed_on: 2026-09-01\nhours: 1\ncategory: support\ncreated_at: 2026-09-01T12:00:00Z\n${extra}`;
+    await writeFile(path.join(entries, "E-26-BBBBBB.yaml"), entry("E-26-BBBBBB", "state: voided\n"), "utf8");
+    await writeFile(path.join(entries, "E-26-CCCCCC.yaml"), entry("E-26-CCCCCC", "state: active\nvoided_at: 2026-09-01T13:00:00Z\n"), "utf8");
+    await writeFile(path.join(entries, "E-26-DDDDDD.yaml"), entry("E-26-DDDDDD", "state: voided\nvoided_at: 2026-09-01T13:00:00Z\nvoided_by:\n  provider: git\n  subject: author@example.test\n  display_name: Author\nreplacement: E-26-EEEEEE\n"), "utf8");
+    await writeFile(path.join(entries, "E-26-GGGGGG.yaml"), entry("E-26-GGGGGG", "state: voided\nvoided_at: 2026-09-01T13:00:00Z\nvoided_by:\n  provider: git\n  subject: author@example.test\n  display_name: Author\nreplacement: E-26-HHHHHH\n"), "utf8");
+    await writeFile(path.join(entries, "E-26-FFFFFF.yaml"), entry("E-26-FFFFFF", "state: voided\nvoided_at: 2026-09-01T13:00:00Z\nvoided_by:\n  provider: git\n  subject: author@example.test\n  display_name: Author\nreplacement: E-26-FFFFFF\n"), "utf8");
+    const otherEntries = path.join(root, "projects", "P-26-8S9HQQ", "time-entries", otherTask);
+    await mkdir(otherEntries, { recursive: true });
+    await writeFile(path.join(otherEntries, "E-26-HHHHHH.yaml"), entry("E-26-HHHHHH", "state: active\n").replace(`project: ${project}`, "project: P-26-8S9HQQ").replace(`task: ${taskOne}`, `task: ${otherTask}`), "utf8");
+    const invalid = await validateRepository(root);
+    expect(invalid.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "SCHEMA_INVALID" }),
+      expect.objectContaining({ code: "TIME_ENTRY_VOID_METADATA_REQUIRED" }),
+      expect.objectContaining({ code: "TIME_ENTRY_VOID_FIELDS_FORBIDDEN" }),
+      expect.objectContaining({ code: "TIME_ENTRY_REPLACEMENT_MISSING" }),
+      expect.objectContaining({ code: "TIME_ENTRY_REPLACEMENT_SELF" }),
+      expect.objectContaining({ code: "TIME_ENTRY_REPLACEMENT_TASK_MISMATCH" }),
+    ]));
+
+    const historical = await fixture();
+    await replace(historical, ".gitpm/work-categories.yaml", "slug: support\n    title: Support\n    active: true", "slug: support\n    title: Support\n    active: false");
+    await replace(historical, `projects/${project}/time-entries/${taskOne}/E-26-AAAAAA.yaml`, "category: warranty", "category: support");
+    expect(await validateRepository(historical)).toMatchObject({ valid: true, errors: [] });
+  });
+
   it("rejects an empty directory and missing required repository layout", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "gitpm-validation-empty-"));
     roots.push(root);
@@ -237,5 +265,82 @@ describe("repository validation", () => {
   it("enforces delete restrict for direct references", async () => {
     const issues = await validateDelete(demo, "U-26-5EBAE3");
     expect(issues).toEqual(expect.arrayContaining([expect.objectContaining({ code: "DELETE_RESTRICTED" })]));
+  });
+
+  it("rejects duplicate schedule track slugs", async () => {
+    const root = await fixture();
+    await replace(root, ".gitpm/schedule-tracks.yaml", "  - slug: actual\n    title: Actual activity\n    kind: actual\n    source: time_entries", "  - slug: plan\n    title: Plan duplicate\n    kind: manual\n    capabilities:\n      - dates\n  - slug: actual\n    title: Actual activity\n    kind: actual\n    source: time_entries");
+    const report = await validateRepository(root);
+    expect(report.errors).toEqual(expect.arrayContaining([expect.objectContaining({ code: "TRACK_SLUG_DUPLICATE", field: "tracks.plan" })]));
+  });
+
+  it("rejects an actual track without source via schema", async () => {
+    const root = await fixture();
+    await replace(root, ".gitpm/schedule-tracks.yaml", "  - slug: actual\n    title: Actual activity\n    kind: actual\n    source: time_entries", "  - slug: actual\n    title: Actual activity\n    kind: actual");
+    const report = await validateRepository(root);
+    expect(report.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "SCHEMA_INVALID", path: ".gitpm/schedule-tracks.yaml" }),
+    ]));
+  });
+
+  it("rejects a manual track with source via schema", async () => {
+    const root = await fixture();
+    await replace(root, ".gitpm/schedule-tracks.yaml", "  - slug: plan\n    title: Working plan\n    kind: manual", "  - slug: plan\n    title: Working plan\n    kind: manual\n    source: time_entries");
+    const report = await validateRepository(root);
+    expect(report.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "SCHEMA_INVALID", path: ".gitpm/schedule-tracks.yaml" }),
+    ]));
+  });
+
+  it("rejects more than one actual track", async () => {
+    const root = await fixture();
+    await replace(root, ".gitpm/schedule-tracks.yaml", "defaults:", "  - slug: second-actual\n    title: Second actual\n    kind: actual\n    source: time_entries\ndefaults:");
+    const report = await validateRepository(root);
+    expect(report.errors).toEqual(expect.arrayContaining([expect.objectContaining({ code: "TRACK_ACTUAL_COUNT" })]));
+  });
+
+  it("rejects dates on a track without the dates capability", async () => {
+    const root = await fixture();
+    await replace(root, ".gitpm/schedule-tracks.yaml", "  - slug: target\n    title: Target\n    kind: manual\n    capabilities:\n      - dates\n      - effort", "  - slug: target\n    title: Target\n    kind: manual\n    capabilities:\n      - effort");
+    const report = await validateRepository(root);
+    expect(report.errors).toEqual(expect.arrayContaining([expect.objectContaining({ code: "CAPABILITY_DATES_NOT_ALLOWED" })]));
+  });
+
+  it("rejects a task using a track not enabled in its owning project", async () => {
+    const root = await fixture();
+    await replace(root, ".gitpm/schedule-tracks.yaml", "defaults:", "  - slug: internal\n    title: Internal\n    kind: manual\n    capabilities:\n      - dates\ndefaults:");
+    await replace(root, `projects/${project}/tasks/${taskOne}.yaml`, "labels:", "  internal:\n    start: 2026-07-01\n    finish: 2026-07-02\nlabels:");
+    const report = await validateRepository(root);
+    expect(report.errors).toEqual(expect.arrayContaining([expect.objectContaining({ code: "SCHEDULE_TRACK_NOT_ENABLED", field: "schedules.internal" })]));
+  });
+
+  it("rejects an actual track used as primary", async () => {
+    const root = await fixture();
+    await replace(root, ".gitpm/schedule-tracks.yaml", "  primary_track: plan", "  primary_track: actual");
+    const report = await validateRepository(root);
+    expect(report.errors).toEqual(expect.arrayContaining([expect.objectContaining({ code: "PLANNING_PRIMARY_NOT_MANUAL", field: "defaults.primary_track" })]));
+  });
+
+  it("accepts a partial project planning override resolved against valid defaults", async () => {
+    const root = await fixture();
+    await replace(root, "projects/P-26-8S9HQQ/project.yaml", "planning:\n  enabled_tracks:\n    - plan\n  primary_track: plan\n  workload_track: plan\n  dashboard_tracks:\n    - plan", "planning:\n  primary_track: plan");
+    const report = await validateRepository(root);
+    expect(report).toMatchObject({ valid: true, errors: [] });
+  });
+
+  it("rejects invalid repository schedule-tracks defaults", async () => {
+    const root = await fixture();
+    await replace(root, ".gitpm/schedule-tracks.yaml", "  workload_track: plan", "  workload_track: actual");
+    const report = await validateRepository(root);
+    expect(report.errors).toEqual(expect.arrayContaining([expect.objectContaining({ code: "PLANNING_WORKLOAD_NOT_MANUAL", field: "defaults.workload_track" })]));
+  });
+
+  it("rejects an empty schedule window", async () => {
+    const root = await fixture();
+    await replace(root, `projects/${project}/tasks/${taskTwo}.yaml`, "  plan:\n    effort_hours: 24.25\n    depends_on:\n      - T-26-P9G3P8 # task: Approve schema v1", "  plan: {}");
+    const report = await validateRepository(root);
+    expect(report.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "SCHEMA_INVALID", path: `projects/${project}/tasks/${taskTwo}.yaml` }),
+    ]));
   });
 });

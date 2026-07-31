@@ -47,7 +47,7 @@ export interface Schedulable {
 export interface RolledWindow {
   readonly start?: string;
   readonly finish?: string;
-  readonly effort_hours: number;
+  readonly effort_hours?: number;
 }
 
 export interface CapabilityViolation {
@@ -143,7 +143,7 @@ export function rollupWindow(subjects: readonly Schedulable[], track: string): R
     }
   }
   if (!contributed) return undefined;
-  return { start, finish, effort_hours: hasEffort ? round(effort) : 0 };
+  return { start, finish, ...(hasEffort ? { effort_hours: round(effort) } : {}) };
 }
 
 export function declaredWindow(subject: Schedulable, track: string): ScheduleWindow | undefined {
@@ -175,6 +175,47 @@ export function rollupOverflowWarnings(
     }
   }
   return warnings;
+}
+
+export function windowEffort(window: ScheduleWindow | RolledWindow | undefined): number | undefined {
+  if (window === undefined) return undefined;
+  return typeof window.effort_hours === "number" ? window.effort_hours : undefined;
+}
+
+export interface TrackWindowSummary {
+  readonly track: string;
+  readonly declared: ScheduleWindow | undefined;
+  readonly rolled: RolledWindow | undefined;
+  readonly effective: ScheduleWindow | RolledWindow | undefined;
+}
+
+export interface SchedulingReadModel {
+  readonly id: string;
+  readonly tracks: readonly TrackWindowSummary[];
+  readonly overflowWarnings: readonly OverflowWarning[];
+}
+
+export function buildSchedulingReadModel(
+  subject: Schedulable,
+  children: readonly Schedulable[],
+  tracks: readonly string[],
+): SchedulingReadModel {
+  const summaries: TrackWindowSummary[] = tracks.map((track) => {
+    const declared = declaredWindow(subject, track);
+    const rolled = rollupWindow(children, track);
+    const effective = declared ?? rolled;
+    return { track, declared, rolled, effective };
+  });
+  return { id: subject.id, tracks: summaries, overflowWarnings: rollupOverflowWarnings(subject, children, tracks) };
+}
+
+export function readModelTrack(model: SchedulingReadModel, track: string): TrackWindowSummary | undefined {
+  return model.tracks.find((summary) => summary.track === track);
+}
+
+export function effectiveFinish(model: SchedulingReadModel, track: string): string | undefined {
+  const finish = readModelTrack(model, track)?.effective?.finish;
+  return typeof finish === "string" ? finish : undefined;
 }
 
 export function daysBetween(start: string, finish: string): number {
@@ -339,6 +380,44 @@ export interface BuildGanttOptions {
   readonly dependencyTrack?: string;
   readonly actual?: ReadonlyMap<string, readonly GanttActualSegment[]>;
   readonly milestones?: readonly GanttMilestone[];
+}
+
+export interface GanttSchedulable extends Schedulable {
+  readonly parent?: string;
+}
+
+/** Resolves inherited task windows before constructing the UI-agnostic Gantt model. */
+export function buildResolvedGanttModel(subjects: readonly GanttSchedulable[], options: BuildGanttOptions): GanttModel {
+  const tracks = [...new Set([
+    options.primaryTrack,
+    ...(options.visibleTracks ?? []),
+    options.dependencyTrack ?? options.primaryTrack,
+  ])];
+  const raw = new Map(subjects.map((subject) => [subject.id, subject]));
+  const children = new Map<string, GanttSchedulable[]>();
+  for (const subject of subjects) {
+    if (subject.parent !== undefined && subject.parent !== "") {
+      children.set(subject.parent, [...(children.get(subject.parent) ?? []), subject]);
+    }
+  }
+  const resolved = new Map<string, Schedulable>();
+  const resolving = new Set<string>();
+  const resolve = (id: string): Schedulable => {
+    const cached = resolved.get(id);
+    if (cached !== undefined) return cached;
+    const subject = raw.get(id);
+    if (subject === undefined || resolving.has(id)) return subject ?? { id };
+    resolving.add(id);
+    const childSubjects = (children.get(id) ?? []).map((child) => resolve(child.id));
+    const read = buildSchedulingReadModel(subject, childSubjects, tracks);
+    const schedules: Record<string, ScheduleWindow> = { ...(subject.schedules ?? {}) };
+    for (const summary of read.tracks) if (summary.effective !== undefined) schedules[summary.track] = summary.effective;
+    const value = { id, schedules };
+    resolving.delete(id);
+    resolved.set(id, value);
+    return value;
+  };
+  return buildGanttModel(subjects.map((subject) => resolve(subject.id)), options);
 }
 
 function barFromWindow(track: string, window: ScheduleWindow | RolledWindow | undefined): GanttTrackBar | undefined {

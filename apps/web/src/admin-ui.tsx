@@ -147,7 +147,7 @@ function TeamEditor(props: EditorProps & { people: readonly EntityResult[]; read
   return <><th>{name}</th><td><PersonLinks empty={t("admin.noMembers")} onOpen={onOpenPerson} people={people} personIds={selected} /></td><td><button className="editor-trigger" onClick={() => setOpen(true)} type="button">{t("admin.editTeam")}</button><EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setOpen(false)} open={open} title={`${t("admin.editTeam")}: ${name}`}><form className="editor-drawer-form" onSubmit={(event) => event.preventDefault()}><label>{t("core.name")}<input name="name" aria-label={`${t("core.name")} ${name}`} defaultValue={name} /></label><MemberChecks people={people} selected={selected} t={t} /><ActionButtons disabled={readOnly} t={t} close={() => setOpen(false)} save={update} archive={async () => await mutate(async () => await api.archiveEntity(draft.draft_id, "teams", entity, fingerprint)) !== null} remove={async () => confirmDelete(name) && await remove(async () => await api.deleteEntity(draft.draft_id, "teams", entity, fingerprint))} /></form></EditorDrawer></td></>;
 }
 
-interface ConfigValue { readonly slug: string; readonly title: string; readonly color?: string; readonly active: boolean }
+interface ConfigValue { readonly slug: string; readonly title: string; readonly color?: string; readonly active: boolean; readonly category?: "backlog" | "active" | "done" | "cancelled" }
 const CONFIG_COLORS = {
   gray: { swatch: "#6b7280", soft: "#eef0f2", text: "#3f4650" },
   blue: { swatch: "#2563eb", soft: "#e9f0ff", text: "#244a99" },
@@ -196,7 +196,7 @@ function ConfigEditor({ api, draft, entity, kind, listKey, title, showColor = tr
   const { highlights: recentRows, mark: markRows } = useExternalHighlights(500);
   const formRef = useFlipList<HTMLFormElement>(useReducedMotion());
   useEffect(() => setValues(entityValues), [entity]);
-  const updateValue = (index: number, changes: Partial<Pick<ConfigValue, "title" | "color" | "active">>) => setValues((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, ...changes } : item));
+  const updateValue = (index: number, changes: Partial<Pick<ConfigValue, "title" | "color" | "active" | "category">>) => setValues((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, ...changes } : item));
   const persist = async (next: readonly ConfigValue[], onPersisted?: () => void) => {
     const previous = values; setValues([...next]); setBusy(true);
     const result = await mutate(async () => { const saved = await api.updateConfiguration(draft.draft_id, kind, entity, entity.draft_fingerprint, { ...entity.document, [listKey]: next }); setBusy(false); onPersisted?.(); return saved; });
@@ -217,8 +217,9 @@ function ConfigEditor({ api, draft, entity, kind, listKey, title, showColor = tr
           <label className="config-active-switch"><input aria-label={t("admin.activeLabel", { name: item.title })} checked={item.active} disabled={readOnly || busy} name={`active-${index}`} onChange={(event) => updateValue(index, { active: event.currentTarget.checked })} role="switch" type="checkbox" /><span aria-hidden="true" className="config-switch-track" /><span>{t("admin.active")}</span></label>
         </header>
         <div className="config-row-fields">
-          <label className="config-field"><span>{t("core.name")}</span><input aria-label={`${title} ${item.slug}`} disabled={readOnly || busy} name={`title-${index}`} onChange={(event) => updateValue(index, { title: event.currentTarget.value })} required value={item.title} /></label>
-          {showColor && <ConfigColorPalette disabled={readOnly || busy} item={item} onChange={(color) => updateValue(index, { color })} t={t} />}
+           <label className="config-field"><span>{t("core.name")}</span><input aria-label={`${title} ${item.slug}`} disabled={readOnly || busy} name={`title-${index}`} onChange={(event) => updateValue(index, { title: event.currentTarget.value })} required value={item.title} /></label>
+           {showColor && <ConfigColorPalette disabled={readOnly || busy} item={item} onChange={(color) => updateValue(index, { color })} t={t} />}
+           {kind === "statuses" && <label className="config-field"><span>{t("admin.statusCategory")}</span><select aria-label={`${t("admin.statusCategory")} ${item.slug}`} disabled={readOnly || busy} onChange={(event) => updateValue(index, { category: event.currentTarget.value as ConfigValue["category"] })} value={item.category ?? "backlog"}><option value="backlog">{t("admin.categoryBacklog")}</option><option value="active">{t("admin.categoryActive")}</option><option value="done">{t("admin.categoryDone")}</option><option value="cancelled">{t("admin.categoryCancelled")}</option></select></label>}
         </div>
         <footer className="config-row-footer"><span>{t("admin.orderPosition", { position: index + 1, count: values.length })}</span><div className="config-order"><button aria-label={t("admin.moveUp", { name: item.title })} disabled={readOnly || busy || index === 0} onClick={() => move(index, -1)} type="button"><span aria-hidden="true">↑</span>{t("admin.higher")}</button><button aria-label={t("admin.moveDown", { name: item.title })} disabled={readOnly || busy || index === values.length - 1} onClick={() => move(index, 1)} type="button"><span aria-hidden="true">↓</span>{t("admin.lower")}</button></div></footer>
       </section>)}</div>

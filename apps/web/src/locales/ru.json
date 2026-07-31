@@ -712,4 +712,10 @@
   ,"snapshot.onTime": "по графику"
   ,"snapshot.actualHours": "Фактические часы"
   ,"snapshot.hoursAfter": "Часы после {date}"
+  ,"snapshot.actualReport": "Отчёт по фактическим часам"
+  ,"admin.statusCategory": "Категория статуса"
+  ,"admin.categoryBacklog": "Бэклог"
+  ,"admin.categoryActive": "В работе"
+  ,"admin.categoryDone": "Готово"
+  ,"admin.categoryCancelled": "Отменено"
 }

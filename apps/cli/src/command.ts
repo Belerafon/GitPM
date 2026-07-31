@@ -113,7 +113,7 @@ function render(json: boolean, payload: Record<string, unknown>, human: string):
 }
 
 const SCHEMA_DIRECTORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../schemas/v1");
-const ROOT_USAGE = "Usage: gitpm <init|status|draft|entity create|entity update|entity import|entity list|entity show|entity delete|entity archive|entity move|comment|time-entry|config|schema|format|validate|diff --semantic|export|commit --all|push|mr create|doctor> [options]";
+const ROOT_USAGE = "Usage: gitpm <init|status|draft|entity create|entity update|entity import|entity list|entity show|entity delete|entity archive|entity move|schedule|planning|comment|time-entry|config|schema|format|validate|diff --semantic|export|commit --all|push|mr create|doctor> [options]";
 
 const commandHelp: Readonly<Record<string, string>> = {
   root: [
@@ -183,13 +183,26 @@ const commandHelp: Readonly<Record<string, string>> = {
   ].join("\n"),
   "time-entry": [
     "Usage:",
-    "  gitpm time-entry list --project <id> --task <id> [--json]",
-    "  gitpm time-entry summary --project <id> --task <id> [--after <yyyy-mm-dd>] [--json]",
+    "  gitpm time-entry list --project <id> [--task <id>] [--milestone <id>] [--person <id>] [--category <slug>] [--state active|voided] [--from <yyyy-mm-dd>] [--to <yyyy-mm-dd>] [--offset <n>] [--limit <n>] [--json]",
+    "  gitpm time-entry summary --project <id> [--task <id>] [--milestone <id>] [--person <id>] [--category <slug>] [--state active|voided] [--from <yyyy-mm-dd>] [--to <yyyy-mm-dd>] [--after <yyyy-mm-dd>] [--json]",
     "  gitpm time-entry create --project <id> --task <id> --person <id> --date <yyyy-mm-dd> --hours <n> --category <slug> [--note <text>] [--json]",
     "  gitpm time-entry void --project <id> --task <id> --id <entry-id> [--json]",
     "",
-    "Actual effort is stored independently of task status and plan windows.",
+    "List and summary operate at Project scope; --task narrows the result. Actual effort is stored independently of task status and plan windows.",
     "Void marks an entry voided (kept in history); available in direct mode.",
+  ].join("\n"),
+  schedule: [
+    "Usage:",
+    "  gitpm schedule set --type project|task|milestone --id <id> --track <slug> [--start <yyyy-mm-dd>] [--finish <yyyy-mm-dd>] [--effort-hours <n>] [--depends-on <task-id>]... [--clear-start] [--clear-finish] [--clear-effort] [--clear-dependencies] [--project <id>] [--allow-delete] [--json]",
+    "",
+    "Updates one schedules.<track> window and preserves other track windows. Dependencies belong to the selected track.",
+  ].join("\n"),
+  planning: [
+    "Usage:",
+    "  gitpm planning show --project <id> [--json]",
+    "  gitpm planning set --project <id> [--primary-track <slug>] [--workload-track <slug>] [--comparison-track <slug>|--clear-comparison-track] [--enabled-track <slug>]... [--dashboard-track <slug>]... [--allow-delete] [--json]",
+    "",
+    "Set only the planning fields supplied. Repeated track flags replace that planning list.",
   ].join("\n"),
   config: [
     "Usage:",
@@ -235,7 +248,9 @@ function commandArgumentSpec(command: string | undefined, args: readonly string[
   if (command === "push") return { values: ["--draft"], booleans: ["--json"], minPositionals: 0, maxPositionals: 0 };
   if (command === "mr") return { values: ["--draft", "--owner", "--title", "--description"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
   if (command === "comment") return { values: ["--project", "--task", "--id", "--body", "--file", "--path"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
-  if (command === "time-entry") return { values: ["--project", "--task", "--id", "--person", "--date", "--hours", "--category", "--note", "--after"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
+  if (command === "time-entry") return { values: ["--project", "--task", "--milestone", "--id", "--person", "--date", "--hours", "--category", "--note", "--after", "--state", "--from", "--to", "--offset", "--limit"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
+  if (command === "schedule") return { values: ["--type", "--id", "--track", "--start", "--finish", "--effort-hours", "--project"], repeatable: ["--depends-on"], booleans: ["--clear-start", "--clear-finish", "--clear-effort", "--clear-dependencies", "--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
+  if (command === "planning") return { values: ["--project", "--primary-track", "--workload-track", "--comparison-track"], repeatable: ["--enabled-track", "--dashboard-track"], booleans: ["--clear-comparison-track", "--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
   if (command === "config") {
     return action === "update"
       ? { values: ["--kind", "--file", "--path"], repeatable: ["--set", "--unset"], booleans: ["--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 }
@@ -718,17 +733,41 @@ async function runTimeEntry(args: readonly string[], cwd: string, dependencies: 
   if (typeof action !== "string" || !validActions.includes(action)) throw new RepositoryFormatError("CLI_USAGE", "time-entry requires list, create, void or summary");
   const direct = requireDirect(dependencies);
   const projectId = required(flagValue(args, "--project"), "--project");
-  const taskId = required(flagValue(args, "--task"), "--task");
+  const taskId = flagValue(args, "--task");
   const json = args.includes("--json");
+  const filters = {
+    ...(taskId === undefined ? {} : { task: taskId }),
+    ...(flagValue(args, "--milestone") === undefined ? {} : { milestone: flagValue(args, "--milestone")! }),
+    ...(flagValue(args, "--person") === undefined ? {} : { person: flagValue(args, "--person")! }),
+    ...(flagValue(args, "--category") === undefined ? {} : { category: flagValue(args, "--category")! }),
+    ...(flagValue(args, "--state") === undefined ? {} : { state: flagValue(args, "--state") as "active" | "voided" }),
+    ...(flagValue(args, "--from") === undefined ? {} : { performed_from: flagValue(args, "--from")! }),
+    ...(flagValue(args, "--to") === undefined ? {} : { performed_to: flagValue(args, "--to")! }),
+  };
   if (action === "list") {
-    const result = await direct.listTimeEntries(projectId, taskId);
-    const items = result.map((item) => ({ id: String(item.document.id), state: item.document.state, person: item.document.person, performed_on: item.document.performed_on, hours: item.document.hours, category: item.document.category, path: item.path }));
-    return { exitCode: 0, output: render(json, { ok: true, code: "OK", items }, `${items.length} time entry/entries`) };
+    const offset = flagValue(args, "--offset");
+    const limit = flagValue(args, "--limit");
+    const result = await direct.listProjectTimeEntries(projectId, {
+      ...filters,
+      ...(offset === undefined ? {} : { offset: Number(offset) }),
+      ...(limit === undefined ? {} : { limit: Number(limit) }),
+    });
+    const items = result.items.map((item) => ({ id: String(item.document.id), task: item.document.task, state: item.document.state, person: item.document.person, performed_on: item.document.performed_on, hours: item.document.hours, category: item.document.category, path: item.path }));
+    return { exitCode: 0, output: render(json, { ok: true, code: "OK", items, total: result.total, offset: result.offset, limit: result.limit }, `${items.length} of ${result.total} time entry/entries`) };
   }
   if (action === "summary") {
     const { actualWindow, groupByCategory, groupByPerson, hoursAfterDate, sumHours } = await import("@gitpm/time-entries");
-    const entries = (await direct.listTimeEntries(projectId, taskId)).map((entry) => ({
-      id: entry.document.id, project: projectId, task: taskId, person: entry.document.person,
+    const results = [];
+    let offset = 0;
+    let total = 0;
+    do {
+      const page = await direct.listProjectTimeEntries(projectId, { ...filters, offset, limit: 200 });
+      results.push(...page.items);
+      total = page.total;
+      offset += page.items.length;
+    } while (offset < total);
+    const entries = results.map((entry) => ({
+      id: entry.document.id, project: projectId, task: entry.document.task, person: entry.document.person,
       performed_on: entry.document.performed_on, hours: entry.document.hours, category: entry.document.category, state: entry.document.state,
     }));
     const cutoff = flagValue(args, "--after");
@@ -739,13 +778,15 @@ async function runTimeEntry(args: readonly string[], cwd: string, dependencies: 
       by_category: [...groupByCategory(entries).entries()].sort(),
       by_person: [...groupByPerson(entries).entries()].sort(),
       actual: actualWindow(entries) ?? null,
+      total_entries: total,
       ...(cutoff === undefined ? {} : { hours_after: hoursAfterDate(entries, cutoff) }),
     };
     return { exitCode: 0, output: render(json, { ok: true, code: "OK", summary }, `${summary.total_hours} h actual`) };
   }
+  const requiredTaskId = required(taskId, "--task");
   const entryId = flagValue(args, "--id");
   if (action === "void") {
-    const voided = await direct.voidTimeEntry(projectId, taskId, required(entryId, "--id"));
+    const voided = await direct.voidTimeEntry(projectId, requiredTaskId, required(entryId, "--id"));
     return { exitCode: 0, output: render(json, { ok: true, code: "OK", document: voided.document, path: voided.path }, `Voided ${voided.path}`) };
   }
   const person = required(flagValue(args, "--person"), "--person");
@@ -754,8 +795,83 @@ async function runTimeEntry(args: readonly string[], cwd: string, dependencies: 
   const category = required(flagValue(args, "--category"), "--category");
   if (!Number.isFinite(hours) || hours <= 0) throw new RepositoryFormatError("CLI_USAGE", "--hours must be a positive number");
   const note = flagValue(args, "--note");
-  const created = await direct.createTimeEntry(projectId, taskId, { person, performed_on: performedOn, hours, category, ...(note === undefined ? {} : { note_markdown: note }) });
+  const created = await direct.createTimeEntry(projectId, requiredTaskId, { person, performed_on: performedOn, hours, category, ...(note === undefined ? {} : { note_markdown: note }) });
   return { exitCode: 0, output: render(json, { ok: true, code: "OK", document: created.document, path: created.path }, `Created ${created.path}`) };
+}
+
+function scheduleEntityType(value: string): "projects" | "tasks" | "milestones" {
+  if (value === "project" || value === "projects") return "projects";
+  if (value === "task" || value === "tasks") return "tasks";
+  if (value === "milestone" || value === "milestones") return "milestones";
+  throw new RepositoryFormatError("CLI_USAGE", "--type must be project, task or milestone");
+}
+
+async function runSchedule(args: readonly string[], dependencies: CliDependencies): Promise<CliResult> {
+  if (args[0] !== "set") throw new RepositoryFormatError("CLI_USAGE", "schedule requires set");
+  const direct = requireDirect(dependencies);
+  const entityType = scheduleEntityType(required(flagValue(args, "--type"), "--type"));
+  const id = required(flagValue(args, "--id"), "--id");
+  const track = required(flagValue(args, "--track"), "--track");
+  const configuration = await direct.getConfiguration("schedule-tracks");
+  const tracks = Array.isArray(configuration.document.tracks) ? configuration.document.tracks : [];
+  const definition = tracks.find((candidate) => candidate !== null && typeof candidate === "object" && (candidate as Record<string, unknown>).slug === track) as Record<string, unknown> | undefined;
+  if (definition === undefined) {
+    throw new RepositoryFormatError("CLI_USAGE", `Unknown schedule track ${track}`);
+  }
+  if (definition.kind !== "manual") throw new RepositoryFormatError("CLI_USAGE", `Schedule track ${track} is not manual`);
+  const supplied = ["--start", "--finish", "--effort-hours", "--depends-on", "--clear-start", "--clear-finish", "--clear-effort", "--clear-dependencies"];
+  if (!supplied.some((flag) => args.includes(flag))) throw new RepositoryFormatError("CLI_USAGE", "schedule set requires a window field");
+  const current = await direct.getEntity(entityType, id);
+  const schedules = current.document.schedules !== null && typeof current.document.schedules === "object" && !Array.isArray(current.document.schedules)
+    ? { ...(current.document.schedules as Record<string, unknown>) }
+    : {};
+  const existing = schedules[track] !== null && typeof schedules[track] === "object" && !Array.isArray(schedules[track])
+    ? { ...(schedules[track] as Record<string, unknown>) }
+    : {};
+  const replace = (flag: string, key: string): void => {
+    const value = flagValue(args, flag);
+    if (value !== undefined) existing[key] = value;
+  };
+  replace("--start", "start");
+  replace("--finish", "finish");
+  const effort = flagValue(args, "--effort-hours");
+  if (effort !== undefined) {
+    const value = Number(effort);
+    if (!Number.isFinite(value) || value < 0) throw new RepositoryFormatError("CLI_USAGE", "--effort-hours must be a non-negative number");
+    existing.effort_hours = value;
+  }
+  if (args.includes("--depends-on")) existing.depends_on = flagValues(args, "--depends-on");
+  if (args.includes("--clear-start")) delete existing.start;
+  if (args.includes("--clear-finish")) delete existing.finish;
+  if (args.includes("--clear-effort")) delete existing.effort_hours;
+  if (args.includes("--clear-dependencies")) delete existing.depends_on;
+  if (Object.keys(existing).length === 0) delete schedules[track]; else schedules[track] = existing;
+  const next = { ...current.document } as Record<string, unknown>;
+  if (Object.keys(schedules).length === 0) delete next.schedules; else next.schedules = schedules;
+  const updated = await direct.updateEntity(next, entityType, id, agentScope(args));
+  return { exitCode: 0, output: render(args.includes("--json"), { ok: true, code: "OK", ...updated }, `Updated ${updated.path} schedule ${track}`) };
+}
+
+async function runPlanning(args: readonly string[], dependencies: CliDependencies): Promise<CliResult> {
+  const action = args[0];
+  if (action !== "show" && action !== "set") throw new RepositoryFormatError("CLI_USAGE", "planning requires show or set");
+  const direct = requireDirect(dependencies);
+  const projectId = required(flagValue(args, "--project"), "--project");
+  const current = await direct.getEntity("projects", projectId);
+  if (action === "show") return { exitCode: 0, output: render(args.includes("--json"), { ok: true, code: "OK", planning: current.document.planning ?? null, document: current.document, path: current.path }, current.path) };
+  const supplied = ["--primary-track", "--workload-track", "--comparison-track", "--clear-comparison-track", "--enabled-track", "--dashboard-track"];
+  if (!supplied.some((flag) => args.includes(flag))) throw new RepositoryFormatError("CLI_USAGE", "planning set requires a planning field");
+  const planning = current.document.planning !== null && typeof current.document.planning === "object" && !Array.isArray(current.document.planning)
+    ? { ...(current.document.planning as Record<string, unknown>) }
+    : {};
+  for (const [flag, field] of [["--primary-track", "primary_track"], ["--workload-track", "workload_track"], ["--comparison-track", "comparison_track"]] as const) {
+    const value = flagValue(args, flag); if (value !== undefined) planning[field] = value;
+  }
+  if (args.includes("--clear-comparison-track")) delete planning.comparison_track;
+  if (args.includes("--enabled-track")) planning.enabled_tracks = flagValues(args, "--enabled-track");
+  if (args.includes("--dashboard-track")) planning.dashboard_tracks = flagValues(args, "--dashboard-track");
+  const updated = await direct.updateEntity({ ...current.document, planning }, "projects", projectId, agentScope(args));
+  return { exitCode: 0, output: render(args.includes("--json"), { ok: true, code: "OK", ...updated }, `Updated ${updated.path} planning`) };
 }
 
 async function runConfig(args: readonly string[], cwd: string, dependencies: CliDependencies): Promise<CliResult> {
@@ -1096,6 +1212,8 @@ export async function run(args: readonly string[], cwd = process.cwd(), dependen
     if (command === "mr") return await runMr(commandArgs, dependencies);
     if (command === "comment") return await runComment(commandArgs, cwd, dependencies);
     if (command === "time-entry") return await runTimeEntry(commandArgs, cwd, dependencies);
+    if (command === "schedule") return await runSchedule(commandArgs, dependencies);
+    if (command === "planning") return await runPlanning(commandArgs, dependencies);
     if (command === "config") return await runConfig(commandArgs, cwd, dependencies);
     if (command === "doctor" && direct !== undefined) { await direct.prepare(); return await runDoctor([...directRootArgs, ...commandArgs], cwd); }
     if (command === "doctor") return await runDoctor(commandArgs, cwd);

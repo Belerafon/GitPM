@@ -1,4 +1,4 @@
-import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -62,6 +62,8 @@ describe("ExportService", () => {
     expect(html).toContain("Портфель GitPM");
     expect(html).toContain('class="board"');
     expect(html).toContain('class="gantt"');
+    expect(html).toContain("Факт");
+    expect(html).toContain("1.5h");
     expect(html).not.toContain("<button");
   });
 
@@ -84,6 +86,37 @@ describe("ExportService", () => {
     expect(artifact.content.readUInt32LE(0)).toBe(0x04034b50);
     expect(artifact.content.toString("utf8")).toContain("projects.csv");
     expect(artifact.content.toString("utf8")).toContain("saved-views.csv");
+    expect(artifact.content.toString("utf8")).toContain("time-entries.csv");
+  });
+
+  it("resolves named planning tracks and semantic done statuses without a reserved plan or done slug", async () => {
+    const repository = await mkdtemp(path.join(os.tmpdir(), "gitpm-export-tracks-"));
+    roots.push(repository);
+    await cp(fixture, repository, { recursive: true });
+    const files = await readdir(repository, { recursive: true });
+    for (const relative of files.filter((item): item is string => typeof item === "string" && item.endsWith(".yaml"))) {
+      const file = path.join(repository, relative);
+      const source = await readFile(file, "utf8");
+      await writeFile(file, source
+        .replaceAll("plan:", "commitment:")
+        .replaceAll("target:", "working:")
+        .replaceAll("slug: plan", "slug: commitment")
+        .replaceAll("slug: target", "slug: working")
+        .replaceAll("- plan", "- commitment")
+        .replaceAll("- target", "- working")
+        .replaceAll("primary_track: plan", "primary_track: commitment")
+        .replaceAll("workload_track: plan", "workload_track: commitment")
+        .replaceAll("comparison_track: target", "comparison_track: working")
+        .replaceAll("slug: done", "slug: accepted")
+        .replaceAll("status: done", "status: accepted"), "utf8");
+    }
+    const trackedService = new ExportService({ getWorkspace: async () => ({ worktree_path: repository }) } as unknown as DraftManager, git, () => new Date("2026-07-26T10:00:00.000Z"));
+    const html = (await trackedService.create("DRF-1", { format: "html", locale: "en" })).content.toString("utf8");
+    const pdf = await trackedService.create("DRF-1", { format: "pdf", locale: "en", sections: ["projects", "gantt"] });
+
+    expect(html).toContain("commitment: 2026-07-01 - 2026-07-02");
+    expect(html).toContain("working: 2026-07-01 - 2026-07-05");
+    expect(pdf.content.subarray(0, 5).toString("ascii")).toBe("%PDF-");
   });
 
   it("archives the repository without .git by default", async () => {

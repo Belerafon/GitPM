@@ -6,7 +6,7 @@ import {
 import { ChangesService, type SemanticDiff } from "@gitpm/changes";
 import { GitClient, GitCommandError } from "@gitpm/git-client";
 import { DirectRepositoryBackend, directPushStrategy, DraftManager, GITPM_GUIDANCE_PATHS } from "@gitpm/drafts";
-import { CommentStore, TimeEntryStore, type CommentActor, type CommentResult, type DeletePlan, type EntityCreateBatchResult, type EntityResult, type TimeEntryActor, type TimeEntryResult } from "@gitpm/domain";
+import { CommentStore, TimeEntryStore, type CommentActor, type CommentResult, type DeletePlan, type EntityCreateBatchResult, type EntityResult, type TimeEntryActor, type TimeEntryProjectFilters, type TimeEntryProjectList, type TimeEntryResult } from "@gitpm/domain";
 import type { GitPmDocument } from "@gitpm/repository-format";
 import { ExportService, type ExportArtifact, type ExportRequest } from "@gitpm/export";
 
@@ -239,6 +239,11 @@ export class DirectCliRuntime {
   async listTimeEntries(projectId: string, taskId: string): Promise<readonly TimeEntryResult[]> {
     const draftId = await this.draftId();
     return await this.timeEntries.list(draftId, projectId, taskId);
+  }
+
+  async listProjectTimeEntries(projectId: string, filters: TimeEntryProjectFilters = {}): Promise<TimeEntryProjectList> {
+    const draftId = await this.draftId();
+    return await this.timeEntries.listProject(draftId, projectId, filters);
   }
 
   async createTimeEntry(projectId: string, taskId: string, input: { readonly person: string; readonly performed_on: string; readonly hours: number; readonly category: string; readonly note_markdown?: string }): Promise<TimeEntryResult> {

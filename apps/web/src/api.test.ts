@@ -46,6 +46,21 @@ describe("HttpGitPmApi request bodies", () => {
     expect(headers.get("content-type")).toBe("application/json");
   });
 
+  it("decodes the project time-entry envelope and serializes filters", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      total: 1,
+      offset: 0,
+      limit: 10,
+      items: [{ document: { schema: "gitpm/time-entry@1", id: "E-26-AAAAAA", project: "P-26-MGP84K", task: "T-26-P9G3P8", person: "U-26-5EBAE3", performed_on: "2026-09-01", hours: 1, category: "regular", created_at: "2026-09-01T00:00:00.000Z", state: "active" }, path: "projects/P-26-MGP84K/time-entries/T-26-P9G3P8/E-26-AAAAAA.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) }],
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await new HttpGitPmApi().listProjectTimeEntries("DRF-1", "P-26-MGP84K", { task: "T-26-P9G3P8", state: "active", limit: 10 });
+
+    expect(result).toMatchObject({ total: 1, items: [expect.objectContaining({ document: expect.objectContaining({ id: "E-26-AAAAAA" }) })] });
+    expect(fetchMock).toHaveBeenCalledWith("/api/drafts/DRF-1/projects/P-26-MGP84K/time-entries?task=T-26-P9G3P8&state=active&limit=10", expect.objectContaining({ credentials: "include" }));
+  });
+
   it("downloads binary exports and preserves the server filename", async () => {
     const fetchMock = vi.fn(async () => new Response(new Blob(["%PDF"]), {
       status: 200,

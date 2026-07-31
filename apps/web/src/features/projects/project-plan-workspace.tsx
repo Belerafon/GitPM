@@ -1,5 +1,6 @@
 import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
 import type { ProjectPlanning } from "@gitpm/contracts";
+import { buildSchedulingReadModel, windowEffort } from "@gitpm/scheduling";
 import { buildSchedule, ScheduleResolver, scheduleTracksConfig, scheduleTextReader, scheduleEffortReader, withScheduleWindow } from "../../schedules.js";
 import { isCompletedStatus } from "../../status-categories.js";
 import { ProjectSnapshot } from "./project-snapshot.js";
@@ -80,9 +81,9 @@ const moveId = (ids: readonly string[], id: string, offset: -1 | 1): string[] | 
   const next = [...ids]; [next[from], next[to]] = [next[to]!, next[from]!];
   return next;
 };
-const compareTasks = (left: EntityResult, right: EntityResult, locale: Locale, text: (document: Readonly<Record<string, unknown>>, key: string) => string) => {
+const compareTasks = (left: EntityResult, right: EntityResult, locale: Locale, text: (document: Readonly<Record<string, unknown>>, key: string) => string, statuses: readonly ConfigValue[]) => {
   const byTitle = text(left.document, "title").localeCompare(text(right.document, "title"), locale) || left.document.id.localeCompare(right.document.id);
-  const byCompletion = Number(text(left.document, "status") === "done") - Number(text(right.document, "status") === "done");
+  const byCompletion = Number(isCompletedStatus(statuses, text(left.document, "status"))) - Number(isCompletedStatus(statuses, text(right.document, "status")));
   const byDue = (text(left.document, "due") || "9999-12-31").localeCompare(text(right.document, "due") || "9999-12-31");
   return byCompletion || byDue || byTitle;
 };
@@ -268,8 +269,8 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     return byOrder || byDue || text(left.document, "name").localeCompare(text(right.document, "name"), locale);
   }), [locale, workspace]);
   const activeTasks = useMemo(
-    () => [...(workspace?.tasks.filter((item) => item.document.lifecycle === "active") ?? [])].sort((left, right) => compareTasks(left, right, locale, text)),
-    [locale, text, workspace],
+    () => [...(workspace?.tasks.filter((item) => item.document.lifecycle === "active") ?? [])].sort((left, right) => compareTasks(left, right, locale, text, statuses)),
+    [locale, statuses, text, workspace],
   );
   const visibleTasks = useMemo(() => activeTasks.filter((task) =>
     (statusFilter === "" || text(task.document, "status") === statusFilter)
@@ -285,6 +286,11 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   const statusTitle = (slug: string) => statuses.find((item) => item.slug === slug)?.title ?? slug;
   const dateLabel = (value: string) => /^\d{4}-\d{2}-\d{2}$/u.test(value) ? formatDateOnly(locale, value) : "—";
   const selectedStage = workspace?.milestones.find((item) => item.document.id === selectedStageId);
+  const selectedStageTrack = selectedStage === undefined
+    ? undefined
+    : buildSchedulingReadModel(selectedStage.document, activeTasks.filter((task) => task.document.milestone === selectedStage.document.id).map((task) => task.document), [primaryTrack]).tracks[0];
+  const selectedStageEstimate = windowEffort(selectedStageTrack?.rolled);
+  const selectedStageDue = typeof selectedStageTrack?.effective?.finish === "string" ? selectedStageTrack.effective.finish : undefined;
   const selectedTask = workspace?.tasks.find((item) => item.document.id === selectedTaskId);
   const catalog = useMemo(() => new EntityCatalog({ projects, milestones: workspace?.milestones ?? [], tasks: workspace?.tasks ?? [] }), [projects, workspace]);
   const closeInspector = () => onNavigate("projects", { projectId, ...(Object.keys(navigationQuery).length > 0 ? { query: navigationQuery } : {}) });
@@ -561,7 +567,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
         {selectedStage !== undefined && <aside className="project-plan-inspector" aria-label={t("core.milestone")} id="project-plan-inspector-pane" ref={inspectorPaneRef}>
           <button aria-label={t("core.closeEditor")} className="inspector-close" onClick={closeInspector} title={t("core.closeEditor")} type="button">×</button>
           <span className="eyebrow">{t("core.milestone")}</span><h2>{text(selectedStage.document, "name")}</h2><code className="project-plan-inspector-id">{selectedStage.document.id}</code><p>{text(selectedStage.document, "description_markdown") || t("core.noDescription")}</p>
-          <dl className="project-plan-inspector-stats"><div><dt>{t("stages.progressLabel")}</dt><dd>{activeTasks.filter((task) => task.document.milestone === selectedStage.document.id && isCompletedStatus(statuses, text(task.document, "status"))).length}/{activeTasks.filter((task) => task.document.milestone === selectedStage.document.id).length}</dd></div><div><dt>{t("stages.estimate")}</dt><dd>{formatDurationHours(locale, activeTasks.filter((task) => task.document.milestone === selectedStage.document.id).reduce((sum, task) => sum + (number(task.document, "estimate_hours") ?? 0), 0))}</dd></div><div><dt>{t("core.due")}</dt><dd>{dateLabel(text(selectedStage.document, "due"))}</dd></div></dl>
+          <dl className="project-plan-inspector-stats"><div><dt>{t("stages.progressLabel")}</dt><dd>{activeTasks.filter((task) => task.document.milestone === selectedStage.document.id && isCompletedStatus(statuses, text(task.document, "status"))).length}/{activeTasks.filter((task) => task.document.milestone === selectedStage.document.id).length}</dd></div><div><dt>{t("stages.estimate")}</dt><dd>{selectedStageEstimate === undefined ? "—" : formatDurationHours(locale, selectedStageEstimate)}</dd></div><div><dt>{t("core.due")}</dt><dd>{dateLabel(selectedStageDue ?? "")}</dd></div></dl>
           <div className="inspector-actions"><button disabled={readOnly} onClick={() => setEditor({ kind: "edit-stage", stageId: selectedStage.document.id })}>{t("core.edit")}</button><button disabled={readOnly} onClick={() => archiveStage(selectedStage)}>{t("core.archive")}</button><button className="primary" disabled={readOnly} onClick={() => setEditor({ kind: "task", stageId: selectedStage.document.id })}>+ {t("core.createTaskAction")}</button></div>
         </aside>}
 

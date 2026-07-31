@@ -174,7 +174,7 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
       message = error.message;
       details = error.details;
       if (["TIME_ENTRY_NOT_FOUND", "ENTITY_NOT_FOUND"].includes(error.code)) status = 404;
-      else if (["ENTITY_ID_INVALID", "ENTITY_PROJECT_INVALID", "REF_MISSING", "TIME_ENTRY_VOIDED"].includes(error.code)) status = 400;
+      else if (["ENTITY_ID_INVALID", "ENTITY_PROJECT_INVALID", "REF_MISSING", "REF_CROSS_PROJECT", "TIME_ENTRY_VOIDED", "TIME_ENTRY_FILTER_INVALID", "TIME_ENTRY_REPLACEMENT_INVALID", "TIME_ENTRY_REPLACEMENT_MISSING", "TIME_ENTRY_REPLACEMENT_SELF", "TIME_ENTRY_REPLACEMENT_TASK_MISMATCH"].includes(error.code)) status = 400;
       else if (error.code === "VALIDATION_FAILED") status = 422;
       else status = 409;
     } else if (error instanceof AuthError) {
@@ -359,6 +359,37 @@ export function registerTimeEntryApi(
   timeEntries: TimeEntryStore,
   authenticate: Authenticate,
 ): void {
+  app.get<{
+    Params: { draftId: string; projectId: string };
+    Querystring: { task?: string; milestone?: string; person?: string; category?: string; performed_from?: string; performed_to?: string; state?: "active" | "voided"; offset?: number; limit?: number };
+  }>(
+    "/api/drafts/:draftId/projects/:projectId/time-entries",
+    {
+      schema: {
+        querystring: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            task: { type: "string", pattern: "^T-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}$" },
+            milestone: { type: "string", pattern: "^M-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}$" },
+            person: { type: "string", pattern: "^U-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}$" },
+            category: { type: "string", pattern: "^[a-z][a-z0-9-]{0,62}$" },
+            performed_from: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+            performed_to: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+            state: { enum: ["active", "voided"] },
+            offset: { type: "integer", minimum: 0 },
+            limit: { type: "integer", minimum: 1, maximum: 200 },
+          },
+        },
+      },
+    },
+    async (request) => {
+      const actor = await authenticate(request);
+      await requireDraftRead(manager, actor, request.params.draftId);
+      return await timeEntries.listProject(request.params.draftId, request.params.projectId, request.query);
+    },
+  );
+
   app.get<{ Params: { draftId: string; projectId: string; taskId: string } }>(
     "/api/drafts/:draftId/projects/:projectId/tasks/:taskId/time-entries",
     async (request) => {
@@ -385,13 +416,13 @@ export function registerTimeEntryApi(
     },
   );
 
-  app.post<{ Params: { draftId: string; projectId: string; taskId: string; entryId: string }; Body: { expected_fingerprint: string; expected_blob_id: string } }>(
+  app.post<{ Params: { draftId: string; projectId: string; taskId: string; entryId: string }; Body: { expected_fingerprint: string; expected_blob_id: string; replacement?: string } }>(
     "/api/drafts/:draftId/projects/:projectId/tasks/:taskId/time-entries/:entryId/void",
     { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.voidTimeEntry } },
     async (request) => {
       const actor = await authenticate(request);
       requireMutationRole(actor);
-      return await timeEntries.void(request.params.draftId, request.params.projectId, request.params.taskId, request.params.entryId, request.body.expected_fingerprint, request.body.expected_blob_id, asTimeEntryActor(actor));
+      return await timeEntries.void(request.params.draftId, request.params.projectId, request.params.taskId, request.params.entryId, request.body.expected_fingerprint, request.body.expected_blob_id, asTimeEntryActor(actor), request.body.replacement);
     },
   );
 

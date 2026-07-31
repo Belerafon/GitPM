@@ -712,4 +712,10 @@
   ,"snapshot.onTime": "on time"
   ,"snapshot.actualHours": "Actual hours"
   ,"snapshot.hoursAfter": "Hours after {date}"
+  ,"snapshot.actualReport": "Actual hours report"
+  ,"admin.statusCategory": "Status category"
+  ,"admin.categoryBacklog": "Backlog"
+  ,"admin.categoryActive": "Active"
+  ,"admin.categoryDone": "Done"
+  ,"admin.categoryCancelled": "Cancelled"
 }

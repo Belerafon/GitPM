@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
-import { buildGanttModel, type GanttActualSegment, type ScheduleWindow, type Schedulable, type TrackDefinition } from "@gitpm/scheduling";
+import { buildResolvedGanttModel, buildSchedulingReadModel, type GanttActualSegment, type GanttSchedulable, type TrackDefinition } from "@gitpm/scheduling";
 import { scheduleTracksConfig, ScheduleResolver } from "./schedules.js";
 import type { GitPmApi } from "./api.js";
 import { buildTaskHierarchy } from "@gitpm/task-hierarchy";
@@ -42,6 +42,12 @@ interface ViewModel {
   readonly dependencies: readonly { readonly from: string; readonly to: string }[];
 }
 
+function rowDateRange(locale: Locale, row: ViewRow): string {
+  const start = row.bar?.start ?? row.actual[0]?.date;
+  const finish = row.bar?.finish ?? row.actual[row.actual.length - 1]?.date ?? start;
+  return start === undefined || finish === undefined ? "" : `${formatDateOnly(locale, start)} — ${formatDateOnly(locale, finish)}`;
+}
+
 function aggregateActual(entries: readonly { readonly document: { readonly performed_on: string; readonly hours: number; readonly state: string } }[]): readonly GanttActualSegment[] {
   const byDate = new Map<string, number>();
   for (const entry of entries) {
@@ -61,20 +67,24 @@ function aggregateSegments(segments: readonly GanttActualSegment[]): readonly Ga
   return [...byDate.entries()].map(([date, hours]) => ({ date, hours: Math.round((hours + Number.EPSILON) * 10_000) / 10_000 })).sort((left, right) => left.date.localeCompare(right.date));
 }
 
-function scheduleFinishOf(document: GitPmDocument, track: string): string {
-  const schedules = document.schedules as Record<string, { finish?: string }> | undefined;
-  const finish = schedules?.[track]?.finish;
-  return typeof finish === "string" ? finish : "";
-}
-
-export function buildGanttView(tasks: readonly EntityResult[], milestones: readonly EntityResult[], actual: ReadonlyMap<string, readonly GanttActualSegment[]>, tracks: readonly TrackDefinition[], options: { readonly primaryTrack: string; readonly visibleTracks: readonly string[]; readonly dependencyTrack: string }): ViewModel | null {
+export function projectTimelineProjection(tasks: readonly EntityResult[], milestones: readonly EntityResult[], actual: ReadonlyMap<string, readonly GanttActualSegment[]>, tracks: readonly TrackDefinition[], options: { readonly primaryTrack: string; readonly visibleTracks: readonly string[]; readonly dependencyTrack: string }): ViewModel | null {
   const aggregated = new Map<string, readonly GanttActualSegment[]>();
   for (const [id, segments] of actual) aggregated.set(id, aggregateSegments(segments));
   const active = tasks.filter((item) => item.document.lifecycle === "active");
-  const subjects: readonly Schedulable[] = active.map((item) => ({ id: item.document.id, schedules: (item.document.schedules ?? {}) as Readonly<Record<string, ScheduleWindow>> }));
+  const modelTracks = [...new Set([...options.visibleTracks, options.primaryTrack, options.dependencyTrack])]
+    .filter((slug) => tracks.find((track) => track.slug === slug)?.kind !== "actual");
+  const subjects: readonly GanttSchedulable[] = active.map((item) => ({ id: item.document.id, parent: stringValue(item.document, "parent") || undefined, schedules: item.document.schedules as GanttSchedulable["schedules"] }));
   const milestoneSubjects = milestones.filter((item) => item.document.lifecycle === "active")
-    .map((item) => ({ id: item.document.id, finish: scheduleFinishOf(item.document, options.primaryTrack) || undefined }));
-  const built = buildGanttModel(subjects, { primaryTrack: options.primaryTrack, visibleTracks: options.visibleTracks, dependencyTrack: options.dependencyTrack, actual: aggregated, milestones: milestoneSubjects });
+    .map((item) => {
+      const finish = buildSchedulingReadModel(
+        { id: item.document.id, schedules: item.document.schedules as GanttSchedulable["schedules"] },
+        active.filter((task) => stringValue(task.document, "milestone") === item.document.id)
+          .map((task) => ({ id: task.document.id, schedules: task.document.schedules as GanttSchedulable["schedules"] })),
+        [options.primaryTrack],
+      ).tracks[0]?.effective?.finish;
+      return { id: item.document.id, finish: typeof finish === "string" ? finish : undefined };
+    });
+  const built = buildResolvedGanttModel(subjects, { primaryTrack: options.primaryTrack, visibleTracks: modelTracks, dependencyTrack: options.dependencyTrack, actual: aggregated, milestones: milestoneSubjects });
   if (built.range === undefined) return null;
   const first = dayNumber(built.range.start);
   const last = dayNumber(built.range.finish);
@@ -100,10 +110,11 @@ export function buildGanttView(tasks: readonly EntityResult[], milestones: reado
       };
     })
     .sort((left, right) => (order.get(left.id) ?? 0) - (order.get(right.id) ?? 0));
-  const activeMilestones = milestones.filter((item) => item.document.lifecycle === "active" && ISO_DATE.test(scheduleFinishOf(item.document, options.primaryTrack)));
+  const milestoneFinishes = new Map(milestoneSubjects.map((milestone) => [milestone.id, milestone.finish]));
+  const activeMilestones = milestones.filter((item) => item.document.lifecycle === "active" && ISO_DATE.test(milestoneFinishes.get(item.document.id) ?? ""));
   return {
     start: isoDate(first), due: isoDate(last), days, rows: viewRows,
-    milestones: activeMilestones.map((item) => { const due = scheduleFinishOf(item.document, options.primaryTrack); return { id: item.document.id, name: stringValue(item.document, "name"), due, offset: dayNumber(due) - first }; }),
+    milestones: activeMilestones.map((item) => { const due = milestoneFinishes.get(item.document.id)!; return { id: item.document.id, name: stringValue(item.document, "name"), due, offset: dayNumber(due) - first }; }),
     dependencies: viewRows.flatMap((row) => row.dependencies.map((from) => ({ from, to: row.id }))),
   };
 }
@@ -128,24 +139,18 @@ export function GanttWorkspace({ api, draft, locale, initialProjectId = "", onNa
       const [allProjects, tracksDocument] = await Promise.all([api.listEntities(draft.draft_id, "projects"), api.getConfiguration(draft.draft_id, "schedule-tracks")]);
       const nextProjects = allProjects.filter((item) => item.document.lifecycle === "active");
       const nextProject = nextProjects.some((item) => item.document.id === preferredProject) ? preferredProject : nextProjects[0]?.document.id ?? "";
-      const [nextTasks, nextMilestones] = nextProject === "" ? [[], []] : await Promise.all([api.listEntities(draft.draft_id, "tasks", nextProject), api.listEntities(draft.draft_id, "milestones", nextProject)]);
-      return { nextProjects, nextProject, nextTasks, nextMilestones, tracksDocument };
-    }, ({ nextProjects, nextProject, nextTasks, nextMilestones, tracksDocument }) => {
+      const [nextTasks, nextMilestones, nextActual] = nextProject === "" ? [[], [], undefined] : await Promise.all([api.listEntities(draft.draft_id, "tasks", nextProject), api.listEntities(draft.draft_id, "milestones", nextProject), api.listProjectTimeEntries(draft.draft_id, nextProject, { limit: 200 })]);
+      return { nextProjects, nextProject, nextTasks, nextMilestones, nextActual, tracksDocument };
+    }, ({ nextProjects, nextProject, nextTasks, nextMilestones, nextActual, tracksDocument }) => {
       setProjects(nextProjects); setProjectId(nextProject); setTasks(nextTasks); setMilestones(nextMilestones); setError(null); setTracksConfig(tracksDocument);
-      void loadActual(nextProject, nextTasks);
+      const segments = new Map<string, readonly GanttActualSegment[]>();
+      for (const entry of nextActual?.items ?? []) {
+        const taskId = entry.document.task;
+        segments.set(taskId, [...(segments.get(taskId) ?? []), ...aggregateActual([entry])]);
+      }
+      setActual(segments);
     });
   }, [api, draft.draft_id, loadRequest.run, projectId]);
-  const loadActual = useCallback(async (project: string, taskList: readonly EntityResult[]) => {
-    if (project === "" || taskList.length === 0) { setActual(new Map()); return; }
-    try {
-      const segments = new Map<string, readonly GanttActualSegment[]>();
-      const results = await Promise.all(taskList.map(async (task) => [task.document.id, aggregateActual(await api.listTimeEntries(draft.draft_id, project, task.document.id))] as const));
-      for (const [taskId, aggregated] of results) segments.set(taskId, aggregated);
-      setActual(segments);
-    } catch {
-      setActual(new Map());
-    }
-  }, [api, draft.draft_id]);
   useEffect(() => { void load(initialProjectId); }, [draft.draft_id, draft.external_fingerprint]);
   const scheduling = useMemo(() => new ScheduleResolver(scheduleTracksConfig(tracksConfig?.document)), [tracksConfig]);
   const tracks = useMemo(() => scheduleTracksConfig(tracksConfig?.document)?.tracks ?? [], [tracksConfig]);
@@ -169,7 +174,7 @@ export function GanttWorkspace({ api, draft, locale, initialProjectId = "", onNa
     }
     return result;
   }, [primaryTrack, selectedTracks, planning.dashboard_tracks, enabledManual]);
-  const model = useMemo(() => buildGanttView(tasks, milestones, actual, tracks, { primaryTrack, visibleTracks, dependencyTrack }), [tasks, milestones, actual, tracks, primaryTrack, visibleTracks, dependencyTrack]);
+  const model = useMemo(() => projectTimelineProjection(tasks, milestones, actual, tracks, { primaryTrack, visibleTracks, dependencyTrack }), [tasks, milestones, actual, tracks, primaryTrack, visibleTracks, dependencyTrack]);
   const rowIndex = new Map(model?.rows.map((row, index) => [row.id, index]) ?? []);
   const outgoingCounts = new Map<string, number>();
   for (const dependency of model?.dependencies ?? []) outgoingCounts.set(dependency.from, (outgoingCounts.get(dependency.from) ?? 0) + 1);
@@ -192,7 +197,7 @@ export function GanttWorkspace({ api, draft, locale, initialProjectId = "", onNa
     </section>}
     <div className="gantt-legend" aria-label={t("gantt.legend")}><span className="task">{t("gantt.legendTask")}</span><span className="milestone">{t("gantt.legendMilestone")}</span><span className="dependency">{t("gantt.legendDependency")}</span><span className="today">{t("gantt.legendToday")}</span></div>
     {model === null ? <section className="card empty-workspace"><strong>{t("gantt.empty")}</strong>{undatedCount > 0 && <span>{t("gantt.undatedHint", { count: undatedCount })}</span>}</section> : <section className="card gantt-scroll" aria-label={t("gantt.chart")} data-start={model.start} data-due={model.due}>
-      <div className="gantt-labels"><div className="gantt-label-head">{t("gantt.tasks")}</div>{model.rows.map((row) => <div className="gantt-label" key={row.id} style={{ paddingInlineStart: `${.75 + row.depth * 1.1}rem` }}><button className="gantt-task-link" onClick={() => onNavigate("tasks", { projectId, taskId: row.id })}><strong>{row.title}</strong><span>{formatDateOnly(locale, row.bar?.start ?? "")} — {formatDateOnly(locale, row.bar?.finish ?? "")}</span>{row.milestone !== undefined && <small>{milestoneNames.get(row.milestone)}</small>}</button></div>)}</div>
+      <div className="gantt-labels"><div className="gantt-label-head">{t("gantt.tasks")}</div>{model.rows.map((row) => <div className="gantt-label" key={row.id} style={{ paddingInlineStart: `${.75 + row.depth * 1.1}rem` }}><button className="gantt-task-link" onClick={() => onNavigate("tasks", { projectId, taskId: row.id })}><strong>{row.title}</strong><span>{rowDateRange(locale, row)}</span>{row.milestone !== undefined && <small>{milestoneNames.get(row.milestone)}</small>}</button></div>)}</div>
       <div className="gantt-timeline" style={{ width: `${timelineWidth}px` }}>
         <div className="gantt-days" style={{ gridTemplateColumns: `repeat(${model.days.length}, ${dayWidth}px)` }}>{model.days.map((day) => <time key={day} dateTime={day}><span>{day.slice(8)}</span><small>{day.slice(5, 7)}</small></time>)}</div>
         <div className="gantt-grid" style={{ backgroundSize: `${dayWidth}px 100%` }} />

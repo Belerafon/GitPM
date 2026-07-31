@@ -56,6 +56,22 @@ const decodeTimeEntryResult: Decoder<TimeEntryResult> = (input) => asTimeEntryRe
 const decodeTimeEntryResults: Decoder<readonly TimeEntryResult[]> = (input) =>
   Array.isArray(input) ? input.map(asTimeEntryResult) : (() => { throw new ApiError("API_RESPONSE_CONTRACT_INVALID", "TimeEntryResult[]: expected an array"); })();
 
+export interface TimeEntryProjectList {
+  readonly items: readonly TimeEntryResult[];
+  readonly total: number;
+  readonly offset: number;
+  readonly limit: number;
+}
+
+function asTimeEntryProjectList(input: unknown): TimeEntryProjectList {
+  if (input === null || typeof input !== "object" || Array.isArray(input)) throw new ApiError("API_RESPONSE_CONTRACT_INVALID", "TimeEntryProjectList: expected an object");
+  const value = input as Record<string, unknown>;
+  if (!Array.isArray(value.items) || typeof value.total !== "number" || !Number.isInteger(value.total) || typeof value.offset !== "number" || !Number.isInteger(value.offset) || typeof value.limit !== "number" || !Number.isInteger(value.limit)) throw new ApiError("API_RESPONSE_CONTRACT_INVALID", "TimeEntryProjectList: invalid pagination envelope");
+  return { items: value.items.map(asTimeEntryResult), total: value.total, offset: value.offset, limit: value.limit };
+}
+
+const decodeTimeEntryProjectList: Decoder<TimeEntryProjectList> = (input) => asTimeEntryProjectList(input);
+
 export class ApiError extends Error {
   constructor(public readonly code: string, message: string, public readonly details?: unknown) {
     super(message);
@@ -160,6 +176,7 @@ export interface GitPmApi {
   deleteComment(draftId: string, projectId: string, taskId: string, comment: CommentResult, fingerprint: string): Promise<CommentResult>;
   notifications(draftId: string): Promise<NotificationsResult>;
   listTimeEntries(draftId: string, projectId: string, taskId: string): Promise<readonly TimeEntryResult[]>;
+  listProjectTimeEntries(draftId: string, projectId: string, filters?: { readonly task?: string; readonly milestone?: string; readonly person?: string; readonly category?: string; readonly performed_from?: string; readonly performed_to?: string; readonly state?: "active" | "voided"; readonly offset?: number; readonly limit?: number }): Promise<TimeEntryProjectList>;
   createTimeEntry(draftId: string, projectId: string, taskId: string, fingerprint: string, input: { readonly person: string; readonly performed_on: string; readonly hours: number; readonly category: string; readonly note_markdown?: string }): Promise<TimeEntryResult>;
   voidTimeEntry(draftId: string, projectId: string, taskId: string, entry: TimeEntryResult, fingerprint: string): Promise<TimeEntryResult>;
 }
@@ -375,6 +392,12 @@ export class HttpGitPmApi implements GitPmApi {
   }
   async listTimeEntries(draftId: string, projectId: string, taskId: string): Promise<readonly TimeEntryResult[]> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}/time-entries`, decodeTimeEntryResults);
+  }
+  async listProjectTimeEntries(draftId: string, projectId: string, filters: { readonly task?: string; readonly milestone?: string; readonly person?: string; readonly category?: string; readonly performed_from?: string; readonly performed_to?: string; readonly state?: "active" | "voided"; readonly offset?: number; readonly limit?: number } = {}): Promise<TimeEntryProjectList> {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(filters)) if (value !== undefined) query.set(key, String(value));
+    const suffix = query.size === 0 ? "" : `?${query.toString()}`;
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/projects/${encodeURIComponent(projectId)}/time-entries${suffix}`, decodeTimeEntryProjectList);
   }
   async createTimeEntry(draftId: string, projectId: string, taskId: string, expected_fingerprint: string, input: { readonly person: string; readonly performed_on: string; readonly hours: number; readonly category: string; readonly note_markdown?: string }): Promise<TimeEntryResult> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}/time-entries`, decodeTimeEntryResult, { method: "POST", body: JSON.stringify({ expected_fingerprint, ...input }) });

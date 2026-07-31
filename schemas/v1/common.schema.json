@@ -69,6 +69,7 @@
     "scheduleWindow": {
       "type": "object",
       "additionalProperties": false,
+      "minProperties": 1,
       "properties": {
         "start": {"$ref": "#/$defs/date"},
         "finish": {"$ref": "#/$defs/date"},
