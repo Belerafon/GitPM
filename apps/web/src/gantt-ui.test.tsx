@@ -59,10 +59,11 @@ describe("read-only Gantt", () => {
     expect(model.due).toBe("2026-09-30");
   });
 
-  it("rolls up a milestone finish when the milestone has no declared schedule", () => {
+  it("rolls up a milestone finish through a nested parent without a declared schedule", () => {
     const rolledMilestone = result({ schema: "gitpm/milestone@2", id: "M-26-ROLLED", project: projectId, name: "Rolled", lifecycle: "active" });
-    const rolledTask = task("R", "Milestone child", "2026-09-01", "2026-09-17", { milestone: rolledMilestone.document.id });
-    const model = projectTimelineProjection([rolledTask], [rolledMilestone], new Map(), [planTrack], { primaryTrack: "plan", visibleTracks: ["plan"], dependencyTrack: "plan" })!;
+    const rolledParent = result({ schema: "gitpm/task@2", id: "T-26-PARENT", project: projectId, milestone: rolledMilestone.document.id, title: "Milestone parent", type: "task", status: "backlog", lifecycle: "active" });
+    const rolledTask = task("R", "Milestone child", "2026-09-01", "2026-09-17", { milestone: rolledMilestone.document.id, parent: rolledParent.document.id });
+    const model = projectTimelineProjection([rolledParent, rolledTask], [rolledMilestone], new Map(), [planTrack], { primaryTrack: "plan", visibleTracks: ["plan"], dependencyTrack: "plan" })!;
     expect(model.milestones).toEqual([{ id: rolledMilestone.document.id, name: "Rolled", due: "2026-09-17", offset: 16 }]);
   });
 

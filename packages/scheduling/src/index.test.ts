@@ -17,6 +17,7 @@ import {
   resolvePlanning,
   resolveTrack,
   readModelTrack,
+  resolveSchedulingHierarchy,
   rollupOverflowWarnings,
   rollupWindow,
   validatePlanning,
@@ -124,6 +125,45 @@ describe("rollup and effective windows", () => {
 
     const rolledOnly = buildSchedulingReadModel(schedulable("T-26-Q"), children, ["plan"]);
     expect(readModelTrack(rolledOnly, "plan")?.effective).toEqual({ start: "2026-09-01", finish: "2026-09-25", effort_hours: 100 });
+  });
+});
+
+describe("scheduling hierarchy resolution", () => {
+  it("resolves nested tasks children-first and preserves a declared parent window", () => {
+    const hierarchy = resolveSchedulingHierarchy({
+      tracks: ["plan"],
+      tasks: [
+        { id: "T-parent", milestone: "M-1", schedules: { plan: { start: "2026-09-05", finish: "2026-09-12", effort_hours: 20 } } },
+        { id: "T-child", parent: "T-parent", milestone: "M-1" },
+        { id: "T-leaf", parent: "T-child", milestone: "M-1", schedules: { plan: { start: "2026-09-01", finish: "2026-09-15", effort_hours: 6 } } },
+      ],
+    });
+
+    expect(readModelTrack(hierarchy.readModels.get("T-child")!, "plan")?.effective).toEqual({ start: "2026-09-01", finish: "2026-09-15", effort_hours: 6 });
+    const parent = hierarchy.readModels.get("T-parent")!;
+    expect(readModelTrack(parent, "plan")?.rolled).toEqual({ start: "2026-09-01", finish: "2026-09-15", effort_hours: 6 });
+    expect(readModelTrack(parent, "plan")?.effective).toEqual({ start: "2026-09-05", finish: "2026-09-12", effort_hours: 20 });
+    expect(parent.overflowWarnings).toEqual([
+      { track: "plan", field: "start", declared: "2026-09-05", rolled: "2026-09-01" },
+      { track: "plan", field: "finish", declared: "2026-09-12", rolled: "2026-09-15" },
+    ]);
+  });
+
+  it("aggregates only resolved roots into milestones and the project without double-counting effort", () => {
+    const hierarchy = resolveSchedulingHierarchy({
+      tracks: ["plan"],
+      project: { id: "P-1" },
+      milestones: [{ id: "M-1" }],
+      tasks: [
+        { id: "T-parent", milestone: "M-1" },
+        { id: "T-child", parent: "T-parent", milestone: "M-1", schedules: { plan: { start: "2026-08-02", finish: "2026-08-05", effort_hours: 5 } } },
+        { id: "T-outside", schedules: { plan: { start: "2026-08-01", finish: "2026-08-10", effort_hours: 2 } } },
+      ],
+    });
+
+    expect(readModelTrack(hierarchy.readModels.get("T-parent")!, "plan")?.effective?.effort_hours).toBe(5);
+    expect(readModelTrack(hierarchy.readModels.get("M-1")!, "plan")?.effective).toEqual({ start: "2026-08-02", finish: "2026-08-05", effort_hours: 5 });
+    expect(readModelTrack(hierarchy.readModels.get("P-1")!, "plan")?.effective).toEqual({ start: "2026-08-01", finish: "2026-08-10", effort_hours: 7 });
   });
 });
 

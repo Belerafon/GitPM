@@ -54,6 +54,23 @@ function api(
 afterEach(() => { cleanup(); localStorage.clear(); });
 
 describe("project plan and stage workspace", () => {
+  it("shows resolved hierarchy overflow dates in the milestone inspector", async () => {
+    const overflowingStage = result({ ...stage.document, schedules: { plan: { start: "2026-08-05", finish: "2026-08-10" } } });
+    const parent = result({ ...urgent.document, title: "Rollup parent", schedules: undefined });
+    const child = result({ ...large.document, parent: parent.document.id, title: "Rollup child", schedules: { plan: { start: "2026-08-01", finish: "2026-08-15", effort_hours: 7 } } });
+    const client = api([parent, child], [overflowingStage]);
+
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} selectedStageId={overflowingStage.document.id} />);
+
+    const inspector = await screen.findByRole("complementary", { name: "Milestone" });
+    expect(within(inspector).getByText("Schedule overflow")).toBeTruthy();
+    expect(inspector.textContent).toContain("Plan");
+    expect(inspector.textContent).toContain("declared Aug 5, 2026");
+    expect(inspector.textContent).toContain("rolled Aug 1, 2026");
+    expect(inspector.textContent).toContain("declared Aug 10, 2026");
+    expect(inspector.textContent).toContain("rolled Aug 15, 2026");
+  });
+
   it("edits and removes the Project group from the active project route", async () => {
     const client = api();
     render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} />);

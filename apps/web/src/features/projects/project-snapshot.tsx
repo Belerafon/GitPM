@@ -1,15 +1,27 @@
 import { useEffect, useState } from "react";
-import { buildSchedulingReadModel, finishVarianceDays } from "@gitpm/scheduling";
+import { finishVarianceDays, resolveSchedulingHierarchy, type SchedulingHierarchyTask } from "@gitpm/scheduling";
 import { actualWindow, hoursAfterDate, sumHours } from "@gitpm/time-entries";
 import { formatDateOnly, message, type Locale, type MessageKey } from "../../i18n.js";
 import { listAllProjectTimeEntries, type GitPmApi } from "../../api.js";
 import type { DraftStatus, EntityDocument, EntityResult } from "../../types.js";
 import type { ScheduleResolver } from "../../schedules.js";
+import { SchedulingOverflowWarnings } from "../../scheduling-overflow-warnings.js";
 
-export function ProjectSnapshot({ project, locale, api, draft, tasks, scheduling, comparisonTrack }: { readonly project: EntityDocument; readonly locale: Locale; readonly api?: GitPmApi; readonly draft?: DraftStatus; readonly tasks?: readonly EntityResult[]; readonly scheduling: ScheduleResolver; readonly comparisonTrack?: string }) {
+export function ProjectSnapshot({ project, locale, api, draft, milestones, tasks, scheduling, comparisonTrack }: { readonly project: EntityDocument; readonly locale: Locale; readonly api?: GitPmApi; readonly draft?: DraftStatus; readonly milestones?: readonly EntityResult[]; readonly tasks?: readonly EntityResult[]; readonly scheduling: ScheduleResolver; readonly comparisonTrack?: string }) {
   const primaryTrack = scheduling.primaryTrack(project.planning);
   const comparison = comparisonTrack ?? scheduling.comparisonTrack(project.planning);
-  const readModel = buildSchedulingReadModel(project, (tasks ?? []).map((task) => task.document), [...new Set([primaryTrack, comparison].filter((track): track is string => track !== undefined && track !== ""))]);
+  const tracks = [...new Set([primaryTrack, comparison].filter((track): track is string => track !== undefined && track !== ""))];
+  const hierarchy = resolveSchedulingHierarchy({
+    project,
+    milestones: (milestones ?? []).map((milestone) => milestone.document),
+    tasks: (tasks ?? []).map((task): SchedulingHierarchyTask => ({
+      ...task.document,
+      parent: typeof task.document.parent === "string" && task.document.parent !== "" ? task.document.parent : undefined,
+      milestone: typeof task.document.milestone === "string" && task.document.milestone !== "" ? task.document.milestone : undefined,
+    })),
+    tracks,
+  });
+  const readModel = hierarchy.readModels.get(project.id)!;
   const primaryFinish = primaryTrack === "" ? undefined : readModel.tracks.find((track) => track.track === primaryTrack)?.effective?.finish;
   const comparisonFinish = comparison === undefined ? undefined : readModel.tracks.find((track) => track.track === comparison)?.effective?.finish;
   const [actual, setActual] = useState<{ total: number; lastActivity?: string; hoursAfter?: number; byDate: readonly { readonly date: string; readonly hours: number }[] } | null>(null);
@@ -40,7 +52,7 @@ export function ProjectSnapshot({ project, locale, api, draft, tasks, scheduling
     return () => { active = false; };
   }, [api, draft, project.id, comparisonFinish]);
 
-  if (primaryFinish === undefined && comparisonFinish === undefined && actual === null) return null;
+  if (primaryFinish === undefined && comparisonFinish === undefined && actual === null && readModel.overflowWarnings.length === 0) return null;
   const variance = primaryFinish !== undefined && comparisonFinish !== undefined ? finishVarianceDays(primaryFinish, comparisonFinish) : undefined;
   const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
   return (
@@ -56,6 +68,7 @@ export function ProjectSnapshot({ project, locale, api, draft, tasks, scheduling
           {actual.hoursAfter !== undefined && comparisonFinish !== undefined && <div><dt>{t("snapshot.hoursAfter", { date: comparisonFinish })}</dt><dd>{actual.hoursAfter}</dd></div>}
         </>}
       </dl>
+      <SchedulingOverflowWarnings locale={locale} trackTitle={(track) => scheduling.trackTitle(track)} warnings={readModel.overflowWarnings} />
       {actual !== null && <section className="actual-hours-report"><h4>{t("snapshot.actualReport")}</h4><ul>{actual.byDate.map((item) => <li key={item.date}><time dateTime={item.date}>{formatDateOnly(locale, item.date)}</time><strong>{item.hours} h</strong></li>)}</ul></section>}
     </section>
   );

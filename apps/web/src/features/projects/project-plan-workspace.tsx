@@ -1,6 +1,6 @@
 import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
 import type { ProjectPlanning } from "@gitpm/contracts";
-import { buildSchedulingReadModel, windowEffort } from "@gitpm/scheduling";
+import { resolveSchedulingHierarchy, windowEffort, type SchedulingHierarchyTask } from "@gitpm/scheduling";
 import { buildSchedule, ScheduleResolver, scheduleTracksConfig, scheduleTextReader, scheduleEffortReader, withScheduleWindow } from "../../schedules.js";
 import { isCompletedStatus } from "../../status-categories.js";
 import { ProjectSnapshot } from "./project-snapshot.js";
@@ -19,6 +19,7 @@ import type { ConfigurationResult, DraftStatus, EntityDocument, EntityResult, Gi
 import type { WorkspaceNavigate } from "../../workspace-navigation.js";
 import { PersonLinks } from "../../person-link.js";
 import { DraftReadOnlyAlert, draftReadOnlyReason } from "../../draft-read-only.js";
+import { SchedulingOverflowWarnings } from "../../scheduling-overflow-warnings.js";
 
 type PlanEditor = { readonly kind: "project" | "new-stage" }
   | { readonly kind: "edit-stage"; readonly stageId: string }
@@ -286,9 +287,20 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   const statusTitle = (slug: string) => statuses.find((item) => item.slug === slug)?.title ?? slug;
   const dateLabel = (value: string) => /^\d{4}-\d{2}-\d{2}$/u.test(value) ? formatDateOnly(locale, value) : "—";
   const selectedStage = workspace?.milestones.find((item) => item.document.id === selectedStageId);
+  const schedulingHierarchy = resolveSchedulingHierarchy({
+    project: workspace?.project.document,
+    milestones: activeStages.map((stage) => stage.document),
+    tasks: activeTasks.map((task): SchedulingHierarchyTask => ({
+      ...task.document,
+      parent: typeof task.document.parent === "string" && task.document.parent !== "" ? task.document.parent : undefined,
+      milestone: typeof task.document.milestone === "string" && task.document.milestone !== "" ? task.document.milestone : undefined,
+    })),
+    tracks: primaryTrack === "" ? [] : [primaryTrack],
+  });
   const selectedStageTrack = selectedStage === undefined
     ? undefined
-    : buildSchedulingReadModel(selectedStage.document, activeTasks.filter((task) => task.document.milestone === selectedStage.document.id).map((task) => task.document), [primaryTrack]).tracks[0];
+    : schedulingHierarchy.readModels.get(selectedStage.document.id)?.tracks[0];
+  const selectedStageWarnings = selectedStage === undefined ? [] : schedulingHierarchy.readModels.get(selectedStage.document.id)?.overflowWarnings ?? [];
   const selectedStageEstimate = windowEffort(selectedStageTrack?.rolled);
   const selectedStageDue = typeof selectedStageTrack?.effective?.finish === "string" ? selectedStageTrack.effective.finish : undefined;
   const selectedTask = workspace?.tasks.find((item) => item.document.id === selectedTaskId);
@@ -489,7 +501,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
             </dl>
           </header>
 
-          <ProjectSnapshot project={workspace.project.document} locale={locale} api={api} draft={draft} tasks={workspace.tasks} scheduling={scheduling} />
+          <ProjectSnapshot project={workspace.project.document} locale={locale} api={api} draft={draft} milestones={workspace.milestones} tasks={workspace.tasks} scheduling={scheduling} />
 
           <dl className="project-plan-summary">
             <div><dt>{t("projectPlan.progress")}</dt><dd>{progress}% <small>{t("stages.progress", { completed, count: activeTasks.length })}</small></dd></div>
@@ -568,6 +580,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
           <button aria-label={t("core.closeEditor")} className="inspector-close" onClick={closeInspector} title={t("core.closeEditor")} type="button">×</button>
           <span className="eyebrow">{t("core.milestone")}</span><h2>{text(selectedStage.document, "name")}</h2><code className="project-plan-inspector-id">{selectedStage.document.id}</code><p>{text(selectedStage.document, "description_markdown") || t("core.noDescription")}</p>
           <dl className="project-plan-inspector-stats"><div><dt>{t("stages.progressLabel")}</dt><dd>{activeTasks.filter((task) => task.document.milestone === selectedStage.document.id && isCompletedStatus(statuses, text(task.document, "status"))).length}/{activeTasks.filter((task) => task.document.milestone === selectedStage.document.id).length}</dd></div><div><dt>{t("stages.estimate")}</dt><dd>{selectedStageEstimate === undefined ? "—" : formatDurationHours(locale, selectedStageEstimate)}</dd></div><div><dt>{t("core.due")}</dt><dd>{dateLabel(selectedStageDue ?? "")}</dd></div></dl>
+          <SchedulingOverflowWarnings locale={locale} trackTitle={(track) => scheduling.trackTitle(track)} warnings={selectedStageWarnings} />
           <div className="inspector-actions"><button disabled={readOnly} onClick={() => setEditor({ kind: "edit-stage", stageId: selectedStage.document.id })}>{t("core.edit")}</button><button disabled={readOnly} onClick={() => archiveStage(selectedStage)}>{t("core.archive")}</button><button className="primary" disabled={readOnly} onClick={() => setEditor({ kind: "task", stageId: selectedStage.document.id })}>+ {t("core.createTaskAction")}</button></div>
         </aside>}
 

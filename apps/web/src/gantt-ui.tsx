@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
-import { buildResolvedGanttModel, buildSchedulingReadModel, type GanttActualSegment, type GanttSchedulable, type TrackDefinition } from "@gitpm/scheduling";
+import { buildGanttModel, resolveSchedulingHierarchy, type GanttActualSegment, type SchedulingHierarchyTask, type TrackDefinition } from "@gitpm/scheduling";
 import { scheduleTracksConfig, ScheduleResolver } from "./schedules.js";
 import { listAllProjectTimeEntries, type GitPmApi } from "./api.js";
 import { buildTaskHierarchy } from "@gitpm/task-hierarchy";
@@ -73,18 +73,20 @@ export function projectTimelineProjection(tasks: readonly EntityResult[], milest
   const active = tasks.filter((item) => item.document.lifecycle === "active");
   const modelTracks = [...new Set([...options.visibleTracks, options.primaryTrack, options.dependencyTrack])]
     .filter((slug) => tracks.find((track) => track.slug === slug)?.kind !== "actual");
-  const subjects: readonly GanttSchedulable[] = active.map((item) => ({ id: item.document.id, parent: stringValue(item.document, "parent") || undefined, schedules: item.document.schedules as GanttSchedulable["schedules"] }));
-  const milestoneSubjects = milestones.filter((item) => item.document.lifecycle === "active")
-    .map((item) => {
-      const finish = buildSchedulingReadModel(
-        { id: item.document.id, schedules: item.document.schedules as GanttSchedulable["schedules"] },
-        active.filter((task) => stringValue(task.document, "milestone") === item.document.id)
-          .map((task) => ({ id: task.document.id, schedules: task.document.schedules as GanttSchedulable["schedules"] })),
-        [options.primaryTrack],
-      ).tracks[0]?.effective?.finish;
-      return { id: item.document.id, finish: typeof finish === "string" ? finish : undefined };
-    });
-  const built = buildResolvedGanttModel(subjects, { primaryTrack: options.primaryTrack, visibleTracks: modelTracks, dependencyTrack: options.dependencyTrack, actual: aggregated, milestones: milestoneSubjects });
+  const subjects: readonly SchedulingHierarchyTask[] = active.map((item) => ({
+    id: item.document.id,
+    parent: stringValue(item.document, "parent") || undefined,
+    milestone: stringValue(item.document, "milestone") || undefined,
+    schedules: item.document.schedules as SchedulingHierarchyTask["schedules"],
+  }));
+  const activeMilestoneEntities = milestones.filter((item) => item.document.lifecycle === "active");
+  const milestoneSubjects = activeMilestoneEntities.map((item) => ({ id: item.document.id, schedules: item.document.schedules as SchedulingHierarchyTask["schedules"] }));
+  const scheduleHierarchy = resolveSchedulingHierarchy({ tasks: subjects, milestones: milestoneSubjects, tracks: modelTracks });
+  const ganttMilestones = activeMilestoneEntities.map((item) => {
+    const finish = scheduleHierarchy.readModels.get(item.document.id)?.tracks.find((track) => track.track === options.primaryTrack)?.effective?.finish;
+    return { id: item.document.id, finish: typeof finish === "string" ? finish : undefined };
+  });
+  const built = buildGanttModel(subjects.map((subject) => scheduleHierarchy.subjects.get(subject.id) ?? subject), { primaryTrack: options.primaryTrack, visibleTracks: modelTracks, dependencyTrack: options.dependencyTrack, actual: aggregated, milestones: ganttMilestones });
   if (built.range === undefined) return null;
   const first = dayNumber(built.range.start);
   const last = dayNumber(built.range.finish);
@@ -110,7 +112,7 @@ export function projectTimelineProjection(tasks: readonly EntityResult[], milest
       };
     })
     .sort((left, right) => (order.get(left.id) ?? 0) - (order.get(right.id) ?? 0));
-  const milestoneFinishes = new Map(milestoneSubjects.map((milestone) => [milestone.id, milestone.finish]));
+  const milestoneFinishes = new Map(ganttMilestones.map((milestone) => [milestone.id, milestone.finish]));
   const activeMilestones = milestones.filter((item) => item.document.lifecycle === "active" && ISO_DATE.test(milestoneFinishes.get(item.document.id) ?? ""));
   return {
     start: isoDate(first), due: isoDate(last), days, rows: viewRows,

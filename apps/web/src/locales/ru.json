@@ -713,6 +713,8 @@
   ,"snapshot.actualHours": "Фактические часы"
   ,"snapshot.hoursAfter": "Часы после {date}"
   ,"snapshot.actualReport": "Отчёт по фактическим часам"
+  ,"scheduling.overflowHeading": "Выход за заявленные сроки"
+  ,"scheduling.overflowWarning": "{track} · {field}: заявлено {declared}; по дочерним элементам {rolled}"
   ,"admin.statusCategory": "Категория статуса"
   ,"admin.categoryBacklog": "Бэклог"
   ,"admin.categoryActive": "В работе"

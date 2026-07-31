@@ -29,6 +29,21 @@ describe("ProjectSnapshot", () => {
     expect(screen.getByText("Variance").parentElement?.textContent).toMatch(/\+20 d/);
   });
 
+  it("renders project overflow warnings from resolved milestone task roots", () => {
+    const milestone = { document: { schema: "gitpm/milestone@2", id: "M-1", project: "P-26-1", name: "Release", lifecycle: "active" }, path: "m.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const parent = { document: { schema: "gitpm/task@2", id: "T-parent", project: "P-26-1", milestone: "M-1", title: "Parent", type: "task", status: "backlog", lifecycle: "active" }, path: "parent.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const child = { document: { schema: "gitpm/task@2", id: "T-child", project: "P-26-1", milestone: "M-1", parent: "T-parent", title: "Child", type: "task", status: "backlog", lifecycle: "active", schedules: { plan: { start: "2026-09-01", finish: "2026-09-15" } } }, path: "child.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+
+    render(<ProjectSnapshot project={project({ plan: { start: "2026-09-05", finish: "2026-09-10" } })} locale="en" milestones={[milestone]} scheduling={scheduling} tasks={[parent, child]} />);
+
+    const warning = screen.getByText("Schedule overflow").parentElement!;
+    expect(warning.textContent).toContain("Plan");
+    expect(warning.textContent).toContain("declared Sep 5, 2026");
+    expect(warning.textContent).toContain("rolled Sep 1, 2026");
+    expect(warning.textContent).toContain("declared Sep 10, 2026");
+    expect(warning.textContent).toContain("rolled Sep 15, 2026");
+  });
+
   it("aggregates actual hours, last activity, and hours-after across more than one page", async () => {
     const items = Array.from({ length: 201 }, (_, index) => ({ document: { schema: "gitpm/time-entry@1" as const, id: `E-${index}`, project: "P-26-1", task: "T-1", person: "U-1", performed_on: index === 200 ? "2026-04-01" : "2026-03-01", hours: index === 200 ? 3.5 : 1, category: "warranty", created_at: "2026-04-01T00:00:00.000Z", state: "active" as const }, path: `p-${index}`, blob_id: "a", draft_fingerprint: "f" }));
     const listProjectTimeEntries = vi.fn(async (_draftId: string, _projectId: string, filters?: { readonly offset?: number; readonly limit?: number }) => {

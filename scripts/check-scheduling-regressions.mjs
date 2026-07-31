@@ -9,6 +9,8 @@ const checks = [
   { name: "first schedule window", pattern: /Object\.values\([^\n]*\.schedules[^\n]*\)\s*\[\s*0\s*\]/u, message: "Do not select a schedule window by object order; use an explicit track." },
   { name: "literal done status", pattern: /\bstatus\s*===\s*["']done["']/u, message: "Use status category semantics instead of the done slug." },
   { name: "local Gantt domain builder", pattern: /(?:function|const)\s+\w*(?:build|Build)\w*Gantt\w*/u, message: "Web UI must project an exported @gitpm/scheduling model, not build one locally." },
+  { name: "local scheduling read-model builder", pattern: /\bbuildSchedulingReadModel\s*\(/u, message: "Resolve task, milestone, and project rollups through resolveSchedulingHierarchy from @gitpm/scheduling." },
+  { name: "local hierarchy scheduling resolver", pattern: /(?:function|const)\s+\w*(?:resolveTask|SchedulingHierarchy|HierarchySchedule|ScheduleHierarchy|HierarchyRollup)\w*/u, message: "Hierarchy scheduling resolution belongs in @gitpm/scheduling." },
   { name: "form schedules replacement", pattern: /(?:setSchedules|onChange)\s*\(\s*\{\s*\[[^\]]+\]\s*:/u, message: "Schedule form mutations must preserve neighboring windows through updateScheduleWindow or setScheduleDependencies." },
 ];
 
@@ -28,6 +30,7 @@ for (const relative of (await Promise.all(sourceRoots.map(files))).flat()) {
   const content = await readFile(path.join(root, relative), "utf8");
   for (const check of checks) {
     if (check.name === "local Gantt domain builder" && !relative.startsWith("apps/web/src/")) continue;
+    if ((check.name === "local scheduling read-model builder" || check.name === "local hierarchy scheduling resolver") && relative.startsWith("packages/scheduling/")) continue;
     if (!check.pattern.test(content)) continue;
     const line = content.slice(0, content.search(check.pattern)).split("\n").length;
     violations.push(`${relative}:${line}: ${check.name}: ${check.message}`);
