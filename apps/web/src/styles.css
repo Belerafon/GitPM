@@ -187,10 +187,6 @@ input { min-width: 0; width: 100%; border: 1px solid #c9cbc5; border-radius: 8px
 .project-directory-card .entity-meta { margin-top: auto; color: #315f50; }
 .project-detail-layout { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr); gap: 1.25rem; margin-top: 1.25rem; align-items: start; }
 .entity-title-row { display: flex; align-items: start; justify-content: space-between; gap: .75rem; }
-.entity-detail-card { padding: 1.25rem; }
-.entity-detail-card .entity-title strong { font-size: 1.4rem; }
-.entity-detail-card .entity-summary { display: block; margin-block: .75rem; -webkit-line-clamp: initial; }
-.entity-detail-card .entity-links { display: flex; gap: .75rem; border-block: 1px solid #e3e6e1; padding-block: .8rem; }
 .core-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; }
 .core-columns > *, .entity-column, .entity-card { min-width: 0; }
 .entity-column form, .task-create, .task-panel { display: grid; gap: .55rem; }

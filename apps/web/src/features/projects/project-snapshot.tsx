@@ -10,6 +10,7 @@ import { SchedulingOverflowWarnings } from "../../scheduling-overflow-warnings.j
 export function ProjectSnapshot({ project, locale, api, draft, milestones, tasks, scheduling, comparisonTrack }: { readonly project: EntityDocument; readonly locale: Locale; readonly api?: GitPmApi; readonly draft?: DraftStatus; readonly milestones?: readonly EntityResult[]; readonly tasks?: readonly EntityResult[]; readonly scheduling: ScheduleResolver; readonly comparisonTrack?: string }) {
   const primaryTrack = scheduling.primaryTrack(project.planning);
   const comparison = comparisonTrack ?? scheduling.comparisonTrack(project.planning);
+  const actualEnabled = scheduling.actualTrack(project.planning)?.source === "time_entries";
   const tracks = [...new Set([primaryTrack, comparison].filter((track): track is string => track !== undefined && track !== ""))];
   const hierarchy = resolveSchedulingHierarchy({
     project,
@@ -27,7 +28,7 @@ export function ProjectSnapshot({ project, locale, api, draft, milestones, tasks
   const [actual, setActual] = useState<{ total: number; lastActivity?: string; hoursAfter?: number; byDate: readonly { readonly date: string; readonly hours: number }[] } | null>(null);
 
   useEffect(() => {
-    if (api === undefined || draft === undefined) { setActual(null); return; }
+    if (!actualEnabled || api === undefined || draft === undefined) { setActual(null); return; }
     let active = true;
     void (async () => {
       try {
@@ -50,7 +51,7 @@ export function ProjectSnapshot({ project, locale, api, draft, milestones, tasks
       }
     })();
     return () => { active = false; };
-  }, [api, draft, project.id, comparisonFinish]);
+  }, [actualEnabled, api, draft, project.id, comparisonFinish]);
 
   if (primaryFinish === undefined && comparisonFinish === undefined && actual === null && readModel.overflowWarnings.length === 0) return null;
   const variance = primaryFinish !== undefined && comparisonFinish !== undefined ? finishVarianceDays(primaryFinish, comparisonFinish) : undefined;

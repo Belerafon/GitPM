@@ -128,21 +128,6 @@ describe("core UI", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Create project" }));
     await waitFor(() => expect(entityApi.entities.find((item) => item.document.name === "Grouped project")?.document.group).toBe("Platform"));
 
-    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
-    dialog = screen.getByRole("dialog", { name: "Edit: Grouped project" });
-    expect((within(dialog).getByLabelText("Group") as HTMLSelectElement).value).toBe(platformOptionValue);
-    fireEvent.change(within(dialog).getByLabelText("Group"), { target: { value: "__new__" } });
-    fireEvent.change(within(dialog).getByLabelText("New group name"), { target: { value: "  Operations  " } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(entityApi.entities.find((item) => item.document.name === "Grouped project")?.document.group).toBe("Operations"));
-    expect(await screen.findByText("Group: Operations")).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
-    dialog = screen.getByRole("dialog", { name: "Edit: Grouped project" });
-    fireEvent.change(within(dialog).getByLabelText("Group"), { target: { value: "" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(entityApi.entities.find((item) => item.document.name === "Grouped project")?.document).not.toHaveProperty("group"));
-
     rendered.unmount();
     render(<CoreWorkspace api={api} draft={draft} locale="en" surface="projects" onChanged={onChanged} />);
     fireEvent.click(await screen.findByRole("button", { name: /New project/u }));
@@ -157,60 +142,7 @@ describe("core UI", () => {
     expect(entityApi.entities.some((item) => item.document.name === "Invalid group project")).toBe(false);
   });
 
-  it("edits independent Project and Milestone schedule tracks without exposing task dependencies", async () => {
-    const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
-    const project = await entityApi.createEntity("DRF-CORE", "projects", "", {
-      schema: "gitpm/project@2", id: "P-26-111111", name: "Multitrack", status: "backlog", lifecycle: "active",
-      planning: { enabled_tracks: ["working", "target", "actual"], primary_track: "working", workload_track: "working", dashboard_tracks: ["working", "target", "actual"] },
-      schedules: { working: { finish: "2026-08-20" }, target: { finish: "2026-08-30" } },
-    });
-    const milestone = await entityApi.createEntity("DRF-CORE", "milestones", "", {
-      schema: "gitpm/milestone@2", id: "M-26-222222", project: project.document.id, name: "Release", lifecycle: "active",
-      schedules: { working: { finish: "2026-09-20" }, target: { finish: "2026-09-30" } },
-    });
-    const originalGetConfiguration = entityApi.getConfiguration.bind(entityApi);
-    vi.spyOn(entityApi, "getConfiguration").mockImplementation(async (draftId, kind) => kind === "schedule-tracks" ? ({
-      document: { schema: "gitpm/schedule-tracks@1", tracks: [
-        { slug: "working", title: "Working", kind: "manual", capabilities: ["dates", "effort", "dependencies"] },
-        { slug: "target", title: "Target", kind: "manual", capabilities: ["dates"] },
-        { slug: "actual", title: "Actual activity", kind: "actual", source: "time_entries" },
-      ], defaults: { enabled_tracks: ["working"], primary_track: "working", workload_track: "working", dashboard_tracks: ["working"] } },
-      path: ".gitpm/schedule-tracks.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64),
-    } as ConfigurationResult) : await originalGetConfiguration(draftId, kind));
-
-    const rendered = render(<CoreWorkspace api={api} draft={draft} initialProjectId={project.document.id} locale="en" surface="projects" onChanged={vi.fn(async () => undefined)} />);
-    await screen.findAllByText("Multitrack");
-    const projectCard = rendered.container.querySelector<HTMLElement>(".entity-detail-card")!;
-    fireEvent.click(within(projectCard).getByRole("button", { name: "Edit" }));
-    let dialog = screen.getByRole("dialog", { name: "Edit: Multitrack" });
-    expect(within(dialog).getByText(/Actual activity is recorded from time entries/u)).toBeTruthy();
-    expect(within(dialog).queryByText("Dependencies")).toBeNull();
-    fireEvent.change(within(dialog).getByLabelText("Due date"), { target: { value: "2026-08-25" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(entityApi.entities.find((item) => item.document.id === project.document.id)?.document.schedules).toEqual({
-      working: { finish: "2026-08-25" }, target: { finish: "2026-08-30" },
-    }));
-
-    const milestoneCard = (await screen.findByText("Release")).closest<HTMLElement>(".entity-card")!;
-    fireEvent.click(within(milestoneCard).getByRole("button", { name: "Edit" }));
-    dialog = screen.getByRole("dialog", { name: "Edit: Release" });
-    fireEvent.click(within(dialog).getByRole("tab", { name: "Target" }));
-    fireEvent.change(within(dialog).getByLabelText("Due date"), { target: { value: "2026-10-05" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(entityApi.entities.find((item) => item.document.id === milestone.document.id)?.document.schedules).toEqual({
-      working: { finish: "2026-09-20" }, target: { finish: "2026-10-05" },
-    }));
-
-    const refreshedMilestoneCard = (await screen.findByText("Release")).closest<HTMLElement>(".entity-card")!;
-    fireEvent.click(within(refreshedMilestoneCard).getByRole("button", { name: "Edit" }));
-    dialog = screen.getByRole("dialog", { name: "Edit: Release" });
-    fireEvent.click(within(dialog).getByRole("tab", { name: "Target" }));
-    fireEvent.change(within(dialog).getByLabelText("Due date"), { target: { value: "" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(entityApi.entities.find((item) => item.document.id === milestone.document.id)?.document.schedules).toEqual({ working: { finish: "2026-09-20" } }));
-  });
-
-  it("creates Project, Milestone and Task, then edits and archives the Task in the drawer", async () => {
+  it("creates a Project and Task, then edits and archives the Task in the drawer", async () => {
     const entityApi = new EntityApi();
     const api = entityApi as unknown as GitPmApi;
     const onChanged = vi.fn(async () => undefined);
@@ -226,13 +158,10 @@ describe("core UI", () => {
     expect(await screen.findAllByText("Alpha")).not.toHaveLength(0);
     expect(screen.queryByRole("dialog")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: /New milestone/u }));
-    const milestoneForm = within(screen.getByRole("dialog", { name: "New milestone" })).getByRole("button", { name: "Create milestone" }).closest("form")!;
-    fireEvent.change(within(milestoneForm).getByLabelText("Name"), { target: { value: "M1" } });
-    fireEvent.submit(milestoneForm);
-    expect(await screen.findByText("M1")).toBeTruthy();
+    const createdProject = entityApi.entities.find((item) => item.document.schema === "gitpm/project@2")!;
+    await entityApi.createEntity("DRF-CORE", "milestones", "", { schema: "gitpm/milestone@2", id: "M-26-111111", project: createdProject.document.id, name: "M1", lifecycle: "active" });
 
-    rendered.rerender(<CoreWorkspace api={api} draft={draft} initialProjectId={entityApi.entities.find((item) => item.document.schema === "gitpm/project@2")?.document.id} locale="en" surface="tasks" onChanged={onChanged} />);
+    rendered.rerender(<CoreWorkspace api={api} draft={draft} initialProjectId={createdProject.document.id} locale="en" surface="tasks" onChanged={onChanged} />);
     fireEvent.click(await screen.findByRole("button", { name: /New task/u }));
     const taskForm = within(screen.getByRole("dialog", { name: "New task" })).getByRole("button", { name: "Create task" }).closest("form")!;
     fireEvent.change(within(taskForm).getByLabelText("Title"), { target: { value: "First task" } });
@@ -252,7 +181,6 @@ describe("core UI", () => {
     expect(entityApi.entities.find((item) => item.document.schema === "gitpm/task@2")?.document).toMatchObject({ schedules: { plan: { start: "2026-07-20", finish: "2026-07-24", effort_hours: 20 } } });
 
     const createdTask = entityApi.entities.find((item) => item.document.schema === "gitpm/task@2")!;
-    const createdProject = entityApi.entities.find((item) => item.document.schema === "gitpm/project@2")!;
     rendered.unmount();
     render(<CoreWorkspace api={api} draft={draft} initialProjectId={createdProject.document.id} initialTaskId={createdTask.document.id} locale="en" surface="tasks" onChanged={onChanged} />);
     await screen.findByRole("heading", { name: "First task" });
@@ -271,27 +199,6 @@ describe("core UI", () => {
     fireEvent.click(within(archiveDialog).getByText("More actions"));
     fireEvent.click(within(archiveDialog).getByRole("button", { name: "Archive" }));
     await waitFor(() => expect(entityApi.entities.find((item) => item.document.schema === "gitpm/task@2")?.document.lifecycle).toBe("archived"));
-  });
-
-  it("uses configured status titles and requires confirmation before permanent deletion", async () => {
-    const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
-    const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
-    await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-222222", project: project.document.id, title: "Localized task", type: "task", status: "backlog", lifecycle: "active" });
-    const confirmAction = vi.fn(() => false);
-    const rendered = render(<CoreWorkspace api={api} confirmAction={confirmAction} draft={draft} locale="en" surface="portfolio" onChanged={vi.fn(async () => undefined)} />);
-
-    expect(await screen.findByText("Backlog")).toBeTruthy();
-    rendered.rerender(<CoreWorkspace api={api} confirmAction={confirmAction} draft={draft} initialProjectId={project.document.id} locale="en" surface="projects" onChanged={vi.fn(async () => undefined)} />);
-    await screen.findAllByText("Alpha");
-    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
-    expect(screen.getByRole("dialog", { name: "Edit: Alpha" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
-    expect(confirmAction).toHaveBeenCalledWith("Delete Alpha permanently? This action cannot be undone.");
-    expect(entityApi.entities).toContain(project);
-
-    confirmAction.mockReturnValue(true);
-    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Edit: Alpha" })).toBeNull());
   });
 
   it("shows resolved project and archived milestone names in task details", async () => {
@@ -346,20 +253,13 @@ describe("core UI", () => {
     expect(grandchild.document.parent).toBe(child.document.id);
   });
 
-  it("filters tasks by milestone and links project milestone progress to that filter", async () => {
+  it("filters tasks by milestone", async () => {
     const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
     const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
     const milestone = await entityApi.createEntity("DRF-CORE", "milestones", "", { schema: "gitpm/milestone@2", id: "M-26-222222", project: project.document.id, name: "Beta", lifecycle: "active" });
     await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-333333", project: project.document.id, milestone: milestone.document.id, title: "Linked", type: "task", status: "done", lifecycle: "active" });
     await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-444444", project: project.document.id, title: "Unlinked", type: "task", status: "backlog", lifecycle: "active" });
     const onNavigate = vi.fn();
-
-    const rendered = render(<CoreWorkspace api={api} draft={draft} initialProjectId={project.document.id} locale="en" surface="projects" onNavigate={onNavigate} onChanged={vi.fn(async () => undefined)} />);
-    const progress = await screen.findByRole("button", { name: "1 of 1 tasks completed" });
-    fireEvent.click(progress);
-    expect(onNavigate).toHaveBeenCalledWith("stages", { projectId: project.document.id, stageId: milestone.document.id });
-
-    rendered.unmount();
     const filtered = render(<CoreWorkspace api={api} draft={draft} initialProjectId={project.document.id} initialMilestoneFilter={milestone.document.id} locale="en" surface="tasks" onNavigate={onNavigate} onChanged={vi.fn(async () => undefined)} />);
     expect(await screen.findByText("Linked")).toBeTruthy();
     expect(screen.queryByText("Unlinked")).toBeNull();

@@ -119,7 +119,10 @@ describe("read-only Gantt", () => {
   it("reads every actual page and filters track controls by effective capabilities", async () => {
     const scheduled = task("A", "Paged actual", "2026-07-01", "2026-07-10");
     const project = result({ schema: "gitpm/project@2", id: projectId, name: "Capabilities", status: "backlog", lifecycle: "active", planning: { enabled_tracks: ["plan", "target", "links", "effort", "actual"], primary_track: "plan", workload_track: "plan", dashboard_tracks: ["plan", "target", "actual"] } });
-    const entries = Array.from({ length: 201 }, (_, index) => ({ document: { schema: "gitpm/time-entry@1" as const, id: `E-${index}`, project: projectId, task: scheduled.document.id, person: "U-1", performed_on: index === 200 ? "2026-12-31" : "2026-07-02", hours: 1, category: "regular", created_at: "2026-07-02T00:00:00.000Z", state: "active" as const }, path: `e-${index}`, blob_id: "a", draft_fingerprint: "f" }));
+    const entries = [
+      ...Array.from({ length: 201 }, (_, index) => ({ document: { schema: "gitpm/time-entry@1" as const, id: `E-${index}`, project: projectId, task: scheduled.document.id, person: "U-1", performed_on: index === 200 ? "2026-12-31" : "2026-07-02", hours: 1, category: "regular", created_at: "2026-07-02T00:00:00.000Z", state: "active" as const }, path: `e-${index}`, blob_id: "a", draft_fingerprint: "f" })),
+      { document: { schema: "gitpm/time-entry@1" as const, id: "E-VOID", project: projectId, task: scheduled.document.id, person: "U-1", performed_on: "2026-07-02", hours: 99, category: "regular", created_at: "2026-07-02T00:00:00.000Z", state: "voided" as const }, path: "e-void", blob_id: "a", draft_fingerprint: "f" },
+    ];
     const listProjectTimeEntries = vi.fn(async (_draftId: string, _projectId: string, filters?: { readonly offset?: number; readonly limit?: number }) => {
       const offset = filters?.offset ?? 0; const limit = filters?.limit ?? 200;
       return { items: entries.slice(offset, offset + limit), total: entries.length, offset, limit };
@@ -140,6 +143,7 @@ describe("read-only Gantt", () => {
     const { container } = render(<GanttWorkspace api={api} draft={draft} locale="en" />);
     await waitFor(() => expect(container.querySelector(".gantt-scroll")?.getAttribute("data-due")).toBe("2026-12-31"));
     expect(container.querySelector('[data-date="2026-12-31"]')).not.toBeNull();
+    expect(container.querySelector<HTMLElement>('[data-date="2026-07-02"]')?.title).toContain("200 h");
     expect(listProjectTimeEntries.mock.calls.map((call) => call[2]?.offset)).toEqual([0, 200]);
     expect(within(screen.getByRole("combobox", { name: "Primary track" })).getAllByRole("option").map((option) => option.textContent)).toEqual(["Plan", "Target"]);
     expect(within(screen.getByRole("combobox", { name: "Dependency track" })).getAllByRole("option").map((option) => option.textContent)).toEqual(["Links"]);

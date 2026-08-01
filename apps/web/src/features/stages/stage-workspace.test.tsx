@@ -24,8 +24,9 @@ const large = result({ schema: "gitpm/task@2", id: "T-26-666666", project: proje
 function api(
   initialTasks: readonly EntityResult[] = [linked, other, large, urgent],
   initialStages: readonly EntityResult[] = [stage, laterStage],
+  initialProject: EntityResult = project,
 ) {
-  let currentProject = project;
+  let currentProject = initialProject;
   let currentStages = [...initialStages];
   let currentTasks = [...initialTasks];
   const createEntity = vi.fn(async (_draftId: string, _type: string, _fingerprint: string, document: EntityDocument) => result(document));
@@ -54,6 +55,99 @@ function api(
 afterEach(() => { cleanup(); localStorage.clear(); });
 
 describe("project plan and stage workspace", () => {
+  it("creates a Milestone from the live Project route with the simplified primary-track form", async () => {
+    const client = api([], []);
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} />);
+
+    await screen.findByRole("heading", { name: "Alpha" });
+    fireEvent.click(screen.getByRole("button", { name: /New milestone/u }));
+    const dialog = screen.getByRole("dialog", { name: "New milestone" });
+    fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "Created milestone" } });
+    fireEvent.change(within(dialog).getByLabelText("Due date"), { target: { value: "2026-08-31" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(client.createEntity).toHaveBeenCalledWith(draft.draft_id, "milestones", fingerprint, expect.objectContaining({
+      name: "Created milestone",
+      schedules: { plan: { finish: "2026-08-31" } },
+    })));
+  });
+
+  it("edits Project and Milestone schedule tracks in the live project workspaces without replacing neighboring windows", async () => {
+    const multitrackProject = result({
+      ...project.document,
+      planning: { enabled_tracks: ["working", "target", "actual"], primary_track: "working", workload_track: "working", dashboard_tracks: ["working", "target", "actual"] },
+      schedules: { working: { finish: "2026-08-20" }, target: { finish: "2026-08-30" } },
+    });
+    const multitrackStage = result({
+      ...stage.document,
+      schedules: { working: { finish: "2026-09-20" }, target: { finish: "2026-09-30" } },
+    });
+    const client = api([], [multitrackStage], multitrackProject);
+    vi.spyOn(client, "getConfiguration").mockImplementation(async (_draftId: string, kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks") => configuration(kind === "statuses"
+      ? { schema: "gitpm/statuses@2", statuses: [{ slug: "backlog", title: "Backlog", color: "gray", active: true, category: "backlog" }] }
+      : kind === "schedule-tracks"
+      ? { schema: "gitpm/schedule-tracks@1", tracks: [
+          { slug: "working", title: "Working", kind: "manual", capabilities: ["dates", "effort", "dependencies"] },
+          { slug: "target", title: "Target", kind: "manual", capabilities: ["dates"] },
+          { slug: "actual", title: "Actual activity", kind: "actual", source: "time_entries" },
+        ], defaults: { enabled_tracks: ["working"], primary_track: "working", workload_track: "working", dashboard_tracks: ["working"] } }
+      : { schema: "gitpm/issue-types@1", issue_types: [{ slug: "task", title: "Task", active: true }] }));
+
+    const rendered = render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={multitrackProject.document.id} />);
+    await screen.findByRole("heading", { name: "Alpha" });
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    let dialog = screen.getByRole("dialog", { name: "Edit: Alpha" });
+    expect(within(dialog).getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Working · primary", "Target"]);
+    expect(within(dialog).getByText(/Actual activity is recorded from time entries/u)).toBeTruthy();
+    expect(within(dialog).queryByText("Dependencies")).toBeNull();
+
+    const enabledTracks = within(dialog).getByText("Enabled tracks").closest<HTMLElement>(".planning-field")!;
+    const targetToggle = within(enabledTracks).getByText("Target").closest("label")!.querySelector("input")!;
+    fireEvent.click(targetToggle);
+    expect(within(dialog).queryByRole("tab", { name: "Target" })).toBeNull();
+    fireEvent.click(targetToggle);
+    expect(within(dialog).getByRole("tab", { name: "Target" })).toBeTruthy();
+
+    fireEvent.change(within(dialog).getByLabelText("Due date"), { target: { value: "2026-08-25" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(client.updateEntity.mock.calls.at(-1)?.[4]).toMatchObject({
+      schedules: { working: { finish: "2026-08-25" }, target: { finish: "2026-08-30" } },
+    }));
+
+    rendered.unmount();
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={multitrackProject.document.id} selectedStageId={multitrackStage.document.id} />);
+    const inspector = await screen.findByRole("complementary", { name: "Milestone" });
+    fireEvent.click(within(inspector).getByRole("button", { name: "Edit" }));
+    dialog = screen.getByRole("dialog", { name: "Edit milestone" });
+    fireEvent.click(within(dialog).getByRole("tab", { name: "Target" }));
+    expect(within(dialog).queryByText("Dependencies")).toBeNull();
+    fireEvent.change(within(dialog).getByLabelText("Due date"), { target: { value: "2026-10-05" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(client.updateEntity.mock.calls.at(-1)?.[4]).toMatchObject({
+      schedules: { working: { finish: "2026-09-20" }, target: { finish: "2026-10-05" } },
+    }));
+  });
+
+  it("uses the same schedule track editor in the Stage workspace", async () => {
+    const multitrackProject = result({ ...project.document, planning: { enabled_tracks: ["working", "target"], primary_track: "working", workload_track: "working", dashboard_tracks: ["working", "target"] } });
+    const multitrackStage = result({ ...stage.document, schedules: { working: { finish: "2026-09-20" }, target: { finish: "2026-09-30" } } });
+    const client = api([], [multitrackStage], multitrackProject);
+    vi.spyOn(client, "getConfiguration").mockImplementation(async (_draftId: string, kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks") => configuration(kind === "statuses"
+      ? { schema: "gitpm/statuses@2", statuses: [{ slug: "backlog", title: "Backlog", color: "gray", active: true, category: "backlog" }] }
+      : kind === "schedule-tracks"
+      ? { schema: "gitpm/schedule-tracks@1", tracks: [{ slug: "working", title: "Working", kind: "manual", capabilities: ["dates", "dependencies"] }, { slug: "target", title: "Target", kind: "manual", capabilities: ["dates"] }], defaults: { enabled_tracks: ["working"], primary_track: "working", workload_track: "", dashboard_tracks: ["working"] } }
+      : { schema: "gitpm/issue-types@1", issue_types: [{ slug: "task", title: "Task", active: true }] }));
+
+    render(<StageWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={multitrackProject.document.id} stageId={multitrackStage.document.id} />);
+    await screen.findByRole("heading", { name: "Launch" });
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    const dialog = screen.getByRole("dialog", { name: "Edit milestone" });
+    fireEvent.click(within(dialog).getByRole("tab", { name: "Target" }));
+    fireEvent.change(within(dialog).getByLabelText("Due date"), { target: { value: "" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(client.updateEntity.mock.calls.at(-1)?.[4]).toMatchObject({ schedules: { working: { finish: "2026-09-20" } } }));
+  });
+
   it("shows resolved hierarchy overflow dates in the milestone inspector", async () => {
     const overflowingStage = result({ ...stage.document, schedules: { plan: { start: "2026-08-05", finish: "2026-08-10" } } });
     const parent = result({ ...urgent.document, title: "Rollup parent", schedules: undefined });

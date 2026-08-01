@@ -6,7 +6,7 @@ import { ScheduleResolver, scheduleTracksConfig } from "../../schedules.js";
 import type { GitPmApi } from "../../api.js";
 import type { DraftStatus, EntityDocument, EntityResult } from "../../types.js";
 
-const configDocument = { schema: "gitpm/schedule-tracks@1", tracks: [{ slug: "plan", title: "Plan", kind: "manual", capabilities: ["dates", "effort", "dependencies"] }, { slug: "target", title: "Target", kind: "manual", capabilities: ["dates"] }], defaults: { enabled_tracks: ["plan", "target"], primary_track: "plan", workload_track: "plan", comparison_track: "target", dashboard_tracks: ["plan", "target"] } };
+const configDocument = { schema: "gitpm/schedule-tracks@1", tracks: [{ slug: "plan", title: "Plan", kind: "manual", capabilities: ["dates", "effort", "dependencies"] }, { slug: "target", title: "Target", kind: "manual", capabilities: ["dates"] }, { slug: "actual", title: "Actual", kind: "actual", source: "time_entries" }], defaults: { enabled_tracks: ["plan", "target", "actual"], primary_track: "plan", workload_track: "plan", comparison_track: "target", dashboard_tracks: ["plan", "target", "actual"] } };
 const scheduling = new ScheduleResolver(scheduleTracksConfig(configDocument));
 
 const project = (schedules: Record<string, unknown>, planning?: Record<string, unknown>): EntityDocument =>
@@ -58,5 +58,18 @@ describe("ProjectSnapshot", () => {
     expect(screen.getByText(/Hours after/).parentElement?.textContent).toMatch(/203\.5/);
     expect(screen.getByText("Actual hours report")).toBeTruthy();
     expect(listProjectTimeEntries.mock.calls.map((call) => call[2]?.offset)).toEqual([0, 200]);
+  });
+
+  it("does not request or render actual data when the effective Project Planning disables the actual track", async () => {
+    const listProjectTimeEntries = vi.fn();
+    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    render(<ProjectSnapshot project={project({ plan: { finish: "2026-03-20" }, target: { finish: "2026-02-28" } }, { enabled_tracks: ["plan", "target"], primary_track: "plan", workload_track: "plan", comparison_track: "target", dashboard_tracks: ["plan", "target"] })} locale="en" scheduling={scheduling} api={api} draft={draft} />);
+
+    expect(await screen.findByText("Primary finish")).toBeTruthy();
+    expect(listProjectTimeEntries).not.toHaveBeenCalled();
+    expect(screen.queryByText("Actual hours")).toBeNull();
+    expect(screen.queryByText("Last activity")).toBeNull();
+    expect(screen.queryByText("Actual hours report")).toBeNull();
+    expect(screen.queryByText(/Hours after/u)).toBeNull();
   });
 });

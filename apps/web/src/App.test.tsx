@@ -301,6 +301,8 @@ describe("frontend draft lifecycle", () => {
     expect(within(breadcrumbs).getByRole("button", { name: "Projects" })).toBeTruthy();
     expect((await within(breadcrumbs).findByText("Alpha")).getAttribute("aria-current")).toBe("page");
     expect(document.querySelector(".project-plan-header")).toBeTruthy();
+    expect(document.querySelector(".entity-detail-card")).toBeNull();
+    expect(screen.getAllByRole("button", { name: "Edit" })).toHaveLength(1);
     expect(await screen.findByRole("heading", { name: "Work plan" })).toBeTruthy();
     expect(screen.queryByRole("dialog")).toBeNull();
     expect((await screen.findAllByRole("button", { name: /New task/u })).length).toBeGreaterThan(0);
