@@ -155,8 +155,31 @@ test.describe("semantic scheduling writes", () => {
 
     await page.goto(`/projects/${FIXTURE_PROJECT_ID}`);
     await expect(page.getByRole("heading", { name: "Actual hours report", exact: true })).toBeVisible();
-    await expect(page.locator(".actual-hours-report li").filter({ hasText: "3.75 h" })).toHaveCount(1);
-    await expect(page.locator(".actual-hours-report li").filter({ hasText: "2 h" })).toHaveCount(1);
+    const report = page.locator(".actual-hours-report");
+    const byDate = report.locator(".actual-breakdown").filter({ has: page.getByRole("heading", { name: "By date", exact: true }) });
+    await expect(byDate.getByRole("row").filter({ hasText: "Sep 10, 2026" })).toContainText("3.75");
+    await expect(byDate.getByRole("row").filter({ hasText: "Dec 20, 2026" })).toContainText("2");
+
+    await report.getByRole("combobox", { name: "Task", exact: true }).selectOption(taskId);
+    await report.getByRole("combobox", { name: "Person", exact: true }).selectOption("U-26-15QJP8");
+    await report.getByRole("combobox", { name: "Category", exact: true }).selectOption("regular");
+    await report.getByRole("combobox", { name: "State", exact: true }).selectOption("active");
+    await report.getByLabel("Performed from", { exact: true }).fill("2026-09-10");
+    await report.getByLabel("Performed to", { exact: true }).fill("2026-12-20");
+    await report.getByLabel("Hours after date", { exact: true }).fill("2026-09-10");
+    const planActual = report.locator(".plan-actual-heading");
+    await expect(planActual.getByText("Planned", { exact: true }).locator("xpath=..")).toContainText("8 hours");
+    await expect(planActual.getByText("Actual", { exact: true }).locator("xpath=..")).toContainText("5.75 hours");
+    await expect(planActual.getByText("Variance", { exact: true }).locator("xpath=..")).toContainText("-2.25 hours");
+    await expect(report.getByText("Hours after 2026-09-10", { exact: true }).locator("xpath=..")).toContainText("2 hours");
+
+    const external = await request.patch(`/api/drafts/${draftId}/writer-mode`, { data: { writer_mode: "external" } });
+    expect(external.status(), await external.text()).toBe(200);
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "Actual hours report", exact: true })).toBeVisible();
+    await expect(page.getByText("Actual hours", { exact: true }).locator("xpath=..")).toContainText("7.25 hours");
+    const ui = await request.patch(`/api/drafts/${draftId}/writer-mode`, { data: { writer_mode: "ui" } });
+    expect(ui.status(), await ui.text()).toBe(200);
 
     await page.goto(`/projects/${FIXTURE_PROJECT_ID}/tasks/${taskId}`);
     await page.reload();
