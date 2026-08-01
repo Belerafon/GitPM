@@ -93,8 +93,9 @@ repository schema, repository ZIP — без `.git` по умолчанию ил
 строку. В JSON-результате элементы содержат `source_index`, `row`, сгенерированный `id` и
 канонический `path`.
 
-`schema list/show` доступны без runtime configuration. `schema list` возвращает восемь
-domain schemas (включая `comment`) и три repository configuration schemas.
+`schema list/show` доступны без runtime configuration. `schema list` возвращает девять
+domain schemas (включая `comment` и `time-entry`), четыре repository configuration schemas
+и schema репозитория.
 `gitpm --version --json` дополнительно
 возвращает digest набора схем и optional build commit из `GITPM_BUILD_COMMIT`, что позволяет
 обнаруживать устаревшую установленную сборку.

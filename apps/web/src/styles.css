@@ -712,6 +712,14 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
 .config-order { display: flex; gap: .35rem; }
 .config-order button { display: inline-flex; align-items: center; gap: .3rem; padding: .38rem .55rem; color: #435149; font-size: .72rem; }
 .config-order button > span { font-size: .9rem; line-height: 1; }
+.schedule-track-preview { gap: .3rem; }
+.schedule-track-preview small { color: inherit; font-size: .62rem; font-weight: 650; opacity: .75; }
+.schedule-track-kind { flex: 0 0 auto; border-radius: 999px; padding: .24rem .48rem; font-size: .68rem; font-weight: 700; }
+.schedule-track-kind.manual { background: #e5f4e9; color: #25613a; }
+.schedule-track-kind.actual { background: #e9f0ff; color: #244a99; }
+.schedule-track-capabilities > div { display: flex; flex-wrap: wrap; gap: .3rem; min-height: 39px; align-items: center; }
+.schedule-track-capabilities > div > span { border-radius: 999px; background: #eef1ee; padding: .22rem .45rem; color: #4f5953; font-size: .7rem; font-weight: 650; }
+.schedule-tracks-config-editor .project-planning-editor { margin: .25rem 0 0; }
 @media (max-width: 900px) { .settings-config-grid, .admin-grid { grid-template-columns: 1fr; } .admin-create { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 560px) { .admin-create, .config-row-fields { grid-template-columns: 1fr; } .config-row-heading, .config-row-footer { align-items: stretch; flex-direction: column; } .config-order { justify-content: end; } .card-heading { align-items: stretch; flex-direction: column; } }
 

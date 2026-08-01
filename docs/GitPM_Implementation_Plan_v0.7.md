@@ -261,12 +261,15 @@ Person ID и timestamp. Deleted comment удаляет body/mentions и сохр
 
 GitLab URL, project ID, repository URL и OAuth secret относятся к server configuration и не редактируются через UI.
 
-`.gitpm/statuses.yaml` содержит `schema: gitpm/statuses@1` и список `statuses`.
+`.gitpm/statuses.yaml` содержит `schema: gitpm/statuses@2` и список `statuses`.
 `.gitpm/issue-types.yaml` содержит `schema: gitpm/issue-types@1` и список
-`issue_types`. Оба файла хранят упорядоченные конфигурационные значения с
+`issue_types`. `.gitpm/work-categories.yaml` содержит `schema: gitpm/work-categories@1`
+и список `categories`. Эти три файла хранят упорядоченные конфигурационные значения с
 immutable `slug`, `title`, `color` token и `active`. Slug уникален внутри файла.
-Эти записи не являются ID-сущностями. Maintainer может редактировать их через
-repository settings UI.
+У категорий работ `color` отсутствует. `.gitpm/schedule-tracks.yaml` содержит
+`schema: gitpm/schedule-tracks@1`, определения контуров и репозиторные defaults
+планирования. Эти записи не являются ID-сущностями. Maintainer может редактировать
+все четыре документа через repository settings UI.
 
 ### 6.11. Archived behavior
 
@@ -505,10 +508,10 @@ GitLab project access level отображается напрямую:
 - Guest или отсутствие membership: deny;
 - Reporter: read-only;
 - Developer: собственные draft, normal domain edits, commit, push и MR;
-- Maintainer: права Developer плюс Person, Team, Calendar, statuses, issue types и cleanup abandoned draft;
+- Maintainer: права Developer плюс Person, Team, Calendar, statuses, issue types, work categories, schedule tracks и cleanup abandoned draft;
 - GitPM Administrator: внешний server operator, заданный конфигурацией; UI server configuration отсутствует.
 
-Backend повторно проверяет роль перед mutation, commit, push и MR. UI visibility не является security boundary. Изменение `.gitpm/repository.yaml` через domain API запрещено. `statuses.yaml` и `issue-types.yaml` доступны только Maintainer routes.
+Backend повторно проверяет роль перед mutation, commit, push и MR. UI visibility не является security boundary. Изменение `.gitpm/repository.yaml` через domain API запрещено. `statuses.yaml`, `issue-types.yaml`, `work-categories.yaml` и `schedule-tracks.yaml` доступны только Maintainer routes.
 
 ## 18. UI decisions
 
@@ -533,7 +536,7 @@ v0.1 использует browser polling каждые 3 секунды, а не
 - Board без swimlanes;
 - People and Teams;
 - Calendar administration;
-- Repository settings только для statuses и issue types;
+- Repository settings для statuses, issue types, work categories и schedule tracks;
 - Workload;
 - read-only Gantt;
 - Changes;
