@@ -1,7 +1,7 @@
 import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
 import type { ProjectPlanning } from "@gitpm/contracts";
 import { resolveSchedulingHierarchy, windowEffort, type SchedulingHierarchyTask } from "@gitpm/scheduling";
-import { buildSchedule, ScheduleResolver, scheduleTracksConfig, scheduleTextReader, scheduleEffortReader, withScheduleWindow } from "../../schedules.js";
+import { buildSchedule, ScheduleResolver, scheduleTracksConfig, scheduleTextReader, scheduleEffortReader, withSchedulesMap, type ScheduleMap } from "../../schedules.js";
 import { isCompletedStatus } from "../../status-categories.js";
 import { ProjectSnapshot } from "./project-snapshot.js";
 import { buildTaskHierarchy } from "@gitpm/task-hierarchy";
@@ -10,6 +10,7 @@ import { ApiError, deleteRestrictionLabels, formatApiError, type GitPmApi } from
 import { AsyncBoundary, useAsyncLoad } from "../../async-data.js";
 import { AssigneeChecks, existingProjectGroups, projectGroupFromForm, ProjectGroupField, TaskPanel, type ConfigValue } from "../../core-ui.js";
 import { ProjectPlanningEditor } from "../../project-planning-editor.js";
+import { ScheduleTracksEditor } from "../../schedule-tracks-editor.js";
 import { EditorDrawer } from "../../editor-drawer.js";
 import { EntityCatalog } from "../../entity-catalog.js";
 import { useExternalHighlights, useReducedMotion } from "../../external-updates.js";
@@ -117,6 +118,8 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   const [tracksConfig, setTracksConfig] = useState<ConfigurationResult | null>(null);
   const [editor, setEditor] = useState<PlanEditor>(null);
   const [projectPlanningDraft, setProjectPlanningDraft] = useState<ProjectPlanning | undefined>(undefined);
+  const [projectSchedulesDraft, setProjectSchedulesDraft] = useState<ScheduleMap | undefined>(undefined);
+  const [stageSchedulesDraft, setStageSchedulesDraft] = useState<ScheduleMap | undefined>(undefined);
   const [statusFilter, setStatusFilter] = useState(initialStatusFilter);
   const [milestoneFilter, setMilestoneFilter] = useState(initialMilestoneFilter);
   const [taskFields, setTaskFields] = useState<TaskFieldVisibility>(readTaskFields);
@@ -133,6 +136,11 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
 
   const scheduling = useMemo(() => new ScheduleResolver(scheduleTracksConfig(tracksConfig?.document)), [tracksConfig]);
   const primaryTrack = scheduling.primaryTrack(workspace?.project.document.planning);
+  const projectEditorPlanning = projectPlanningDraft ?? scheduling.planning(workspace?.project.document.planning);
+  const projectEditorManualTracks = scheduling.manualTracks(projectEditorPlanning);
+  const projectEditorActualTrack = scheduling.actualTrack(projectEditorPlanning);
+  const stageManualTracks = scheduling.manualTracks(workspace?.project.document.planning);
+  const stageActualTrack = scheduling.actualTrack(workspace?.project.document.planning);
   const text = useMemo(() => scheduleTextReader(primaryTrack), [primaryTrack]);
   const effortOf = useMemo(() => scheduleEffortReader(primaryTrack), [primaryTrack]);
   const number = useMemo(() => (document: Readonly<Record<string, unknown>>, key: string): number | undefined => key === "estimate_hours" ? effortOf(document) : typeof document[key] === "number" ? document[key] as number : undefined, [effortOf]);
@@ -372,20 +380,20 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     event.preventDefault();
     if (workspace === null) return;
     const data = new FormData(event.currentTarget);
-    const owner = String(data.get("owner")); const start = String(data.get("start")); const due = String(data.get("due"));
+    const owner = String(data.get("owner"));
     const selectedGroup = projectGroupFromForm(data, availableProjectGroups);
     if (!selectedGroup.valid) {
       if (selectedGroup.duplicate) setError(t("core.groupAlreadyExists"));
       return;
     }
-    const document = withScheduleWindow({
+    const document = withSchedulesMap({
       ...workspace.project.document,
       name: String(data.get("name")).trim(),
       status: String(data.get("status")),
       description_markdown: String(data.get("description")),
       owner: owner || undefined,
       ...(projectPlanningDraft === undefined ? {} : { planning: projectPlanningDraft }),
-    }, primaryTrack, { start, finish: due }) as EntityDocument;
+    }, projectSchedulesDraft) as EntityDocument;
     const writableDocument = document as unknown as Record<string, unknown>;
     if (selectedGroup.group === "") delete writableDocument.group;
     else writableDocument.group = selectedGroup.group;
@@ -407,9 +415,13 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     const stage = workspace.milestones.find((item) => item.document.id === editor.stageId);
     if (stage === undefined) return;
     const data = new FormData(event.currentTarget);
-    const due = String(data.get("due"));
-    const document = withScheduleWindow({ ...stage.document, name: String(data.get("name")).trim(), description_markdown: String(data.get("description")) }, primaryTrack, { finish: due }) as EntityDocument;
+    const document = withSchedulesMap({ ...stage.document, name: String(data.get("name")).trim(), description_markdown: String(data.get("description")) }, stageSchedulesDraft) as EntityDocument;
     void mutate(async () => await api.updateEntity(draft.draft_id, "milestones", stage, workspace.draft_fingerprint, document));
+  };
+
+  const openStageEditor = (stage: EntityResult) => {
+    setStageSchedulesDraft(stage.document.schedules as ScheduleMap | undefined);
+    setEditor({ kind: "edit-stage", stageId: stage.document.id });
   };
 
   const archiveStage = (stage: EntityResult) => {
@@ -491,7 +503,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
         <div className="project-plan-main">
           <header className={`project-plan-header${recentChanges[workspace.project.document.id] ? " recently-changed" : ""}`}>
             <div className="project-plan-title"><span className="project-plan-project-kind">{t("core.project")} <code>{workspace.project.document.id}</code></span><h2>{text(workspace.project.document, "name")}</h2><p>{text(workspace.project.document, "description_markdown") || t("core.noDescription")}</p></div>
-            <div className="project-plan-actions"><button disabled={readOnly} onClick={() => { setProjectPlanningDraft(scheduling.planning(workspace.project.document.planning)); setEditor({ kind: "project" }); }}>{t("core.edit")}</button><button disabled={readOnly} onClick={() => setEditor({ kind: "new-stage" })}>+ {t("stages.new")}</button><button className="primary" disabled={readOnly} onClick={() => setEditor({ kind: "task" })}>+ {t("core.createTaskAction")}</button></div>
+            <div className="project-plan-actions"><button disabled={readOnly} onClick={() => { setProjectPlanningDraft(scheduling.planning(workspace.project.document.planning)); setProjectSchedulesDraft(workspace.project.document.schedules as ScheduleMap | undefined); setEditor({ kind: "project" }); }}>{t("core.edit")}</button><button disabled={readOnly} onClick={() => setEditor({ kind: "new-stage" })}>+ {t("stages.new")}</button><button className="primary" disabled={readOnly} onClick={() => setEditor({ kind: "task" })}>+ {t("core.createTaskAction")}</button></div>
             <dl className="project-plan-meta">
               <div><dt>{t("core.status")}</dt><dd><span className="state open">{statusTitle(text(workspace.project.document, "status"))}</span></dd></div>
               {text(workspace.project.document, "group").trim() !== "" && <div><dt>{t("core.group")}</dt><dd>{text(workspace.project.document, "group").trim()}</dd></div>}
@@ -581,7 +593,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
           <span className="eyebrow">{t("core.milestone")}</span><h2>{text(selectedStage.document, "name")}</h2><code className="project-plan-inspector-id">{selectedStage.document.id}</code><p>{text(selectedStage.document, "description_markdown") || t("core.noDescription")}</p>
           <dl className="project-plan-inspector-stats"><div><dt>{t("stages.progressLabel")}</dt><dd>{activeTasks.filter((task) => task.document.milestone === selectedStage.document.id && isCompletedStatus(statuses, text(task.document, "status"))).length}/{activeTasks.filter((task) => task.document.milestone === selectedStage.document.id).length}</dd></div><div><dt>{t("stages.estimate")}</dt><dd>{selectedStageEstimate === undefined ? "—" : formatDurationHours(locale, selectedStageEstimate)}</dd></div><div><dt>{t("core.due")}</dt><dd>{dateLabel(selectedStageDue ?? "")}</dd></div></dl>
           <SchedulingOverflowWarnings locale={locale} trackTitle={(track) => scheduling.trackTitle(track)} warnings={selectedStageWarnings} />
-          <div className="inspector-actions"><button disabled={readOnly} onClick={() => setEditor({ kind: "edit-stage", stageId: selectedStage.document.id })}>{t("core.edit")}</button><button disabled={readOnly} onClick={() => archiveStage(selectedStage)}>{t("core.archive")}</button><button className="primary" disabled={readOnly} onClick={() => setEditor({ kind: "task", stageId: selectedStage.document.id })}>+ {t("core.createTaskAction")}</button></div>
+          <div className="inspector-actions"><button disabled={readOnly} onClick={() => openStageEditor(selectedStage)}>{t("core.edit")}</button><button disabled={readOnly} onClick={() => archiveStage(selectedStage)}>{t("core.archive")}</button><button className="primary" disabled={readOnly} onClick={() => setEditor({ kind: "task", stageId: selectedStage.document.id })}>+ {t("core.createTaskAction")}</button></div>
         </aside>}
 
         {selectedTask !== undefined && <aside className="project-plan-inspector task-inspector" aria-label={t("core.details")} id="project-plan-inspector-pane" ref={inspectorPaneRef}>
@@ -597,10 +609,9 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
         <label>{t("core.status")}<select defaultValue={text(workspace.project.document, "status")} disabled={readOnly} name="status">{statuses.map((item) => <option key={item.slug} value={item.slug}>{item.title}</option>)}</select></label>
         <ProjectGroupField currentGroup={text(workspace.project.document, "group")} disabled={readOnly} groups={availableProjectGroups} key={editor?.kind === "project" ? "open" : "closed"} t={t} />
         <label>{t("core.owner")}<select defaultValue={text(workspace.project.document, "owner")} disabled={readOnly} name="owner"><option value="">{t("core.unassigned")}</option>{people.map((person) => <option key={person.document.id} value={person.document.id}>{text(person.document, "name")}</option>)}</select></label>
-        <label>{t("projectPlan.start")}<input defaultValue={text(workspace.project.document, "start")} disabled={readOnly} name="start" type="date" /></label>
-        <label>{t("core.due")}<input defaultValue={text(workspace.project.document, "due")} disabled={readOnly} name="due" type="date" /></label>
+        <ScheduleTracksEditor schedules={projectSchedulesDraft} tracks={projectEditorManualTracks} actualTrack={projectEditorActualTrack} primaryTrack={projectEditorPlanning.primary_track ?? ""} dependencies={[]} showDependencies={false} disabled={readOnly} locale={locale} onChange={setProjectSchedulesDraft} />
         <label>{t("core.description")}<textarea defaultValue={text(workspace.project.document, "description_markdown")} disabled={readOnly} name="description" /></label>
-        <ProjectPlanningEditor planning={projectPlanningDraft ?? scheduling.planning(workspace.project.document.planning)} tracks={scheduling.raw?.tracks ?? []} disabled={readOnly} locale={locale} onChange={setProjectPlanningDraft} />
+        <ProjectPlanningEditor planning={projectEditorPlanning} tracks={scheduling.raw?.tracks ?? []} disabled={readOnly} locale={locale} onChange={setProjectPlanningDraft} />
         <div className="editor-drawer-actions"><details className="more-actions"><summary>{t("core.moreActions")}</summary><div><button disabled={readOnly} onClick={archiveProject} type="button">{t("core.archive")}</button><button className="danger" disabled={readOnly} onClick={() => { void deleteProject(); }} type="button">{t("core.delete")}</button></div></details><button onClick={() => setEditor(null)} type="button">{t("core.cancel")}</button><button className="primary" disabled={readOnly}>{t("core.save")}</button></div>
       </form>
     </EditorDrawer>}
@@ -619,7 +630,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
       return stage === undefined ? null : <EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setEditor(null)} open title={t("stages.edit")}>
         <form className="editor-drawer-form" onSubmit={updateStage}>
           <label>{t("core.name")}<input defaultValue={text(stage.document, "name")} disabled={readOnly} name="name" required /></label>
-          <label>{t("core.due")}<input defaultValue={text(stage.document, "due")} disabled={readOnly} name="due" type="date" /></label>
+          <ScheduleTracksEditor schedules={stageSchedulesDraft} tracks={stageManualTracks} actualTrack={stageActualTrack} primaryTrack={primaryTrack} dependencies={[]} showDependencies={false} disabled={readOnly} locale={locale} onChange={setStageSchedulesDraft} />
           <label>{t("core.description")}<textarea defaultValue={text(stage.document, "description_markdown")} disabled={readOnly} name="description" /></label>
           <div className="editor-drawer-actions"><button onClick={() => setEditor(null)} type="button">{t("core.cancel")}</button><button className="primary" disabled={readOnly}>{t("core.save")}</button></div>
         </form>

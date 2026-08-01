@@ -48,16 +48,6 @@ function rowDateRange(locale: Locale, row: ViewRow): string {
   return start === undefined || finish === undefined ? "" : `${formatDateOnly(locale, start)} — ${formatDateOnly(locale, finish)}`;
 }
 
-function aggregateActual(entries: readonly { readonly document: { readonly performed_on: string; readonly hours: number; readonly state: string } }[]): readonly GanttActualSegment[] {
-  const byDate = new Map<string, number>();
-  for (const entry of entries) {
-    if (entry.document.state === "voided") continue;
-    if (!ISO_DATE.test(entry.document.performed_on)) continue;
-    byDate.set(entry.document.performed_on, (byDate.get(entry.document.performed_on) ?? 0) + entry.document.hours);
-  }
-  return [...byDate.entries()].map(([date, hours]) => ({ date, hours: Math.round((hours + Number.EPSILON) * 10_000) / 10_000 })).sort((left, right) => left.date.localeCompare(right.date));
-}
-
 function aggregateSegments(segments: readonly GanttActualSegment[]): readonly GanttActualSegment[] {
   const byDate = new Map<string, number>();
   for (const segment of segments) {
@@ -150,8 +140,9 @@ export function GanttWorkspace({ api, draft, locale, initialProjectId = "", onNa
       setProjects(nextProjects); setProjectId(nextProject); setTasks(nextTasks); setMilestones(nextMilestones); setError(null); setTracksConfig(tracksDocument);
       const segments = new Map<string, readonly GanttActualSegment[]>();
       for (const entry of nextActual ?? []) {
+        if (entry.document.state === "voided") continue;
         const taskId = entry.document.task;
-        segments.set(taskId, [...(segments.get(taskId) ?? []), ...aggregateActual([entry])]);
+        segments.set(taskId, [...(segments.get(taskId) ?? []), { date: entry.document.performed_on, hours: entry.document.hours }]);
       }
       setActual(segments);
     });

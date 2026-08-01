@@ -1,6 +1,6 @@
 import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
 import { resolveSchedulingHierarchy, windowEffort, type SchedulingHierarchyTask } from "@gitpm/scheduling";
-import { buildSchedule, ScheduleResolver, scheduleTracksConfig, scheduleTextReader, withScheduleWindow } from "../../schedules.js";
+import { buildSchedule, ScheduleResolver, scheduleTracksConfig, scheduleTextReader, withSchedulesMap, type ScheduleMap } from "../../schedules.js";
 import { isCompletedStatus } from "../../status-categories.js";
 import { buildTaskHierarchy } from "@gitpm/task-hierarchy";
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type FormEvent } from "react";
@@ -8,6 +8,7 @@ import type { GitPmApi } from "../../api.js";
 import { AsyncBoundary, useAsyncLoad } from "../../async-data.js";
 import { AssigneeChecks } from "../../core-ui.js";
 import { EditorDrawer } from "../../editor-drawer.js";
+import { ScheduleTracksEditor } from "../../schedule-tracks-editor.js";
 import { useExternalHighlights } from "../../external-updates.js";
 import { formatDateOnly, formatDurationHours, message, type Locale, type MessageKey } from "../../i18n.js";
 import { upsertEntity } from "../../optimistic-ui.js";
@@ -42,6 +43,7 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
   const [tracksConfig, setTracksConfig] = useState<ConfigurationResult | null>(null);
   const [people, setPeople] = useState<readonly EntityResult[]>([]);
   const [editor, setEditor] = useState<"stage" | "task" | null>(null);
+  const [stageSchedulesDraft, setStageSchedulesDraft] = useState<ScheduleMap | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [statusPending, setStatusPending] = useState<string | null>(null);
   const { highlights, mark } = useExternalHighlights(500);
@@ -90,6 +92,8 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
 
   const scheduling = useMemo(() => new ScheduleResolver(scheduleTracksConfig(tracksConfig?.document)), [tracksConfig]);
   const primaryTrack = scheduling.primaryTrack(workspace?.project.document.planning);
+  const manualTracks = scheduling.manualTracks(workspace?.project.document.planning);
+  const actualTrack = scheduling.actualTrack(workspace?.project.document.planning);
   const text = useMemo(() => scheduleTextReader(primaryTrack), [primaryTrack]);
 
   const activeTasks = useMemo(() => workspace?.tasks.filter((item) => item.document.lifecycle === "active") ?? [], [workspace]);
@@ -104,8 +108,7 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
     event.preventDefault();
     if (workspace === null || selectedStage === undefined) return;
     const data = new FormData(event.currentTarget);
-    const due = String(data.get("due"));
-    const document = withScheduleWindow({ ...selectedStage.document, name: String(data.get("name")).trim(), description_markdown: String(data.get("description")) }, primaryTrack, { finish: due }) as EntityDocument;
+    const document = withSchedulesMap({ ...selectedStage.document, name: String(data.get("name")).trim(), description_markdown: String(data.get("description")) }, stageSchedulesDraft) as EntityDocument;
     void mutate(async () => await api.updateEntity(draft.draft_id, "milestones", selectedStage, workspace.draft_fingerprint, document));
   };
 
@@ -142,7 +145,7 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
         changed={highlights[selectedStage.document.id] !== undefined}
         changedTaskIds={new Set(Object.keys(highlights))}
         onArchive={archiveStage}
-        onEdit={() => setEditor("stage")}
+        onEdit={() => { setStageSchedulesDraft(selectedStage.document.schedules as ScheduleMap | undefined); setEditor("stage"); }}
         onNewTask={() => setEditor("task")}
         onNavigate={onNavigate}
         onStatusChange={changeTaskStatus}
@@ -164,7 +167,7 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
     <EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setEditor(null)} open={editor === "stage"} title={t("stages.edit")}>
       <form className="editor-drawer-form" onSubmit={updateStage}>
         <label>{t("core.name")}<input defaultValue={selectedStage === undefined ? "" : text(selectedStage.document, "name")} disabled={readOnly} name="name" required /></label>
-        <label>{t("core.due")}<input defaultValue={selectedStage === undefined ? "" : text(selectedStage.document, "due")} disabled={readOnly} name="due" type="date" /></label>
+        <ScheduleTracksEditor schedules={stageSchedulesDraft} tracks={manualTracks} actualTrack={actualTrack} primaryTrack={primaryTrack} dependencies={[]} showDependencies={false} disabled={readOnly} locale={locale} onChange={setStageSchedulesDraft} />
         <label>{t("core.description")}<textarea defaultValue={selectedStage === undefined ? "" : text(selectedStage.document, "description_markdown")} disabled={readOnly} name="description" /></label>
         <div className="editor-drawer-actions"><button onClick={() => setEditor(null)} type="button">{t("core.cancel")}</button><button className="primary" disabled={readOnly}>{t("core.save")}</button></div>
       </form>
