@@ -92,6 +92,22 @@ docker compose -f compose.yaml -f compose.server.yaml up -d --build
 
 Configuration for the server profile is documented in `compose.server.yaml`.
 
+In the local single-user profile, GitPM does not authenticate individual HTTP
+clients. Every client that can reach the API is a trusted local Maintainer. Bind
+this profile to loopback, or place it behind an independently authenticating
+reverse proxy after a deployment review. GitPM itself does not protect a public
+network perimeter.
+
+This profile supports one operator working with one repository and one working
+tree at a time. Its mutexes and optimistic fingerprints make individual UI
+operations atomic and detect stale writes; they are not a coordination mechanism
+for concurrent authors. Parallel local editing is unsupported and must instead
+use Git branches/worktrees and the normal Git workflow.
+
+The legacy `user-oauth-publication` flow authenticates remote publication, not
+the whole HTTP API. The authenticated multi-user profile requires worktree mode
+and `GITPM_GITLAB_AUTH_MODE=oauth-identity-project-token`, as described below.
+
 ## Multi-user GitLab authentication
 
 The supported multi-user mode deliberately separates user identity from

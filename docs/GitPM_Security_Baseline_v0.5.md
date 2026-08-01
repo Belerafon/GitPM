@@ -101,6 +101,11 @@ OAuth tokens, PATs, and repository contents can otherwise be observed in transit
 
 ## 8. Authorization
 
+В local single-user mode все клиенты, достигшие HTTP API, находятся внутри
+доверенной операторской границы и используют единую локальную Maintainer
+identity. Правила Guest/Reporter/Developer/Maintainer ниже применяются к
+`oauth-identity-project-token` mode.
+
 - Guest/non-member denied;
 - Reporter read-only;
 - Developer owns and edits normal drafts;
