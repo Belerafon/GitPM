@@ -49,7 +49,7 @@ export function ProjectPlanningEditor({ planning, tracks, usedTracks = new Set()
     const workloadChoices = manualChoices.filter(hasDatesEffort);
     const primary = manualChoices.find((track) => track.slug === planning.primary_track)?.slug ?? manualChoices[0]?.slug ?? "";
     const workload = workloadChoices.find((track) => track.slug === planning.workload_track)?.slug ?? workloadChoices[0]?.slug ?? "";
-    const comparison = (planning.comparison_track !== undefined && nextSet.has(planning.comparison_track)) ? planning.comparison_track : undefined;
+    const comparison = manualChoices.find((track) => track.slug === planning.comparison_track)?.slug;
     update({ enabled_tracks: nextEnabled, primary_track: primary, workload_track: workload, comparison_track: comparison, dashboard_tracks: dashboard.filter((slug) => nextSet.has(slug)) });
   };
 
@@ -59,13 +59,17 @@ export function ProjectPlanningEditor({ planning, tracks, usedTracks = new Set()
       <span className="planning-field-label">{t("planning.enabledTracks")}</span>
       <div className="planning-checkboxes">
         {tracks.map((track) => {
-          const cannotDisable = enabledSet.has(track.slug) && track.kind !== "actual" && usedTracks.has(track.slug);
-          return <label key={track.slug}><span><input type="checkbox" disabled={disabled || cannotDisable} checked={enabledSet.has(track.slug)} onChange={(event) => setEnabled(toggle(track.slug, event.target.checked))} />{track.title}</span>{cannotDisable && <small>{t("planning.trackInUse")}</small>}</label>;
+          const enabledTrack = enabledSet.has(track.slug);
+          const inUse = enabledTrack && track.kind !== "actual" && usedTracks.has(track.slug);
+          const requiredForPlanning = enabledTrack
+            && ((manualWithDates(track) && enabledManual.length === 1) || (manualWithDates(track) && hasDatesEffort(track) && enabledWorkload.length === 1));
+          const cannotDisable = inUse || requiredForPlanning;
+          return <label key={track.slug}><span><input type="checkbox" disabled={disabled || cannotDisable} checked={enabledTrack} onChange={(event) => setEnabled(toggle(track.slug, event.target.checked))} />{track.title}</span>{inUse ? <small>{t("planning.trackInUse")}</small> : requiredForPlanning ? <small>{t("planning.trackRequired")}</small> : null}</label>;
         })}
       </div>
     </div>
-    <label className="planning-field">{t("planning.primaryTrack")}<select disabled={disabled} value={planning.primary_track ?? ""} onChange={(event) => update({ primary_track: event.target.value })}><option value="">{t("planning.none")}</option>{enabledManual.map((track) => <option key={track.slug} value={track.slug}>{track.title}</option>)}</select></label>
-    <label className="planning-field">{t("planning.workloadTrack")}<select disabled={disabled} value={planning.workload_track ?? ""} onChange={(event) => update({ workload_track: event.target.value })}><option value="">{t("planning.none")}</option>{enabledWorkload.map((track) => <option key={track.slug} value={track.slug}>{track.title}</option>)}</select></label>
+    <label className="planning-field">{t("planning.primaryTrack")}<select disabled={disabled} value={planning.primary_track ?? ""} onChange={(event) => update({ primary_track: event.target.value })}>{enabledManual.map((track) => <option key={track.slug} value={track.slug}>{track.title}</option>)}</select></label>
+    <label className="planning-field">{t("planning.workloadTrack")}<select disabled={disabled} value={planning.workload_track ?? ""} onChange={(event) => update({ workload_track: event.target.value })}>{enabledWorkload.map((track) => <option key={track.slug} value={track.slug}>{track.title}</option>)}</select></label>
     <label className="planning-field">{t("planning.comparisonTrack")}<select disabled={disabled} value={planning.comparison_track ?? NONE} onChange={(event) => update({ comparison_track: event.target.value === NONE ? undefined : event.target.value })}><option value={NONE}>{t("planning.none")}</option>{enabledForComparison.map((track) => <option key={track.slug} value={track.slug}>{track.title}</option>)}</select></label>
     <div className="planning-field">
       <span className="planning-field-label">{t("planning.dashboardTracks")}</span>

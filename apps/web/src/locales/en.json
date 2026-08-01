@@ -560,6 +560,7 @@
   ,"planning.dashboardTracks": "Dashboard tracks"
   ,"planning.none": "None"
   ,"planning.trackInUse": "Clear this track's schedule data before disabling it."
+  ,"planning.trackRequired": "Keep at least one valid primary and workload track enabled."
   ,"projectPlan.start": "Start date"
   ,"projectPlan.progress": "Overall progress"
   ,"projectPlan.stages": "Active milestones"

@@ -58,16 +58,16 @@ const multitrackConfig: ConfigurationDocument = {
   tracks: [
     { slug: "plan", title: "Plan", kind: "manual", capabilities: ["dates", "effort", "dependencies"] },
     { slug: "target", title: "Target", kind: "manual", capabilities: ["dates"] },
-    { slug: "actual", title: "Actual activity", kind: "actual", source: "time_entries", capabilities: ["dates"] },
+    { slug: "actual", title: "Actual activity", kind: "actual", source: "time_entries" },
   ],
   defaults: { enabled_tracks: ["plan", "target", "actual"], primary_track: "plan", workload_track: "plan", comparison_track: "target", dashboard_tracks: ["plan", "target", "actual"] },
 };
 
-const useMultitrackConfig = (client: GitPmApi): void => {
+const useMultitrackConfig = (client: GitPmApi, tracksConfig: ConfigurationDocument = multitrackConfig): void => {
   vi.spyOn(client, "getConfiguration").mockImplementation(async (_draftId: string, kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks") => configuration(kind === "statuses"
     ? { schema: "gitpm/statuses@2", statuses: [{ slug: "backlog", title: "Backlog", color: "gray", active: true, category: "backlog" }, { slug: "done", title: "Done", color: "green", active: true, category: "done" }] }
     : kind === "schedule-tracks"
-    ? multitrackConfig
+    ? tracksConfig
     : { schema: "gitpm/issue-types@1", issue_types: [{ slug: "task", title: "Task", active: true }] }));
 };
 
@@ -201,6 +201,75 @@ describe("ProjectPlanWorkspace", () => {
     expect(checkbox.disabled).toBe(false);
     fireEvent.click(checkbox);
     expect(checkbox.checked).toBe(false);
+  });
+
+  it("blocks disabling the last workload-capable track without calling updateEntity", async () => {
+    const configuredProject = result({ ...project.document, planning: { enabled_tracks: ["plan", "target", "actual"], primary_track: "plan", workload_track: "plan", comparison_track: "target", dashboard_tracks: ["plan", "target", "actual"] } });
+    const client = api([], [], configuredProject);
+    useMultitrackConfig(client);
+
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} />);
+    await screen.findByRole("heading", { name: "Alpha" });
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    const dialog = screen.getByRole("dialog", { name: "Edit: Alpha" });
+    const checkbox = within(dialog).getByText("Plan", { selector: ".planning-checkboxes span" }).closest("label")!.querySelector("input") as HTMLInputElement;
+
+    expect(checkbox.disabled).toBe(true);
+    fireEvent.click(checkbox);
+    expect(client.updateEntity).not.toHaveBeenCalled();
+  });
+
+  it("switches workload to the remaining capable track and saves complete valid planning", async () => {
+    const alternativeConfig: ConfigurationDocument = {
+      schema: "gitpm/schedule-tracks@1",
+      tracks: [
+        { slug: "plan", title: "Plan", kind: "manual", capabilities: ["dates", "effort"] },
+        { slug: "forecast", title: "Forecast", kind: "manual", capabilities: ["dates", "effort"] },
+        { slug: "actual", title: "Actual activity", kind: "actual", source: "time_entries" },
+      ],
+      defaults: { enabled_tracks: ["plan", "forecast", "actual"], primary_track: "plan", workload_track: "plan", comparison_track: "forecast", dashboard_tracks: ["plan", "forecast", "actual"] },
+    };
+    const configuredProject = result({ ...project.document, planning: alternativeConfig.defaults });
+    const client = api([], [], configuredProject);
+    useMultitrackConfig(client, alternativeConfig);
+
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} />);
+    await screen.findByRole("heading", { name: "Alpha" });
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    const dialog = screen.getByRole("dialog", { name: "Edit: Alpha" });
+    const checkbox = within(dialog).getByText("Plan", { selector: ".planning-checkboxes span" }).closest("label")!.querySelector("input") as HTMLInputElement;
+
+    expect(checkbox.disabled).toBe(false);
+    fireEvent.click(checkbox);
+    expect((within(dialog).getByLabelText("Workload track") as HTMLSelectElement).value).toBe("forecast");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(client.updateEntity).toHaveBeenCalled());
+    expect(client.updateEntity.mock.calls.at(-1)?.[4]).toMatchObject({
+      planning: { enabled_tracks: ["forecast", "actual"], primary_track: "forecast", workload_track: "forecast", comparison_track: "forecast", dashboard_tracks: ["forecast", "actual"] },
+    });
+  });
+
+  it("rejects invalid effective planning before calling updateEntity", async () => {
+    const invalidConfig: ConfigurationDocument = {
+      schema: "gitpm/schedule-tracks@1",
+      tracks: [
+        { slug: "plan", title: "Plan", kind: "manual", capabilities: ["dates", "effort"] },
+        { slug: "actual", title: "Actual activity", kind: "actual", source: "time_entries" },
+      ],
+      defaults: { enabled_tracks: ["plan", "actual"], primary_track: "actual", workload_track: "plan", dashboard_tracks: ["plan", "actual"] },
+    };
+    const client = api([], [], project);
+    useMultitrackConfig(client, invalidConfig);
+
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} />);
+    await screen.findByRole("heading", { name: "Alpha" });
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    const dialog = screen.getByRole("dialog", { name: "Edit: Alpha" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    expect(client.updateEntity).not.toHaveBeenCalled();
+    expect(await screen.findByText("primary_track actual must be a manual track")).toBeTruthy();
   });
 
   it("allows disabling the actual track even when the project has TimeEntry data", async () => {

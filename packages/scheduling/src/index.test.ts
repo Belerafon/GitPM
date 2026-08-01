@@ -213,6 +213,10 @@ describe("planning resolution and validation", () => {
       defaults: {},
     };
     expect(resolvePlanning(minimal).enabled_tracks).toEqual(["plan"]);
+    expect(resolvePlanning(config, { enabled_tracks: [], dashboard_tracks: [] })).toMatchObject({
+      enabled_tracks: [],
+      dashboard_tracks: [],
+    });
   });
 
   it("validates planning settings", () => {
@@ -238,6 +242,59 @@ describe("planning resolution and validation", () => {
       comparison_track: "target",
       dashboard_tracks: ["target", "plan", "actual"],
     };
+    expect(validatePlanning(config, settings)).toEqual([]);
+  });
+
+  it.each([
+    ["actual", "PLANNING_PRIMARY_NOT_MANUAL"],
+    ["links", "PLANNING_PRIMARY_MISSING_DATES"],
+  ])("rejects %s as primary", (primaryTrack, expectedCode) => {
+    const extended: ScheduleTracksConfig = {
+      ...config,
+      tracks: [...config.tracks, { slug: "links", title: "Dependencies", kind: "manual", capabilities: ["dependencies"] }],
+    };
+    const settings: PlanningSettings = {
+      enabled_tracks: [primaryTrack, "plan"],
+      primary_track: primaryTrack,
+      workload_track: "plan",
+      dashboard_tracks: [],
+    };
+
+    expect(validatePlanning(extended, settings)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: expectedCode, field: "primary_track", track: primaryTrack }),
+    ]));
+  });
+
+  it.each([
+    ["actual", "PLANNING_COMPARISON_NOT_MANUAL"],
+    ["effort", "PLANNING_COMPARISON_MISSING_DATES"],
+  ])("rejects %s as comparison", (comparisonTrack, expectedCode) => {
+    const extended: ScheduleTracksConfig = {
+      ...config,
+      tracks: [...config.tracks, { slug: "effort", title: "Effort", kind: "manual", capabilities: ["effort"] }],
+    };
+    const settings: PlanningSettings = {
+      enabled_tracks: ["plan", comparisonTrack],
+      primary_track: "plan",
+      workload_track: "plan",
+      comparison_track: comparisonTrack,
+      dashboard_tracks: [],
+    };
+
+    expect(validatePlanning(extended, settings)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: expectedCode, field: "comparison_track", track: comparisonTrack }),
+    ]));
+  });
+
+  it("accepts a dates-capable manual comparison", () => {
+    const settings: PlanningSettings = {
+      enabled_tracks: ["plan", "target"],
+      primary_track: "plan",
+      workload_track: "plan",
+      comparison_track: "target",
+      dashboard_tracks: [],
+    };
+
     expect(validatePlanning(config, settings)).toEqual([]);
   });
 });

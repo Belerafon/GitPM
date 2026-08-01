@@ -1,6 +1,6 @@
 import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
 import type { ProjectPlanning } from "@gitpm/contracts";
-import { resolveSchedulingHierarchy, windowEffort, type SchedulingHierarchyTask } from "@gitpm/scheduling";
+import { resolveSchedulingHierarchy, validatePlanning, windowEffort, type PlanningSettings, type SchedulingHierarchyTask } from "@gitpm/scheduling";
 import { buildSchedule, ScheduleResolver, scheduleTracksConfig, scheduleTextReader, scheduleEffortReader, withSchedulesMap, type ScheduleMap } from "../../schedules.js";
 import { isCompletedStatus } from "../../status-categories.js";
 import { ProjectSnapshot } from "./project-snapshot.js";
@@ -400,6 +400,13 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     if (!selectedGroup.valid) {
       if (selectedGroup.duplicate) setError(t("core.groupAlreadyExists"));
       return;
+    }
+    if (scheduling.raw !== null) {
+      const planningIssues = validatePlanning(scheduling.raw, projectEditorPlanning as PlanningSettings);
+      if (planningIssues.length > 0) {
+        setError(planningIssues[0]!.message);
+        return;
+      }
     }
     const document = withSchedulesMap({
       ...workspace.project.document,

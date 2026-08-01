@@ -371,6 +371,9 @@ importers:
       '@gitpm/repository-format':
         specifier: workspace:*
         version: link:../repository-format
+      '@gitpm/scheduling':
+        specifier: workspace:*
+        version: link:../scheduling
       ajv:
         specifier: 8.18.0
         version: 8.18.0

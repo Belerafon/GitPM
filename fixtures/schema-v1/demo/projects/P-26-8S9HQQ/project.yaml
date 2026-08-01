@@ -7,9 +7,11 @@ owner: U-26-15QJP8 # person: Boris Sokolov
 planning:
   enabled_tracks:
     - plan
+    - target
     - actual
   primary_track: plan
   workload_track: plan
   dashboard_tracks:
     - plan
+    - target
     - actual
