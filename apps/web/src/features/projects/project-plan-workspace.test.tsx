@@ -3,8 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError, type GitPmApi } from "../../api.js";
 import type { ConfigurationDocument, ConfigurationResult, DraftStatus, EntityDocument, EntityResult } from "../../types.js";
-import { ProjectPlanWorkspace } from "../projects/project-plan-workspace.js";
-import { StageWorkspace } from "./stage-workspace.js";
+import { ProjectPlanWorkspace } from "./project-plan-workspace.js";
 
 const fingerprint = "b".repeat(64);
 const draft: DraftStatus = { draft_id: "DRF-STAGES", owner_gitlab_user_id: "42", branch: "gitpm/42/DRF-STAGES", base_commit: "a".repeat(40), writer_mode: "ui", state: "open", fingerprint, created_at: "2026-07-10T00:00:00.000Z", updated_at: "2026-07-10T00:00:00.000Z" };
@@ -54,7 +53,25 @@ function api(
 
 afterEach(() => { cleanup(); localStorage.clear(); });
 
-describe("project plan and stage workspace", () => {
+const multitrackConfig: ConfigurationDocument = {
+  schema: "gitpm/schedule-tracks@1",
+  tracks: [
+    { slug: "plan", title: "Plan", kind: "manual", capabilities: ["dates", "effort", "dependencies"] },
+    { slug: "target", title: "Target", kind: "manual", capabilities: ["dates"] },
+    { slug: "actual", title: "Actual activity", kind: "actual", source: "time_entries", capabilities: ["dates"] },
+  ],
+  defaults: { enabled_tracks: ["plan", "target", "actual"], primary_track: "plan", workload_track: "plan", comparison_track: "target", dashboard_tracks: ["plan", "target", "actual"] },
+};
+
+const useMultitrackConfig = (client: GitPmApi): void => {
+  vi.spyOn(client, "getConfiguration").mockImplementation(async (_draftId: string, kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks") => configuration(kind === "statuses"
+    ? { schema: "gitpm/statuses@2", statuses: [{ slug: "backlog", title: "Backlog", color: "gray", active: true, category: "backlog" }, { slug: "done", title: "Done", color: "green", active: true, category: "done" }] }
+    : kind === "schedule-tracks"
+    ? multitrackConfig
+    : { schema: "gitpm/issue-types@1", issue_types: [{ slug: "task", title: "Task", active: true }] }));
+};
+
+describe("ProjectPlanWorkspace", () => {
   it("creates a Milestone from the live Project route with the simplified primary-track form", async () => {
     const client = api([], []);
     render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} />);
@@ -128,24 +145,122 @@ describe("project plan and stage workspace", () => {
     }));
   });
 
-  it("uses the same schedule track editor in the Stage workspace", async () => {
-    const multitrackProject = result({ ...project.document, planning: { enabled_tracks: ["working", "target"], primary_track: "working", workload_track: "working", dashboard_tracks: ["working", "target"] } });
-    const multitrackStage = result({ ...stage.document, schedules: { working: { finish: "2026-09-20" }, target: { finish: "2026-09-30" } } });
-    const client = api([], [multitrackStage], multitrackProject);
-    vi.spyOn(client, "getConfiguration").mockImplementation(async (_draftId: string, kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks") => configuration(kind === "statuses"
-      ? { schema: "gitpm/statuses@2", statuses: [{ slug: "backlog", title: "Backlog", color: "gray", active: true, category: "backlog" }] }
-      : kind === "schedule-tracks"
-      ? { schema: "gitpm/schedule-tracks@1", tracks: [{ slug: "working", title: "Working", kind: "manual", capabilities: ["dates", "dependencies"] }, { slug: "target", title: "Target", kind: "manual", capabilities: ["dates"] }], defaults: { enabled_tracks: ["working"], primary_track: "working", workload_track: "", dashboard_tracks: ["working"] } }
-      : { schema: "gitpm/issue-types@1", issue_types: [{ slug: "task", title: "Task", active: true }] }));
+  it.each(["Project", "Milestone", "Task"] as const)("prevents disabling a track used only by a %s schedule", async (entityType) => {
+    const planning = { enabled_tracks: ["plan", "target", "actual"], primary_track: "plan", workload_track: "plan", comparison_track: "target", dashboard_tracks: ["plan", "target", "actual"] };
+    const scheduledProject = result({ ...project.document, planning, ...(entityType === "Project" ? { schedules: { target: { finish: "2026-08-30" } } } : {}) });
+    const scheduledStage = result({ ...stage.document, schedules: entityType === "Milestone" ? { target: { finish: "2026-08-30" } } : undefined });
+    const scheduledTask = result({ ...linked.document, schedules: entityType === "Task" ? { target: { finish: "2026-08-30" } } : undefined });
+    const client = api([scheduledTask], [scheduledStage], scheduledProject);
+    useMultitrackConfig(client);
 
-    render(<StageWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={multitrackProject.document.id} stageId={multitrackStage.document.id} />);
-    await screen.findByRole("heading", { name: "Launch" });
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} />);
+    await screen.findByRole("heading", { name: "Alpha" });
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
-    const dialog = screen.getByRole("dialog", { name: "Edit milestone" });
+    const dialog = screen.getByRole("dialog", { name: "Edit: Alpha" });
+    const target = within(dialog).getByText("Target", { selector: ".planning-checkboxes span" }).closest("label")!;
+
+    expect((target.querySelector("input") as HTMLInputElement).disabled).toBe(true);
+    expect(target.textContent).toContain("Clear this track's schedule data before disabling it.");
+  });
+
+  it("allows disabling a project track immediately after its last draft window is cleared", async () => {
+    const scheduledProject = result({
+      ...project.document,
+      planning: { enabled_tracks: ["plan", "target", "actual"], primary_track: "plan", workload_track: "plan", comparison_track: "target", dashboard_tracks: ["plan", "target", "actual"] },
+      schedules: { target: { finish: "2026-08-30" } },
+    });
+    const client = api([], [], scheduledProject);
+    useMultitrackConfig(client);
+
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} />);
+    await screen.findByRole("heading", { name: "Alpha" });
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    const dialog = screen.getByRole("dialog", { name: "Edit: Alpha" });
+    const target = within(dialog).getByText("Target", { selector: ".planning-checkboxes span" }).closest("label")!;
+    const checkbox = target.querySelector("input") as HTMLInputElement;
+    expect(checkbox.disabled).toBe(true);
+
     fireEvent.click(within(dialog).getByRole("tab", { name: "Target" }));
     fireEvent.change(within(dialog).getByLabelText("Due date"), { target: { value: "" } });
+
+    expect(checkbox.disabled).toBe(false);
+    expect(target.textContent).not.toContain("Clear this track's schedule data before disabling it.");
+  });
+
+  it("allows disabling an unused track", async () => {
+    const configuredProject = result({ ...project.document, planning: { enabled_tracks: ["plan", "target", "actual"], primary_track: "plan", workload_track: "plan", comparison_track: "target", dashboard_tracks: ["plan", "target", "actual"] } });
+    const client = api([], [], configuredProject);
+    useMultitrackConfig(client);
+
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} />);
+    await screen.findByRole("heading", { name: "Alpha" });
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    const dialog = screen.getByRole("dialog", { name: "Edit: Alpha" });
+    const checkbox = within(dialog).getByText("Target", { selector: ".planning-checkboxes span" }).closest("label")!.querySelector("input") as HTMLInputElement;
+
+    expect(checkbox.disabled).toBe(false);
+    fireEvent.click(checkbox);
+    expect(checkbox.checked).toBe(false);
+  });
+
+  it("allows disabling the actual track even when the project has TimeEntry data", async () => {
+    const configuredProject = result({
+      ...project.document,
+      planning: { enabled_tracks: ["plan", "target", "actual"], primary_track: "plan", workload_track: "plan", comparison_track: "target", dashboard_tracks: ["plan", "target", "actual"] },
+      schedules: { plan: { finish: "2026-08-20" }, target: { finish: "2026-08-30" } },
+    });
+    const client = api([], [], configuredProject);
+    const listProjectTimeEntries = vi.fn(async () => ({
+      total: 1,
+      offset: 0,
+      limit: 200,
+      items: [{ document: { schema: "gitpm/time-entry@1" as const, id: "E-26-111111", project: project.document.id, task: linked.document.id, person: person.document.id, performed_on: "2026-08-01", hours: 2, category: "regular", created_at: "2026-08-01T00:00:00.000Z", state: "active" as const }, path: "entry.yaml", blob_id: "a", draft_fingerprint: fingerprint }],
+    }));
+    Object.assign(client, { listProjectTimeEntries });
+    useMultitrackConfig(client);
+
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} />);
+    await waitFor(() => expect(listProjectTimeEntries).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    const dialog = screen.getByRole("dialog", { name: "Edit: Alpha" });
+    const checkbox = within(dialog).getByText("Actual activity", { selector: ".planning-checkboxes span" }).closest("label")!.querySelector("input") as HTMLInputElement;
+
+    expect(checkbox.disabled).toBe(false);
+    fireEvent.click(checkbox);
+    expect(checkbox.checked).toBe(false);
+  });
+
+  it("does not materialize repository planning defaults when only the project name changes", async () => {
+    const client = api([], [], project);
+    useMultitrackConfig(client);
+
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} />);
+    await screen.findByRole("heading", { name: "Alpha" });
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    const dialog = screen.getByRole("dialog", { name: "Edit: Alpha" });
+    expect((within(dialog).getByLabelText("Primary track") as HTMLSelectElement).value).toBe("plan");
+    fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "Renamed" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(client.updateEntity.mock.calls.at(-1)?.[4]).toMatchObject({ schedules: { working: { finish: "2026-09-20" } } }));
+
+    await waitFor(() => expect(client.updateEntity).toHaveBeenCalled());
+    expect(client.updateEntity.mock.calls.at(-1)?.[4]).not.toHaveProperty("planning");
+  });
+
+  it("materializes a complete planning override after an explicit primary-track change", async () => {
+    const client = api([], [], project);
+    useMultitrackConfig(client);
+
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} />);
+    await screen.findByRole("heading", { name: "Alpha" });
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    const dialog = screen.getByRole("dialog", { name: "Edit: Alpha" });
+    fireEvent.change(within(dialog).getByLabelText("Primary track"), { target: { value: "target" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(client.updateEntity).toHaveBeenCalled());
+    expect(client.updateEntity.mock.calls.at(-1)?.[4]).toMatchObject({
+      planning: { enabled_tracks: ["plan", "target", "actual"], primary_track: "target", workload_track: "plan", comparison_track: "target", dashboard_tracks: ["plan", "target", "actual"] },
+    });
   });
 
   it("shows resolved hierarchy overflow dates in the milestone inspector", async () => {
@@ -453,33 +568,20 @@ describe("project plan and stage workspace", () => {
     });
   });
 
-  it("shows only stage tasks and creates a task inside the stage context", async () => {
-    const client = api(); const onNavigate = vi.fn();
-    render(<StageWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={onNavigate} projectId={project.document.id} stageId={stage.document.id} />);
+  it("creates a task in the selected milestone context through the project workspace", async () => {
+    const client = api();
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} selectedStageId={stage.document.id} />);
 
-    expect(await screen.findByRole("heading", { name: "Launch" })).toBeTruthy();
-    expect(screen.getByText("Linked task")).toBeTruthy();
-    expect(document.querySelector(".stage-detail-assignees")?.textContent).toContain("Ada");
-    expect(screen.getByText("Linked task").closest(".stage-task-row")?.querySelector(".task-assignees")?.textContent).toBe("Ada");
-    expect(screen.queryByText("Without stage")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /Linked task/u }));
-    expect(onNavigate).toHaveBeenCalledWith("tasks", { projectId: project.document.id, taskId: linked.document.id });
+    const inspector = await screen.findByRole("complementary", { name: "Milestone" });
+    expect(inspector.textContent).toContain("Launch");
+    expect(document.querySelector(".project-plan-stage-assignees")?.textContent).toContain("Ada");
+    expect(screen.getByText("Linked task").closest(".project-plan-task-row")?.textContent).toContain("Ada");
 
-    fireEvent.click(screen.getByRole("button", { name: /New task in milestone/u }));
-    const dialog = screen.getByRole("dialog", { name: "New task in milestone" });
+    fireEvent.click(within(inspector).getByRole("button", { name: /New task/u }));
+    const dialog = screen.getByRole("dialog", { name: "New task" });
     fireEvent.change(within(dialog).getByLabelText("Title"), { target: { value: "Created here" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Create task" }));
     await waitFor(() => expect(client.createEntity).toHaveBeenCalled());
     expect(client.createEntity.mock.calls[0]?.[3]).toMatchObject({ project: project.document.id, milestone: stage.document.id, title: "Created here" });
-  });
-
-  it("uses milestone task_order in the stage workspace", async () => {
-    const orderedStage = result({ ...stage.document, task_order: [linked.document.id, urgent.document.id, large.document.id] });
-    const client = api([linked, large, urgent], [orderedStage, laterStage]);
-    render(<StageWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} stageId={stage.document.id} />);
-
-    await screen.findByRole("heading", { name: "Launch" });
-    expect(Array.from(document.querySelectorAll(".stage-task-row strong"), (element) => element.textContent))
-      .toEqual(["Linked task", "Zebra task", "Alpha task"]);
   });
 });

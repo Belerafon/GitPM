@@ -846,7 +846,7 @@ Worktree: `D:\other_projects\GitPM-worktrees\feat-semantic-tracks-and-rollup`
 
 ### Остаётся
 
-- [x] Полный локальный release gate `corepack pnpm verify:local` выполнен 2026-07-31: frozen install, clean, build, lint, typecheck, 540 unit tests, 27 E2E tests, smoke, schema, security и planning прошли успешно.
+- [x] Полный локальный release gate `corepack pnpm verify:local` повторно выполнен 2026-08-01 после финальной зачистки scheduling UI: все 11 шагов прошли за 8 мин 07 с, включая frozen install, clean, build, lint, typecheck, 564 unit/integration tests, 27 E2E tests, smoke, schema, security и planning.
 - [ ] Отдельный расширенный actual-report с фильтрами по сотруднику, категории и периоду, а также полный plan-vs-actual отчёт остаются следующей работой.
 - [ ] Performance smoke для большого числа TimeEntry и E2E для всех writer modes не входят в текущее focused покрытие.
 
@@ -856,3 +856,4 @@ Worktree: `D:\other_projects\GitPM-worktrees\feat-semantic-tracks-and-rollup`
 - Текущий инкремент добавляет write-oriented E2E и release-gated статические регрессии; Gantt domain resolution перенесён в `@gitpm/scheduling`.
 - Исторические записи о «всех 13 критериях» и успешном `verify:local` удалены: они противоречили незавершённым UI/E2E и не должны служить доказательством текущего состояния.
 - После завершения write E2E запущен полный `verify:local`; все 11 шагов прошли успешно. Это подтверждает текущую поставку, но не отменяет явно перечисленные ограничения отчётности и performance coverage.
+- Финальная зачистка scheduling UI запрещает отключать используемые schedule tracks, не материализует repository planning defaults без явного изменения, ограничивает comparison ручными date tracks и удаляет мёртвый `StageWorkspace`; новый полный `verify:local` подтверждает состояние исходников после этих изменений.

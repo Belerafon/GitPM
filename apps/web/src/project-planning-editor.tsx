@@ -7,12 +7,13 @@ const NONE = "__none__";
 export interface ProjectPlanningEditorProps {
   readonly planning: ProjectPlanning;
   readonly tracks: readonly TrackDefinition[];
+  readonly usedTracks?: ReadonlySet<string>;
   readonly disabled: boolean;
   readonly locale: Locale;
   readonly onChange: (next: ProjectPlanning) => void;
 }
 
-export function ProjectPlanningEditor({ planning, tracks, disabled, locale, onChange }: ProjectPlanningEditorProps) {
+export function ProjectPlanningEditor({ planning, tracks, usedTracks = new Set(), disabled, locale, onChange }: ProjectPlanningEditorProps) {
   const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>): string => message(locale, key, values);
   const enabled = planning.enabled_tracks ?? [];
   const enabledSet = new Set(enabled);
@@ -21,6 +22,7 @@ export function ProjectPlanningEditor({ planning, tracks, disabled, locale, onCh
   const enabledManual = tracks.filter((track) => enabledSet.has(track.slug) && manualWithDates(track));
   const enabledWorkload = enabledManual.filter(hasDatesEffort);
   const enabledForSelect = tracks.filter((track) => enabledSet.has(track.slug));
+  const enabledForComparison = enabledForSelect.filter(manualWithDates);
   const dashboard = planning.dashboard_tracks ?? enabled;
   const dashboardSet = new Set(dashboard);
 
@@ -56,12 +58,15 @@ export function ProjectPlanningEditor({ planning, tracks, disabled, locale, onCh
     <div className="planning-field">
       <span className="planning-field-label">{t("planning.enabledTracks")}</span>
       <div className="planning-checkboxes">
-        {tracks.map((track) => <label key={track.slug}><input type="checkbox" disabled={disabled} checked={enabledSet.has(track.slug)} onChange={(event) => setEnabled(toggle(track.slug, event.target.checked))} />{track.title}</label>)}
+        {tracks.map((track) => {
+          const cannotDisable = enabledSet.has(track.slug) && track.kind !== "actual" && usedTracks.has(track.slug);
+          return <label key={track.slug}><span><input type="checkbox" disabled={disabled || cannotDisable} checked={enabledSet.has(track.slug)} onChange={(event) => setEnabled(toggle(track.slug, event.target.checked))} />{track.title}</span>{cannotDisable && <small>{t("planning.trackInUse")}</small>}</label>;
+        })}
       </div>
     </div>
     <label className="planning-field">{t("planning.primaryTrack")}<select disabled={disabled} value={planning.primary_track ?? ""} onChange={(event) => update({ primary_track: event.target.value })}><option value="">{t("planning.none")}</option>{enabledManual.map((track) => <option key={track.slug} value={track.slug}>{track.title}</option>)}</select></label>
     <label className="planning-field">{t("planning.workloadTrack")}<select disabled={disabled} value={planning.workload_track ?? ""} onChange={(event) => update({ workload_track: event.target.value })}><option value="">{t("planning.none")}</option>{enabledWorkload.map((track) => <option key={track.slug} value={track.slug}>{track.title}</option>)}</select></label>
-    <label className="planning-field">{t("planning.comparisonTrack")}<select disabled={disabled} value={planning.comparison_track ?? NONE} onChange={(event) => update({ comparison_track: event.target.value === NONE ? undefined : event.target.value })}><option value={NONE}>{t("planning.none")}</option>{enabledForSelect.map((track) => <option key={track.slug} value={track.slug}>{track.title}</option>)}</select></label>
+    <label className="planning-field">{t("planning.comparisonTrack")}<select disabled={disabled} value={planning.comparison_track ?? NONE} onChange={(event) => update({ comparison_track: event.target.value === NONE ? undefined : event.target.value })}><option value={NONE}>{t("planning.none")}</option>{enabledForComparison.map((track) => <option key={track.slug} value={track.slug}>{track.title}</option>)}</select></label>
     <div className="planning-field">
       <span className="planning-field-label">{t("planning.dashboardTracks")}</span>
       <div className="planning-checkboxes">

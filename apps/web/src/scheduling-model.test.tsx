@@ -11,7 +11,6 @@ import { PeopleProfileWorkspace } from "./people-profile-ui.js";
 import { WorkloadWorkspace } from "./workload-ui.js";
 import { ProjectSnapshot } from "./features/projects/project-snapshot.js";
 import { ProjectPlanWorkspace } from "./features/projects/project-plan-workspace.js";
-import { StageWorkspace } from "./features/stages/stage-workspace.js";
 
 const fingerprint = "b".repeat(64);
 const draft: DraftStatus = { draft_id: "DRF-SCHED", owner_gitlab_user_id: "42", branch: "gitpm/42/DRF-SCHED", base_commit: "a".repeat(40), writer_mode: "ui", state: "open", fingerprint, created_at: "2026-07-01T00:00:00.000Z", updated_at: "2026-07-01T00:00:00.000Z" };
@@ -104,15 +103,15 @@ describe("unified scheduling model", () => {
     expect(container.textContent).toContain("Aug 15, 2026");
   });
 
-  it("stage workspace renders the working-track stage due date and task title", async () => {
+  it("selected milestone route renders the working-track due date and task title in the project workspace", async () => {
     const projectId = "P-26-111111";
     const project = result({ schema: "gitpm/project@2", id: projectId, name: "Stage project", status: "backlog", lifecycle: "active", planning });
     const milestone = result({ schema: "gitpm/milestone@2", id: "M-26-888888", project: projectId, name: "Launch", lifecycle: "active", schedules: { working: { finish: "2026-08-15" } } });
     const task = result({ schema: "gitpm/task@2", id: "T-26-333333", project: projectId, milestone: milestone.document.id, title: "Stage task", type: "task", status: "backlog", lifecycle: "active", schedules: { working: { start: "2026-07-10", finish: "2026-08-01", effort_hours: 8 } } });
     const workspace: ProjectWorkspaceResult = { project, milestones: [milestone], tasks: [task], draft_fingerprint: fingerprint };
     const api = { projectWorkspace: vi.fn(async () => workspace), listEntities: listEntitiesMock([]), getConfiguration: buildGetConfiguration() } as unknown as GitPmApi;
-    const { container } = render(<StageWorkspace api={api} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={projectId} stageId={milestone.document.id} />);
-    await screen.findByRole("heading", { name: "Launch" });
+    const { container } = render(<ProjectPlanWorkspace api={api} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={projectId} selectedStageId={milestone.document.id} />);
+    await screen.findByRole("complementary", { name: "Milestone" });
     expect(screen.getByText("Stage task")).toBeTruthy();
     expect(container.textContent).toContain("Aug 15, 2026");
   });

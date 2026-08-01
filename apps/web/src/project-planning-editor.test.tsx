@@ -78,4 +78,28 @@ describe("ProjectPlanningEditor", () => {
     expect(Array.from((screen.getByLabelText("Primary track") as HTMLSelectElement).options).map((option) => option.textContent)).toEqual(["None", "Working", "Forecast"]);
     expect(Array.from((screen.getByLabelText("Workload track") as HTMLSelectElement).options).map((option) => option.textContent)).toEqual(["None", "Working"]);
   });
+
+  it("offers only enabled manual date tracks for comparison", () => {
+    const capabilityTracks: readonly TrackDefinition[] = [
+      { slug: "working", title: "Working", kind: "manual", capabilities: ["dates", "effort"] },
+      { slug: "links", title: "Links", kind: "manual", capabilities: ["dependencies"] },
+      { slug: "effort", title: "Effort", kind: "manual", capabilities: ["effort"] },
+      { slug: "actual", title: "Actual", kind: "actual", source: "time_entries", capabilities: ["dates"] },
+      { slug: "disabled", title: "Disabled", kind: "manual", capabilities: ["dates"] },
+    ];
+    render(<ProjectPlanningEditor planning={{ enabled_tracks: ["working", "links", "effort", "actual"], primary_track: "working", workload_track: "working", dashboard_tracks: ["working", "actual"] }} tracks={capabilityTracks} disabled={false} locale="en" onChange={vi.fn()} />);
+
+    expect(Array.from((screen.getByLabelText("Comparison track") as HTMLSelectElement).options).map((option) => option.textContent)).toEqual(["None", "Working"]);
+  });
+
+  it("blocks disabling an enabled used manual track but never blocks the actual track", () => {
+    render(<ProjectPlanningEditor planning={{ enabled_tracks: ["plan", "target", "actual"], primary_track: "plan", workload_track: "plan", dashboard_tracks: ["plan", "target", "actual"] }} tracks={tracks} usedTracks={new Set(["target", "actual"])} disabled={false} locale="en" onChange={vi.fn()} />);
+    const enabled = screen.getByText("Enabled tracks").closest<HTMLElement>(".planning-field")!;
+    const target = within(enabled).getByText("Target").closest("label")!;
+    const actual = within(enabled).getByText("Actual activity").closest("label")!;
+
+    expect((target.querySelector("input") as HTMLInputElement).disabled).toBe(true);
+    expect(target.textContent).toContain("Clear this track's schedule data before disabling it.");
+    expect((actual.querySelector("input") as HTMLInputElement).disabled).toBe(false);
+  });
 });
