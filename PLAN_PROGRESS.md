@@ -847,8 +847,9 @@ Worktree: `D:\other_projects\GitPM-worktrees\feat-semantic-tracks-and-rollup`
 ### Остаётся
 
 - [x] Полный локальный release gate `corepack pnpm verify:local` повторно выполнен 2026-08-01 после финальной зачистки scheduling UI: все 11 шагов прошли за 8 мин 07 с, включая frozen install, clean, build, lint, typecheck, 564 unit/integration tests, 27 E2E tests, smoke, schema, security и planning.
-- [ ] Отдельный расширенный actual-report с фильтрами по сотруднику, категории и периоду, а также полный plan-vs-actual отчёт остаются следующей работой.
-- [ ] Performance smoke для большого числа TimeEntry и E2E для всех writer modes не входят в текущее focused покрытие.
+- [x] Web actual-report использует project-level endpoint с фильтрами по задаче, этапу, сотруднику, категории, состоянию и диапазону дат, считает часы после произвольной даты и показывает разрезы по сотрудникам, категориям и датам.
+- [x] Plan-vs-actual сравнивает отфильтрованный факт с эффективными плановыми трудозатратами выбранной области Project/Milestone/Task из `workload_track`; UI явно отмечает actual-only семантику фильтров сотрудника, категории, состояния и даты.
+- [x] Performance smoke покрывает project-level выборку из 1000 TimeEntry с серверными фильтрами; Playwright проверяет actual-report и в `ui`, и в `external` writer mode.
 
 ### Журнал изменений
 
@@ -857,3 +858,4 @@ Worktree: `D:\other_projects\GitPM-worktrees\feat-semantic-tracks-and-rollup`
 - Исторические записи о «всех 13 критериях» и успешном `verify:local` удалены: они противоречили незавершённым UI/E2E и не должны служить доказательством текущего состояния.
 - После завершения write E2E запущен полный `verify:local`; все 11 шагов прошли успешно. Это подтверждает текущую поставку, но не отменяет явно перечисленные ограничения отчётности и performance coverage.
 - Финальная зачистка scheduling UI запрещает отключать используемые schedule tracks, не материализует repository planning defaults без явного изменения, ограничивает comparison ручными date tracks и удаляет мёртвый `StageWorkspace`; новый полный `verify:local` подтверждает состояние исходников после этих изменений.
+- Расширенный Web actual-report устраняет расхождение с CLI по project-level фильтрам, добавляет прозрачное сравнение plan-vs-actual по `workload_track`, а focused performance/E2E покрытие закрывает ранее зафиксированные пробелы TimeEntry.

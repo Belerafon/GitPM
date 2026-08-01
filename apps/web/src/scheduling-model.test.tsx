@@ -112,7 +112,7 @@ describe("unified scheduling model", () => {
     const api = { projectWorkspace: vi.fn(async () => workspace), listEntities: listEntitiesMock([]), getConfiguration: buildGetConfiguration() } as unknown as GitPmApi;
     const { container } = render(<ProjectPlanWorkspace api={api} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={projectId} selectedStageId={milestone.document.id} />);
     await screen.findByRole("complementary", { name: "Milestone" });
-    expect(screen.getByText("Stage task")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Stage task/u })).toBeTruthy();
     expect(container.textContent).toContain("Aug 15, 2026");
   });
 

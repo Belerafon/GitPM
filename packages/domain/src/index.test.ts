@@ -216,6 +216,54 @@ describe("domain entity store", () => {
     expect(after.tasks.find((item) => item.document.id === task.document.id)?.document.title).toBe("Externally changed");
   });
 
+  it("performance smoke lists and filters a project with 1000 TimeEntry documents", async () => {
+    const { manager, timeEntries } = await runtime();
+    const draft = await manager.createDraft("DRF-TIME-PERF", "42");
+    const project = "P-26-MGP84K";
+    const task = "T-26-P9G3P8";
+    const directory = path.join(draft.worktree_path, "projects", project, "time-entries", task);
+    const alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+    const suffix = (input: number): string => {
+      let value = input;
+      let result = "";
+      do { result = `${alphabet[value % alphabet.length]}${result}`; value = Math.floor(value / alphabet.length); } while (value > 0);
+      return result.padStart(6, "0");
+    };
+    let expected = 0;
+    const documents = Array.from({ length: 1000 }, (_, index) => {
+      const category = index % 2 === 0 ? "regular" : "warranty";
+      const performedOn = index % 3 === 0 ? "2026-08-31" : "2026-09-02";
+      const state = index % 10 === 0 ? "voided" : "active";
+      if (category === "warranty" && performedOn >= "2026-09-01" && state === "active") expected += 1;
+      const id = `E-26-${suffix(100_000 + index)}`;
+      return { id, content: [
+        "schema: gitpm/time-entry@1",
+        `id: ${id}`,
+        `project: ${project}`,
+        `task: ${task}`,
+        "person: U-26-5EBAE3",
+        `performed_on: ${performedOn}`,
+        "hours: 1",
+        `category: ${category}`,
+        "created_at: 2026-09-03T00:00:00.000Z",
+        `state: ${state}`,
+        "",
+      ].join("\n") };
+    });
+    for (let offset = 0; offset < documents.length; offset += 200) {
+      await Promise.all(documents.slice(offset, offset + 200).map(async (document) => await writeFile(path.join(directory, `${document.id}.yaml`), document.content, "utf8")));
+    }
+
+    const started = performance.now();
+    const report = await timeEntries.listProject("DRF-TIME-PERF", project, { category: "warranty", state: "active", performed_from: "2026-09-01", limit: 200 });
+    const duration = performance.now() - started;
+
+    expect(report).toMatchObject({ total: expected, offset: 0, limit: 200 });
+    expect(report.items).toHaveLength(Math.min(expected, 200));
+    expect(report.items.every((item) => item.document.category === "warranty" && item.document.state === "active" && item.document.performed_on >= "2026-09-01")).toBe(true);
+    expect(duration).toBeLessThan(10_000);
+  }, 30_000);
+
   it("moves a complete task subtree and its comments between projects and rejects broken external references", async () => {
     const { manager, store, comments, timeEntries } = await runtime();
     const draft = await manager.createDraft("DRF-MOVE", "42");
