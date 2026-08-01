@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { GITPM_GUIDANCE_FILES } from "@gitpm/drafts";
-import type { DraftManager } from "@gitpm/drafts";
+import type { DraftManager, RepositoryMutationMode } from "@gitpm/drafts";
 import { GitCommandError, type GitClient } from "@gitpm/git-client";
 import { parseYamlDocument, type GitPmDocument } from "@gitpm/repository-format";
 import { atomicWriteDomainFile, resolveDomainPath } from "@gitpm/security";
@@ -344,9 +344,15 @@ export class ChangesService {
     };
   }
 
-  async restoreFile(draftId: string, owner: string, expectedFingerprint: string, relativePath: string) {
+  async restoreFile(
+    draftId: string,
+    owner: string,
+    expectedFingerprint: string,
+    relativePath: string,
+    mutationMode: RepositoryMutationMode = "ui",
+  ) {
     const safePath = safeRelativePath(relativePath);
-    return await this.drafts.withUiMutation(draftId, owner, expectedFingerprint, async (metadata) => {
+    return await this.drafts.withRepositoryMutation(draftId, owner, expectedFingerprint, mutationMode, async (metadata) => {
       const head = await this.git.showHeadFile(metadata.worktree_path, safePath);
       await atomicWriteDomainFile(metadata.worktree_path, safePath, head);
       return { path: safePath, validation: await validateRepository(metadata.worktree_path) };
@@ -360,9 +366,10 @@ export class ChangesService {
     relativePath: string,
     expectedDiffToken: string,
     hunkIndex: number,
+    mutationMode: RepositoryMutationMode = "ui",
   ) {
     const safePath = safeRelativePath(relativePath);
-    return await this.drafts.withUiMutation(draftId, owner, expectedFingerprint, async (metadata) => {
+    return await this.drafts.withRepositoryMutation(draftId, owner, expectedFingerprint, mutationMode, async (metadata) => {
       const diff = await this.git.diffFile(metadata.worktree_path, safePath, 1);
       if (token(diff) !== expectedDiffToken) throw new ChangesError("STALE_DIFF", "Diff changed after it was displayed");
       const hunk = parseUnifiedDiff(diff)[hunkIndex];
@@ -374,19 +381,24 @@ export class ChangesService {
     });
   }
 
-  async discardAll(draftId: string, owner: string, expectedFingerprint: string) {
+  async discardAll(
+    draftId: string,
+    owner: string,
+    expectedFingerprint: string,
+    mutationMode: RepositoryMutationMode = "ui",
+  ) {
     const changes = await this.list(draftId);
     let fingerprint = expectedFingerprint;
     for (const change of changes.files) {
       if (change.kind === "Added") {
-        const mutation = await this.drafts.withUiMutation(draftId, owner, fingerprint, async (metadata) => {
+        const mutation = await this.drafts.withRepositoryMutation(draftId, owner, fingerprint, mutationMode, async (metadata) => {
           const absolute = await resolveDomainPath(metadata.worktree_path, change.path);
           await rm(absolute);
           return change.path;
         });
         fingerprint = mutation.metadata.fingerprint;
       } else {
-        const mutation = await this.restoreFile(draftId, owner, fingerprint, change.path);
+        const mutation = await this.restoreFile(draftId, owner, fingerprint, change.path, mutationMode);
         fingerprint = mutation.metadata.fingerprint;
       }
     }

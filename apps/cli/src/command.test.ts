@@ -224,6 +224,50 @@ describe("CLI P12 agent commands", () => {
     expect(JSON.parse((await run(["entity", "create", "--draft", "DRF-X", "--file", "missing.yaml", "--json"])).output)).toMatchObject({ code: "CLI_AGENT_CONFIGURATION_REQUIRED" });
     expect(JSON.parse((await run(["draft", "status", "--draft", "DRF-X", "--json"])).output)).toMatchObject({ code: "CLI_AGENT_CONFIGURATION_REQUIRED" });
   });
+
+  it("routes GUI-parity workflow and domain commands through the draft agent runtime", async () => {
+    const metadata = { version: 1 as const, draft_id: "DRF-PARITY", owner_gitlab_user_id: "42", branch: "gitpm/42/DRF-PARITY", base_commit: "a".repeat(40), worktree_path: demo, writer_mode: "external" as const, state: "open" as const, fingerprint: "b".repeat(64), created_at: "2026-07-11T00:00:00.000Z", updated_at: "2026-07-11T00:00:00.000Z" };
+    const cleaned: string[] = [];
+    const task = { schema: "gitpm/task@2", id: "T-26-P9G3P8", project: "P-26-MGP84K", title: "Parity", type: "task", status: "backlog", lifecycle: "active" } as GitPmDocument;
+    const project = { schema: "gitpm/project@2", id: "P-26-MGP84K", name: "Parity", lifecycle: "active", planning: { primary_track: "plan" } } as GitPmDocument;
+    const configuration = { schema: "gitpm/schedule-tracks@1", tracks: [{ slug: "plan", title: "Plan", kind: "manual" }], defaults: { primary_track: "plan" } };
+    const historyItem = { commit: "c".repeat(40), parents: [], author_name: "GitPM", author_email: "gitpm@example.test", authored_at: "2026-07-11T00:00:00.000Z", subject: "Initial" };
+    const agent = {
+      createDraft: async () => metadata, openDraft: async () => metadata, status: async () => metadata, setWriterMode: async () => metadata,
+      assertScope: async () => ({ affected_projects: [], changed_files: [] }), semanticDiff: async () => ({ created: [], updated: [], archived: [], deleted: [], counts: { created: 0, updated: 0, archived: 0, deleted: 0 }, affected_projects: [], unclassified_files: [] }),
+      commitAll: async () => ({ commit: "c".repeat(40), branch: metadata.branch, draft_fingerprint: metadata.fingerprint }), push: async () => ({ branch: metadata.branch, commit: "c".repeat(40) }),
+      createMergeRequest: async () => ({ iid: 9, state: "opened" as const, source_branch: metadata.branch, target_branch: "main", web_url: "https://gitlab.example.test/mr/9" }),
+      listDrafts: async () => [metadata], acknowledgeExternalChanges: async () => metadata, closeDraft: async () => ({ ...metadata, state: "closed" as const }), reopenDraft: async () => metadata,
+      cleanupDraft: async (draftId: string) => { cleaned.push(draftId); },
+      getConfiguration: async () => ({ document: configuration, path: ".gitpm/schedule-tracks.yaml", blob_id: "d".repeat(40), draft_fingerprint: metadata.fingerprint }),
+      updateConfiguration: async (_draft: string, _kind: string, document: GitPmDocument) => ({ document, path: ".gitpm/schedule-tracks.yaml", blob_id: "d".repeat(40), draft_fingerprint: metadata.fingerprint }),
+      getEntity: async (_draft: string, type: string) => ({ document: type === "projects" ? project : task, path: type === "projects" ? "projects/P-26-MGP84K/project.yaml" : "projects/P-26-MGP84K/tasks/T-26-P9G3P8.yaml", draft_fingerprint: metadata.fingerprint }),
+      updateEntity: async (_draft: string, document: GitPmDocument, type: string) => ({ document, path: type === "projects" ? "projects/P-26-MGP84K/project.yaml" : "projects/P-26-MGP84K/tasks/T-26-P9G3P8.yaml", draft_fingerprint: metadata.fingerprint }),
+      listComments: async () => [], createComment: async () => ({ document: { id: "N-26-AAAAAA", state: "active" }, path: "comment.yaml" }), updateComment: async () => ({ document: { id: "N-26-AAAAAA", state: "active" }, path: "comment.yaml" }), deleteComment: async () => ({ document: { id: "N-26-AAAAAA", state: "deleted" }, path: "comment.yaml" }),
+      notifications: async () => ({ recipient_person_id: "U-26-5EBAE3", items: [] }),
+      listProjectTimeEntries: async () => ({ items: [], total: 0, offset: 0, limit: 100 }), createTimeEntry: async () => ({ document: { id: "E-26-AAAAAA", state: "active" }, path: "entry.yaml" }), voidTimeEntry: async () => ({ document: { id: "E-26-AAAAAA", state: "voided" }, path: "entry.yaml" }),
+      listChanges: async () => ({ files: [], changed_files_count: 0, affected_projects: [] }),
+      historyList: async () => [historyItem], historyDetail: async () => ({ ...historyItem, body: "", files: [], semantic_summary: { created: 0, updated: 0, deleted: 0, affected_projects: [] } }), historyFileDiff: async () => ({ diff: "diff", oversized: false }), fileHistory: async () => [historyItem],
+      createRevertDraft: async () => ({ draft: { ...metadata, draft_id: "DRF-REVERT" }, reverted_commit: historyItem.commit, conflicted: false, conflicted_files: [] }),
+      mergeRequestStatus: async () => ({ iid: 9, state: "merged" as const, source_branch: metadata.branch, target_branch: "main", web_url: "https://gitlab.example.test/mr/9" }),
+    } as unknown as AgentWorkflow;
+    const invoke = async (args: string[]) => JSON.parse((await run([...args, "--json"], process.cwd(), { agent })).output);
+
+    expect(await invoke(["draft", "list", "--owner", "42"])).toMatchObject({ ok: true, items: [{ draft_id: "DRF-PARITY" }] });
+    expect(await invoke(["draft", "close", "--draft", "DRF-PARITY", "--owner", "42"])).toMatchObject({ draft: { state: "closed" } });
+    expect(await invoke(["draft", "cleanup", "--draft", "DRF-PARITY", "--owner", "42", "--confirm", "DRF-PARITY"])).toMatchObject({ deleted: true });
+    expect(cleaned).toEqual(["DRF-PARITY"]);
+    expect(await invoke(["config", "show", "--draft", "DRF-PARITY", "--kind", "schedule-tracks"])).toMatchObject({ document: { schema: "gitpm/schedule-tracks@1" } });
+    expect(await invoke(["comment", "list", "--draft", "DRF-PARITY", "--project", "P-26-MGP84K", "--task", "T-26-P9G3P8"])).toMatchObject({ items: [] });
+    expect(await invoke(["notification", "list", "--draft", "DRF-PARITY", "--person", "U-26-5EBAE3"])).toMatchObject({ recipient_person_id: "U-26-5EBAE3" });
+    expect(await invoke(["time-entry", "list", "--draft", "DRF-PARITY", "--project", "P-26-MGP84K"])).toMatchObject({ total: 0, items: [] });
+    expect(await invoke(["schedule", "set", "--draft", "DRF-PARITY", "--type", "task", "--id", "T-26-P9G3P8", "--track", "plan", "--finish", "2026-09-01"])).toMatchObject({ document: { schedules: { plan: { finish: "2026-09-01" } } } });
+    expect(await invoke(["planning", "set", "--draft", "DRF-PARITY", "--project", "P-26-MGP84K", "--workload-track", "plan"])).toMatchObject({ document: { planning: { workload_track: "plan" } } });
+    expect(await invoke(["changes", "list", "--draft", "DRF-PARITY"])).toMatchObject({ changed_files_count: 0 });
+    expect(await invoke(["history", "list", "--draft", "DRF-PARITY"])).toMatchObject({ items: [{ subject: "Initial" }] });
+    expect(await invoke(["history", "revert", "--draft", "DRF-PARITY", "--commit", historyItem.commit, "--new-draft", "DRF-REVERT", "--owner", "42"])).toMatchObject({ draft: { draft_id: "DRF-REVERT" }, conflicted: false });
+    expect(await invoke(["mr", "status", "--draft", "DRF-PARITY", "--owner", "42"])).toMatchObject({ merge_request: { iid: 9, state: "merged" } });
+  });
 });
 
 describe("CLI init command", () => {

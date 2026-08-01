@@ -9,6 +9,7 @@ import { DirectRepositoryBackend, directPushStrategy, DraftManager, GITPM_GUIDAN
 import { CommentStore, TimeEntryStore, type CommentActor, type CommentResult, type DeletePlan, type EntityCreateBatchResult, type EntityResult, type TimeEntryActor, type TimeEntryProjectFilters, type TimeEntryProjectList, type TimeEntryResult } from "@gitpm/domain";
 import type { GitPmDocument } from "@gitpm/repository-format";
 import { ExportService, type ExportArtifact, type ExportRequest } from "@gitpm/export";
+import { HistoryService } from "@gitpm/history";
 
 const DIRECT_WORKSPACE_ID = "DRF-LOCAL";
 
@@ -51,6 +52,8 @@ export class DirectCliRuntime {
   private readonly drafts: DraftManager;
   private readonly comments: CommentStore;
   private readonly timeEntries: TimeEntryStore;
+  private readonly changes: ChangesService;
+  private readonly history: HistoryService;
   private readonly repository: RepositoryWorkflow;
   private readonly authorName: string;
   private readonly authorEmail: string;
@@ -73,13 +76,14 @@ export class DirectCliRuntime {
       backend: this.backend,
       push: directPushStrategy(this.git),
     });
-    const changes = new ChangesService(this.drafts, this.git);
+    this.changes = new ChangesService(this.drafts, this.git);
+    this.history = new HistoryService(this.drafts, this.git);
     this.comments = new CommentStore(this.drafts, () => new Date(), "repository");
     this.timeEntries = new TimeEntryStore(this.drafts, () => new Date(), "repository");
     this.authorName = options.authorName;
     this.authorEmail = options.authorEmail;
     this.pushAccessToken = options.pushAccessToken;
-    this.repository = new RepositoryWorkflow(this.drafts, this.git, changes, {
+    this.repository = new RepositoryWorkflow(this.drafts, this.git, this.changes, {
       mutationMode: "repository",
       authorName: options.authorName,
       authorEmail: options.authorEmail,
@@ -89,7 +93,12 @@ export class DirectCliRuntime {
   }
 
   private directActor(): CommentActor {
-    return { userId: "local-user", role: "Maintainer", identity: { provider: "git", subject: this.authorEmail, display_name: this.authorName } };
+    return {
+      userId: "local-user",
+      role: "Maintainer",
+      identity: { provider: "git", subject: this.authorEmail.trim().toLocaleLowerCase(), display_name: this.authorName },
+      email: this.authorEmail,
+    };
   }
 
   get checkoutPath(): string {
@@ -231,6 +240,12 @@ export class DirectCliRuntime {
     return await this.comments.delete(draftId, projectId, taskId, commentId, metadata.fingerprint, blob_id, this.directActor());
   }
 
+  async notifications(personId?: string) {
+    const draftId = await this.draftId();
+    const actor = this.directActor();
+    return await this.comments.notifications(draftId, { ...actor, ...(personId === undefined ? {} : { personId }) });
+  }
+
   private timeEntryActor(): TimeEntryActor {
     const actor = this.directActor();
     return { userId: actor.userId, identity: actor.identity };
@@ -262,6 +277,42 @@ export class DirectCliRuntime {
 
   async semanticDiff(scope: AgentScope = {}): Promise<SemanticDiff> {
     return await this.repository.semanticDiff(DIRECT_WORKSPACE_ID, scope);
+  }
+
+  async listChanges(scope: AgentScope = {}) {
+    return await this.repository.listChanges(DIRECT_WORKSPACE_ID, scope);
+  }
+
+  async restoreFile(relativePath: string, scope: AgentScope = {}) {
+    return await this.repository.restoreFile(DIRECT_WORKSPACE_ID, relativePath, scope);
+  }
+
+  async restoreHunk(relativePath: string, diffToken: string, hunkIndex: number, scope: AgentScope = {}) {
+    return await this.repository.restoreHunk(DIRECT_WORKSPACE_ID, relativePath, diffToken, hunkIndex, scope);
+  }
+
+  async discardAll(scope: AgentScope = {}) {
+    return await this.repository.discardAll(DIRECT_WORKSPACE_ID, scope);
+  }
+
+  async historyList(limit = 50) {
+    await this.prepare();
+    return await this.history.list(DIRECT_WORKSPACE_ID, limit);
+  }
+
+  async historyDetail(commit: string) {
+    await this.prepare();
+    return await this.history.detail(DIRECT_WORKSPACE_ID, commit);
+  }
+
+  async historyFileDiff(commit: string, relativePath: string) {
+    await this.prepare();
+    return await this.history.fileDiff(DIRECT_WORKSPACE_ID, commit, relativePath);
+  }
+
+  async fileHistory(relativePath: string, limit = 50) {
+    await this.prepare();
+    return await this.history.fileHistory(DIRECT_WORKSPACE_ID, relativePath, limit);
   }
 
   async status(): Promise<DirectStatus> {

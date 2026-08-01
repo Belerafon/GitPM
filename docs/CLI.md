@@ -8,8 +8,10 @@ CLI живёт в `apps/cli` и собирается в `apps/cli/dist/index.js`
 ```
 gitpm init [path]                    Создать skeleton схемы v2 (schedules, schedule-tracks, work-categories) в path (по умолчанию cwd)
 gitpm status [--draft <id>]
-gitpm draft create|open|status --draft <id> [--owner <id>]
+gitpm draft list [--owner <id>]
+gitpm draft create|open|status|acknowledge|close|reopen --draft <id> [--owner <id>]
 gitpm draft set-writer ui|external --draft <id> [--owner <id>]
+gitpm draft cleanup --draft <id> --owner <id> --confirm <id>
 gitpm entity create [--draft <id>] --file <file> [--type <type>] [--project <id>] [--allow-delete]
 gitpm entity update [--draft <id>] --type <type> --id <entity-id> [--file <yaml-patch>] [--set <field>=<yaml-value>]... [--unset <field>]... [--project <id>] [--allow-delete]
 gitpm entity import [--draft <id>] --type <type> --format csv|yaml|jsonl (--file <file>|--path <file>) [--dry-run] [--project <id>] [--allow-delete]
@@ -18,28 +20,39 @@ gitpm entity show [--draft <id>] --type <type> --id <entity-id>
 gitpm entity delete [--draft <id>] --type <type> --id <entity-id> [--unlink-references|--cascade-references] [--dry-run] [--allow-delete] [--project <id>]
 gitpm entity archive [--draft <id>] --type <type> --id <entity-id> [--project <id>] [--allow-delete]
 gitpm entity move [--draft <id>] --type task --id <entity-id> --to-project <id> [--to-milestone <id>] [--to-parent <task-id>] [--allow-delete] [--project <id>]
-gitpm schedule set --type project|task|milestone --id <entity-id> --track <slug> [--start <yyyy-mm-dd>] [--finish <yyyy-mm-dd>] [--effort-hours <n>] [--depends-on <task-id>]... [--clear-start] [--clear-finish] [--clear-effort] [--clear-dependencies] [--project <id>] [--allow-delete]
-gitpm planning show --project <id>
-gitpm planning set --project <id> [--primary-track <slug>] [--workload-track <slug>] [--comparison-track <slug>|--clear-comparison-track] [--enabled-track <slug>]... [--dashboard-track <slug>]... [--allow-delete]
-gitpm comment list --project <id> --task <id>
-gitpm comment create --project <id> --task <id> (--body <text> | --file <path>)
-gitpm comment update --project <id> --task <id> --id <comment-id> (--body <text> | --file <path>)
-gitpm comment delete --project <id> --task <id> --id <comment-id>
-gitpm time-entry list --project <id> [--task <id>] [--milestone <id>] [--person <id>] [--category <slug>] [--state active|voided] [--from <yyyy-mm-dd>] [--to <yyyy-mm-dd>] [--offset <n>] [--limit <n>] [--json]
-gitpm time-entry summary --project <id> [--task <id>] [--milestone <id>] [--person <id>] [--category <slug>] [--state active|voided] [--from <yyyy-mm-dd>] [--to <yyyy-mm-dd>] [--after <yyyy-mm-dd>] [--json]
-gitpm time-entry create --project <id> --task <id> --person <id> --date <yyyy-mm-dd> --hours <n> --category <slug> [--note <text>] [--json]
-gitpm time-entry void --project <id> --task <id> --id <entry-id> [--json]
-gitpm config show --kind statuses|issue-types|work-categories|schedule-tracks
-gitpm config update --kind statuses|issue-types|work-categories|schedule-tracks [--file <yaml>] [--set <field>=<yaml-value>]... [--unset <field>] [--allow-delete]
+gitpm schedule set [--draft <id>] --type project|task|milestone --id <entity-id> --track <slug> [--start <yyyy-mm-dd>] [--finish <yyyy-mm-dd>] [--effort-hours <n>] [--depends-on <task-id>]... [--clear-start] [--clear-finish] [--clear-effort] [--clear-dependencies] [--project <id>] [--allow-delete]
+gitpm planning show [--draft <id>] --project <id>
+gitpm planning set [--draft <id>] --project <id> [--primary-track <slug>] [--workload-track <slug>] [--comparison-track <slug>|--clear-comparison-track] [--enabled-track <slug>]... [--dashboard-track <slug>]... [--allow-delete]
+gitpm comment list [--draft <id>] --project <id> --task <id>
+gitpm comment create [--draft <id>] --project <id> --task <id> (--body <text> | --file <path>)
+gitpm comment update [--draft <id>] --project <id> --task <id> --id <comment-id> (--body <text> | --file <path>)
+gitpm comment delete [--draft <id>] --project <id> --task <id> --id <comment-id>
+gitpm notification list [--draft <id>] [--person <id>]
+gitpm time-entry list [--draft <id>] --project <id> [--task <id>] [--milestone <id>] [--person <id>] [--category <slug>] [--state active|voided] [--from <yyyy-mm-dd>] [--to <yyyy-mm-dd>] [--offset <n>] [--limit <n>] [--json]
+gitpm time-entry summary [--draft <id>] --project <id> [--task <id>] [--milestone <id>] [--person <id>] [--category <slug>] [--state active|voided] [--from <yyyy-mm-dd>] [--to <yyyy-mm-dd>] [--after <yyyy-mm-dd>] [--json]
+gitpm time-entry create [--draft <id>] --project <id> --task <id> --person <id> --date <yyyy-mm-dd> --hours <n> --category <slug> [--note <text>] [--json]
+gitpm time-entry void [--draft <id>] --project <id> --task <id> --id <entry-id> [--json]
+gitpm config show [--draft <id>] --kind statuses|issue-types|work-categories|schedule-tracks
+gitpm config update [--draft <id>] --kind statuses|issue-types|work-categories|schedule-tracks [--file <yaml>] [--set <field>=<yaml-value>]... [--unset <field>] [--allow-delete]
 gitpm schema list
 gitpm schema show <type> [--example]
 gitpm format [--draft <id>] [--project <id>] [--check] [--allow-delete]
 gitpm validate [--draft <id>] [--project <id>] [--changed] [--allow-delete]
 gitpm diff --semantic [--draft <id>] [--project <id>] [--allow-delete]
+gitpm changes list [--draft <id>] [--project <id>] [--allow-delete]
+gitpm changes restore-file [--draft <id>] --path <path> [--project <id>] [--allow-delete]
+gitpm changes restore-hunk [--draft <id>] --path <path> --diff-token <sha256> --hunk <index> [--project <id>] [--allow-delete]
+gitpm changes discard-all [--draft <id>] --confirm discard-all [--project <id>] [--allow-delete]
+gitpm history list [--draft <id>] [--limit <n>]
+gitpm history show [--draft <id>] --commit <sha>
+gitpm history file-diff [--draft <id>] --commit <sha> --path <path>
+gitpm history file-history [--draft <id>] --path <path> [--limit <n>]
+gitpm history revert --draft <id> --commit <sha> --new-draft <id> --owner <id>
 gitpm export [--draft <id>] --format pdf|html|csv|repository [--locale en|ru] [--section projects|people|project-details|gantt]... [--include-git] [--output <path>] [--force]
 gitpm commit --all [--draft <id>] -m <message> [--project <id>] [--allow-delete]
 gitpm push [--draft <id>]
 gitpm mr create --draft <id> --owner <id> --title <title> [--description <text>]
+gitpm mr status --draft <id> --owner <id>
 gitpm doctor
 gitpm --version [--json]
 ```
@@ -110,25 +123,43 @@ Project (поддерживается только для `project`; други�
 зависимости `schedules.<track>.depends_on` блокируются validation.
 
 `comment` управляет комментариями к Task: Markdown с упоминаниями `@[Name](person:U-...)`,
-soft-delete (tombstone остаётся в Git history). Доступно в direct mode.
+soft-delete (tombstone остаётся в Git history). `notification list` возвращает упоминания
+выбранного Person; без `--person` получатель определяется по email CLI-автора.
 
 `time-entry list` и `time-entry summary` работают на уровне Project; `--task` лишь сужает
 выборку. List возвращает `total`, `offset` и `limit`; фильтры Person, Milestone, category,
 state и диапазон фактической даты соответствуют project-level TimeEntry API.
 
 `config show/update` читает и обновляет конфигурацию репозитория (`.gitpm/statuses.yaml`,
-`.gitpm/issue-types.yaml`). Доступно в direct mode.
+`.gitpm/issue-types.yaml`, `.gitpm/work-categories.yaml`, `.gitpm/schedule-tracks.yaml`).
 
-В `direct` mode команды `status`, `entity create`, `entity update`, `entity import`, `entity list`,
-`entity show`, `entity delete`, `entity archive`, `entity move`, `comment`, `config`, `format`,
-`validate`, `diff`, `commit` и `push` работают с выбранным checkout без `--draft`.
-В `worktree` mode `status`, `entity`, `format`, `validate`, `diff`, `commit` и `push`
-требуют `--draft <id>`; `comment` и `config` в этом режиме не реализованы, а
-`mr create` доступна только в нём. `--project <id>` проверяет, что все текущие
+`changes list` возвращает тот же raw diff, токены и hunks, которые показывает GUI.
+`restore-file` и `restore-hunk` используют optimistic fingerprint и общий безопасный changes
+pipeline. `discard-all` требует буквального `--confirm discard-all`; это отдельное подтверждение
+массовой отмены незакоммиченных изменений. `--project` и `--allow-delete` сохраняют те же
+ограничения scope и физического удаления, что и `diff`/`commit`.
+
+`history list/show/file-diff/file-history` доступны в обоих repository modes. В worktree mode
+`history revert` создаёт отдельный draft в external writer mode; исходный draft не изменяется.
+`mr status` перечитывает состояние уже созданного GitLab Merge Request.
+
+В `direct` mode команды `status`, `entity`, `schedule`, `planning`, `comment`, `notification`,
+`time-entry`, `config`, `format`, `validate`, `diff`, `changes`, `history`, `commit` и `push`
+работают с выбранным checkout без `--draft`.
+В `worktree` mode те же предметные и inspection-команды требуют `--draft <id>`; draft lifecycle,
+`history revert`, `mr create` и `mr status` доступны только в нём. `--project <id>` проверяет, что все текущие
 business changes принадлежат указанному Project, а физическое удаление требует явного
 `--allow-delete` при каждой следующей мутации, а также при format/validation/diff и commit,
 пока удалённые пути остаются в checkout. Флаг подтверждает весь текущий набор физических
 удалений; он не создаёт новые удаления сам по себе.
+
+Низкоуровневый GUI file manager намеренно не дублируется в agent CLI: он может временно
+оставить repository невалидным и предназначен для осознанного ручного управления файлами.
+Агент использует доменные CLI-команды выше и не получает обход validation через универсальные
+`file write/delete`. GitLab OAuth login и экран repository connection также остаются
+browser/server operations: секреты живут только в памяти процесса, а headless CLI получает
+credential-free connection settings и токены только через документированные environment/runtime
+каналы.
 
 Каждая команда поддерживает `--json` для машинно-читаемого вывода.
 Неизвестная или повторно переданная нереплицируемая option отклоняется с

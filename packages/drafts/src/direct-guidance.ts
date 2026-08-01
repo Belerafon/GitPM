@@ -150,8 +150,10 @@ Archive a reversible lifecycle state with
 Move a task with
 \`gitpm entity move --type task --id <entity-id> --to-project <id> [--to-milestone <id>] --allow-delete --json\`.
 
-Manage task comments with \`gitpm comment list|create|update|delete\` and repository
-configuration with \`gitpm config show|update --kind statuses|issue-types [--allow-delete]\`.
+Manage task comments with \`gitpm comment list|create|update|delete\`, mention notifications
+with \`gitpm notification list\`, actual effort with \`gitpm time-entry list|summary|create|void\`,
+and repository configuration with
+\`gitpm config show|update --kind statuses|issue-types|work-categories|schedule-tracks [--allow-delete]\`.
 
 Then run \`format\`, \`validate --changed\`, and \`diff --semantic\` with \`--json\` and
 \`--project\` when scoped. Repeat \`--allow-delete\` on every subsequent mutation, verification,
@@ -276,8 +278,12 @@ All commands accept \`--json\`; use it for automation. Direct-mode commands do n
 - \`gitpm comment update --project <id> --task <id> --id <comment-id> (--body <text> | --file <path>)\`
   edits a comment body.
 - \`gitpm comment delete --project <id> --task <id> --id <comment-id>\` soft-deletes a comment.
-- \`gitpm config show --kind statuses|issue-types\` reads repository configuration.
-- \`gitpm config update --kind statuses|issue-types [--file <yaml>] [--set <field>=<yaml-value>]...
+- \`gitpm notification list [--person <id>]\` reads mention notifications.
+- \`gitpm time-entry list|summary|create|void ...\` reads or updates actual effort.
+- \`gitpm schedule set ...\` and \`gitpm planning show|set ...\` manage multi-track schedules
+  and Project planning.
+- \`gitpm config show --kind statuses|issue-types|work-categories|schedule-tracks\` reads repository configuration.
+- \`gitpm config update --kind statuses|issue-types|work-categories|schedule-tracks [--file <yaml>] [--set <field>=<yaml-value>]...
   [--unset <field>] [--allow-delete]\` updates repository configuration.
 - \`gitpm schema list|show <type> [--example]\` exposes the installed schema contract.
 - \`gitpm format [--project <id>] [--check] [--allow-delete]\` applies or checks canonical YAML.
@@ -285,6 +291,9 @@ All commands accept \`--json\`; use it for automation. Direct-mode commands do n
   identities, references, dates, and scope closure.
 - \`gitpm diff --semantic [--project <id>] [--allow-delete]\` reports created, updated, archived, and deleted
   entities.
+- \`gitpm changes list|restore-file|restore-hunk|discard-all ...\` inspects or explicitly
+  restores uncommitted changes. Discard-all requires \`--confirm discard-all\`.
+- \`gitpm history list|show|file-diff|file-history ...\` inspects Git history.
 - \`gitpm export --format <pdf|html|csv|repository> [--locale <en|ru>] [--section <projects|people|project-details|gantt>] [--include-git] [--output <path>]\`
   creates a read-only export whose default filename contains the HEAD commit date and short hash.
 - \`gitpm commit --all -m <message> [--project <id>] [--allow-delete]\` validates and commits every change onto the
@@ -293,10 +302,9 @@ All commands accept \`--json\`; use it for automation. Direct-mode commands do n
 - \`gitpm doctor\` checks runtime and repository readiness.
 - \`gitpm --version\` reports the CLI version.
 
-There is no \`mr\` command in direct mode. The current CLI exposes entity create, update,
-import, list, show, delete (with dry-run and reference unlink), archive, move, comment CRUD,
-and configuration update. When the request needs an operation the CLI does not provide, report
-the capability gap. Do not invent syntax and do not fall back to editing YAML.
+There is no \`mr\` or \`history revert\` command in direct mode because neither operation has a
+draft branch. When the request needs an operation the CLI does not provide, report the capability
+gap. Do not invent syntax and do not fall back to editing YAML.
 
 For entity creation, keep the temporary input outside the checkout, inspect fields with
 \`gitpm schema show\`, and never guess a reference or configuration slug. Omit \`id\` to let GitPM

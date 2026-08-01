@@ -138,9 +138,15 @@ gitpm entity archive --type task --id T-26-RHBNH8 --json
 ```
 
 Для Person `--unlink-references` разрешает явно удалить поддерживаемые ссылки перед
-delete. В `worktree` mode эти entity-команды получают `--draft <id>`. Отдельные
-`comment` и `config` команды пока доступны только в `direct` mode; этот gap нельзя
-обходить прямой правкой YAML.
+delete. В `worktree` mode все предметные команды получают `--draft <id>`, включая
+`comment`, `notification`, `time-entry`, `config`, `schedule` и `planning`. Они используют
+тот же optimistic fingerprint, полную validation и rollback, что и GUI-формы. Raw GUI
+file manager не является agent CLI surface и не даёт разрешения обходить эти команды.
+
+Незакоммиченные изменения проверяются через `changes list`; отдельный файл или hunk
+восстанавливается через `changes restore-file|restore-hunk`. Массовая отмена требует
+`changes discard-all --confirm discard-all`. `history` читает commit/file history, а
+`history revert` создаёт новый draft и не меняет исходный.
 
 ## Scope, validation и publication
 
