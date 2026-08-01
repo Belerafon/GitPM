@@ -206,8 +206,8 @@ const commandHelp: Readonly<Record<string, string>> = {
   ].join("\n"),
   config: [
     "Usage:",
-    "  gitpm config show --kind statuses|issue-types [--json]",
-    "  gitpm config update --kind statuses|issue-types [--file <yaml>] [--set <field>=<yaml-value>]... [--unset <field>] [--allow-delete] [--json]",
+    "  gitpm config show --kind statuses|issue-types|work-categories|schedule-tracks [--json]",
+    "  gitpm config update --kind statuses|issue-types|work-categories|schedule-tracks [--file <yaml>] [--set <field>=<yaml-value>]... [--unset <field>] [--allow-delete] [--json]",
     "",
     "Reads or updates repository configuration documents in .gitpm/. Available in direct mode.",
   ].join("\n"),

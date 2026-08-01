@@ -5,7 +5,7 @@ import path from "node:path";
 import type { DraftManager } from "@gitpm/drafts";
 import type { GitClient } from "@gitpm/git-client";
 import { parseYamlDocument, type GitPmDocument } from "@gitpm/repository-format";
-import { buildGanttModel, buildSchedulingReadModel, resolvePlanning, type GanttModel, type ScheduleTracksConfig, type ScheduleWindow, type Schedulable } from "@gitpm/scheduling";
+import { buildGanttModel, resolvePlanning, resolveSchedulingHierarchy, type GanttModel, type ScheduleTracksConfig, type ScheduleWindow, type SchedulingHierarchyTask } from "@gitpm/scheduling";
 import { actualSegments, actualWindow, type TimeEntryRecord } from "@gitpm/time-entries";
 import { discoverRepositoryFiles, validateRepository } from "@gitpm/validation";
 import pdfMake from "pdfmake/build/pdfmake.js";
@@ -151,8 +151,10 @@ function scheduleMap(document: GitPmDocument): Readonly<Record<string, ScheduleW
     : {};
 }
 
-function schedulable(document: GitPmDocument, schedules = scheduleMap(document)): Schedulable {
-  return { id: text(document, "id"), schedules };
+function schedulable(document: GitPmDocument, schedules = scheduleMap(document)): SchedulingHierarchyTask {
+  const parent = text(document, "parent");
+  const milestone = text(document, "milestone");
+  return { id: text(document, "id"), schedules, ...(parent === "" ? {} : { parent }), ...(milestone === "" ? {} : { milestone }) };
 }
 
 function timeEntry(document: GitPmDocument): TimeEntryRecord | undefined {
@@ -199,28 +201,15 @@ function buildExportScheduling(snapshot: ExportSnapshot): ExportScheduling {
     plans.set(projectId, { primary: planning.primary_track, visible });
     const tasks = groups.tasks.filter((task) => text(task, "project") === projectId);
     const milestones = groups.milestones.filter((milestone) => text(milestone, "project") === projectId);
-    const effective = new Map<string, ReadonlyMap<string, ScheduleWindow>>();
-    const resolveTask = (task: GitPmDocument): ReadonlyMap<string, ScheduleWindow> => {
-      const id = text(task, "id");
-      const known = effective.get(id); if (known !== undefined) return known;
-      const children = tasks.filter((candidate) => text(candidate, "parent") === id).map((child) => schedulable(child, Object.fromEntries(resolveTask(child))));
-      const model = buildSchedulingReadModel(schedulable(task), children, visible);
-      const resolved = new Map(model.tracks.flatMap((summary) => summary.effective === undefined ? [] : [[summary.track, summary.effective as ScheduleWindow] as const]));
-      effective.set(id, resolved);
-      return resolved;
-    };
-    for (const task of tasks) resolveTask(task);
-    const resolvedMilestones = milestones.map((milestone) => {
-      const children = tasks.filter((task) => text(task, "milestone") === text(milestone, "id") && text(task, "parent") === "").map((task) => schedulable(task, Object.fromEntries(resolveTask(task))));
-      const model = buildSchedulingReadModel(schedulable(milestone), children, visible);
-      const resolved = new Map(model.tracks.flatMap((summary) => summary.effective === undefined ? [] : [[summary.track, summary.effective as ScheduleWindow] as const]));
-      effective.set(text(milestone, "id"), resolved);
-      return schedulable(milestone, Object.fromEntries(resolved));
+    const hierarchy = resolveSchedulingHierarchy({
+      project: schedulable(project),
+      milestones: milestones.map((milestone) => schedulable(milestone)),
+      tasks: tasks.map((task) => schedulable(task)),
+      tracks: visible,
     });
-    const rootTasks = tasks.filter((task) => text(task, "milestone") === "" && text(task, "parent") === "").map((task) => schedulable(task, Object.fromEntries(resolveTask(task))));
-    const projectModel = buildSchedulingReadModel(schedulable(project), [...resolvedMilestones, ...rootTasks], visible);
-    effective.set(projectId, new Map(projectModel.tracks.flatMap((summary) => summary.effective === undefined ? [] : [[summary.track, summary.effective as ScheduleWindow] as const])));
-    for (const [id, value] of effective) windows.set(id, value);
+    for (const [id, model] of hierarchy.readModels) {
+      windows.set(id, new Map(model.tracks.flatMap((summary) => summary.effective === undefined ? [] : [[summary.track, summary.effective as ScheduleWindow] as const])));
+    }
   }
   return { plans, windows, actual, actualWindows };
 }

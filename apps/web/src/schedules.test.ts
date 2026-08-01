@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSchedule, updateScheduleWindow, withScheduleWindow } from "./schedules.js";
+import { buildSchedule, setScheduleDependencies, updateScheduleWindow, withScheduleWindow } from "./schedules.js";
 
 describe("updateScheduleWindow", () => {
   const multiTrack = {
@@ -22,9 +22,9 @@ describe("updateScheduleWindow", () => {
     expect(next.working).toEqual({ start: "2026-08-05", finish: "2026-08-17", effort_hours: 40, depends_on: ["T-26-AAAAAA"] });
   });
 
-  it("removes only the edited window when every editable field is cleared", () => {
+  it("keeps a dependency-only window when every editable field is cleared", () => {
     const next = updateScheduleWindow(multiTrack, "working", { start: "", finish: "", effort_hours: "" })!;
-    expect(next.working).toBeUndefined();
+    expect(next.working).toEqual({ depends_on: ["T-26-AAAAAA"] });
     expect(next.target).toEqual(multiTrack.target);
     expect(next.forecast).toEqual(multiTrack.forecast);
   });
@@ -53,6 +53,31 @@ describe("updateScheduleWindow", () => {
 
   it("keeps buildSchedule parity for fresh single-track creation", () => {
     expect(buildSchedule("working", "2026-08-05", "2026-08-20", "40")).toEqual({ working: { start: "2026-08-05", finish: "2026-08-20", effort_hours: 40 } });
+  });
+});
+
+describe("setScheduleDependencies", () => {
+  it("creates a dependency-only window for an absent track", () => {
+    expect(setScheduleDependencies(undefined, "working", ["T-26-AAAAAA"])).toEqual({
+      working: { depends_on: ["T-26-AAAAAA"] },
+    });
+  });
+
+  it("removes an empty dependency-only window after its last dependency is cleared", () => {
+    expect(setScheduleDependencies({ working: { depends_on: ["T-26-AAAAAA"] } }, "working", [])).toBeUndefined();
+  });
+
+  it("preserves neighboring tracks while dependencies change", () => {
+    const multiTrack = {
+      target: { start: "2026-08-01", finish: "2026-08-30" },
+      working: { start: "2026-08-05", finish: "2026-08-20", effort_hours: 40, depends_on: ["T-26-AAAAAA"] },
+      forecast: { finish: "2026-09-10" },
+    };
+    expect(setScheduleDependencies(multiTrack, "working", ["T-26-BBBBBB"])).toEqual({
+      target: multiTrack.target,
+      forecast: multiTrack.forecast,
+      working: { start: "2026-08-05", finish: "2026-08-20", effort_hours: 40, depends_on: ["T-26-BBBBBB"] },
+    });
   });
 });
 

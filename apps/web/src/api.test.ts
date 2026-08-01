@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, formatApiError, HttpGitPmApi } from "./api.js";
+import { ApiError, formatApiError, HttpGitPmApi, listAllProjectTimeEntries, type TimeEntryResult } from "./api.js";
 import { ApiContractError } from "@gitpm/contracts";
 import type { EntityResult } from "./types.js";
 
@@ -59,6 +59,23 @@ describe("HttpGitPmApi request bodies", () => {
 
     expect(result).toMatchObject({ total: 1, items: [expect.objectContaining({ document: expect.objectContaining({ id: "E-26-AAAAAA" }) })] });
     expect(fetchMock).toHaveBeenCalledWith("/api/drafts/DRF-1/projects/P-26-MGP84K/time-entries?task=T-26-P9G3P8&state=active&limit=10", expect.objectContaining({ credentials: "include" }));
+  });
+
+  it("reads project time entries sequentially until the reported total", async () => {
+    const entry = (index: number): TimeEntryResult => ({
+      document: { schema: "gitpm/time-entry@1", id: `E-26-${String(index).padStart(6, "0")}`, project: "P-26-MGP84K", task: "T-26-P9G3P8", person: "U-26-5EBAE3", performed_on: "2026-09-01", hours: 1, category: "regular", created_at: "2026-09-01T00:00:00.000Z", state: "active" },
+      path: `${index}.yaml`, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64),
+    });
+    const all = Array.from({ length: 201 }, (_, index) => entry(index));
+    const listProjectTimeEntries = vi.fn(async (_draftId: string, _projectId: string, filters?: { readonly offset?: number; readonly limit?: number }) => {
+      const offset = filters?.offset ?? 0; const limit = filters?.limit ?? 200;
+      return { items: all.slice(offset, offset + limit), total: all.length, offset, limit };
+    });
+
+    const result = await listAllProjectTimeEntries({ listProjectTimeEntries }, "DRF-1", "P-26-MGP84K");
+
+    expect(result).toHaveLength(201);
+    expect(listProjectTimeEntries.mock.calls.map((call) => call[2]?.offset)).toEqual([0, 200]);
   });
 
   it("downloads binary exports and preserves the server filename", async () => {

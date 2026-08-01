@@ -85,6 +85,7 @@ describe("CLI P02 commands", () => {
     }
     const configHelp = JSON.parse((await run(["config", "--help", "--json"])).output) as { help: string };
     expect(configHelp.help).toMatch(/config update.*--allow-delete/u);
+    expect(configHelp.help).toContain("statuses|issue-types|work-categories|schedule-tracks");
     for (const command of ["format", "validate", "diff", "commit"]) {
       const commandHelp = JSON.parse((await run([command, "--help", "--json"])).output) as { help: string };
       expect(commandHelp.help).toContain("--allow-delete");

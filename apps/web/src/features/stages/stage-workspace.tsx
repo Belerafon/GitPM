@@ -1,5 +1,5 @@
 import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
-import { buildSchedulingReadModel, windowEffort } from "@gitpm/scheduling";
+import { resolveSchedulingHierarchy, windowEffort, type SchedulingHierarchyTask } from "@gitpm/scheduling";
 import { buildSchedule, ScheduleResolver, scheduleTracksConfig, scheduleTextReader, withScheduleWindow } from "../../schedules.js";
 import { isCompletedStatus } from "../../status-categories.js";
 import { buildTaskHierarchy } from "@gitpm/task-hierarchy";
@@ -15,6 +15,7 @@ import type { ConfigurationResult, DraftStatus, EntityDocument, EntityResult, Gi
 import type { WorkspaceNavigate } from "../../workspace-navigation.js";
 import { PersonLinks } from "../../person-link.js";
 import { draftReadOnlyReason } from "../../draft-read-only.js";
+import { SchedulingOverflowWarnings } from "../../scheduling-overflow-warnings.js";
 
 interface ConfigValue { readonly slug: string; readonly title: string; readonly active: boolean; readonly category?: "backlog" | "active" | "done" | "cancelled" }
 type ScheduleTextReader = (document: Readonly<Record<string, unknown>>, key: string) => string;
@@ -155,6 +156,7 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
         statusSavingId={statusPending}
         text={text}
         primaryTrack={primaryTrack}
+        scheduling={scheduling}
         t={t}
       />)}
     </AsyncBoundary>
@@ -184,7 +186,7 @@ export function StageWorkspace({ api, draft, locale, projectId, stageId, onNavig
   </section>;
 }
 
-function StageDetails({ stage, tasks, projectId, locale, people, readOnly, changed, changedTaskIds, statusOptions, statusBusy, statusSavingId, text, primaryTrack, onArchive, onEdit, onNewTask, onStatusChange, onNavigate, t }: {
+function StageDetails({ stage, tasks, projectId, locale, people, readOnly, changed, changedTaskIds, statusOptions, statusBusy, statusSavingId, text, primaryTrack, scheduling, onArchive, onEdit, onNewTask, onStatusChange, onNavigate, t }: {
   readonly stage: EntityResult;
   readonly tasks: readonly EntityResult[];
   readonly projectId: string;
@@ -198,6 +200,7 @@ function StageDetails({ stage, tasks, projectId, locale, people, readOnly, chang
   readonly statusSavingId: string | null;
   readonly text: ScheduleTextReader;
   readonly primaryTrack: string;
+  readonly scheduling: ScheduleResolver;
   readonly onArchive: () => void;
   readonly onEdit: () => void;
   readonly onNewTask: () => void;
@@ -207,7 +210,17 @@ function StageDetails({ stage, tasks, projectId, locale, people, readOnly, chang
 }) {
   const completed = tasks.filter((task) => isCompletedStatus(statusOptions, text(task.document, "status"))).length;
   const overdue = tasks.filter((task) => !isCompletedStatus(statusOptions, text(task.document, "status")) && /^\d{4}-\d{2}-\d{2}$/u.test(text(task.document, "due")) && text(task.document, "due") < new Date().toISOString().slice(0, 10)).length;
-  const track = buildSchedulingReadModel(stage.document, tasks.map((task) => task.document), [primaryTrack]).tracks[0];
+  const hierarchyScheduling = resolveSchedulingHierarchy({
+    milestones: [stage.document],
+    tasks: tasks.map((task): SchedulingHierarchyTask => ({
+      ...task.document,
+      parent: typeof task.document.parent === "string" && task.document.parent !== "" ? task.document.parent : undefined,
+      milestone: typeof task.document.milestone === "string" && task.document.milestone !== "" ? task.document.milestone : undefined,
+    })),
+    tracks: primaryTrack === "" ? [] : [primaryTrack],
+  });
+  const stageReadModel = hierarchyScheduling.readModels.get(stage.document.id);
+  const track = stageReadModel?.tracks[0];
   const estimate = windowEffort(track?.rolled);
   const due = typeof track?.effective?.finish === "string" ? track.effective.finish : undefined;
   const stageAssignees = [...new Set(tasks.flatMap((task) => Array.isArray(task.document.assignees) ? task.document.assignees.filter((id): id is string => typeof id === "string") : []))];
@@ -227,6 +240,7 @@ function StageDetails({ stage, tasks, projectId, locale, people, readOnly, chang
       <div className="card"><span>{t("stages.estimate")}</span><strong>{estimate === undefined ? "—" : formatDurationHours(locale, estimate)}</strong></div>
       <div className="card"><span>{t("core.due")}</span><strong>{due === undefined ? "—" : formatDateOnly(locale, due)}</strong></div>
     </div>
+    <SchedulingOverflowWarnings locale={locale} trackTitle={(trackSlug) => scheduling.trackTitle(trackSlug)} warnings={stageReadModel?.overflowWarnings ?? []} />
     <section className="card stage-task-list"><div className="card-heading"><div><h3>{t("stages.tasks")}</h3><p>{t("stages.tasksDescription")}</p></div><button onClick={() => onNavigate("board", { projectId, query: { milestone: [stage.document.id] } })}>{t("stages.openBoard")}</button></div>
       {tasks.length === 0 ? <p>{t("stages.emptyTasks")}</p> : taskEntries.map((entry) => { const task = entry.task.entity; const assignees = Array.isArray(task.document.assignees) ? task.document.assignees.filter((id): id is string => typeof id === "string") : []; return <div className={`stage-task-row${changedTaskIds.has(task.document.id) ? " recently-changed" : ""}${statusSavingId === task.document.id ? " is-saving" : ""}`} data-depth={entry.depth} key={task.document.id} style={{ "--task-depth": entry.depth } as CSSProperties}>
         <button className="stage-task-link" onClick={() => onNavigate("tasks", { projectId, taskId: task.document.id })}><strong>{text(task.document, "title")}</strong><code>{task.document.id}</code><span className="task-assignees"><PersonLinks empty={t("core.unassigned")} onOpen={(personId) => onNavigate("people", { personId })} people={people} personIds={assignees} /></span></button>{readOnly ? <span className="state open">{statusOptions.find((status) => status.slug === text(task.document, "status"))?.title ?? text(task.document, "status")}</span> : <select aria-label={`${t("core.status")}: ${text(task.document, "title")}`} className="inline-status-select" disabled={statusBusy} onChange={(event) => onStatusChange(task, event.target.value)} title={t("tooltip.changeStatus")} value={text(task.document, "status")}>{statusOptions.map((status) => <option key={status.slug} value={status.slug}>{status.title}</option>)}</select>}

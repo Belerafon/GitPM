@@ -713,6 +713,8 @@
   ,"snapshot.actualHours": "Actual hours"
   ,"snapshot.hoursAfter": "Hours after {date}"
   ,"snapshot.actualReport": "Actual hours report"
+  ,"scheduling.overflowHeading": "Schedule overflow"
+  ,"scheduling.overflowWarning": "{track} · {field}: declared {declared}; rolled {rolled}"
   ,"admin.statusCategory": "Status category"
   ,"admin.categoryBacklog": "Backlog"
   ,"admin.categoryActive": "Active"

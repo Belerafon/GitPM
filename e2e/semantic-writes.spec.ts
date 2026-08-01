@@ -118,7 +118,7 @@ test.describe("semantic scheduling writes", () => {
     });
   });
 
-  test("switches dependency tracks in Gantt without mixing per-track edges", async ({ page, request }) => {
+  test("shows only dependency-capable tracks in Gantt without mixing per-track edges", async ({ page, request }) => {
     const predecessorId = "T-26-SMW003";
     const successorId = "T-26-SMW004";
     await createTask(request, task(predecessorId, "Track predecessor", { plan: { start: "2026-09-01", finish: "2026-09-02" }, target: { start: "2026-09-01", finish: "2026-09-02" } }));
@@ -128,10 +128,10 @@ test.describe("semantic scheduling writes", () => {
     await page.goto(`/projects/${FIXTURE_PROJECT_ID}/timeline`);
     await english(page);
     const dependencyTrack = page.getByLabel("Dependency track", { exact: true });
+    await expect(dependencyTrack.locator("option")).toHaveText(["Working plan"]);
     await dependencyTrack.selectOption("plan");
     await expect(page.locator(`.gantt-dependencies path[data-from='${predecessorId}'][data-to='${successorId}']`)).toHaveCount(1);
-    await dependencyTrack.selectOption("target");
-    await expect(page.locator(`.gantt-dependencies path[data-to='${successorId}']`)).toHaveCount(0);
+    await expect(dependencyTrack.locator("option[value='target']")).toHaveCount(0);
   });
 
   test("records late duplicate-day actual activity, reports it by project, and moves it with the task", async ({ page, request }) => {

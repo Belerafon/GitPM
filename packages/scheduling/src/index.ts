@@ -209,6 +209,87 @@ export function buildSchedulingReadModel(
   return { id: subject.id, tracks: summaries, overflowWarnings: rollupOverflowWarnings(subject, children, tracks) };
 }
 
+export interface SchedulingHierarchyTask extends Schedulable {
+  readonly parent?: string;
+  readonly milestone?: string;
+}
+
+export interface ResolveSchedulingHierarchyOptions {
+  readonly project?: Schedulable;
+  readonly milestones?: readonly Schedulable[];
+  readonly tasks: readonly SchedulingHierarchyTask[];
+  readonly tracks: readonly string[];
+}
+
+export interface ResolvedSchedulingHierarchy {
+  readonly readModels: ReadonlyMap<string, SchedulingReadModel>;
+  readonly subjects: ReadonlyMap<string, Schedulable>;
+}
+
+function subjectFromReadModel(subject: Schedulable, model: SchedulingReadModel): Schedulable {
+  const schedules: Record<string, ScheduleWindow> = { ...(subject.schedules ?? {}) };
+  for (const summary of model.tracks) {
+    if (summary.effective !== undefined) schedules[summary.track] = summary.effective;
+  }
+  return { ...subject, schedules };
+}
+
+/**
+ * Resolves task windows children-first, then rolls root tasks into milestones and
+ * resolved milestones plus root tasks without a milestone into the project.
+ */
+export function resolveSchedulingHierarchy(options: ResolveSchedulingHierarchyOptions): ResolvedSchedulingHierarchy {
+  const readModels = new Map<string, SchedulingReadModel>();
+  const subjects = new Map<string, Schedulable>();
+  const tasksById = new Map(options.tasks.map((task) => [task.id, task]));
+  const childrenByParent = new Map<string, SchedulingHierarchyTask[]>();
+  for (const task of options.tasks) {
+    if (task.parent === undefined || task.parent === "") continue;
+    childrenByParent.set(task.parent, [...(childrenByParent.get(task.parent) ?? []), task]);
+  }
+  const resolving = new Set<string>();
+  const resolveTask = (id: string): Schedulable => {
+    const known = subjects.get(id);
+    if (known !== undefined) return known;
+    const task = tasksById.get(id);
+    if (task === undefined || resolving.has(id)) return task ?? { id };
+    resolving.add(id);
+    const children = (childrenByParent.get(id) ?? []).map((child) => resolveTask(child.id));
+    const model = buildSchedulingReadModel(task, children, options.tracks);
+    const resolved = subjectFromReadModel(task, model);
+    resolving.delete(id);
+    readModels.set(id, model);
+    subjects.set(id, resolved);
+    return resolved;
+  };
+
+  for (const task of options.tasks) resolveTask(task.id);
+
+  const milestones = options.milestones ?? [];
+  for (const milestone of milestones) {
+    const rootTasks = options.tasks
+      .filter((task) => (task.parent === undefined || task.parent === "") && task.milestone === milestone.id)
+      .map((task) => resolveTask(task.id));
+    const model = buildSchedulingReadModel(milestone, rootTasks, options.tracks);
+    readModels.set(milestone.id, model);
+    subjects.set(milestone.id, subjectFromReadModel(milestone, model));
+  }
+
+  if (options.project !== undefined) {
+    const projectChildren = [
+      ...milestones.map((milestone) => subjects.get(milestone.id) ?? milestone),
+      ...options.tasks
+        .filter((task) => (task.parent === undefined || task.parent === "") && (task.milestone === undefined || task.milestone === ""))
+        .map((task) => resolveTask(task.id)),
+    ];
+    const model = buildSchedulingReadModel(options.project, projectChildren, options.tracks);
+    readModels.set(options.project.id, model);
+    subjects.set(options.project.id, subjectFromReadModel(options.project, model));
+  }
+
+  return { readModels, subjects };
+}
+
 export function readModelTrack(model: SchedulingReadModel, track: string): TrackWindowSummary | undefined {
   return model.tracks.find((summary) => summary.track === track);
 }
@@ -380,44 +461,6 @@ export interface BuildGanttOptions {
   readonly dependencyTrack?: string;
   readonly actual?: ReadonlyMap<string, readonly GanttActualSegment[]>;
   readonly milestones?: readonly GanttMilestone[];
-}
-
-export interface GanttSchedulable extends Schedulable {
-  readonly parent?: string;
-}
-
-/** Resolves inherited task windows before constructing the UI-agnostic Gantt model. */
-export function buildResolvedGanttModel(subjects: readonly GanttSchedulable[], options: BuildGanttOptions): GanttModel {
-  const tracks = [...new Set([
-    options.primaryTrack,
-    ...(options.visibleTracks ?? []),
-    options.dependencyTrack ?? options.primaryTrack,
-  ])];
-  const raw = new Map(subjects.map((subject) => [subject.id, subject]));
-  const children = new Map<string, GanttSchedulable[]>();
-  for (const subject of subjects) {
-    if (subject.parent !== undefined && subject.parent !== "") {
-      children.set(subject.parent, [...(children.get(subject.parent) ?? []), subject]);
-    }
-  }
-  const resolved = new Map<string, Schedulable>();
-  const resolving = new Set<string>();
-  const resolve = (id: string): Schedulable => {
-    const cached = resolved.get(id);
-    if (cached !== undefined) return cached;
-    const subject = raw.get(id);
-    if (subject === undefined || resolving.has(id)) return subject ?? { id };
-    resolving.add(id);
-    const childSubjects = (children.get(id) ?? []).map((child) => resolve(child.id));
-    const read = buildSchedulingReadModel(subject, childSubjects, tracks);
-    const schedules: Record<string, ScheduleWindow> = { ...(subject.schedules ?? {}) };
-    for (const summary of read.tracks) if (summary.effective !== undefined) schedules[summary.track] = summary.effective;
-    const value = { id, schedules };
-    resolving.delete(id);
-    resolved.set(id, value);
-    return value;
-  };
-  return buildGanttModel(subjects.map((subject) => resolve(subject.id)), options);
 }
 
 function barFromWindow(track: string, window: ScheduleWindow | RolledWindow | undefined): GanttTrackBar | undefined {
