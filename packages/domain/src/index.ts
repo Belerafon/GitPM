@@ -473,6 +473,22 @@ export class EntityStore {
     };
   }
 
+  async getRepositoryConfiguration(draftId: string): Promise<EntityResult> {
+    const metadata = await this.drafts.getWorkspace(draftId);
+    const relative = ".gitpm/repository.yaml";
+    const absolute = await resolveDomainPath(metadata.worktree_path, relative);
+    const document = parseYamlDocument(await readFile(absolute, "utf8"), relative);
+    if (document.schema !== "gitpm/repository@1") {
+      throw new DomainOperationError("SCHEMA_CONST", `${relative} must contain gitpm/repository@1`);
+    }
+    return {
+      document,
+      path: relative,
+      blob_id: await this.drafts.fileBlobId(draftId, relative),
+      draft_fingerprint: metadata.fingerprint,
+    };
+  }
+
   async updateConfiguration(
     draftId: string,
     owner: string,

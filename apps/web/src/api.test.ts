@@ -183,6 +183,30 @@ describe("HttpGitPmApi request bodies", () => {
     });
   });
 
+  it("loads the repository default calendar through its strict response contract", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      document: { schema: "gitpm/repository@1", default_branch: "main", default_calendar: "C-26-QD7FJ4", allowed_top_level_files: ["README.md"], ui_poll_interval_seconds: 5 },
+      path: ".gitpm/repository.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64),
+    }), { status: 200, headers: { "content-type": "application/json" } })));
+
+    const result = await new HttpGitPmApi().getRepositoryConfiguration("DRF-1");
+
+    expect(result.document.default_calendar).toBe("C-26-QD7FJ4");
+  });
+
+  it("serializes and decodes an atomic time-entry replacement", async () => {
+    const original = { document: { schema: "gitpm/time-entry@1" as const, id: "E-26-AAAAAA", project: "P-26-MGP84K", task: "T-26-P9G3P8", person: "U-26-5EBAE3", performed_on: "2026-09-01", hours: 1, category: "regular", created_at: "2026-09-01T00:00:00.000Z", state: "active" as const }, path: "old.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) };
+    const replacement = { ...original, document: { ...original.document, id: "E-26-BBBBBB", hours: 2 }, path: "new.yaml" };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ voided: { ...original, document: { ...original.document, state: "voided", replacement: replacement.document.id, voided_at: "2026-09-02T00:00:00.000Z", voided_by: { provider: "git", subject: "ada@example.test", display_name: "Ada" } } }, created: replacement }), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await new HttpGitPmApi().replaceTimeEntry("DRF-1", original.document.project, original.document.task, original, original.draft_fingerprint, { person: original.document.person, performed_on: original.document.performed_on, hours: 2, category: "regular" });
+
+    expect(result.voided.document.replacement).toBe("E-26-BBBBBB");
+    expect(result.created.document.hours).toBe(2);
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/E-26-AAAAAA/replace"), expect.objectContaining({ method: "POST" }));
+  });
+
   it("rejects entity responses that violate the shared runtime contract", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify([{
       document: { schema: "gitpm/statuses@2", statuses: [] },

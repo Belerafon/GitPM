@@ -19,6 +19,7 @@ import {
   decodePushResult,
   decodeRepositoryConnectionStatus,
   decodeRepositoryConnectionTest,
+  decodeRepositoryResult,
   decodeRevertDraftResult,
   decodeSemanticDiff,
   decodeValidationSummary,
@@ -32,13 +33,18 @@ import {
   type ConfigurationResult,
   type Decoder,
 } from "@gitpm/contracts";
-import type { ChangesList, CommentResult, CommitFileDiff, CommitHistoryDetail, CommitHistoryItem, CommitResult, DraftSnapshot, DraftStatus, EntityResult, GitPmDocument, MergeRequestStatus, NotificationsResult, ProjectWorkspaceResult, PublicSession, PushResult, RepositoryConnectionStatus, RepositoryConnectionTest, RepositoryConnectionUpdate, RevertDraftResult, SemanticDiff, TimeEntryDocument, WriterMode, WorktreeDirectory, WorktreeFile } from "./types.js";
+import type { ChangesList, CommentResult, CommitFileDiff, CommitHistoryDetail, CommitHistoryItem, CommitResult, DraftSnapshot, DraftStatus, EntityResult, GitPmDocument, MergeRequestStatus, NotificationsResult, ProjectWorkspaceResult, PublicSession, PushResult, RepositoryConnectionStatus, RepositoryConnectionTest, RepositoryConnectionUpdate, RepositoryResult, RevertDraftResult, SemanticDiff, TimeEntryDocument, WriterMode, WorktreeDirectory, WorktreeFile } from "./types.js";
 
 export interface TimeEntryResult {
   readonly document: TimeEntryDocument;
   readonly path: string;
   readonly blob_id: string;
   readonly draft_fingerprint: string;
+}
+
+export interface TimeEntryReplacementResult {
+  readonly voided: TimeEntryResult;
+  readonly created: TimeEntryResult;
 }
 
 function asTimeEntryResult(input: unknown): TimeEntryResult {
@@ -55,6 +61,11 @@ function asTimeEntryResult(input: unknown): TimeEntryResult {
 const decodeTimeEntryResult: Decoder<TimeEntryResult> = (input) => asTimeEntryResult(input);
 const decodeTimeEntryResults: Decoder<readonly TimeEntryResult[]> = (input) =>
   Array.isArray(input) ? input.map(asTimeEntryResult) : (() => { throw new ApiError("API_RESPONSE_CONTRACT_INVALID", "TimeEntryResult[]: expected an array"); })();
+const decodeTimeEntryReplacementResult: Decoder<TimeEntryReplacementResult> = (input) => {
+  if (input === null || typeof input !== "object" || Array.isArray(input)) throw new ApiError("API_RESPONSE_CONTRACT_INVALID", "TimeEntryReplacementResult: expected an object");
+  const value = input as Record<string, unknown>;
+  return { voided: asTimeEntryResult(value.voided), created: asTimeEntryResult(value.created) };
+};
 
 export interface TimeEntryProjectList {
   readonly items: readonly TimeEntryResult[];
@@ -161,6 +172,7 @@ export interface GitPmApi {
   archiveEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string): Promise<EntityResult>;
   deleteEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string, unlinkReferences?: boolean, cascadeReferences?: boolean): Promise<void>;
   getConfiguration(draftId: string, kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks"): Promise<ConfigurationResult>;
+  getRepositoryConfiguration(draftId: string): Promise<RepositoryResult>;
   updateConfiguration(draftId: string, kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks", entity: ConfigurationResult, fingerprint: string, document: ConfigurationDocument): Promise<ConfigurationResult>;
   listChanges(draftId: string): Promise<ChangesList>;
   listWorktree(draftId: string, path?: string): Promise<WorktreeDirectory>;
@@ -191,6 +203,7 @@ export interface GitPmApi {
   listProjectTimeEntries(draftId: string, projectId: string, filters?: ProjectTimeEntryFilters): Promise<TimeEntryProjectList>;
   createTimeEntry(draftId: string, projectId: string, taskId: string, fingerprint: string, input: { readonly person: string; readonly performed_on: string; readonly hours: number; readonly category: string; readonly note_markdown?: string }): Promise<TimeEntryResult>;
   voidTimeEntry(draftId: string, projectId: string, taskId: string, entry: TimeEntryResult, fingerprint: string): Promise<TimeEntryResult>;
+  replaceTimeEntry(draftId: string, projectId: string, taskId: string, entry: TimeEntryResult, fingerprint: string, input: { readonly person: string; readonly performed_on: string; readonly hours: number; readonly category: string; readonly note_markdown?: string }): Promise<TimeEntryReplacementResult>;
 }
 
 export async function listAllProjectTimeEntries(api: Pick<GitPmApi, "listProjectTimeEntries">, draftId: string, projectId: string, filters: ProjectTimeEntryFilters = {}): Promise<readonly TimeEntryResult[]> {
@@ -337,6 +350,9 @@ export class HttpGitPmApi implements GitPmApi {
   async getConfiguration(draftId: string, kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks"): Promise<ConfigurationResult> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/config/${kind}`, decodeConfigurationResult);
   }
+  async getRepositoryConfiguration(draftId: string): Promise<RepositoryResult> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/config/repository`, decodeRepositoryResult);
+  }
   async updateConfiguration(draftId: string, kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks", entity: ConfigurationResult, expected_fingerprint: string, document: ConfigurationDocument): Promise<ConfigurationResult> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/config/${kind}`, decodeConfigurationResult, { method: "PUT", body: JSON.stringify({ expected_fingerprint, expected_blob_id: entity.blob_id, document }) });
   }
@@ -430,5 +446,8 @@ export class HttpGitPmApi implements GitPmApi {
   }
   async voidTimeEntry(draftId: string, projectId: string, taskId: string, entry: TimeEntryResult, expected_fingerprint: string): Promise<TimeEntryResult> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}/time-entries/${encodeURIComponent(entry.document.id)}/void`, decodeTimeEntryResult, { method: "POST", body: JSON.stringify({ expected_fingerprint, expected_blob_id: entry.blob_id }) });
+  }
+  async replaceTimeEntry(draftId: string, projectId: string, taskId: string, entry: TimeEntryResult, expected_fingerprint: string, input: { readonly person: string; readonly performed_on: string; readonly hours: number; readonly category: string; readonly note_markdown?: string }): Promise<TimeEntryReplacementResult> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}/time-entries/${encodeURIComponent(entry.document.id)}/replace`, decodeTimeEntryReplacementResult, { method: "POST", body: JSON.stringify({ expected_fingerprint, expected_blob_id: entry.blob_id, ...input }) });
   }
 }

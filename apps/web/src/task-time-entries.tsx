@@ -4,6 +4,7 @@ import { formatApiError, type GitPmApi } from "./api.js";
 import { formatDateOnly, message, type Locale, type MessageKey } from "./i18n.js";
 import type { DraftStatus, EntityResult } from "./types.js";
 import type { TimeEntryResult } from "./api.js";
+import { EditorDrawer } from "./editor-drawer.js";
 
 interface WorkCategory { readonly slug: string; readonly title: string; readonly active: boolean }
 
@@ -33,6 +34,7 @@ export function TaskTimeEntries(props: {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [fingerprint, setFingerprint] = useState(props.fingerprint);
+  const [editingEntry, setEditingEntry] = useState<TimeEntryResult | null>(null);
 
   const personName = useCallback((id: string): string => people.find((person) => person.document.id === id)?.document.name ?? id, [people]);
 
@@ -113,6 +115,32 @@ export function TaskTimeEntries(props: {
     }
   };
 
+  const replaceEntry = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (editingEntry === null) return;
+    const data = new FormData(event.currentTarget);
+    const input = {
+      person: String(data.get("person") ?? ""),
+      performed_on: String(data.get("performed_on") ?? ""),
+      hours: Number(data.get("hours") ?? 0),
+      category: String(data.get("category") ?? ""),
+      ...(data.get("note") === null || String(data.get("note")) === "" ? {} : { note_markdown: String(data.get("note")) }),
+    };
+    setBusy(true);
+    try {
+      const replaced = await api.replaceTimeEntry(draft.draft_id, projectId, taskId, editingEntry, fingerprint, input);
+      setEntries((current) => current.flatMap((item) => item.document.id === editingEntry.document.id ? [replaced.voided, replaced.created] : [item]));
+      setFingerprint(replaced.created.draft_fingerprint);
+      await props.onFingerprintChange(replaced.created.draft_fingerprint);
+      setEditingEntry(null);
+      setError(null);
+    } catch (candidate) {
+      setError(formatApiError(candidate));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <section className="task-time-entries">
       <div className="task-time-entries-heading">
@@ -135,7 +163,7 @@ export function TaskTimeEntries(props: {
                 <span className="time-entry-person">{personName(entry.document.person)}</span>
                 <span className="time-entry-category">{categories.find((category) => category.slug === entry.document.category)?.title ?? entry.document.category}</span>
                 {typeof entry.document.note_markdown === "string" && entry.document.note_markdown !== "" && <span className="time-entry-note">{entry.document.note_markdown}</span>}
-                {entry.document.state === "active" && !readOnly && <button className="text-link" disabled={busy} onClick={() => void voidEntry(entry)} type="button">{t("timeEffort.void")}</button>}
+                {entry.document.state === "active" && !readOnly && <><button className="text-link" disabled={busy} onClick={() => setEditingEntry(entry)} type="button">{t("timeEffort.correct")}</button><button className="text-link" disabled={busy} onClick={() => void voidEntry(entry)} type="button">{t("timeEffort.void")}</button></>}
               </li>
             ))}
             {entries.length === 0 && <li className="empty-copy">{t("timeEffort.empty")}</li>}
@@ -150,6 +178,16 @@ export function TaskTimeEntries(props: {
               <button className="primary" disabled={busy} type="submit">{t("timeEffort.add")}</button>
             </form>
           )}
+          <EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setEditingEntry(null)} open={editingEntry !== null} title={t("timeEffort.correctTitle")}>
+            {editingEntry !== null && <form className="editor-drawer-form time-entry-form" onSubmit={replaceEntry}>
+              <label>{t("timeEffort.person")}<select defaultValue={editingEntry.document.person} disabled={busy} name="person" required>{activePeople.map((person) => <option key={person.document.id} value={person.document.id}>{person.document.name}</option>)}</select></label>
+              <label>{t("timeEffort.date")}<input defaultValue={editingEntry.document.performed_on} disabled={busy} name="performed_on" required type="date" /></label>
+              <label>{t("timeEffort.hours")}<input defaultValue={editingEntry.document.hours} disabled={busy} min="0.25" name="hours" required step="0.25" type="number" /></label>
+              <label>{t("timeEffort.category")}<select defaultValue={editingEntry.document.category} disabled={busy} name="category" required>{categories.map((category) => <option key={category.slug} value={category.slug}>{category.title}</option>)}</select></label>
+              <label>{t("timeEffort.note")}<input defaultValue={editingEntry.document.note_markdown ?? ""} disabled={busy} name="note" type="text" /></label>
+              <div className="editor-drawer-actions"><button disabled={busy} onClick={() => setEditingEntry(null)} type="button">{t("core.cancel")}</button><button className="primary" disabled={busy} type="submit">{t("core.save")}</button></div>
+            </form>}
+          </EditorDrawer>
         </>
       )}
     </section>

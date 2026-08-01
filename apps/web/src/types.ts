@@ -31,6 +31,7 @@ export type {
   RepositoryConnectionStatus,
   RepositoryConnectionTest,
   RepositoryConnectionUpdate,
+  RepositoryResult,
   RevertDraftResult,
   SemanticChange,
   SemanticDiff,

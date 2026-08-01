@@ -74,7 +74,9 @@ describe("scripted agent CLI", () => {
 
     const entry = await invoke(["time-entry", "create", "--draft", "DRF-PARITY", "--project", project, "--task", "T-26-P9G3P8", "--person", "U-26-5EBAE3", "--date", "2026-09-01", "--hours", "2", "--category", "regular"]) as unknown as { document: { id: string; state: string } };
     expect(entry).toMatchObject({ ok: true, document: { state: "active" } });
-    expect(await invoke(["time-entry", "void", "--draft", "DRF-PARITY", "--project", project, "--task", "T-26-P9G3P8", "--id", entry.document.id])).toMatchObject({ document: { state: "voided" } });
+    const replacement = await invoke(["time-entry", "replace", "--draft", "DRF-PARITY", "--project", project, "--task", "T-26-P9G3P8", "--id", entry.document.id, "--person", "U-26-5EBAE3", "--date", "2026-09-01", "--hours", "2.5", "--category", "regular"]) as unknown as { voided: { document: { state: string; replacement: string } }; created: { document: { id: string; state: string } } };
+    expect(replacement).toMatchObject({ voided: { document: { state: "voided", replacement: replacement.created.document.id } }, created: { document: { state: "active" } } });
+    expect(await invoke(["time-entry", "void", "--draft", "DRF-PARITY", "--project", project, "--task", "T-26-P9G3P8", "--id", replacement.created.document.id])).toMatchObject({ document: { state: "voided" } });
     expect(await invoke(["schedule", "set", "--draft", "DRF-PARITY", "--type", "task", "--id", "T-26-P9G3P8", "--track", "plan", "--finish", "2026-07-04", "--project", project])).toMatchObject({ ok: true, document: { schedules: { plan: { finish: "2026-07-04" } } } });
     expect(await invoke(["planning", "set", "--draft", "DRF-PARITY", "--project", project, "--workload-track", "plan"])).toMatchObject({ ok: true, document: { planning: { workload_track: "plan" } } });
     expect(await invoke(["history", "list", "--draft", "DRF-PARITY", "--limit", "5"])).toMatchObject({ ok: true, items: [expect.objectContaining({ subject: "fixture" })] });

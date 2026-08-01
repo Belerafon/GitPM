@@ -22,6 +22,7 @@ class AdminApi {
   async archiveEntity(draftId: string, type: string, entity: EntityResult, fingerprint: string) { return await this.updateEntity(draftId, type, entity, fingerprint, { ...entity.document, lifecycle: "archived" }); }
   async deleteEntity(_draftId: string, _type: string, entity: EntityResult) { this.mutations += 1; this.entities = this.entities.filter((item) => item !== entity); }
   async getConfiguration(_draftId: string, kind: ConfigurationKind) { this.configurationReads.push(kind); return this.configurations.get(kind)!; }
+  async getRepositoryConfiguration() { const calendar = this.entities.find((item) => item.document.schema === "gitpm/calendar@1")?.document.id ?? "C-26-QD7FJ4"; return { document: { schema: "gitpm/repository@1" as const, default_branch: "main", default_calendar: calendar, allowed_top_level_files: [], ui_poll_interval_seconds: 5 }, path: ".gitpm/repository.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) }; }
   async updateConfiguration(_draftId: string, kind: ConfigurationKind, entity: ConfigurationResult, _fingerprint: string, document: ConfigurationDocument) { const result: ConfigurationResult = { ...entity, document }; this.configurations.set(kind, result); return result; }
 }
 
@@ -45,6 +46,7 @@ describe("administration UI", () => {
     const personForm = within(screen.getByRole("dialog", { name: "Create person" })).getByRole("button", { name: "Create person" }).closest("form")!;
     fireEvent.change(within(personForm).getByLabelText("Name"), { target: { value: "Alice" } }); fireEvent.change(within(personForm).getByLabelText("Weekly capacity (hours)"), { target: { value: "32" } }); fireEvent.submit(personForm);
     expect(await screen.findByText("Alice")).toBeTruthy();
+    expect(admin.entities.find((item) => item.document.schema === "gitpm/person@1")?.document.calendar).toBe(admin.entities.find((item) => item.document.schema === "gitpm/calendar@1")?.document.id);
     expect(document.querySelectorAll(".people-directory-table tbody tr")).toHaveLength(1);
     expect(screen.queryByRole("button", { name: "Edit person" })).toBeNull();
     fireEvent.click(screen.getByRole("link", { name: "Alice" }));
@@ -90,12 +92,20 @@ describe("administration UI", () => {
     expect(screen.queryByRole("dialog", { name: "Edit: Statuses" })).toBeNull();
     fireEvent.click(within(statusesCard).getByRole("button", { name: "Edit Statuses" }));
     expect((screen.getByLabelText("Statuses backlog") as HTMLInputElement).value).toBe("Queue");
+    const updatesBeforeCancel = changed.mock.calls.length;
+    fireEvent.change(screen.getByLabelText("Statuses backlog"), { target: { value: "Cancelled rename" } });
+    fireEvent.click(screen.getByRole("button", { name: "Move Cancelled rename down" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(changed.mock.calls).toHaveLength(updatesBeforeCancel);
+    expect((admin.configurations.get("statuses")!.document.statuses as readonly { slug: string; title: string }[])[0]).toMatchObject({ slug: "backlog", title: "Queue" });
+
+    fireEvent.click(within(statusesCard).getByRole("button", { name: "Edit Statuses" }));
     fireEvent.click(screen.getByRole("button", { name: "Move Queue down" }));
-    expect(screen.getByLabelText("Statuses backlog").closest(".config-row")?.classList.contains("is-saving")).toBe(true);
-    expect(screen.getByLabelText("Statuses accepted").closest(".config-row")?.classList.contains("is-saving")).toBe(true);
-    await waitFor(() => expect(screen.getByLabelText("Statuses backlog").closest(".config-row")?.classList.contains("recently-changed")).toBe(true));
-    expect(screen.getByLabelText("Statuses accepted").closest(".config-row")?.classList.contains("recently-changed")).toBe(true);
+    fireEvent.change(screen.getByLabelText("New technical ID"), { target: { value: "review" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add value" }));
+    fireEvent.submit(screen.getByLabelText("Statuses backlog").closest("form")!);
     await waitFor(() => expect((admin.configurations.get("statuses")!.document.statuses as readonly { slug: string }[])[0]?.slug).toBe("accepted"));
+    expect((admin.configurations.get("statuses")!.document.statuses as readonly { slug: string }[]).some((item) => item.slug === "review")).toBe(true);
     expect(changed).toHaveBeenCalled();
   });
 
@@ -111,15 +121,19 @@ describe("administration UI", () => {
 
     fireEvent.click(within(tracksCard).getByRole("button", { name: "Edit Schedule tracks" }));
     const dialog = await screen.findByRole("dialog", { name: "Edit: Schedule tracks" });
-    expect(within(dialog).getAllByText("Manual")).toHaveLength(2);
+    expect((within(dialog).getByLabelText("Track kind plan") as HTMLSelectElement).value).toBe("manual");
     expect(within(dialog).getByText("Time entries")).toBeTruthy();
     const planTitle = within(dialog).getByLabelText("Schedule tracks plan");
     fireEvent.change(planTitle, { target: { value: "Working plan" } });
+    const targetRow = within(dialog).getByLabelText("Schedule tracks target").closest<HTMLElement>(".config-row")!;
+    fireEvent.click(within(targetRow).getByLabelText("Dependencies"));
+    fireEvent.change(within(dialog).getByLabelText("New track technical ID"), { target: { value: "forecast" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add manual track" }));
     fireEvent.change(within(dialog).getByLabelText("Primary track"), { target: { value: "target" } });
     fireEvent.submit(planTitle.closest("form")!);
 
     await waitFor(() => expect(admin.configurations.get("schedule-tracks")!.document).toMatchObject({
-      tracks: [expect.objectContaining({ slug: "plan", title: "Working plan", kind: "manual", capabilities: ["dates", "effort", "dependencies"] }), expect.objectContaining({ slug: "target" }), expect.objectContaining({ slug: "actual", source: "time_entries" })],
+      tracks: [expect.objectContaining({ slug: "plan", title: "Working plan", kind: "manual", capabilities: ["dates", "effort", "dependencies"] }), expect.objectContaining({ slug: "target", capabilities: ["dates", "dependencies"] }), expect.objectContaining({ slug: "actual", source: "time_entries" }), expect.objectContaining({ slug: "forecast", kind: "manual", capabilities: ["dates"] })],
       defaults: { enabled_tracks: ["plan", "target", "actual"], primary_track: "target", workload_track: "plan", comparison_track: "target", dashboard_tracks: ["plan", "target", "actual"] },
     }));
     expect(changed).toHaveBeenCalled();

@@ -275,6 +275,14 @@ export class DirectCliRuntime {
     return await this.timeEntries.void(draftId, projectId, taskId, entryId, metadata.fingerprint, blob_id, this.timeEntryActor());
   }
 
+  async replaceTimeEntry(projectId: string, taskId: string, entryId: string, input: { readonly person: string; readonly performed_on: string; readonly hours: number; readonly category: string; readonly note_markdown?: string }) {
+    const draftId = await this.draftId();
+    const metadata = await this.drafts.refreshWorkspaceFingerprint(draftId);
+    const relative = `projects/${projectId}/time-entries/${taskId}/${entryId}.yaml`;
+    const blobId = await this.drafts.fileBlobId(draftId, relative);
+    return await this.timeEntries.replace(draftId, projectId, taskId, entryId, metadata.fingerprint, blobId, input, this.timeEntryActor());
+  }
+
   async semanticDiff(scope: AgentScope = {}): Promise<SemanticDiff> {
     return await this.repository.semanticDiff(DIRECT_WORKSPACE_ID, scope);
   }

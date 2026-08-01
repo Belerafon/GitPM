@@ -33,7 +33,7 @@ type CliAgent = Pick<AgentWorkflow, "assertScope" | "commitAll" | "createDraft" 
     | "historyDetail" | "historyFileDiff" | "historyList" | "listChanges" | "listComments" | "listDrafts"
     | "listEntities" | "listProjectTimeEntries" | "mergeRequestStatus" | "moveTask" | "notifications"
     | "planDelete" | "reopenDraft" | "restoreFile" | "restoreHunk" | "updateComment"
-    | "updateConfiguration" | "updateEntity" | "voidTimeEntry"
+    | "replaceTimeEntry" | "updateConfiguration" | "updateEntity" | "voidTimeEntry"
   >>;
 
 export interface CliDependencies {
@@ -201,6 +201,7 @@ const commandHelp: Readonly<Record<string, string>> = {
     "  gitpm time-entry list [--draft <id>] --project <id> [--task <id>] [--milestone <id>] [--person <id>] [--category <slug>] [--state active|voided] [--from <yyyy-mm-dd>] [--to <yyyy-mm-dd>] [--offset <n>] [--limit <n>] [--json]",
     "  gitpm time-entry summary [--draft <id>] --project <id> [--task <id>] [--milestone <id>] [--person <id>] [--category <slug>] [--state active|voided] [--from <yyyy-mm-dd>] [--to <yyyy-mm-dd>] [--after <yyyy-mm-dd>] [--json]",
     "  gitpm time-entry create [--draft <id>] --project <id> --task <id> --person <id> --date <yyyy-mm-dd> --hours <n> --category <slug> [--note <text>] [--json]",
+    "  gitpm time-entry replace [--draft <id>] --project <id> --task <id> --id <entry-id> --person <id> --date <yyyy-mm-dd> --hours <n> --category <slug> [--note <text>] [--json]",
     "  gitpm time-entry void [--draft <id>] --project <id> --task <id> --id <entry-id> [--json]",
     "",
     "List and summary operate at Project scope; --task narrows the result. Actual effort is stored independently of task status and plan windows.",
@@ -830,8 +831,8 @@ async function runNotification(args: readonly string[], dependencies: CliDepende
 
 async function runTimeEntry(args: readonly string[], cwd: string, dependencies: CliDependencies): Promise<CliResult> {
   const action = args[0];
-  const validActions = ["list", "create", "void", "summary"];
-  if (typeof action !== "string" || !validActions.includes(action)) throw new RepositoryFormatError("CLI_USAGE", "time-entry requires list, create, void or summary");
+  const validActions = ["list", "create", "replace", "void", "summary"];
+  if (typeof action !== "string" || !validActions.includes(action)) throw new RepositoryFormatError("CLI_USAGE", "time-entry requires list, create, replace, void or summary");
   const draftId = flagValue(args, "--draft");
   const agent = draftId === undefined ? undefined : requireAgent(dependencies);
   const direct = agent === undefined ? requireDirect(dependencies) : undefined;
@@ -906,8 +907,15 @@ async function runTimeEntry(args: readonly string[], cwd: string, dependencies: 
   const category = required(flagValue(args, "--category"), "--category");
   if (!Number.isFinite(hours) || hours <= 0) throw new RepositoryFormatError("CLI_USAGE", "--hours must be a positive number");
   const note = flagValue(args, "--note");
-  if (agent !== undefined && agent.createTimeEntry === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Time-entry creation is unavailable");
   const input = { person, performed_on: performedOn, hours, category, ...(note === undefined ? {} : { note_markdown: note }) };
+  if (action === "replace") {
+    if (agent !== undefined && agent.replaceTimeEntry === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Time-entry replacement is unavailable");
+    const replaced = agent === undefined
+      ? await direct!.replaceTimeEntry(projectId, requiredTaskId, required(entryId, "--id"), input)
+      : await agent.replaceTimeEntry!(draftId!, projectId, requiredTaskId, required(entryId, "--id"), input);
+    return { exitCode: 0, output: render(json, { ok: true, code: "OK", voided: replaced.voided, created: replaced.created }, `Replaced ${replaced.voided.path} with ${replaced.created.path}`) };
+  }
+  if (agent !== undefined && agent.createTimeEntry === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Time-entry creation is unavailable");
   const created = agent === undefined
     ? await direct!.createTimeEntry(projectId, requiredTaskId, input)
     : await agent.createTimeEntry!(draftId!, projectId, requiredTaskId, input);

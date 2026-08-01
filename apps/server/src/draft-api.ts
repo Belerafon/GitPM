@@ -674,6 +674,15 @@ export function registerEntityApi(
     },
   );
 
+  app.get<{ Params: { draftId: string } }>(
+    "/api/drafts/:draftId/config/repository",
+    async (request) => {
+      const actor = await authenticate(request);
+      await requireDraftRead(manager, actor, request.params.draftId);
+      return await store.getRepositoryConfiguration(request.params.draftId);
+    },
+  );
+
   app.put<{ Params: { draftId: string; kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks" }; Body: { expected_fingerprint: string; expected_blob_id: string; document: ConfigurationDocument } }>(
     "/api/drafts/:draftId/config/:kind",
     {
