@@ -55,6 +55,20 @@ the current checkout and explicitly acknowledges it. The acknowledgement updates
 runtime fingerprint; it does not edit, discard, commit, or validate repository files. The next
 domain mutation still performs the normal full repository validation.
 
+### Optimistic fingerprint scope
+
+The fingerprint detects working-tree changes that may have occurred outside the current UI
+runtime. Its scope is deliberately broader than GitPM semantic diff and repository validation.
+
+It includes Git working-tree status and every discovered YAML file outside `.git`, including YAML
+in permitted additional directories such as `uploads/`. It includes file size, modification time,
+and content hash, so a file metadata change can invalidate the current UI revision even when the
+file is not GitPM business data, is ignored by Git, and is excluded from semantic diff.
+
+This is conservative protection against an unnoticed external write, not a test of repository
+semantic correctness. Acknowledgement accepts the current state as the new optimistic-lock
+baseline only; it neither validates nor modifies files.
+
 The selected path must already be a Git checkout. GitPM does not create a second clone and does
 not add a separate `source` remote. Local-path and bare repositories are supported only by the
 development/test harness; a normal application installation works in the selected checkout and

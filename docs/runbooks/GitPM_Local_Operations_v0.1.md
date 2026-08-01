@@ -113,7 +113,9 @@ The command generates a temporary deterministic portfolio with 30 Projects, 30 P
 - `GIT_TIMEOUT` or `GIT_OUTPUT_LIMIT`: inspect the repository size and system Git; do not raise limits before reviewing the input.
 - `DRAFT_CHANGED_EXTERNALLY`: review the current files and use the UI acknowledgement action (or
   `POST /api/drafts/:draftId/acknowledge-external-changes`) before editing; acknowledgement accepts
-  the current fingerprint but does not modify or validate files.
+  the current fingerprint but does not modify or validate files. A YAML file in `uploads/` or a
+  file metadata change can also cause this error; this is expected even when the file is ignored
+  by Git and excluded from semantic diff.
 - `DIRECT_MODE_DRAFT_OPERATION_UNAVAILABLE`: the requested create/writer/close/reopen/cleanup or
   revert-draft operation belongs to worktree mode; direct mode always uses its one internal
   `DRF-LOCAL` workspace.
