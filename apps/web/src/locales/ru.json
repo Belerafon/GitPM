@@ -560,6 +560,7 @@
   ,"planning.dashboardTracks": "Контуры на дашборде"
   ,"planning.none": "Нет"
   ,"planning.trackInUse": "Перед отключением очистите данные этого графика."
+  ,"planning.trackRequired": "Оставьте включённым хотя бы по одному допустимому основному контуру и контуру нагрузки."
   ,"projectPlan.start": "Дата начала"
   ,"projectPlan.progress": "Общий прогресс"
   ,"projectPlan.stages": "Активные этапы"

@@ -15,8 +15,8 @@ import { ProjectPlanWorkspace } from "./features/projects/project-plan-workspace
 const fingerprint = "b".repeat(64);
 const draft: DraftStatus = { draft_id: "DRF-SCHED", owner_gitlab_user_id: "42", branch: "gitpm/42/DRF-SCHED", base_commit: "a".repeat(40), writer_mode: "ui", state: "open", fingerprint, created_at: "2026-07-01T00:00:00.000Z", updated_at: "2026-07-01T00:00:00.000Z" };
 
-const tracksConfig = (): ConfigurationDocument => ({ schema: "gitpm/schedule-tracks@1", tracks: [{ slug: "working", title: "Working", kind: "manual", capabilities: ["dates", "effort", "dependencies"] }, { slug: "actual", title: "Actual", kind: "actual", source: "time_entries", capabilities: ["dates"] }], defaults: { enabled_tracks: ["working", "actual"], primary_track: "working", workload_track: "working", comparison_track: "actual", dashboard_tracks: ["working", "actual"] } });
-const planning = { primary_track: "working", workload_track: "working", comparison_track: "actual", enabled_tracks: ["working", "actual"], dashboard_tracks: ["working", "actual"] };
+const tracksConfig = (): ConfigurationDocument => ({ schema: "gitpm/schedule-tracks@1", tracks: [{ slug: "working", title: "Working", kind: "manual", capabilities: ["dates", "effort", "dependencies"] }, { slug: "actual", title: "Actual", kind: "actual", source: "time_entries" }], defaults: { enabled_tracks: ["working", "actual"], primary_track: "working", workload_track: "working", dashboard_tracks: ["working", "actual"] } });
+const planning = { primary_track: "working", workload_track: "working", enabled_tracks: ["working", "actual"], dashboard_tracks: ["working", "actual"] };
 
 const result = (document: EntityDocument): EntityResult => ({ document, path: `${document.id}.yaml`, blob_id: "a".repeat(40), draft_fingerprint: fingerprint });
 const configResult = (document: ConfigurationDocument): ConfigurationResult => ({ document, path: document.schema, blob_id: "a".repeat(40), draft_fingerprint: fingerprint });

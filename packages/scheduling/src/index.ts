@@ -67,10 +67,14 @@ export interface PlanningIssue {
   readonly code:
     | "PLANNING_UNKNOWN_TRACK"
     | "PLANNING_PRIMARY_NOT_ENABLED"
+    | "PLANNING_PRIMARY_NOT_MANUAL"
+    | "PLANNING_PRIMARY_MISSING_DATES"
     | "PLANNING_WORKLOAD_NOT_ENABLED"
     | "PLANNING_WORKLOAD_NOT_MANUAL"
     | "PLANNING_WORKLOAD_MISSING_EFFORT"
     | "PLANNING_COMPARISON_NOT_ENABLED"
+    | "PLANNING_COMPARISON_NOT_MANUAL"
+    | "PLANNING_COMPARISON_MISSING_DATES"
     | "PLANNING_DASHBOARD_UNKNOWN"
     | "PLANNING_PRIMARY_UNDEFINED"
     | "PLANNING_WORKLOAD_UNDEFINED";
@@ -385,6 +389,10 @@ export function validatePlanning(config: ScheduleTracksConfig, planning: Plannin
   const known = new Set(config.tracks.map((track) => track.slug));
   const enabled = new Set(planning.enabled_tracks);
 
+  const checkKnown = (slug: string, field: string): void => {
+    if (!known.has(slug)) issues.push({ code: "PLANNING_UNKNOWN_TRACK", track: slug, field, message: `Unknown track ${slug}` });
+  };
+
   if (planning.primary_track === "") {
     issues.push({ code: "PLANNING_PRIMARY_UNDEFINED", field: "primary_track", message: "primary_track is not defined" });
   }
@@ -392,11 +400,25 @@ export function validatePlanning(config: ScheduleTracksConfig, planning: Plannin
     issues.push({ code: "PLANNING_WORKLOAD_UNDEFINED", field: "workload_track", message: "workload_track is not defined" });
   }
 
-  for (const slug of [...planning.enabled_tracks, ...planning.dashboard_tracks]) {
-    if (!known.has(slug)) issues.push({ code: "PLANNING_UNKNOWN_TRACK", track: slug, field: "enabled_tracks", message: `Unknown track ${slug}` });
-  }
+  for (const slug of planning.enabled_tracks) checkKnown(slug, "enabled_tracks");
+  for (const slug of planning.dashboard_tracks) checkKnown(slug, "dashboard_tracks");
+  if (planning.primary_track !== "") checkKnown(planning.primary_track, "primary_track");
+  if (planning.workload_track !== "") checkKnown(planning.workload_track, "workload_track");
+  if (planning.comparison_track !== undefined && planning.comparison_track !== "") checkKnown(planning.comparison_track, "comparison_track");
+
   if (planning.primary_track !== "" && !enabled.has(planning.primary_track)) {
     issues.push({ code: "PLANNING_PRIMARY_NOT_ENABLED", track: planning.primary_track, field: "primary_track", message: `primary_track ${planning.primary_track} is not enabled` });
+  }
+  if (planning.primary_track !== "") {
+    const track = resolveTrack(config, planning.primary_track);
+    if (track !== undefined) {
+      if (!isManualTrack(track)) {
+        issues.push({ code: "PLANNING_PRIMARY_NOT_MANUAL", track: planning.primary_track, field: "primary_track", message: `primary_track ${planning.primary_track} must be a manual track` });
+      }
+      if (!hasCapability(track, "dates")) {
+        issues.push({ code: "PLANNING_PRIMARY_MISSING_DATES", track: planning.primary_track, field: "primary_track", message: `primary_track ${planning.primary_track} needs dates capability` });
+      }
+    }
   }
   if (planning.workload_track !== "" && !enabled.has(planning.workload_track)) {
     issues.push({ code: "PLANNING_WORKLOAD_NOT_ENABLED", track: planning.workload_track, field: "workload_track", message: `workload_track ${planning.workload_track} is not enabled` });
@@ -413,6 +435,17 @@ export function validatePlanning(config: ScheduleTracksConfig, planning: Plannin
   }
   if (planning.comparison_track !== undefined && planning.comparison_track !== "" && !enabled.has(planning.comparison_track)) {
     issues.push({ code: "PLANNING_COMPARISON_NOT_ENABLED", track: planning.comparison_track, field: "comparison_track", message: `comparison_track ${planning.comparison_track} is not enabled` });
+  }
+  if (planning.comparison_track !== undefined && planning.comparison_track !== "") {
+    const track = resolveTrack(config, planning.comparison_track);
+    if (track !== undefined) {
+      if (!isManualTrack(track)) {
+        issues.push({ code: "PLANNING_COMPARISON_NOT_MANUAL", track: planning.comparison_track, field: "comparison_track", message: `comparison_track ${planning.comparison_track} must be a manual track` });
+      }
+      if (!hasCapability(track, "dates")) {
+        issues.push({ code: "PLANNING_COMPARISON_MISSING_DATES", track: planning.comparison_track, field: "comparison_track", message: `comparison_track ${planning.comparison_track} needs dates capability` });
+      }
+    }
   }
   for (const slug of planning.dashboard_tracks) {
     if (!enabled.has(slug)) issues.push({ code: "PLANNING_DASHBOARD_UNKNOWN", track: slug, field: "dashboard_tracks", message: `dashboard track ${slug} is not enabled` });

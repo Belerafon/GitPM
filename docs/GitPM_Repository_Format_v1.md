@@ -131,6 +131,12 @@ Project может содержать необязательную строку 
 `workload_track`, `comparison_track`, `enabled_tracks`, `dashboard_tracks`).
 Project переопределяет их полем `planning` и хранит окна в `schedules` —
 отображение `track -> { start, finish, effort_hours, depends_on }`.
+Отсутствующее поле `planning` наследует соответствующий repository default, а явно заданные
+`enabled_tracks: []` и `dashboard_tracks: []` остаются пустыми списками. После разрешения defaults
+`primary_track` обязан быть включённым manual-контуром с capability `dates`, `workload_track` —
+включённым manual-контуром с capabilities `dates` и `effort`, а `comparison_track`, если задан, —
+включённым manual-контуром с capability `dates`. Actual- и dependency-only-контуры не могут быть
+primary, workload или comparison, если не удовлетворяют этим требованиям.
 `.gitpm/work-categories.yaml` задаёт категории фактической работы.
 `gitpm/time-entry@1` (`projects/<project>/time-entries/<task>/<entry>.yaml`)
 фиксирует: `person`, `performed_on`, `hours` (положителен, кратен 0.25),

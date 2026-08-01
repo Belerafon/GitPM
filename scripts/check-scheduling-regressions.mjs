@@ -11,6 +11,8 @@ const checks = [
   { name: "local Gantt domain builder", pattern: /(?:function|const)\s+\w*(?:build|Build)\w*Gantt\w*/u, message: "Web UI must project an exported @gitpm/scheduling model, not build one locally." },
   { name: "local scheduling read-model builder", pattern: /\bbuildSchedulingReadModel\s*\(/u, message: "Resolve task, milestone, and project rollups through resolveSchedulingHierarchy from @gitpm/scheduling." },
   { name: "local hierarchy scheduling resolver", pattern: /(?:function|const)\s+\w*(?:resolveTask|SchedulingHierarchy|HierarchySchedule|ScheduleHierarchy|HierarchyRollup)\w*/u, message: "Hierarchy scheduling resolution belongs in @gitpm/scheduling." },
+  { name: "local planning resolver", pattern: /\bfunction\s+resolveProjectPlanning\b/u, message: "Project planning resolution belongs in @gitpm/scheduling." },
+  { name: "local planning validator", pattern: /\bfunction\s+validatePlanningSettings\b/u, message: "Project planning validation belongs in @gitpm/scheduling." },
   { name: "form schedules replacement", pattern: /(?:setSchedules|onChange)\s*\(\s*\{\s*\[[^\]]+\]\s*:/u, message: "Schedule form mutations must preserve neighboring windows through updateScheduleWindow or setScheduleDependencies." },
 ];
 

@@ -7,6 +7,7 @@ import { CalendarError, parseDateOnly, validateCalendar } from "@gitpm/calendar"
 import { parseYamlDocument, RepositoryFormatError } from "@gitpm/repository-format";
 import type { GitPmDocument } from "@gitpm/repository-format";
 import { DOCUMENT_SCHEMA_DEFINITIONS, DOCUMENT_SCHEMA_IDS } from "@gitpm/contracts";
+import { resolvePlanning, validatePlanning, type PlanningIssue, type PlanningSettings, type ScheduleTracksConfig } from "@gitpm/scheduling";
 
 export interface ValidationIssue {
   readonly severity: "error" | "warning";
@@ -287,16 +288,6 @@ function detectCycles(
   for (const id of byId.keys()) walk(id);
 }
 
-type TrackInfo = { readonly kind: string; readonly capabilities: ReadonlySet<string>; readonly source?: string };
-
-interface PlanningSettingsInput {
-  readonly enabled: ReadonlySet<string>;
-  readonly primary?: string;
-  readonly workload?: string;
-  readonly comparison?: string;
-  readonly dashboard: readonly string[];
-}
-
 function validateScheduleTrackDefinitions(document: LoadedDocument, add: (issue: ValidationIssue) => void): void {
   const tracks = (document.value.tracks as Array<Record<string, unknown>>) ?? [];
   for (const [index, track] of tracks.entries()) {
@@ -314,62 +305,15 @@ function validateScheduleTrackDefinitions(document: LoadedDocument, add: (issue:
   }
 }
 
-function validatePlanningSettings(
+function addPlanningIssues(
   path: string,
   fieldPrefix: string,
-  settings: PlanningSettingsInput,
-  tracks: ReadonlyMap<string, TrackInfo>,
+  issues: readonly PlanningIssue[],
   add: (issue: ValidationIssue) => void,
 ): void {
-  const referenced = [...settings.enabled, ...settings.dashboard];
-  if (settings.primary !== undefined) referenced.push(settings.primary);
-  if (settings.workload !== undefined) referenced.push(settings.workload);
-  if (settings.comparison !== undefined) referenced.push(settings.comparison);
-  for (const slug of [...new Set(referenced)]) {
-    if (!tracks.has(slug)) add({ severity: "error", code: "PLANNING_UNKNOWN_TRACK", path, field: fieldPrefix, message: `Unknown schedule track ${slug}` });
+  for (const issue of issues) {
+    add({ severity: "error", code: issue.code, path, field: `${fieldPrefix}.${issue.field}`, message: issue.message });
   }
-  if (settings.primary !== undefined) {
-    const primary = settings.primary;
-    if (!settings.enabled.has(primary)) add({ severity: "error", code: "PLANNING_PRIMARY_NOT_ENABLED", path, field: `${fieldPrefix}.primary_track`, message: `primary_track ${primary} is not enabled` });
-    const primaryTrack = tracks.get(primary);
-    if (primaryTrack !== undefined) {
-      if (primaryTrack.kind !== "manual") add({ severity: "error", code: "PLANNING_PRIMARY_NOT_MANUAL", path, field: `${fieldPrefix}.primary_track`, message: `primary_track ${primary} must be a manual track` });
-      if (!primaryTrack.capabilities.has("dates")) add({ severity: "error", code: "PLANNING_PRIMARY_MISSING_DATES", path, field: `${fieldPrefix}.primary_track`, message: `primary_track ${primary} needs dates capability` });
-    }
-  }
-  if (settings.workload !== undefined) {
-    const workload = settings.workload;
-    if (!settings.enabled.has(workload)) add({ severity: "error", code: "PLANNING_WORKLOAD_NOT_ENABLED", path, field: `${fieldPrefix}.workload_track`, message: `workload_track ${workload} is not enabled` });
-    const workloadTrack = tracks.get(workload);
-    if (workloadTrack !== undefined) {
-      if (workloadTrack.kind !== "manual") add({ severity: "error", code: "PLANNING_WORKLOAD_NOT_MANUAL", path, field: `${fieldPrefix}.workload_track`, message: `workload_track ${workload} must be a manual track` });
-      if (!workloadTrack.capabilities.has("dates") || !workloadTrack.capabilities.has("effort")) add({ severity: "error", code: "PLANNING_WORKLOAD_MISSING_EFFORT", path, field: `${fieldPrefix}.workload_track`, message: `workload_track ${workload} needs manual dates and effort capabilities` });
-    }
-  }
-  if (settings.comparison !== undefined && !settings.enabled.has(settings.comparison)) add({ severity: "error", code: "PLANNING_COMPARISON_NOT_ENABLED", path, field: `${fieldPrefix}.comparison_track`, message: `comparison_track ${settings.comparison} is not enabled` });
-  for (const slug of settings.dashboard) if (!settings.enabled.has(slug)) add({ severity: "error", code: "PLANNING_DASHBOARD_UNKNOWN", path, field: `${fieldPrefix}.dashboard_tracks`, message: `dashboard track ${slug} is not enabled` });
-}
-
-function resolveProjectPlanning(
-  defaults: PlanningSettingsInput,
-  planning: Record<string, unknown> | undefined,
-  tracks: ReadonlyMap<string, TrackInfo>,
-): PlanningSettingsInput {
-  const projectEnabled = values(planning?.enabled_tracks);
-  const enabled = projectEnabled.length > 0 ? new Set(projectEnabled) : defaults.enabled.size > 0 ? defaults.enabled : new Set([...tracks.keys()].filter((slug) => tracks.get(slug)?.kind === "manual"));
-  const primary = typeof planning?.primary_track === "string" ? planning.primary_track : defaults.primary;
-  const workload = typeof planning?.workload_track === "string" ? planning.workload_track : defaults.workload ?? primary;
-  const defaultComparison = defaults.comparison;
-  const comparison = typeof planning?.comparison_track === "string"
-    ? planning.comparison_track
-    : defaultComparison !== undefined && enabled.has(defaultComparison) ? defaultComparison : undefined;
-  const projectDashboard = values(planning?.dashboard_tracks);
-  const dashboard = projectDashboard.length > 0
-    ? projectDashboard
-    : defaults.dashboard.filter((slug) => enabled.has(slug)).length > 0
-      ? defaults.dashboard.filter((slug) => enabled.has(slug))
-      : [...enabled];
-  return { enabled, primary, workload, comparison, dashboard };
 }
 
 export async function validateRepository(repositoryRoot: string): Promise<ValidationReport> {
@@ -507,24 +451,20 @@ export async function validateRepository(repositoryRoot: string): Promise<Valida
     add({ severity: "error", code: "TRACK_ACTUAL_COUNT", path: tracksDocument?.path ?? ".gitpm/schedule-tracks.yaml", field: "tracks", message: `At most one actual track is allowed (found ${actualTrackCount})` });
   }
   if (tracksDocument !== undefined) validateScheduleTrackDefinitions(tracksDocument, add);
-  const tracksDefaults = tracksDocument?.value.defaults as Record<string, unknown> | undefined;
-  const defaultSettings: PlanningSettingsInput = {
-    enabled: new Set(values(tracksDefaults?.enabled_tracks)),
-    primary: typeof tracksDefaults?.primary_track === "string" ? tracksDefaults.primary_track : undefined,
-    workload: typeof tracksDefaults?.workload_track === "string" ? tracksDefaults.workload_track : undefined,
-    comparison: typeof tracksDefaults?.comparison_track === "string" ? tracksDefaults.comparison_track : undefined,
-    dashboard: values(tracksDefaults?.dashboard_tracks),
-  };
-  if (tracksDocument !== undefined && (defaultSettings.enabled.size > 0 || defaultSettings.primary !== undefined || defaultSettings.workload !== undefined || defaultSettings.comparison !== undefined || defaultSettings.dashboard.length > 0)) {
-    validatePlanningSettings(tracksDocument.path, "defaults", defaultSettings, tracks, add);
+  const schedulingConfig = tracksDocument?.value as unknown as ScheduleTracksConfig | undefined;
+  const defaultPlanning = schedulingConfig === undefined ? undefined : resolvePlanning(schedulingConfig);
+  if (tracksDocument !== undefined && schedulingConfig !== undefined && defaultPlanning !== undefined) {
+    addPlanningIssues(tracksDocument.path, "defaults", validatePlanning(schedulingConfig, defaultPlanning), add);
   }
 
   const projectsById = new Map<string, LoadedDocument>();
   for (const document of validDocuments) if (document.value.schema === "gitpm/project@2" && typeof document.value.id === "string") projectsById.set(document.value.id, document);
   const projectEnabledTracks = new Map<string, ReadonlySet<string>>();
-  for (const [projectId, document] of projectsById) {
-    const planning = document.value.planning as Record<string, unknown> | undefined;
-    projectEnabledTracks.set(projectId, resolveProjectPlanning(defaultSettings, planning, tracks).enabled);
+  if (schedulingConfig !== undefined) {
+    for (const [projectId, document] of projectsById) {
+      const planning = document.value.planning as Partial<PlanningSettings> | undefined;
+      projectEnabledTracks.set(projectId, new Set(resolvePlanning(schedulingConfig, planning).enabled_tracks));
+    }
   }
 
   const allowedTop = new Set([
@@ -628,12 +568,11 @@ export async function validateRepository(repositoryRoot: string): Promise<Valida
     } else if (value.schema === "gitpm/project@2") {
       if (!statuses.has(String(value.status))) add({ severity: "error", code: "CONFIG_REFERENCE", path: document.path, message: `Unknown status ${String(value.status)}` });
       reference(value.owner, "gitpm/person@1", document);
-      const planning = value.planning as Record<string, unknown> | undefined;
-      const resolved = resolveProjectPlanning(defaultSettings, planning, tracks);
-      validateScheduleWindows(document, resolved.enabled);
-      const hasOverride = planning !== undefined && Object.keys(planning).length > 0;
-      if (hasOverride || resolved.primary !== undefined || resolved.workload !== undefined) {
-        validatePlanningSettings(document.path, "planning", resolved, tracks, add);
+      if (schedulingConfig !== undefined) {
+        const planning = value.planning as Partial<PlanningSettings> | undefined;
+        const resolved = resolvePlanning(schedulingConfig, planning);
+        validateScheduleWindows(document, new Set(resolved.enabled_tracks));
+        addPlanningIssues(document.path, "planning", validatePlanning(schedulingConfig, resolved), add);
       }
     } else if (value.schema === "gitpm/person@1") {
       reference(value.calendar, "gitpm/calendar@1", document);

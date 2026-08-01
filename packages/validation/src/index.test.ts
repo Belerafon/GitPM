@@ -321,11 +321,38 @@ describe("repository validation", () => {
     expect(report.errors).toEqual(expect.arrayContaining([expect.objectContaining({ code: "PLANNING_PRIMARY_NOT_MANUAL", field: "defaults.primary_track" })]));
   });
 
+  it("rejects an actual track used as the repository comparison", async () => {
+    const root = await fixture();
+    await replace(root, ".gitpm/schedule-tracks.yaml", "  comparison_track: target", "  comparison_track: actual");
+    const report = await validateRepository(root);
+    expect(report.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "PLANNING_COMPARISON_NOT_MANUAL", path: ".gitpm/schedule-tracks.yaml", field: "defaults.comparison_track" }),
+      expect.objectContaining({ code: "PLANNING_COMPARISON_MISSING_DATES", path: ".gitpm/schedule-tracks.yaml", field: "defaults.comparison_track" }),
+    ]));
+  });
+
   it("accepts a partial project planning override resolved against valid defaults", async () => {
     const root = await fixture();
-    await replace(root, "projects/P-26-8S9HQQ/project.yaml", "planning:\n  enabled_tracks:\n    - plan\n  primary_track: plan\n  workload_track: plan\n  dashboard_tracks:\n    - plan", "planning:\n  primary_track: plan");
+    await replace(root, "projects/P-26-8S9HQQ/project.yaml", "planning:\n  enabled_tracks:\n    - plan\n    - target\n    - actual\n  primary_track: plan\n  workload_track: plan\n  dashboard_tracks:\n    - plan\n    - target\n    - actual", "planning:\n  primary_track: plan");
     const report = await validateRepository(root);
     expect(report).toMatchObject({ valid: true, errors: [] });
+  });
+
+  it("preserves an explicit empty dashboard track list", async () => {
+    const root = await fixture();
+    await replace(root, "projects/P-26-8S9HQQ/project.yaml", "  dashboard_tracks:\n    - plan\n    - target\n    - actual", "  dashboard_tracks: []");
+    const report = await validateRepository(root);
+    expect(report).toMatchObject({ valid: true, errors: [] });
+  });
+
+  it("rejects explicit empty enabled tracks instead of inheriting defaults", async () => {
+    const root = await fixture();
+    await replace(root, "projects/P-26-8S9HQQ/project.yaml", "  enabled_tracks:\n    - plan\n    - target\n    - actual", "  enabled_tracks: []");
+    const report = await validateRepository(root);
+    expect(report.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "PLANNING_PRIMARY_NOT_ENABLED", path: "projects/P-26-8S9HQQ/project.yaml", field: "planning.primary_track" }),
+      expect.objectContaining({ code: "PLANNING_WORKLOAD_NOT_ENABLED", path: "projects/P-26-8S9HQQ/project.yaml", field: "planning.workload_track" }),
+    ]));
   });
 
   it("rejects invalid repository schedule-tracks defaults", async () => {

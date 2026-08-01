@@ -20,6 +20,7 @@
     "@gitpm/calendar": "workspace:*",
     "@gitpm/contracts": "workspace:*",
     "@gitpm/repository-format": "workspace:*",
+    "@gitpm/scheduling": "workspace:*",
     "ajv": "8.18.0"
   }
 }
