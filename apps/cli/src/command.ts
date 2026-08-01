@@ -26,7 +26,15 @@ interface CommonOptions {
 }
 
 type CliAgent = Pick<AgentWorkflow, "assertScope" | "commitAll" | "createDraft" | "createMergeRequest" | "openDraft" | "push" | "semanticDiff" | "setWriterMode" | "status">
-  & Partial<Pick<AgentWorkflow, "createEntity" | "createEntities" | "updateEntity" | "listEntities" | "getEntity" | "planDelete" | "deleteEntity" | "archiveEntity" | "moveTask">>;
+  & Partial<Pick<AgentWorkflow,
+    | "acknowledgeExternalChanges" | "archiveEntity" | "cleanupDraft" | "closeDraft"
+    | "createComment" | "createEntities" | "createEntity" | "createRevertDraft" | "createTimeEntry"
+    | "deleteComment" | "deleteEntity" | "discardAll" | "fileHistory" | "getConfiguration" | "getEntity"
+    | "historyDetail" | "historyFileDiff" | "historyList" | "listChanges" | "listComments" | "listDrafts"
+    | "listEntities" | "listProjectTimeEntries" | "mergeRequestStatus" | "moveTask" | "notifications"
+    | "planDelete" | "reopenDraft" | "restoreFile" | "restoreHunk" | "updateComment"
+    | "updateConfiguration" | "updateEntity" | "voidTimeEntry"
+  >>;
 
 export interface CliDependencies {
   readonly agent?: CliAgent;
@@ -113,7 +121,7 @@ function render(json: boolean, payload: Record<string, unknown>, human: string):
 }
 
 const SCHEMA_DIRECTORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../schemas/v1");
-const ROOT_USAGE = "Usage: gitpm <init|status|draft|entity create|entity update|entity import|entity list|entity show|entity delete|entity archive|entity move|schedule|planning|comment|time-entry|config|schema|format|validate|diff --semantic|export|commit --all|push|mr create|doctor> [options]";
+const ROOT_USAGE = "Usage: gitpm <init|status|draft|entity|schedule|planning|comment|notification|time-entry|config|schema|format|validate|diff --semantic|changes|history|export|commit --all|push|mr|doctor> [options]";
 
 const commandHelp: Readonly<Record<string, string>> = {
   root: [
@@ -166,50 +174,72 @@ const commandHelp: Readonly<Record<string, string>> = {
   ].join("\n"),
   commit: "Usage: gitpm commit --all [--draft <id>] -m <message> [--project <id>] [--allow-delete] [--json]",
   status: "Usage: gitpm status [--draft <id>] [--json]",
-  draft: "Usage: gitpm draft create|open|status|set-writer --draft <id> [--owner <id>] [ui|external] [--json]",
+  draft: [
+    "Usage:",
+    "  gitpm draft list [--owner <id>] [--json]",
+    "  gitpm draft create|open|status|acknowledge|close|reopen --draft <id> [--owner <id>] [--json]",
+    "  gitpm draft set-writer ui|external --draft <id> --owner <id> [--json]",
+    "  gitpm draft cleanup --draft <id> --owner <id> --confirm <id> [--json]",
+  ].join("\n"),
   push: "Usage: gitpm push [--draft <id>] [--json]",
-  mr: "Usage: gitpm mr create --draft <id> --owner <id> --title <title> [--description <text>] [--json]",
+  mr: "Usage: gitpm mr create|status --draft <id> --owner <id> [--title <title>] [--description <text>] [--json]",
   init: "Usage: gitpm init [path] [--json]",
   doctor: "Usage: gitpm doctor [--json]",
   comment: [
     "Usage:",
-    "  gitpm comment list --project <id> --task <id> [--json]",
-    "  gitpm comment create --project <id> --task <id> (--body <text> | --file <path>) [--json]",
-    "  gitpm comment update --project <id> --task <id> --id <comment-id> (--body <text> | --file <path>) [--json]",
-    "  gitpm comment delete --project <id> --task <id> --id <comment-id> [--json]",
+    "  gitpm comment list [--draft <id>] --project <id> --task <id> [--json]",
+    "  gitpm comment create [--draft <id>] --project <id> --task <id> (--body <text> | --file <path>) [--json]",
+    "  gitpm comment update [--draft <id>] --project <id> --task <id> --id <comment-id> (--body <text> | --file <path>) [--json]",
+    "  gitpm comment delete [--draft <id>] --project <id> --task <id> --id <comment-id> [--json]",
     "",
     "Comments support Markdown with @[Name](person:U-...) mentions.",
-    "Delete is a soft-delete (tombstone remains in Git history). Available in direct mode.",
+    "Delete is a soft-delete (tombstone remains in Git history).",
   ].join("\n"),
+  notification: "Usage: gitpm notification list [--draft <id>] [--person <id>] [--json]",
   "time-entry": [
     "Usage:",
-    "  gitpm time-entry list --project <id> [--task <id>] [--milestone <id>] [--person <id>] [--category <slug>] [--state active|voided] [--from <yyyy-mm-dd>] [--to <yyyy-mm-dd>] [--offset <n>] [--limit <n>] [--json]",
-    "  gitpm time-entry summary --project <id> [--task <id>] [--milestone <id>] [--person <id>] [--category <slug>] [--state active|voided] [--from <yyyy-mm-dd>] [--to <yyyy-mm-dd>] [--after <yyyy-mm-dd>] [--json]",
-    "  gitpm time-entry create --project <id> --task <id> --person <id> --date <yyyy-mm-dd> --hours <n> --category <slug> [--note <text>] [--json]",
-    "  gitpm time-entry void --project <id> --task <id> --id <entry-id> [--json]",
+    "  gitpm time-entry list [--draft <id>] --project <id> [--task <id>] [--milestone <id>] [--person <id>] [--category <slug>] [--state active|voided] [--from <yyyy-mm-dd>] [--to <yyyy-mm-dd>] [--offset <n>] [--limit <n>] [--json]",
+    "  gitpm time-entry summary [--draft <id>] --project <id> [--task <id>] [--milestone <id>] [--person <id>] [--category <slug>] [--state active|voided] [--from <yyyy-mm-dd>] [--to <yyyy-mm-dd>] [--after <yyyy-mm-dd>] [--json]",
+    "  gitpm time-entry create [--draft <id>] --project <id> --task <id> --person <id> --date <yyyy-mm-dd> --hours <n> --category <slug> [--note <text>] [--json]",
+    "  gitpm time-entry void [--draft <id>] --project <id> --task <id> --id <entry-id> [--json]",
     "",
     "List and summary operate at Project scope; --task narrows the result. Actual effort is stored independently of task status and plan windows.",
-    "Void marks an entry voided (kept in history); available in direct mode.",
+    "Void marks an entry voided (kept in history).",
   ].join("\n"),
   schedule: [
     "Usage:",
-    "  gitpm schedule set --type project|task|milestone --id <id> --track <slug> [--start <yyyy-mm-dd>] [--finish <yyyy-mm-dd>] [--effort-hours <n>] [--depends-on <task-id>]... [--clear-start] [--clear-finish] [--clear-effort] [--clear-dependencies] [--project <id>] [--allow-delete] [--json]",
+    "  gitpm schedule set [--draft <id>] --type project|task|milestone --id <id> --track <slug> [--start <yyyy-mm-dd>] [--finish <yyyy-mm-dd>] [--effort-hours <n>] [--depends-on <task-id>]... [--clear-start] [--clear-finish] [--clear-effort] [--clear-dependencies] [--project <id>] [--allow-delete] [--json]",
     "",
     "Updates one schedules.<track> window and preserves other track windows. Dependencies belong to the selected track.",
   ].join("\n"),
   planning: [
     "Usage:",
-    "  gitpm planning show --project <id> [--json]",
-    "  gitpm planning set --project <id> [--primary-track <slug>] [--workload-track <slug>] [--comparison-track <slug>|--clear-comparison-track] [--enabled-track <slug>]... [--dashboard-track <slug>]... [--allow-delete] [--json]",
+    "  gitpm planning show [--draft <id>] --project <id> [--json]",
+    "  gitpm planning set [--draft <id>] --project <id> [--primary-track <slug>] [--workload-track <slug>] [--comparison-track <slug>|--clear-comparison-track] [--enabled-track <slug>]... [--dashboard-track <slug>]... [--allow-delete] [--json]",
     "",
     "Set only the planning fields supplied. Repeated track flags replace that planning list.",
   ].join("\n"),
   config: [
     "Usage:",
-    "  gitpm config show --kind statuses|issue-types|work-categories|schedule-tracks [--json]",
-    "  gitpm config update --kind statuses|issue-types|work-categories|schedule-tracks [--file <yaml>] [--set <field>=<yaml-value>]... [--unset <field>] [--allow-delete] [--json]",
+    "  gitpm config show [--draft <id>] --kind statuses|issue-types|work-categories|schedule-tracks [--json]",
+    "  gitpm config update [--draft <id>] --kind statuses|issue-types|work-categories|schedule-tracks [--file <yaml>] [--set <field>=<yaml-value>]... [--unset <field>] [--allow-delete] [--json]",
     "",
-    "Reads or updates repository configuration documents in .gitpm/. Available in direct mode.",
+    "Reads or updates repository configuration documents in .gitpm/.",
+  ].join("\n"),
+  changes: [
+    "Usage:",
+    "  gitpm changes list [--draft <id>] [--project <id>] [--allow-delete] [--json]",
+    "  gitpm changes restore-file [--draft <id>] --path <path> [--project <id>] [--allow-delete] [--json]",
+    "  gitpm changes restore-hunk [--draft <id>] --path <path> --diff-token <sha256> --hunk <index> [--project <id>] [--allow-delete] [--json]",
+    "  gitpm changes discard-all [--draft <id>] --confirm discard-all [--project <id>] [--allow-delete] [--json]",
+  ].join("\n"),
+  history: [
+    "Usage:",
+    "  gitpm history list [--draft <id>] [--limit <n>] [--json]",
+    "  gitpm history show [--draft <id>] --commit <sha> [--json]",
+    "  gitpm history file-diff [--draft <id>] --commit <sha> --path <path> [--json]",
+    "  gitpm history file-history [--draft <id>] --path <path> [--limit <n>] [--json]",
+    "  gitpm history revert --draft <id> --commit <sha> --new-draft <id> --owner <id> [--json]",
   ].join("\n"),
 };
 
@@ -224,7 +254,7 @@ interface CliArgumentSpec {
 function commandArgumentSpec(command: string | undefined, args: readonly string[]): CliArgumentSpec | undefined {
   const action = args[0];
   if (command === "status") return { values: ["--draft"], booleans: ["--json"], minPositionals: 0, maxPositionals: 0 };
-  if (command === "draft") return { values: ["--draft", "--owner"], booleans: ["--json"], minPositionals: 1, maxPositionals: action === "set-writer" ? 2 : 1 };
+  if (command === "draft") return { values: ["--draft", "--owner", "--confirm"], booleans: ["--json"], minPositionals: 1, maxPositionals: action === "set-writer" ? 2 : 1 };
   if (command === "entity") {
     const common = ["--draft", "--type", "--schema"];
     if (action === "create") return { values: [...common, "--file", "--path", "--project"], booleans: ["--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
@@ -247,15 +277,18 @@ function commandArgumentSpec(command: string | undefined, args: readonly string[
   if (command === "commit") return { values: ["--draft", "-m", "--message", "--project"], booleans: ["--all", "--allow-delete", "--json"], minPositionals: 0, maxPositionals: 0 };
   if (command === "push") return { values: ["--draft"], booleans: ["--json"], minPositionals: 0, maxPositionals: 0 };
   if (command === "mr") return { values: ["--draft", "--owner", "--title", "--description"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
-  if (command === "comment") return { values: ["--project", "--task", "--id", "--body", "--file", "--path"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
-  if (command === "time-entry") return { values: ["--project", "--task", "--milestone", "--id", "--person", "--date", "--hours", "--category", "--note", "--after", "--state", "--from", "--to", "--offset", "--limit"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
-  if (command === "schedule") return { values: ["--type", "--id", "--track", "--start", "--finish", "--effort-hours", "--project"], repeatable: ["--depends-on"], booleans: ["--clear-start", "--clear-finish", "--clear-effort", "--clear-dependencies", "--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
-  if (command === "planning") return { values: ["--project", "--primary-track", "--workload-track", "--comparison-track"], repeatable: ["--enabled-track", "--dashboard-track"], booleans: ["--clear-comparison-track", "--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
+  if (command === "comment") return { values: ["--draft", "--project", "--task", "--id", "--body", "--file", "--path"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
+  if (command === "notification") return { values: ["--draft", "--person"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
+  if (command === "time-entry") return { values: ["--draft", "--project", "--task", "--milestone", "--id", "--person", "--date", "--hours", "--category", "--note", "--after", "--state", "--from", "--to", "--offset", "--limit"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
+  if (command === "schedule") return { values: ["--draft", "--type", "--id", "--track", "--start", "--finish", "--effort-hours", "--project"], repeatable: ["--depends-on"], booleans: ["--clear-start", "--clear-finish", "--clear-effort", "--clear-dependencies", "--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
+  if (command === "planning") return { values: ["--draft", "--project", "--primary-track", "--workload-track", "--comparison-track"], repeatable: ["--enabled-track", "--dashboard-track"], booleans: ["--clear-comparison-track", "--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
   if (command === "config") {
     return action === "update"
-      ? { values: ["--kind", "--file", "--path"], repeatable: ["--set", "--unset"], booleans: ["--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 }
-      : { values: ["--kind"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
+      ? { values: ["--draft", "--kind", "--file", "--path"], repeatable: ["--set", "--unset"], booleans: ["--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 }
+      : { values: ["--draft", "--kind"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
   }
+  if (command === "changes") return { values: ["--draft", "--project", "--path", "--diff-token", "--hunk", "--confirm"], booleans: ["--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
+  if (command === "history") return { values: ["--draft", "--commit", "--path", "--limit", "--new-draft", "--owner"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
   if (command === "doctor") return { values: ["--root"], booleans: ["--json"], minPositionals: 0, maxPositionals: 0 };
   if (command === "init") return { booleans: ["--json"], minPositionals: 0, maxPositionals: 1 };
   return undefined;
@@ -481,14 +514,35 @@ async function draftRoot(args: readonly string[], dependencies: CliDependencies)
 }
 
 async function runDraft(args: readonly string[], dependencies: CliDependencies): Promise<CliResult> {
-  const agent = requireAgent(dependencies); const [action, mode] = args.filter((value, index) => index === 0 || !args[index - 1]?.startsWith("--"));
-  const draftId = required(flagValue(args, "--draft"), "--draft"); const owner = flagValue(args, "--owner"); const json = args.includes("--json");
+  const agent = requireAgent(dependencies); const action = args[0]; const mode = args[1];
+  const owner = flagValue(args, "--owner"); const json = args.includes("--json");
+  if (action === "list") {
+    if (agent.listDrafts === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Draft listing is unavailable");
+    const drafts = await agent.listDrafts(owner);
+    return { exitCode: 0, output: render(json, { ok: true, code: "OK", items: drafts }, `${drafts.length} draft(s)`) };
+  }
+  const draftId = required(flagValue(args, "--draft"), "--draft");
   let metadata;
   if (action === "create") metadata = await agent.createDraft(draftId, required(owner, "--owner"));
   else if (action === "open") metadata = await agent.openDraft(draftId, required(owner, "--owner"));
   else if (action === "status") metadata = await agent.status(draftId);
   else if (action === "set-writer") metadata = await agent.setWriterMode(draftId, required(owner, "--owner"), mode === "ui" ? "ui" : mode === "external" ? "external" : (() => { throw new RepositoryFormatError("CLI_USAGE", "writer mode must be ui or external"); })());
-  else throw new RepositoryFormatError("CLI_USAGE", "draft requires create, open, status or set-writer");
+  else if (action === "acknowledge") {
+    if (agent.acknowledgeExternalChanges === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "External-change acknowledgement is unavailable");
+    metadata = await agent.acknowledgeExternalChanges(draftId, required(owner, "--owner"));
+  } else if (action === "close") {
+    if (agent.closeDraft === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Draft close is unavailable");
+    metadata = await agent.closeDraft(draftId, required(owner, "--owner"));
+  } else if (action === "reopen") {
+    if (agent.reopenDraft === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Draft reopen is unavailable");
+    metadata = await agent.reopenDraft(draftId, required(owner, "--owner"));
+  } else if (action === "cleanup") {
+    if (agent.cleanupDraft === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Draft cleanup is unavailable");
+    const confirmation = required(flagValue(args, "--confirm"), "--confirm");
+    if (confirmation !== draftId) throw new RepositoryFormatError("CLI_USAGE", "--confirm must exactly match --draft");
+    await agent.cleanupDraft(draftId, required(owner, "--owner"), confirmation);
+    return { exitCode: 0, output: render(json, { ok: true, code: "OK", deleted: true, draft_id: draftId }, `Cleaned up draft ${draftId}`) };
+  } else throw new RepositoryFormatError("CLI_USAGE", "draft requires list, create, open, status, set-writer, acknowledge, close, reopen or cleanup");
   return { exitCode: 0, output: render(json, { ok: true, code: "OK", draft: metadata }, `Draft ${metadata.draft_id}: ${metadata.writer_mode} (${metadata.state})\n${metadata.worktree_path}`) };
 }
 
@@ -640,7 +694,11 @@ async function runEntity(args: readonly string[], cwd: string, dependencies: Cli
     const requestedType = required(entityType, "--type");
     const dryRun = args.includes("--dry-run");
     const rowOffset = format === "csv" ? 2 : 1;
-    const scheduleTrack = direct === undefined ? "" : await readDefaultPrimaryTrack(direct);
+    const scheduleTrack = await readDefaultPrimaryTrack(async () => agent === undefined
+      ? await direct!.getConfiguration("schedule-tracks")
+      : agent.getConfiguration === undefined
+        ? (() => { throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Schedule-track configuration is unavailable"); })()
+        : await agent.getConfiguration(required(draftId, "--draft"), "schedule-tracks"));
     const preparedDocuments = scheduleTrack === "" ? documents : documents.map((document) => nestScheduleColumns(document, scheduleTrack));
     let imported;
     try {
@@ -673,9 +731,11 @@ async function runEntity(args: readonly string[], cwd: string, dependencies: Cli
   };
 }
 
-async function readDefaultPrimaryTrack(direct: DirectCliRuntime): Promise<string> {
+async function readDefaultPrimaryTrack(
+  read: () => Promise<{ readonly document: Readonly<Record<string, unknown>> }>,
+): Promise<string> {
   try {
-    const result = await direct.getConfiguration("schedule-tracks");
+    const result = await read();
     const defaults = (result.document as { defaults?: { primary_track?: unknown } | null }).defaults;
     const primaryTrack = defaults?.primary_track;
     return typeof primaryTrack === "string" ? primaryTrack : "";
@@ -690,9 +750,18 @@ async function runPush(args: readonly string[], dependencies: CliDependencies): 
 }
 
 async function runMr(args: readonly string[], dependencies: CliDependencies): Promise<CliResult> {
-  if (args[0] !== "create") throw new RepositoryFormatError("CLI_USAGE", "mr requires create");
-  const draftId = required(flagValue(args, "--draft"), "--draft"); const owner = required(flagValue(args, "--owner"), "--owner"); const title = required(flagValue(args, "--title"), "--title");
-  const result = await requireAgent(dependencies).createMergeRequest(draftId, owner, title, flagValue(args, "--description"));
+  const action = args[0];
+  if (action !== "create" && action !== "status") throw new RepositoryFormatError("CLI_USAGE", "mr requires create or status");
+  const draftId = required(flagValue(args, "--draft"), "--draft");
+  const owner = required(flagValue(args, "--owner"), "--owner");
+  const agent = requireAgent(dependencies);
+  if (action === "status") {
+    if (agent.mergeRequestStatus === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Merge Request status is unavailable");
+    const result = await agent.mergeRequestStatus(draftId, owner);
+    return { exitCode: 0, output: render(args.includes("--json"), { ok: true, code: "OK", merge_request: result }, `Merge Request !${result.iid}: ${result.state}`) };
+  }
+  const title = required(flagValue(args, "--title"), "--title");
+  const result = await agent.createMergeRequest(draftId, owner, title, flagValue(args, "--description"));
   return { exitCode: 0, output: render(args.includes("--json"), { ok: true, code: "OK", merge_request: result }, `Created Merge Request !${result.iid}: ${result.web_url}`) };
 }
 
@@ -700,18 +769,26 @@ async function runComment(args: readonly string[], cwd: string, dependencies: Cl
   const action = args[0];
   const validActions = ["list", "create", "update", "delete"];
   if (typeof action !== "string" || !validActions.includes(action)) throw new RepositoryFormatError("CLI_USAGE", "comment requires list, create, update or delete");
-  const direct = requireDirect(dependencies);
+  const draftId = flagValue(args, "--draft");
+  const agent = draftId === undefined ? undefined : requireAgent(dependencies);
+  const direct = agent === undefined ? requireDirect(dependencies) : undefined;
   const projectId = required(flagValue(args, "--project"), "--project");
   const taskId = required(flagValue(args, "--task"), "--task");
   const json = args.includes("--json");
   if (action === "list") {
-    const result = await direct.listComments(projectId, taskId);
+    if (agent !== undefined && agent.listComments === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Comment listing is unavailable");
+    const result = agent === undefined
+      ? await direct!.listComments(projectId, taskId)
+      : await agent.listComments!(draftId!, projectId, taskId);
     const items = result.map((item) => ({ id: String(item.document.id), state: item.document.state, author: item.document.author.display_name, ...(typeof item.document.body_markdown === "string" ? { excerpt: item.document.body_markdown.slice(0, 120) } : {}), path: item.path }));
     return { exitCode: 0, output: render(json, { ok: true, code: "OK", items }, `${items.length} comment(s)`) };
   }
   if (action === "delete") {
     const commentId = required(flagValue(args, "--id"), "--id");
-    const deleted = await direct.deleteComment(projectId, taskId, commentId);
+    if (agent !== undefined && agent.deleteComment === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Comment deletion is unavailable");
+    const deleted = agent === undefined
+      ? await direct!.deleteComment(projectId, taskId, commentId)
+      : await agent.deleteComment!(draftId!, projectId, taskId, commentId);
     return { exitCode: 0, output: render(json, { ok: true, code: "OK", document: deleted.document, path: deleted.path }, `Deleted ${deleted.path}`) };
   }
   const commentId = action === "create" ? undefined : required(flagValue(args, "--id"), "--id");
@@ -720,18 +797,44 @@ async function runComment(args: readonly string[], cwd: string, dependencies: Cl
   const body = bodyInline ?? (bodyFile === undefined ? undefined : await readFile(path.resolve(cwd, bodyFile), "utf8"));
   if (body === undefined) throw new RepositoryFormatError("CLI_USAGE", "comment requires --body or --file");
   if (action === "create") {
-    const created = await direct.createComment(projectId, taskId, body);
+    if (agent !== undefined && agent.createComment === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Comment creation is unavailable");
+    const created = agent === undefined
+      ? await direct!.createComment(projectId, taskId, body)
+      : await agent.createComment!(draftId!, projectId, taskId, body);
     return { exitCode: 0, output: render(json, { ok: true, code: "OK", document: created.document, path: created.path }, `Created ${created.path}`) };
   }
-  const updated = await direct.updateComment(projectId, taskId, commentId!, body);
+  if (agent !== undefined && agent.updateComment === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Comment update is unavailable");
+  const updated = agent === undefined
+    ? await direct!.updateComment(projectId, taskId, commentId!, body)
+    : await agent.updateComment!(draftId!, projectId, taskId, commentId!, body);
   return { exitCode: 0, output: render(json, { ok: true, code: "OK", document: updated.document, path: updated.path }, `Updated ${updated.path}`) };
+}
+
+async function runNotification(args: readonly string[], dependencies: CliDependencies): Promise<CliResult> {
+  if (args[0] !== "list") throw new RepositoryFormatError("CLI_USAGE", "notification requires list");
+  const draftId = flagValue(args, "--draft");
+  const personId = flagValue(args, "--person");
+  let result;
+  if (draftId === undefined) {
+    result = await requireDirect(dependencies).notifications(personId);
+  } else {
+    const agent = requireAgent(dependencies);
+    if (agent.notifications === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Notifications are unavailable");
+    result = await agent.notifications(draftId, personId);
+  }
+  return {
+    exitCode: 0,
+    output: render(args.includes("--json"), { ok: true, code: "OK", ...result }, `${result.items.length} notification(s)`),
+  };
 }
 
 async function runTimeEntry(args: readonly string[], cwd: string, dependencies: CliDependencies): Promise<CliResult> {
   const action = args[0];
   const validActions = ["list", "create", "void", "summary"];
   if (typeof action !== "string" || !validActions.includes(action)) throw new RepositoryFormatError("CLI_USAGE", "time-entry requires list, create, void or summary");
-  const direct = requireDirect(dependencies);
+  const draftId = flagValue(args, "--draft");
+  const agent = draftId === undefined ? undefined : requireAgent(dependencies);
+  const direct = agent === undefined ? requireDirect(dependencies) : undefined;
   const projectId = required(flagValue(args, "--project"), "--project");
   const taskId = flagValue(args, "--task");
   const json = args.includes("--json");
@@ -744,10 +847,15 @@ async function runTimeEntry(args: readonly string[], cwd: string, dependencies: 
     ...(flagValue(args, "--from") === undefined ? {} : { performed_from: flagValue(args, "--from")! }),
     ...(flagValue(args, "--to") === undefined ? {} : { performed_to: flagValue(args, "--to")! }),
   };
+  const listProject = async (requestedFilters: Parameters<DirectCliRuntime["listProjectTimeEntries"]>[1]) => {
+    if (agent === undefined) return await direct!.listProjectTimeEntries(projectId, requestedFilters);
+    if (agent.listProjectTimeEntries === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Time-entry listing is unavailable");
+    return await agent.listProjectTimeEntries(draftId!, projectId, requestedFilters);
+  };
   if (action === "list") {
     const offset = flagValue(args, "--offset");
     const limit = flagValue(args, "--limit");
-    const result = await direct.listProjectTimeEntries(projectId, {
+    const result = await listProject({
       ...filters,
       ...(offset === undefined ? {} : { offset: Number(offset) }),
       ...(limit === undefined ? {} : { limit: Number(limit) }),
@@ -761,7 +869,7 @@ async function runTimeEntry(args: readonly string[], cwd: string, dependencies: 
     let offset = 0;
     let total = 0;
     do {
-      const page = await direct.listProjectTimeEntries(projectId, { ...filters, offset, limit: 200 });
+      const page = await listProject({ ...filters, offset, limit: 200 });
       results.push(...page.items);
       total = page.total;
       offset += page.items.length;
@@ -786,7 +894,10 @@ async function runTimeEntry(args: readonly string[], cwd: string, dependencies: 
   const requiredTaskId = required(taskId, "--task");
   const entryId = flagValue(args, "--id");
   if (action === "void") {
-    const voided = await direct.voidTimeEntry(projectId, requiredTaskId, required(entryId, "--id"));
+    if (agent !== undefined && agent.voidTimeEntry === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Time-entry void is unavailable");
+    const voided = agent === undefined
+      ? await direct!.voidTimeEntry(projectId, requiredTaskId, required(entryId, "--id"))
+      : await agent.voidTimeEntry!(draftId!, projectId, requiredTaskId, required(entryId, "--id"));
     return { exitCode: 0, output: render(json, { ok: true, code: "OK", document: voided.document, path: voided.path }, `Voided ${voided.path}`) };
   }
   const person = required(flagValue(args, "--person"), "--person");
@@ -795,7 +906,11 @@ async function runTimeEntry(args: readonly string[], cwd: string, dependencies: 
   const category = required(flagValue(args, "--category"), "--category");
   if (!Number.isFinite(hours) || hours <= 0) throw new RepositoryFormatError("CLI_USAGE", "--hours must be a positive number");
   const note = flagValue(args, "--note");
-  const created = await direct.createTimeEntry(projectId, requiredTaskId, { person, performed_on: performedOn, hours, category, ...(note === undefined ? {} : { note_markdown: note }) });
+  if (agent !== undefined && agent.createTimeEntry === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Time-entry creation is unavailable");
+  const input = { person, performed_on: performedOn, hours, category, ...(note === undefined ? {} : { note_markdown: note }) };
+  const created = agent === undefined
+    ? await direct!.createTimeEntry(projectId, requiredTaskId, input)
+    : await agent.createTimeEntry!(draftId!, projectId, requiredTaskId, input);
   return { exitCode: 0, output: render(json, { ok: true, code: "OK", document: created.document, path: created.path }, `Created ${created.path}`) };
 }
 
@@ -808,11 +923,18 @@ function scheduleEntityType(value: string): "projects" | "tasks" | "milestones" 
 
 async function runSchedule(args: readonly string[], dependencies: CliDependencies): Promise<CliResult> {
   if (args[0] !== "set") throw new RepositoryFormatError("CLI_USAGE", "schedule requires set");
-  const direct = requireDirect(dependencies);
+  const draftId = flagValue(args, "--draft");
+  const agent = draftId === undefined ? undefined : requireAgent(dependencies);
+  const direct = agent === undefined ? requireDirect(dependencies) : undefined;
+  if (agent !== undefined && (agent.getConfiguration === undefined || agent.getEntity === undefined || agent.updateEntity === undefined)) {
+    throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Schedule mutation is unavailable");
+  }
   const entityType = scheduleEntityType(required(flagValue(args, "--type"), "--type"));
   const id = required(flagValue(args, "--id"), "--id");
   const track = required(flagValue(args, "--track"), "--track");
-  const configuration = await direct.getConfiguration("schedule-tracks");
+  const configuration = agent === undefined
+    ? await direct!.getConfiguration("schedule-tracks")
+    : await agent.getConfiguration!(draftId!, "schedule-tracks");
   const tracks = Array.isArray(configuration.document.tracks) ? configuration.document.tracks : [];
   const definition = tracks.find((candidate) => candidate !== null && typeof candidate === "object" && (candidate as Record<string, unknown>).slug === track) as Record<string, unknown> | undefined;
   if (definition === undefined) {
@@ -821,7 +943,9 @@ async function runSchedule(args: readonly string[], dependencies: CliDependencie
   if (definition.kind !== "manual") throw new RepositoryFormatError("CLI_USAGE", `Schedule track ${track} is not manual`);
   const supplied = ["--start", "--finish", "--effort-hours", "--depends-on", "--clear-start", "--clear-finish", "--clear-effort", "--clear-dependencies"];
   if (!supplied.some((flag) => args.includes(flag))) throw new RepositoryFormatError("CLI_USAGE", "schedule set requires a window field");
-  const current = await direct.getEntity(entityType, id);
+  const current = agent === undefined
+    ? await direct!.getEntity(entityType, id)
+    : await agent.getEntity!(draftId!, entityType, id);
   const schedules = current.document.schedules !== null && typeof current.document.schedules === "object" && !Array.isArray(current.document.schedules)
     ? { ...(current.document.schedules as Record<string, unknown>) }
     : {};
@@ -848,16 +972,25 @@ async function runSchedule(args: readonly string[], dependencies: CliDependencie
   if (Object.keys(existing).length === 0) delete schedules[track]; else schedules[track] = existing;
   const next = { ...current.document } as Record<string, unknown>;
   if (Object.keys(schedules).length === 0) delete next.schedules; else next.schedules = schedules;
-  const updated = await direct.updateEntity(next, entityType, id, agentScope(args));
+  const updated = agent === undefined
+    ? await direct!.updateEntity(next, entityType, id, agentScope(args))
+    : await agent.updateEntity!(draftId!, next, entityType, id, agentScope(args));
   return { exitCode: 0, output: render(args.includes("--json"), { ok: true, code: "OK", ...updated }, `Updated ${updated.path} schedule ${track}`) };
 }
 
 async function runPlanning(args: readonly string[], dependencies: CliDependencies): Promise<CliResult> {
   const action = args[0];
   if (action !== "show" && action !== "set") throw new RepositoryFormatError("CLI_USAGE", "planning requires show or set");
-  const direct = requireDirect(dependencies);
+  const draftId = flagValue(args, "--draft");
+  const agent = draftId === undefined ? undefined : requireAgent(dependencies);
+  const direct = agent === undefined ? requireDirect(dependencies) : undefined;
+  if (agent !== undefined && (agent.getEntity === undefined || agent.updateEntity === undefined)) {
+    throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Planning commands are unavailable");
+  }
   const projectId = required(flagValue(args, "--project"), "--project");
-  const current = await direct.getEntity("projects", projectId);
+  const current = agent === undefined
+    ? await direct!.getEntity("projects", projectId)
+    : await agent.getEntity!(draftId!, "projects", projectId);
   if (action === "show") return { exitCode: 0, output: render(args.includes("--json"), { ok: true, code: "OK", planning: current.document.planning ?? null, document: current.document, path: current.path }, current.path) };
   const supplied = ["--primary-track", "--workload-track", "--comparison-track", "--clear-comparison-track", "--enabled-track", "--dashboard-track"];
   if (!supplied.some((flag) => args.includes(flag))) throw new RepositoryFormatError("CLI_USAGE", "planning set requires a planning field");
@@ -870,22 +1003,34 @@ async function runPlanning(args: readonly string[], dependencies: CliDependencie
   if (args.includes("--clear-comparison-track")) delete planning.comparison_track;
   if (args.includes("--enabled-track")) planning.enabled_tracks = flagValues(args, "--enabled-track");
   if (args.includes("--dashboard-track")) planning.dashboard_tracks = flagValues(args, "--dashboard-track");
-  const updated = await direct.updateEntity({ ...current.document, planning }, "projects", projectId, agentScope(args));
+  const next = { ...current.document, planning };
+  const updated = agent === undefined
+    ? await direct!.updateEntity(next, "projects", projectId, agentScope(args))
+    : await agent.updateEntity!(draftId!, next, "projects", projectId, agentScope(args));
   return { exitCode: 0, output: render(args.includes("--json"), { ok: true, code: "OK", ...updated }, `Updated ${updated.path} planning`) };
 }
 
 async function runConfig(args: readonly string[], cwd: string, dependencies: CliDependencies): Promise<CliResult> {
   const action = args[0];
   if (action !== "show" && action !== "update") throw new RepositoryFormatError("CLI_USAGE", "config requires show or update");
-  const direct = requireDirect(dependencies);
+  const draftId = flagValue(args, "--draft");
+  const agent = draftId === undefined ? undefined : requireAgent(dependencies);
+  const direct = agent === undefined ? requireDirect(dependencies) : undefined;
+  if (agent !== undefined && (agent.getConfiguration === undefined || agent.updateConfiguration === undefined)) {
+    throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Configuration commands are unavailable");
+  }
   const kind = required(flagValue(args, "--kind"), "--kind");
   if (kind !== "statuses" && kind !== "issue-types" && kind !== "work-categories" && kind !== "schedule-tracks") throw new RepositoryFormatError("CLI_USAGE", "--kind must be statuses, issue-types, work-categories or schedule-tracks");
   const json = args.includes("--json");
   if (action === "show") {
-    const result = await direct.getConfiguration(kind);
+    const result = agent === undefined
+      ? await direct!.getConfiguration(kind)
+      : await agent.getConfiguration!(draftId!, kind);
     return { exitCode: 0, output: render(json, { ok: true, code: "OK", document: result.document, path: result.path }, result.path) };
   }
-  const current = await direct.getConfiguration(kind);
+  const current = agent === undefined
+    ? await direct!.getConfiguration(kind)
+    : await agent.getConfiguration!(draftId!, kind);
   const patch = await entityUpdatePatch(args, cwd);
   const next: Record<string, unknown> = { ...current.document };
   for (const [field, value] of Object.entries(patch)) {
@@ -893,8 +1038,103 @@ async function runConfig(args: readonly string[], cwd: string, dependencies: Cli
     else next[field] = value;
   }
   next.schema = current.document.schema;
-  const updated = await direct.updateConfiguration(kind, next, agentScope(args));
+  const updated = agent === undefined
+    ? await direct!.updateConfiguration(kind, next, agentScope(args))
+    : await agent.updateConfiguration!(draftId!, kind, next, agentScope(args));
   return { exitCode: 0, output: render(json, { ok: true, code: "OK", document: updated.document, path: updated.path }, `Updated ${updated.path}`) };
+}
+
+function nonNegativeInteger(value: string | undefined, name: string, defaultValue?: number): number {
+  if (value === undefined && defaultValue !== undefined) return defaultValue;
+  const parsed = Number(required(value, name));
+  if (!Number.isInteger(parsed) || parsed < 0) throw new RepositoryFormatError("CLI_USAGE", `${name} must be a non-negative integer`);
+  return parsed;
+}
+
+async function runChanges(args: readonly string[], dependencies: CliDependencies): Promise<CliResult> {
+  const action = args[0];
+  if (!action || !["list", "restore-file", "restore-hunk", "discard-all"].includes(action)) {
+    throw new RepositoryFormatError("CLI_USAGE", "changes requires list, restore-file, restore-hunk or discard-all");
+  }
+  const draftId = flagValue(args, "--draft");
+  const agent = draftId === undefined ? undefined : requireAgent(dependencies);
+  const direct = agent === undefined ? requireDirect(dependencies) : undefined;
+  const scope = agentScope(args);
+  const json = args.includes("--json");
+  if (action === "list") {
+    if (agent !== undefined && agent.listChanges === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Change listing is unavailable");
+    const result = agent === undefined
+      ? await direct!.listChanges(scope)
+      : await agent.listChanges!(draftId!, scope);
+    return { exitCode: 0, output: render(json, { ok: true, code: "OK", ...result }, `${result.changed_files_count} changed file(s)`) };
+  }
+  if (action === "discard-all") {
+    if (flagValue(args, "--confirm") !== "discard-all") throw new RepositoryFormatError("CLI_USAGE", "changes discard-all requires --confirm discard-all");
+    if (agent !== undefined && agent.discardAll === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Discard all is unavailable");
+    const result = agent === undefined
+      ? await direct!.discardAll(scope)
+      : await agent.discardAll!(draftId!, scope);
+    return { exitCode: 0, output: render(json, { ok: true, code: "OK", ...result }, `Discarded ${result.discarded} changed file(s)`) };
+  }
+  const relativePath = required(flagValue(args, "--path"), "--path");
+  if (action === "restore-file") {
+    if (agent !== undefined && agent.restoreFile === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "File restore is unavailable");
+    const mutation = agent === undefined
+      ? await direct!.restoreFile(relativePath, scope)
+      : await agent.restoreFile!(draftId!, relativePath, scope);
+    return { exitCode: 0, output: render(json, { ok: true, code: "OK", ...mutation.result, draft_fingerprint: mutation.metadata.fingerprint }, `Restored ${relativePath}`) };
+  }
+  const diffToken = required(flagValue(args, "--diff-token"), "--diff-token");
+  const hunkIndex = nonNegativeInteger(flagValue(args, "--hunk"), "--hunk");
+  if (agent !== undefined && agent.restoreHunk === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Hunk restore is unavailable");
+  const mutation = agent === undefined
+    ? await direct!.restoreHunk(relativePath, diffToken, hunkIndex, scope)
+    : await agent.restoreHunk!(draftId!, relativePath, diffToken, hunkIndex, scope);
+  return { exitCode: 0, output: render(json, { ok: true, code: "OK", ...mutation.result, draft_fingerprint: mutation.metadata.fingerprint }, `Restored hunk ${hunkIndex} in ${relativePath}`) };
+}
+
+async function runHistory(args: readonly string[], dependencies: CliDependencies): Promise<CliResult> {
+  const action = args[0];
+  if (!action || !["list", "show", "file-diff", "file-history", "revert"].includes(action)) {
+    throw new RepositoryFormatError("CLI_USAGE", "history requires list, show, file-diff, file-history or revert");
+  }
+  const draftId = flagValue(args, "--draft");
+  const agent = draftId === undefined ? undefined : requireAgent(dependencies);
+  const direct = agent === undefined ? requireDirect(dependencies) : undefined;
+  const json = args.includes("--json");
+  const limit = nonNegativeInteger(flagValue(args, "--limit"), "--limit", 50);
+  if (limit < 1) throw new RepositoryFormatError("CLI_USAGE", "--limit must be greater than zero");
+  if (action === "list") {
+    if (agent !== undefined && agent.historyList === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "History listing is unavailable");
+    const items = agent === undefined ? await direct!.historyList(limit) : await agent.historyList!(draftId!, limit);
+    return { exitCode: 0, output: render(json, { ok: true, code: "OK", items }, `${items.length} commit(s)`) };
+  }
+  if (action === "file-history") {
+    const relativePath = required(flagValue(args, "--path"), "--path");
+    if (agent !== undefined && agent.fileHistory === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "File history is unavailable");
+    const items = agent === undefined ? await direct!.fileHistory(relativePath, limit) : await agent.fileHistory!(draftId!, relativePath, limit);
+    return { exitCode: 0, output: render(json, { ok: true, code: "OK", items }, `${items.length} commit(s) for ${relativePath}`) };
+  }
+  const commit = required(flagValue(args, "--commit"), "--commit");
+  if (action === "show") {
+    if (agent !== undefined && agent.historyDetail === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "History detail is unavailable");
+    const detail = agent === undefined ? await direct!.historyDetail(commit) : await agent.historyDetail!(draftId!, commit);
+    return { exitCode: 0, output: render(json, { ok: true, code: "OK", commit: detail }, `${detail.commit} ${detail.subject}`) };
+  }
+  if (action === "file-diff") {
+    const relativePath = required(flagValue(args, "--path"), "--path");
+    if (agent !== undefined && agent.historyFileDiff === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "History file diff is unavailable");
+    const result = agent === undefined
+      ? await direct!.historyFileDiff(commit, relativePath)
+      : await agent.historyFileDiff!(draftId!, commit, relativePath);
+    return { exitCode: 0, output: render(json, { ok: true, code: "OK", ...result, commit, path: relativePath }, result.oversized ? `Diff is too large: ${relativePath}` : result.diff) };
+  }
+  if (agent === undefined || draftId === undefined) throw new RepositoryFormatError("CLI_USAGE", "history revert requires --draft");
+  if (agent.createRevertDraft === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Revert draft creation is unavailable");
+  const newDraftId = required(flagValue(args, "--new-draft"), "--new-draft");
+  const owner = required(flagValue(args, "--owner"), "--owner");
+  const result = await agent.createRevertDraft(draftId, commit, newDraftId, owner);
+  return { exitCode: 0, output: render(json, { ok: true, code: "OK", ...result }, `Created revert draft ${result.draft.draft_id}${result.conflicted ? " with conflicts" : ""}`) };
 }
 
 async function runDoctor(args: readonly string[], cwd: string): Promise<CliResult> {
@@ -1211,10 +1451,13 @@ export async function run(args: readonly string[], cwd = process.cwd(), dependen
     }
     if (command === "mr") return await runMr(commandArgs, dependencies);
     if (command === "comment") return await runComment(commandArgs, cwd, dependencies);
+    if (command === "notification") return await runNotification(commandArgs, dependencies);
     if (command === "time-entry") return await runTimeEntry(commandArgs, cwd, dependencies);
     if (command === "schedule") return await runSchedule(commandArgs, dependencies);
     if (command === "planning") return await runPlanning(commandArgs, dependencies);
     if (command === "config") return await runConfig(commandArgs, cwd, dependencies);
+    if (command === "changes") return await runChanges(commandArgs, dependencies);
+    if (command === "history") return await runHistory(commandArgs, dependencies);
     if (command === "doctor" && direct !== undefined) { await direct.prepare(); return await runDoctor([...directRootArgs, ...commandArgs], cwd); }
     if (command === "doctor") return await runDoctor(commandArgs, cwd);
     if (command === "init") return await runInit(commandArgs, cwd, dependencies.init);

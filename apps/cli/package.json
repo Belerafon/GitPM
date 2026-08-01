@@ -20,6 +20,7 @@
     "@gitpm/export": "workspace:*",
     "@gitpm/git-client": "workspace:*",
     "@gitpm/gitlab": "workspace:*",
+    "@gitpm/history": "workspace:*",
     "@gitpm/repository-format": "workspace:*",
     "@gitpm/security": "workspace:*",
     "@gitpm/shared": "workspace:*",

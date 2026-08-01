@@ -123,6 +123,51 @@ export class RepositoryWorkflow {
     };
   }
 
+  async listChanges(workspaceId: string, scope: AgentScope = {}) {
+    await this.assertScope(workspaceId, scope);
+    return await this.changes.list(workspaceId);
+  }
+
+  async restoreFile(workspaceId: string, relativePath: string, scope: AgentScope = {}) {
+    const workspace = await this.beginMutation(workspaceId, scope);
+    return await this.changes.restoreFile(
+      workspaceId,
+      workspace.owner_id,
+      workspace.fingerprint,
+      relativePath,
+      this.options.mutationMode,
+    );
+  }
+
+  async restoreHunk(
+    workspaceId: string,
+    relativePath: string,
+    diffToken: string,
+    hunkIndex: number,
+    scope: AgentScope = {},
+  ) {
+    const workspace = await this.beginMutation(workspaceId, scope);
+    return await this.changes.restoreHunk(
+      workspaceId,
+      workspace.owner_id,
+      workspace.fingerprint,
+      relativePath,
+      diffToken,
+      hunkIndex,
+      this.options.mutationMode,
+    );
+  }
+
+  async discardAll(workspaceId: string, scope: AgentScope = {}) {
+    const workspace = await this.beginMutation(workspaceId, scope);
+    return await this.changes.discardAll(
+      workspaceId,
+      workspace.owner_id,
+      workspace.fingerprint,
+      this.options.mutationMode,
+    );
+  }
+
   async createEntity(
     workspaceId: string,
     document: Readonly<Record<string, unknown>>,
@@ -359,6 +404,21 @@ export class RepositoryWorkflow {
       ownerId,
       accessToken: () => accessToken,
     }, { draftId: workspaceId }, data);
+  }
+
+  async pollMergeRequest(
+    workspaceId: string,
+    ownerId: string,
+    accessToken: string | undefined,
+    missingConfiguration: { readonly code: string; readonly message: string },
+  ): Promise<MergeRequestState> {
+    if (accessToken === undefined || this.options.mergeRequests === undefined) {
+      throw this.createError(missingConfiguration.code, missingConfiguration.message);
+    }
+    return await this.publication.pollMergeRequest({
+      ownerId,
+      accessToken: () => accessToken,
+    }, { draftId: workspaceId });
   }
 
   private async workspace(workspaceId: string): Promise<RepositoryWorkspace> {

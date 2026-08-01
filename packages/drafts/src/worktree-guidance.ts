@@ -172,6 +172,12 @@ Archive a reversible lifecycle state with
 Move a task with
 \`gitpm entity move --draft ${draftId} --type task --id <entity-id> --to-project <id> [--to-milestone <id>] --allow-delete --json\`.
 
+Use \`gitpm comment list|create|update|delete --draft ${draftId} ...\` for task comments,
+\`gitpm notification list --draft ${draftId}\` for mentions,
+\`gitpm time-entry list|summary|create|void --draft ${draftId} ...\` for actual effort, and
+\`gitpm config show|update --draft ${draftId} ...\` for repository configuration. These are
+domain commands; never substitute raw YAML edits.
+
 Then run \`format\`, \`validate --changed\`, and \`diff --semantic\` with
 \`--draft ${draftId}\`, \`--json\`, and \`--project\` when scoped. Repeat
 \`--allow-delete\` on every subsequent mutation, verification, and commit command while a
@@ -288,7 +294,7 @@ change must be attributable to a documented \`gitpm\` command.
 All commands accept \`--json\`; use it for automation. The CLI rejects unknown and duplicate
 non-repeatable options with \`CLI_USAGE\`; never retry a misspelled flag by dropping it silently.
 
-- \`gitpm draft create|open|status|set-writer --draft <id> [--owner <id>]\` manages draft
+- \`gitpm draft list|create|open|status|set-writer|acknowledge|close|reopen|cleanup\` manages draft
   lifecycle and writer ownership.
 - \`gitpm entity create --draft <id> --type <type> --file <file> [--project <id>] [--allow-delete]\` creates an
   entity from a YAML mapping, generating a missing ID and applying documented defaults.
@@ -315,26 +321,36 @@ non-repeatable options with \`CLI_USAGE\`; never retry a misspelled flag by drop
 - \`gitpm entity move --draft <id> --type task --id <entity-id> --to-project <id>
   [--to-milestone <id>] [--allow-delete] [--project <id>]\` relocates a task and its comments
   to another Project.
+- \`gitpm schedule set --draft <id> ...\` and \`gitpm planning show|set --draft <id> ...\`
+  update multi-track schedules and Project planning without replacing neighboring tracks.
+- \`gitpm comment list|create|update|delete --draft <id> ...\` manages Task comments, and
+  \`gitpm notification list --draft <id> [--person <id>]\` reads mention notifications.
+- \`gitpm time-entry list|summary|create|void --draft <id> ...\` manages actual effort.
+- \`gitpm config show|update --draft <id> ...\` reads or transactionally updates repository
+  configuration.
 - \`gitpm schema list|show <type> [--example]\` exposes the installed schema contract.
 - \`gitpm format [--draft <id>] [--project <id>] [--check] [--allow-delete]\` applies or checks canonical YAML.
 - \`gitpm validate [--draft <id>] [--project <id>] [--changed] [--allow-delete]\` validates repository structure,
   schemas, identities, references, dates, and scope closure.
 - \`gitpm diff --semantic [--draft <id>] [--project <id>] [--allow-delete]\` reports created, updated, archived,
   and deleted entities.
+- \`gitpm changes list|restore-file|restore-hunk|discard-all --draft <id> ...\` inspects or
+  explicitly restores uncommitted changes. Discard-all requires \`--confirm discard-all\`.
+- \`gitpm history list|show|file-diff|file-history --draft <id> ...\` inspects Git history;
+  \`history revert\` creates a separate external-mode draft.
 - \`gitpm export --draft <id> --format <pdf|html|csv|repository> [--locale <en|ru>] [--section <projects|people|project-details|gantt>] [--include-git] [--output <path>]\`
   creates a read-only export whose default filename contains the HEAD commit date and short hash.
 - \`gitpm commit --all --draft <id> -m <message> [--project <id>] [--allow-delete]\` validates and commits the
   complete draft. Partial staging is unsupported.
 - \`gitpm push --draft <id>\` publishes a clean committed branch.
 - \`gitpm mr create --draft <id> --owner <id> --title <title> [--description <text>]\` opens a
-  Merge Request against the configured default branch.
+  Merge Request against the configured default branch; \`gitpm mr status\` reads its state.
 - \`gitpm doctor\` checks runtime and repository readiness.
 - \`gitpm --version\` reports the CLI version.
 
-The current CLI exposes entity create, update, import, list, show, delete (with dry-run and
-reference unlink), archive, and move. Configuration update and comment-specific commands are
-direct-mode only; in worktree mode, report the gap if they are needed rather than editing YAML
-directly. Do not invent syntax and do not fall back to editing YAML.
+Do not invent syntax and do not fall back to editing YAML. The GUI file manager is intentionally
+not an agent command: it is a raw filesystem interface that may temporarily bypass repository
+validation. Use the domain commands above and report a product gap when no command exists.
 
 For entity creation, keep the temporary input outside the worktree, inspect fields with
 \`gitpm schema show\`, and never guess a reference or configuration slug. Omit \`id\` to let GitPM
@@ -405,9 +421,6 @@ and a GitPM product problem. Report:
    clearer validation path, machine-readable diagnostic field, safer transaction, or clarified
    documentation.
 6. Next decision: the smallest user choice or external fix needed to continue.
-
-For example, if a comment or configuration update is requested in worktree mode, report that
-those commands are direct-mode only; do not emulate them by editing YAML directly.
 
 Do not patch the GitPM application from inside the managed portfolio draft. Product feedback is
 an explicit handoff to the user, not authorization for an improvised workaround or broader work.
