@@ -367,7 +367,7 @@
 - Project, Task, Milestone, Person, Team, Calendar and Saved View operations.
 - Archive and physical delete with restrict references.
 - Atomic API writes and optimistic content revision.
-- Maintainer routes for statuses and issue types.
+- Maintainer routes for statuses, issue types, work categories and schedule tracks.
 - Static technical request/file limits without quota state.
 
 ### Artifacts
@@ -657,7 +657,7 @@
 - Person CRUD and weekly capacity.
 - Team CRUD and membership.
 - Calendar weekday and holiday editor.
-- Maintainer-only statuses and issue-types editor.
+- Maintainer-only editors for statuses, issue types, work categories and schedule tracks.
 - Role-aware controls and read-only behavior.
 
 ### Artifacts
@@ -671,7 +671,7 @@
 
 ### Manual acceptance
 
-1. Maintainer изменяет Person, Team, Calendar, status and issue type.
+1. Maintainer изменяет Person, Team, Calendar, status, issue type, work category and schedule track settings.
 2. Developer получает deny на administrative mutation.
 3. Сохранить role matrix screenshots and Git diff.
 

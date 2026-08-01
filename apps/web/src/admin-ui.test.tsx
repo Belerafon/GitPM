@@ -6,21 +6,23 @@ import { AdminWorkspace } from "./admin-ui.js";
 import type { ConfigurationDocument, ConfigurationResult, DraftStatus, EntityDocument, EntityResult } from "./types.js";
 
 const draft: DraftStatus = { draft_id: "DRF-ADMIN", owner_gitlab_user_id: "42", branch: "gitpm/42/DRF-ADMIN", base_commit: "a".repeat(40), writer_mode: "ui", state: "open", fingerprint: "b".repeat(64), created_at: "2026-07-10T00:00:00.000Z", updated_at: "2026-07-10T00:00:00.000Z" };
-const configDocument = (kind: "statuses" | "issue-types" | "work-categories") => (kind === "statuses" ? { schema: "gitpm/statuses@2", statuses: [{ slug: "backlog", title: "Backlog", color: "gray", active: true, category: "backlog" }, { slug: "accepted", title: "Accepted", color: "green", active: true, category: "done" }] } : kind === "work-categories" ? { schema: "gitpm/work-categories@1", categories: [{ slug: "regular", title: "Regular work", active: true }, { slug: "rework", title: "Rework", active: true }] } : { schema: "gitpm/issue-types@1", issue_types: [{ slug: "task", title: "Task", color: "blue", active: true }] }) as ConfigurationDocument;
+type ConfigurationKind = "statuses" | "issue-types" | "work-categories" | "schedule-tracks";
+const configDocument = (kind: ConfigurationKind) => (kind === "statuses" ? { schema: "gitpm/statuses@2", statuses: [{ slug: "backlog", title: "Backlog", color: "gray", active: true, category: "backlog" }, { slug: "accepted", title: "Accepted", color: "green", active: true, category: "done" }] } : kind === "work-categories" ? { schema: "gitpm/work-categories@1", categories: [{ slug: "regular", title: "Regular work", active: true }, { slug: "rework", title: "Rework", active: true }] } : kind === "schedule-tracks" ? { schema: "gitpm/schedule-tracks@1", tracks: [{ slug: "plan", title: "Plan", kind: "manual", capabilities: ["dates", "effort", "dependencies"] }, { slug: "target", title: "Target", kind: "manual", capabilities: ["dates"] }, { slug: "actual", title: "Actual", kind: "actual", source: "time_entries" }], defaults: { enabled_tracks: ["plan", "target", "actual"], primary_track: "plan", workload_track: "plan", comparison_track: "target", dashboard_tracks: ["plan", "target", "actual"] } } : { schema: "gitpm/issue-types@1", issue_types: [{ slug: "task", title: "Task", color: "blue", active: true }] }) as ConfigurationDocument;
 
 class AdminApi {
   entities: EntityResult[] = [];
-  configurations = new Map<"statuses" | "issue-types" | "work-categories", ConfigurationResult>([["statuses", this.config("statuses")], ["issue-types", this.config("issue-types")], ["work-categories", this.config("work-categories")]]);
+  configurations = new Map<ConfigurationKind, ConfigurationResult>([["statuses", this.config("statuses")], ["issue-types", this.config("issue-types")], ["work-categories", this.config("work-categories")], ["schedule-tracks", this.config("schedule-tracks")]]);
+  configurationReads: ConfigurationKind[] = [];
   mutations = 0;
-  private config(kind: "statuses" | "issue-types" | "work-categories"): ConfigurationResult { return { document: configDocument(kind), path: `.gitpm/${kind}.yaml`, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) }; }
+  private config(kind: ConfigurationKind): ConfigurationResult { return { document: configDocument(kind), path: `.gitpm/${kind}.yaml`, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) }; }
   private result(document: EntityDocument): EntityResult { this.mutations += 1; return { document, path: `${document.id}.yaml`, blob_id: String(this.mutations).padStart(40, "a"), draft_fingerprint: String(this.mutations).padStart(64, "b") }; }
   async listEntities(_draftId: string, type: string) { const schemas: Record<string, string> = { calendars: "gitpm/calendar@1", people: "gitpm/person@1", teams: "gitpm/team@1", projects: "gitpm/project@2", tasks: "gitpm/task@2", milestones: "gitpm/milestone@2" }; return this.entities.filter((item) => item.document.schema === schemas[type]); }
   async createEntity(_draftId: string, _type: string, _fingerprint: string, document: EntityDocument) { const result = this.result(document); this.entities.push(result); return result; }
   async updateEntity(_draftId: string, _type: string, entity: EntityResult, _fingerprint: string, document: EntityDocument) { const result = this.result(document); this.entities = this.entities.map((item) => item === entity ? result : item); return result; }
   async archiveEntity(draftId: string, type: string, entity: EntityResult, fingerprint: string) { return await this.updateEntity(draftId, type, entity, fingerprint, { ...entity.document, lifecycle: "archived" }); }
   async deleteEntity(_draftId: string, _type: string, entity: EntityResult) { this.mutations += 1; this.entities = this.entities.filter((item) => item !== entity); }
-  async getConfiguration(_draftId: string, kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks") { return this.configurations.get(kind as "statuses" | "issue-types" | "work-categories")!; }
-  async updateConfiguration(_draftId: string, kind: "statuses" | "issue-types", entity: ConfigurationResult, _fingerprint: string, document: ConfigurationDocument) { const result: ConfigurationResult = { ...entity, document }; this.configurations.set(kind, result); return result; }
+  async getConfiguration(_draftId: string, kind: ConfigurationKind) { this.configurationReads.push(kind); return this.configurations.get(kind)!; }
+  async updateConfiguration(_draftId: string, kind: ConfigurationKind, entity: ConfigurationResult, _fingerprint: string, document: ConfigurationDocument) { const result: ConfigurationResult = { ...entity, document }; this.configurations.set(kind, result); return result; }
 }
 
 afterEach(cleanup);
@@ -94,6 +96,32 @@ describe("administration UI", () => {
     await waitFor(() => expect(screen.getByLabelText("Statuses backlog").closest(".config-row")?.classList.contains("recently-changed")).toBe(true));
     expect(screen.getByLabelText("Statuses accepted").closest(".config-row")?.classList.contains("recently-changed")).toBe(true);
     await waitFor(() => expect((admin.configurations.get("statuses")!.document.statuses as readonly { slug: string }[])[0]?.slug).toBe("accepted"));
+    expect(changed).toHaveBeenCalled();
+  });
+
+  it("loads, displays and updates the schedule tracks configuration", async () => {
+    const admin = new AdminApi(); const api = admin as unknown as GitPmApi; const changed = vi.fn(async () => undefined);
+    render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="settings" onChanged={changed} />);
+
+    const tracksCard = (await screen.findByRole("heading", { name: "Schedule tracks" })).closest<HTMLElement>(".config-editor")!;
+    expect(admin.configurationReads).toContain("schedule-tracks");
+    expect(within(tracksCard).getByText("Plan")).toBeTruthy();
+    expect(within(tracksCard).getByText("Target")).toBeTruthy();
+    expect(within(tracksCard).getAllByText("Actual")).toHaveLength(2);
+
+    fireEvent.click(within(tracksCard).getByRole("button", { name: "Edit Schedule tracks" }));
+    const dialog = await screen.findByRole("dialog", { name: "Edit: Schedule tracks" });
+    expect(within(dialog).getAllByText("Manual")).toHaveLength(2);
+    expect(within(dialog).getByText("Time entries")).toBeTruthy();
+    const planTitle = within(dialog).getByLabelText("Schedule tracks plan");
+    fireEvent.change(planTitle, { target: { value: "Working plan" } });
+    fireEvent.change(within(dialog).getByLabelText("Primary track"), { target: { value: "target" } });
+    fireEvent.submit(planTitle.closest("form")!);
+
+    await waitFor(() => expect(admin.configurations.get("schedule-tracks")!.document).toMatchObject({
+      tracks: [expect.objectContaining({ slug: "plan", title: "Working plan", kind: "manual", capabilities: ["dates", "effort", "dependencies"] }), expect.objectContaining({ slug: "target" }), expect.objectContaining({ slug: "actual", source: "time_entries" })],
+      defaults: { enabled_tracks: ["plan", "target", "actual"], primary_track: "target", workload_track: "plan", comparison_track: "target", dashboard_tracks: ["plan", "target", "actual"] },
+    }));
     expect(changed).toHaveBeenCalled();
   });
 

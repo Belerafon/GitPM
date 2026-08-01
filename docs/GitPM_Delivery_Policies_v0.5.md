@@ -34,7 +34,7 @@ P01 должен завершиться approved schema v1 baseline. Parser impl
 
 Normal UI: Project, Task, Milestone, Saved View и Task Comment.
 
-Maintainer UI: Person, Team, Calendar, statuses and issue types.
+Maintainer UI: Person, Team, Calendar, statuses, issue types, work categories and schedule tracks.
 
 Credential-free repository URL, GitLab project и OAuth Application ID доступны
 Maintainer в repository settings, если не заданы environment variables. OAuth
