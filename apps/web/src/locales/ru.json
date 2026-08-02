@@ -30,7 +30,6 @@
   "export.includeGit": "Включить переносимую историю .git (URL удалённого репозитория удаляется)",
   "export.download": "Скачать экспорт",
   "export.preparing": "Подготовка…",
-  "nav.portfolio": "Портфель",
   "nav.drafts": "Рабочие копии",
   "nav.projects": "Проекты",
   "nav.tasks": "Задачи",
@@ -145,9 +144,6 @@
   ,"worktree.clearSelection": "Снять выделение"
   ,"worktree.type.folder": "Папка"
   ,"worktree.type.file": "Файл"
-  ,"core.heading": "Работа портфеля"
-  ,"core.portfolioHeading": "Обзор портфеля"
-  ,"core.portfolioDescription": "Сводка активных проектов, этапов и задач во всём репозитории."
   ,"core.projectsHeading": "Проекты"
   ,"core.projectsDescription": "Создание проектов и управление этапами выбранного проекта."
   ,"core.tasksHeading": "Задачи"
@@ -597,7 +593,7 @@
   ,"feedback.undo": "Отменить"
   ,"core.taskDetailDescription": "Просмотрите задачу и переходите к редактированию только при необходимости."
   ,"core.projectDetailDescription": "Обзор проекта, его этапы и переходы к рабочим представлениям."
-  ,"core.allTasksDescription": "Выберите проект, чтобы открыть его рабочий список задач. Межпроектный обзор доступен в Портфеле и Загрузке."
+  ,"core.allTasksDescription": "Выберите проект, чтобы открыть его рабочий список задач. Межпроектная загрузка доступна в разделе «Загрузка»."
   ,"core.projectListDescription": "Откройте проект, чтобы увидеть его обзор и этапы."
   ,"core.noDescription": "Описание пока не добавлено."
   ,"core.projectNotFound": "Проект не найден или перенесён в архив."

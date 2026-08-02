@@ -30,7 +30,6 @@
   "export.includeGit": "Include portable .git history (remote URL is removed)",
   "export.download": "Download export",
   "export.preparing": "Preparing…",
-  "nav.portfolio": "Portfolio",
   "nav.drafts": "Working copies",
   "nav.projects": "Projects",
   "nav.tasks": "Tasks",
@@ -145,9 +144,6 @@
   ,"worktree.clearSelection": "Clear selection"
   ,"worktree.type.folder": "Folder"
   ,"worktree.type.file": "File"
-  ,"core.heading": "Portfolio work"
-  ,"core.portfolioHeading": "Portfolio overview"
-  ,"core.portfolioDescription": "A summary of active projects, milestones and tasks across the repository."
   ,"core.projectsHeading": "Projects"
   ,"core.projectsDescription": "Create projects and manage the milestones of the selected project."
   ,"core.tasksHeading": "Tasks"
@@ -597,7 +593,7 @@
   ,"feedback.undo": "Undo"
   ,"core.taskDetailDescription": "Review the task, then edit it only when a change is needed."
   ,"core.projectDetailDescription": "Project overview, milestones and shortcuts to its working views."
-  ,"core.allTasksDescription": "Choose a project to open its task workspace. Cross-project work is available in Portfolio and Workload."
+  ,"core.allTasksDescription": "Choose a project to open its task workspace. Cross-project capacity is available in Workload."
   ,"core.projectListDescription": "Open a project to see its overview and milestones."
   ,"core.noDescription": "No description yet."
   ,"core.projectNotFound": "This project was not found or is archived."

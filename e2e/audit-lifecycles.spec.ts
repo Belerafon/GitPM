@@ -43,6 +43,7 @@ test.describe("audited vertical lifecycles", () => {
     await expect(page.locator(".workload-table")).toHaveCount(0);
 
     await page.goto("/portfolio");
+    await expect(page).toHaveURL(/\/projects$/u);
     await expect(page.getByText("Active tasks", { exact: true }).locator("xpath=following-sibling::*[1]")).toHaveText("1");
     await page.goto("/projects");
     await expect(page.getByRole("button", { name: /GitPM launch/u })).toHaveCount(0);

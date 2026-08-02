@@ -129,7 +129,7 @@ export function SafeMarkdown({ source }: { readonly source: string }) {
   })}</div>;
 }
 
-export type CoreSurface = "portfolio" | "projects" | "tasks";
+export type CoreSurface = "projects" | "tasks";
 
 export function CoreWorkspace({ api, draft, locale, surface = "projects", initialProjectId = "", initialTaskId = "", initialCommentId = "", initialStatusFilter = "", initialMilestoneFilter = "", onNavigate = () => undefined, confirmAction = () => true, onChanged }: {
   readonly api: GitPmApi;
@@ -181,12 +181,11 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
   const load = useCallback(async (preferredProject = projectId, externalUpdate = false) => {
     await loadRequest.run(async () => {
       const [nextProjects, nextPeople, statusConfig, typeConfig, tracksDocument] = await Promise.all([api.listEntities(draft.draft_id, "projects"), api.listEntities(draft.draft_id, "people"), api.getConfiguration(draft.draft_id, "statuses"), api.getConfiguration(draft.draft_id, "issue-types"), api.getConfiguration(draft.draft_id, "schedule-tracks")]);
-      const nextProject = surface === "projects" || surface === "portfolio" ? "" : nextProjects.some((item) => item.document.id === preferredProject && item.document.lifecycle === "active") ? preferredProject : "";
-      const [nextMilestones, nextTasks] = surface === "portfolio" || (surface === "projects" && nextProject === "")
+      const nextProject = surface === "projects" ? "" : nextProjects.some((item) => item.document.id === preferredProject && item.document.lifecycle === "active") ? preferredProject : "";
+      const [nextMilestones, nextTasks] = surface === "projects"
         ? await Promise.all([api.listEntities(draft.draft_id, "milestones"), api.listEntities(draft.draft_id, "tasks")])
         : nextProject === "" ? [[], []]
-          : surface === "projects" ? await Promise.all([api.listEntities(draft.draft_id, "milestones", nextProject), api.listEntities(draft.draft_id, "tasks", nextProject)])
-            : await Promise.all([api.listEntities(draft.draft_id, "milestones"), api.listEntities(draft.draft_id, "tasks", nextProject)]);
+          : await Promise.all([api.listEntities(draft.draft_id, "milestones"), api.listEntities(draft.draft_id, "tasks", nextProject)]);
       return { nextProjects, nextPeople, nextProject, nextMilestones, nextTasks, statusConfig, typeConfig, tracksDocument };
     }, ({ nextProjects, nextPeople, nextProject, nextMilestones, nextTasks, statusConfig, typeConfig, tracksDocument }) => {
       const nextEntities = [...nextProjects, ...nextPeople, ...nextMilestones, ...nextTasks];
@@ -286,8 +285,8 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
     const risk = projectRisk(project);
     return <button className="project-register-row" key={project.document.id} onClick={() => onNavigate("projects", { projectId: project.document.id })}><span><strong>{value(project.document, "name")}</strong><code>{project.document.id}</code><small>{value(project.document, "description_markdown") || t("core.noDescription")}</small></span><span><span className="state open">{statusTitle(value(project.document, "status"))}</span></span><span><PersonLinks empty={t("core.unassigned")} onOpen={openPerson} people={people} personIds={value(project.document, "owner") ? [value(project.document, "owner")] : []} /></span><span>{projectTasks}</span><span>{projectMilestones}</span><span>{due === "" ? "—" : formatDateOnly(locale, due)}</span><span className={`project-risk ${risk}`}>{t(`core.risk${risk === "onTrack" ? "OnTrack" : risk === "near" ? "Near" : risk === "overdue" ? "Overdue" : "Unknown"}` as MessageKey)}</span></button>;
   };
-  const headingKey: MessageKey = surface === "portfolio" ? "core.portfolioHeading" : surface === "tasks" ? "core.tasksHeading" : "core.projectsHeading";
-  const descriptionKey: MessageKey = surface === "portfolio" ? "core.portfolioDescription" : surface === "tasks" ? "core.tasksDescription" : "core.projectsDescription";
+  const headingKey: MessageKey = surface === "tasks" ? "core.tasksHeading" : "core.projectsHeading";
+  const descriptionKey: MessageKey = surface === "tasks" ? "core.tasksDescription" : "core.projectsDescription";
   const pageHeading = task !== undefined ? value(task.document, "title") : t(headingKey);
   const pageDescription = task !== undefined ? t("core.taskDetailDescription") : projectId === "" && surface === "tasks" ? t("core.allTasksDescription") : t(descriptionKey);
 
@@ -313,23 +312,7 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
     {feedback !== null && <div aria-live="polite" className={`save-feedback ${feedback.kind}`} role="status"><span>{feedback.text}</span></div>}
     <AsyncBoundary state={loadRequest.state} loading={t("status.loading")} retry={() => { void load(); }} error={(loadError, retry) => <div className="alert error">{loadError}<button onClick={retry}>{t("status.retry")}</button></div>}>
     <>
-    {surface === "portfolio" && <>
-      <div className="portfolio-stats">
-        <div className="card"><span>{t("core.projectsTotal")}</span><strong>{activeProjects.length}</strong></div>
-        <div className="card"><span>{t("core.tasksTotal")}</span><strong>{activeTasks.length}</strong></div>
-        <div className="card"><span>{t("core.milestonesTotal")}</span><strong>{activeMilestones.length}</strong></div>
-        <div className="card"><span>{t("core.completedTasks")}</span><strong>{completedTasks}</strong></div>
-      </div>
-      <section className="card portfolio-projects"><h3>{t("core.projects")}</h3>
-        {activeProjects.length === 0 ? <p>{t("core.empty")}</p> : <div className="portfolio-project-grid">{activeProjects.map((project) => {
-          const projectTasks = activeTasks.filter((item) => item.document.project === project.document.id).length;
-          const projectMilestones = activeMilestones.filter((item) => item.document.project === project.document.id).length;
-          const due = value(project.document, "due"); const risk = projectRisk(project);
-          return <article className="portfolio-project-card" key={project.document.id}><button className="portfolio-project-link" onClick={() => onNavigate("projects", { projectId: project.document.id })}><span><strong>{value(project.document, "name")}</strong><code>{project.document.id}</code></span><span className="state open">{statusTitle(value(project.document, "status"))}</span><dl><div><dt>{t("core.tasks")}</dt><dd>{projectTasks}</dd></div><div><dt>{t("core.milestones")}</dt><dd>{projectMilestones}</dd></div><div><dt>{t("core.owner")}</dt><dd><PersonLinks empty={t("core.unassigned")} onOpen={openPerson} people={people} personIds={value(project.document, "owner") ? [value(project.document, "owner")] : []} /></dd></div><div><dt>{t("core.due")}</dt><dd>{due === "" ? "—" : formatDateOnly(locale, due)}</dd></div></dl><span className={`project-risk ${risk}`}>{t(`core.risk${risk === "onTrack" ? "OnTrack" : risk === "near" ? "Near" : risk === "overdue" ? "Overdue" : "Unknown"}` as MessageKey)}</span></button></article>;
-        })}</div>}
-      </section>
-    </>}
-    {surface === "projects" && <section className="project-directory"><div className="card-heading"><div><h3>{t("core.projectList")}</h3><p>{t("core.portfolioDescription")}</p></div><LifecycleFilter onChange={setLifecycleFilter} t={t} value={lifecycleFilter} /><button className="primary" disabled={readOnly} onClick={() => { setError(null); setCreateEditor("project"); }} type="button">+ {t("core.createProjectAction")}</button><EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setCreateEditor(null)} open={createEditor === "project"} title={t("core.createProjectAction")}><form className="editor-drawer-form" onSubmit={createProject}><label>{t("core.name")}<input disabled={readOnly} name="name" required /></label><ProjectGroupField currentGroup="" disabled={readOnly} groups={existingGroups} key={createEditor === "project" ? "open" : "closed"} t={t} /><label>{t("core.description")}<textarea disabled={readOnly} name="description" /></label><div className="editor-drawer-actions"><button onClick={() => setCreateEditor(null)} type="button">{t("core.cancel")}</button><button className="primary" disabled={readOnly}>{t("core.createProject")}</button></div></form></EditorDrawer></div>
+    {surface === "projects" && <section className="project-directory"><div className="card-heading"><div><h3>{t("core.projectList")}</h3><p>{t("core.projectListDescription")}</p></div><LifecycleFilter onChange={setLifecycleFilter} t={t} value={lifecycleFilter} /><button className="primary" disabled={readOnly} onClick={() => { setError(null); setCreateEditor("project"); }} type="button">+ {t("core.createProjectAction")}</button><EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setCreateEditor(null)} open={createEditor === "project"} title={t("core.createProjectAction")}><form className="editor-drawer-form" onSubmit={createProject}><label>{t("core.name")}<input disabled={readOnly} name="name" required /></label><ProjectGroupField currentGroup="" disabled={readOnly} groups={existingGroups} key={createEditor === "project" ? "open" : "closed"} t={t} /><label>{t("core.description")}<textarea disabled={readOnly} name="description" /></label><div className="editor-drawer-actions"><button onClick={() => setCreateEditor(null)} type="button">{t("core.cancel")}</button><button className="primary" disabled={readOnly}>{t("core.createProject")}</button></div></form></EditorDrawer></div>
       <dl className="project-register-summary"><div><dt>{t("core.projectsTotal")}</dt><dd>{activeProjects.length}</dd></div><div><dt>{t("core.tasksTotal")}</dt><dd>{activeTasks.length}</dd></div><div><dt>{t("core.milestonesTotal")}</dt><dd>{activeMilestones.length}</dd></div><div><dt>{t("core.completedTasks")}</dt><dd>{completedTasks}</dd></div></dl>
       {lifecycleProjects.length === 0 ? <p>{t("core.empty")}</p> : <div className="project-groups">{projectGroupSections.map((group) => <section className="project-group" data-ungrouped={group.isUngrouped || undefined} key={group.key}><header className="project-group-heading"><h4>{group.title}</h4><span>{t("core.projectsCount", { count: group.projects.length })}</span></header><div className="project-register" aria-label={group.title}>{renderProjectRegisterHeader()}{group.projects.map(renderProjectRow)}</div></section>)}</div>}
     </section>}
