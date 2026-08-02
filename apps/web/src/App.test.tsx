@@ -99,6 +99,8 @@ class FakeApi implements GitPmApi {
   async commitFileDiff(): Promise<CommitFileDiff> { throw new Error("not used"); }
   async fileHistory() { return []; }
   async createRevertDraft(): Promise<RevertDraftResult> { throw new Error("not used"); }
+  async restoreCommitFiles(): Promise<never> { throw new Error("not used"); }
+  async revertDirect(): Promise<never> { throw new Error("not used"); }
   async listComments() { return []; }
   async createComment(): Promise<never> { throw new Error("not used"); }
   async updateComment(): Promise<never> { throw new Error("not used"); }

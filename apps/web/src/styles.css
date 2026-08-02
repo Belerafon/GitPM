@@ -868,6 +868,8 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
 .history-workspace { display: grid; gap: 1rem; margin-top: 1.5rem; }
 .history-chrome { overflow: hidden; min-width: 0; border: 1px solid #cfd3cd; border-radius: 10px; background: #fff; box-shadow: 0 4px 18px rgba(31,45,37,.04); }
 .history-toolbar { display: grid; grid-template-columns: minmax(260px, 1.4fr) repeat(3, minmax(150px, .7fr)); gap: .55rem; border-bottom: 1px solid #d8dcd6; background: #f4f6f3; padding: .65rem; }
+.history-commit-lookup { display: grid; grid-template-columns: minmax(260px, 1fr) auto; grid-column: 1 / -1; align-items: center; gap: .4rem; }
+.history-commit-lookup small { grid-column: 1 / -1; color: #68706a; font-size: .68rem; }
 .history-toolbar label { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: .45rem; margin: 0; color: #606761; font-size: .72rem; }
 .history-toolbar input, .history-toolbar select { min-width: 0; width: 100%; height: 34px; border: 1px solid #c9cec8; border-radius: 5px; background: #fff; padding: .4rem .5rem; }
 .history-log { overflow-x: auto; border-bottom: 1px solid #cfd3cd; }
@@ -939,8 +941,12 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
 .history-actions > summary { cursor: pointer; padding: .7rem .85rem; color: #315b47; font-size: .78rem; font-weight: 700; }
 .revert-form { display: grid; grid-template-columns: minmax(260px, 420px) auto; align-items: end; gap: .65rem; border-top: 1px solid #e0e3de; padding: .75rem .85rem; }
 .revert-form label { display: grid; gap: .35rem; margin: 0; }
+.history-direct-actions { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 1fr); gap: 1rem; border-top: 1px solid #e0e3de; padding: .85rem; }
+.history-direct-actions p { margin: .3rem 0 .65rem; color: #5f6963; font-size: .82rem; }
+.history-direct-actions .revert-form { border: 0; padding: 0; grid-template-columns: minmax(220px, 1fr) auto; }
+.history-direct-actions .revert-form small { grid-column: 1 / -1; color: #5f6963; }
 @media (max-width: 1050px) { .history-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); } .history-commit-bar { grid-template-columns: 1fr; gap: .6rem; } .history-inspector { grid-template-columns: minmax(250px, 290px) minmax(0, 1fr); } }
-@media (max-width: 800px) { .history-toolbar { grid-template-columns: 1fr; } .history-toolbar label { grid-template-columns: 110px minmax(0, 1fr); } .history-inspector { grid-template-columns: 1fr; } .history-file-pane { max-height: 410px; border-right: 0; border-bottom: 1px solid #cfd3cd; } .history-diff-pane { min-height: 420px; } .history-commit-bar dl { grid-template-columns: 1fr; } .revert-form { grid-template-columns: 1fr; } }
+@media (max-width: 800px) { .history-toolbar { grid-template-columns: 1fr; } .history-toolbar label { grid-template-columns: 110px minmax(0, 1fr); } .history-inspector { grid-template-columns: 1fr; } .history-file-pane { max-height: 410px; border-right: 0; border-bottom: 1px solid #cfd3cd; } .history-diff-pane { min-height: 420px; } .history-commit-bar dl { grid-template-columns: 1fr; } .revert-form, .history-direct-actions { grid-template-columns: 1fr; } }
 .board-workspace { display: grid; gap: 1.25rem; margin-top: 1.5rem; }
 .board-toolbar { display: grid; grid-template-columns: repeat(4, minmax(140px, 1fr)) auto; align-items: end; gap: .75rem; }
 .board-toolbar label { display: grid; gap: .3rem; color: #5d625f; font-size: .78rem; }

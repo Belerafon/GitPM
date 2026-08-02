@@ -43,18 +43,22 @@ function FileDiff({ diff, oversized, loading, emptyLabel, tooLargeLabel, loading
   </div>;
 }
 
-export function HistoryWorkspace({ api, draft, locale, canRevert, initialCommit = "", onNavigate = () => undefined, onDraftCreated }: {
+export function HistoryWorkspace({ api, draft, locale, canRevert, directMode = false, initialCommit = "", onNavigate = () => undefined, onDraftCreated = async () => undefined, onChanged = async () => undefined, confirmAction = () => true }: {
   readonly api: GitPmApi;
   readonly draft: DraftStatus;
   readonly locale: Locale;
   readonly canRevert: boolean;
+  readonly directMode?: boolean;
   readonly initialCommit?: string;
   readonly onNavigate?: WorkspaceNavigate;
-  readonly onDraftCreated: (draftId: string) => Promise<void>;
+  readonly onDraftCreated?: (draftId: string) => Promise<void>;
+  readonly onChanged?: () => Promise<void>;
+  readonly confirmAction?: (message: string) => boolean;
 }) {
   const t = (key: Parameters<typeof message>[1], values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
   const [items, setItems] = useState<readonly CommitHistoryItem[]>([]);
   const [historyQuery, setHistoryQuery] = useState("");
+  const [commitLookup, setCommitLookup] = useState(initialCommit);
   const [authorFilter, setAuthorFilter] = useState("");
   const [projectFilter, setProjectFilter] = useState("");
   const [dateFilter, setDateFilter] = useState("");
@@ -67,24 +71,27 @@ export function HistoryWorkspace({ api, draft, locale, canRevert, initialCommit 
   const [filePath, setFilePath] = useState<string | null>(null);
   const [fileQuery, setFileQuery] = useState("");
   const [newDraftId, setNewDraftId] = useState("");
+  const [revertMessage, setRevertMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conflicts, setConflicts] = useState<readonly string[]>([]);
+  const [success, setSuccess] = useState<string | null>(null);
   const loadRequest = useAsyncLoad();
 
   const applyDetail = (next: CommitHistoryDetail | null) => {
     setDetail(next);
     setSelectedPath(next?.files[0]?.path ?? null);
     setNewDraftId(next === null ? "" : `REVERT-${next.commit.slice(0, 8).toUpperCase()}`);
+    setRevertMessage(next === null ? "" : `Revert \"${next.subject}\"`);
   };
   const load = () => loadRequest.run(async () => {
     const history = await api.history(draft.draft_id);
-    const selectedCommit = history.some((item) => item.commit === initialCommit) ? initialCommit : history[0]?.commit;
+    const selectedCommit = initialCommit.trim().toLocaleLowerCase() || history[0]?.commit;
     const firstDetail = selectedCommit === undefined ? null : await api.commitDetail(draft.draft_id, selectedCommit);
     return { history, firstDetail };
-  }, ({ history, firstDetail }) => { setItems(history); applyDetail(firstDetail); });
+  }, ({ history, firstDetail }) => { setItems(firstDetail !== null && !history.some((item) => item.commit === firstDetail.commit) ? [firstDetail, ...history] : history); applyDetail(firstDetail); });
   useEffect(() => {
-    applyDetail(null); setHistoryQuery(""); setAuthorFilter(""); setProjectFilter(""); setDateFilter(""); setFileItems([]); setFilePath(null); setFileQuery(""); setConflicts([]);
+    applyDetail(null); setHistoryQuery(""); setCommitLookup(initialCommit); setAuthorFilter(""); setProjectFilter(""); setDateFilter(""); setFileItems([]); setFilePath(null); setFileQuery(""); setConflicts([]); setSuccess(null);
     void load();
   }, [api, draft.draft_id]);
 
@@ -107,6 +114,17 @@ export function HistoryWorkspace({ api, draft, locale, canRevert, initialCommit 
     try { const next = await api.commitDetail(draft.draft_id, item.commit); applyDetail(next); onNavigate("history", { commit: item.commit }); }
     catch (caught) { report(caught); }
   };
+  const openCommit = async (event: FormEvent) => {
+    event.preventDefault();
+    const commit = commitLookup.trim().toLocaleLowerCase();
+    setError(null); setFileItems([]); setFilePath(null); setFileQuery("");
+    try {
+      const next = await api.commitDetail(draft.draft_id, commit);
+      setItems((current) => current.some((item) => item.commit === next.commit) ? current : [next, ...current]);
+      applyDetail(next);
+      onNavigate("history", { commit: next.commit });
+    } catch (caught) { report(caught); }
+  };
   const selectFile = async (path: string) => {
     setSelectedPath(path); setError(null); setFilePath(path); setFileItems([]);
     try { setFileItems(await api.fileHistory(draft.draft_id, path)); }
@@ -123,20 +141,47 @@ export function HistoryWorkspace({ api, draft, locale, canRevert, initialCommit 
     } catch (caught) { report(caught); }
     finally { setBusy(false); }
   };
+  const restoreFiles = async (paths: readonly string[]) => {
+    if (detail === null || paths.length === 0 || !confirmAction(t("history.restoreConfirm", { count: paths.length, commit: detail.commit.slice(0, 8) }))) return;
+    setBusy(true); setError(null); setSuccess(null);
+    try {
+      const result = await api.restoreCommitFiles(draft.draft_id, detail.commit, draft.fingerprint, paths);
+      await onChanged();
+      setSuccess(t("history.restoreSuccess", { count: result.restored_paths.length }));
+      onNavigate("changes");
+    } catch (caught) { report(caught); }
+    finally { setBusy(false); }
+  };
+  const submitDirectRevert = async (event: FormEvent) => {
+    event.preventDefault();
+    if (detail === null || !confirmAction(t("history.directRevertConfirm", { commit: detail.commit.slice(0, 8) }))) return;
+    setBusy(true); setError(null); setSuccess(null);
+    try {
+      const result = await api.revertDirect(draft.draft_id, detail.commit, draft.fingerprint, revertMessage.trim());
+      await onChanged();
+      setSuccess(t("history.directRevertSuccess", { commit: result.commit.slice(0, 8) }));
+      onNavigate("history", { commit: result.commit });
+    } catch (caught) { report(caught); }
+    finally { setBusy(false); }
+  };
   const visibleFiles = detail?.files.filter((file) => file.path.toLocaleLowerCase(locale).includes(fileQuery.trim().toLocaleLowerCase(locale))) ?? [];
   const normalizedHistoryQuery = historyQuery.trim().toLocaleLowerCase(locale);
   const authors = [...new Set(items.map((item) => item.author_name))].sort((left, right) => left.localeCompare(right, locale));
   const projects = [...new Set(items.flatMap((item) => item.semantic_summary.affected_projects))].sort((left, right) => left.localeCompare(right, locale));
   const visibleItems = items.filter((item) => (normalizedHistoryQuery === "" || `${item.subject} ${item.author_name} ${item.commit}`.toLocaleLowerCase(locale).includes(normalizedHistoryQuery)) && (authorFilter === "" || item.author_name === authorFilter) && (projectFilter === "" || item.semantic_summary.affected_projects.includes(projectFilter)) && (dateFilter === "" || item.authored_at.slice(0, 10) === dateFilter));
   const selectedFile = detail?.files.find((file) => file.path === selectedPath);
+  const restorablePaths = detail?.files.map((file) => file.path).filter((path) => path !== "AGENTS.md" && path !== ".agents/skills/gitpm/SKILL.md") ?? [];
+  const selectedPathRestorable = selectedPath !== null && restorablePaths.includes(selectedPath);
 
   return <section className="history-workspace">
     <div className="section-heading"><span className="eyebrow">Git</span><h2 aria-hidden="true">{t("history.heading")}</h2><p>{t("history.description")}</p></div>
     {error !== null && <div className="alert error">{error}</div>}
+    {success !== null && <div className="alert success">{success}</div>}
     {conflicts.length > 0 && <div className="alert warning">{t("history.conflict", { count: conflicts.length })}</div>}
     <AsyncBoundary state={loadRequest.state} loading={t("status.loading")} retry={() => { void load(); }} error={(loadError, retry) => <div className="alert error">{loadError}<button onClick={retry}>{t("status.retry")}</button></div>}>
       <div className="history-chrome">
         <div className="history-toolbar">
+          <form className="history-commit-lookup" onSubmit={openCommit}><label><span>{t("history.openCommit")}</span><input aria-describedby="history-commit-hint" pattern="[0-9a-fA-F]{40,64}" value={commitLookup} onChange={(event) => setCommitLookup(event.target.value)} required /></label><button disabled={busy}>{t("history.openCommitAction")}</button><small id="history-commit-hint">{t("history.openCommitHint")}</small></form>
           <label className="history-search"><span>{t("history.searchCommits")}</span><input type="search" value={historyQuery} onChange={(event) => setHistoryQuery(event.target.value)} /></label>
           <label><span>{t("history.authorFilter")}</span><select value={authorFilter} onChange={(event) => setAuthorFilter(event.target.value)}><option value="">{t("history.allAuthors")}</option>{authors.map((author) => <option key={author}>{author}</option>)}</select></label>
           <label><span>{t("history.projectFilter")}</span><select value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}><option value="">{t("history.allProjects")}</option>{projects.map((project) => <option key={project}>{project}</option>)}</select></label>
@@ -170,7 +215,8 @@ export function HistoryWorkspace({ api, draft, locale, canRevert, initialCommit 
               <FileDiff diff={fileDiffText} oversized={fileDiffOversized} loading={fileDiffLoading} emptyLabel={t(selectedPath === null ? "history.selectFile" : "history.noTextDiff")} tooLargeLabel={t("history.diffTooLarge")} loadingLabel={t("status.loading")} />
             </section>
           </div>
-          {canRevert && <details className="history-actions"><summary>{t("history.revertActions")}</summary><form className="revert-form" onSubmit={submitRevert}><label>{t("history.revertDraft")}<input value={newDraftId} onChange={(event) => setNewDraftId(event.target.value)} pattern="[A-Za-z0-9][A-Za-z0-9-]{0,127}" required /></label><button className="primary" disabled={busy}>{t("history.createRevert")}</button></form></details>}
+          {canRevert && directMode && <details className="history-actions" open><summary>{t("history.directActions")}</summary><div className="history-direct-actions"><div><strong>{t("history.restoreSnapshot")}</strong><p>{t("history.restoreSnapshotHint")}</p><div className="actions"><button disabled={busy || !selectedPathRestorable} onClick={() => { if (selectedPath !== null && selectedPathRestorable) void restoreFiles([selectedPath]); }}>{t("history.restoreSelectedFile")}</button><button disabled={busy || restorablePaths.length === 0 || restorablePaths.length > 200} onClick={() => { void restoreFiles(restorablePaths); }}>{t("history.restoreAllFiles", { count: restorablePaths.length })}</button></div></div><form className="revert-form direct-revert-form" onSubmit={submitDirectRevert}><label>{t("history.directRevertMessage")}<input value={revertMessage} onChange={(event) => setRevertMessage(event.target.value)} maxLength={500} required /></label><button className="primary" disabled={busy}>{t("history.createDirectRevert")}</button><small>{t("history.directRevertHint")}</small></form></div></details>}
+          {canRevert && !directMode && <details className="history-actions"><summary>{t("history.revertActions")}</summary><form className="revert-form" onSubmit={submitRevert}><label>{t("history.revertDraft")}<input value={newDraftId} onChange={(event) => setNewDraftId(event.target.value)} pattern="[A-Za-z0-9][A-Za-z0-9-]{0,127}" required /></label><button className="primary" disabled={busy}>{t("history.createRevert")}</button></form></details>}
         </>}
       </div>
     </AsyncBoundary>

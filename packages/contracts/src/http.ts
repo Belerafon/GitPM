@@ -296,6 +296,19 @@ export interface RevertDraftResult {
   readonly conflicted_files: readonly string[];
 }
 
+export interface RestoreCommitFilesResult {
+  readonly restored_commit: string;
+  readonly restored_paths: readonly string[];
+  readonly draft_fingerprint: string;
+}
+
+export interface DirectRevertResult {
+  readonly commit: string;
+  readonly reverted_commit: string;
+  readonly branch: string;
+  readonly draft_fingerprint: string;
+}
+
 export interface ProjectWorkspaceResult {
   readonly project: EntityResult;
   readonly milestones: readonly EntityResult[];
@@ -660,6 +673,17 @@ export const HTTP_RESPONSE_SCHEMAS = {
     conflicted: booleanSchema,
     conflicted_files: stringArraySchema,
   }),
+  restoreCommitFilesResult: objectSchema({
+    restored_commit: stringSchema,
+    restored_paths: stringArraySchema,
+    draft_fingerprint: stringSchema,
+  }),
+  directRevertResult: objectSchema({
+    commit: stringSchema,
+    reverted_commit: stringSchema,
+    branch: stringSchema,
+    draft_fingerprint: stringSchema,
+  }),
   worktreeDirectory: worktreeDirectorySchema,
   worktreeFile: worktreeFileSchema,
   worktreeEntryMutation: objectSchema({ path: stringSchema, draft_fingerprint: stringSchema }),
@@ -714,6 +738,8 @@ export const decodeCommitHistoryItems = createDecoder<readonly CommitHistoryItem
 export const decodeCommitHistoryDetail = createDecoder<CommitHistoryDetail>("CommitHistoryDetail", HTTP_RESPONSE_SCHEMAS.commitHistoryDetail);
 export const decodeCommitFileDiff = createDecoder<CommitFileDiff>("CommitFileDiff", HTTP_RESPONSE_SCHEMAS.commitFileDiff);
 export const decodeRevertDraftResult = createDecoder<RevertDraftResult>("RevertDraftResult", HTTP_RESPONSE_SCHEMAS.revertDraftResult);
+export const decodeRestoreCommitFilesResult = createDecoder<RestoreCommitFilesResult>("RestoreCommitFilesResult", HTTP_RESPONSE_SCHEMAS.restoreCommitFilesResult);
+export const decodeDirectRevertResult = createDecoder<DirectRevertResult>("DirectRevertResult", HTTP_RESPONSE_SCHEMAS.directRevertResult);
 export const decodeWorktreeDirectory = createDecoder<WorktreeDirectory>("WorktreeDirectory", HTTP_RESPONSE_SCHEMAS.worktreeDirectory);
 export const decodeWorktreeFile = createDecoder<WorktreeFile>("WorktreeFile", HTTP_RESPONSE_SCHEMAS.worktreeFile);
 export const decodeWorktreeEntryMutation = createDecoder<{ readonly path: string; readonly draft_fingerprint: string }>("WorktreeEntryMutation", HTTP_RESPONSE_SCHEMAS.worktreeEntryMutation);
@@ -771,6 +797,8 @@ export const HTTP_REQUEST_BODY_SCHEMAS = {
   commit: objectSchema({ message: stringSchema }),
   mergeRequest: objectSchema({ title: stringSchema, description: stringSchema }, ["title"]),
   revertDraft: objectSchema({ draft_id: stringSchema }),
+  restoreCommitFiles: objectSchema({ expected_fingerprint: stringSchema, paths: stringArraySchema }),
+  directRevert: objectSchema({ expected_fingerprint: stringSchema, message: stringSchema }),
   createComment: objectSchema({ expected_fingerprint: stringSchema, body_markdown: stringSchema }),
   updateComment: objectSchema({
     expected_fingerprint: stringSchema,

@@ -474,6 +474,13 @@ History показывает commit graph, author, message, files, semantic summ
 
 Поддерживается создание revert draft через `git revert`.
 
+В `direct` mode History открывает любой полный SHA, достижимый из текущей ветки, но не переводит
+checkout в detached HEAD и не переписывает ветку. Из выбранного
+коммита можно восстановить один или все изменённые файлы в текущее рабочее дерево (аналог безопасного
+file-level cherry-pick) либо создать новый обратный commit. Restore защищён fingerprint и не затирает
+локально изменённые выбранные пути; revert требует чистого business-worktree. После применения выполняется
+полная repository validation, а conflict или validation failure атомарно возвращает checkout к исходному HEAD.
+
 GitPM не выполняет rebase и не разрешает conflicts. При conflict UI показывает статус и предлагает внешний Git client, GitLab UI или новый draft от текущего main.
 
 ## 16. OAuth 2.0 и GitLab integration

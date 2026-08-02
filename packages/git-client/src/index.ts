@@ -642,6 +642,64 @@ export class GitClient {
     return diff.stdout;
   }
 
+  async statusPorcelainPaths(worktree: string, relativePaths: readonly string[]): Promise<string> {
+    if (relativePaths.length === 0) return "";
+    if (relativePaths.some((value) => /[\r\n\0]/u.test(value))) throw new GitCommandError("GIT_PATH_INVALID", "Git path is invalid");
+    const result = await this.git([
+      "-C", await realpath(worktree), "status", "--porcelain=v1", "--untracked-files=all", "--", ...relativePaths,
+    ]);
+    return result.stdout;
+  }
+
+  async existingPathsAtCommit(worktree: string, commitInput: string, relativePaths: readonly string[]): Promise<ReadonlySet<string>> {
+    if (relativePaths.some((value) => /[\r\n\0]/u.test(value))) throw new GitCommandError("GIT_PATH_INVALID", "Git path is invalid");
+    const commit = assertCommitId(commitInput);
+    const canonical = await realpath(worktree);
+    await this.assertCommitReachable(canonical, commit);
+    const existing = new Set<string>();
+    for (const relativePath of relativePaths) {
+      try {
+        await this.git(["-C", canonical, "cat-file", "-e", `${commit}:${relativePath}`]);
+        existing.add(relativePath);
+      } catch (error) {
+        if (!(error instanceof GitCommandError) || error.code !== "GIT_FAILED") throw error;
+      }
+    }
+    return existing;
+  }
+
+  /**
+   * Materialize paths from an ancestor commit without moving HEAD or changing the active branch.
+   * Callers own path-containment checks and decide whether the index should also be restored.
+   */
+  async restorePathsFromCommit(
+    worktree: string,
+    commitInput: string,
+    relativePaths: readonly string[],
+    includeIndex = false,
+  ): Promise<void> {
+    if (relativePaths.length === 0) return;
+    if (relativePaths.some((value) => /[\r\n\0]/u.test(value))) throw new GitCommandError("GIT_PATH_INVALID", "Git path is invalid");
+    const commit = assertCommitId(commitInput);
+    const canonical = await realpath(worktree);
+    await this.assertCommitReachable(canonical, commit);
+    for (let index = 0; index < relativePaths.length; index += 64) {
+      await this.git([
+        "-C", canonical, "restore", `--source=${commit}`, ...(includeIndex ? ["--staged"] : []), "--worktree", "--", ...relativePaths.slice(index, index + 64),
+      ]);
+    }
+  }
+
+  async clearRevertState(worktree: string): Promise<void> {
+    try {
+      await this.git(["-C", await realpath(worktree), "revert", "--quit"]);
+    } catch (error) {
+      // A successful single-commit `revert --no-commit` may not create sequencer
+      // state. In that case there is nothing to clear.
+      if (!(error instanceof GitCommandError) || error.code !== "GIT_FAILED") throw error;
+    }
+  }
+
   async revertNoCommit(worktree: string, commitInput: string): Promise<GitRevertResult> {
     const commit = assertCommitId(commitInput);
     const canonical = await realpath(worktree);

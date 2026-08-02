@@ -250,6 +250,8 @@ const commandHelp: Readonly<Record<string, string>> = {
     "  gitpm history show [--draft <id>] --commit <sha> [--json]",
     "  gitpm history file-diff [--draft <id>] --commit <sha> --path <path> [--json]",
     "  gitpm history file-history [--draft <id>] --path <path> [--limit <n>] [--json]",
+    "  gitpm history restore --commit <sha> --path <path> [--path <path> ...] [--json]",
+    "  gitpm history revert --commit <sha> --message <message> [--json]",
     "  gitpm history revert --draft <id> --commit <sha> --new-draft <id> --owner <id> [--json]",
   ].join("\n"),
 };
@@ -301,7 +303,7 @@ function commandArgumentSpec(command: string | undefined, args: readonly string[
       : { values: ["--draft", "--kind"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
   }
   if (command === "changes") return { values: ["--draft", "--project", "--path", "--diff-token", "--hunk", "--confirm"], booleans: ["--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
-  if (command === "history") return { values: ["--draft", "--commit", "--path", "--limit", "--new-draft", "--owner"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
+  if (command === "history") return { values: ["--draft", "--commit", "--path", "--limit", "--new-draft", "--owner", "--message"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
   if (command === "doctor") return { values: ["--root"], booleans: ["--json"], minPositionals: 0, maxPositionals: 0 };
   if (command === "init") return { booleans: ["--json"], minPositionals: 0, maxPositionals: 1 };
   return undefined;
@@ -1165,8 +1167,8 @@ async function runChanges(args: readonly string[], dependencies: CliDependencies
 
 async function runHistory(args: readonly string[], dependencies: CliDependencies): Promise<CliResult> {
   const action = args[0];
-  if (!action || !["list", "show", "file-diff", "file-history", "revert"].includes(action)) {
-    throw new RepositoryFormatError("CLI_USAGE", "history requires list, show, file-diff, file-history or revert");
+  if (!action || !["list", "show", "file-diff", "file-history", "restore", "revert"].includes(action)) {
+    throw new RepositoryFormatError("CLI_USAGE", "history requires list, show, file-diff, file-history, restore or revert");
   }
   const draftId = flagValue(args, "--draft");
   const agent = draftId === undefined ? undefined : requireAgent(dependencies);
@@ -1198,6 +1200,18 @@ async function runHistory(args: readonly string[], dependencies: CliDependencies
       ? await direct!.historyFileDiff(commit, relativePath)
       : await agent.historyFileDiff!(draftId!, commit, relativePath);
     return { exitCode: 0, output: render(json, { ok: true, code: "OK", ...result, commit, path: relativePath }, result.oversized ? `Diff is too large: ${relativePath}` : result.diff) };
+  }
+  if (action === "restore") {
+    if (agent !== undefined) throw new RepositoryFormatError("CLI_USAGE", "history restore is available only in direct mode; use a revert draft in worktree mode");
+    const paths = flagValues(args, "--path");
+    if (paths.length === 0) throw new RepositoryFormatError("CLI_USAGE", "history restore requires at least one --path");
+    const result = await direct!.restoreCommitFiles(commit, paths);
+    return { exitCode: 0, output: render(json, { ok: true, code: "OK", ...result }, `Restored ${result.restored_paths.length} file(s) from ${result.restored_commit}`) };
+  }
+  if (agent === undefined) {
+    const message = required(flagValue(args, "--message"), "--message");
+    const result = await direct!.revertCommit(commit, message);
+    return { exitCode: 0, output: render(json, { ok: true, code: "OK", ...result }, `Created reverse commit ${result.commit}`) };
   }
   if (agent === undefined || draftId === undefined) throw new RepositoryFormatError("CLI_USAGE", "history revert requires --draft");
   if (agent.createRevertDraft === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Revert draft creation is unavailable");

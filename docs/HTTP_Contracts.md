@@ -40,6 +40,13 @@ does not mutate repository YAML, change the draft fingerprint, or require a writ
 web client imports matching legacy `localStorage` keys once and removes them only after successful
 server persistence.
 
+Direct-mode history writes use two explicit routes rather than overloading draft lifecycle:
+`POST /api/drafts/:draftId/history/:commit/restore-files` accepts an optimistic fingerprint and
+1–200 changed paths, while `POST /api/drafts/:draftId/history/:commit/revert-direct` accepts the
+fingerprint and commit message. Their decoded results return the refreshed fingerprint; the revert
+result also returns the newly created commit. The existing `/revert` route remains the worktree-mode
+operation that creates a separate revert draft.
+
 When a repository document schema changes:
 
 1. update the corresponding file in `schemas/v1`;

@@ -1,6 +1,9 @@
-import type { DraftManager, DraftMetadata } from "@gitpm/drafts";
+import { lstat, rm } from "node:fs/promises";
+import { GITPM_GUIDANCE_PATHS, type DraftManager, type DraftMetadata } from "@gitpm/drafts";
 import { GitCommandError } from "@gitpm/git-client";
 import type { GitClient, GitCommitDetail, GitHistoryEntry } from "@gitpm/git-client";
+import { resolveDomainPath } from "@gitpm/security";
+import { validateRepository, type ValidationIssue } from "@gitpm/validation";
 
 export interface HistorySemanticSummary {
   readonly created: number;
@@ -29,11 +32,59 @@ export interface RevertDraftResult {
   readonly conflicted_files: readonly string[];
 }
 
+export interface RestoreCommitFilesResult {
+  readonly restored_commit: string;
+  readonly restored_paths: readonly string[];
+  readonly draft_fingerprint: string;
+}
+
+export interface DirectRevertResult {
+  readonly commit: string;
+  readonly reverted_commit: string;
+  readonly branch: string;
+  readonly draft_fingerprint: string;
+}
+
 function assertRepositoryRelativePath(relativePath: string): string {
   if (relativePath.includes("\\") || relativePath.startsWith("/") || relativePath.split("/").some((part) => part === "" || part === "." || part === "..")) {
     throw new HistoryError("HISTORY_PATH_INVALID", "History path must be a normalized repository-relative path");
   }
   return relativePath;
+}
+
+function assertDirectMode(drafts: DraftManager): void {
+  if (drafts.repositoryMode !== "direct") throw new HistoryError("HISTORY_DIRECT_MODE_REQUIRED", "This history operation is available only in direct repository mode");
+}
+
+function assertRestorablePaths(paths: readonly string[], maximum = 200): readonly string[] {
+  if (paths.length === 0) throw new HistoryError("HISTORY_FILES_REQUIRED", "The selected commit has no files to restore");
+  if (paths.length > maximum) throw new HistoryError("HISTORY_FILES_REQUIRED", `Choose no more than ${maximum} files to restore`);
+  const normalized = [...new Set(paths.map(assertRepositoryRelativePath))].sort();
+  const guidancePaths: readonly string[] = GITPM_GUIDANCE_PATHS;
+  const guidance = normalized.find((value) => guidancePaths.includes(value));
+  if (guidance !== undefined) throw new HistoryError("HISTORY_GUIDANCE_RESTORE_FORBIDDEN", "Generated agent guidance cannot be restored from business history");
+  return normalized;
+}
+
+async function removeRepositoryFile(root: string, relativePath: string): Promise<void> {
+  try {
+    await rm(await resolveDomainPath(root, relativePath), { force: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+}
+
+async function assertSafeRepositoryPath(root: string, relativePath: string): Promise<void> {
+  const segments = relativePath.split("/");
+  for (let index = 1; index <= segments.length; index += 1) {
+    const candidate = await resolveDomainPath(root, segments.slice(0, index).join("/"));
+    try {
+      await lstat(candidate);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+      throw error;
+    }
+  }
 }
 
 function summarizeFiles(files: readonly { readonly path: string; readonly status: "Added" | "Modified" | "Deleted" }[]): HistorySemanticSummary {
@@ -100,10 +151,92 @@ export class HistoryService {
     if (revert.conflicted) refreshed = await this.drafts.setWriterMode(draft.draft_id, owner, "external");
     return { draft: refreshed, reverted_commit: commit, ...revert };
   }
+
+  async restoreCommitFiles(
+    workspaceId: string,
+    commit: string,
+    paths: readonly string[],
+    owner: string,
+    expectedFingerprint: string,
+  ): Promise<RestoreCommitFilesResult> {
+    assertDirectMode(this.drafts);
+    const requested = assertRestorablePaths(paths);
+    const mutation = await this.drafts.withRepositoryMutation(workspaceId, owner, expectedFingerprint, "repository", async (workspace) => {
+      await this.git.assertCheckoutOnDefaultBranch(workspace.worktree_path);
+      const detail = await this.git.commitDetail(workspace.worktree_path, commit);
+      const changed = new Map(detail.files.map((file) => [file.path, file]));
+      const unavailable = requested.find((value) => !changed.has(value));
+      if (unavailable !== undefined) throw new HistoryError("HISTORY_FILE_NOT_IN_COMMIT", `${unavailable} was not changed by the selected commit`);
+      for (const relativePath of requested) await assertSafeRepositoryPath(workspace.worktree_path, relativePath);
+      if ((await this.git.statusPorcelainPaths(workspace.worktree_path, requested)).trim() !== "") {
+        throw new HistoryError("HISTORY_SELECTED_FILE_DIRTY", "A selected file already has uncommitted changes");
+      }
+      const head = await this.git.headCommit(workspace.worktree_path);
+      const headPaths = await this.git.existingPathsAtCommit(workspace.worktree_path, head, requested);
+      try {
+        const present = requested.filter((value) => changed.get(value)?.status !== "Deleted");
+        const deleted = requested.filter((value) => changed.get(value)?.status === "Deleted");
+        await this.git.restorePathsFromCommit(workspace.worktree_path, detail.commit, present);
+        for (const relativePath of deleted) await removeRepositoryFile(workspace.worktree_path, relativePath);
+        const validation = await validateRepository(workspace.worktree_path);
+        if (!validation.valid) throw new HistoryError("HISTORY_VALIDATION_FAILED", "Restored files do not form a valid repository", validation.errors);
+      } catch (error) {
+        const existingAtHead = requested.filter((value) => headPaths.has(value));
+        const absentAtHead = requested.filter((value) => !headPaths.has(value));
+        await this.git.restorePathsFromCommit(workspace.worktree_path, head, existingAtHead);
+        for (const relativePath of absentAtHead) await removeRepositoryFile(workspace.worktree_path, relativePath);
+        throw error;
+      }
+      return { restored_commit: detail.commit, restored_paths: requested };
+    });
+    return { ...mutation.result, draft_fingerprint: mutation.metadata.fingerprint };
+  }
+
+  async revertDirect(
+    workspaceId: string,
+    commit: string,
+    message: string,
+    owner: string,
+    expectedFingerprint: string,
+    authorName: string,
+    authorEmail: string,
+  ): Promise<DirectRevertResult> {
+    assertDirectMode(this.drafts);
+    if (!message.trim() || message.length > 500 || /[\r\n\0]/u.test(message)) {
+      throw new HistoryError("HISTORY_REVERT_MESSAGE_INVALID", "Reverse commit message must be one non-empty line up to 500 characters");
+    }
+    const mutation = await this.drafts.withRepositoryMutation(workspaceId, owner, expectedFingerprint, "repository", async (workspace) => {
+      const branch = await this.git.assertCheckoutOnDefaultBranch(workspace.worktree_path);
+      if ((await this.git.statusPorcelain(workspace.worktree_path, GITPM_GUIDANCE_PATHS)).trim() !== "") {
+        throw new HistoryError("HISTORY_WORKSPACE_DIRTY", "Creating a reverse commit requires a clean working tree");
+      }
+      const detail = await this.git.commitDetail(workspace.worktree_path, commit);
+      const paths = assertRestorablePaths(detail.files.map((file) => file.path), Number.MAX_SAFE_INTEGER);
+      const head = await this.git.headCommit(workspace.worktree_path);
+      let committed = false;
+      try {
+        const reverted = await this.git.revertNoCommit(workspace.worktree_path, detail.commit);
+        if (reverted.conflicted) {
+          throw new HistoryError("HISTORY_REVERT_CONFLICT", "The selected commit cannot be reverted automatically", reverted.conflicted_files);
+        }
+        const validation = await validateRepository(workspace.worktree_path);
+        if (!validation.valid) throw new HistoryError("HISTORY_VALIDATION_FAILED", "The reverse commit would make the repository invalid", validation.errors);
+        const created = await this.git.commitAll(workspace.worktree_path, message, authorName, authorEmail, GITPM_GUIDANCE_PATHS);
+        committed = true;
+        return { commit: created, reverted_commit: detail.commit, branch };
+      } finally {
+        if (!committed) {
+          await this.git.restorePathsFromCommit(workspace.worktree_path, head, paths, true);
+          await this.git.clearRevertState(workspace.worktree_path);
+        }
+      }
+    });
+    return { ...mutation.result, draft_fingerprint: mutation.metadata.fingerprint };
+  }
 }
 
 export class HistoryError extends Error {
-  constructor(public readonly code: string, message: string) {
+  constructor(public readonly code: string, message: string, public readonly details?: readonly string[] | readonly ValidationIssue[]) {
     super(message);
     this.name = "HistoryError";
   }

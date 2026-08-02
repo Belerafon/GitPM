@@ -335,6 +335,18 @@ export class DirectCliRuntime {
     return await this.history.fileHistory(DIRECT_WORKSPACE_ID, relativePath, limit);
   }
 
+  async restoreCommitFiles(commit: string, relativePaths: readonly string[]) {
+    const draftId = await this.draftId();
+    const metadata = await this.drafts.refreshWorkspaceFingerprint(draftId);
+    return await this.history.restoreCommitFiles(draftId, commit, relativePaths, "local-user", metadata.fingerprint);
+  }
+
+  async revertCommit(commit: string, message: string) {
+    const draftId = await this.draftId();
+    const metadata = await this.drafts.refreshWorkspaceFingerprint(draftId);
+    return await this.history.revertDirect(draftId, commit, message, "local-user", metadata.fingerprint, this.authorName, this.authorEmail);
+  }
+
   async status(): Promise<DirectStatus> {
     await this.prepare();
     const checkout = await this.git.checkoutRealPath(this.checkoutPath);

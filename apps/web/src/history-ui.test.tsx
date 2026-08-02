@@ -14,11 +14,13 @@ afterEach(cleanup);
 describe("History workspace", () => {
   it("restores a commit deep link and publishes later selections to navigation", async () => {
     const olderCommit = "c".repeat(40);
+    const lookedUpCommit = "d".repeat(40);
     const olderItem = { ...item, commit: olderCommit, subject: "Older change", author_name: "Dev", authored_at: "2026-07-09T12:00:00.000Z", semantic_summary: { ...item.semantic_summary, affected_projects: ["P-26-222222"] } };
+    const lookedUpItem = { ...olderItem, commit: lookedUpCommit, subject: "Deep history change" };
     const onNavigate = vi.fn();
     const api = {
-      history: async () => [item, olderItem],
-      commitDetail: async (_draftId: string, selectedCommit: string) => ({ ...detail, ...(selectedCommit === olderCommit ? olderItem : item) }),
+      history: async () => [item],
+      commitDetail: async (_draftId: string, selectedCommit: string) => ({ ...detail, ...(selectedCommit === olderCommit ? olderItem : selectedCommit === lookedUpCommit ? lookedUpItem : item) }),
       commitFileDiff: async (): Promise<CommitFileDiff> => ({ diff: "", oversized: false }),
     } as unknown as GitPmApi;
 
@@ -35,6 +37,11 @@ describe("History workspace", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Merged task update/u }));
     await waitFor(() => expect(onNavigate).toHaveBeenCalledWith("history", { commit }));
+
+    fireEvent.change(screen.getByLabelText("Commit SHA"), { target: { value: lookedUpCommit } });
+    fireEvent.click(screen.getByRole("button", { name: "Open commit" }));
+    expect(await screen.findByRole("heading", { name: "Deep history change" })).toBeTruthy();
+    expect(onNavigate).toHaveBeenCalledWith("history", { commit: lookedUpCommit });
   });
 
   it("shows the selected file diff and file history and creates a separate revert draft without a rebase action", async () => {
@@ -51,6 +58,27 @@ describe("History workspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create revert working copy" }));
     await waitFor(() => expect(createRevertDraft).toHaveBeenCalledWith("DRF-HISTORY", commit, "REVERT-AAAAAAAA"));
     expect(select).toHaveBeenCalledWith("REVERT-AAAAAAAA");
+  });
+
+  it("restores historical files and creates a reverse commit in direct mode", async () => {
+    const restoreCommitFiles = vi.fn(async () => ({ restored_commit: commit, restored_paths: [detail.files[0]!.path], draft_fingerprint: "e".repeat(64) }));
+    const revertDirect = vi.fn(async () => ({ commit: "d".repeat(40), reverted_commit: commit, branch: "main", draft_fingerprint: "e".repeat(64) }));
+    const onNavigate = vi.fn();
+    const onChanged = vi.fn(async () => undefined);
+    const confirmAction = vi.fn(() => true);
+    const api = { history: async () => [item], commitDetail: async () => detail, commitFileDiff: async () => ({ diff: "", oversized: false }), restoreCommitFiles, revertDirect } as unknown as GitPmApi;
+    render(<HistoryWorkspace api={api} confirmAction={confirmAction} directMode draft={draft} locale="en" canRevert onChanged={onChanged} onNavigate={onNavigate} />);
+    expect(await screen.findByRole("heading", { name: "Merged task update" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Restore selected file" }));
+    await waitFor(() => expect(restoreCommitFiles).toHaveBeenCalledWith("DRF-HISTORY", commit, draft.fingerprint, [detail.files[0]!.path]));
+    expect(onNavigate).toHaveBeenCalledWith("changes");
+
+    fireEvent.change(screen.getByLabelText("Reverse commit message"), { target: { value: "Reverse merged task update" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create reverse commit" }));
+    await waitFor(() => expect(revertDirect).toHaveBeenCalledWith("DRF-HISTORY", commit, draft.fingerprint, "Reverse merged task update"));
+    expect(onNavigate).toHaveBeenCalledWith("history", { commit: "d".repeat(40) });
+    expect(onChanged).toHaveBeenCalledTimes(2);
   });
 
   it("keeps long file lists in the file pane and filters them on demand", async () => {

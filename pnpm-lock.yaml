@@ -333,6 +333,12 @@ importers:
       '@gitpm/git-client':
         specifier: workspace:*
         version: link:../git-client
+      '@gitpm/security':
+        specifier: workspace:*
+        version: link:../security
+      '@gitpm/validation':
+        specifier: workspace:*
+        version: link:../validation
 
   packages/logging:
     dependencies:

@@ -15,6 +15,8 @@ describe("history API", () => {
       fileDiff: vi.fn(async () => ({ diff: "@@ -1 +1 @@\n-old\n+new\n", oversized: false })),
       fileHistory: vi.fn(async () => []),
       createRevertDraft: vi.fn(async () => ({ draft: { ...metadata, draft_id: "DRF-REVERT", branch: "gitpm/42/DRF-REVERT" }, reverted_commit: commit, conflicted: false, conflicted_files: [] })),
+      restoreCommitFiles: vi.fn(async () => ({ restored_commit: commit, restored_paths: ["projects/P-26-AAA/project.yaml"], draft_fingerprint: "e".repeat(64) })),
+      revertDirect: vi.fn(async () => ({ commit: "b".repeat(40), reverted_commit: commit, branch: "main", draft_fingerprint: "e".repeat(64) })),
     } as unknown as HistoryService;
     const app = buildApp({ draftManager: manager, historyService: history, authenticate: () => ({ userId: "42", role: "Developer" }) });
     const detail = await app.inject({ method: "GET", url: `/api/drafts/DRF-HISTORY/history/${commit}` });
@@ -28,6 +30,12 @@ describe("history API", () => {
     expect(reverted.statusCode).toBe(201);
     expect(reverted.body).not.toContain("worktree_path");
     expect(history.createRevertDraft).toHaveBeenCalledWith("DRF-HISTORY", commit, "DRF-REVERT", "42");
+    const restored = await app.inject({ method: "POST", url: `/api/drafts/DRF-HISTORY/history/${commit}/restore-files`, payload: { expected_fingerprint: metadata.fingerprint, paths: ["projects/P-26-AAA/project.yaml"] } });
+    expect(restored.statusCode).toBe(200);
+    expect(history.restoreCommitFiles).toHaveBeenCalledWith("DRF-HISTORY", commit, ["projects/P-26-AAA/project.yaml"], "42", metadata.fingerprint);
+    const directRevert = await app.inject({ method: "POST", url: `/api/drafts/DRF-HISTORY/history/${commit}/revert-direct`, payload: { expected_fingerprint: metadata.fingerprint, message: "Reverse change" } });
+    expect(directRevert.statusCode).toBe(201);
+    expect(history.revertDirect).toHaveBeenCalledWith("DRF-HISTORY", commit, "Reverse change", "42", metadata.fingerprint, "42", "42@localhost");
     await app.close();
   });
 });

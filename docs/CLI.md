@@ -50,6 +50,8 @@ gitpm history list [--draft <id>] [--limit <n>]
 gitpm history show [--draft <id>] --commit <sha>
 gitpm history file-diff [--draft <id>] --commit <sha> --path <path>
 gitpm history file-history [--draft <id>] --path <path> [--limit <n>]
+gitpm history restore --commit <sha> --path <path> [--path <path> ...]
+gitpm history revert --commit <sha> --message <message>
 gitpm history revert --draft <id> --commit <sha> --new-draft <id> --owner <id>
 gitpm export [--draft <id>] --format pdf|html|csv|repository [--locale en|ru] [--section projects|people|project-details|gantt]... [--include-git] [--output <path>] [--force]
 gitpm commit --all [--draft <id>] -m <message> [--project <id>] [--allow-delete]
@@ -160,13 +162,17 @@ pipeline. `discard-all` требует буквального `--confirm discard
 
 `history list/show/file-diff/file-history` доступны в обоих repository modes. В worktree mode
 `history revert` создаёт отдельный draft в external writer mode; исходный draft не изменяется.
+В direct mode `history restore` переносит выбранные версии файлов из коммита в текущее рабочее
+дерево без смены ветки или HEAD, а `history revert --message` создаёт новый обратный коммит.
+Restore не перезаписывает уже изменённый выбранный файл; прямой revert требует чистого business-worktree.
+Обе операции выполняют полную валидацию и автоматически убирают частичный результат при ошибке или конфликте.
 `mr status` перечитывает состояние уже созданного GitLab Merge Request.
 
 В `direct` mode команды `status`, `entity`, `schedule`, `planning`, `comment`, `notification`,
 `time-entry`, `config`, `format`, `validate`, `diff`, `changes`, `history`, `commit` и `push`
 работают с выбранным checkout без `--draft`.
 В `worktree` mode те же предметные и inspection-команды требуют `--draft <id>`; draft lifecycle,
-`history revert`, `mr create` и `mr status` доступны только в нём. `--project <id>` проверяет, что все текущие
+draft-form `history revert`, `mr create` и `mr status` доступны только в нём. `--project <id>` проверяет, что все текущие
 business changes принадлежат указанному Project, а физическое удаление требует явного
 `--allow-delete` при каждой следующей мутации, а также при format/validation/diff и commit,
 пока удалённые пути остаются в checkout. Флаг подтверждает весь текущий набор физических
