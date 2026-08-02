@@ -118,6 +118,30 @@ describe("administration UI", () => {
     expect(changed).toHaveBeenCalled();
   });
 
+  it("preserves current archived members when a team is edited", async () => {
+    const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
+    const activePersonId = "U-26-ACTIVE"; const archivedMemberId = "U-26-FORMER"; const otherArchivedId = "U-26-OTHER"; const teamId = "G-26-CORE";
+    admin.entities = [
+      { document: { schema: "gitpm/person@1", id: activePersonId, name: "Alice", weekly_capacity_hours: 40, calendar: "C-26-DEFAULT", lifecycle: "active" }, path: `${activePersonId}.yaml`, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) },
+      { document: { schema: "gitpm/person@1", id: archivedMemberId, name: "Former member", weekly_capacity_hours: 40, calendar: "C-26-DEFAULT", lifecycle: "archived" }, path: `${archivedMemberId}.yaml`, blob_id: "c".repeat(40), draft_fingerprint: "b".repeat(64) },
+      { document: { schema: "gitpm/person@1", id: otherArchivedId, name: "Other former member", weekly_capacity_hours: 40, calendar: "C-26-DEFAULT", lifecycle: "archived" }, path: `${otherArchivedId}.yaml`, blob_id: "d".repeat(40), draft_fingerprint: "b".repeat(64) },
+      { document: { schema: "gitpm/team@1", id: teamId, name: "Core", members: [activePersonId, archivedMemberId], lifecycle: "active" }, path: `${teamId}.yaml`, blob_id: "e".repeat(40), draft_fingerprint: "b".repeat(64) },
+    ];
+
+    render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="people" onChanged={vi.fn(async () => undefined)} />);
+    const editTeam = await screen.findByRole("button", { name: "Edit team" });
+    const teamTable = document.querySelector<HTMLElement>(".team-directory-table")!;
+    expect(within(teamTable).getByText("Former member")).toBeTruthy();
+    fireEvent.click(editTeam);
+    const dialog = screen.getByRole("dialog", { name: "Edit team: Core" });
+    expect((within(dialog).getByLabelText("Former member") as HTMLInputElement).checked).toBe(true);
+    expect(within(dialog).queryByLabelText("Other former member")).toBeNull();
+    fireEvent.change(within(dialog).getByLabelText("Name Core"), { target: { value: "Core renamed" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(admin.entities.find((item) => item.document.id === teamId)?.document).toMatchObject({ name: "Core renamed", members: [activePersonId, archivedMemberId] }));
+  });
+
   it("loads, displays and updates the schedule tracks configuration", async () => {
     const admin = new AdminApi(); const api = admin as unknown as GitPmApi; const changed = vi.fn(async () => undefined);
     render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="settings" onChanged={changed} />);
