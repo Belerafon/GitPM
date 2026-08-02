@@ -206,6 +206,7 @@ export interface GitPmApi {
   updateComment(draftId: string, projectId: string, taskId: string, comment: CommentResult, fingerprint: string, bodyMarkdown: string): Promise<CommentResult>;
   deleteComment(draftId: string, projectId: string, taskId: string, comment: CommentResult, fingerprint: string): Promise<CommentResult>;
   notifications(draftId: string): Promise<NotificationsResult>;
+  markNotificationsRead(draftId: string, keys: readonly string[]): Promise<NotificationsResult>;
   listTimeEntries(draftId: string, projectId: string, taskId: string): Promise<readonly TimeEntryResult[]>;
   listProjectTimeEntries(draftId: string, projectId: string, filters?: ProjectTimeEntryFilters): Promise<TimeEntryProjectList>;
   createTimeEntry(draftId: string, projectId: string, taskId: string, fingerprint: string, input: { readonly person: string; readonly performed_on: string; readonly hours: number; readonly category: string; readonly note_markdown?: string }): Promise<TimeEntryResult>;
@@ -468,6 +469,9 @@ export class HttpGitPmApi implements GitPmApi {
   }
   async notifications(draftId: string): Promise<NotificationsResult> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/notifications`, decodeNotifications);
+  }
+  async markNotificationsRead(draftId: string, keys: readonly string[]): Promise<NotificationsResult> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/notifications/read`, decodeNotifications, { method: "POST", body: JSON.stringify({ keys }) });
   }
   async listTimeEntries(draftId: string, projectId: string, taskId: string): Promise<readonly TimeEntryResult[]> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}/time-entries`, decodeTimeEntryResults);

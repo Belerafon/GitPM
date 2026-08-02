@@ -335,9 +335,20 @@ describe("comment API contract", () => {
       document: { schema: "gitpm/comment@1", id: "N-26-ABC123", project: "P-26-MGP84K", task: "T-26-P9G3P8", author: { provider: "git", subject: "anna@example.test", display_name: "Anna" }, created_at: "2026-07-20T10:00:00.000Z", state: "active", body_markdown: "Hello", mentions: [] },
       path: "projects/P-26-MGP84K/comments/T-26-P9G3P8/N-26-ABC123.yaml", blob_id: "c".repeat(40), draft_fingerprint: metadata.fingerprint, can_edit: true, can_delete: true,
     };
+    const notification = {
+      key: "N-26-ABC123:2026-07-20T10:05:00.000Z",
+      person_id: "U-26-5EBAE3",
+      mentioned_at: "2026-07-20T10:05:00.000Z",
+      project_id: "P-26-MGP84K",
+      task_id: "T-26-P9G3P8",
+      task_title: "Approve schema v1",
+      comment_id: "N-26-ABC123",
+      author: { provider: "git" as const, subject: "boris@example.test", display_name: "Boris" },
+      excerpt: "Please review @Anna Petrova",
+    };
     const commentStore = {
       create: vi.fn(async () => created),
-      notifications: vi.fn(async () => ({ recipient_person_id: "U-26-5EBAE3", items: [] })),
+      notifications: vi.fn(async () => ({ recipient_person_id: "U-26-5EBAE3", items: [notification] })),
     } as unknown as CommentStore;
     const app = buildApp({
       authenticate: () => ({ userId: "42", role: "Developer", provider: "git", displayName: "Anna", email: "ANNA@example.test" }),
@@ -360,7 +371,16 @@ describe("comment API contract", () => {
 
     const notifications = await app.inject({ method: "GET", url: "/api/drafts/DRF-API/notifications" });
     expect(notifications.statusCode).toBe(200);
-    expect(notifications.json()).toMatchObject({ recipient_person_id: "U-26-5EBAE3", items: [] });
+    expect(notifications.json()).toMatchObject({ recipient_person_id: "U-26-5EBAE3", items: [{ key: notification.key, read: false }] });
+
+    const marked = await app.inject({
+      method: "POST",
+      url: "/api/drafts/DRF-API/notifications/read",
+      payload: { keys: [notification.key, "not-visible"] },
+    });
+    expect(marked.statusCode).toBe(200);
+    expect(marked.json()).toMatchObject({ items: [{ key: notification.key, read: true }] });
+    expect((await app.inject({ method: "GET", url: "/api/drafts/DRF-API/notifications" })).json()).toMatchObject({ items: [{ key: notification.key, read: true }] });
   });
 });
 

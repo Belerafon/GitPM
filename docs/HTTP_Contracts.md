@@ -31,6 +31,15 @@ Mutation routes declare a Fastify body schema. Entity and configuration document
 through the shared full JSON Schema decoder before the domain layer is called. Malformed requests
 return HTTP 400 with the locale-neutral code `REQUEST_CONTRACT_INVALID`.
 
+Notification read state is server-owned personal runtime data, not repository business data.
+`GET /api/drafts/:draftId/notifications` returns a required `read` boolean on every notification.
+`POST /api/drafts/:draftId/notifications/read` accepts `{ "keys": string[] }`, authenticates the
+draft reader, ignores keys that are not currently visible to that reader, and persists matching
+keys by repository namespace and resolved Person ID under the server data directory. This action
+does not mutate repository YAML, change the draft fingerprint, or require a writable draft. The
+web client imports matching legacy `localStorage` keys once and removes them only after successful
+server persistence.
+
 When a repository document schema changes:
 
 1. update the corresponding file in `schemas/v1`;
