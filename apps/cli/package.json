@@ -25,6 +25,7 @@
     "@gitpm/security": "workspace:*",
     "@gitpm/shared": "workspace:*",
     "@gitpm/time-entries": "workspace:*",
-    "@gitpm/validation": "workspace:*"
+    "@gitpm/validation": "workspace:*",
+    "@gitpm/workload": "workspace:*"
   }
 }

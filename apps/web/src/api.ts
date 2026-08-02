@@ -29,12 +29,13 @@ import {
   decodeWorktreeFile,
   decodeWorktreeFileMutation,
   decodeWorktreeMoveMutation,
+  decodeWorkloadReport,
   decodeTimeEntryDocument,
   type ConfigurationDocument,
   type ConfigurationResult,
   type Decoder,
 } from "@gitpm/contracts";
-import type { ChangesList, CommentResult, CommitFileDiff, CommitHistoryDetail, CommitHistoryItem, CommitResult, ConfigurationImpact, DraftSnapshot, DraftStatus, EntityResult, GitPmDocument, MergeRequestStatus, NotificationsResult, ProjectWorkspaceResult, PublicSession, PushResult, RepositoryConnectionStatus, RepositoryConnectionTest, RepositoryConnectionUpdate, RepositoryDocument, RepositoryResult, RevertDraftResult, SemanticDiff, TimeEntryDocument, WriterMode, WorktreeDirectory, WorktreeFile } from "./types.js";
+import type { ChangesList, CommentResult, CommitFileDiff, CommitHistoryDetail, CommitHistoryItem, CommitResult, ConfigurationImpact, DraftSnapshot, DraftStatus, EntityResult, GitPmDocument, MergeRequestStatus, NotificationsResult, ProjectWorkspaceResult, PublicSession, PushResult, RepositoryConnectionStatus, RepositoryConnectionTest, RepositoryConnectionUpdate, RepositoryDocument, RepositoryResult, RevertDraftResult, SemanticDiff, TimeEntryDocument, WorkloadReport, WriterMode, WorktreeDirectory, WorktreeFile } from "./types.js";
 
 export interface TimeEntryResult {
   readonly document: TimeEntryDocument;
@@ -332,6 +333,12 @@ export class HttpGitPmApi implements GitPmApi {
   async listEntities(draftId: string, entityType: string, project?: string): Promise<readonly EntityResult[]> {
     const query = project === undefined ? "" : `?project=${encodeURIComponent(project)}`;
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/entities/${encodeURIComponent(entityType)}${query}`, decodeEntityResults);
+  }
+  async workload(draftId: string, filters: { readonly project?: string; readonly milestone?: string; readonly team?: string } = {}): Promise<WorkloadReport> {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(filters)) if (value !== undefined) query.set(key, value);
+    const suffix = query.size === 0 ? "" : `?${query.toString()}`;
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/workload${suffix}`, decodeWorkloadReport);
   }
   async getEntity(draftId: string, entityType: string, id: string): Promise<EntityResult> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(id)}`, decodeEntityResult);

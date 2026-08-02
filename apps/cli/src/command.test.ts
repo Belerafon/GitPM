@@ -70,6 +70,17 @@ async function directFixture(options: { withRemote?: boolean } = {}): Promise<{
 }
 
 describe("CLI P02 commands", () => {
+  it("reports workload consistently and excludes Tasks after their Project is archived", async () => {
+    const { direct } = await directFixture();
+    const before = JSON.parse((await run(["workload", "report", "--json"], process.cwd(), { direct })).output);
+    expect(before).toMatchObject({ ok: true, report: { included_tasks: 1, exclusions: { archived: 0 } } });
+
+    const archived = await run(["entity", "archive", "--type", "projects", "--id", "P-26-MGP84K", "--json"], process.cwd(), { direct });
+    expect(archived.exitCode).toBe(0);
+    const after = JSON.parse((await run(["workload", "report", "--json"], process.cwd(), { direct })).output);
+    expect(after).toMatchObject({ report: { included_tasks: 0, weeks: [], rows: [], exclusions: { archived: 2 } } });
+  }, 120_000);
+
   it("prints a stable version", async () => {
     expect(await run(["--version"])).toEqual({ exitCode: 0, output: "0.1.0" });
     expect(JSON.parse((await run(["--version", "--json"])).output)).toMatchObject({ ok: true, version: "0.1.0", repository_schema: 1, schema_digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u) });

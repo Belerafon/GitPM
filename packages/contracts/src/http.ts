@@ -44,6 +44,30 @@ export interface ConfigurationImpact {
   readonly issues: readonly ConfigurationImpactIssue[];
 }
 
+export interface PersonWeekWorkload {
+  readonly person_id: string;
+  readonly person_name: string;
+  readonly week: string;
+  readonly allocated_hours: number;
+  readonly capacity_hours: number;
+  readonly utilization_percent: number | null;
+  readonly task_ids: readonly string[];
+}
+
+export interface WorkloadReport {
+  readonly formula: "equal-assignee-share/equal-person-working-day/v1";
+  readonly weeks: readonly string[];
+  readonly rows: readonly PersonWeekWorkload[];
+  readonly included_tasks: number;
+  readonly exclusions: {
+    readonly archived: number;
+    readonly undated: number;
+    readonly unestimated: number;
+    readonly unassigned: number;
+    readonly unavailable_assignees: number;
+  };
+}
+
 export interface PublicSession {
   readonly user: {
     readonly id: string;
@@ -301,10 +325,12 @@ export interface NotificationsResult {
 
 const stringSchema = { type: "string" } as const;
 const integerSchema = { type: "integer" } as const;
+const numberSchema = { type: "number" } as const;
 const booleanSchema = { type: "boolean" } as const;
 const unknownSchema = {} as const;
 const stringArraySchema = { type: "array", items: stringSchema } as const;
 const nullableStringSchema = { type: ["string", "null"] } as const;
+const nullableNumberSchema = { type: ["number", "null"] } as const;
 
 function objectSchema(
   properties: Readonly<Record<string, unknown>>,
@@ -565,6 +591,27 @@ const notificationSchema = objectSchema({
   author: actorSchema,
   excerpt: stringSchema,
 });
+const workloadReportSchema = objectSchema({
+  formula: { const: "equal-assignee-share/equal-person-working-day/v1" },
+  weeks: stringArraySchema,
+  rows: arraySchema(objectSchema({
+    person_id: stringSchema,
+    person_name: stringSchema,
+    week: stringSchema,
+    allocated_hours: numberSchema,
+    capacity_hours: numberSchema,
+    utilization_percent: nullableNumberSchema,
+    task_ids: stringArraySchema,
+  })),
+  included_tasks: integerSchema,
+  exclusions: objectSchema({
+    archived: integerSchema,
+    undated: integerSchema,
+    unestimated: integerSchema,
+    unassigned: integerSchema,
+    unavailable_assignees: integerSchema,
+  }),
+});
 
 export const HTTP_RESPONSE_SCHEMAS = {
   authorization: objectSchema({ authorization_url: stringSchema, state: stringSchema }),
@@ -580,6 +627,7 @@ export const HTTP_RESPONSE_SCHEMAS = {
   configurationResult: configurationResultSchema,
   repositoryResult: repositoryResultSchema,
   configurationImpact: configurationImpactSchema,
+  workloadReport: workloadReportSchema,
   projectWorkspace: objectSchema({
     project: entityResultSchema,
     milestones: arraySchema(entityResultSchema),
@@ -643,6 +691,7 @@ export const decodeEntityResults = createDecoder<readonly EntityResult[]>("Entit
 export const decodeConfigurationResult = createDecoder<ConfigurationResult>("ConfigurationResult", HTTP_RESPONSE_SCHEMAS.configurationResult);
 export const decodeRepositoryResult = createDecoder<RepositoryResult>("RepositoryResult", HTTP_RESPONSE_SCHEMAS.repositoryResult);
 export const decodeConfigurationImpact = createDecoder<ConfigurationImpact>("ConfigurationImpact", HTTP_RESPONSE_SCHEMAS.configurationImpact);
+export const decodeWorkloadReport = createDecoder<WorkloadReport>("WorkloadReport", HTTP_RESPONSE_SCHEMAS.workloadReport);
 export const decodeProjectWorkspace = createDecoder<ProjectWorkspaceResult>("ProjectWorkspaceResult", HTTP_RESPONSE_SCHEMAS.projectWorkspace);
 export const decodeChangesList = createDecoder<ChangesList>("ChangesList", HTTP_RESPONSE_SCHEMAS.changesList);
 export const decodeSemanticDiff = createDecoder<SemanticDiff>("SemanticDiff", HTTP_RESPONSE_SCHEMAS.semanticDiff);

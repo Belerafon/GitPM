@@ -213,6 +213,21 @@ describe("HttpGitPmApi request bodies", () => {
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/config/statuses/impact"), expect.objectContaining({ method: "POST" }));
   });
 
+  it("loads the shared workload report with repository filters", async () => {
+    const report = {
+      formula: "equal-assignee-share/equal-person-working-day/v1",
+      weeks: ["2026-07-06"],
+      rows: [{ person_id: "U-26-5EBAE3", person_name: "Anna", week: "2026-07-06", allocated_hours: 8, capacity_hours: 40, utilization_percent: 20, task_ids: ["T-26-P9G3P8"] }],
+      included_tasks: 1,
+      exclusions: { archived: 0, undated: 0, unestimated: 0, unassigned: 0, unavailable_assignees: 0 },
+    };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(report), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(await new HttpGitPmApi().workload("DRF-1", { project: "P-26-MGP84K", team: "G-26-XB86WT" })).toEqual(report);
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/workload?project=P-26-MGP84K&team=G-26-XB86WT"), expect.anything());
+  });
+
   it("serializes and decodes an atomic time-entry replacement", async () => {
     const original = { document: { schema: "gitpm/time-entry@1" as const, id: "E-26-AAAAAA", project: "P-26-MGP84K", task: "T-26-P9G3P8", person: "U-26-5EBAE3", performed_on: "2026-09-01", hours: 1, category: "regular", created_at: "2026-09-01T00:00:00.000Z", state: "active" as const }, path: "old.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) };
     const replacement = { ...original, document: { ...original.document, id: "E-26-BBBBBB", hours: 2 }, path: "new.yaml" };

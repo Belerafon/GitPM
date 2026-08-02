@@ -58,6 +58,27 @@ afterEach(async () => {
 });
 
 describe("domain API integration", () => {
+  it("excludes active Tasks owned by an archived Project from the workload endpoint", async () => {
+    const { app, manager } = await runtime();
+    const draft = await manager.createDraft("DRF-WORKLOAD-PROJECT", "42");
+    const before = await app.inject({ method: "GET", url: "/api/drafts/DRF-WORKLOAD-PROJECT/workload" });
+    expect(before.statusCode).toBe(200);
+    expect(before.json()).toMatchObject({ included_tasks: 1, exclusions: { archived: 0 } });
+
+    const projectResponse = await app.inject({ method: "GET", url: "/api/drafts/DRF-WORKLOAD-PROJECT/entities/projects/P-26-MGP84K" });
+    const project = projectResponse.json<ApiEntityResult>();
+    const archived = await app.inject({
+      method: "POST",
+      url: "/api/drafts/DRF-WORKLOAD-PROJECT/entities/projects/P-26-MGP84K/archive",
+      payload: { expected_fingerprint: draft.fingerprint, expected_blob_id: project.blob_id },
+    });
+    expect(archived.statusCode).toBe(200);
+
+    const after = await app.inject({ method: "GET", url: "/api/drafts/DRF-WORKLOAD-PROJECT/workload" });
+    expect(after.statusCode).toBe(200);
+    expect(after.json()).toMatchObject({ included_tasks: 0, weeks: [], rows: [], exclusions: { archived: 2 } });
+  }, 120_000);
+
   it("returns project references and cascades them only after explicit confirmation", async () => {
     const { app, manager } = await runtime();
     const draft = await manager.createDraft("DRF-PROJECT-CASCADE", "42");

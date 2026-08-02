@@ -22,25 +22,28 @@ const span = task("6", "Span", { schedules: { plan: { effort_hours: 30, start: "
 const undated = task("7", "Undated", { schedules: { plan: { effort_hours: 10 } }, assignees: [adaId] });
 const archived = result({ ...task("8", "Archived", { schedules: { plan: { effort_hours: 10, start: "2026-07-06", finish: "2026-07-10" } }, assignees: [adaId] }).document, lifecycle: "archived" });
 const project = result({ schema: "gitpm/project@2", id: projectId, name: "Platform", status: "backlog", lifecycle: "active" });
+const archivedProjectId = "P-26-999999";
+const archivedProject = result({ schema: "gitpm/project@2", id: archivedProjectId, name: "Legacy", status: "backlog", lifecycle: "archived" });
+const archivedProjectTask = result({ ...shared.document, id: "T-26-999999", project: archivedProjectId, title: "Legacy active task" });
 const reviewers = result({ schema: "gitpm/team@1", id: "G-26-555555", name: "Reviewers", members: [linusId], lifecycle: "active" });
 
 afterEach(cleanup);
 describe("Workload UI", () => {
   it("renders deterministic Person-week values and excludes archived and undated Tasks", async () => {
-    const entities = [shared, span, undated, archived, ada, linus, calendar, project, reviewers];
+    const entities = [shared, span, undated, archived, archivedProjectTask, ada, linus, calendar, project, archivedProject, reviewers];
     const onNavigate = vi.fn();
     const api = { listEntities: vi.fn(async (_draftId: string, type: string) => entities.filter((item) => ({ tasks: "gitpm/task@2", people: "gitpm/person@1", calendars: "gitpm/calendar@1", projects: "gitpm/project@2", teams: "gitpm/team@1" })[type] === item.document.schema)), getConfiguration: vi.fn(async (_draftId: string, kind: string) => kind === "schedule-tracks" ? tracksConfig() : { document: { schema: "gitpm/statuses@2", id: "statuses", lifecycle: "active", statuses: [] }, path: kind, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) }) } as unknown as GitPmApi;
     const { container } = render(<WorkloadWorkspace api={api} draft={draft} locale="en" onNavigate={onNavigate} />);
     await waitFor(() => expect(container.querySelectorAll(".workload-table tbody tr")).toHaveLength(2));
     expect(screen.getByText("Included Tasks").nextElementSibling?.textContent).toBe("2");
-    expect(screen.getByText("Excluded Tasks").nextElementSibling?.textContent).toBe("2");
+    expect(screen.getByText("Excluded Tasks").nextElementSibling?.textContent).toBe("3");
     expect(container.querySelector(`[data-person-id="${adaId}"][data-week="2026-07-06"]`)?.textContent).toContain("32h / 32h");
     expect(container.querySelector(`[data-person-id="${adaId}"][data-week="2026-07-13"]`)?.textContent).toContain("18h / 40h");
     expect(container.querySelector(`[data-person-id="${linusId}"][data-week="2026-07-06"]`)?.textContent).toContain("20h / 25.6h");
     expect(container.querySelector(`[data-person-id="${adaId}"][data-week="2026-07-06"]`)?.className).toContain("near");
     expect(screen.getByText("Near capacity")).toBeTruthy();
     expect(screen.getByText("Missing or invalid date range").nextElementSibling?.textContent).toBe("1");
-    expect(screen.getByText("Archived").nextElementSibling?.textContent).toBe("1");
+    expect(screen.getByText("Archived").nextElementSibling?.textContent).toBe("2");
     fireEvent.change(screen.getByLabelText("Team"), { target: { value: reviewers.document.id } });
     await waitFor(() => expect(screen.getByText("Included Tasks").nextElementSibling?.textContent).toBe("1"));
     fireEvent.click(screen.getByRole("button", { name: "Ada" }));

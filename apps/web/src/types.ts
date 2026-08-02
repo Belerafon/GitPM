@@ -45,5 +45,6 @@ export type {
   WorktreeDirectory,
   WorktreeEntry,
   WorktreeFile,
+  WorkloadReport,
   WriterMode,
 } from "@gitpm/contracts";

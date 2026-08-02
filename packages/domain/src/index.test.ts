@@ -515,6 +515,11 @@ describe("domain entity store", () => {
     const originalCalendar = await store.get("DRF-REPOSITORY", "calendars", "C-26-QD7FJ4");
     await expect(store.archive("DRF-REPOSITORY", "42", "calendars", "C-26-QD7FJ4", draft.fingerprint, originalCalendar.blob_id))
       .rejects.toMatchObject({ code: "DEFAULT_CALENDAR_ARCHIVE_RESTRICTED" });
+    await expect(store.delete("DRF-REPOSITORY", "42", "calendars", "C-26-QD7FJ4", draft.fingerprint, originalCalendar.blob_id))
+      .rejects.toMatchObject({
+        code: "DELETE_RESTRICTED",
+        details: expect.arrayContaining([expect.objectContaining({ path: ".gitpm/repository.yaml", schema: "gitpm/repository@1" })]),
+      });
 
     const created = await store.create("DRF-REPOSITORY", "42", draft.fingerprint, {
       schema: "gitpm/calendar@1", id: "C-26-7GQW87", name: "Replacement calendar", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active",

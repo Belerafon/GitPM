@@ -1,16 +1,23 @@
 import { formatDateOnly, isoWeekday, parseDateOnly, workingDatesBetween, type CalendarDefinition } from "@gitpm/calendar";
+import { resolvePlanning, type ScheduleTracksConfig } from "@gitpm/scheduling";
 
 const DAY_MS = 86_400_000;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 
 export interface WorkloadTask {
   readonly id: string;
+  readonly project: string;
   readonly title: string;
   readonly lifecycle: "active" | "archived";
   readonly estimate_hours?: number;
   readonly start?: string;
   readonly finish?: string;
   readonly assignees?: readonly string[];
+}
+
+export interface WorkloadProject {
+  readonly id: string;
+  readonly lifecycle: "active" | "archived";
 }
 
 export interface WorkloadPerson {
@@ -80,14 +87,16 @@ export function calculateWorkload(
   tasks: readonly WorkloadTask[],
   people: readonly WorkloadPerson[],
   calendars: readonly WorkloadCalendar[],
+  projects: readonly WorkloadProject[],
 ): WorkloadReport {
+  const activeProjects = new Set(projects.filter((project) => project.lifecycle === "active").map((project) => project.id));
   const activeCalendars = new Map(calendars.filter((calendar) => calendar.lifecycle === "active").map((calendar) => [calendar.id, calendar]));
   const activePeople = new Map(people.filter((person) => person.lifecycle === "active" && activeCalendars.has(person.calendar)).map((person) => [person.id, person]));
   const exclusions = { archived: 0, undated: 0, unestimated: 0, unassigned: 0, unavailable_assignees: 0 };
   const included: { task: WorkloadTask; assignees: readonly WorkloadPerson[]; assigneeCount: number }[] = [];
 
   for (const task of tasks) {
-    if (task.lifecycle !== "active") { exclusions.archived += 1; continue; }
+    if (task.lifecycle !== "active" || !activeProjects.has(task.project)) { exclusions.archived += 1; continue; }
     if (task.start === undefined || task.finish === undefined || !DATE_PATTERN.test(task.start) || !DATE_PATTERN.test(task.finish) || dayTime(task.start) > dayTime(task.finish)) { exclusions.undated += 1; continue; }
     if (task.estimate_hours === undefined || !Number.isFinite(task.estimate_hours) || task.estimate_hours < 0) { exclusions.unestimated += 1; continue; }
     if (task.assignees === undefined || task.assignees.length === 0) { exclusions.unassigned += 1; continue; }
@@ -135,4 +144,75 @@ export function calculateWorkload(
     };
   }));
   return { formula: "equal-assignee-share/equal-person-working-day/v1", weeks, rows, included_tasks: included.length, exclusions };
+}
+
+export interface WorkloadEntityDocument extends Readonly<Record<string, unknown>> {
+  readonly schema: string;
+  readonly id?: string;
+}
+
+export interface WorkloadFilters {
+  readonly project?: string;
+  readonly milestone?: string;
+  readonly team?: string;
+}
+
+export interface WorkloadWorkspaceInput {
+  readonly tasks: readonly WorkloadEntityDocument[];
+  readonly projects: readonly WorkloadEntityDocument[];
+  readonly people: readonly WorkloadEntityDocument[];
+  readonly calendars: readonly WorkloadEntityDocument[];
+  readonly teams?: readonly WorkloadEntityDocument[];
+  readonly scheduleTracks: WorkloadEntityDocument;
+  readonly filters?: WorkloadFilters;
+}
+
+const documentText = (document: Readonly<Record<string, unknown>>, key: string): string | undefined => typeof document[key] === "string" ? document[key] : undefined;
+const documentNumber = (document: Readonly<Record<string, unknown>>, key: string): number | undefined => typeof document[key] === "number" ? document[key] : undefined;
+const documentStrings = (document: Readonly<Record<string, unknown>>, key: string): readonly string[] => Array.isArray(document[key]) ? (document[key] as readonly unknown[]).filter((item): item is string => typeof item === "string") : [];
+const documentNumbers = (document: Readonly<Record<string, unknown>>, key: string): readonly number[] => Array.isArray(document[key]) ? (document[key] as readonly unknown[]).filter((item): item is number => typeof item === "number") : [];
+const lifecycle = (document: Readonly<Record<string, unknown>>): "active" | "archived" => document.lifecycle === "archived" ? "archived" : "active";
+const entityId = (document: WorkloadEntityDocument): string => documentText(document, "id") ?? "";
+
+function scheduleWindow(document: WorkloadEntityDocument, track: string): Readonly<Record<string, unknown>> {
+  const schedules = typeof document.schedules === "object" && document.schedules !== null ? document.schedules as Readonly<Record<string, unknown>> : {};
+  const window = schedules[track];
+  return typeof window === "object" && window !== null ? window as Readonly<Record<string, unknown>> : {};
+}
+
+/** Builds the repository-level workload read model used by the HTTP API, CLI and GUI. */
+export function buildWorkloadReport(input: WorkloadWorkspaceInput): WorkloadReport {
+  const filters = input.filters ?? {};
+  const projectById = new Map(input.projects.map((project) => [entityId(project), project]));
+  const config = input.scheduleTracks as unknown as ScheduleTracksConfig;
+  const teamMembers = filters.team === undefined
+    ? undefined
+    : new Set(documentStrings(input.teams?.find((team) => entityId(team) === filters.team) ?? {}, "members"));
+  const selectedTasks = input.tasks.filter((task) => {
+    if (filters.project !== undefined && documentText(task, "project") !== filters.project) return false;
+    if (filters.milestone !== undefined && documentText(task, "milestone") !== filters.milestone) return false;
+    return teamMembers === undefined || documentStrings(task, "assignees").some((id) => teamMembers.has(id));
+  });
+  const tasks = selectedTasks.map((task): WorkloadTask => {
+    const project = documentText(task, "project") ?? "";
+    const projectDocument = projectById.get(project);
+    const planning = typeof projectDocument?.planning === "object" && projectDocument.planning !== null
+      ? projectDocument.planning as Parameters<typeof resolvePlanning>[1]
+      : undefined;
+    const track = resolvePlanning(config, planning).workload_track;
+    const window = scheduleWindow(task, track);
+    return {
+      id: entityId(task), project, title: documentText(task, "title") ?? entityId(task), lifecycle: lifecycle(task),
+      estimate_hours: documentNumber(window, "effort_hours"), start: documentText(window, "start"), finish: documentText(window, "finish"), assignees: documentStrings(task, "assignees"),
+    };
+  });
+  const projects = input.projects.map((project): WorkloadProject => ({ id: entityId(project), lifecycle: lifecycle(project) }));
+  const people = input.people.map((person): WorkloadPerson => ({
+    id: entityId(person), name: documentText(person, "name") ?? entityId(person), lifecycle: lifecycle(person),
+    weekly_capacity_hours: documentNumber(person, "weekly_capacity_hours") ?? 0, calendar: documentText(person, "calendar") ?? "",
+  }));
+  const calendars = input.calendars.map((calendar): WorkloadCalendar => ({
+    id: entityId(calendar), lifecycle: lifecycle(calendar), working_weekdays: documentNumbers(calendar, "working_weekdays"), holidays: documentStrings(calendar, "holidays"),
+  }));
+  return calculateWorkload(tasks, people, calendars, projects);
 }

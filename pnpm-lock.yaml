@@ -80,6 +80,9 @@ importers:
       '@gitpm/validation':
         specifier: workspace:*
         version: link:../../packages/validation
+      '@gitpm/workload':
+        specifier: workspace:*
+        version: link:../../packages/workload
 
   apps/server:
     dependencies:
@@ -125,6 +128,9 @@ importers:
       '@gitpm/validation':
         specifier: workspace:*
         version: link:../../packages/validation
+      '@gitpm/workload':
+        specifier: workspace:*
+        version: link:../../packages/workload
       fastify:
         specifier: 5.10.0
         version: 5.10.0
@@ -389,6 +395,9 @@ importers:
       '@gitpm/calendar':
         specifier: workspace:*
         version: link:../calendar
+      '@gitpm/scheduling':
+        specifier: workspace:*
+        version: link:../scheduling
 
 packages:
 

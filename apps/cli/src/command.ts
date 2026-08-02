@@ -13,6 +13,7 @@ import type { AgentScope, AgentScopeReport, AgentWorkflow } from "@gitpm/agent";
 import type { DirectCliRuntime } from "./direct-runtime.js";
 import { parseCsvEntities, parseEntityMapping, parseJsonLinesEntities, parseYamlEntities, nestScheduleColumns } from "./entity-input.js";
 import type { ExportFormat, ExportProvider, ExportRequest, ExportSection } from "@gitpm/export";
+import { buildWorkloadReport, type WorkloadEntityDocument } from "@gitpm/workload";
 
 export interface CliResult {
   readonly exitCode: number;
@@ -121,7 +122,7 @@ function render(json: boolean, payload: Record<string, unknown>, human: string):
 }
 
 const SCHEMA_DIRECTORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../schemas/v1");
-const ROOT_USAGE = "Usage: gitpm <init|status|draft|entity|schedule|planning|comment|notification|time-entry|config|schema|format|validate|diff --semantic|changes|history|export|commit --all|push|mr|doctor> [options]";
+const ROOT_USAGE = "Usage: gitpm <init|status|draft|entity|schedule|planning|workload|comment|notification|time-entry|config|schema|format|validate|diff --semantic|changes|history|export|commit --all|push|mr|doctor> [options]";
 
 const commandHelp: Readonly<Record<string, string>> = {
   root: [
@@ -220,6 +221,13 @@ const commandHelp: Readonly<Record<string, string>> = {
     "",
     "Set only the planning fields supplied. Repeated track flags replace that planning list.",
   ].join("\n"),
+  workload: [
+    "Usage:",
+    "  gitpm workload report [--draft <id>] [--project <id>] [--milestone <id>] [--team <id>] [--json]",
+    "",
+    "Uses the same repository-level workload calculation as the HTTP API and GUI.",
+    "Active Tasks owned by archived Projects are excluded from capacity and reported as archived exclusions.",
+  ].join("\n"),
   config: [
     "Usage:",
     "  gitpm config show [--draft <id>] --kind repository|statuses|issue-types|work-categories|schedule-tracks [--json]",
@@ -283,6 +291,7 @@ function commandArgumentSpec(command: string | undefined, args: readonly string[
   if (command === "time-entry") return { values: ["--draft", "--project", "--task", "--milestone", "--id", "--person", "--date", "--hours", "--category", "--note", "--after", "--state", "--from", "--to", "--offset", "--limit"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
   if (command === "schedule") return { values: ["--draft", "--type", "--id", "--track", "--start", "--finish", "--effort-hours", "--project"], repeatable: ["--depends-on"], booleans: ["--clear-start", "--clear-finish", "--clear-effort", "--clear-dependencies", "--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
   if (command === "planning") return { values: ["--draft", "--project", "--primary-track", "--workload-track", "--comparison-track"], repeatable: ["--enabled-track", "--dashboard-track"], booleans: ["--clear-comparison-track", "--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
+  if (command === "workload") return { values: ["--draft", "--project", "--milestone", "--team"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
   if (command === "config") {
     return action === "update"
       ? { values: ["--draft", "--kind", "--file", "--path"], repeatable: ["--set", "--unset"], booleans: ["--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 }
@@ -1018,6 +1027,40 @@ async function runPlanning(args: readonly string[], dependencies: CliDependencie
   return { exitCode: 0, output: render(args.includes("--json"), { ok: true, code: "OK", ...updated }, `Updated ${updated.path} planning`) };
 }
 
+async function runWorkload(args: readonly string[], dependencies: CliDependencies): Promise<CliResult> {
+  if (args[0] !== "report") throw new RepositoryFormatError("CLI_USAGE", "workload requires report");
+  const draftId = flagValue(args, "--draft");
+  const agent = draftId === undefined ? undefined : requireAgent(dependencies);
+  const direct = agent === undefined ? requireDirect(dependencies) : undefined;
+  if (agent !== undefined && (agent.listEntities === undefined || agent.getConfiguration === undefined)) {
+    throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Workload reporting is unavailable");
+  }
+  const readEntities = async (type: string): Promise<readonly WorkloadEntityDocument[]> => {
+    const result = agent === undefined
+      ? await direct!.listEntities(type)
+      : await agent.listEntities!(draftId!, type);
+    return result.items.map((item) => item.document as unknown as WorkloadEntityDocument);
+  };
+  const [tasks, projects, people, calendars, teams, tracks] = await Promise.all([
+    readEntities("tasks"), readEntities("projects"), readEntities("people"), readEntities("calendars"), readEntities("teams"),
+    agent === undefined ? direct!.getConfiguration("schedule-tracks") : agent.getConfiguration!(draftId!, "schedule-tracks"),
+  ]);
+  const report = buildWorkloadReport({
+    tasks, projects, people, calendars, teams,
+    scheduleTracks: tracks.document as unknown as WorkloadEntityDocument,
+    filters: {
+      ...(flagValue(args, "--project") === undefined ? {} : { project: flagValue(args, "--project") }),
+      ...(flagValue(args, "--milestone") === undefined ? {} : { milestone: flagValue(args, "--milestone") }),
+      ...(flagValue(args, "--team") === undefined ? {} : { team: flagValue(args, "--team") }),
+    },
+  });
+  const excluded = Object.values(report.exclusions).reduce((sum, count) => sum + count, 0);
+  return {
+    exitCode: 0,
+    output: render(args.includes("--json"), { ok: true, code: "OK", report }, `Workload: ${report.included_tasks} included, ${excluded} excluded, ${report.weeks.length} week(s)`),
+  };
+}
+
 async function runConfig(args: readonly string[], cwd: string, dependencies: CliDependencies): Promise<CliResult> {
   const action = args[0];
   if (action !== "show" && action !== "update") throw new RepositoryFormatError("CLI_USAGE", "config requires show or update");
@@ -1466,6 +1509,7 @@ export async function run(args: readonly string[], cwd = process.cwd(), dependen
     if (command === "time-entry") return await runTimeEntry(commandArgs, cwd, dependencies);
     if (command === "schedule") return await runSchedule(commandArgs, dependencies);
     if (command === "planning") return await runPlanning(commandArgs, dependencies);
+    if (command === "workload") return await runWorkload(commandArgs, dependencies);
     if (command === "config") return await runConfig(commandArgs, cwd, dependencies);
     if (command === "changes") return await runChanges(commandArgs, dependencies);
     if (command === "history") return await runHistory(commandArgs, dependencies);
