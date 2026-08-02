@@ -33,7 +33,7 @@ type CliAgent = Pick<AgentWorkflow, "assertScope" | "commitAll" | "createDraft" 
     | "deleteComment" | "deleteEntity" | "discardAll" | "fileHistory" | "getConfiguration" | "getEntity" | "getRepositoryConfiguration"
     | "historyDetail" | "historyFileDiff" | "historyList" | "listChanges" | "listComments" | "listDrafts"
     | "listEntities" | "listProjectTimeEntries" | "mergeRequestStatus" | "moveTask" | "notifications"
-    | "planDelete" | "reopenDraft" | "restoreFile" | "restoreHunk" | "updateComment"
+    | "planDelete" | "reopenDraft" | "restoreEntity" | "restoreFile" | "restoreHunk" | "updateComment"
     | "replaceTimeEntry" | "updateConfiguration" | "updateEntity" | "updateRepositoryConfiguration" | "voidTimeEntry"
   >>;
 
@@ -139,12 +139,13 @@ const commandHelp: Readonly<Record<string, string>> = {
     "  gitpm entity show [--draft <id>] --type <type> --id <entity-id> [--json]",
     "  gitpm entity delete [--draft <id>] --type <type> --id <entity-id> [--unlink-references|--cascade-references] [--dry-run] [--allow-delete] [--project <id>] [--json]",
     "  gitpm entity archive [--draft <id>] --type <type> --id <entity-id> [--project <id>] [--allow-delete] [--json]",
+    "  gitpm entity restore [--draft <id>] --type <type> --id <entity-id> [--project <id>] [--allow-delete] [--json]",
     "  gitpm entity move [--draft <id>] --type task --id <entity-id> --to-project <id> [--to-milestone <id>] [--to-parent <task-id>] [--allow-delete] [--project <id>] [--json]",
     "",
     "create accepts a YAML mapping. schema, id and lifecycle may be omitted when --type is supplied.",
     "Person calendar may be omitted and is materialized from repository default_calendar.",
     "A supplied valid ID is preserved; otherwise GitPM generates <prefix>-<UTC YY>-<6 Crockford Base32>.",
-    "update applies a YAML field patch from --file and/or repeatable --set/--unset options. Entity ID, schema and owning Project are immutable.",
+    "update applies a YAML field patch from --file and/or repeatable --set/--unset options. Entity ID, schema, owning Project and lifecycle are immutable.",
     "import is atomic: the complete batch is validated once and rolled back on any error.",
     "list returns every entity of a type (optionally filtered by --project).",
     "show returns a single entity document with its canonical path.",
@@ -154,6 +155,7 @@ const commandHelp: Readonly<Record<string, string>> = {
     "  --cascade-references deletes every entity owned by a project before deleting the project (projects only).",
     "  Restricted references raise DELETE_RESTRICTED with structured details listing every affected item.",
     "archive sets lifecycle to archived (reversible); the entity file stays and references remain valid.",
+    "restore sets an archived entity back to active after validating that its lifecycle references are active.",
     "move relocates a task (and its comments) to another project and optional milestone.",
   ].join("\n"),
   schema: [
@@ -273,6 +275,7 @@ function commandArgumentSpec(command: string | undefined, args: readonly string[
     if (action === "show") return { values: [...common, "--id"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
     if (action === "delete") return { values: [...common, "--id", "--project"], booleans: ["--unlink-references", "--cascade-references", "--dry-run", "--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
     if (action === "archive") return { values: [...common, "--id", "--project"], booleans: ["--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
+    if (action === "restore") return { values: [...common, "--id", "--project"], booleans: ["--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
     if (action === "move") return { values: [...common, "--id", "--to-project", "--to-milestone", "--to-parent", "--project"], booleans: ["--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
     return { booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
   }
@@ -576,8 +579,8 @@ function entitySummary(document: Readonly<Record<string, unknown>>): Record<stri
 
 async function runEntity(args: readonly string[], cwd: string, dependencies: CliDependencies): Promise<CliResult> {
   const action = args[0] === "bulk-import" ? "import" : args[0];
-  const validActions = ["create", "update", "import", "list", "show", "delete", "archive", "move"];
-  if (typeof action !== "string" || !validActions.includes(action)) throw new RepositoryFormatError("CLI_USAGE", "entity requires create, update, import, list, show, delete, archive or move");
+  const validActions = ["create", "update", "import", "list", "show", "delete", "archive", "restore", "move"];
+  if (typeof action !== "string" || !validActions.includes(action)) throw new RepositoryFormatError("CLI_USAGE", "entity requires create, update, import, list, show, delete, archive, restore or move");
   const draftId = flagValue(args, "--draft");
   const agent = args.includes("--draft") ? requireAgent(dependencies) : undefined;
   if (agent !== undefined && action === "create" && agent.createEntity === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Entity creation is unavailable");
@@ -588,6 +591,7 @@ async function runEntity(args: readonly string[], cwd: string, dependencies: Cli
   if (agent !== undefined && action === "delete" && !args.includes("--dry-run") && agent.deleteEntity === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Entity delete is unavailable");
   if (agent !== undefined && (action === "delete" && args.includes("--dry-run")) && agent.planDelete === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Entity delete preview is unavailable");
   if (agent !== undefined && action === "archive" && agent.archiveEntity === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Entity archive is unavailable");
+  if (agent !== undefined && action === "restore" && agent.restoreEntity === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Entity restore is unavailable");
   if (agent !== undefined && action === "move" && agent.moveTask === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Entity move is unavailable");
   const direct = agent === undefined ? requireDirect(dependencies) : undefined;
   const entityType = requestedEntityType(args);
@@ -661,6 +665,18 @@ async function runEntity(args: readonly string[], cwd: string, dependencies: Cli
     return {
       exitCode: 0,
       output: render(json, { ok: true, code: "OK", path: archived.path, draft_fingerprint: archived.draft_fingerprint, document: archived.document }, `Archived ${archived.path}`),
+    };
+  }
+
+  if (action === "restore") {
+    const requestedType = required(entityType, "--type");
+    const requestedId = required(flagValue(args, "--id"), "--id");
+    const restored = agent?.restoreEntity === undefined
+      ? await direct!.restoreEntity(requestedType, requestedId, agentScope(args))
+      : await agent.restoreEntity(required(draftId, "--draft"), requestedType, requestedId, agentScope(args));
+    return {
+      exitCode: 0,
+      output: render(json, { ok: true, code: "OK", path: restored.path, draft_fingerprint: restored.draft_fingerprint, document: restored.document }, `Restored ${restored.path}`),
     };
   }
 

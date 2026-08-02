@@ -6,6 +6,7 @@ import type { DraftManager } from "@gitpm/drafts";
 import type { GitClient } from "@gitpm/git-client";
 import { parseYamlDocument, type GitPmDocument } from "@gitpm/repository-format";
 import { buildGanttModel, resolvePlanning, resolveSchedulingHierarchy, type GanttModel, type ScheduleTracksConfig, type ScheduleWindow, type SchedulingHierarchyTask } from "@gitpm/scheduling";
+import { activeProjectIds, isOperationalTask } from "@gitpm/shared";
 import { actualSegments, actualWindow, type TimeEntryRecord } from "@gitpm/time-entries";
 import { discoverRepositoryFiles, validateRepository } from "@gitpm/validation";
 import pdfMake from "pdfmake/build/pdfmake.js";
@@ -497,7 +498,7 @@ async function renderPdf(snapshot: ExportSnapshot, locale: ExportLocale, selecte
   const groups = documentGroups(snapshot);
   const projects = active(groups.projects);
   const people = active(groups.people);
-  const tasks = active(groups.tasks);
+  const tasks = groups.tasks.filter((task) => isOperationalTask(task, activeProjectIds(projects)));
   const milestones = active(groups.milestones);
   const teams = active(groups.teams);
   const calendars = active(groups.calendars);

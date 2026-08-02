@@ -66,6 +66,7 @@ class FakeApi implements GitPmApi {
   async updateEntity(): Promise<EntityResult> { throw new Error("not used"); }
   async moveTask(): Promise<EntityResult> { throw new Error("not used"); }
   async archiveEntity(): Promise<EntityResult> { throw new Error("not used"); }
+  async restoreEntity(): Promise<EntityResult> { throw new Error("not used"); }
   async deleteEntity() { /* not used */ }
   async getConfiguration(_draftId: string, kind: "statuses" | "issue-types"): Promise<ConfigurationResult> {
     const document = (kind === "statuses"

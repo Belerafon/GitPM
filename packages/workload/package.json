@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@gitpm/calendar": "workspace:*",
-    "@gitpm/scheduling": "workspace:*"
+    "@gitpm/scheduling": "workspace:*",
+    "@gitpm/shared": "workspace:*"
   }
 }

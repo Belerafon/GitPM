@@ -5,7 +5,10 @@ import { fileURLToPath } from "node:url";
 
 const isWindows = process.platform === "win32";
 const workspace = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const dataDirectory = path.join(workspace, ".tmp", "playwright-local");
+const repositoryMode = process.argv[2] ?? "worktree";
+const port = Number(process.argv[3] ?? "3100");
+if (!new Set(["direct", "worktree"]).has(repositoryMode) || !Number.isInteger(port)) throw new Error("Usage: start-e2e-server.mjs direct|worktree <port>");
+const dataDirectory = path.join(workspace, ".tmp", `playwright-local-${repositoryMode}`);
 const repository = path.join(dataDirectory, "source");
 const runtimeData = path.join(dataDirectory, "data");
 await rm(dataDirectory, { recursive: true, force: true });
@@ -21,13 +24,11 @@ const child = spawn("corepack", ["pnpm", "--filter", "@gitpm/server", "exec", "t
   detached: !isWindows,
   env: {
     ...process.env,
-    // This suite exercises the public draft lifecycle. Keep its repository mode
-    // explicit now that the application default is the single-checkout direct mode.
-    GITPM_REPOSITORY_MODE: "worktree",
+    GITPM_REPOSITORY_MODE: repositoryMode,
     GITPM_REPOSITORY_PATH: repository,
     GITPM_DATA_DIR: runtimeData,
     HOST: "127.0.0.1",
-    PORT: "3100",
+    PORT: String(port),
   },
   shell: isWindows,
   stdio: "inherit",

@@ -184,6 +184,10 @@ export class DirectCliRuntime {
     return await this.repository.archiveEntity(DIRECT_WORKSPACE_ID, entityType, id, scope);
   }
 
+  async restoreEntity(entityType: string, id: string, scope: AgentScope = {}): Promise<EntityResult> {
+    return await this.repository.restoreEntity(DIRECT_WORKSPACE_ID, entityType, id, scope);
+  }
+
   async exportData(request: ExportRequest): Promise<ExportArtifact> {
     await this.prepare();
     return await new ExportService(this.drafts, this.git).create(DIRECT_WORKSPACE_ID, request);

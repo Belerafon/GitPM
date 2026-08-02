@@ -18,11 +18,12 @@ async function entity(request: APIRequestContext, draftId: string, type: string,
   return await response.json() as EntityResult;
 }
 
-async function archiveProject(request: APIRequestContext, draft: DraftStatus, project: EntityResult): Promise<void> {
+async function archiveProject(request: APIRequestContext, draft: DraftStatus, project: EntityResult): Promise<EntityResult> {
   const response = await request.post(`/api/drafts/${encodeURIComponent(draft.draft_id)}/entities/projects/${String(project.document.id)}/archive`, {
     data: { expected_fingerprint: draft.fingerprint, expected_blob_id: project.blob_id },
   });
   expect(response.status(), await response.text()).toBe(200);
+  return await response.json() as EntityResult;
 }
 
 test.describe("audited vertical lifecycles", () => {
@@ -34,12 +35,34 @@ test.describe("audited vertical lifecycles", () => {
     await openDraft(page, draft.draft_id, "/workload");
     await expect(page.getByText("Included Tasks").locator("xpath=following-sibling::*[1]")).toHaveText("1");
 
-    await archiveProject(request, draft, await entity(request, draft.draft_id, "projects", FIXTURE_PROJECT_ID));
+    const archivedProject = await archiveProject(request, draft, await entity(request, draft.draft_id, "projects", FIXTURE_PROJECT_ID));
     await page.reload();
 
     await expect(page.getByText("Included Tasks").locator("xpath=following-sibling::*[1]")).toHaveText("0");
     await expect(page.getByText("Archived", { exact: true }).locator("xpath=following-sibling::*[1]")).toHaveText("2");
     await expect(page.locator(".workload-table")).toHaveCount(0);
+
+    await page.goto("/portfolio");
+    await expect(page.getByText("Active tasks", { exact: true }).locator("xpath=following-sibling::*[1]")).toHaveText("1");
+    await page.goto("/projects");
+    await expect(page.getByRole("button", { name: /GitPM launch/u })).toHaveCount(0);
+    await page.goto("/people/U-26-5EBAE3");
+    await expect(page.getByText("Assigned tasks", { exact: true }).locator("xpath=following-sibling::*[1]")).toHaveText("0");
+    await expect(page.getByRole("button", { name: /Approve schema v1/u })).toHaveCount(0);
+    await page.goto(`/projects/${FIXTURE_PROJECT_ID}/tasks/T-26-P9G3P8`);
+    await expect(page.getByText("This task is unavailable while its project is archived. Restore the project first.", { exact: true })).toBeVisible();
+    await page.goto(`/projects/${FIXTURE_PROJECT_ID}/board`);
+    await expect(page.getByRole("button", { name: /Approve schema v1/u })).toHaveCount(0);
+    await page.goto(`/projects/${FIXTURE_PROJECT_ID}/gantt`);
+    await expect(page.getByText("Approve schema v1", { exact: true })).toHaveCount(0);
+
+    const restored = await request.post(`/api/drafts/${encodeURIComponent(draft.draft_id)}/entities/projects/${FIXTURE_PROJECT_ID}/restore`, {
+      data: { expected_fingerprint: archivedProject.draft_fingerprint, expected_blob_id: archivedProject.blob_id },
+    });
+    expect(restored.status(), await restored.text()).toBe(200);
+    await page.goto("/people/U-26-5EBAE3");
+    await expect(page.getByText("Assigned tasks", { exact: true }).locator("xpath=following-sibling::*[1]")).toHaveText("1");
+    await expect(page.getByRole("button", { name: /Approve schema v1/u }).first()).toBeVisible();
   });
 
   test("Saved View update, rename, archive and delete unblock configuration", async ({ page, request }) => {

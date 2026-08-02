@@ -187,10 +187,20 @@ describe("domain API integration", () => {
     expect(archived.document.lifecycle).toBe("archived");
     fingerprint = archived.draft_fingerprint;
 
+    const restoreResponse = await app.inject({
+      method: "POST",
+      url: `/api/drafts/DRF-HTTP/entities/tasks/${String(task.document.id)}/restore`,
+      payload: { expected_fingerprint: fingerprint, expected_blob_id: archived.blob_id },
+    });
+    expect(restoreResponse.statusCode).toBe(200);
+    const restored = restoreResponse.json<ApiEntityResult>();
+    expect(restored.document.lifecycle).toBe("active");
+    fingerprint = restored.draft_fingerprint;
+
     const deleteResponse = await app.inject({
       method: "DELETE",
       url: `/api/drafts/DRF-HTTP/entities/tasks/${String(task.document.id)}`,
-      payload: { expected_fingerprint: fingerprint, expected_blob_id: archived.blob_id },
+      payload: { expected_fingerprint: fingerprint, expected_blob_id: restored.blob_id },
     });
     expect(deleteResponse.statusCode).toBe(200);
     fingerprint = deleteResponse.json<{ draft_fingerprint: string }>().draft_fingerprint;

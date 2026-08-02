@@ -305,6 +305,25 @@ export class RepositoryWorkflow {
     );
   }
 
+  async restoreEntity(
+    workspaceId: string,
+    entityType: string,
+    id: string,
+    scope: AgentScope = {},
+  ): Promise<EntityResult> {
+    const workspace = await this.beginMutation(workspaceId, scope);
+    const current = await this.entities.get(workspaceId, entityType, id);
+    this.assertPlannedPaths([{ path: current.path, kind: "Modified" }], scope);
+    return await this.entities.restore(
+      workspaceId,
+      workspace.owner_id,
+      entityType,
+      id,
+      workspace.fingerprint,
+      current.blob_id,
+    );
+  }
+
   async moveTask(
     workspaceId: string,
     id: string,

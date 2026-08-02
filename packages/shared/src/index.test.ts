@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ENTITY_ID_PREFIX, isEntityId, newEntityId, newUniqueEntityId, resolveRepositoryMode, DEFAULT_REPOSITORY_MODE, REPOSITORY_MODES } from "./index.js";
+import { activeProjectIds, ENTITY_ID_PREFIX, isEntityId, isOperationalTask, newEntityId, newUniqueEntityId, resolveRepositoryMode, DEFAULT_REPOSITORY_MODE, REPOSITORY_MODES } from "./index.js";
 
 describe("short entity IDs", () => {
   it("includes the entity type, UTC year and six Crockford Base32 characters", () => {
@@ -52,5 +52,17 @@ describe("repository mode resolution", () => {
 
   it("exposes the accepted modes", () => {
     expect(REPOSITORY_MODES).toEqual(["direct", "worktree"]);
+  });
+});
+
+describe("effective task lifecycle", () => {
+  it("requires both the Task and its owning Project to be active", () => {
+    const projects = activeProjectIds([
+      { id: "P-26-ACTIVE", lifecycle: "active" },
+      { id: "P-26-ARCHIV", lifecycle: "archived" },
+    ]);
+    expect(isOperationalTask({ project: "P-26-ACTIVE", lifecycle: "active" }, projects)).toBe(true);
+    expect(isOperationalTask({ project: "P-26-ARCHIV", lifecycle: "active" }, projects)).toBe(false);
+    expect(isOperationalTask({ project: "P-26-ACTIVE", lifecycle: "archived" }, projects)).toBe(false);
   });
 });

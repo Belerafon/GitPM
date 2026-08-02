@@ -169,6 +169,8 @@ Restrictions, cascade, and unlink paths are reported without writing. Then delet
 \`--cascade-references\` for a project to delete every project-owned entity.
 Archive a reversible lifecycle state with
 \`gitpm entity archive --draft ${draftId} --type <type> --id <entity-id> [--project <project-id>] [--allow-delete] --json\`.
+Restore it with
+\`gitpm entity restore --draft ${draftId} --type <type> --id <entity-id> [--project <project-id>] [--allow-delete] --json\`.
 Move a task with
 \`gitpm entity move --draft ${draftId} --type task --id <entity-id> --to-project <id> [--to-milestone <id>] --allow-delete --json\`.
 
@@ -318,6 +320,8 @@ non-repeatable options with \`CLI_USAGE\`; never retry a misspelled flag by drop
 - \`gitpm entity archive --draft <id> --type <type> --id <entity-id> [--project <id>]
   [--allow-delete]\` sets
   lifecycle to archived (reversible; the file stays and references remain valid).
+- \`gitpm entity restore --draft <id> --type <type> --id <entity-id> [--project <id>]
+  [--allow-delete]\` restores an archived entity after validating that its lifecycle references are active.
 - \`gitpm entity move --draft <id> --type task --id <entity-id> --to-project <id>
   [--to-milestone <id>] [--allow-delete] [--project <id>]\` relocates a task and its comments
   to another Project.

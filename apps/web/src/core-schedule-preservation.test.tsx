@@ -22,6 +22,7 @@ class MultiTrackApi {
   async createEntity(_draftId: string, _type: string, _fingerprint: string, document: EntityDocument) { const next = this.result(document); this.entities.push(next); return next; }
   async updateEntity(_draftId: string, _type: string, entity: EntityResult, _fingerprint: string, document: EntityDocument) { const next = this.result(document); this.entities = this.entities.map((item) => item === entity ? next : item); return next; }
   async archiveEntity(_draftId: string, type: string, entity: EntityResult, fingerprint: string) { return await this.updateEntity(_draftId, type, entity, fingerprint, { ...entity.document, lifecycle: "archived" }); }
+  async restoreEntity(_draftId: string, type: string, entity: EntityResult, fingerprint: string) { return await this.updateEntity(_draftId, type, entity, fingerprint, { ...entity.document, lifecycle: "active" }); }
   async deleteEntity(_draftId: string, _type: string, entity: EntityResult) { this.entities = this.entities.filter((item) => item !== entity); }
   async moveTask(_draftId: string, entity: EntityResult, _fingerprint: string, targetProject: string, targetMilestone?: string, targetParent?: string) { return await this.updateEntity(_draftId, "tasks", entity, _fingerprint, { ...entity.document, project: targetProject, milestone: targetMilestone, parent: targetParent }); }
   async getConfiguration(_draftId: string, kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks"): Promise<ConfigurationResult> {
