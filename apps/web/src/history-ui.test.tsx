@@ -14,11 +14,13 @@ afterEach(cleanup);
 describe("History workspace", () => {
   it("restores a commit deep link and publishes later selections to navigation", async () => {
     const olderCommit = "c".repeat(40);
+    const lookedUpCommit = "d".repeat(40);
     const olderItem = { ...item, commit: olderCommit, subject: "Older change", author_name: "Dev", authored_at: "2026-07-09T12:00:00.000Z", semantic_summary: { ...item.semantic_summary, affected_projects: ["P-26-222222"] } };
+    const lookedUpItem = { ...olderItem, commit: lookedUpCommit, subject: "Deep history change" };
     const onNavigate = vi.fn();
     const api = {
-      history: async () => [item, olderItem],
-      commitDetail: async (_draftId: string, selectedCommit: string) => ({ ...detail, ...(selectedCommit === olderCommit ? olderItem : item) }),
+      history: async () => [item],
+      commitDetail: async (_draftId: string, selectedCommit: string) => ({ ...detail, ...(selectedCommit === olderCommit ? olderItem : selectedCommit === lookedUpCommit ? lookedUpItem : item) }),
       commitFileDiff: async (): Promise<CommitFileDiff> => ({ diff: "", oversized: false }),
     } as unknown as GitPmApi;
 
@@ -35,6 +37,11 @@ describe("History workspace", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Merged task update/u }));
     await waitFor(() => expect(onNavigate).toHaveBeenCalledWith("history", { commit }));
+
+    fireEvent.change(screen.getByLabelText("Commit SHA"), { target: { value: lookedUpCommit } });
+    fireEvent.click(screen.getByRole("button", { name: "Open commit" }));
+    expect(await screen.findByRole("heading", { name: "Deep history change" })).toBeTruthy();
+    expect(onNavigate).toHaveBeenCalledWith("history", { commit: lookedUpCommit });
   });
 
   it("shows the selected file diff and file history and creates a separate revert draft without a rebase action", async () => {

@@ -104,7 +104,8 @@ gitpm push --json
 the HEAD commit, the dirty state, and ahead/behind counts versus the remote.
 
 History mutations preserve the same branch boundary. Selecting an old commit is a read-only
-snapshot view; GitPM never checks out a detached HEAD. A user may restore one or more files changed
+snapshot view; GitPM never checks out a detached HEAD. The History UI can open any full commit SHA
+reachable from the current branch, even when it is older than the recent log window. A user may restore one or more files changed
 by that commit into the current working tree, then review and commit the resulting diff, or create
 a new validated reverse commit with `git revert`. Restore refuses to overwrite an already dirty
 selected path. Direct revert requires a clean business working tree. Validation failures and Git

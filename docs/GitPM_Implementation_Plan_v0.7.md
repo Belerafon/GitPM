@@ -474,7 +474,8 @@ History показывает commit graph, author, message, files, semantic summ
 
 Поддерживается создание revert draft через `git revert`.
 
-В `direct` mode History не переводит checkout в detached HEAD и не переписывает ветку. Из выбранного
+В `direct` mode History открывает любой полный SHA, достижимый из текущей ветки, но не переводит
+checkout в detached HEAD и не переписывает ветку. Из выбранного
 коммита можно восстановить один или все изменённые файлы в текущее рабочее дерево (аналог безопасного
 file-level cherry-pick) либо создать новый обратный commit. Restore защищён fingerprint и не затирает
 локально изменённые выбранные пути; revert требует чистого business-worktree. После применения выполняется

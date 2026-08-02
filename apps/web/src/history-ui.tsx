@@ -58,6 +58,7 @@ export function HistoryWorkspace({ api, draft, locale, canRevert, directMode = f
   const t = (key: Parameters<typeof message>[1], values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
   const [items, setItems] = useState<readonly CommitHistoryItem[]>([]);
   const [historyQuery, setHistoryQuery] = useState("");
+  const [commitLookup, setCommitLookup] = useState(initialCommit);
   const [authorFilter, setAuthorFilter] = useState("");
   const [projectFilter, setProjectFilter] = useState("");
   const [dateFilter, setDateFilter] = useState("");
@@ -85,12 +86,12 @@ export function HistoryWorkspace({ api, draft, locale, canRevert, directMode = f
   };
   const load = () => loadRequest.run(async () => {
     const history = await api.history(draft.draft_id);
-    const selectedCommit = history.some((item) => item.commit === initialCommit) ? initialCommit : history[0]?.commit;
+    const selectedCommit = initialCommit.trim().toLocaleLowerCase() || history[0]?.commit;
     const firstDetail = selectedCommit === undefined ? null : await api.commitDetail(draft.draft_id, selectedCommit);
     return { history, firstDetail };
-  }, ({ history, firstDetail }) => { setItems(history); applyDetail(firstDetail); });
+  }, ({ history, firstDetail }) => { setItems(firstDetail !== null && !history.some((item) => item.commit === firstDetail.commit) ? [firstDetail, ...history] : history); applyDetail(firstDetail); });
   useEffect(() => {
-    applyDetail(null); setHistoryQuery(""); setAuthorFilter(""); setProjectFilter(""); setDateFilter(""); setFileItems([]); setFilePath(null); setFileQuery(""); setConflicts([]); setSuccess(null);
+    applyDetail(null); setHistoryQuery(""); setCommitLookup(initialCommit); setAuthorFilter(""); setProjectFilter(""); setDateFilter(""); setFileItems([]); setFilePath(null); setFileQuery(""); setConflicts([]); setSuccess(null);
     void load();
   }, [api, draft.draft_id]);
 
@@ -112,6 +113,17 @@ export function HistoryWorkspace({ api, draft, locale, canRevert, directMode = f
     setError(null); setFileItems([]); setFilePath(null); setFileQuery("");
     try { const next = await api.commitDetail(draft.draft_id, item.commit); applyDetail(next); onNavigate("history", { commit: item.commit }); }
     catch (caught) { report(caught); }
+  };
+  const openCommit = async (event: FormEvent) => {
+    event.preventDefault();
+    const commit = commitLookup.trim().toLocaleLowerCase();
+    setError(null); setFileItems([]); setFilePath(null); setFileQuery("");
+    try {
+      const next = await api.commitDetail(draft.draft_id, commit);
+      setItems((current) => current.some((item) => item.commit === next.commit) ? current : [next, ...current]);
+      applyDetail(next);
+      onNavigate("history", { commit: next.commit });
+    } catch (caught) { report(caught); }
   };
   const selectFile = async (path: string) => {
     setSelectedPath(path); setError(null); setFilePath(path); setFileItems([]);
@@ -169,6 +181,7 @@ export function HistoryWorkspace({ api, draft, locale, canRevert, directMode = f
     <AsyncBoundary state={loadRequest.state} loading={t("status.loading")} retry={() => { void load(); }} error={(loadError, retry) => <div className="alert error">{loadError}<button onClick={retry}>{t("status.retry")}</button></div>}>
       <div className="history-chrome">
         <div className="history-toolbar">
+          <form className="history-commit-lookup" onSubmit={openCommit}><label><span>{t("history.openCommit")}</span><input aria-describedby="history-commit-hint" pattern="[0-9a-fA-F]{40,64}" value={commitLookup} onChange={(event) => setCommitLookup(event.target.value)} required /></label><button disabled={busy}>{t("history.openCommitAction")}</button><small id="history-commit-hint">{t("history.openCommitHint")}</small></form>
           <label className="history-search"><span>{t("history.searchCommits")}</span><input type="search" value={historyQuery} onChange={(event) => setHistoryQuery(event.target.value)} /></label>
           <label><span>{t("history.authorFilter")}</span><select value={authorFilter} onChange={(event) => setAuthorFilter(event.target.value)}><option value="">{t("history.allAuthors")}</option>{authors.map((author) => <option key={author}>{author}</option>)}</select></label>
           <label><span>{t("history.projectFilter")}</span><select value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}><option value="">{t("history.allProjects")}</option>{projects.map((project) => <option key={project}>{project}</option>)}</select></label>
