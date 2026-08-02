@@ -87,6 +87,15 @@ function readAsBase64(file: File): Promise<string> {
   });
 }
 
+function saveBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
 function FolderIcon() {
   return <span className="fm-icon" aria-hidden="true"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M1.5 4.2a1 1 0 0 1 1-1h3.1a1 1 0 0 1 .66.25l1.2 1H13.5a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H2.5a1 1 0 0 1-1-1V4.2z" /></svg></span>;
 }
@@ -172,13 +181,14 @@ function FolderPicker({ api, draftId, excludePath, entryName, locale, onSelect, 
   </div>;
 }
 
-export function WorktreeWorkspace({ api, draft, role, locale, onChanged, confirmAction = () => true }: {
+export function WorktreeWorkspace({ api, draft, role, locale, onChanged, confirmAction = () => true, save = saveBlob }: {
   readonly api: GitPmApi;
   readonly draft: DraftStatus;
   readonly role: GitPmRole;
   readonly locale: Locale;
   readonly onChanged: () => Promise<void>;
   readonly confirmAction?: (message: string) => boolean;
+  readonly save?: (blob: Blob, filename: string) => void;
 }) {
   const t = (key: MessageKey) => message(locale, key);
   const canMutate = role !== "Reporter" && draft.state === "open" && draft.writer_mode === "ui";
@@ -307,6 +317,21 @@ export function WorktreeWorkspace({ api, draft, role, locale, onChanged, confirm
     if (busy || !confirmAction(message(locale, "worktree.deleteConfirm", { name: entry.name }))) return;
     setActionMenuPath(null);
     void run(async () => { await api.deleteWorktreeEntry(draft.draft_id, draft.fingerprint, entry.path); }, selectedPath !== entry.path);
+  };
+
+  const downloadEntry = async (entry: WorktreeEntry) => {
+    if (busy || entry.type !== "file") return;
+    setBusy(true);
+    setActionMenuPath(null);
+    setActionError(null);
+    try {
+      const download = await api.downloadWorktreeFile(draft.draft_id, entry.path);
+      save(download.blob, download.filename);
+    } catch (reason) {
+      setActionError(errorMessage(locale, reason));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const moveEntryTo = (entry: WorktreeEntry, destination: string) => {
@@ -451,6 +476,7 @@ export function WorktreeWorkspace({ api, draft, role, locale, onChanged, confirm
                 {!unavailable
                   ? <div className="fm-row-menu">
                     {menuOpen && <div className="fm-row-menu-popover" role="menu">
+                      {isFile && <button type="button" role="menuitem" onClick={() => void downloadEntry(entry)} disabled={busy}>{t("worktree.download")}</button>}
                       <button type="button" role="menuitem" onClick={() => openRename(entry)} disabled={!canMutate || busy}>{t("worktree.rename")}</button>
                       <button type="button" role="menuitem" onClick={() => openMove(entry)} disabled={!canMutate || busy}>{t("worktree.move")}</button>
                       <button type="button" role="menuitem" className="danger" onClick={() => removeEntry(entry)} disabled={!canMutate || busy}>{t("worktree.delete")}</button>
@@ -498,6 +524,7 @@ export function WorktreeWorkspace({ api, draft, role, locale, onChanged, confirm
             <div className="fm-preview-tools">
               {selected !== null && <span>{formatBytes(locale, selected.size)}</span>}
               {previewEntry !== undefined && <div className="fm-preview-actions">
+                <button type="button" onClick={() => void downloadEntry(previewEntry)} disabled={busy}>{t("worktree.download")}</button>
                 <button type="button" onClick={() => openRename(previewEntry)} disabled={!canMutate || busy}>{t("worktree.rename")}</button>
                 <button type="button" onClick={() => openMove(previewEntry)} disabled={!canMutate || busy}>{t("worktree.move")}</button>
                 <button type="button" className="danger" onClick={() => removeEntry(previewEntry)} disabled={!canMutate || busy}>{t("worktree.delete")}</button>

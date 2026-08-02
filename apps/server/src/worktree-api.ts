@@ -74,8 +74,49 @@ function entryType(stat: Awaited<ReturnType<typeof lstat>>): WorktreeEntryType {
 
 function statusFor(error: NodeJS.ErrnoException): never {
   if (error.code === "ENOENT") throw new WorktreeReadError("WORKTREE_ENTRY_NOT_FOUND", "The requested working tree entry does not exist");
-  if (error.code === "EACCES" || error.code === "EPERM") throw new WorktreeReadError("WORKTREE_PATH_FORBIDDEN", "The requested working tree entry cannot be read");
+  if (error.code === "EACCES" || error.code === "EPERM" || error.code === "ELOOP") throw new WorktreeReadError("WORKTREE_PATH_FORBIDDEN", "The requested working tree entry cannot be read");
   throw error;
+}
+
+async function openRegularFile(target: string): Promise<{ readonly handle: Awaited<ReturnType<typeof open>>; readonly size: number }> {
+  let before;
+  try {
+    before = await lstat(target);
+  } catch (error) {
+    statusFor(error as NodeJS.ErrnoException);
+  }
+  if (before.isSymbolicLink()) throw new WorktreeReadError("WORKTREE_PATH_FORBIDDEN", "The requested working tree entry is a symlink");
+  if (!before.isFile()) throw new WorktreeReadError("WORKTREE_NOT_FILE", "The requested working tree entry is not a regular file");
+
+  let handle;
+  try {
+    handle = await open(target, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+  } catch (error) {
+    statusFor(error as NodeJS.ErrnoException);
+  }
+  try {
+    const opened = await handle.stat();
+    const after = await lstat(target);
+    const beforeIdentity = { device: before.dev, inode: before.ino };
+    const openedIdentity = { device: opened.dev, inode: opened.ino };
+    const afterIdentity = { device: after.dev, inode: after.ino };
+    if (!opened.isFile() || after.isSymbolicLink() || !after.isFile() || !sameIdentity(beforeIdentity, openedIdentity) || !sameIdentity(openedIdentity, afterIdentity)) {
+      throw new WorktreeReadError("WORKTREE_PATH_FORBIDDEN", "The requested working tree entry changed while it was being opened");
+    }
+    return { handle, size: opened.size };
+  } catch (error) {
+    await handle.close();
+    if (error instanceof WorktreeReadError) throw error;
+    statusFor(error as NodeJS.ErrnoException);
+  }
+}
+
+function downloadDisposition(relativePath: string): string {
+  const filename = relativePath.split("/").at(-1) ?? "download";
+  const withoutControls = filename.replace(/[\u0000-\u001f\u007f]/gu, "_");
+  const fallback = withoutControls.replace(/[^\x20-\x7e]/gu, "_").replace(/["\\]/gu, "_") || "download";
+  const encoded = encodeURIComponent(withoutControls).replace(/[!'()*]/gu, (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
+  return `attachment; filename="${fallback}"; filename*=UTF-8''${encoded}`;
 }
 
 async function assertExists(target: string): Promise<void> {
@@ -255,19 +296,12 @@ export function registerWorktreeApi(app: FastifyInstance, manager: DraftManager,
     const root = await draftRoot(manager, authenticate, request, request.params.draftId);
     const relativePath = requestedPath(request.query.path, false);
     const absolutePath = await safeTarget(root, relativePath);
-    let handle;
+    const { handle, size } = await openRegularFile(absolutePath);
     try {
-      handle = await open(absolutePath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
-    } catch (error) {
-      statusFor(error as NodeJS.ErrnoException);
-    }
-    try {
-      const stat = await handle.stat();
-      if (!stat.isFile()) throw new WorktreeReadError("WORKTREE_NOT_FILE", "The requested working tree entry is not a regular file");
-      if (stat.size > MAX_TEXT_FILE_BYTES) {
+      if (size > MAX_TEXT_FILE_BYTES) {
         throw new WorktreeReadError("WORKTREE_FILE_TOO_LARGE", "The file is larger than the 1 MiB preview limit");
       }
-      const buffer = Buffer.alloc(Math.min(MAX_TEXT_FILE_BYTES + 1, Math.max(1, stat.size + 1)));
+      const buffer = Buffer.alloc(Math.min(MAX_TEXT_FILE_BYTES + 1, Math.max(1, size + 1)));
       const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
       if (bytesRead > MAX_TEXT_FILE_BYTES) {
         throw new WorktreeReadError("WORKTREE_FILE_TOO_LARGE", "The file is larger than the 1 MiB preview limit");
@@ -283,6 +317,20 @@ export function registerWorktreeApi(app: FastifyInstance, manager: DraftManager,
     } finally {
       await handle.close();
     }
+  });
+
+  app.get<{ Params: { draftId: string }; Querystring: { path?: string } }>("/api/drafts/:draftId/worktree/file/download", async (request, reply) => {
+    const root = await draftRoot(manager, authenticate, request, request.params.draftId);
+    const relativePath = requestedPath(request.query.path, false);
+    const absolutePath = await safeTarget(root, relativePath);
+    const { handle, size } = await openRegularFile(absolutePath);
+    const stream = handle.createReadStream({ autoClose: true });
+    return reply
+      .header("content-type", "application/octet-stream")
+      .header("content-length", String(size))
+      .header("content-disposition", downloadDisposition(relativePath))
+      .header("x-content-type-options", "nosniff")
+      .send(stream);
   });
 
   app.delete<{ Params: { draftId: string }; Body: { expected_fingerprint: string; path: string } }>(

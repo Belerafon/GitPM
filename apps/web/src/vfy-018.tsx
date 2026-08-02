@@ -138,6 +138,7 @@ class BrowserAcceptanceApi implements GitPmApi {
     ] };
   }
   async readWorktreeFile(_draftId: string, path: string) { return { path, size: 2194, content: `# ${path}\n\nGitPM working-copy preview.\n\nThis fixture intentionally includes long file names and mixed entry sizes for responsive UI checks.` }; }
+  async downloadWorktreeFile(_draftId: string, path: string) { return { blob: new Blob([path]), filename: path.split("/").at(-1) ?? "download" }; }
   async deleteWorktreeEntry(): Promise<string> { return "f".repeat(64); }
   async createWorktreeDirectory(): Promise<string> { return "f".repeat(64); }
   async uploadWorktreeFile(): Promise<string> { return "f".repeat(64); }

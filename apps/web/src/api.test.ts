@@ -102,6 +102,26 @@ describe("HttpGitPmApi request bodies", () => {
     );
   });
 
+  it("downloads worktree files and decodes UTF-8 attachment names", async () => {
+    const fetchMock = vi.fn(async () => new Response(new Blob([new Uint8Array([0, 1, 2, 3])]), {
+      status: 200,
+      headers: {
+        "content-disposition": "attachment; filename=\"____.bin\"; filename*=UTF-8''%D0%BE%D1%82%D1%87%D1%91%D1%82.bin",
+        "content-type": "application/octet-stream",
+      },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await new HttpGitPmApi().downloadWorktreeFile("DRF-1", "docs/отчёт.bin");
+
+    expect(result.filename).toBe("отчёт.bin");
+    expect(result.blob.type).toBe("application/octet-stream");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/drafts/DRF-1/worktree/file/download?path=docs%2F%D0%BE%D1%82%D1%87%D1%91%D1%82.bin",
+      { credentials: "include" },
+    );
+  });
+
   it("preserves structured error details and sends explicit unlink confirmation", async () => {
     const details = [{ path: "teams/G-26-CORE.yaml", label: "Core" }];
     const fetchMock = vi.fn()

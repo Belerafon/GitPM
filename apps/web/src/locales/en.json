@@ -117,6 +117,7 @@
   ,"worktree.refresh": "Refresh"
   ,"worktree.newFolder": "New folder"
   ,"worktree.upload": "Upload"
+  ,"worktree.download": "Download"
   ,"worktree.rename": "Rename"
   ,"worktree.move": "Move"
   ,"worktree.delete": "Delete"
