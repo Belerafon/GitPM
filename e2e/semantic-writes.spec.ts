@@ -232,6 +232,53 @@ test.describe("semantic scheduling writes", () => {
     expect(saved?.document.calendar).toBe(calendar);
   });
 
+  test("switches repository default calendar before archiving the previous default", async ({ page, request }) => {
+    const repositoryBeforeResponse = await request.get(`/api/drafts/${draftId}/config/repository`);
+    expect(repositoryBeforeResponse.status(), await repositoryBeforeResponse.text()).toBe(200);
+    const repositoryBefore = await repositoryBeforeResponse.json() as EntityResult;
+    const calendarsBeforeResponse = await request.get(`/api/drafts/${draftId}/entities/calendars`);
+    const calendarsBefore = await calendarsBeforeResponse.json() as EntityResult[];
+    const previousDefault = calendarsBefore.find((item) => item.document.id === repositoryBefore.document.default_calendar)!;
+
+    await useDraft(page);
+    await page.goto("/calendars");
+    await english(page);
+    await page.getByRole("button", { name: "Create calendar", exact: false }).click();
+    const createDialog = page.getByRole("dialog", { name: "Create calendar", exact: true });
+    await createDialog.getByRole("textbox", { name: "Name", exact: true }).fill("Replacement default E2E");
+    await createDialog.getByRole("button", { name: "Create calendar", exact: true }).click();
+    await expect(createDialog).toBeHidden();
+
+    const calendarsAfterResponse = await request.get(`/api/drafts/${draftId}/entities/calendars`);
+    const calendarsAfter = await calendarsAfterResponse.json() as EntityResult[];
+    const replacement = calendarsAfter.find((item) => item.document.name === "Replacement default E2E")!;
+    await page.goto("/settings");
+    const repositoryCard = page.locator(".repository-config-editor");
+    await repositoryCard.getByRole("button", { name: "Edit Repository settings", exact: true }).click();
+    const settingsDialog = page.getByRole("dialog", { name: "Edit: Repository settings", exact: true });
+    await settingsDialog.getByRole("combobox", { name: "Repository default calendar", exact: true }).selectOption(String(replacement.document.id));
+    await settingsDialog.getByRole("spinbutton", { name: "UI polling interval", exact: true }).fill("7");
+    await settingsDialog.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(settingsDialog).toBeHidden();
+    const repositoryAfterResponse = await request.get(`/api/drafts/${draftId}/config/repository`);
+    expect(await repositoryAfterResponse.json()).toMatchObject({ document: { default_calendar: replacement.document.id, ui_poll_interval_seconds: 7 } });
+
+    await page.goto("/calendars");
+    const previousCard = page.locator(".admin-card").filter({ hasText: String(previousDefault.document.name) });
+    await previousCard.getByRole("button", { name: "Edit calendar", exact: true }).click();
+    let calendarDialog = page.getByRole("dialog", { name: `Edit calendar: ${String(previousDefault.document.name)}`, exact: true });
+    await calendarDialog.getByText("More actions", { exact: true }).click();
+    await expect(calendarDialog.getByRole("button", { name: "Archive", exact: true })).toBeEnabled();
+    await calendarDialog.getByRole("button", { name: "Archive", exact: true }).click();
+    await expect(calendarDialog).toBeHidden();
+
+    const replacementCard = page.locator(".admin-card").filter({ hasText: "Replacement default E2E" });
+    await replacementCard.getByRole("button", { name: "Edit calendar", exact: true }).click();
+    calendarDialog = page.getByRole("dialog", { name: "Edit calendar: Replacement default E2E", exact: true });
+    await calendarDialog.getByText("More actions", { exact: true }).click();
+    await expect(calendarDialog.getByRole("button", { name: "Archive", exact: true })).toBeDisabled();
+  });
+
   test("atomically corrects actual effort through the real UI and preserves the audit link", async ({ page, request }) => {
     const taskId = "T-26-SMW006";
     await createTask(request, task(taskId, "Correctable actual effort", { plan: { start: "2026-09-01", finish: "2026-09-05", effort_hours: 8 } }));
@@ -256,6 +303,66 @@ test.describe("semantic scheduling writes", () => {
     const newEntry = entries.find((item) => item.document.id !== original.document.id);
     expect(oldEntry?.document).toMatchObject({ state: "voided", replacement: newEntry?.document.id });
     expect(newEntry?.document).toMatchObject({ state: "active", hours: 2.5, note_markdown: "E2E correction" });
+  });
+
+  test("preserves archived person and inactive category when correcting only historical hours", async ({ page, request }) => {
+    const taskId = "T-26-SMW007";
+    const personId = "U-26-SMW007";
+    const category = "historical-e2e";
+    await createTask(request, task(taskId, "Historical actual effort", { plan: { start: "2026-09-06", finish: "2026-09-07", effort_hours: 4 } }));
+
+    const repositoryResponse = await request.get(`/api/drafts/${draftId}/config/repository`);
+    expect(repositoryResponse.status(), await repositoryResponse.text()).toBe(200);
+    const repository = await repositoryResponse.json() as EntityResult;
+    let draftResponse = await request.get(`/api/drafts/${draftId}`);
+    let fingerprint = (await draftResponse.json() as { fingerprint: string }).fingerprint;
+    const personResponse = await request.post(`/api/drafts/${draftId}/entities/people`, { data: { expected_fingerprint: fingerprint, document: { schema: "gitpm/person@1", id: personId, name: "Historical E2E Person", weekly_capacity_hours: 40, calendar: repository.document.default_calendar, lifecycle: "active" } } });
+    expect(personResponse.status(), await personResponse.text()).toBe(201);
+    const createdPerson = await personResponse.json() as EntityResult;
+
+    let categoriesResponse = await request.get(`/api/drafts/${draftId}/config/work-categories`);
+    let categories = await categoriesResponse.json() as EntityResult;
+    draftResponse = await request.get(`/api/drafts/${draftId}`);
+    fingerprint = (await draftResponse.json() as { fingerprint: string }).fingerprint;
+    let updateCategories = await request.put(`/api/drafts/${draftId}/config/work-categories`, { data: { expected_fingerprint: fingerprint, expected_blob_id: categories.blob_id, document: { ...categories.document, categories: [...(categories.document.categories as unknown[]), { slug: category, title: "Historical E2E", active: true }] } } });
+    expect(updateCategories.status(), await updateCategories.text()).toBe(200);
+
+    draftResponse = await request.get(`/api/drafts/${draftId}`);
+    fingerprint = (await draftResponse.json() as { fingerprint: string }).fingerprint;
+    const entryResponse = await request.post(`/api/drafts/${draftId}/projects/${FIXTURE_PROJECT_ID}/tasks/${taskId}/time-entries`, { data: { expected_fingerprint: fingerprint, person: personId, performed_on: "2026-09-06", hours: 2, category } });
+    expect(entryResponse.status(), await entryResponse.text()).toBe(201);
+    const original = await entryResponse.json() as EntityResult;
+
+    draftResponse = await request.get(`/api/drafts/${draftId}`);
+    fingerprint = (await draftResponse.json() as { fingerprint: string }).fingerprint;
+    const archivePerson = await request.post(`/api/drafts/${draftId}/entities/people/${personId}/archive`, { data: { expected_fingerprint: fingerprint, expected_blob_id: createdPerson.blob_id } });
+    expect(archivePerson.status(), await archivePerson.text()).toBe(200);
+
+    categoriesResponse = await request.get(`/api/drafts/${draftId}/config/work-categories`);
+    categories = await categoriesResponse.json() as EntityResult;
+    draftResponse = await request.get(`/api/drafts/${draftId}`);
+    fingerprint = (await draftResponse.json() as { fingerprint: string }).fingerprint;
+    updateCategories = await request.put(`/api/drafts/${draftId}/config/work-categories`, { data: { expected_fingerprint: fingerprint, expected_blob_id: categories.blob_id, document: { ...categories.document, categories: (categories.document.categories as Array<Record<string, unknown>>).map((item) => item.slug === category ? { ...item, active: false } : item) } } });
+    expect(updateCategories.status(), await updateCategories.text()).toBe(200);
+
+    await useDraft(page);
+    await page.goto(`/projects/${FIXTURE_PROJECT_ID}/tasks/${taskId}`);
+    await english(page);
+    await page.getByRole("button", { name: "Correct", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Correct effort entry", exact: true });
+    await expect(dialog.getByRole("combobox", { name: "Person", exact: true })).toHaveValue(personId);
+    await expect(dialog.getByRole("option", { name: "Historical E2E Person (Archived)", exact: true })).toHaveCount(1);
+    await expect(dialog.getByRole("combobox", { name: "Category", exact: true })).toHaveValue(category);
+    await expect(dialog.getByRole("option", { name: "Historical E2E (Inactive)", exact: true })).toHaveCount(1);
+    await dialog.getByRole("spinbutton", { name: "Hours", exact: true }).fill("2.5");
+    await dialog.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(dialog).toBeHidden();
+
+    const listed = await request.get(`/api/drafts/${draftId}/projects/${FIXTURE_PROJECT_ID}/tasks/${taskId}/time-entries`);
+    expect(listed.status(), await listed.text()).toBe(200);
+    const entries = await listed.json() as EntityResult[];
+    const replacement = entries.find((item) => item.document.id !== original.document.id);
+    expect(replacement?.document).toMatchObject({ state: "active", person: personId, category, hours: 2.5 });
   });
 
   test("keeps configuration reorder local until Save and persists new values after reload", async ({ page, request }) => {

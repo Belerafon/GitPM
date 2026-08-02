@@ -7,6 +7,7 @@ import type { TimeEntryResult } from "./api.js";
 import { EditorDrawer } from "./editor-drawer.js";
 
 interface WorkCategory { readonly slug: string; readonly title: string; readonly active: boolean }
+interface TimeEntryCorrection { readonly person: string; readonly performed_on: string; readonly hours: number; readonly category: string; readonly note: string }
 
 const NO_ASSIGNEES: readonly string[] = [];
 
@@ -35,8 +36,10 @@ export function TaskTimeEntries(props: {
   const [busy, setBusy] = useState(false);
   const [fingerprint, setFingerprint] = useState(props.fingerprint);
   const [editingEntry, setEditingEntry] = useState<TimeEntryResult | null>(null);
+  const [correction, setCorrection] = useState<TimeEntryCorrection | null>(null);
+  const [historicalPerson, setHistoricalPerson] = useState<EntityResult | null>(null);
 
-  const personName = useCallback((id: string): string => people.find((person) => person.document.id === id)?.document.name ?? id, [people]);
+  const personName = useCallback((id: string): string => people.find((person) => person.document.id === id)?.document.name ?? (historicalPerson?.document.id === id ? historicalPerson.document.name : undefined) ?? id, [historicalPerson, people]);
 
   useEffect(() => { void (async () => {
     let loadError: string | null = null;
@@ -47,7 +50,7 @@ export function TaskTimeEntries(props: {
     }
     try {
       const config = await api.getConfiguration(draft.draft_id, "work-categories");
-      setCategories((config.document.categories as readonly WorkCategory[] | undefined)?.filter((category) => category.active) ?? []);
+      setCategories((config.document.categories as readonly WorkCategory[] | undefined) ?? []);
     } catch {
       setCategories([]);
     }
@@ -55,6 +58,18 @@ export function TaskTimeEntries(props: {
   })(); }, [api, draft.draft_id, projectId, taskId]);
 
   useEffect(() => { setFingerprint(props.fingerprint); }, [props.fingerprint]);
+
+  useEffect(() => {
+    if (editingEntry === null || people.some((person) => person.document.id === editingEntry.document.person)) {
+      setHistoricalPerson(null);
+      return;
+    }
+    let cancelled = false;
+    void api.getEntity(draft.draft_id, "people", editingEntry.document.person)
+      .then((person) => { if (!cancelled) setHistoricalPerson(person); })
+      .catch(() => { if (!cancelled) setHistoricalPerson(null); });
+    return () => { cancelled = true; };
+  }, [api, draft.draft_id, editingEntry, people]);
 
   const records = useMemo(() => entries.map((entry) => ({
     id: entry.document.id,
@@ -70,10 +85,28 @@ export function TaskTimeEntries(props: {
   const actual = useMemo(() => actualWindow(records.map((record) => ({ id: record.id, project: projectId, task: taskId, person: record.person, performed_on: record.performed_on, hours: record.hours, category: record.category, state: record.state }))), [records, projectId, taskId]);
   const totalHours = useMemo(() => sumHours(records.map((record) => ({ id: record.id, project: projectId, task: taskId, person: record.person, performed_on: record.performed_on, hours: record.hours, category: record.category, state: record.state }))), [records, projectId, taskId]);
   const activePeople = useMemo(() => people.filter((person) => person.document.lifecycle === "active"), [people]);
+  const activeCategories = useMemo(() => categories.filter((category) => category.active), [categories]);
+  const correctionPeople = useMemo(() => {
+    const active = activePeople.map((person) => ({ id: String(person.document.id), name: String(person.document.name ?? person.document.id), archived: false }));
+    if (editingEntry === null || active.some((person) => person.id === editingEntry.document.person)) return active;
+    const historical = people.find((person) => person.document.id === editingEntry.document.person)
+      ?? (historicalPerson?.document.id === editingEntry.document.person ? historicalPerson : undefined);
+    return [...active, { id: editingEntry.document.person, name: String(historical?.document.name ?? editingEntry.document.person), archived: true }];
+  }, [activePeople, editingEntry, historicalPerson, people]);
+  const correctionCategories = useMemo(() => {
+    if (editingEntry === null || activeCategories.some((category) => category.slug === editingEntry.document.category)) return activeCategories;
+    const historical = categories.find((category) => category.slug === editingEntry.document.category);
+    return [...activeCategories, historical ?? { slug: editingEntry.document.category, title: editingEntry.document.category, active: false }];
+  }, [activeCategories, categories, editingEntry]);
   const [open, setOpen] = useState(true);
   const defaultPersonId = useMemo(() => assigneeIds.find((id) => activePeople.some((person) => person.document.id === id)), [assigneeIds, activePeople]);
   const today = useMemo(() => todayISODate(), []);
   const activeCount = entries.filter((entry) => entry.document.state === "active").length;
+  const closeCorrection = () => { setEditingEntry(null); setCorrection(null); };
+  const beginCorrection = (entry: TimeEntryResult) => {
+    setEditingEntry(entry);
+    setCorrection({ person: entry.document.person, performed_on: entry.document.performed_on, hours: entry.document.hours, category: entry.document.category, note: entry.document.note_markdown ?? "" });
+  };
 
   const createEntry = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -117,14 +150,16 @@ export function TaskTimeEntries(props: {
 
   const replaceEntry = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (editingEntry === null) return;
-    const data = new FormData(event.currentTarget);
+    if (editingEntry === null || correction === null) return;
+    if (!correctionPeople.some((person) => person.id === correction.person) || !correctionCategories.some((category) => category.slug === correction.category)) {
+      setError(t("timeEffort.historicalValueUnavailable")); return;
+    }
     const input = {
-      person: String(data.get("person") ?? ""),
-      performed_on: String(data.get("performed_on") ?? ""),
-      hours: Number(data.get("hours") ?? 0),
-      category: String(data.get("category") ?? ""),
-      ...(data.get("note") === null || String(data.get("note")) === "" ? {} : { note_markdown: String(data.get("note")) }),
+      person: correction.person,
+      performed_on: correction.performed_on,
+      hours: correction.hours,
+      category: correction.category,
+      ...(correction.note === "" ? {} : { note_markdown: correction.note }),
     };
     setBusy(true);
     try {
@@ -132,7 +167,7 @@ export function TaskTimeEntries(props: {
       setEntries((current) => current.flatMap((item) => item.document.id === editingEntry.document.id ? [replaced.voided, replaced.created] : [item]));
       setFingerprint(replaced.created.draft_fingerprint);
       await props.onFingerprintChange(replaced.created.draft_fingerprint);
-      setEditingEntry(null);
+      closeCorrection();
       setError(null);
     } catch (candidate) {
       setError(formatApiError(candidate));
@@ -163,7 +198,7 @@ export function TaskTimeEntries(props: {
                 <span className="time-entry-person">{personName(entry.document.person)}</span>
                 <span className="time-entry-category">{categories.find((category) => category.slug === entry.document.category)?.title ?? entry.document.category}</span>
                 {typeof entry.document.note_markdown === "string" && entry.document.note_markdown !== "" && <span className="time-entry-note">{entry.document.note_markdown}</span>}
-                {entry.document.state === "active" && !readOnly && <><button className="text-link" disabled={busy} onClick={() => setEditingEntry(entry)} type="button">{t("timeEffort.correct")}</button><button className="text-link" disabled={busy} onClick={() => void voidEntry(entry)} type="button">{t("timeEffort.void")}</button></>}
+                {entry.document.state === "active" && !readOnly && <><button className="text-link" disabled={busy} onClick={() => beginCorrection(entry)} type="button">{t("timeEffort.correct")}</button><button className="text-link" disabled={busy} onClick={() => void voidEntry(entry)} type="button">{t("timeEffort.void")}</button></>}
               </li>
             ))}
             {entries.length === 0 && <li className="empty-copy">{t("timeEffort.empty")}</li>}
@@ -173,19 +208,19 @@ export function TaskTimeEntries(props: {
               <label>{t("timeEffort.person")}<select defaultValue={defaultPersonId} disabled={busy} name="person" required>{activePeople.map((person) => <option key={person.document.id} value={person.document.id}>{person.document.name}</option>)}</select></label>
               <label>{t("timeEffort.date")}<input defaultValue={today} disabled={busy} name="performed_on" required type="date" /></label>
               <label>{t("timeEffort.hours")}<input disabled={busy} min="0.25" name="hours" required step="0.25" type="number" /></label>
-              <label>{t("timeEffort.category")}<select disabled={busy} name="category" required>{categories.map((category) => <option key={category.slug} value={category.slug}>{category.title}</option>)}</select></label>
+              <label>{t("timeEffort.category")}<select disabled={busy} name="category" required>{activeCategories.map((category) => <option key={category.slug} value={category.slug}>{category.title}</option>)}</select></label>
               <label>{t("timeEffort.note")}<input disabled={busy} name="note" type="text" /></label>
               <button className="primary" disabled={busy} type="submit">{t("timeEffort.add")}</button>
             </form>
           )}
-          <EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setEditingEntry(null)} open={editingEntry !== null} title={t("timeEffort.correctTitle")}>
-            {editingEntry !== null && <form className="editor-drawer-form time-entry-form" onSubmit={replaceEntry}>
-              <label>{t("timeEffort.person")}<select defaultValue={editingEntry.document.person} disabled={busy} name="person" required>{activePeople.map((person) => <option key={person.document.id} value={person.document.id}>{person.document.name}</option>)}</select></label>
-              <label>{t("timeEffort.date")}<input defaultValue={editingEntry.document.performed_on} disabled={busy} name="performed_on" required type="date" /></label>
-              <label>{t("timeEffort.hours")}<input defaultValue={editingEntry.document.hours} disabled={busy} min="0.25" name="hours" required step="0.25" type="number" /></label>
-              <label>{t("timeEffort.category")}<select defaultValue={editingEntry.document.category} disabled={busy} name="category" required>{categories.map((category) => <option key={category.slug} value={category.slug}>{category.title}</option>)}</select></label>
-              <label>{t("timeEffort.note")}<input defaultValue={editingEntry.document.note_markdown ?? ""} disabled={busy} name="note" type="text" /></label>
-              <div className="editor-drawer-actions"><button disabled={busy} onClick={() => setEditingEntry(null)} type="button">{t("core.cancel")}</button><button className="primary" disabled={busy} type="submit">{t("core.save")}</button></div>
+          <EditorDrawer closeLabel={t("core.closeEditor")} onClose={closeCorrection} open={editingEntry !== null && correction !== null} title={t("timeEffort.correctTitle")}>
+            {editingEntry !== null && correction !== null && <form className="editor-drawer-form time-entry-form" onSubmit={replaceEntry}>
+              <label>{t("timeEffort.person")}<select disabled={busy} name="person" onChange={(event) => setCorrection({ ...correction, person: event.currentTarget.value })} required value={correction.person}>{correctionPeople.map((person) => <option key={person.id} value={person.id}>{person.name}{person.archived ? ` (${t("core.archived")})` : ""}</option>)}</select></label>
+              <label>{t("timeEffort.date")}<input disabled={busy} name="performed_on" onChange={(event) => setCorrection({ ...correction, performed_on: event.currentTarget.value })} required type="date" value={correction.performed_on} /></label>
+              <label>{t("timeEffort.hours")}<input disabled={busy} min="0.25" name="hours" onChange={(event) => setCorrection({ ...correction, hours: event.currentTarget.valueAsNumber })} required step="0.25" type="number" value={correction.hours} /></label>
+              <label>{t("timeEffort.category")}<select disabled={busy} name="category" onChange={(event) => setCorrection({ ...correction, category: event.currentTarget.value })} required value={correction.category}>{correctionCategories.map((category) => <option key={category.slug} value={category.slug}>{category.title}{category.active ? "" : ` (${t("admin.inactive")})`}</option>)}</select></label>
+              <label>{t("timeEffort.note")}<input disabled={busy} name="note" onChange={(event) => setCorrection({ ...correction, note: event.currentTarget.value })} type="text" value={correction.note} /></label>
+              <div className="editor-drawer-actions"><button disabled={busy} onClick={closeCorrection} type="button">{t("core.cancel")}</button><button className="primary" disabled={busy || !Number.isFinite(correction.hours)} type="submit">{t("core.save")}</button></div>
             </form>}
           </EditorDrawer>
         </>

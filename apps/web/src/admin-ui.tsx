@@ -2,9 +2,9 @@ import { useCallback, useEffect, useState, type CSSProperties, type FormEvent } 
 import { CALENDAR_PRESETS, calendarPreset, workingDatesBetween, type CalendarPresetId } from "@gitpm/calendar";
 import { resolvePlanning, type ScheduleTracksConfig, type TrackDefinition } from "@gitpm/scheduling";
 import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
-import type { GitPmApi } from "./api.js";
+import { formatApiError, type GitPmApi } from "./api.js";
 import { formatDateOnly, message, type Locale, type MessageKey } from "./i18n.js";
-import type { ConfigurationDocument, ConfigurationResult, DraftStatus, EntityResult, GitPmDocument, GitPmRole, ProjectPlanning, RepositoryResult } from "./types.js";
+import type { ConfigurationDocument, ConfigurationImpactIssue, ConfigurationResult, DraftStatus, EntityResult, GitPmDocument, GitPmRole, ProjectPlanning, RepositoryDocument, RepositoryResult } from "./types.js";
 import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
 import { EditorDrawer } from "./editor-drawer.js";
 import { useExternalHighlights, useReducedMotion } from "./external-updates.js";
@@ -61,7 +61,7 @@ export function AdminWorkspace({ api, draft, role, locale, surface, confirmActio
   }, [api, draft.draft_id, draft.external_fingerprint, loadRequest.run]);
   useEffect(() => { void load(); }, [load]);
 
-  const mutate = async <Result extends EntityResult | ConfigurationResult>(operation: () => Promise<Result>): Promise<Result | null> => { setError(null); try {
+  const mutate = async <Result extends EntityResult | ConfigurationResult | RepositoryResult>(operation: () => Promise<Result>): Promise<Result | null> => { setError(null); try {
     const result = await operation(); setFingerprint(result.draft_fingerprint);
     if (result.document.schema === "gitpm/calendar@1") setCalendars((current) => upsertEntity(current, result as EntityResult));
     if (result.document.schema === "gitpm/person@1") setPeople((current) => upsertEntity(current, result as EntityResult));
@@ -70,6 +70,7 @@ export function AdminWorkspace({ api, draft, role, locale, surface, confirmActio
     if (result.document.schema === "gitpm/issue-types@1") setIssueTypes(result as ConfigurationResult);
     if (result.document.schema === "gitpm/work-categories@1") setWorkCategories(result as ConfigurationResult);
     if (result.document.schema === "gitpm/schedule-tracks@1") setScheduleTracks(result as ConfigurationResult);
+    if (result.document.schema === "gitpm/repository@1") setRepository(result as RepositoryResult);
     if ("id" in result.document && typeof result.document.id === "string") mark({ [result.document.id]: ["$local"] }); await onChanged(); await load(); return result;
   } catch (caught) { setError(caught instanceof Error ? caught.message : String(caught)); return null; } };
   const remove = async (operation: () => Promise<void>) => { setError(null); try { await operation(); await load(); await onChanged(); return true; } catch (caught) { setError(caught instanceof Error ? caught.message : String(caught)); return false; } };
@@ -100,26 +101,27 @@ export function AdminWorkspace({ api, draft, role, locale, surface, confirmActio
     {role !== "Maintainer" && <div className="alert warning">{t("admin.maintainerOnly")}</div>}{error !== null && <div className="alert error">{error}</div>}
     <AsyncBoundary state={loadRequest.state} loading={t("status.loading")} retry={() => { void load(); }} error={(loadError, retry) => <div className="alert error">{loadError}<button onClick={retry}>{t("status.retry")}</button></div>}>
     <>
-    {surface === "calendar" && <section className="card"><button className="primary editor-trigger" disabled={readOnly} onClick={() => setCreateEditor("calendar")} type="button">+ {t("admin.createCalendar")}</button><EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setCreateEditor(null)} open={createEditor === "calendar"} title={t("admin.createCalendar")}><CalendarCreateForm disabled={readOnly} onCancel={() => setCreateEditor(null)} onSubmit={createCalendar} t={t} /></EditorDrawer><div className="admin-grid">{activeCalendars.map((entity) => <div className={highlights[entity.document.id] ? "recently-changed" : ""} key={entity.document.id}><CalendarEditor {...{ api, draft, entity, fingerprint, readOnly, t, locale, mutate, remove, confirmDelete }} /></div>)}</div></section>}
+    {surface === "calendar" && <section className="card"><button className="primary editor-trigger" disabled={readOnly} onClick={() => setCreateEditor("calendar")} type="button">+ {t("admin.createCalendar")}</button><EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setCreateEditor(null)} open={createEditor === "calendar"} title={t("admin.createCalendar")}><CalendarCreateForm disabled={readOnly} onCancel={() => setCreateEditor(null)} onSubmit={createCalendar} t={t} /></EditorDrawer><div className="admin-grid">{activeCalendars.map((entity) => <div className={highlights[entity.document.id] ? "recently-changed" : ""} key={entity.document.id}><CalendarEditor {...{ api, draft, entity, fingerprint, readOnly, t, locale, mutate, remove, confirmDelete }} defaultCalendarId={repository?.document.default_calendar} /></div>)}</div></section>}
     {surface === "people" && <div className="people-admin-sections"><section className="card directory-card"><div className="card-heading"><h3>{t("admin.people")}</h3><label className="search-field">{t("admin.peopleSearch")}<input type="search" value={peopleQuery} onChange={(event) => setPeopleQuery(event.target.value)} /></label></div><button className="primary editor-trigger" disabled={readOnly || repositoryDefaultCalendar === undefined} onClick={() => setCreateEditor("person")} type="button">+ {t("admin.createPerson")}</button><EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setCreateEditor(null)} open={createEditor === "person"} title={t("admin.createPerson")}><form className="editor-drawer-form" onSubmit={createPerson}><label>{t("core.name")}<input name="name" required /></label><label>{t("admin.email")}<input name="email" type="email" /></label><label>{t("admin.capacity")}<input name="capacity" type="number" min="0" step="0.25" defaultValue="40" required /></label><label>{t("admin.calendar")}<select defaultValue={repositoryDefaultCalendar?.document.id} name="calendar" required>{activeCalendars.map((item) => <option value={item.document.id} key={item.document.id}>{item.document.id === repositoryDefaultCalendar?.document.id ? `${text(item.document, "name")} (${t("admin.defaultCalendar")})` : text(item.document, "name")}</option>)}</select></label><div className="editor-drawer-actions"><button onClick={() => setCreateEditor(null)} type="button">{t("core.cancel")}</button><button className="primary" disabled={readOnly || repositoryDefaultCalendar === undefined}>{t("admin.createPerson")}</button></div></form></EditorDrawer><div className="directory-table-wrap"><table className="directory-table people-directory-table"><thead><tr><th>{t("admin.person")}</th><th>{t("people.projects")}</th><th>{t("admin.teams")}</th><th>{t("admin.capacity")}</th><th>{t("admin.calendar")}</th></tr></thead><tbody>{visiblePeople.map((entity) => { const calendar = activeCalendars.find((item) => item.document.id === text(entity.document, "calendar")); const personTeams = teamsByPerson.get(entity.document.id) ?? []; return <tr className={highlights[entity.document.id] ? "recently-changed" : ""} key={entity.document.id}><th><PersonLink name={text(entity.document, "name")} onOpen={onOpenPerson} personId={entity.document.id} /></th><td><ProjectLinks empty="—" onOpen={onOpenProject} projectIds={(projectsByPerson.get(entity.document.id) ?? []).map((project) => project.document.id)} projects={activeProjects} /></td><td>{personTeams.length === 0 ? "—" : personTeams.map((team) => text(team.document, "name")).join(", ")}</td><td>{t("people.hoursPerWeek", { count: number(entity.document, "weekly_capacity_hours") })}</td><td>{calendar === undefined ? "—" : text(calendar.document, "name")}</td></tr>; })}</tbody></table></div></section>
       <section className="card directory-card"><div className="card-heading"><h3>{t("admin.teams")}</h3><label className="search-field">{t("admin.teamSearch")}<input type="search" value={teamQuery} onChange={(event) => setTeamQuery(event.target.value)} /></label></div><button className="primary editor-trigger" disabled={readOnly} onClick={() => setCreateEditor("team")} type="button">+ {t("admin.createTeam")}</button><EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setCreateEditor(null)} open={createEditor === "team"} title={t("admin.createTeam")}><form className="editor-drawer-form" onSubmit={createTeam}><label>{t("core.name")}<input name="name" required /></label><MemberChecks people={activePeople} selected={[]} t={t} /><div className="editor-drawer-actions"><button onClick={() => setCreateEditor(null)} type="button">{t("core.cancel")}</button><button className="primary" disabled={readOnly}>{t("admin.createTeam")}</button></div></form></EditorDrawer><div className="directory-table-wrap"><table className="directory-table team-directory-table"><thead><tr><th>{t("admin.team")}</th><th>{t("admin.members")}</th><th>{t("admin.actions")}</th></tr></thead><tbody>{visibleTeams.map((entity) => <tr className={highlights[entity.document.id] ? "recently-changed" : ""} key={entity.document.id}><TeamEditor {...{ api, draft, entity, fingerprint, readOnly, t, people: activePeople, mutate, remove, confirmDelete, onOpenPerson }} /></tr>)}</tbody></table></div></section></div>}
-    {surface === "settings" && <section aria-label={t("admin.settings")} className="settings-config-grid">{statuses !== null && <ConfigEditor api={api} draft={draft} entity={statuses} kind="statuses" listKey="statuses" title={t("admin.statuses")} readOnly={readOnly} t={t} mutate={mutate} />}{issueTypes !== null && <ConfigEditor api={api} draft={draft} entity={issueTypes} kind="issue-types" listKey="issue_types" title={t("admin.issueTypes")} readOnly={readOnly} t={t} mutate={mutate} />}{workCategories !== null && <ConfigEditor api={api} draft={draft} entity={workCategories} kind="work-categories" listKey="categories" title={t("admin.workCategories")} showColor={false} readOnly={readOnly} t={t} mutate={mutate} />}{scheduleTracks !== null && <ScheduleTracksConfigEditor api={api} draft={draft} entity={scheduleTracks} locale={locale} readOnly={readOnly} t={t} mutate={mutate} />}</section>}
+    {surface === "settings" && <section aria-label={t("admin.settings")} className="settings-config-grid">{repository !== null && <RepositoryConfigEditor api={api} calendars={activeCalendars} draft={draft} entity={repository} readOnly={readOnly} t={t} mutate={mutate} />}{statuses !== null && <ConfigEditor api={api} draft={draft} entity={statuses} kind="statuses" listKey="statuses" title={t("admin.statuses")} readOnly={readOnly} t={t} mutate={mutate} />}{issueTypes !== null && <ConfigEditor api={api} draft={draft} entity={issueTypes} kind="issue-types" listKey="issue_types" title={t("admin.issueTypes")} readOnly={readOnly} t={t} mutate={mutate} />}{workCategories !== null && <ConfigEditor api={api} draft={draft} entity={workCategories} kind="work-categories" listKey="categories" title={t("admin.workCategories")} showColor={false} readOnly={readOnly} t={t} mutate={mutate} />}{scheduleTracks !== null && <ScheduleTracksConfigEditor api={api} draft={draft} entity={scheduleTracks} locale={locale} readOnly={readOnly} t={t} mutate={mutate} />}</section>}
     </>
     </AsyncBoundary>
   </section>;
 }
 
 interface EditorProps { readonly api: GitPmApi; readonly draft: DraftStatus; readonly entity: EntityResult; readonly fingerprint: string; readonly readOnly: boolean; readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string; readonly mutate: (operation: () => Promise<EntityResult>) => Promise<EntityResult | null>; readonly remove: (operation: () => Promise<void>) => Promise<boolean>; readonly confirmDelete: (name: string) => boolean }
-const ActionButtons = ({ disabled, save, archive, remove, close, t }: { disabled: boolean; save: (form: HTMLFormElement) => Promise<boolean>; archive: () => Promise<boolean>; remove: () => Promise<boolean>; close: () => void; t: (key: MessageKey) => string }) => <div className="editor-drawer-actions"><details className="more-actions"><summary>{t("core.moreActions")}</summary><div><button type="button" disabled={disabled} onClick={() => { void archive().then((success) => { if (success) close(); }); }}>{t("core.archive")}</button><button type="button" className="danger" disabled={disabled} onClick={() => { void remove().then((success) => { if (success) close(); }); }}>{t("core.delete")}</button></div></details><button onClick={close} type="button">{t("core.cancel")}</button><button type="button" className="primary" disabled={disabled} onClick={(event) => { if (event.currentTarget.form !== null) void save(event.currentTarget.form).then((success) => { if (success) close(); }); }}>{t("core.save")}</button></div>;
+const ActionButtons = ({ disabled, archiveDisabled = false, save, archive, remove, close, t }: { disabled: boolean; archiveDisabled?: boolean; save: (form: HTMLFormElement) => Promise<boolean>; archive: () => Promise<boolean>; remove: () => Promise<boolean>; close: () => void; t: (key: MessageKey) => string }) => <div className="editor-drawer-actions"><details className="more-actions"><summary>{t("core.moreActions")}</summary><div><button type="button" disabled={disabled || archiveDisabled} onClick={() => { void archive().then((success) => { if (success) close(); }); }}>{t("core.archive")}</button><button type="button" className="danger" disabled={disabled} onClick={() => { void remove().then((success) => { if (success) close(); }); }}>{t("core.delete")}</button></div></details><button onClick={close} type="button">{t("core.cancel")}</button><button type="button" className="primary" disabled={disabled} onClick={(event) => { if (event.currentTarget.form !== null) void save(event.currentTarget.form).then((success) => { if (success) close(); }); }}>{t("core.save")}</button></div>;
 
-function CalendarEditor(props: EditorProps & { readonly locale: Locale }) {
-  const { api, draft, entity, fingerprint, readOnly, t, locale, mutate, remove, confirmDelete } = props;
+function CalendarEditor(props: EditorProps & { readonly locale: Locale; readonly defaultCalendarId?: string }) {
+  const { api, draft, entity, fingerprint, readOnly, t, locale, mutate, remove, confirmDelete, defaultCalendarId } = props;
   const [open, setOpen] = useState(false);
   const name = text(entity.document, "name");
   const weekdays = numbers(entity.document, "working_weekdays");
   const holidays = strings(entity.document, "holidays").filter((date) => /^\d{4}-\d{2}-\d{2}$/u.test(date)).sort().slice(0, 3);
   const submit = async (form: HTMLFormElement) => { const data = new FormData(form); return await mutate(async () => await api.updateEntity(draft.draft_id, "calendars", entity, fingerprint, { ...entity.document, name: String(data.get("name")), working_weekdays: data.getAll("weekdays").map(Number), holidays: calendarDates(data) })) !== null; };
-  return <article className="admin-card admin-card-summary"><strong>{name}</strong><div aria-label={t("admin.weekPreview")} className="calendar-week-preview">{[1, 2, 3, 4, 5, 6, 7].map((day) => <span className={weekdays.includes(day) ? "working" : "off"} key={day}>{t(`admin.day${day}` as MessageKey)}</span>)}</div><div className="calendar-exceptions"><span>{t("admin.nextHolidays")}</span>{holidays.length === 0 ? <small>{t("admin.noHolidays")}</small> : holidays.map((date) => <time dateTime={date} key={date}>{formatDateOnly(locale, date)}</time>)}</div><button className="editor-trigger" onClick={() => setOpen(true)} type="button">{t("admin.editCalendar")}</button><EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setOpen(false)} open={open} title={`${t("admin.editCalendar")}: ${name}`}><form className="editor-drawer-form" onSubmit={(event) => event.preventDefault()}><label>{t("core.name")}<input name="name" aria-label={`${t("core.name")} ${name}`} defaultValue={name} /></label><WeekdayChecks selected={weekdays} t={t} /><CalendarDateList selected={strings(entity.document, "holidays")} t={t} /><ActionButtons disabled={readOnly} t={t} close={() => setOpen(false)} save={submit} archive={async () => await mutate(async () => await api.archiveEntity(draft.draft_id, "calendars", entity, fingerprint)) !== null} remove={async () => confirmDelete(name) && await remove(async () => await api.deleteEntity(draft.draft_id, "calendars", entity, fingerprint))} /></form></EditorDrawer></article>;
+  const isDefault = entity.document.id === defaultCalendarId;
+  return <article className="admin-card admin-card-summary"><strong>{name}{isDefault ? ` (${t("admin.defaultCalendar")})` : ""}</strong><div aria-label={t("admin.weekPreview")} className="calendar-week-preview">{[1, 2, 3, 4, 5, 6, 7].map((day) => <span className={weekdays.includes(day) ? "working" : "off"} key={day}>{t(`admin.day${day}` as MessageKey)}</span>)}</div><div className="calendar-exceptions"><span>{t("admin.nextHolidays")}</span>{holidays.length === 0 ? <small>{t("admin.noHolidays")}</small> : holidays.map((date) => <time dateTime={date} key={date}>{formatDateOnly(locale, date)}</time>)}</div><button className="editor-trigger" onClick={() => setOpen(true)} type="button">{t("admin.editCalendar")}</button><EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setOpen(false)} open={open} title={`${t("admin.editCalendar")}: ${name}`}><form className="editor-drawer-form" onSubmit={(event) => event.preventDefault()}><label>{t("core.name")}<input name="name" aria-label={`${t("core.name")} ${name}`} defaultValue={name} /></label><WeekdayChecks selected={weekdays} t={t} /><CalendarDateList selected={strings(entity.document, "holidays")} t={t} />{isDefault && <p className="config-hint">{t("admin.defaultCalendarArchiveBlocked")}</p>}<ActionButtons archiveDisabled={isDefault} disabled={readOnly} t={t} close={() => setOpen(false)} save={submit} archive={async () => await mutate(async () => await api.archiveEntity(draft.draft_id, "calendars", entity, fingerprint)) !== null} remove={async () => confirmDelete(name) && await remove(async () => await api.deleteEntity(draft.draft_id, "calendars", entity, fingerprint))} /></form></EditorDrawer></article>;
 }
 
 function CalendarCreateForm({ disabled, onCancel, onSubmit, t }: { readonly disabled: boolean; readonly onCancel: () => void; readonly onSubmit: (event: FormEvent<HTMLFormElement>) => void; readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string }) {
@@ -152,6 +154,35 @@ function TeamEditor(props: EditorProps & { people: readonly EntityResult[]; read
   const update = async (form: HTMLFormElement) => { const data = new FormData(form); return await mutate(async () => await api.updateEntity(draft.draft_id, "teams", entity, fingerprint, { ...entity.document, name: String(data.get("name")), members: data.getAll("members").map(String) })) !== null; };
   return <><th>{name}</th><td><PersonLinks empty={t("admin.noMembers")} onOpen={onOpenPerson} people={people} personIds={selected} /></td><td><button className="editor-trigger" onClick={() => setOpen(true)} type="button">{t("admin.editTeam")}</button><EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setOpen(false)} open={open} title={`${t("admin.editTeam")}: ${name}`}><form className="editor-drawer-form" onSubmit={(event) => event.preventDefault()}><label>{t("core.name")}<input name="name" aria-label={`${t("core.name")} ${name}`} defaultValue={name} /></label><MemberChecks people={people} selected={selected} t={t} /><ActionButtons disabled={readOnly} t={t} close={() => setOpen(false)} save={update} archive={async () => await mutate(async () => await api.archiveEntity(draft.draft_id, "teams", entity, fingerprint)) !== null} remove={async () => confirmDelete(name) && await remove(async () => await api.deleteEntity(draft.draft_id, "teams", entity, fingerprint))} /></form></EditorDrawer></td></>;
 }
+
+function RepositoryConfigEditor({ api, calendars, draft, entity, readOnly, t, mutate }: { readonly api: GitPmApi; readonly calendars: readonly EntityResult[]; readonly draft: DraftStatus; readonly entity: RepositoryResult; readonly readOnly: boolean; readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string; readonly mutate: (operation: () => Promise<RepositoryResult>) => Promise<RepositoryResult | null> }) {
+  const [open, setOpen] = useState(false);
+  const [defaultCalendar, setDefaultCalendar] = useState(entity.document.default_calendar);
+  const [pollInterval, setPollInterval] = useState(entity.document.ui_poll_interval_seconds);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { setDefaultCalendar(entity.document.default_calendar); setPollInterval(entity.document.ui_poll_interval_seconds); }, [entity]);
+  const reset = () => { setDefaultCalendar(entity.document.default_calendar); setPollInterval(entity.document.ui_poll_interval_seconds); };
+  const close = () => { reset(); setOpen(false); };
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault(); setBusy(true);
+    const document = { ...entity.document, default_calendar: defaultCalendar, ui_poll_interval_seconds: pollInterval } as RepositoryDocument;
+    void mutate(async () => await api.updateRepositoryConfiguration(draft.draft_id, entity, entity.draft_fingerprint, document)).then((result) => {
+      setBusy(false); if (result !== null) setOpen(false);
+    });
+  };
+  const calendarName = calendars.find((calendar) => calendar.document.id === entity.document.default_calendar)?.document.name ?? entity.document.default_calendar;
+  return <article className="config-editor config-summary repository-config-editor">
+    <header className="config-summary-heading"><h3>{t("admin.repositoryConfiguration")}</h3><button className="editor-trigger" aria-label={t("admin.editConfig", { name: t("admin.repositoryConfiguration") })} disabled={readOnly} onClick={() => { reset(); setOpen(true); }} type="button">{t("core.edit")}</button></header>
+    <dl><div><dt>{t("admin.defaultCalendar")}</dt><dd>{String(calendarName)}</dd></div><div><dt>{t("admin.pollInterval")}</dt><dd>{t("admin.pollIntervalSeconds", { count: entity.document.ui_poll_interval_seconds })}</dd></div></dl>
+    <EditorDrawer closeLabel={t("core.closeEditor")} onClose={close} open={open} title={`${t("core.edit")}: ${t("admin.repositoryConfiguration")}`}><form className="editor-drawer-form" onSubmit={submit}>
+      <label>{t("admin.defaultCalendar")}<select disabled={readOnly || busy} onChange={(event) => setDefaultCalendar(event.currentTarget.value)} required value={defaultCalendar}>{calendars.map((calendar) => <option key={calendar.document.id} value={calendar.document.id}>{String(calendar.document.name ?? calendar.document.id)}</option>)}</select></label>
+      <label>{t("admin.pollInterval")}<input disabled={readOnly || busy} max="10" min="2" onChange={(event) => setPollInterval(event.currentTarget.valueAsNumber)} required type="number" value={pollInterval} /></label>
+      <div className="editor-drawer-actions"><button onClick={close} type="button">{t("core.cancel")}</button><button className="primary" disabled={readOnly || busy || !Number.isInteger(pollInterval) || pollInterval < 2 || pollInterval > 10}>{t("core.save")}</button></div>
+    </form></EditorDrawer>
+  </article>;
+}
+
+const ConfigurationImpactNotice = ({ issues, t }: { readonly issues: readonly ConfigurationImpactIssue[]; readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string }) => issues.length === 0 ? null : <div className="alert error configuration-impact"><strong>{t("admin.configurationBlocked")}</strong><ul>{issues.map((issue) => <li key={`${issue.code}:${issue.path}:${issue.field ?? ""}`}><code>{issue.path}{issue.field === undefined ? "" : `#${issue.field}`}</code>: {issue.message}</li>)}</ul></div>;
 
 interface ConfigValue { readonly slug: string; readonly title: string; readonly color?: string; readonly active: boolean; readonly category?: "backlog" | "active" | "done" | "cancelled" }
 const CONFIG_COLORS = {
@@ -199,16 +230,25 @@ function ConfigEditor({ api, draft, entity, kind, listKey, title, showColor = tr
   const [values, setValues] = useState(entityValues);
   const [newSlug, setNewSlug] = useState("");
   const [busy, setBusy] = useState(false);
+  const [impactIssues, setImpactIssues] = useState<readonly ConfigurationImpactIssue[]>([]);
   const formRef = useFlipList<HTMLFormElement>(useReducedMotion());
   useEffect(() => setValues(entityValues), [entity]);
   const updateValue = (index: number, changes: Partial<Pick<ConfigValue, "title" | "color" | "active" | "category">>) => setValues((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, ...changes } : item));
   const persist = async (next: readonly ConfigValue[], onPersisted?: () => void) => {
     const previous = values; setValues([...next]); setBusy(true);
-    const result = await mutate(async () => { const saved = await api.updateConfiguration(draft.draft_id, kind, entity, entity.draft_fingerprint, { ...entity.document, [listKey]: next }); setBusy(false); onPersisted?.(); return saved; });
+    const document = { ...entity.document, [listKey]: next } as ConfigurationDocument;
+    try {
+      const impact = await api.getConfigurationImpact(draft.draft_id, kind, document);
+      setImpactIssues(impact.issues);
+      if (impact.blocking) { setBusy(false); return null; }
+    } catch (caught) {
+      setImpactIssues([{ code: "CONFIGURATION_IMPACT_UNAVAILABLE", path: entity.path, message: formatApiError(caught) }]); setBusy(false); return null;
+    }
+    const result = await mutate(async () => { const saved = await api.updateConfiguration(draft.draft_id, kind, entity, entity.draft_fingerprint, document); setBusy(false); onPersisted?.(); return saved; });
     if (result === null) setValues(previous);
     setBusy(false); return result;
   };
-  const close = () => { setValues(entityValues); setNewSlug(""); setOpen(false); };
+  const close = () => { setValues(entityValues); setNewSlug(""); setImpactIssues([]); setOpen(false); };
   const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); void persist(values).then((result) => { if (result !== null) setOpen(false); }); };
   const move = (index: number, offset: number) => setValues((current) => { const next = [...current]; const target = index + offset; if (target < 0 || target >= next.length) return current; [next[index], next[target]] = [next[target]!, next[index]!]; return next; });
   const addValue = () => {
@@ -223,6 +263,7 @@ function ConfigEditor({ api, draft, entity, kind, listKey, title, showColor = tr
     <div className="config-summary-values">{values.map((item) => <ConfigBadge inactiveLabel={t("admin.inactive")} item={item} key={item.slug} />)}</div>
     <EditorDrawer closeLabel={t("core.closeEditor")} onClose={close} open={open} title={`${t("core.edit")}: ${title}`}><form className="editor-drawer-form config-editor-form" onSubmit={submit} ref={formRef}>
       <p className="config-hint">{t("admin.slugHint")}</p>
+      <ConfigurationImpactNotice issues={impactIssues} t={t} />
       <div className="config-list">{values.map((item, index) => <section className="config-row" data-flip-key={`config:${kind}:${item.slug}`} key={item.slug}>
         <header className="config-row-heading">
           <div className="config-identity"><ConfigBadge inactiveLabel={t("admin.inactive")} item={item} /><span className="config-technical-id"><span>{t("admin.technicalId")}</span><code>{item.slug}</code></span></div>
@@ -252,13 +293,14 @@ function ScheduleTracksConfigEditor({ api, draft, entity, locale, readOnly, t, m
   const [defaultsTouched, setDefaultsTouched] = useState(false);
   const [newTrackSlug, setNewTrackSlug] = useState("");
   const [busy, setBusy] = useState(false);
+  const [impactIssues, setImpactIssues] = useState<readonly ConfigurationImpactIssue[]>([]);
   const formRef = useFlipList<HTMLFormElement>(useReducedMotion());
   useEffect(() => {
     setTracks(entityTracks);
     setDefaults(resolvedDefaults);
     setDefaultsTouched(false);
   }, [entity]);
-  const reset = () => { setTracks(entityTracks); setDefaults(resolvedDefaults); setDefaultsTouched(false); setNewTrackSlug(""); };
+  const reset = () => { setTracks(entityTracks); setDefaults(resolvedDefaults); setDefaultsTouched(false); setNewTrackSlug(""); setImpactIssues([]); };
   const close = () => { reset(); setOpen(false); };
   const updateTitle = (index: number, nextTitle: string) => setTracks((current) => current.map((track, trackIndex) => trackIndex === index ? { ...track, title: nextTitle } : track));
   const move = (index: number, offset: number) => setTracks((current) => {
@@ -294,15 +336,24 @@ function ScheduleTracksConfigEditor({ api, draft, entity, locale, readOnly, t, m
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setBusy(true);
     const document = { ...entity.document, tracks, defaults: defaultsTouched ? defaults : entityDefaults } as ConfigurationDocument;
-    void mutate(async () => await api.updateConfiguration(draft.draft_id, "schedule-tracks", entity, entity.draft_fingerprint, document)).then((result) => {
+    void (async () => {
+      try {
+        const impact = await api.getConfigurationImpact(draft.draft_id, "schedule-tracks", document);
+        setImpactIssues(impact.issues);
+        if (impact.blocking) { setBusy(false); return; }
+      } catch (caught) {
+        setImpactIssues([{ code: "CONFIGURATION_IMPACT_UNAVAILABLE", path: entity.path, message: formatApiError(caught) }]); setBusy(false); return;
+      }
+      const result = await mutate(async () => await api.updateConfiguration(draft.draft_id, "schedule-tracks", entity, entity.draft_fingerprint, document));
       setBusy(false); if (result !== null) setOpen(false);
-    });
+    })();
   };
   return <article className="config-editor config-summary schedule-tracks-config-editor">
     <header className="config-summary-heading"><h3>{title}</h3><button className="editor-trigger" aria-label={t("admin.editConfig", { name: title })} disabled={readOnly} onClick={() => { reset(); setOpen(true); }} type="button">{t("core.edit")}</button></header>
     <div className="config-summary-values">{tracks.map((track) => <span className="config-preview schedule-track-preview" key={track.slug}><span aria-hidden="true" className="config-preview-dot" />{track.title}<small>{track.kind === "manual" ? t("admin.manualTrack") : t("admin.actualTrack")}</small></span>)}</div>
     <EditorDrawer closeLabel={t("core.closeEditor")} onClose={close} open={open} title={`${t("core.edit")}: ${title}`}><form className="editor-drawer-form config-editor-form" onSubmit={submit} ref={formRef}>
       <p className="config-hint">{t("admin.scheduleTracksHint")}</p>
+      <ConfigurationImpactNotice issues={impactIssues} t={t} />
       <div className="config-list">{tracks.map((track, index) => <section className="config-row schedule-track-row" data-flip-key={`config:schedule-tracks:${track.slug}`} key={track.slug}>
         <header className="config-row-heading"><div className="config-identity"><strong>{track.title}</strong><span className="config-technical-id"><span>{t("admin.technicalId")}</span><code>{track.slug}</code></span></div><span className={`schedule-track-kind ${track.kind}`}>{track.kind === "manual" ? t("admin.manualTrack") : t("admin.actualTrack")}</span></header>
         <div className="config-row-fields"><label className="config-field"><span>{t("core.name")}</span><input aria-label={`${title} ${track.slug}`} disabled={readOnly || busy} onChange={(event) => updateTitle(index, event.currentTarget.value)} required value={track.title} /></label><label className="config-field"><span>{t("admin.trackKind")}</span><select aria-label={`${t("admin.trackKind")} ${track.slug}`} disabled={readOnly || busy} onChange={(event) => changeKind(index, event.currentTarget.value as "manual" | "actual")} value={track.kind}><option value="manual">{t("admin.manualTrack")}</option><option value="actual">{t("admin.actualTrack")}</option></select></label><fieldset className="config-field schedule-track-capabilities"><legend>{track.kind === "manual" ? t("admin.capabilities") : t("admin.trackSource")}</legend><div>{track.kind === "manual" ? (["dates", "effort", "dependencies"] as const).map((capability) => <label key={capability}><input checked={track.capabilities?.includes(capability) ?? false} disabled={readOnly || busy || (track.capabilities?.length === 1 && track.capabilities[0] === capability)} onChange={() => toggleCapability(index, capability)} type="checkbox" />{t(`admin.capability${capability[0]!.toUpperCase()}${capability.slice(1)}` as MessageKey)}</label>) : <span>{t("admin.timeEntriesSource")}</span>}</div></fieldset></div>

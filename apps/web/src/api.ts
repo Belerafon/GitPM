@@ -7,6 +7,7 @@ import {
   decodeCommitHistoryDetail,
   decodeCommitHistoryItems,
   decodeCommitResult,
+  decodeConfigurationImpact,
   decodeConfigurationResult,
   decodeDraftStatus,
   decodeDraftStatuses,
@@ -33,7 +34,7 @@ import {
   type ConfigurationResult,
   type Decoder,
 } from "@gitpm/contracts";
-import type { ChangesList, CommentResult, CommitFileDiff, CommitHistoryDetail, CommitHistoryItem, CommitResult, DraftSnapshot, DraftStatus, EntityResult, GitPmDocument, MergeRequestStatus, NotificationsResult, ProjectWorkspaceResult, PublicSession, PushResult, RepositoryConnectionStatus, RepositoryConnectionTest, RepositoryConnectionUpdate, RepositoryResult, RevertDraftResult, SemanticDiff, TimeEntryDocument, WriterMode, WorktreeDirectory, WorktreeFile } from "./types.js";
+import type { ChangesList, CommentResult, CommitFileDiff, CommitHistoryDetail, CommitHistoryItem, CommitResult, ConfigurationImpact, DraftSnapshot, DraftStatus, EntityResult, GitPmDocument, MergeRequestStatus, NotificationsResult, ProjectWorkspaceResult, PublicSession, PushResult, RepositoryConnectionStatus, RepositoryConnectionTest, RepositoryConnectionUpdate, RepositoryDocument, RepositoryResult, RevertDraftResult, SemanticDiff, TimeEntryDocument, WriterMode, WorktreeDirectory, WorktreeFile } from "./types.js";
 
 export interface TimeEntryResult {
   readonly document: TimeEntryDocument;
@@ -165,6 +166,7 @@ export interface GitPmApi {
   cleanupDraft(draftId: string): Promise<void>;
   exportData?(draftId: string, options: ExportOptions): Promise<ExportDownload>;
   listEntities(draftId: string, entityType: string, project?: string): Promise<readonly EntityResult[]>;
+  getEntity(draftId: string, entityType: string, id: string): Promise<EntityResult>;
   projectWorkspace(draftId: string, projectId: string): Promise<ProjectWorkspaceResult>;
   createEntity(draftId: string, entityType: string, fingerprint: string, document: GitPmDocument): Promise<EntityResult>;
   updateEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string, document: GitPmDocument): Promise<EntityResult>;
@@ -173,7 +175,9 @@ export interface GitPmApi {
   deleteEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string, unlinkReferences?: boolean, cascadeReferences?: boolean): Promise<void>;
   getConfiguration(draftId: string, kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks"): Promise<ConfigurationResult>;
   getRepositoryConfiguration(draftId: string): Promise<RepositoryResult>;
+  getConfigurationImpact(draftId: string, kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks", document: ConfigurationDocument): Promise<ConfigurationImpact>;
   updateConfiguration(draftId: string, kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks", entity: ConfigurationResult, fingerprint: string, document: ConfigurationDocument): Promise<ConfigurationResult>;
+  updateRepositoryConfiguration(draftId: string, entity: RepositoryResult, fingerprint: string, document: RepositoryDocument): Promise<RepositoryResult>;
   listChanges(draftId: string): Promise<ChangesList>;
   listWorktree(draftId: string, path?: string): Promise<WorktreeDirectory>;
   readWorktreeFile(draftId: string, path: string): Promise<WorktreeFile>;
@@ -329,6 +333,9 @@ export class HttpGitPmApi implements GitPmApi {
     const query = project === undefined ? "" : `?project=${encodeURIComponent(project)}`;
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/entities/${encodeURIComponent(entityType)}${query}`, decodeEntityResults);
   }
+  async getEntity(draftId: string, entityType: string, id: string): Promise<EntityResult> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(id)}`, decodeEntityResult);
+  }
   async projectWorkspace(draftId: string, projectId: string): Promise<ProjectWorkspaceResult> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/projects/${encodeURIComponent(projectId)}/workspace`, decodeProjectWorkspace);
   }
@@ -353,8 +360,14 @@ export class HttpGitPmApi implements GitPmApi {
   async getRepositoryConfiguration(draftId: string): Promise<RepositoryResult> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/config/repository`, decodeRepositoryResult);
   }
+  async getConfigurationImpact(draftId: string, kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks", document: ConfigurationDocument): Promise<ConfigurationImpact> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/config/${kind}/impact`, decodeConfigurationImpact, { method: "POST", body: JSON.stringify({ document }) });
+  }
   async updateConfiguration(draftId: string, kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks", entity: ConfigurationResult, expected_fingerprint: string, document: ConfigurationDocument): Promise<ConfigurationResult> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/config/${kind}`, decodeConfigurationResult, { method: "PUT", body: JSON.stringify({ expected_fingerprint, expected_blob_id: entity.blob_id, document }) });
+  }
+  async updateRepositoryConfiguration(draftId: string, entity: RepositoryResult, expected_fingerprint: string, document: RepositoryDocument): Promise<RepositoryResult> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/config/repository`, decodeRepositoryResult, { method: "PUT", body: JSON.stringify({ expected_fingerprint, expected_blob_id: entity.blob_id, document }) });
   }
   async listChanges(draftId: string): Promise<ChangesList> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/changes`, decodeChangesList);

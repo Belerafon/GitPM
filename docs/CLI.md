@@ -33,8 +33,8 @@ gitpm time-entry summary [--draft <id>] --project <id> [--task <id>] [--mileston
 gitpm time-entry create [--draft <id>] --project <id> --task <id> --person <id> --date <yyyy-mm-dd> --hours <n> --category <slug> [--note <text>] [--json]
 gitpm time-entry replace [--draft <id>] --project <id> --task <id> --id <entry-id> --person <id> --date <yyyy-mm-dd> --hours <n> --category <slug> [--note <text>] [--json]
 gitpm time-entry void [--draft <id>] --project <id> --task <id> --id <entry-id> [--json]
-gitpm config show [--draft <id>] --kind statuses|issue-types|work-categories|schedule-tracks
-gitpm config update [--draft <id>] --kind statuses|issue-types|work-categories|schedule-tracks [--file <yaml>] [--set <field>=<yaml-value>]... [--unset <field>] [--allow-delete]
+gitpm config show [--draft <id>] --kind repository|statuses|issue-types|work-categories|schedule-tracks
+gitpm config update [--draft <id>] --kind repository|statuses|issue-types|work-categories|schedule-tracks [--file <yaml>] [--set <field>=<yaml-value>]... [--unset <field>] [--allow-delete]
 gitpm schema list
 gitpm schema show <type> [--example]
 gitpm format [--draft <id>] [--project <id>] [--check] [--allow-delete]
@@ -135,8 +135,11 @@ state и диапазон фактической даты соответству
 и записывает её ID в поле `replacement` исходной записи; отдельная последовательность
 `void` + `create` не является эквивалентной корректировкой.
 
-`config show/update` читает и обновляет конфигурацию репозитория (`.gitpm/statuses.yaml`,
-`.gitpm/issue-types.yaml`, `.gitpm/work-categories.yaml`, `.gitpm/schedule-tracks.yaml`).
+`config show/update` читает и обновляет конфигурацию репозитория (`.gitpm/repository.yaml`,
+`.gitpm/statuses.yaml`, `.gitpm/issue-types.yaml`, `.gitpm/work-categories.yaml`,
+`.gitpm/schedule-tracks.yaml`). Удаление используемого значения или несовместимое изменение
+schedule track блокируется до записи кодом `CONFIGURATION_UPDATE_BLOCKED`; JSON details содержит
+конкретные пути и поля, которые сначала нужно мигрировать.
 
 `changes list` возвращает тот же raw diff, токены и hunks, которые показывает GUI.
 `restore-file` и `restore-hunk` используют optimistic fingerprint и общий безопасный changes

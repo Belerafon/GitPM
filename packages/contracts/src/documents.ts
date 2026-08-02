@@ -356,6 +356,7 @@ function decodeDocument(input: unknown, allowedSchemas: ReadonlySet<string>, con
 
 const entitySchemas = new Set<string>(ENTITY_DOCUMENT_SCHEMAS);
 const configurationSchemas = new Set<string>(["gitpm/statuses@2", "gitpm/issue-types@1", "gitpm/schedule-tracks@1", "gitpm/work-categories@1"]);
+const repositorySchemas = new Set<string>(["gitpm/repository@1"]);
 const commentSchemas = new Set<string>(["gitpm/comment@1"]);
 const timeEntrySchemas = new Set<string>(["gitpm/time-entry@1"]);
 
@@ -364,6 +365,9 @@ export const decodeEntityDocument: Decoder<StrictEntityDocument> = (input) =>
 
 export const decodeConfigurationDocument: Decoder<StrictConfigurationDocument> = (input) =>
   decodeDocument(input, configurationSchemas, "ConfigurationDocument") as StrictConfigurationDocument;
+
+export const decodeRepositoryDocument: Decoder<RepositoryDocument> = (input) =>
+  decodeDocument(input, repositorySchemas, "RepositoryDocument") as RepositoryDocument;
 
 export const decodeCommentDocument: Decoder<CommentDocument> = (input) =>
   decodeDocument(input, commentSchemas, "CommentDocument") as CommentDocument;

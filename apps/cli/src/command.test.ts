@@ -85,7 +85,7 @@ describe("CLI P02 commands", () => {
     }
     const configHelp = JSON.parse((await run(["config", "--help", "--json"])).output) as { help: string };
     expect(configHelp.help).toMatch(/config update.*--allow-delete/u);
-    expect(configHelp.help).toContain("statuses|issue-types|work-categories|schedule-tracks");
+    expect(configHelp.help).toContain("repository|statuses|issue-types|work-categories|schedule-tracks");
     for (const command of ["format", "validate", "diff", "commit"]) {
       const commandHelp = JSON.parse((await run([command, "--help", "--json"])).output) as { help: string };
       expect(commandHelp.help).toContain("--allow-delete");
@@ -780,7 +780,7 @@ describe.concurrent("CLI direct mode", () => {
     expect(await readFile(commentPath, "utf8")).toContain("state: deleted");
   });
 
-  it("shows and updates repository configuration", async () => {
+  it("shows and updates every repository configuration including repository.yaml", async () => {
     const { direct, checkout } = await directFixture();
     const shown = await run(["config", "show", "--kind", "statuses", "--json"], process.cwd(), { direct });
     expect(shown.exitCode).toBe(0);
@@ -791,6 +791,13 @@ describe.concurrent("CLI direct mode", () => {
     const configPath = path.join(checkout, ".gitpm", "issue-types.yaml");
     const content = await readFile(configPath, "utf8");
     expect(content).toContain("title: Defect");
+
+    const repositoryShown = await run(["config", "show", "--kind", "repository", "--json"], process.cwd(), { direct });
+    expect(JSON.parse(repositoryShown.output)).toMatchObject({ ok: true, document: { schema: "gitpm/repository@1", default_calendar: "C-26-QD7FJ4" } });
+    const repositoryUpdated = await run(["config", "update", "--kind", "repository", "--set", "ui_poll_interval_seconds=7", "--json"], process.cwd(), { direct });
+    expect(repositoryUpdated.exitCode).toBe(0);
+    expect(JSON.parse(repositoryUpdated.output)).toMatchObject({ document: { ui_poll_interval_seconds: 7 } });
+    expect(await readFile(path.join(checkout, ".gitpm", "repository.yaml"), "utf8")).toContain("ui_poll_interval_seconds: 7");
   });
 
   it("exports through the shared service without overwriting an existing file", async () => {

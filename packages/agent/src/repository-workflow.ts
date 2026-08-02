@@ -340,6 +340,11 @@ export class RepositoryWorkflow {
     return await this.entities.getConfiguration(workspaceId, kind);
   }
 
+  async getRepositoryConfiguration(workspaceId: string): Promise<EntityResult> {
+    await this.workspace(workspaceId);
+    return await this.entities.getRepositoryConfiguration(workspaceId);
+  }
+
   async updateConfiguration(
     workspaceId: string,
     kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks",
@@ -357,6 +362,24 @@ export class RepositoryWorkflow {
       workspaceId,
       workspace.owner_id,
       kind,
+      workspace.fingerprint,
+      current.blob_id,
+      document as GitPmDocument,
+    );
+  }
+
+  async updateRepositoryConfiguration(
+    workspaceId: string,
+    document: Record<string, unknown>,
+    scope: AgentScope = {},
+  ): Promise<EntityResult> {
+    const workspace = await this.beginMutation(workspaceId, scope);
+    const relative = ".gitpm/repository.yaml";
+    this.assertPlannedPaths([{ path: relative, kind: "Modified" }], scope);
+    const current = await this.entities.getRepositoryConfiguration(workspaceId);
+    return await this.entities.updateRepositoryConfiguration(
+      workspaceId,
+      workspace.owner_id,
       workspace.fingerprint,
       current.blob_id,
       document as GitPmDocument,

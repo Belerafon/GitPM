@@ -111,6 +111,8 @@ Email Person, если задан, синтаксически валиден и 
 Во входе CLI create/import Person может не содержать Calendar: mutation boundary подставляет
 активный repository `default_calendar`. Это только input default; в сохранённом каноническом
 Person поле `calendar` остаётся обязательным и явным.
+`default_calendar` должен ссылаться на active Calendar. Текущий default Calendar нельзя
+архивировать, пока `.gitpm/repository.yaml` не переключён на другой active Calendar.
 
 ## Calendars and built-in presets
 

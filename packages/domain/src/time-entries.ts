@@ -334,9 +334,9 @@ export class TimeEntryStore {
     let createdRelative = "";
     const mutation = await this.drafts.withRepositoryMutation(draftId, actor.userId, expectedFingerprint, this.mutationMode, async (metadata) => {
       const task = await this.assertWritableTask(metadata, projectId, taskId);
-      await this.assertActiveCategory(metadata, input.category);
       const current = await this.readEntry(metadata, projectId, taskId, entryId);
       if (current.document.state !== "active") throw new TimeEntryOperationError("TIME_ENTRY_VOIDED", "Time entry is already voided");
+      if (input.category !== current.document.category) await this.assertActiveCategory(metadata, input.category);
       await this.drafts.assertFileBlobId(draftId, current.relative, expectedBlobId);
       const id = newUniqueEntityId(ENTITY_ID_PREFIX.entry, await this.allEntryIds(metadata));
       createdRelative = entryPath(projectId, taskId, id);

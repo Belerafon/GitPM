@@ -194,6 +194,25 @@ describe("HttpGitPmApi request bodies", () => {
     expect(result.document.default_calendar).toBe("C-26-QD7FJ4");
   });
 
+  it("updates repository configuration with optimistic file metadata", async () => {
+    const entity = { document: { schema: "gitpm/repository@1" as const, default_branch: "main", default_calendar: "C-26-QD7FJ4", allowed_top_level_files: ["README.md"], ui_poll_interval_seconds: 5 }, path: ".gitpm/repository.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) };
+    const next = { ...entity.document, ui_poll_interval_seconds: 7 };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ...entity, document: next }), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await new HttpGitPmApi().updateRepositoryConfiguration("DRF-1", entity, entity.draft_fingerprint, next);
+    expect(result.document.ui_poll_interval_seconds).toBe(7);
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/config/repository"), expect.objectContaining({ method: "PUT", body: expect.stringContaining(`\"expected_blob_id\":\"${entity.blob_id}\"`) }));
+  });
+
+  it("decodes configuration reference impact", async () => {
+    const impact = { blocking: true, issues: [{ code: "CONFIG_REFERENCE", path: "projects/P-26-MGP84K/project.yaml", field: "status", message: "Status in-progress is still in use" }] };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(impact), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const document = { schema: "gitpm/statuses@2" as const, statuses: [{ slug: "backlog", title: "Backlog", color: "gray", active: true, category: "backlog" as const }] };
+    expect(await new HttpGitPmApi().getConfigurationImpact("DRF-1", "statuses", document)).toEqual(impact);
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/config/statuses/impact"), expect.objectContaining({ method: "POST" }));
+  });
+
   it("serializes and decodes an atomic time-entry replacement", async () => {
     const original = { document: { schema: "gitpm/time-entry@1" as const, id: "E-26-AAAAAA", project: "P-26-MGP84K", task: "T-26-P9G3P8", person: "U-26-5EBAE3", performed_on: "2026-09-01", hours: 1, category: "regular", created_at: "2026-09-01T00:00:00.000Z", state: "active" as const }, path: "old.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) };
     const replacement = { ...original, document: { ...original.document, id: "E-26-BBBBBB", hours: 2 }, path: "new.yaml" };
