@@ -444,7 +444,7 @@ describe.concurrent("CLI direct mode", () => {
     expect(diff.exitCode).toBe(0);
   });
 
-  it("lists, creates and voids a time entry through the CLI", async () => {
+  it("lists, creates, atomically replaces and voids a time entry through the CLI", async () => {
     const { direct } = await directFixture();
     const listBefore = await run(["time-entry", "list", "--project", "P-26-MGP84K", "--task", "T-26-P9G3P8", "--json"], process.cwd(), { direct });
     expect(listBefore.exitCode).toBe(0);
@@ -457,7 +457,16 @@ describe.concurrent("CLI direct mode", () => {
     expect(created.exitCode).toBe(0);
     const createdId = JSON.parse(created.output).document.id as string;
 
-    const voided = await run(["time-entry", "void", "--project", "P-26-MGP84K", "--task", "T-26-P9G3P8", "--id", createdId, "--json"], process.cwd(), { direct });
+    const replaced = await run([
+      "time-entry", "replace", "--project", "P-26-MGP84K", "--task", "T-26-P9G3P8", "--id", createdId,
+      "--person", "U-26-5EBAE3", "--date", "2026-09-01", "--hours", "2.5", "--category", "regular", "--note", "corrected", "--json",
+    ], process.cwd(), { direct });
+    expect(replaced.exitCode).toBe(0);
+    const replacedPayload = JSON.parse(replaced.output) as { voided: { document: { state: string; replacement: string } }; created: { document: { id: string; state: string; hours: number } } };
+    expect(replacedPayload.voided.document).toMatchObject({ state: "voided", replacement: replacedPayload.created.document.id });
+    expect(replacedPayload.created.document).toMatchObject({ state: "active", hours: 2.5 });
+
+    const voided = await run(["time-entry", "void", "--project", "P-26-MGP84K", "--task", "T-26-P9G3P8", "--id", replacedPayload.created.document.id, "--json"], process.cwd(), { direct });
     expect(voided.exitCode).toBe(0);
     expect(JSON.parse(voided.output).document.state).toBe("voided");
 

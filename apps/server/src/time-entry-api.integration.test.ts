@@ -87,6 +87,24 @@ describe("time entry API integration", () => {
     const otherTaskEntryBody = JSON.parse(otherTaskEntry.body) as { readonly document: { readonly id: string }; readonly draft_fingerprint: string };
     fingerprint = otherTaskEntryBody.draft_fingerprint;
 
+    const replaceSource = await app.inject({
+      method: "POST",
+      url: `/api/drafts/DRF-TIME/projects/${project}/tasks/${task}/time-entries`,
+      payload: { expected_fingerprint: fingerprint, person: "U-26-5EBAE3", performed_on: "2026-09-02", hours: 1, category: "regular", note_markdown: "wrong" },
+    });
+    expect(replaceSource.statusCode).toBe(201);
+    const replaceSourceBody = JSON.parse(replaceSource.body) as { readonly document: { readonly id: string }; readonly blob_id: string; readonly draft_fingerprint: string };
+    const replaced = await app.inject({
+      method: "POST",
+      url: `/api/drafts/DRF-TIME/projects/${project}/tasks/${task}/time-entries/${replaceSourceBody.document.id}/replace`,
+      payload: { expected_fingerprint: replaceSourceBody.draft_fingerprint, expected_blob_id: replaceSourceBody.blob_id, person: "U-26-5EBAE3", performed_on: "2026-09-02", hours: 1.5, category: "regular", note_markdown: "corrected" },
+    });
+    expect(replaced.statusCode).toBe(200);
+    const replacedBody = JSON.parse(replaced.body) as { readonly voided: { readonly document: { readonly id: string; readonly state: string; readonly replacement: string } }; readonly created: { readonly document: { readonly id: string; readonly state: string; readonly hours: number }; readonly draft_fingerprint: string } };
+    expect(replacedBody.voided.document).toMatchObject({ id: replaceSourceBody.document.id, state: "voided", replacement: replacedBody.created.document.id });
+    expect(replacedBody.created.document).toMatchObject({ state: "active", hours: 1.5 });
+    fingerprint = replacedBody.created.draft_fingerprint;
+
     const invalidReplacement = await app.inject({
       method: "POST",
       url: `/api/drafts/DRF-TIME/projects/${project}/tasks/${task}/time-entries/${createdBody.document.id}/void`,
@@ -115,10 +133,10 @@ describe("time entry API integration", () => {
 
     const voidedOnly = await app.inject({ method: "GET", url: `/api/drafts/DRF-TIME/projects/${project}/time-entries?state=voided` });
     expect(voidedOnly.statusCode).toBe(200);
-    expect(JSON.parse(voidedOnly.body)).toMatchObject({ total: 1, items: [expect.objectContaining({ document: expect.objectContaining({ id: createdBody.document.id, state: "voided" }) })] });
+    expect(JSON.parse(voidedOnly.body)).toMatchObject({ total: 2, items: expect.arrayContaining([expect.objectContaining({ document: expect.objectContaining({ id: createdBody.document.id, state: "voided" }) })]) });
     const pagedActive = await app.inject({ method: "GET", url: `/api/drafts/DRF-TIME/projects/${project}/time-entries?state=active&offset=1&limit=1` });
     expect(pagedActive.statusCode).toBe(200);
-    expect(JSON.parse(pagedActive.body)).toMatchObject({ total: 2, offset: 1, limit: 1, items: [expect.anything()] });
+    expect(JSON.parse(pagedActive.body)).toMatchObject({ total: 3, offset: 1, limit: 1, items: [expect.anything()] });
 
     const badCategory = await app.inject({
       method: "POST",

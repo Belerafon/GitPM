@@ -35,7 +35,7 @@ async function timeEntryCount(api: APIRequestContext, projectId: string, taskId:
   return (await response.json() as unknown[]).length;
 }
 
-async function createTimeEntry(api: APIRequestContext, projectId: string, taskId: string, performedOn: string, hours: number): Promise<void> {
+async function createTimeEntry(api: APIRequestContext, projectId: string, taskId: string, performedOn: string, hours: number): Promise<EntityResult> {
   const draft = await api.get(`/api/drafts/${draftId}`);
   expect(draft.status(), await draft.text()).toBe(200);
   const { fingerprint } = await draft.json() as { fingerprint: string };
@@ -43,6 +43,7 @@ async function createTimeEntry(api: APIRequestContext, projectId: string, taskId
     data: { expected_fingerprint: fingerprint, person: "U-26-15QJP8", performed_on: performedOn, hours, category: "regular" },
   });
   expect(response.status(), await response.text()).toBe(201);
+  return await response.json() as EntityResult;
 }
 
 function task(id: string, title: string, schedules: Record<string, unknown>, status = "backlog"): Record<string, unknown> {
@@ -208,5 +209,82 @@ test.describe("semantic scheduling writes", () => {
     await page.goto(`/projects/${targetProjectId}`);
     await expect(page.getByRole("heading", { name: "Actual hours report", exact: true })).toBeVisible();
     await expect(page.getByText("Actual hours", { exact: true }).locator("xpath=..")).toContainText("5.75");
+  });
+
+  test("creates a person with the repository default calendar through the real UI and API", async ({ page, request }) => {
+    await useDraft(page);
+    await page.goto("/people");
+    await english(page);
+    await page.getByRole("button", { name: "Create person", exact: false }).click();
+    const dialog = page.getByRole("dialog", { name: "Create person", exact: true });
+    const calendar = await dialog.getByRole("combobox", { name: "Calendar", exact: true }).inputValue();
+    expect(calendar).not.toBe("");
+    await dialog.getByRole("textbox", { name: "Name", exact: true }).fill("Default calendar E2E");
+    await dialog.getByRole("spinbutton", { name: "Weekly capacity (hours)", exact: true }).fill("32");
+    await dialog.getByRole("button", { name: "Create person", exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await page.reload();
+    await expect(page.getByRole("link", { name: "Default calendar E2E", exact: true })).toBeVisible();
+
+    const listed = await request.get(`/api/drafts/${draftId}/entities/people`);
+    expect(listed.status(), await listed.text()).toBe(200);
+    const saved = (await listed.json() as EntityResult[]).find((item) => item.document.name === "Default calendar E2E");
+    expect(saved?.document.calendar).toBe(calendar);
+  });
+
+  test("atomically corrects actual effort through the real UI and preserves the audit link", async ({ page, request }) => {
+    const taskId = "T-26-SMW006";
+    await createTask(request, task(taskId, "Correctable actual effort", { plan: { start: "2026-09-01", finish: "2026-09-05", effort_hours: 8 } }));
+    const original = await createTimeEntry(request, FIXTURE_PROJECT_ID, taskId, "2026-09-03", 1);
+
+    await useDraft(page);
+    await page.goto(`/projects/${FIXTURE_PROJECT_ID}/tasks/${taskId}`);
+    await english(page);
+    await page.getByRole("button", { name: "Correct", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Correct effort entry", exact: true });
+    await dialog.getByRole("spinbutton", { name: "Hours", exact: true }).fill("2.5");
+    await dialog.getByRole("textbox", { name: "Note", exact: true }).fill("E2E correction");
+    await dialog.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await page.reload();
+    await expect(page.getByText("2.5 h", { exact: true })).toBeVisible();
+
+    const listed = await request.get(`/api/drafts/${draftId}/projects/${FIXTURE_PROJECT_ID}/tasks/${taskId}/time-entries`);
+    expect(listed.status(), await listed.text()).toBe(200);
+    const entries = await listed.json() as EntityResult[];
+    const oldEntry = entries.find((item) => item.document.id === original.document.id);
+    const newEntry = entries.find((item) => item.document.id !== original.document.id);
+    expect(oldEntry?.document).toMatchObject({ state: "voided", replacement: newEntry?.document.id });
+    expect(newEntry?.document).toMatchObject({ state: "active", hours: 2.5, note_markdown: "E2E correction" });
+  });
+
+  test("keeps configuration reorder local until Save and persists new values after reload", async ({ page, request }) => {
+    await useDraft(page);
+    await page.goto("/settings");
+    await english(page);
+    const card = page.locator(".config-editor").filter({ has: page.getByRole("heading", { name: "Statuses", exact: true }) });
+    await card.getByRole("button", { name: "Edit Statuses", exact: true }).click();
+    let dialog = page.getByRole("dialog", { name: "Edit: Statuses", exact: true });
+    const backlog = dialog.getByLabel("Statuses backlog", { exact: true });
+    const before = await backlog.inputValue();
+    await backlog.fill("Must be cancelled");
+    await dialog.getByRole("button", { name: "Move Must be cancelled down", exact: true }).click();
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await page.reload();
+
+    const statusesBefore = await request.get(`/api/drafts/${draftId}/config/statuses`);
+    expect(statusesBefore.status(), await statusesBefore.text()).toBe(200);
+    expect(((await statusesBefore.json() as { document: { statuses: Array<{ slug: string; title: string }> } }).document.statuses)[0]).toMatchObject({ slug: "backlog", title: before });
+
+    await card.getByRole("button", { name: "Edit Statuses", exact: true }).click();
+    dialog = page.getByRole("dialog", { name: "Edit: Statuses", exact: true });
+    await dialog.getByLabel("New technical ID", { exact: true }).fill("qa-review");
+    await dialog.getByRole("button", { name: "Add value", exact: true }).click();
+    await dialog.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await page.reload();
+    await expect(card.getByText("qa-review", { exact: true })).toBeVisible();
+    const statusesAfter = await request.get(`/api/drafts/${draftId}/config/statuses`);
+    expect(((await statusesAfter.json() as { document: { statuses: Array<{ slug: string }> } }).document.statuses).some((item) => item.slug === "qa-review")).toBe(true);
   });
 });

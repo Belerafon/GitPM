@@ -297,6 +297,20 @@ export class AgentWorkflow {
     return await this.timeEntries.void(draftId, projectId, taskId, entryId, workspace.fingerprint, blobId, actor);
   }
 
+  async replaceTimeEntry(
+    draftId: string,
+    projectId: string,
+    taskId: string,
+    entryId: string,
+    input: { readonly person: string; readonly performed_on: string; readonly hours: number; readonly category: string; readonly note_markdown?: string },
+  ) {
+    const actor = await this.timeEntryActor(draftId);
+    const workspace = await this.drafts.refreshWorkspaceFingerprint(draftId);
+    const relative = `projects/${projectId}/time-entries/${taskId}/${entryId}.yaml`;
+    const blobId = await this.drafts.fileBlobId(draftId, relative);
+    return await this.timeEntries.replace(draftId, projectId, taskId, entryId, workspace.fingerprint, blobId, input, actor);
+  }
+
   async commitAll(draftId: string, message: string, scope: AgentScope = {}) {
     return await this.repository.commitAll(draftId, message, scope);
   }

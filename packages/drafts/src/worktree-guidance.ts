@@ -174,7 +174,7 @@ Move a task with
 
 Use \`gitpm comment list|create|update|delete --draft ${draftId} ...\` for task comments,
 \`gitpm notification list --draft ${draftId}\` for mentions,
-\`gitpm time-entry list|summary|create|void --draft ${draftId} ...\` for actual effort, and
+\`gitpm time-entry list|summary|create|replace|void --draft ${draftId} ...\` for actual effort, and
 \`gitpm config show|update --draft ${draftId} ...\` for repository configuration. These are
 domain commands; never substitute raw YAML edits.
 
@@ -325,7 +325,7 @@ non-repeatable options with \`CLI_USAGE\`; never retry a misspelled flag by drop
   update multi-track schedules and Project planning without replacing neighboring tracks.
 - \`gitpm comment list|create|update|delete --draft <id> ...\` manages Task comments, and
   \`gitpm notification list --draft <id> [--person <id>]\` reads mention notifications.
-- \`gitpm time-entry list|summary|create|void --draft <id> ...\` manages actual effort.
+- \`gitpm time-entry list|summary|create|replace|void --draft <id> ...\` manages actual effort.
 - \`gitpm config show|update --draft <id> ...\` reads or transactionally updates repository
   configuration.
 - \`gitpm schema list|show <type> [--example]\` exposes the installed schema contract.

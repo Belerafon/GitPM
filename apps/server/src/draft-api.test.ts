@@ -164,6 +164,19 @@ describe("entity API contract", () => {
     expect(entityStore.projectWorkspace).toHaveBeenCalledWith("DRF-API", "P-26-MGP84K");
   });
 
+  it("returns the repository configuration needed for canonical person creation", async () => {
+    const repository = { document: { schema: "gitpm/repository@1", default_branch: "main", default_calendar: "C-26-QD7FJ4", allowed_top_level_files: ["README.md"], ui_poll_interval_seconds: 5 }, path: ".gitpm/repository.yaml", blob_id: "a".repeat(40), draft_fingerprint: metadata.fingerprint };
+    const entityStore = { getRepositoryConfiguration: vi.fn(async () => repository) } as unknown as EntityStore;
+    const app = buildApp({ authenticate: () => ({ userId: "42", role: "Developer" }), draftManager: manager(), entityStore });
+    apps.push(app);
+
+    const response = await app.inject({ method: "GET", url: "/api/drafts/DRF-API/config/repository" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ document: { default_calendar: "C-26-QD7FJ4" } });
+    expect(entityStore.getRepositoryConfiguration).toHaveBeenCalledWith("DRF-API");
+  });
+
   it("creates an entity through the domain store", async () => {
     const entityStore = {
       create: vi.fn(async () => ({

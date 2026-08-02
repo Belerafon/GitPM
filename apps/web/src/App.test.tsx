@@ -72,6 +72,7 @@ class FakeApi implements GitPmApi {
       : { schema: "gitpm/issue-types@1", issue_types: [{ slug: "task", title: "Task", active: true }] }) as ConfigurationDocument;
     return { document, path: kind, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) };
   }
+  async getRepositoryConfiguration() { return { document: { schema: "gitpm/repository@1" as const, default_branch: "main", default_calendar: "C-26-QD7FJ4", allowed_top_level_files: [], ui_poll_interval_seconds: 5 }, path: ".gitpm/repository.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) }; }
   async updateConfiguration(): Promise<ConfigurationResult> { throw new Error("not used"); }
   async listChanges(): Promise<ChangesList> { throw new Error("not used"); }
   async listWorktree(): Promise<WorktreeDirectory> { return { path: "", entries: [] }; }
@@ -101,6 +102,7 @@ class FakeApi implements GitPmApi {
   async listProjectTimeEntries() { return { items: [], total: 0, offset: 0, limit: 200 }; }
   async createTimeEntry(): Promise<never> { throw new Error("not used"); }
   async voidTimeEntry(): Promise<never> { throw new Error("not used"); }
+  async replaceTimeEntry(): Promise<never> { throw new Error("not used"); }
   async notifications() { return { items: [] }; }
   private replace(draftId: string, values: Partial<DraftStatus>) { const next = { ...(this.drafts.find((item) => item.draft_id === draftId) ?? draft({ draft_id: draftId })), ...values }; this.drafts = [next]; return next; }
 }

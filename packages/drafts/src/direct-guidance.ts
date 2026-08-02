@@ -151,7 +151,7 @@ Move a task with
 \`gitpm entity move --type task --id <entity-id> --to-project <id> [--to-milestone <id>] --allow-delete --json\`.
 
 Manage task comments with \`gitpm comment list|create|update|delete\`, mention notifications
-with \`gitpm notification list\`, actual effort with \`gitpm time-entry list|summary|create|void\`,
+with \`gitpm notification list\`, actual effort with \`gitpm time-entry list|summary|create|replace|void\`,
 and repository configuration with
 \`gitpm config show|update --kind statuses|issue-types|work-categories|schedule-tracks [--allow-delete]\`.
 
@@ -279,7 +279,7 @@ All commands accept \`--json\`; use it for automation. Direct-mode commands do n
   edits a comment body.
 - \`gitpm comment delete --project <id> --task <id> --id <comment-id>\` soft-deletes a comment.
 - \`gitpm notification list [--person <id>]\` reads mention notifications.
-- \`gitpm time-entry list|summary|create|void ...\` reads or updates actual effort.
+- \`gitpm time-entry list|summary|create|replace|void ...\` reads or updates actual effort.
 - \`gitpm schedule set ...\` and \`gitpm planning show|set ...\` manage multi-track schedules
   and Project planning.
 - \`gitpm config show --kind statuses|issue-types|work-categories|schedule-tracks\` reads repository configuration.

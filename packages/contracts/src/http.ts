@@ -9,6 +9,7 @@ import {
   type ConfigurationDocument,
   type Decoder,
   type EntityDocument,
+  type RepositoryDocument,
 } from "./documents.js";
 
 export type GitPmRole = "Reporter" | "Developer" | "Maintainer";
@@ -23,6 +24,13 @@ export interface EntityResult<Document extends EntityDocument | ConfigurationDoc
 }
 
 export type ConfigurationResult = EntityResult<ConfigurationDocument>;
+
+export interface RepositoryResult {
+  readonly document: RepositoryDocument;
+  readonly path: string;
+  readonly blob_id: string;
+  readonly draft_fingerprint: string;
+}
 
 export interface PublicSession {
   readonly user: {
@@ -355,6 +363,13 @@ const configurationResultSchema = objectSchema({
   draft_fingerprint: stringSchema,
 });
 
+const repositoryResultSchema = objectSchema({
+  document: { $ref: "https://gitpm.dev/schemas/v1/repository.schema.json" },
+  path: stringSchema,
+  blob_id: stringSchema,
+  draft_fingerprint: stringSchema,
+});
+
 const publicSessionSchema = objectSchema({
   user: objectSchema(
     { id: stringSchema, username: stringSchema, name: stringSchema, email: stringSchema },
@@ -539,6 +554,7 @@ export const HTTP_RESPONSE_SCHEMAS = {
   entityResult: entityResultSchema,
   entityResults: arraySchema(entityResultSchema),
   configurationResult: configurationResultSchema,
+  repositoryResult: repositoryResultSchema,
   projectWorkspace: objectSchema({
     project: entityResultSchema,
     milestones: arraySchema(entityResultSchema),
@@ -600,6 +616,7 @@ export const decodeValidationSummary = createDecoder<ValidationSummary>("Validat
 export const decodeEntityResult = createDecoder<EntityResult>("EntityResult", HTTP_RESPONSE_SCHEMAS.entityResult);
 export const decodeEntityResults = createDecoder<readonly EntityResult[]>("EntityResult[]", HTTP_RESPONSE_SCHEMAS.entityResults);
 export const decodeConfigurationResult = createDecoder<ConfigurationResult>("ConfigurationResult", HTTP_RESPONSE_SCHEMAS.configurationResult);
+export const decodeRepositoryResult = createDecoder<RepositoryResult>("RepositoryResult", HTTP_RESPONSE_SCHEMAS.repositoryResult);
 export const decodeProjectWorkspace = createDecoder<ProjectWorkspaceResult>("ProjectWorkspaceResult", HTTP_RESPONSE_SCHEMAS.projectWorkspace);
 export const decodeChangesList = createDecoder<ChangesList>("ChangesList", HTTP_RESPONSE_SCHEMAS.changesList);
 export const decodeSemanticDiff = createDecoder<SemanticDiff>("SemanticDiff", HTTP_RESPONSE_SCHEMAS.semanticDiff);

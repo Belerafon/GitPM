@@ -31,6 +31,7 @@ gitpm notification list [--draft <id>] [--person <id>]
 gitpm time-entry list [--draft <id>] --project <id> [--task <id>] [--milestone <id>] [--person <id>] [--category <slug>] [--state active|voided] [--from <yyyy-mm-dd>] [--to <yyyy-mm-dd>] [--offset <n>] [--limit <n>] [--json]
 gitpm time-entry summary [--draft <id>] --project <id> [--task <id>] [--milestone <id>] [--person <id>] [--category <slug>] [--state active|voided] [--from <yyyy-mm-dd>] [--to <yyyy-mm-dd>] [--after <yyyy-mm-dd>] [--json]
 gitpm time-entry create [--draft <id>] --project <id> --task <id> --person <id> --date <yyyy-mm-dd> --hours <n> --category <slug> [--note <text>] [--json]
+gitpm time-entry replace [--draft <id>] --project <id> --task <id> --id <entry-id> --person <id> --date <yyyy-mm-dd> --hours <n> --category <slug> [--note <text>] [--json]
 gitpm time-entry void [--draft <id>] --project <id> --task <id> --id <entry-id> [--json]
 gitpm config show [--draft <id>] --kind statuses|issue-types|work-categories|schedule-tracks
 gitpm config update [--draft <id>] --kind statuses|issue-types|work-categories|schedule-tracks [--file <yaml>] [--set <field>=<yaml-value>]... [--unset <field>] [--allow-delete]
@@ -130,6 +131,9 @@ soft-delete (tombstone остаётся в Git history). `notification list` в�
 `time-entry list` и `time-entry summary` работают на уровне Project; `--task` лишь сужает
 выборку. List возвращает `total`, `offset` и `limit`; фильтры Person, Milestone, category,
 state и диапазон фактической даты соответствуют project-level TimeEntry API.
+`time-entry replace` атомарно помечает исходную запись как `voided`, создаёт активную замену
+и записывает её ID в поле `replacement` исходной записи; отдельная последовательность
+`void` + `create` не является эквивалентной корректировкой.
 
 `config show/update` читает и обновляет конфигурацию репозитория (`.gitpm/statuses.yaml`,
 `.gitpm/issue-types.yaml`, `.gitpm/work-categories.yaml`, `.gitpm/schedule-tracks.yaml`).

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GitPmApi } from "./api.js";
 import type { TimeEntryResult } from "./api.js";
@@ -64,6 +64,31 @@ describe("TaskTimeEntries", () => {
     const expected = (() => { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`; })();
     expect((dateInput as HTMLInputElement).value).toBe(expected);
     expect((screen.getByLabelText("Person") as HTMLSelectElement).value).toBe(person.document.id);
+  });
+
+  it("atomically corrects an entry and keeps the audit-linked voided original", async () => {
+    const original = entry("E-26-ORIGINAL", { hours: 2, note_markdown: "wrong" });
+    const voided = entry("E-26-ORIGINAL", { hours: 2, note_markdown: "wrong", state: "voided", replacement: "E-26-CORRECT" });
+    const created = entry("E-26-CORRECT", { hours: 3.5, note_markdown: "corrected" });
+    const replaceTimeEntry = vi.fn(async () => ({ voided, created }));
+    const api = {
+      listTimeEntries: vi.fn(async (): Promise<readonly TimeEntryResult[]> => [original]),
+      getConfiguration: vi.fn(async (_draftId: string, kind: string) => ({ document: { schema: "gitpm/work-categories@1", categories: [{ slug: "regular", title: "Regular", active: true }] }, path: kind, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) })),
+      replaceTimeEntry,
+    } as unknown as GitPmApi;
+
+    render(<TaskTimeEntries api={api} draft={draft} fingerprint={draft.fingerprint} projectId="P-26-1" taskId="T-26-1" people={[person]} readOnly={false} locale="en" onFingerprintChange={vi.fn(async () => undefined)} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Correct" }));
+    const dialog = screen.getByRole("dialog", { name: "Correct effort entry" });
+    fireEvent.change(within(dialog).getByLabelText("Hours"), { target: { value: "3.5" } });
+    fireEvent.change(within(dialog).getByLabelText("Note"), { target: { value: "corrected" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(replaceTimeEntry).toHaveBeenCalledWith("DRF-TIME", "P-26-1", "T-26-1", original, draft.fingerprint, expect.objectContaining({ hours: 3.5, note_markdown: "corrected" })));
+    await waitFor(() => expect(screen.getByText("3.5 h")).toBeTruthy());
+    expect(screen.getAllByText("2 h")).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Correct" })).toHaveLength(1);
   });
 
   it("collapses and expands via the heading toggle", async () => {
