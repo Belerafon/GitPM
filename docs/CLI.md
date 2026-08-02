@@ -60,6 +60,10 @@ gitpm doctor
 gitpm --version [--json]
 ```
 
+В JSON-отчёте `workload report` каждая строка Person-week содержит как стабильный список
+`task_ids`, так и `task_allocations` с парами `task_id`/`allocated_hours`. Расшифровка использует
+ту же формулу распределения, что итоговое поле `allocated_hours`.
+
 `gitpm export` использует единый с web/API сервис экспорта. PDF по умолчанию содержит
 разделы Projects и People; повторяемый `--section` добавляет или явно задаёт состав.
 HTML создаётся одним автономным файлом без мутаций, CSV — ZIP с таблицей для каждой

@@ -42,6 +42,12 @@ export interface PersonWeekWorkload {
   readonly capacity_hours: number;
   readonly utilization_percent: number | null;
   readonly task_ids: readonly string[];
+  readonly task_allocations: readonly TaskWeekAllocation[];
+}
+
+export interface TaskWeekAllocation {
+  readonly task_id: string;
+  readonly allocated_hours: number;
 }
 
 export interface WorkloadExclusions {
@@ -111,7 +117,7 @@ export function calculateWorkload(
   const first = included.reduce((value, item) => dayTime(item.task.start!) < dayTime(value) ? item.task.start! : value, included[0]!.task.start!);
   const last = included.reduce((value, item) => dayTime(item.task.finish!) > dayTime(value) ? item.task.finish! : value, included[0]!.task.finish!);
   const weeks = weekStartsBetween(first, last);
-  const allocations = new Map<string, { hours: number; taskIds: Set<string> }>();
+  const allocations = new Map<string, { hours: number; taskHours: Map<string, number> }>();
 
   for (const { task, assignees, assigneeCount } of included) {
     const personShare = task.estimate_hours! / assigneeCount;
@@ -122,9 +128,9 @@ export function calculateWorkload(
       const dailyShare = personShare / dates.length;
       for (const date of dates) {
         const key = `${person.id}:${isoWeekStart(date)}`;
-        const allocation = allocations.get(key) ?? { hours: 0, taskIds: new Set<string>() };
+        const allocation = allocations.get(key) ?? { hours: 0, taskHours: new Map<string, number>() };
         allocation.hours += dailyShare;
-        allocation.taskIds.add(task.id);
+        allocation.taskHours.set(task.id, (allocation.taskHours.get(task.id) ?? 0) + dailyShare);
         allocations.set(key, allocation);
       }
     }
@@ -134,6 +140,9 @@ export function calculateWorkload(
     const allocation = allocations.get(`${person.id}:${week}`);
     const allocated = round(allocation?.hours ?? 0);
     const capacity = calendarCapacity(week, person, activeCalendars.get(person.calendar)!);
+    const taskAllocations = [...(allocation?.taskHours ?? [])]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([taskId, hours]): TaskWeekAllocation => ({ task_id: taskId, allocated_hours: round(hours) }));
     return {
       person_id: person.id,
       person_name: person.name,
@@ -141,7 +150,8 @@ export function calculateWorkload(
       allocated_hours: allocated,
       capacity_hours: capacity,
       utilization_percent: capacity === 0 ? null : round(allocated / capacity * 100),
-      task_ids: [...(allocation?.taskIds ?? [])].sort(),
+      task_ids: taskAllocations.map((item) => item.task_id),
+      task_allocations: taskAllocations,
     };
   }));
   return { formula: "equal-assignee-share/equal-person-working-day/v1", weeks, rows, included_tasks: included.length, exclusions };

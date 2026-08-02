@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GitPmApi } from "./api.js";
 import type { DraftStatus, EntityDocument, EntityResult } from "./types.js";
@@ -19,6 +19,7 @@ const ada = result({ schema: "gitpm/person@1", id: adaId, name: "Ada", weekly_ca
 const linus = result({ schema: "gitpm/person@1", id: linusId, name: "Linus", weekly_capacity_hours: 32, calendar: calendarId, lifecycle: "active" });
 const shared = task("5", "Shared", { schedules: { plan: { effort_hours: 40, start: "2026-07-06", finish: "2026-07-10" } }, assignees: [adaId, linusId] });
 const span = task("6", "Span", { schedules: { plan: { effort_hours: 30, start: "2026-07-09", finish: "2026-07-15" } }, assignees: [adaId] });
+const spike = task("4", "Release spike", { schedules: { plan: { effort_hours: 8, start: "2026-07-06", finish: "2026-07-10" } }, assignees: [adaId] });
 const undated = task("7", "Undated", { schedules: { plan: { effort_hours: 10 } }, assignees: [adaId] });
 const archived = result({ ...task("8", "Archived", { schedules: { plan: { effort_hours: 10, start: "2026-07-06", finish: "2026-07-10" } }, assignees: [adaId] }).document, lifecycle: "archived" });
 const project = result({ schema: "gitpm/project@2", id: projectId, name: "Platform", status: "backlog", lifecycle: "active" });
@@ -30,20 +31,28 @@ const reviewers = result({ schema: "gitpm/team@1", id: "G-26-555555", name: "Rev
 afterEach(cleanup);
 describe("Workload UI", () => {
   it("renders deterministic Person-week values and excludes archived and undated Tasks", async () => {
-    const entities = [shared, span, undated, archived, archivedProjectTask, ada, linus, calendar, project, archivedProject, reviewers];
+    const entities = [shared, span, spike, undated, archived, archivedProjectTask, ada, linus, calendar, project, archivedProject, reviewers];
     const onNavigate = vi.fn();
     const api = { listEntities: vi.fn(async (_draftId: string, type: string) => entities.filter((item) => ({ tasks: "gitpm/task@2", people: "gitpm/person@1", calendars: "gitpm/calendar@1", projects: "gitpm/project@2", teams: "gitpm/team@1" })[type] === item.document.schema)), getConfiguration: vi.fn(async (_draftId: string, kind: string) => kind === "schedule-tracks" ? tracksConfig() : { document: { schema: "gitpm/statuses@2", id: "statuses", lifecycle: "active", statuses: [] }, path: kind, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) }) } as unknown as GitPmApi;
     const { container } = render(<WorkloadWorkspace api={api} draft={draft} locale="en" onNavigate={onNavigate} />);
     await waitFor(() => expect(container.querySelectorAll(".workload-table tbody tr")).toHaveLength(2));
-    expect(screen.getByText("Included Tasks").nextElementSibling?.textContent).toBe("2");
+    expect(screen.getByText("Included Tasks").nextElementSibling?.textContent).toBe("3");
     expect(screen.getByText("Excluded Tasks").nextElementSibling?.textContent).toBe("3");
-    expect(container.querySelector(`[data-person-id="${adaId}"][data-week="2026-07-06"]`)?.textContent).toContain("32h / 32h");
+    expect(container.querySelector(`[data-person-id="${adaId}"][data-week="2026-07-06"]`)?.textContent).toContain("40h / 32h");
     expect(container.querySelector(`[data-person-id="${adaId}"][data-week="2026-07-13"]`)?.textContent).toContain("18h / 40h");
     expect(container.querySelector(`[data-person-id="${linusId}"][data-week="2026-07-06"]`)?.textContent).toContain("20h / 25.6h");
-    expect(container.querySelector(`[data-person-id="${adaId}"][data-week="2026-07-06"]`)?.className).toContain("near");
+    expect(container.querySelector(`[data-person-id="${adaId}"][data-week="2026-07-06"]`)?.className).toContain("overloaded");
     expect(screen.getByText("Near capacity")).toBeTruthy();
     expect(screen.getByText("Missing or invalid date range").nextElementSibling?.textContent).toBe("1");
     expect(screen.getByText("Archived").nextElementSibling?.textContent).toBe("2");
+    fireEvent.click(screen.getByRole("button", { name: "Show workload details for Ada, week of Jul 6, 2026" }));
+    const breakdown = screen.getByRole("dialog", { name: /Ada · Week of/u });
+    expect(within(breakdown).getByText("Overload").nextElementSibling?.textContent).toBe("8h");
+    expect(within(breakdown).getByText("Contributing Tasks: 3")).toBeTruthy();
+    expect(within(breakdown).getByText("Release spike")).toBeTruthy();
+    expect(within(breakdown).getAllByText(/Week of Jul 13, 2026 · 22h available/u).length).toBeGreaterThan(0);
+    fireEvent.click(within(breakdown).getByRole("button", { name: "Release spike" }));
+    expect(onNavigate).toHaveBeenCalledWith("tasks", { projectId, taskId: spike.document.id });
     fireEvent.change(screen.getByLabelText("Team"), { target: { value: reviewers.document.id } });
     await waitFor(() => expect(screen.getByText("Included Tasks").nextElementSibling?.textContent).toBe("1"));
     fireEvent.click(screen.getByRole("button", { name: "Ada" }));

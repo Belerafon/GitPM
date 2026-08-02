@@ -52,6 +52,12 @@ export interface PersonWeekWorkload {
   readonly capacity_hours: number;
   readonly utilization_percent: number | null;
   readonly task_ids: readonly string[];
+  readonly task_allocations: readonly TaskWeekAllocation[];
+}
+
+export interface TaskWeekAllocation {
+  readonly task_id: string;
+  readonly allocated_hours: number;
 }
 
 export interface WorkloadReport {
@@ -602,6 +608,10 @@ const workloadReportSchema = objectSchema({
     capacity_hours: numberSchema,
     utilization_percent: nullableNumberSchema,
     task_ids: stringArraySchema,
+    task_allocations: arraySchema(objectSchema({
+      task_id: stringSchema,
+      allocated_hours: numberSchema,
+    })),
   })),
   included_tasks: integerSchema,
   exclusions: objectSchema({
