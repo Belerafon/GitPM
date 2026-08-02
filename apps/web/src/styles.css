@@ -973,8 +973,13 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
 .saved-views p { color: #6d726e; font-size: .78rem; }
 .saved-views form { display: flex; gap: .5rem; }
 .saved-view-list { display: grid; gap: .4rem; }
-.saved-view-list button { display: grid; gap: .2rem; text-align: left; }
-.saved-view-list button.selected { border-color: #49715d; background: #edf3ee; }
+.saved-view-list article { display: grid; gap: .55rem; padding: .7rem; border: 1px solid #d8ded9; border-radius: .65rem; }
+.saved-view-list article.selected { border-color: #49715d; background: #edf3ee; }
+.saved-view-list article.archived { opacity: .78; }
+.saved-view-list header { display: flex; align-items: center; flex-wrap: wrap; gap: .45rem; }
+.saved-view-list header code { margin-left: auto; }
+.saved-view-list form, .saved-view-list label { display: grid; gap: .35rem; }
+.saved-view-actions { display: flex; flex-wrap: wrap; gap: .4rem; }
 .saved-view-list code { color: #747974; font-size: .65rem; }
 @media (max-width: 900px) { .board-toolbar, .saved-views { grid-template-columns: 1fr; } .board-count { justify-self: start; } }
 @media (max-width: 700px) {

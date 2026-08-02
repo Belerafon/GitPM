@@ -19,7 +19,7 @@ const configValues = (document: GitPmDocument, key: "statuses" | "issue_types"):
   ? (document[key] as unknown[]).filter((item): item is ConfigValue => typeof item === "object" && item !== null && typeof (item as ConfigValue).slug === "string" && typeof (item as ConfigValue).title === "string" && (item as ConfigValue).active === true)
   : [];
 
-export function BoardWorkspace({ api, draft, locale, initialProjectId = "", initialStatusFilter = "", initialTypeFilter = "", initialMilestoneFilter = "", initialViewId = "", onNavigate = () => undefined, onChanged }: {
+export function BoardWorkspace({ api, draft, locale, initialProjectId = "", initialStatusFilter = "", initialTypeFilter = "", initialMilestoneFilter = "", initialViewId = "", confirmAction = () => true, onNavigate = () => undefined, onChanged }: {
   readonly api: GitPmApi;
   readonly draft: DraftStatus;
   readonly locale: Locale;
@@ -28,6 +28,7 @@ export function BoardWorkspace({ api, draft, locale, initialProjectId = "", init
   readonly initialTypeFilter?: string;
   readonly initialMilestoneFilter?: string;
   readonly initialViewId?: string;
+  readonly confirmAction?: (message: string) => boolean;
   readonly onNavigate?: WorkspaceNavigate;
   readonly onChanged: () => Promise<void>;
 }) {
@@ -129,6 +130,28 @@ export function BoardWorkspace({ api, draft, locale, initialProjectId = "", init
     void mutate(async () => await api.createEntity(draft.draft_id, "views", fingerprint, document));
     event.currentTarget.reset();
   };
+  const currentViewFilters = () => ({ statuses: statusFilter === "" ? [] : [statusFilter], types: typeFilter === "" ? [] : [typeFilter], milestones: milestoneFilter === "" ? [] : [milestoneFilter] });
+  const updateManagedView = (form: HTMLFormElement, view: EntityResult, updateFilters: boolean) => {
+    const name = String(new FormData(form).get("name") ?? "").trim();
+    if (name === "") return;
+    const document = { ...view.document, name, ...(updateFilters ? { filters: currentViewFilters() } : {}) } as EntityDocument;
+    void mutate(async () => await api.updateEntity(draft.draft_id, "views", view, fingerprint, document));
+  };
+  const archiveView = (view: EntityResult) => {
+    void mutate(async () => await api.archiveEntity(draft.draft_id, "views", view, fingerprint)).then((result) => {
+      if (result !== null && activeViewId === view.document.id) applyFilters(statusFilter, typeFilter, milestoneFilter);
+    });
+  };
+  const deleteView = (view: EntityResult) => {
+    const name = text(view.document, "name");
+    if (!confirmAction(t("board.deleteViewConfirm", { name }))) return;
+    setError(null);
+    void api.deleteEntity(draft.draft_id, "views", view, fingerprint).then(async () => {
+      setViews((current) => current.filter((item) => item.document.id !== view.document.id));
+      if (activeViewId === view.document.id) applyFilters(statusFilter, typeFilter, milestoneFilter);
+      await onChanged(); await load();
+    }).catch(report);
+  };
   const applyFilters = (status: string, type: string, milestone: string, view = "") => {
     setStatusFilter(status); setTypeFilter(type); setMilestoneFilter(milestone); setActiveViewId(view);
     const query = { ...(status === "" ? {} : { status: [status] }), ...(type === "" ? {} : { type: [type] }), ...(milestone === "" ? {} : { milestone: [milestone] }), ...(view === "" ? {} : { view: [view] }) };
@@ -139,6 +162,7 @@ export function BoardWorkspace({ api, draft, locale, initialProjectId = "", init
     applyFilters(strings(filters.statuses)[0] ?? "", strings(filters.types)[0] ?? "", strings(filters.milestones)[0] ?? "", view.document.id);
   };
   const savedViews = views.filter((view) => view.document.lifecycle === "active" && view.document.kind === "board");
+  const managedViews = views.filter((view) => view.document.kind === "board");
   const scrollColumns = (direction: -1 | 1) => columnsRef.current?.scrollBy({ left: direction * Math.max(280, columnsRef.current.clientWidth * .75), behavior: "smooth" });
 
   return <section className="board-workspace">
@@ -170,8 +194,20 @@ export function BoardWorkspace({ api, draft, locale, initialProjectId = "", init
       </section>;
     })}</div>
     <details className="card saved-view-manager"><summary>{t("board.manageViews")}</summary><section className="saved-views"><div><h3>{t("board.savedViews")}</h3><p>{t("board.savedDescription")}</p></div>
-      <form onSubmit={saveView}><input name="name" aria-label={t("board.viewName")} placeholder={t("board.viewName")} required /><button className="primary" disabled={readOnly || projectId === ""}>{t("board.saveView")}</button></form>
-      <div className="saved-view-list">{savedViews.map((view) => <button className={activeViewId === view.document.id ? "selected" : ""} key={view.document.id} onClick={() => openView(view)}><strong>{text(view.document, "name")}</strong><code>{view.document.id}</code></button>)}</div>
+      <form className="saved-view-create" onSubmit={saveView}><input name="name" aria-label={t("board.viewName")} placeholder={t("board.viewName")} required /><button className="primary" disabled={readOnly || projectId === ""}>{t("board.saveViewAsNew")}</button></form>
+      <div className="saved-view-list">{managedViews.map((view) => {
+        const name = text(view.document, "name"); const archived = view.document.lifecycle === "archived";
+        return <article className={`${activeViewId === view.document.id ? "selected" : ""}${archived ? " archived" : ""}`} key={view.document.id}>
+          <header><strong>{name}</strong><code>{view.document.id}</code>{archived && <span>{t("core.archived")}</span>}</header>
+          {!archived && <button type="button" onClick={() => openView(view)}>{t("board.applyView", { name })}</button>}
+          <form onSubmit={(event) => event.preventDefault()}><label>{t("board.viewName")}<input aria-label={t("board.viewNameFor", { name })} defaultValue={name} key={`${view.document.id}:${view.blob_id}`} name="name" required /></label><div className="saved-view-actions">
+            <button disabled={readOnly || archived} onClick={(event) => updateManagedView(event.currentTarget.form!, view, false)} type="button">{t("board.renameView")}</button>
+            <button className="primary" disabled={readOnly || archived} onClick={(event) => updateManagedView(event.currentTarget.form!, view, true)} type="button">{t("board.updateView")}</button>
+            <button disabled={readOnly || archived} onClick={() => archiveView(view)} type="button">{t("core.archive")}</button>
+            <button className="danger" disabled={readOnly} onClick={() => deleteView(view)} type="button">{t("board.deleteView")}</button>
+          </div></form>
+        </article>;
+      })}</div>
     </section></details>
     </>
     </AsyncBoundary>

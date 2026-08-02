@@ -26,6 +26,7 @@ import { RepositoryConnectionError } from "./repository-connection.js";
 import { SecurityBoundaryError } from "@gitpm/security";
 import type { GitPmDocument as RepositoryFormatDocument } from "@gitpm/repository-format";
 import { ExportError } from "@gitpm/export";
+import { buildWorkloadReport, type WorkloadEntityDocument } from "@gitpm/workload";
 
 export type ProjectRole = "Reporter" | "Developer" | "Maintainer";
 
@@ -549,6 +550,44 @@ export function registerEntityApi(
   store: EntityStore,
   authenticate: Authenticate,
 ): void {
+  app.get<{
+    Params: { draftId: string };
+    Querystring: { project?: string; milestone?: string; team?: string };
+  }>(
+    "/api/drafts/:draftId/workload",
+    {
+      schema: {
+        querystring: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            project: { type: "string", pattern: "^P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}$" },
+            milestone: { type: "string", pattern: "^M-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}$" },
+            team: { type: "string", pattern: "^G-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}$" },
+          },
+        },
+      },
+    },
+    async (request) => {
+      const actor = await authenticate(request);
+      await requireDraftRead(manager, actor, request.params.draftId);
+      const [tasks, projects, people, calendars, teams, tracks] = await Promise.all([
+        store.list(request.params.draftId, "tasks"),
+        store.list(request.params.draftId, "projects"),
+        store.list(request.params.draftId, "people"),
+        store.list(request.params.draftId, "calendars"),
+        store.list(request.params.draftId, "teams"),
+        store.getConfiguration(request.params.draftId, "schedule-tracks"),
+      ]);
+      const documents = (items: readonly { readonly document: unknown }[]) => items.map((item) => item.document as WorkloadEntityDocument);
+      return buildWorkloadReport({
+        tasks: documents(tasks), projects: documents(projects), people: documents(people), calendars: documents(calendars), teams: documents(teams),
+        scheduleTracks: tracks.document as WorkloadEntityDocument,
+        filters: request.query,
+      });
+    },
+  );
+
   app.get<{ Params: { draftId: string; projectId: string } }>(
     "/api/drafts/:draftId/projects/:projectId/workspace",
     async (request) => {

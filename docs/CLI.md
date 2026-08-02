@@ -23,6 +23,7 @@ gitpm entity move [--draft <id>] --type task --id <entity-id> --to-project <id> 
 gitpm schedule set [--draft <id>] --type project|task|milestone --id <entity-id> --track <slug> [--start <yyyy-mm-dd>] [--finish <yyyy-mm-dd>] [--effort-hours <n>] [--depends-on <task-id>]... [--clear-start] [--clear-finish] [--clear-effort] [--clear-dependencies] [--project <id>] [--allow-delete]
 gitpm planning show [--draft <id>] --project <id>
 gitpm planning set [--draft <id>] --project <id> [--primary-track <slug>] [--workload-track <slug>] [--comparison-track <slug>|--clear-comparison-track] [--enabled-track <slug>]... [--dashboard-track <slug>]... [--allow-delete]
+gitpm workload report [--draft <id>] [--project <id>] [--milestone <id>] [--team <id>] [--json]
 gitpm comment list [--draft <id>] --project <id> --task <id>
 gitpm comment create [--draft <id>] --project <id> --task <id> (--body <text> | --file <path>)
 gitpm comment update [--draft <id>] --project <id> --task <id> --id <comment-id> (--body <text> | --file <path>)

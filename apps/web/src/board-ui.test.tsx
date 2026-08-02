@@ -23,6 +23,8 @@ class BoardApi {
   async listEntities(_draftId: string, type: string, project?: string) { const schemas: Record<string, string> = { projects: "gitpm/project@2", people: "gitpm/person@1", tasks: "gitpm/task@2", milestones: "gitpm/milestone@2", views: "gitpm/saved-view@1" }; return this.entities.filter((item) => item.document.schema === schemas[type] && (project === undefined || item.document.project === project)); }
   async createEntity(_draftId: string, _type: string, _fingerprint: string, document: EntityDocument) { const result = this.result(document); this.entities.push(result); return result; }
   async updateEntity(_draftId: string, _type: string, entity: EntityResult, _fingerprint: string, document: EntityDocument) { const result = this.result(document); this.entities = this.entities.map((item) => item.document.id === entity.document.id ? result : item); return result; }
+  async archiveEntity(draftId: string, type: string, entity: EntityResult, fingerprint: string) { return await this.updateEntity(draftId, type, entity, fingerprint, { ...entity.document, lifecycle: "archived" }); }
+  async deleteEntity(_draftId: string, _type: string, entity: EntityResult) { this.entities = this.entities.filter((item) => item.document.id !== entity.document.id); }
   async getConfiguration(_draftId: string, kind: "statuses" | "issue-types"): Promise<ConfigurationResult> { const document = (kind === "statuses" ? { schema: "gitpm/statuses@2", statuses: [{ slug: "backlog", title: "Backlog", active: true }, { slug: "done", title: "Done", active: true }] } : { schema: "gitpm/issue-types@1", issue_types: [{ slug: "task", title: "Task", active: true }, { slug: "bug", title: "Bug", active: true }] }) as ConfigurationDocument; return { document, path: kind, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) }; }
 }
 
@@ -30,8 +32,8 @@ afterEach(cleanup);
 describe("Board and Saved Views", () => {
   it("drags a Task between status columns and reopens persisted filters", async () => {
     const entityApi = new BoardApi(); const api = entityApi as unknown as GitPmApi;
-    const onNavigate = vi.fn();
-    const { container } = render(<BoardWorkspace api={api} draft={draft} locale="en" onNavigate={onNavigate} onChanged={vi.fn(async () => undefined)} />);
+    const onNavigate = vi.fn(); const confirmAction = vi.fn(() => true);
+    const { container } = render(<BoardWorkspace api={api} confirmAction={confirmAction} draft={draft} locale="en" onNavigate={onNavigate} onChanged={vi.fn(async () => undefined)} />);
     const card = await screen.findByText("Drag me");
     expect(container.querySelector(".board-milestone")?.textContent).toBe("Beta");
     expect(container.querySelector(".board-assignees")?.textContent).toContain("Ada");
@@ -58,7 +60,7 @@ describe("Board and Saved Views", () => {
     expect(onNavigate).toHaveBeenCalledWith("board", { projectId, query: { status: ["done"], type: ["task"], milestone: [milestoneId] } });
     fireEvent.click(screen.getByText("Create and manage saved views"));
     fireEvent.change(screen.getByLabelText("View name"), { target: { value: "Done tasks" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save view" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save as new" }));
     expect(await screen.findByRole("button", { name: /Done tasks/u })).toBeTruthy();
     const saved = entityApi.entities.find((item) => item.document.schema === "gitpm/saved-view@1")!;
     expect(saved.document).toMatchObject({ kind: "board", group_by: "status", filters: { statuses: ["done"], types: ["task"], milestones: [milestoneId] } });
@@ -71,6 +73,22 @@ describe("Board and Saved Views", () => {
     expect((screen.getByLabelText("Type filter") as HTMLSelectElement).value).toBe("task");
     expect((screen.getByLabelText("Milestone") as HTMLSelectElement).value).toBe(milestoneId);
     expect(onNavigate).toHaveBeenCalledWith("board", { projectId, query: { status: ["done"], type: ["task"], milestone: [milestoneId], view: [saved.document.id] } });
+
+    fireEvent.change(screen.getByLabelText("Status filter"), { target: { value: "backlog" } });
+    fireEvent.change(screen.getByLabelText("Type filter"), { target: { value: "bug" } });
+    fireEvent.click(screen.getByRole("button", { name: "Update current view" }));
+    await waitFor(() => expect(entityApi.entities.find((item) => item.document.id === saved.document.id)?.document.filters).toEqual({ statuses: ["backlog"], types: ["bug"], milestones: [milestoneId] }));
+
+    fireEvent.change(screen.getByLabelText("View name for Done tasks"), { target: { value: "Critical work" } });
+    fireEvent.click(screen.getByRole("button", { name: "Rename" }));
+    await screen.findByRole("button", { name: "Apply Critical work" });
+    fireEvent.click(screen.getByRole("button", { name: "Archive" }));
+    await waitFor(() => expect(entityApi.entities.find((item) => item.document.id === saved.document.id)?.document.lifecycle).toBe("archived"));
+    expect(await screen.findByText("Archived")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Delete permanently" }));
+    expect(confirmAction).toHaveBeenCalledWith("Delete saved view Critical work permanently? This action cannot be undone.");
+    await waitFor(() => expect(entityApi.entities.some((item) => item.document.id === saved.document.id)).toBe(false));
+    expect(screen.queryByText("Critical work")).toBeNull();
   });
 
   it("restores project, status, type and saved view route state", async () => {

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { GitPmApi } from "./api.js";
+import { ApiError, type GitPmApi } from "./api.js";
 import { AdminWorkspace } from "./admin-ui.js";
 import type { ConfigurationDocument, ConfigurationImpact, ConfigurationResult, DraftStatus, EntityDocument, EntityResult, RepositoryDocument, RepositoryResult } from "./types.js";
 
@@ -23,7 +23,10 @@ class AdminApi {
   async createEntity(_draftId: string, _type: string, _fingerprint: string, document: EntityDocument) { const result = this.result(document); this.entities.push(result); if (document.schema === "gitpm/calendar@1" && this.repository !== undefined && !this.entities.some((item) => item !== result && item.document.id === this.repository?.document.default_calendar)) this.repository = { ...this.repository, document: { ...this.repository.document, default_calendar: String(document.id) } }; return result; }
   async updateEntity(_draftId: string, _type: string, entity: EntityResult, _fingerprint: string, document: EntityDocument) { const result = this.result(document); this.entities = this.entities.map((item) => item === entity ? result : item); return result; }
   async archiveEntity(draftId: string, type: string, entity: EntityResult, fingerprint: string) { return await this.updateEntity(draftId, type, entity, fingerprint, { ...entity.document, lifecycle: "archived" }); }
-  async deleteEntity(_draftId: string, _type: string, entity: EntityResult) { this.mutations += 1; this.entities = this.entities.filter((item) => item !== entity); }
+  async deleteEntity(_draftId: string, _type: string, entity: EntityResult) {
+    if (entity.document.schema === "gitpm/calendar@1" && this.repository?.document.default_calendar === entity.document.id) throw new ApiError("DELETE_RESTRICTED", `${entity.document.id} is referenced`);
+    this.mutations += 1; this.entities = this.entities.filter((item) => item.document.id !== entity.document.id);
+  }
   async getConfiguration(_draftId: string, kind: ConfigurationKind) { this.configurationReads.push(kind); return this.configurations.get(kind)!; }
   async getRepositoryConfiguration() { const calendar = this.entities.find((item) => item.document.schema === "gitpm/calendar@1")?.document.id ?? "C-26-QD7FJ4"; this.repository ??= { document: { schema: "gitpm/repository@1" as const, default_branch: "main", default_calendar: calendar, allowed_top_level_files: [], ui_poll_interval_seconds: 5 }, path: ".gitpm/repository.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) }; return this.repository; }
   async getConfigurationImpact() { return this.configurationImpact; }
@@ -161,14 +164,17 @@ describe("administration UI", () => {
 
   it("shows concrete reference blockers instead of submitting an unsafe configuration update", async () => {
     const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
-    admin.configurationImpact = { blocking: true, issues: [{ code: "CONFIG_REFERENCE", path: "projects/P-26-111111/tasks/T-26-222222.yaml", field: "status", message: "Status backlog is still in use" }] };
-    render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="settings" onChanged={vi.fn(async () => undefined)} />);
+    admin.configurationImpact = { blocking: true, issues: [{ code: "CONFIG_REFERENCE", path: "projects/P-26-111111/views/V-26-333333.yaml", field: "filters.statuses", message: "Status backlog is still in use" }] };
+    const onOpenView = vi.fn();
+    render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="settings" onOpenView={onOpenView} onChanged={vi.fn(async () => undefined)} />);
     const statusesCard = (await screen.findByRole("heading", { name: "Statuses" })).closest<HTMLElement>(".config-editor")!;
     fireEvent.click(within(statusesCard).getByRole("button", { name: "Edit Statuses" }));
     const dialog = screen.getByRole("dialog", { name: "Edit: Statuses" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Delete Backlog" }));
     fireEvent.submit(within(dialog).getByRole("button", { name: "Save" }).closest("form")!);
-    expect(await within(dialog).findByText(/projects\/P-26-111111\/tasks\/T-26-222222.yaml/u)).toBeTruthy();
+    expect(await within(dialog).findByText(/projects\/P-26-111111\/views\/V-26-333333.yaml/u)).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Open blocking view" }));
+    expect(onOpenView).toHaveBeenCalledWith("P-26-111111", "V-26-333333");
     expect(admin.configurationUpdates).toBe(0);
   });
 
@@ -206,25 +212,40 @@ describe("administration UI", () => {
     expect(admin.mutations).toBe(0);
   });
 
-  it("blocks default-calendar archival and confirms permanent administration deletion", async () => {
+  it("blocks default-calendar archival and deletion until another default is selected", async () => {
     const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
-    await admin.createEntity("DRF-ADMIN", "calendars", "", { schema: "gitpm/calendar@1", id: "CAL-26-111111", name: "Default", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
-    const confirmAction = vi.fn(() => false);
-    render(<AdminWorkspace api={api} confirmAction={confirmAction} draft={draft} role="Maintainer" locale="en" surface="calendar" onChanged={vi.fn(async () => undefined)} />);
+    await admin.createEntity("DRF-ADMIN", "calendars", "", { schema: "gitpm/calendar@1", id: "C-26-111111", name: "Default", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
+    await admin.createEntity("DRF-ADMIN", "calendars", "", { schema: "gitpm/calendar@1", id: "C-26-222222", name: "Replacement", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
+    const confirmAction = vi.fn(() => true);
+    const rendered = render(<AdminWorkspace api={api} confirmAction={confirmAction} draft={draft} role="Maintainer" locale="en" surface="calendar" onChanged={vi.fn(async () => undefined)} />);
     await screen.findByText(/Default \(Repository default calendar\)/u);
-    fireEvent.click(screen.getByRole("button", { name: "Edit calendar" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Edit calendar" })[0]!);
 
     const deleteButton = screen.getByRole("button", { name: "Delete" });
     expect(deleteButton.className).toContain("danger");
     expect((screen.getByRole("button", { name: "Archive" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((deleteButton as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText(/Choose another repository default calendar/u)).toBeTruthy();
     fireEvent.click(deleteButton);
-    expect(confirmAction).toHaveBeenCalledWith("Delete Default permanently? This action cannot be undone.");
-    expect(screen.getByRole("dialog", { name: "Edit calendar: Default" })).toBeTruthy();
+    expect(confirmAction).not.toHaveBeenCalled();
+    expect(admin.entities.some((item) => item.document.id === "C-26-111111")).toBe(true);
 
-    confirmAction.mockReturnValue(true);
-    fireEvent.click(deleteButton);
+    rendered.rerender(<AdminWorkspace api={api} confirmAction={confirmAction} draft={draft} role="Maintainer" locale="en" surface="settings" onChanged={vi.fn(async () => undefined)} />);
+    const repositoryCard = (await screen.findByRole("heading", { name: "Repository settings" })).closest<HTMLElement>(".config-editor")!;
+    fireEvent.click(within(repositoryCard).getByRole("button", { name: "Edit Repository settings" }));
+    fireEvent.change(screen.getByLabelText("Repository default calendar"), { target: { value: "C-26-222222" } });
+    fireEvent.submit(screen.getByRole("button", { name: "Save" }).closest("form")!);
+    await waitFor(() => expect(admin.repository?.document.default_calendar).toBe("C-26-222222"));
+
+    rendered.rerender(<AdminWorkspace api={api} confirmAction={confirmAction} draft={draft} role="Maintainer" locale="en" surface="calendar" onChanged={vi.fn(async () => undefined)} />);
+    await screen.findByText(/^Default$/u);
+    fireEvent.click(screen.getAllByRole("button", { name: "Edit calendar" })[0]!);
+    const enabledDelete = screen.getByRole("button", { name: "Delete" });
+    expect((enabledDelete as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(enabledDelete);
+    expect(confirmAction).toHaveBeenCalledWith("Delete Default permanently? This action cannot be undone.");
     await waitFor(() => expect(screen.queryByText(/Default \(Repository default calendar\)/u)).toBeNull());
+    expect(admin.entities.some((item) => item.document.id === "C-26-111111")).toBe(false);
   });
 
   it("shows each person's projects as clickable links in the people directory", async () => {
