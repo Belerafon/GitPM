@@ -743,6 +743,11 @@ describe.concurrent("CLI direct mode", () => {
     expect(archived.exitCode).toBe(0);
     expect(JSON.parse(archived.output)).toMatchObject({ ok: true, code: "OK", document: { lifecycle: "archived" } });
     await expect(readFile(path.join(checkout, "projects", "P-26-MGP84K", "milestones", "M-26-461GDJ.yaml"), "utf8")).resolves.toContain("lifecycle: archived");
+    const bypass = await run(["entity", "update", "--type", "milestone", "--id", "M-26-461GDJ", "--set", "lifecycle=active", "--json"], process.cwd(), { direct });
+    expect(JSON.parse(bypass.output)).toMatchObject({ ok: false, code: "ENTITY_LIFECYCLE_OPERATION_REQUIRED" });
+    const restored = await run(["entity", "restore", "--type", "milestone", "--id", "M-26-461GDJ", "--json"], process.cwd(), { direct });
+    expect(restored.exitCode, restored.output).toBe(0);
+    expect(JSON.parse(restored.output)).toMatchObject({ ok: true, code: "OK", document: { lifecycle: "active" } });
 
     const moved = await run([
       "entity", "move",

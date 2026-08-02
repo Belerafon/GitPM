@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type DragEvent, type FormEvent } from "react";
-import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
+import { activeProjectIds, ENTITY_ID_PREFIX, isOperationalTask, newUniqueEntityId } from "@gitpm/shared";
 import { buildTaskHierarchy } from "@gitpm/task-hierarchy";
 import type { GitPmApi } from "./api.js";
 import { message, type Locale, type MessageKey } from "./i18n.js";
@@ -91,7 +91,7 @@ export function BoardWorkspace({ api, draft, locale, initialProjectId = "", init
     } catch (caught) { report(caught); return null; }
   };
 
-  const activeTasks = tasks.filter((item) => item.document.lifecycle === "active");
+  const activeTasks = tasks.filter((item) => isOperationalTask(item.document, activeProjectIds(projects.map((project) => project.document))));
   const hierarchy = useMemo(() => buildTaskHierarchy(activeTasks.map((entity) => ({
     id: entity.document.id,
     parent: text(entity.document, "parent") || undefined,
@@ -141,6 +141,9 @@ export function BoardWorkspace({ api, draft, locale, initialProjectId = "", init
     void mutate(async () => await api.archiveEntity(draft.draft_id, "views", view, fingerprint)).then((result) => {
       if (result !== null && activeViewId === view.document.id) applyFilters(statusFilter, typeFilter, milestoneFilter);
     });
+  };
+  const restoreView = (view: EntityResult) => {
+    void mutate(async () => await api.restoreEntity(draft.draft_id, "views", view, fingerprint));
   };
   const deleteView = (view: EntityResult) => {
     const name = text(view.document, "name");
@@ -203,7 +206,7 @@ export function BoardWorkspace({ api, draft, locale, initialProjectId = "", init
           <form onSubmit={(event) => event.preventDefault()}><label>{t("board.viewName")}<input aria-label={t("board.viewNameFor", { name })} defaultValue={name} key={`${view.document.id}:${view.blob_id}`} name="name" required /></label><div className="saved-view-actions">
             <button disabled={readOnly || archived} onClick={(event) => updateManagedView(event.currentTarget.form!, view, false)} type="button">{t("board.renameView")}</button>
             <button className="primary" disabled={readOnly || archived} onClick={(event) => updateManagedView(event.currentTarget.form!, view, true)} type="button">{t("board.updateView")}</button>
-            <button disabled={readOnly || archived} onClick={() => archiveView(view)} type="button">{t("core.archive")}</button>
+            {archived ? <button disabled={readOnly} onClick={() => restoreView(view)} type="button">{t("core.restore")}</button> : <button disabled={readOnly} onClick={() => archiveView(view)} type="button">{t("core.archive")}</button>}
             <button className="danger" disabled={readOnly} onClick={() => deleteView(view)} type="button">{t("board.deleteView")}</button>
           </div></form>
         </article>;

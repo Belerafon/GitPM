@@ -668,6 +668,23 @@ export function registerEntityApi(
     },
   );
 
+  app.post<{ Params: { draftId: string; entityType: string; id: string }; Body: { expected_fingerprint: string; expected_blob_id: string } }>(
+    "/api/drafts/:draftId/entities/:entityType/:id/restore",
+    { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.entityFingerprint } },
+    async (request) => {
+      const actor = await authenticate(request);
+      requireEntityMutationRole(actor, request.params.entityType);
+      return await store.restore(
+        request.params.draftId,
+        actor.userId,
+        request.params.entityType,
+        request.params.id,
+        request.body.expected_fingerprint,
+        request.body.expected_blob_id,
+      );
+    },
+  );
+
   app.post<{ Params: { draftId: string; id: string }; Body: { expected_fingerprint: string; expected_blob_id: string; target_project: string; target_milestone?: string; target_parent?: string } }>(
     "/api/drafts/:draftId/entities/tasks/:id/move",
     { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.moveTask } },

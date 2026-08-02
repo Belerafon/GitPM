@@ -214,6 +214,10 @@ export class AgentWorkflow {
     return await this.repository.archiveEntity(draftId, entityType, id, scope);
   }
 
+  async restoreEntity(draftId: string, entityType: string, id: string, scope: AgentScope = {}) {
+    return await this.repository.restoreEntity(draftId, entityType, id, scope);
+  }
+
   async moveTask(
     draftId: string,
     id: string,

@@ -304,6 +304,9 @@ importers:
       '@gitpm/scheduling':
         specifier: workspace:*
         version: link:../scheduling
+      '@gitpm/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@gitpm/time-entries':
         specifier: workspace:*
         version: link:../time-entries
@@ -398,6 +401,9 @@ importers:
       '@gitpm/scheduling':
         specifier: workspace:*
         version: link:../scheduling
+      '@gitpm/shared':
+        specifier: workspace:*
+        version: link:../shared
 
 packages:
 

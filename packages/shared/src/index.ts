@@ -72,6 +72,33 @@ export type RepositoryMode = (typeof REPOSITORY_MODES)[number];
 export const DEFAULT_REPOSITORY_MODE: RepositoryMode = "direct";
 export const REPOSITORY_MODE_ENV = "GITPM_REPOSITORY_MODE";
 
+const lifecycleField = (document: object, field: "id" | "lifecycle" | "project"): unknown => (
+  (document as Readonly<Record<string, unknown>>)[field]
+);
+
+export function activeProjectIds(projects: readonly object[]): ReadonlySet<string> {
+  return new Set(projects.flatMap((project) => (
+    lifecycleField(project, "lifecycle") === "active" && typeof lifecycleField(project, "id") === "string"
+      ? [lifecycleField(project, "id") as string]
+      : []
+  )));
+}
+
+/**
+ * A Task is operational only while both it and its owning Project are active.
+ * Keep this predicate at the shared read-model boundary so UI, exports and
+ * workload calculations cannot silently disagree about effective lifecycle.
+ */
+export function isOperationalTask(
+  task: object,
+  operationalProjects: ReadonlySet<string>,
+): boolean {
+  const project = lifecycleField(task, "project");
+  return lifecycleField(task, "lifecycle") === "active"
+    && typeof project === "string"
+    && operationalProjects.has(project);
+}
+
 export class RepositoryModeError extends Error {
   constructor(public readonly code: string, message: string) {
     super(message);

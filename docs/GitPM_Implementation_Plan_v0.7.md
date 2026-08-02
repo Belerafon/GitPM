@@ -409,6 +409,9 @@ Optimistic revision для файла является Git blob object ID, вы�
 
 Archive меняет `lifecycle: archived` и оставляет файл.
 
+Restore меняет `lifecycle: archived` на `active` только через отдельную доменную операцию,
+после проверки активного состояния ссылок сущности. Generic update не меняет lifecycle.
+
 Delete удаляет файл из worktree. Перед delete server проверяет прямые ссылки и сначала отвечает
 `DELETE_RESTRICTED` со структурированным списком затрагиваемых объектов.
 

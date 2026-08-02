@@ -1,5 +1,6 @@
 import { formatDateOnly, isoWeekday, parseDateOnly, workingDatesBetween, type CalendarDefinition } from "@gitpm/calendar";
 import { resolvePlanning, type ScheduleTracksConfig } from "@gitpm/scheduling";
+import { activeProjectIds, isOperationalTask } from "@gitpm/shared";
 
 const DAY_MS = 86_400_000;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
@@ -89,14 +90,14 @@ export function calculateWorkload(
   calendars: readonly WorkloadCalendar[],
   projects: readonly WorkloadProject[],
 ): WorkloadReport {
-  const activeProjects = new Set(projects.filter((project) => project.lifecycle === "active").map((project) => project.id));
+  const activeProjects = activeProjectIds(projects);
   const activeCalendars = new Map(calendars.filter((calendar) => calendar.lifecycle === "active").map((calendar) => [calendar.id, calendar]));
   const activePeople = new Map(people.filter((person) => person.lifecycle === "active" && activeCalendars.has(person.calendar)).map((person) => [person.id, person]));
   const exclusions = { archived: 0, undated: 0, unestimated: 0, unassigned: 0, unavailable_assignees: 0 };
   const included: { task: WorkloadTask; assignees: readonly WorkloadPerson[]; assigneeCount: number }[] = [];
 
   for (const task of tasks) {
-    if (task.lifecycle !== "active" || !activeProjects.has(task.project)) { exclusions.archived += 1; continue; }
+    if (!isOperationalTask(task, activeProjects)) { exclusions.archived += 1; continue; }
     if (task.start === undefined || task.finish === undefined || !DATE_PATTERN.test(task.start) || !DATE_PATTERN.test(task.finish) || dayTime(task.start) > dayTime(task.finish)) { exclusions.undated += 1; continue; }
     if (task.estimate_hours === undefined || !Number.isFinite(task.estimate_hours) || task.estimate_hours < 0) { exclusions.unestimated += 1; continue; }
     if (task.assignees === undefined || task.assignees.length === 0) { exclusions.unassigned += 1; continue; }

@@ -485,7 +485,12 @@ describe("domain entity store", () => {
     const archived = await store.archive("DRF-DOMAIN", "42", "tasks", String(task.document.id), fingerprint, task.blob_id);
     fingerprint = archived.draft_fingerprint;
     expect(archived.document.lifecycle).toBe("archived");
-    const deleted = await store.delete("DRF-DOMAIN", "42", "tasks", String(task.document.id), fingerprint, archived.blob_id);
+    await expect(store.update("DRF-DOMAIN", "42", "tasks", String(task.document.id), fingerprint, archived.blob_id, { ...archived.document, lifecycle: "active" }))
+      .rejects.toMatchObject({ code: "ENTITY_LIFECYCLE_OPERATION_REQUIRED" });
+    const restored = await store.restore("DRF-DOMAIN", "42", "tasks", String(task.document.id), fingerprint, archived.blob_id);
+    fingerprint = restored.draft_fingerprint;
+    expect(restored.document.lifecycle).toBe("active");
+    const deleted = await store.delete("DRF-DOMAIN", "42", "tasks", String(task.document.id), fingerprint, restored.blob_id);
     fingerprint = deleted.draft_fingerprint;
     expect(deleted.deleted).toBe(true);
 
@@ -535,6 +540,24 @@ describe("domain entity store", () => {
     expect(updated.document).toMatchObject({ default_calendar: "C-26-7GQW87", ui_poll_interval_seconds: 7 });
     const archived = await store.archive("DRF-REPOSITORY", "42", "calendars", "C-26-QD7FJ4", updated.draft_fingerprint, originalCalendar.blob_id);
     expect(archived.document.lifecycle).toBe("archived");
+  });
+
+  it("restores only archived entities whose activation references are active", async () => {
+    const { manager, store } = await runtime();
+    const draft = await manager.createDraft("DRF-RESTORE", "42");
+    const project = await store.get("DRF-RESTORE", "projects", "P-26-MGP84K");
+    const archivedProject = await store.archive("DRF-RESTORE", "42", "projects", "P-26-MGP84K", draft.fingerprint, project.blob_id);
+    const task = await store.get("DRF-RESTORE", "tasks", "T-26-P9G3P8");
+    const archivedTask = await store.archive("DRF-RESTORE", "42", "tasks", "T-26-P9G3P8", archivedProject.draft_fingerprint, task.blob_id);
+
+    await expect(store.restore("DRF-RESTORE", "42", "tasks", "T-26-P9G3P8", archivedTask.draft_fingerprint, archivedTask.blob_id))
+      .rejects.toMatchObject({
+        code: "ENTITY_RESTORE_REFERENCES_INACTIVE",
+        details: expect.arrayContaining([expect.objectContaining({ field: "project", id: "P-26-MGP84K" })]),
+      });
+    const restoredProject = await store.restore("DRF-RESTORE", "42", "projects", "P-26-MGP84K", archivedTask.draft_fingerprint, archivedProject.blob_id);
+    const restoredTask = await store.restore("DRF-RESTORE", "42", "tasks", "T-26-P9G3P8", restoredProject.draft_fingerprint, archivedTask.blob_id);
+    expect(restoredTask.document.lifecycle).toBe("active");
   });
 
   it("previews and blocks configuration changes that invalidate repository data", async () => {

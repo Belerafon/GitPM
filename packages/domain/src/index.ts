@@ -420,6 +420,68 @@ export function containsEntityReference(value: unknown, id: string): boolean {
   return false;
 }
 
+interface RestoreReference {
+  readonly field: string;
+  readonly schema: string;
+  readonly id: string;
+}
+
+function restoreReferences(document: GitPmDocument): readonly RestoreReference[] {
+  const references: RestoreReference[] = [];
+  const add = (field: string, schema: string, value: unknown): void => {
+    if (typeof value === "string") references.push({ field, schema, id: value });
+  };
+  const addMany = (field: string, schema: string, value: unknown): void => {
+    if (Array.isArray(value)) for (const id of value) add(field, schema, id);
+  };
+  const schedules = objectValue(document.schedules);
+  switch (document.schema) {
+    case "gitpm/project@2":
+      add("owner", "gitpm/person@1", document.owner);
+      break;
+    case "gitpm/task@2":
+      add("project", "gitpm/project@2", document.project);
+      add("parent", "gitpm/task@2", document.parent);
+      add("milestone", "gitpm/milestone@2", document.milestone);
+      addMany("assignees", "gitpm/person@1", document.assignees);
+      for (const [track, rawWindow] of Object.entries(schedules)) {
+        addMany(`schedules.${track}.depends_on`, "gitpm/task@2", objectValue(rawWindow).depends_on);
+      }
+      break;
+    case "gitpm/milestone@2":
+      add("project", "gitpm/project@2", document.project);
+      break;
+    case "gitpm/person@1":
+      add("calendar", "gitpm/calendar@1", document.calendar);
+      break;
+    case "gitpm/team@1":
+      addMany("members", "gitpm/person@1", document.members);
+      break;
+    case "gitpm/saved-view@1": {
+      add("project", "gitpm/project@2", document.project);
+      const filters = objectValue(document.filters);
+      addMany("filters.assignees", "gitpm/person@1", filters.assignees);
+      addMany("filters.milestones", "gitpm/milestone@2", filters.milestones);
+      break;
+    }
+  }
+  return references;
+}
+
+function assertRestoreReferencesActive(document: GitPmDocument, repository: RepositoryIndex): void {
+  const inactive = restoreReferences(document).flatMap((reference) => {
+    const target = repository.bySchemaAndId.get(`${reference.schema}:${reference.id}`);
+    return target?.document.lifecycle === "active" ? [] : [{ field: reference.field, id: reference.id, path: target?.relative }];
+  });
+  if (inactive.length > 0) {
+    throw new DomainOperationError(
+      "ENTITY_RESTORE_REFERENCES_INACTIVE",
+      `Entity ${String(document.id)} cannot be restored while ${inactive.length} referenced entit${inactive.length === 1 ? "y is" : "ies are"} unavailable`,
+      inactive,
+    );
+  }
+}
+
 export function entityDisplayLabel(document: GitPmDocument): string | undefined {
   if (typeof document.name === "string" && document.name.trim() !== "") return document.name;
   if (typeof document.title === "string" && document.title.trim() !== "") return document.title;
@@ -806,14 +868,26 @@ export class EntityStore {
     expectedBlobId: string,
     document: GitPmDocument,
     assertChangedPaths?: (paths: readonly string[]) => void,
+    lifecycleOperation?: "archive" | "restore",
   ): Promise<EntityResult> {
     const mutation = await this.drafts.withRepositoryMutation(draftId, owner, expectedFingerprint, this.mutationMode, async (metadata) => {
       const found = await this.find(draftId, metadata, entityType, id);
       if (document.id !== id || document.schema !== found.document.schema || entityPathForDocument(document) !== found.relative) {
         throw new DomainOperationError("ENTITY_IDENTITY_IMMUTABLE", "Entity ID, schema and owning project are immutable");
       }
+      const lifecycleChanged = found.document.lifecycle !== document.lifecycle;
+      if (lifecycleChanged && lifecycleOperation === undefined) {
+        throw new DomainOperationError("ENTITY_LIFECYCLE_OPERATION_REQUIRED", "Use the dedicated archive or restore operation to change lifecycle");
+      }
+      if (lifecycleOperation === "archive" && document.lifecycle !== "archived") {
+        throw new DomainOperationError("ENTITY_LIFECYCLE_OPERATION_REQUIRED", "Archive must set lifecycle to archived");
+      }
+      if (lifecycleOperation === "restore" && document.lifecycle !== "active") {
+        throw new DomainOperationError("ENTITY_LIFECYCLE_OPERATION_REQUIRED", "Restore must set lifecycle to active");
+      }
       await this.drafts.assertFileBlobId(draftId, found.relative, expectedBlobId);
       const repository = await this.index(draftId, metadata);
+      if (lifecycleOperation === "restore") assertRestoreReferencesActive(document, repository);
       if (found.document.schema === "gitpm/calendar@1" && document.lifecycle === "archived") {
         const repositoryConfiguration = repository.entities.find((entity) => entity.document.schema === "gitpm/repository@1")?.document;
         if (repositoryConfiguration?.default_calendar === id) {
@@ -863,7 +937,25 @@ export class EntityStore {
     return await this.update(draftId, owner, entityType, id, expectedFingerprint, expectedBlobId, {
       ...current.document,
       lifecycle: "archived",
-    });
+    }, undefined, "archive");
+  }
+
+  async restore(
+    draftId: string,
+    owner: string,
+    entityType: string,
+    id: string,
+    expectedFingerprint: string,
+    expectedBlobId: string,
+  ): Promise<EntityResult> {
+    const current = await this.get(draftId, entityType, id);
+    if (current.document.lifecycle !== "archived") {
+      throw new DomainOperationError("ENTITY_NOT_ARCHIVED", `Entity ${id} is not archived`);
+    }
+    return await this.update(draftId, owner, entityType, id, expectedFingerprint, expectedBlobId, {
+      ...current.document,
+      lifecycle: "active",
+    }, undefined, "restore");
   }
 
   async moveTask(
