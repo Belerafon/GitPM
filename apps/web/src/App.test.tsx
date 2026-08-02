@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App.js";
-import type { GitPmApi } from "./api.js";
+import type { ExportDownload, GitPmApi } from "./api.js";
 import { POLL_INTERVAL_MS } from "./draft-context.js";
 import { assertLocalePacks, formatDateOnly, formatDurationHours, formatNumber, localeRegistry, LOCALE_STORAGE_KEY, message, pluralCategory, registerLocale, selectLocale } from "./i18n.js";
 import type { ChangesList, CommitFileDiff, CommitHistoryDetail, CommitResult, ConfigurationDocument, ConfigurationResult, DraftSnapshot, DraftStatus, EntityResult, MergeRequestStatus, PublicSession, PushResult, RepositoryDocument, RepositoryResult, RevertDraftResult, SemanticDiff, WriterMode, WorktreeDirectory, WorktreeFile } from "./types.js";
@@ -81,6 +81,7 @@ class FakeApi implements GitPmApi {
   async listChanges(): Promise<ChangesList> { throw new Error("not used"); }
   async listWorktree(): Promise<WorktreeDirectory> { return { path: "", entries: [] }; }
   async readWorktreeFile(): Promise<WorktreeFile> { throw new Error("not used"); }
+  async downloadWorktreeFile(): Promise<ExportDownload> { throw new Error("not used"); }
   async deleteWorktreeEntry(): Promise<string> { throw new Error("not used"); }
   async createWorktreeDirectory(): Promise<string> { throw new Error("not used"); }
   async uploadWorktreeFile(): Promise<string> { throw new Error("not used"); }

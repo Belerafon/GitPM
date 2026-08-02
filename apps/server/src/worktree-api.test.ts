@@ -67,6 +67,7 @@ beforeEach(async () => {
   await writeFile(path.join(worktree, ".agents", "skills", "gitpm", "SKILL.md"), "---\nname: gitpm\n---\n", "utf8");
   await writeFile(path.join(worktree, "README.md"), "# Привет\n", "utf8");
   await writeFile(path.join(worktree, "docs", "guide.txt"), "Guide", "utf8");
+  await writeFile(path.join(worktree, "docs", "отчёт.bin"), Buffer.from([4, 5, 6]));
   await writeFile(path.join(worktree, "binary.bin"), Buffer.from([0, 1, 2, 3]));
   await writeFile(path.join(worktree, "large.txt"), Buffer.alloc(1_048_577, 65));
   await writeFile(path.join(worktree, ".git", "config"), "secret", "utf8");
@@ -101,12 +102,32 @@ describe("read-only working tree API", () => {
     expect(listing.body).not.toContain(".git");
 
     const nested = await app.inject({ method: "GET", url: "/api/drafts/DRF-TREE/worktree?path=docs" });
-    expect(nested.json()).toMatchObject({ path: "docs", entries: [{ path: "docs/guide.txt", type: "file" }] });
+    const nestedBody = nested.json<{ readonly path: string; readonly entries: readonly unknown[] }>();
+    expect(nestedBody.path).toBe("docs");
+    expect(nestedBody.entries).toEqual(expect.arrayContaining([expect.objectContaining({ path: "docs/guide.txt", type: "file" })]));
     const skill = await app.inject({ method: "GET", url: "/api/drafts/DRF-TREE/worktree?path=.agents%2Fskills%2Fgitpm" });
     expect(skill.json()).toMatchObject({ path: ".agents/skills/gitpm", entries: [{ path: ".agents/skills/gitpm/SKILL.md", type: "file" }] });
     const file = await app.inject({ method: "GET", url: "/api/drafts/DRF-TREE/worktree/file?path=README.md" });
     expect(file.statusCode).toBe(200);
     expect(file.json()).toEqual({ path: "README.md", size: Buffer.byteLength("# Привет\n"), content: "# Привет\n" });
+  });
+
+  it("downloads binary and large files with attachment headers", async () => {
+    const binary = await app.inject({ method: "GET", url: "/api/drafts/DRF-TREE/worktree/file/download?path=binary.bin" });
+    expect(binary.statusCode).toBe(200);
+    expect(binary.rawPayload).toEqual(Buffer.from([0, 1, 2, 3]));
+    expect(binary.headers["content-type"]).toBe("application/octet-stream");
+    expect(binary.headers["content-disposition"]).toBe("attachment; filename=\"binary.bin\"; filename*=UTF-8''binary.bin");
+    expect(binary.headers["x-content-type-options"]).toBe("nosniff");
+
+    const large = await app.inject({ method: "GET", url: "/api/drafts/DRF-TREE/worktree/file/download?path=large.txt" });
+    expect(large.statusCode).toBe(200);
+    expect(large.rawPayload.byteLength).toBe(1_048_577);
+
+    const unicode = await app.inject({ method: "GET", url: "/api/drafts/DRF-TREE/worktree/file/download?path=docs%2F%D0%BE%D1%82%D1%87%D1%91%D1%82.bin" });
+    expect(unicode.statusCode).toBe(200);
+    expect(unicode.rawPayload).toEqual(Buffer.from([4, 5, 6]));
+    expect(unicode.headers["content-disposition"]).toBe("attachment; filename=\"_____.bin\"; filename*=UTF-8''%D0%BE%D1%82%D1%87%D1%91%D1%82.bin");
   });
 
   it.each([
@@ -116,6 +137,11 @@ describe("read-only working tree API", () => {
     ["/api/drafts/DRF-TREE/worktree/file?path=binary.bin", 415, "WORKTREE_FILE_BINARY"],
     ["/api/drafts/DRF-TREE/worktree/file?path=large.txt", 413, "WORKTREE_FILE_TOO_LARGE"],
     ["/api/drafts/DRF-TREE/worktree/file?path=missing.txt", 404, "WORKTREE_ENTRY_NOT_FOUND"],
+    ["/api/drafts/DRF-TREE/worktree/file/download?path=..%2Foutside%2Fsecret.txt", 403, "WORKTREE_PATH_FORBIDDEN"],
+    ["/api/drafts/DRF-TREE/worktree/file/download?path=.git%2Fconfig", 403, "WORKTREE_PATH_FORBIDDEN"],
+    ["/api/drafts/DRF-TREE/worktree/file/download?path=outside-link%2Fsecret.txt", 403, "WORKTREE_PATH_FORBIDDEN"],
+    ["/api/drafts/DRF-TREE/worktree/file/download?path=docs", 400, "WORKTREE_NOT_FILE"],
+    ["/api/drafts/DRF-TREE/worktree/file/download?path=missing.txt", 404, "WORKTREE_ENTRY_NOT_FOUND"],
   ])("rejects unsafe or unavailable preview %s", async (url, status, code) => {
     const response = await app.inject({ method: "GET", url });
     expect(response.statusCode).toBe(status);

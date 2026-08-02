@@ -25,6 +25,7 @@ function apiFor(entries: readonly WorktreeEntry[], overrides: Partial<GitPmApi> 
   return {
     listWorktree: vi.fn(async (_draftId: string, _path?: string) => listing),
     readWorktreeFile: vi.fn(async (_draftId: string, path: string): Promise<WorktreeFile> => ({ path, size: 28, content: "<img src=x onerror=alert(1)>" })),
+    downloadWorktreeFile: vi.fn(async () => ({ blob: new Blob(["file bytes"]), filename: "download.bin" })),
     deleteWorktreeEntry: vi.fn(async () => "c".repeat(64)),
     createWorktreeDirectory: vi.fn(async () => "c".repeat(64)),
     uploadWorktreeFile: vi.fn(async () => "c".repeat(64)),
@@ -174,6 +175,19 @@ describe("working tree file manager", () => {
     expect(screen.getByRole("menuitem", { name: "Rename" })).toBeTruthy();
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("menu")).toBeNull();
+  });
+
+  it("downloads a selected file for read-only roles", async () => {
+    const artifact = { blob: new Blob(["file bytes"]), filename: "отчёт.bin" };
+    const api = apiFor([file("отчёт.bin", artifact.blob.size)], { downloadWorktreeFile: vi.fn(async () => artifact) });
+    const save = vi.fn();
+    render(<WorktreeWorkspace api={api} draft={draft} role="Reporter" locale="en" onChanged={noChanged} save={save} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "отчёт.bin" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Download" }));
+
+    await vi.waitFor(() => expect(api.downloadWorktreeFile).toHaveBeenCalledWith("DRF-TREE", "отчёт.bin"));
+    expect(save).toHaveBeenCalledWith(artifact.blob, artifact.filename);
   });
 
   it("hides mutation controls for read-only roles", async () => {

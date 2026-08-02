@@ -183,6 +183,7 @@ export interface GitPmApi {
   listChanges(draftId: string): Promise<ChangesList>;
   listWorktree(draftId: string, path?: string): Promise<WorktreeDirectory>;
   readWorktreeFile(draftId: string, path: string): Promise<WorktreeFile>;
+  downloadWorktreeFile(draftId: string, path: string): Promise<ExportDownload>;
   deleteWorktreeEntry(draftId: string, fingerprint: string, path: string): Promise<string>;
   createWorktreeDirectory(draftId: string, fingerprint: string, path: string): Promise<string>;
   uploadWorktreeFile(draftId: string, fingerprint: string, path: string, contentBase64: string): Promise<string>;
@@ -260,7 +261,7 @@ export class HttpGitPmApi implements GitPmApi {
     }
   }
 
-  private async requestDownload(path: string): Promise<ExportDownload> {
+  private async requestDownload(path: string, invalidFilenameCode = "EXPORT_FILENAME_INVALID"): Promise<ExportDownload> {
     const response = await fetch(`${this.baseUrl}${path}`, { credentials: "include" });
     if (!response.ok) {
       let body: ErrorBody = {};
@@ -268,8 +269,17 @@ export class HttpGitPmApi implements GitPmApi {
       throw new ApiError(body.error?.code ?? `HTTP_${response.status}`, body.error?.message ?? response.statusText, body.error?.details);
     }
     const disposition = response.headers.get("content-disposition") ?? "";
-    const filename = /filename="([^"]+)"/u.exec(disposition)?.[1];
-    if (filename === undefined || !/^[A-Za-z0-9._-]+$/u.test(filename)) throw new ApiError("EXPORT_FILENAME_INVALID", "Export response has no safe filename");
+    const extended = /filename\*\s*=\s*UTF-8''([^;]+)/iu.exec(disposition)?.[1]?.trim();
+    let filename: string | undefined;
+    try {
+      filename = extended === undefined ? undefined : decodeURIComponent(extended);
+    } catch {
+      filename = undefined;
+    }
+    filename ??= /filename\s*=\s*"([^"]+)"/iu.exec(disposition)?.[1];
+    if (filename === undefined || filename === "" || filename === "." || filename === ".." || /[\/\\\u0000-\u001f\u007f]/u.test(filename)) {
+      throw new ApiError(invalidFilenameCode, "Download response has no safe filename");
+    }
     return { blob: await response.blob(), filename };
   }
 
@@ -389,6 +399,9 @@ export class HttpGitPmApi implements GitPmApi {
   }
   async readWorktreeFile(draftId: string, path: string): Promise<WorktreeFile> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/worktree/file?path=${encodeURIComponent(path)}`, decodeWorktreeFile);
+  }
+  async downloadWorktreeFile(draftId: string, path: string): Promise<ExportDownload> {
+    return await this.requestDownload(`/api/drafts/${encodeURIComponent(draftId)}/worktree/file/download?path=${encodeURIComponent(path)}`, "WORKTREE_DOWNLOAD_FILENAME_INVALID");
   }
   async deleteWorktreeEntry(draftId: string, expected_fingerprint: string, path: string): Promise<string> {
     return (await this.request(`/api/drafts/${encodeURIComponent(draftId)}/worktree/entry`, decodeWorktreeEntryMutation, { method: "DELETE", body: JSON.stringify({ expected_fingerprint, path }) })).draft_fingerprint;
