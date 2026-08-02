@@ -1,6 +1,6 @@
 import type { WorkspaceDestination, WorkspaceSelection } from "../workspace-navigation.js";
 
-export type AppRouteName = "workspaces" | "portfolio" | "projects" | "stages" | "tasks" | "board" | "people" | "calendars" | "settings" | "workload" | "gantt" | "changes" | "files" | "history" | "connection";
+export type AppRouteName = "workspaces" | "projects" | "stages" | "tasks" | "board" | "people" | "calendars" | "settings" | "workload" | "gantt" | "changes" | "files" | "history" | "connection";
 export type RouteQuery = Readonly<Record<string, readonly string[]>>;
 
 export interface AppRoute {
@@ -39,9 +39,9 @@ export function parseAppRoute(input: string | URL): AppRoute | null {
   }
   const query = readQuery(url.searchParams);
   if (segments.length === 1) {
-    if (segments[0] === "tasks") return route("projects");
+    if (segments[0] === "tasks" || segments[0] === "portfolio") return route("projects");
     const staticRoutes: Readonly<Record<string, AppRouteName>> = {
-      workspaces: "workspaces", portfolio: "projects", projects: "projects", board: "board", people: "people",
+      workspaces: "workspaces", projects: "projects", board: "board", people: "people",
       calendars: "calendars", settings: "settings", workload: "workload", gantt: "gantt", changes: "changes", files: "files", history: "history", connection: "connection",
     };
     const name = staticRoutes[segments[0]!];
@@ -69,7 +69,6 @@ export function serializeAppRoute(value: AppRoute): string {
   let pathname: string;
   switch (value.name) {
     case "workspaces": pathname = "/workspaces"; break;
-    case "portfolio": pathname = "/projects"; break;
     case "projects": pathname = value.projectId === undefined ? "/projects" : `/projects/${segment(value.projectId)}`; break;
     case "stages": pathname = value.projectId === undefined ? "/projects" : value.stageId === undefined ? `/projects/${segment(value.projectId)}` : `/projects/${segment(value.projectId)}/stages/${segment(value.stageId)}`; break;
     case "tasks": pathname = value.projectId === undefined ? "/projects" : value.taskId === undefined ? `/projects/${segment(value.projectId)}` : `/projects/${segment(value.projectId)}/tasks/${segment(value.taskId)}`; break;
@@ -93,7 +92,6 @@ export function serializeAppRoute(value: AppRoute): string {
 export function routeForDestination(destination: WorkspaceDestination | "workspaces", selection: WorkspaceSelection = {}, query: RouteQuery = emptyQuery): AppRoute {
   const routeQuery = selection.query ?? query;
   if (destination === "workspaces") return route("workspaces", {}, routeQuery);
-  if (destination === "portfolio") return route("projects", {}, routeQuery);
   if (destination === "calendar") return route("calendars", {}, routeQuery);
   if (destination === "people") return route("people", { personId: selection.personId }, routeQuery);
   if (destination === "projects") return route("projects", { projectId: selection.projectId }, routeQuery);

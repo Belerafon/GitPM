@@ -21,7 +21,7 @@ This made valid domain relationships difficult to discover and produced a task s
    ```
 
 4. Board and Timeline use project-scoped canonical routes. Legacy query routes are parsed and replaced without losing filters.
-5. Tasks exist only inside a project workspace. The former global `/tasks` entry point redirects to `/projects`; Portfolio and Team Workload remain the explicit cross-project views.
+5. Tasks exist only inside a project workspace. The former global `/tasks` entry point and the removed `/portfolio` surface redirect to `/projects`; the Projects directory and Team Workload provide the remaining cross-project views.
 6. Project screens may use a project workspace read model. The read model is derived from Git/YAML, cached by the current content fingerprint, and invalidated after UI or external changes. No business database is introduced.
 7. Schema v1 and repository paths remain compatible. The UI term “stage” continues to map to `gitpm/milestone@1` until a separate schema decision establishes whether GitPM needs ordered project phases rather than due-date milestones.
 

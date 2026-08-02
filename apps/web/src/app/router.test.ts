@@ -28,7 +28,7 @@ describe("app route model", () => {
     expect(serializeAppRoute(routeForDestination("people", { personId: "U-1" }))).toBe("/people/U-1");
   });
 
-  it("canonicalizes legacy project query routes into the project workspace", () => {
+  it("canonicalizes legacy project routes into the project workspace", () => {
     expect(roundTrip("/board?project=P-1&status=backlog")).toBe("/projects/P-1/board?status=backlog");
     expect(roundTrip("/gantt?project=P-1")).toBe("/projects/P-1/timeline");
     expect(roundTrip("/projects/P-1/stages")).toBe("/projects/P-1");
