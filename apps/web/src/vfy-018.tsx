@@ -163,6 +163,8 @@ class BrowserAcceptanceApi implements GitPmApi {
   async commitFileDiff() { return { diff: "@@ -1 +1 @@\n-title: Before\n+title: After\n", oversized: false }; }
   async fileHistory() { return await this.history(); }
   async createRevertDraft(_draftId: string, commit: string, newDraftId: string) { const draft = await this.createDraft(newDraftId); this.changedFiles = [{ path: "projects/P-26-A1PHA1/tasks/T-26-H1ST0R.yaml", kind: "Modified", diff_token: "revert-token", diff: "@@ -1 +1 @@\n-title: After\n+title: Before\n", hunks: [{ old_start: 1, old_count: 1, new_start: 1, new_count: 1, lines: ["-title: After", "+title: Before"] }] }]; document.documentElement.dataset.revertedCommit = commit; return { draft, reverted_commit: commit, conflicted: false, conflicted_files: [] }; }
+  async restoreCommitFiles(): Promise<never> { throw new Error("not used in acceptance fixture"); }
+  async revertDirect(): Promise<never> { throw new Error("not used in acceptance fixture"); }
   async listComments() { return []; }
   async createComment(): Promise<never> { throw new Error("not used in acceptance fixture"); }
   async updateComment(): Promise<never> { throw new Error("not used in acceptance fixture"); }

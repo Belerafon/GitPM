@@ -31,6 +31,13 @@ Mutation routes declare a Fastify body schema. Entity and configuration document
 through the shared full JSON Schema decoder before the domain layer is called. Malformed requests
 return HTTP 400 with the locale-neutral code `REQUEST_CONTRACT_INVALID`.
 
+Direct-mode history writes use two explicit routes rather than overloading draft lifecycle:
+`POST /api/drafts/:draftId/history/:commit/restore-files` accepts an optimistic fingerprint and
+1–200 changed paths, while `POST /api/drafts/:draftId/history/:commit/revert-direct` accepts the
+fingerprint and commit message. Their decoded results return the refreshed fingerprint; the revert
+result also returns the newly created commit. The existing `/revert` route remains the worktree-mode
+operation that creates a separate revert draft.
+
 When a repository document schema changes:
 
 1. update the corresponding file in `schemas/v1`;

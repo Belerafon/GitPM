@@ -1,10 +1,10 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
-import { DraftManager } from "@gitpm/drafts";
+import { DirectRepositoryBackend, directPushStrategy, DraftManager } from "@gitpm/drafts";
 import { GitClient, GitCommandError } from "@gitpm/git-client";
 import { HistoryService } from "./index.js";
 
@@ -16,6 +16,61 @@ async function git(cwd: string, ...args: string[]): Promise<string> {
 afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))));
 
 describe("history and revert drafts", () => {
+  it("restores selected historical files and creates validated reverse commits in direct mode", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "gitpm-history-direct-")); roots.push(root);
+    const source = path.join(root, "source"); const data = path.join(root, "data");
+    await cp(path.resolve("fixtures", "schema-v1", "demo"), source, { recursive: true });
+    await git(source, "init", "-b", "main");
+    await git(source, "add", "."); await git(source, "-c", "user.name=GitPM Test", "-c", "user.email=gitpm@example.test", "commit", "-m", "Initial portfolio");
+    const projectPath = "projects/P-26-MGP84K/project.yaml";
+    const projectFile = path.join(source, ...projectPath.split("/"));
+    const initialProject = await readFile(projectFile, "utf8");
+    await writeFile(projectFile, initialProject.replace("name: GitPM launch", "name: Historical GitPM plan"), "utf8");
+    await git(source, "add", "."); await git(source, "-c", "user.name=GitPM Test", "-c", "user.email=gitpm@example.test", "commit", "-m", "Rename plan");
+    const historical = await git(source, "rev-parse", "HEAD");
+    await writeFile(projectFile, (await readFile(projectFile, "utf8")).replace("P-26-MGP84K", "P-26-INVALID"), "utf8");
+    await git(source, "add", "."); await git(source, "-c", "user.name=GitPM Test", "-c", "user.email=gitpm@example.test", "commit", "-m", "Invalid historical state");
+    const invalid = await git(source, "rev-parse", "HEAD");
+    await writeFile(projectFile, initialProject.replace("name: GitPM launch", "name: Current GitPM plan"), "utf8");
+    await git(source, "add", "."); await git(source, "-c", "user.name=GitPM Test", "-c", "user.email=gitpm@example.test", "commit", "-m", "Repair current state");
+    const repairCommit = await git(source, "rev-parse", "HEAD");
+    const readmeFile = path.join(source, "README.md");
+    await writeFile(readmeFile, `${await readFile(readmeFile, "utf8")}\ntemporary history note\n`, "utf8");
+    await git(source, "add", "README.md"); await git(source, "-c", "user.name=GitPM Test", "-c", "user.email=gitpm@example.test", "commit", "-m", "Add history note");
+    const noteCommit = await git(source, "rev-parse", "HEAD");
+
+    const client = new GitClient({ dataDirectory: data, remoteUrl: source, defaultBranch: "main", allowLocalRepository: true });
+    const backend = new DirectRepositoryBackend(client, source);
+    const drafts = new DraftManager(client, data, { backend, push: directPushStrategy(client) });
+    await drafts.ensureDirectWorkspace("DRF-LOCAL", "local-user");
+    const service = new HistoryService(drafts, client);
+
+    let metadata = await drafts.getDraft("DRF-LOCAL");
+    const restored = await service.restoreCommitFiles("DRF-LOCAL", historical, [projectPath], "local-user", metadata.fingerprint);
+    expect(restored).toMatchObject({ restored_commit: historical, restored_paths: [projectPath] });
+    expect(await readFile(projectFile, "utf8")).toContain("Historical GitPM plan");
+    await git(source, "restore", "--worktree", "--source=HEAD", "--", projectPath);
+    metadata = await drafts.refreshFingerprint("DRF-LOCAL");
+
+    await expect(service.restoreCommitFiles("DRF-LOCAL", invalid, [projectPath], "local-user", metadata.fingerprint)).rejects.toMatchObject({ code: "HISTORY_VALIDATION_FAILED" });
+    expect(await readFile(projectFile, "utf8")).toContain("Current GitPM plan");
+    expect(await git(source, "status", "--porcelain", "--", projectPath)).toBe("");
+
+    metadata = await drafts.getDraft("DRF-LOCAL");
+    await expect(service.revertDirect("DRF-LOCAL", repairCommit, "Reintroduce invalid state", "local-user", metadata.fingerprint, "GitPM Test", "gitpm@example.test")).rejects.toMatchObject({ code: "HISTORY_VALIDATION_FAILED" });
+    expect(await client.headCommit(source)).toBe(noteCommit);
+    expect((await client.statusPorcelain(source, ["AGENTS.md", ".agents/skills/gitpm/SKILL.md"])).trim()).toBe("");
+
+    metadata = await drafts.getDraft("DRF-LOCAL");
+    const reversed = await service.revertDirect("DRF-LOCAL", noteCommit, "Remove temporary history note", "local-user", metadata.fingerprint, "GitPM Test", "gitpm@example.test");
+    expect(reversed).toMatchObject({ reverted_commit: noteCommit, branch: "main" });
+    expect(await readFile(readmeFile, "utf8")).not.toContain("temporary history note");
+    expect(await git(source, "log", "-1", "--format=%s")).toBe("Remove temporary history note");
+    metadata = await drafts.getDraft("DRF-LOCAL");
+    await service.restoreCommitFiles("DRF-LOCAL", noteCommit, ["README.md"], "local-user", metadata.fingerprint);
+    expect(await readFile(readmeFile, "utf8")).toContain("temporary history note");
+  });
+
   it("shows exact commit detail and leaves the inverse diff in a new draft without rebase", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "gitpm-history-")); roots.push(root);
     const source = path.join(root, "source"); const remote = path.join(root, "remote.git"); const data = path.join(root, "data");

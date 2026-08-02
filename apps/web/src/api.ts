@@ -10,7 +10,8 @@ import {
   decodeConfigurationImpact,
   decodeConfigurationResult,
   decodeDraftStatus,
-  decodeDraftStatuses,
+    decodeDraftStatuses,
+    decodeDirectRevertResult,
   decodeEntityResult,
   decodeEntityResults,
   decodeMergeRequestStatus,
@@ -21,7 +22,8 @@ import {
   decodeRepositoryConnectionStatus,
   decodeRepositoryConnectionTest,
   decodeRepositoryResult,
-  decodeRevertDraftResult,
+    decodeRevertDraftResult,
+    decodeRestoreCommitFilesResult,
   decodeSemanticDiff,
   decodeValidationSummary,
   decodeWorktreeDirectory,
@@ -35,7 +37,7 @@ import {
   type ConfigurationResult,
   type Decoder,
 } from "@gitpm/contracts";
-import type { ChangesList, CommentResult, CommitFileDiff, CommitHistoryDetail, CommitHistoryItem, CommitResult, ConfigurationImpact, DraftSnapshot, DraftStatus, EntityResult, GitPmDocument, MergeRequestStatus, NotificationsResult, ProjectWorkspaceResult, PublicSession, PushResult, RepositoryConnectionStatus, RepositoryConnectionTest, RepositoryConnectionUpdate, RepositoryDocument, RepositoryResult, RevertDraftResult, SemanticDiff, TimeEntryDocument, WorkloadReport, WriterMode, WorktreeDirectory, WorktreeFile } from "./types.js";
+import type { ChangesList, CommentResult, CommitFileDiff, CommitHistoryDetail, CommitHistoryItem, CommitResult, ConfigurationImpact, DirectRevertResult, DraftSnapshot, DraftStatus, EntityResult, GitPmDocument, MergeRequestStatus, NotificationsResult, ProjectWorkspaceResult, PublicSession, PushResult, RepositoryConnectionStatus, RepositoryConnectionTest, RepositoryConnectionUpdate, RepositoryDocument, RepositoryResult, RestoreCommitFilesResult, RevertDraftResult, SemanticDiff, TimeEntryDocument, WorkloadReport, WriterMode, WorktreeDirectory, WorktreeFile } from "./types.js";
 
 export interface TimeEntryResult {
   readonly document: TimeEntryDocument;
@@ -200,6 +202,8 @@ export interface GitPmApi {
   commitFileDiff(draftId: string, commit: string, path: string): Promise<CommitFileDiff>;
   fileHistory(draftId: string, path: string): Promise<readonly CommitHistoryItem[]>;
   createRevertDraft(draftId: string, commit: string, newDraftId: string): Promise<RevertDraftResult>;
+  restoreCommitFiles(draftId: string, commit: string, expectedFingerprint: string, paths: readonly string[]): Promise<RestoreCommitFilesResult>;
+  revertDirect(draftId: string, commit: string, expectedFingerprint: string, message: string): Promise<DirectRevertResult>;
   listComments(draftId: string, projectId: string, taskId: string): Promise<readonly CommentResult[]>;
   createComment(draftId: string, projectId: string, taskId: string, fingerprint: string, bodyMarkdown: string): Promise<CommentResult>;
   updateComment(draftId: string, projectId: string, taskId: string, comment: CommentResult, fingerprint: string, bodyMarkdown: string): Promise<CommentResult>;
@@ -440,6 +444,12 @@ export class HttpGitPmApi implements GitPmApi {
   }
   async createRevertDraft(draftId: string, commit: string, draft_id: string): Promise<RevertDraftResult> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/history/${encodeURIComponent(commit)}/revert`, decodeRevertDraftResult, { method: "POST", body: JSON.stringify({ draft_id }) });
+  }
+  async restoreCommitFiles(draftId: string, commit: string, expected_fingerprint: string, paths: readonly string[]): Promise<RestoreCommitFilesResult> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/history/${encodeURIComponent(commit)}/restore-files`, decodeRestoreCommitFilesResult, { method: "POST", body: JSON.stringify({ expected_fingerprint, paths }) });
+  }
+  async revertDirect(draftId: string, commit: string, expected_fingerprint: string, message: string): Promise<DirectRevertResult> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/history/${encodeURIComponent(commit)}/revert-direct`, decodeDirectRevertResult, { method: "POST", body: JSON.stringify({ expected_fingerprint, message }) });
   }
   async listComments(draftId: string, projectId: string, taskId: string): Promise<readonly CommentResult[]> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}/comments`, decodeCommentResults);

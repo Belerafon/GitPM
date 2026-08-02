@@ -410,6 +410,34 @@ describe.concurrent("CLI direct mode", () => {
     expect(await git(checkout, "log", "-1", "--format=%s")).toBe("cli direct commit");
   });
 
+  it("restores files from history and creates a reverse commit without moving main", async () => {
+    const { direct, checkout } = await directFixture();
+    const relativeProject = "projects/P-26-MGP84K/project.yaml";
+    const projectFile = path.join(checkout, ...relativeProject.split("/"));
+    await writeFile(projectFile, (await readFile(projectFile, "utf8")).replace("name: GitPM launch", "name: Historical CLI state"), "utf8");
+    await git(checkout, "add", relativeProject);
+    await git(checkout, "-c", "user.name=GitPM Test", "-c", "user.email=gitpm@example.test", "commit", "-m", "historical CLI state");
+    const historical = await git(checkout, "rev-parse", "HEAD");
+    await writeFile(projectFile, (await readFile(projectFile, "utf8")).replace("name: Historical CLI state", "name: Current CLI state"), "utf8");
+    await git(checkout, "add", relativeProject);
+    await git(checkout, "-c", "user.name=GitPM Test", "-c", "user.email=gitpm@example.test", "commit", "-m", "current CLI state");
+
+    const restored = await run(["history", "restore", "--commit", historical, "--path", relativeProject, "--json"], process.cwd(), { direct });
+    expect(JSON.parse(restored.output)).toMatchObject({ ok: true, restored_commit: historical, restored_paths: [relativeProject] });
+    expect(await readFile(projectFile, "utf8")).toContain("name: Historical CLI state");
+    await git(checkout, "restore", "--source=HEAD", "--worktree", "--", relativeProject);
+
+    const notePath = "README.md";
+    await writeFile(path.join(checkout, notePath), `${await readFile(path.join(checkout, notePath), "utf8")}\ntemporary direct note\n`, "utf8");
+    await git(checkout, "add", notePath);
+    await git(checkout, "-c", "user.name=GitPM Test", "-c", "user.email=gitpm@example.test", "commit", "-m", "temporary direct note");
+    const noteCommit = await git(checkout, "rev-parse", "HEAD");
+    const reversed = await run(["history", "revert", "--commit", noteCommit, "--message", "remove direct note", "--json"], process.cwd(), { direct });
+    expect(reversed.exitCode, reversed.output).toBe(0);
+    expect(JSON.parse(reversed.output)).toMatchObject({ ok: true, reverted_commit: noteCommit, branch: "main" });
+    expect(await git(checkout, "log", "-1", "--format=%s")).toBe("remove direct note");
+  }, 120_000);
+
   it("blocks commit when an unknown file is placed inside the domain layout", async () => {
     const { direct, checkout } = await directFixture();
     const unknown = path.join(checkout, "people", "payload.bin");

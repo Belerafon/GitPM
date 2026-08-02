@@ -103,6 +103,14 @@ gitpm push --json
 `gitpm status --json` returns the mode, the checkout path, the current branch,
 the HEAD commit, the dirty state, and ahead/behind counts versus the remote.
 
+History mutations preserve the same branch boundary. Selecting an old commit is a read-only
+snapshot view; GitPM never checks out a detached HEAD. A user may restore one or more files changed
+by that commit into the current working tree, then review and commit the resulting diff, or create
+a new validated reverse commit with `git revert`. Restore refuses to overwrite an already dirty
+selected path. Direct revert requires a clean business working tree. Validation failures and Git
+conflicts roll back the attempted mutation, so direct history actions never leave an unresolved
+sequencer or a partially applied tree.
+
 ## `worktree`
 
 This is the original GitPM draft workflow. It keeps a bare repository, creates one

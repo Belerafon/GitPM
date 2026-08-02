@@ -195,7 +195,10 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
     } else if (error instanceof HistoryError) {
       code = error.code;
       message = error.message;
-      status = 400;
+      details = error.details;
+      status = error.code === "HISTORY_VALIDATION_FAILED" ? 422
+        : ["HISTORY_REVERT_CONFLICT", "HISTORY_SELECTED_FILE_DIRTY", "HISTORY_WORKSPACE_DIRTY", "HISTORY_DIRECT_MODE_REQUIRED"].includes(error.code) ? 409
+          : 400;
     } else if (error instanceof ExportError) {
       code = error.code;
       message = error.message;
@@ -486,6 +489,39 @@ export function registerHistoryApi(
     const result = await history.createRevertDraft(request.params.draftId, request.params.commit, request.body.draft_id, actor.userId);
     await reply.code(201).send({ ...result, draft: publicMetadata(result.draft) });
   });
+
+  app.post<{ Params: { draftId: string; commit: string }; Body: { expected_fingerprint: string; paths: string[] } }>(
+    "/api/drafts/:draftId/history/:commit/restore-files",
+    { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.restoreCommitFiles } },
+    async (request) => {
+      const actor = await authenticate(request);
+      requireMutationRole(actor);
+      await requireDraftRead(manager, actor, request.params.draftId);
+      return await history.restoreCommitFiles(request.params.draftId, request.params.commit, request.body.paths, actor.userId, request.body.expected_fingerprint);
+    },
+  );
+
+  app.post<{ Params: { draftId: string; commit: string }; Body: { expected_fingerprint: string; message: string } }>(
+    "/api/drafts/:draftId/history/:commit/revert-direct",
+    { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.directRevert } },
+    async (request, reply) => {
+      const actor = await authenticate(request);
+      requireMutationRole(actor);
+      await requireDraftRead(manager, actor, request.params.draftId);
+      if (actor.provider === "gitlab" && actor.email === undefined) throw new AuthError("GITLAB_PUBLIC_EMAIL_REQUIRED", "Configure a Public email in your GitLab profile before creating a commit");
+      if (actor.provider === "gitlab" && !actor.displayName?.trim()) throw new AuthError("GITLAB_PROFILE_NAME_REQUIRED", "GitLab profile name is required before creating a commit");
+      const result = await history.revertDirect(
+        request.params.draftId,
+        request.params.commit,
+        request.body.message,
+        actor.userId,
+        request.body.expected_fingerprint,
+        actor.displayName?.trim() || actor.userId,
+        actor.email?.trim() || `${actor.userId}@localhost`,
+      );
+      await reply.code(201).send(result);
+    },
+  );
 }
 
 export function registerChangesApi(
