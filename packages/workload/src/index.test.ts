@@ -15,8 +15,8 @@ describe("workload calculator", () => {
     ], [ada, linus], [calendar], [project]);
     expect(report.weeks).toEqual(["2026-07-06"]);
     expect(report.rows).toEqual([
-      { person_id: ada.id, person_name: "Ada", week: "2026-07-06", allocated_hours: 28, capacity_hours: 32, utilization_percent: 87.5, task_ids: ["T-26-ADA000", "T-26-SHARED"] },
-      { person_id: linus.id, person_name: "Linus", week: "2026-07-06", allocated_hours: 20, capacity_hours: 25.6, utilization_percent: 78.125, task_ids: ["T-26-SHARED"] },
+      { person_id: ada.id, person_name: "Ada", week: "2026-07-06", allocated_hours: 28, capacity_hours: 32, utilization_percent: 87.5, task_ids: ["T-26-ADA000", "T-26-SHARED"], task_allocations: [{ task_id: "T-26-ADA000", allocated_hours: 8 }, { task_id: "T-26-SHARED", allocated_hours: 20 }] },
+      { person_id: linus.id, person_name: "Linus", week: "2026-07-06", allocated_hours: 20, capacity_hours: 25.6, utilization_percent: 78.125, task_ids: ["T-26-SHARED"], task_allocations: [{ task_id: "T-26-SHARED", allocated_hours: 20 }] },
     ]);
   });
 
@@ -40,7 +40,7 @@ describe("workload calculator", () => {
     ], [ada, archived], [calendar], [project]);
 
     expect(report.rows).toEqual([
-      { person_id: ada.id, person_name: "Ada", week: "2026-07-06", allocated_hours: 20, capacity_hours: 32, utilization_percent: 62.5, task_ids: ["T-26-SHARED"] },
+      { person_id: ada.id, person_name: "Ada", week: "2026-07-06", allocated_hours: 20, capacity_hours: 32, utilization_percent: 62.5, task_ids: ["T-26-SHARED"], task_allocations: [{ task_id: "T-26-SHARED", allocated_hours: 20 }] },
     ]);
     expect(report.included_tasks).toBe(1);
     expect(report.exclusions.unavailable_assignees).toBe(1);
