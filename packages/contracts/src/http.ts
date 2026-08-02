@@ -308,6 +308,7 @@ export interface CommentResult {
 
 export interface MentionNotification {
   readonly key: string;
+  readonly read: boolean;
   readonly person_id: string;
   readonly mentioned_at: string;
   readonly project_id: string;
@@ -582,6 +583,7 @@ const commentResultSchema = objectSchema({
 });
 const notificationSchema = objectSchema({
   key: stringSchema,
+  read: booleanSchema,
   person_id: stringSchema,
   mentioned_at: stringSchema,
   project_id: stringSchema,
@@ -766,6 +768,7 @@ export const HTTP_REQUEST_BODY_SCHEMAS = {
     body_markdown: stringSchema,
   }),
   deleteComment: objectSchema({ expected_fingerprint: stringSchema, expected_blob_id: stringSchema }),
+  markNotificationsRead: objectSchema({ keys: stringArraySchema }),
   createTimeEntry: objectSchema({
     expected_fingerprint: stringSchema,
     person: stringSchema,

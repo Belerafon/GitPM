@@ -9,6 +9,7 @@ import {
   decodeDraftStatus,
   decodeEntityDocument,
   decodeEntityResult,
+  decodeNotifications,
   describeAjvError,
   summarizeAjvErrors,
 } from "./index.js";
@@ -61,6 +62,23 @@ describe("@gitpm/contracts runtime contracts", () => {
       draft_fingerprint: "fingerprint",
     })).toThrow(ApiContractError);
     expect(() => decodeDraftStatus({ draft_id: "DRF-1" })).toThrow(ApiContractError);
+  });
+
+  it("requires authoritative server read state on every notification", () => {
+    const notification = {
+      key: "N-26-ABC123:2026-07-20T10:05:00.000Z",
+      person_id: "U-26-5EBAE3",
+      mentioned_at: "2026-07-20T10:05:00.000Z",
+      project_id: "P-26-MGP84K",
+      task_id: "T-26-P9G3P8",
+      task_title: "Approve schema v1",
+      comment_id: "N-26-ABC123",
+      author: { provider: "git", subject: "boris@example.test", display_name: "Boris" },
+      excerpt: "Please review",
+    };
+
+    expect(() => decodeNotifications({ recipient_person_id: "U-26-5EBAE3", items: [notification] })).toThrow(ApiContractError);
+    expect(decodeNotifications({ recipient_person_id: "U-26-5EBAE3", items: [{ ...notification, read: true }] }).items[0]?.read).toBe(true);
   });
 
   it("derives entity and CLI schema catalogs from the shared registry", () => {

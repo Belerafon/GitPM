@@ -27,6 +27,7 @@ import { SecurityBoundaryError } from "@gitpm/security";
 import type { GitPmDocument as RepositoryFormatDocument } from "@gitpm/repository-format";
 import { ExportError } from "@gitpm/export";
 import { buildWorkloadReport, type WorkloadEntityDocument } from "@gitpm/workload";
+import { MemoryNotificationReadStore, type NotificationReadStore } from "./notification-read-store.js";
 
 export type ProjectRole = "Reporter" | "Developer" | "Maintainer";
 
@@ -308,7 +309,14 @@ export function registerCommentApi(
   manager: DraftManager,
   comments: CommentStore,
   authenticate: Authenticate,
+  notificationReads: NotificationReadStore = new MemoryNotificationReadStore(),
 ): void {
+  const withReadState = async (result: Awaited<ReturnType<CommentStore["notifications"]>>) => {
+    if (result.recipient_person_id === undefined) return result;
+    const readKeys = await notificationReads.read(result.recipient_person_id);
+    return { ...result, items: result.items.map((item) => ({ ...item, read: readKeys.has(item.key) })) };
+  };
+
   app.get<{ Params: { draftId: string; projectId: string; taskId: string } }>(
     "/api/drafts/:draftId/projects/:projectId/tasks/:taskId/comments",
     async (request) => {
@@ -352,8 +360,23 @@ export function registerCommentApi(
   app.get<{ Params: { draftId: string } }>("/api/drafts/:draftId/notifications", async (request) => {
     const actor = await authenticate(request);
     await requireDraftRead(manager, actor, request.params.draftId);
-    return await comments.notifications(request.params.draftId, asCommentActor(actor));
+    return await withReadState(await comments.notifications(request.params.draftId, asCommentActor(actor)));
   });
+
+  app.post<{ Params: { draftId: string }; Body: { keys: string[] } }>(
+    "/api/drafts/:draftId/notifications/read",
+    { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.markNotificationsRead } },
+    async (request) => {
+      const actor = await authenticate(request);
+      await requireDraftRead(manager, actor, request.params.draftId);
+      const result = await comments.notifications(request.params.draftId, asCommentActor(actor));
+      if (result.recipient_person_id === undefined) return result;
+      const visibleKeys = new Set(result.items.map((item) => item.key));
+      const keys = [...new Set(request.body.keys)].filter((key) => visibleKeys.has(key));
+      await notificationReads.markRead(result.recipient_person_id, keys);
+      return await withReadState(result);
+    },
+  );
 }
 
 export function registerTimeEntryApi(

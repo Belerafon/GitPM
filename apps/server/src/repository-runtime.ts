@@ -16,6 +16,7 @@ import { ExportService } from "@gitpm/export";
 import { PublicationService } from "@gitpm/publishing";
 import { resolveRepositoryMode, type RepositoryMode } from "@gitpm/shared";
 import { buildApp } from "./app.js";
+import { FileNotificationReadStore } from "./notification-read-store.js";
 import { registerAuthApi, requiredRepositorySession } from "./auth-api.js";
 import {
   RepositoryConnectionManager,
@@ -316,6 +317,7 @@ export async function buildRepositoryApp() {
     entityStore: new EntityStore(draftManager),
     exportService: new ExportService(draftManager, gitClient),
     historyService: new HistoryService(draftManager, gitClient),
+    notificationReadStore: new FileNotificationReadStore(configuration.dataDirectory, configuration.repository),
   });
   const publishing = new PublicationService(draftManager, gitClient, {
     defaultBranch: configuration.defaultBranch,

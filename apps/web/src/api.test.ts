@@ -46,6 +46,19 @@ describe("HttpGitPmApi request bodies", () => {
     expect(headers.get("content-type")).toBe("application/json");
   });
 
+  it("marks notification keys read through the authenticated server action", async () => {
+    const result = { recipient_person_id: "U-26-5EBAE3", items: [] };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(result), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await new HttpGitPmApi().markNotificationsRead("DRF-1", ["N-26-ABC123:2026-07-20T10:05:00.000Z"]);
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/drafts/DRF-1/notifications/read", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ keys: ["N-26-ABC123:2026-07-20T10:05:00.000Z"] }),
+    }));
+  });
+
   it("decodes the project time-entry envelope and serializes filters", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({
       total: 1,

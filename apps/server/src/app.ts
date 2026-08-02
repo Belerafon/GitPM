@@ -12,6 +12,7 @@ import { registerChangesApi, registerCommentApi, registerDraftApi, registerEntit
 import { registerExportApi } from "./export-api.js";
 import type { Authenticate } from "./draft-api.js";
 import { registerWorktreeApi, type WorktreeApiOptions } from "./worktree-api.js";
+import type { NotificationReadStore } from "./notification-read-store.js";
 
 const MAX_CORRELATION_ID_LENGTH = 128;
 const REQUEST_BODY_LIMIT = 1_048_576;
@@ -42,6 +43,7 @@ export interface AppOptions {
   historyService?: HistoryService;
   timeEntryStore?: TimeEntryStore;
   logger?: FastifyBaseLogger;
+  notificationReadStore?: NotificationReadStore;
   worktreeApiOptions?: WorktreeApiOptions;
 }
 
@@ -179,7 +181,7 @@ export function buildApp(options: AppOptions = {}) {
     registerWorktreeApi(app, options.draftManager, authenticate, options.worktreeApiOptions);
     if (options.entityStore) registerEntityApi(app, options.draftManager, options.entityStore, authenticate);
     if (options.exportService) registerExportApi(app, options.draftManager, options.exportService, authenticate);
-    if (options.commentStore) registerCommentApi(app, options.draftManager, options.commentStore, authenticate);
+    if (options.commentStore) registerCommentApi(app, options.draftManager, options.commentStore, authenticate, options.notificationReadStore);
     if (options.timeEntryStore) registerTimeEntryApi(app, options.draftManager, options.timeEntryStore, authenticate);
     if (options.changesService) registerChangesApi(app, options.draftManager, options.changesService, authenticate);
     if (options.historyService) registerHistoryApi(app, options.draftManager, options.historyService, authenticate);

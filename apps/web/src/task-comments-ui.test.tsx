@@ -123,7 +123,7 @@ describe("task comments", () => {
 
     const toggle = await screen.findByRole("button", { name: /^Discussion$/iu });
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByText("Keep this visible")).toBeTruthy();
+    expect(await screen.findByText("Keep this visible")).toBeTruthy();
     fireEvent.click(toggle);
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     expect(screen.queryByText("Keep this visible")).toBeNull();
@@ -135,21 +135,24 @@ describe("task comments", () => {
 describe("mention notifications", () => {
   it("shows unread mentions, marks one read and opens its task", async () => {
     const onNavigate = vi.fn();
+    const notification = {
+      key: "N-26-ABC123:2026-07-20T10:05:00.000Z",
+      read: false,
+      person_id: "U-26-5EBAE3",
+      mentioned_at: "2026-07-20T10:05:00.000Z",
+      project_id: "P-26-MGP84K",
+      task_id: "T-26-P9G3P8",
+      task_title: "Approve schema v1",
+      comment_id: "N-26-ABC123",
+      author: { provider: "git" as const, subject: "boris@example.test", display_name: "Boris" },
+      excerpt: "Please review @Anna Petrova",
+    };
     const api = {
       notifications: vi.fn(async () => ({
         recipient_person_id: "U-26-5EBAE3",
-        items: [{
-          key: "N-26-ABC123:2026-07-20T10:05:00.000Z",
-          person_id: "U-26-5EBAE3",
-          mentioned_at: "2026-07-20T10:05:00.000Z",
-          project_id: "P-26-MGP84K",
-          task_id: "T-26-P9G3P8",
-          task_title: "Approve schema v1",
-          comment_id: "N-26-ABC123",
-          author: { provider: "git" as const, subject: "boris@example.test", display_name: "Boris" },
-          excerpt: "Please review @Anna Petrova",
-        }],
+        items: [notification],
       })),
+      markNotificationsRead: vi.fn(async () => ({ recipient_person_id: "U-26-5EBAE3", items: [{ ...notification, read: true }] })),
     } as unknown as GitPmApi;
 
     render(<NotificationsMenu api={api} draft={draft} locale="en" namespace="test" onNavigate={onNavigate} />);
@@ -157,6 +160,22 @@ describe("mention notifications", () => {
     fireEvent.click(screen.getByLabelText("Notifications"));
     fireEvent.click(await screen.findByRole("button", { name: /Approve schema v1/iu }));
     expect(onNavigate).toHaveBeenCalledWith("tasks", { projectId: "P-26-MGP84K", taskId: "T-26-P9G3P8", query: { comment: ["N-26-ABC123"] } });
-    expect(JSON.parse(localStorage.getItem("gitpm.notifications.read:test") ?? "[]")).toEqual(["N-26-ABC123:2026-07-20T10:05:00.000Z"]);
+    await waitFor(() => expect(api.markNotificationsRead).toHaveBeenCalledWith(draft.draft_id, [notification.key]));
+    expect(localStorage.getItem("gitpm.notifications.read:test")).toBeNull();
+  });
+
+  it("migrates legacy browser keys to the server once", async () => {
+    const key = "N-26-ABC123:2026-07-20T10:05:00.000Z";
+    const notification = { key, read: false, person_id: "U-26-5EBAE3", mentioned_at: "2026-07-20T10:05:00.000Z", project_id: "P-26-MGP84K", task_id: "T-26-P9G3P8", task_title: "Approve schema v1", comment_id: "N-26-ABC123", author: { provider: "git" as const, subject: "boris@example.test", display_name: "Boris" }, excerpt: "Please review" };
+    localStorage.setItem("gitpm.notifications.read:test", JSON.stringify([key]));
+    const api = {
+      notifications: vi.fn(async () => ({ recipient_person_id: "U-26-5EBAE3", items: [notification] })),
+      markNotificationsRead: vi.fn(async () => ({ recipient_person_id: "U-26-5EBAE3", items: [{ ...notification, read: true }] })),
+    } as unknown as GitPmApi;
+
+    render(<NotificationsMenu api={api} draft={draft} locale="en" namespace="test" onNavigate={vi.fn()} />);
+
+    await waitFor(() => expect(api.markNotificationsRead).toHaveBeenCalledWith(draft.draft_id, [key]));
+    expect(localStorage.getItem("gitpm.notifications.read:test")).toBeNull();
   });
 });
