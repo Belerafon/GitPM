@@ -5,7 +5,7 @@ import { App } from "./App.js";
 import type { GitPmApi } from "./api.js";
 import { POLL_INTERVAL_MS } from "./draft-context.js";
 import { assertLocalePacks, formatDateOnly, formatDurationHours, formatNumber, localeRegistry, LOCALE_STORAGE_KEY, message, pluralCategory, registerLocale, selectLocale } from "./i18n.js";
-import type { ChangesList, CommitFileDiff, CommitHistoryDetail, CommitResult, ConfigurationDocument, ConfigurationResult, DraftSnapshot, DraftStatus, EntityResult, MergeRequestStatus, PublicSession, PushResult, RevertDraftResult, SemanticDiff, WriterMode, WorktreeDirectory, WorktreeFile } from "./types.js";
+import type { ChangesList, CommitFileDiff, CommitHistoryDetail, CommitResult, ConfigurationDocument, ConfigurationResult, DraftSnapshot, DraftStatus, EntityResult, MergeRequestStatus, PublicSession, PushResult, RepositoryDocument, RepositoryResult, RevertDraftResult, SemanticDiff, WriterMode, WorktreeDirectory, WorktreeFile } from "./types.js";
 
 const session: PublicSession = {
   user: { id: "42", username: "developer" },
@@ -56,6 +56,7 @@ class FakeApi implements GitPmApi {
     const schemas: Record<string, string> = { projects: "gitpm/project@2", milestones: "gitpm/milestone@2", tasks: "gitpm/task@2", people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1" };
     return this.entities.filter((item) => item.document.schema === schemas[type] && (project === undefined || item.document.project === project));
   }
+  async getEntity(_draftId: string, _type: string, id: string) { const entity = this.entities.find((item) => item.document.id === id); if (entity === undefined) throw new Error("entity not found"); return entity; }
   async projectWorkspace(draftId: string, projectId: string) {
     const project = (await this.listEntities(draftId, "projects")).find((item) => item.document.id === projectId);
     if (project === undefined) throw new Error("project not found");
@@ -73,7 +74,9 @@ class FakeApi implements GitPmApi {
     return { document, path: kind, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) };
   }
   async getRepositoryConfiguration() { return { document: { schema: "gitpm/repository@1" as const, default_branch: "main", default_calendar: "C-26-QD7FJ4", allowed_top_level_files: [], ui_poll_interval_seconds: 5 }, path: ".gitpm/repository.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) }; }
+  async getConfigurationImpact() { return { blocking: false, issues: [] }; }
   async updateConfiguration(): Promise<ConfigurationResult> { throw new Error("not used"); }
+  async updateRepositoryConfiguration(_draftId: string, entity: RepositoryResult, _fingerprint: string, document: RepositoryDocument): Promise<RepositoryResult> { return { ...entity, document }; }
   async listChanges(): Promise<ChangesList> { throw new Error("not used"); }
   async listWorktree(): Promise<WorktreeDirectory> { return { path: "", entries: [] }; }
   async readWorktreeFile(): Promise<WorktreeFile> { throw new Error("not used"); }

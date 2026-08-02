@@ -29,11 +29,11 @@ type CliAgent = Pick<AgentWorkflow, "assertScope" | "commitAll" | "createDraft" 
   & Partial<Pick<AgentWorkflow,
     | "acknowledgeExternalChanges" | "archiveEntity" | "cleanupDraft" | "closeDraft"
     | "createComment" | "createEntities" | "createEntity" | "createRevertDraft" | "createTimeEntry"
-    | "deleteComment" | "deleteEntity" | "discardAll" | "fileHistory" | "getConfiguration" | "getEntity"
+    | "deleteComment" | "deleteEntity" | "discardAll" | "fileHistory" | "getConfiguration" | "getEntity" | "getRepositoryConfiguration"
     | "historyDetail" | "historyFileDiff" | "historyList" | "listChanges" | "listComments" | "listDrafts"
     | "listEntities" | "listProjectTimeEntries" | "mergeRequestStatus" | "moveTask" | "notifications"
     | "planDelete" | "reopenDraft" | "restoreFile" | "restoreHunk" | "updateComment"
-    | "replaceTimeEntry" | "updateConfiguration" | "updateEntity" | "voidTimeEntry"
+    | "replaceTimeEntry" | "updateConfiguration" | "updateEntity" | "updateRepositoryConfiguration" | "voidTimeEntry"
   >>;
 
 export interface CliDependencies {
@@ -222,8 +222,8 @@ const commandHelp: Readonly<Record<string, string>> = {
   ].join("\n"),
   config: [
     "Usage:",
-    "  gitpm config show [--draft <id>] --kind statuses|issue-types|work-categories|schedule-tracks [--json]",
-    "  gitpm config update [--draft <id>] --kind statuses|issue-types|work-categories|schedule-tracks [--file <yaml>] [--set <field>=<yaml-value>]... [--unset <field>] [--allow-delete] [--json]",
+    "  gitpm config show [--draft <id>] --kind repository|statuses|issue-types|work-categories|schedule-tracks [--json]",
+    "  gitpm config update [--draft <id>] --kind repository|statuses|issue-types|work-categories|schedule-tracks [--file <yaml>] [--set <field>=<yaml-value>]... [--unset <field>] [--allow-delete] [--json]",
     "",
     "Reads or updates repository configuration documents in .gitpm/.",
   ].join("\n"),
@@ -1024,21 +1024,24 @@ async function runConfig(args: readonly string[], cwd: string, dependencies: Cli
   const draftId = flagValue(args, "--draft");
   const agent = draftId === undefined ? undefined : requireAgent(dependencies);
   const direct = agent === undefined ? requireDirect(dependencies) : undefined;
-  if (agent !== undefined && (agent.getConfiguration === undefined || agent.updateConfiguration === undefined)) {
+  const kind = required(flagValue(args, "--kind"), "--kind");
+  if (kind !== "repository" && kind !== "statuses" && kind !== "issue-types" && kind !== "work-categories" && kind !== "schedule-tracks") throw new RepositoryFormatError("CLI_USAGE", "--kind must be repository, statuses, issue-types, work-categories or schedule-tracks");
+  if (agent !== undefined && kind === "repository" && (agent.getRepositoryConfiguration === undefined || agent.updateRepositoryConfiguration === undefined)) {
+    throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Repository configuration commands are unavailable");
+  }
+  if (agent !== undefined && kind !== "repository" && (agent.getConfiguration === undefined || agent.updateConfiguration === undefined)) {
     throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Configuration commands are unavailable");
   }
-  const kind = required(flagValue(args, "--kind"), "--kind");
-  if (kind !== "statuses" && kind !== "issue-types" && kind !== "work-categories" && kind !== "schedule-tracks") throw new RepositoryFormatError("CLI_USAGE", "--kind must be statuses, issue-types, work-categories or schedule-tracks");
   const json = args.includes("--json");
   if (action === "show") {
-    const result = agent === undefined
-      ? await direct!.getConfiguration(kind)
-      : await agent.getConfiguration!(draftId!, kind);
+    const result = kind === "repository"
+      ? agent === undefined ? await direct!.getRepositoryConfiguration() : await agent.getRepositoryConfiguration!(draftId!)
+      : agent === undefined ? await direct!.getConfiguration(kind) : await agent.getConfiguration!(draftId!, kind);
     return { exitCode: 0, output: render(json, { ok: true, code: "OK", document: result.document, path: result.path }, result.path) };
   }
-  const current = agent === undefined
-    ? await direct!.getConfiguration(kind)
-    : await agent.getConfiguration!(draftId!, kind);
+  const current = kind === "repository"
+    ? agent === undefined ? await direct!.getRepositoryConfiguration() : await agent.getRepositoryConfiguration!(draftId!)
+    : agent === undefined ? await direct!.getConfiguration(kind) : await agent.getConfiguration!(draftId!, kind);
   const patch = await entityUpdatePatch(args, cwd);
   const next: Record<string, unknown> = { ...current.document };
   for (const [field, value] of Object.entries(patch)) {
@@ -1046,9 +1049,9 @@ async function runConfig(args: readonly string[], cwd: string, dependencies: Cli
     else next[field] = value;
   }
   next.schema = current.document.schema;
-  const updated = agent === undefined
-    ? await direct!.updateConfiguration(kind, next, agentScope(args))
-    : await agent.updateConfiguration!(draftId!, kind, next, agentScope(args));
+  const updated = kind === "repository"
+    ? agent === undefined ? await direct!.updateRepositoryConfiguration(next, agentScope(args)) : await agent.updateRepositoryConfiguration!(draftId!, next, agentScope(args))
+    : agent === undefined ? await direct!.updateConfiguration(kind, next, agentScope(args)) : await agent.updateConfiguration!(draftId!, kind, next, agentScope(args));
   return { exitCode: 0, output: render(json, { ok: true, code: "OK", document: updated.document, path: updated.path }, `Updated ${updated.path}`) };
 }
 

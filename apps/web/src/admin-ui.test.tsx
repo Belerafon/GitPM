@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GitPmApi } from "./api.js";
 import { AdminWorkspace } from "./admin-ui.js";
-import type { ConfigurationDocument, ConfigurationResult, DraftStatus, EntityDocument, EntityResult } from "./types.js";
+import type { ConfigurationDocument, ConfigurationImpact, ConfigurationResult, DraftStatus, EntityDocument, EntityResult, RepositoryDocument, RepositoryResult } from "./types.js";
 
 const draft: DraftStatus = { draft_id: "DRF-ADMIN", owner_gitlab_user_id: "42", branch: "gitpm/42/DRF-ADMIN", base_commit: "a".repeat(40), writer_mode: "ui", state: "open", fingerprint: "b".repeat(64), created_at: "2026-07-10T00:00:00.000Z", updated_at: "2026-07-10T00:00:00.000Z" };
 type ConfigurationKind = "statuses" | "issue-types" | "work-categories" | "schedule-tracks";
@@ -13,17 +13,22 @@ class AdminApi {
   entities: EntityResult[] = [];
   configurations = new Map<ConfigurationKind, ConfigurationResult>([["statuses", this.config("statuses")], ["issue-types", this.config("issue-types")], ["work-categories", this.config("work-categories")], ["schedule-tracks", this.config("schedule-tracks")]]);
   configurationReads: ConfigurationKind[] = [];
+  configurationImpact: ConfigurationImpact = { blocking: false, issues: [] };
+  configurationUpdates = 0;
+  repository: RepositoryResult | undefined;
   mutations = 0;
   private config(kind: ConfigurationKind): ConfigurationResult { return { document: configDocument(kind), path: `.gitpm/${kind}.yaml`, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) }; }
   private result(document: EntityDocument): EntityResult { this.mutations += 1; return { document, path: `${document.id}.yaml`, blob_id: String(this.mutations).padStart(40, "a"), draft_fingerprint: String(this.mutations).padStart(64, "b") }; }
   async listEntities(_draftId: string, type: string) { const schemas: Record<string, string> = { calendars: "gitpm/calendar@1", people: "gitpm/person@1", teams: "gitpm/team@1", projects: "gitpm/project@2", tasks: "gitpm/task@2", milestones: "gitpm/milestone@2" }; return this.entities.filter((item) => item.document.schema === schemas[type]); }
-  async createEntity(_draftId: string, _type: string, _fingerprint: string, document: EntityDocument) { const result = this.result(document); this.entities.push(result); return result; }
+  async createEntity(_draftId: string, _type: string, _fingerprint: string, document: EntityDocument) { const result = this.result(document); this.entities.push(result); if (document.schema === "gitpm/calendar@1" && this.repository !== undefined && !this.entities.some((item) => item !== result && item.document.id === this.repository?.document.default_calendar)) this.repository = { ...this.repository, document: { ...this.repository.document, default_calendar: String(document.id) } }; return result; }
   async updateEntity(_draftId: string, _type: string, entity: EntityResult, _fingerprint: string, document: EntityDocument) { const result = this.result(document); this.entities = this.entities.map((item) => item === entity ? result : item); return result; }
   async archiveEntity(draftId: string, type: string, entity: EntityResult, fingerprint: string) { return await this.updateEntity(draftId, type, entity, fingerprint, { ...entity.document, lifecycle: "archived" }); }
   async deleteEntity(_draftId: string, _type: string, entity: EntityResult) { this.mutations += 1; this.entities = this.entities.filter((item) => item !== entity); }
   async getConfiguration(_draftId: string, kind: ConfigurationKind) { this.configurationReads.push(kind); return this.configurations.get(kind)!; }
-  async getRepositoryConfiguration() { const calendar = this.entities.find((item) => item.document.schema === "gitpm/calendar@1")?.document.id ?? "C-26-QD7FJ4"; return { document: { schema: "gitpm/repository@1" as const, default_branch: "main", default_calendar: calendar, allowed_top_level_files: [], ui_poll_interval_seconds: 5 }, path: ".gitpm/repository.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) }; }
-  async updateConfiguration(_draftId: string, kind: ConfigurationKind, entity: ConfigurationResult, _fingerprint: string, document: ConfigurationDocument) { const result: ConfigurationResult = { ...entity, document }; this.configurations.set(kind, result); return result; }
+  async getRepositoryConfiguration() { const calendar = this.entities.find((item) => item.document.schema === "gitpm/calendar@1")?.document.id ?? "C-26-QD7FJ4"; this.repository ??= { document: { schema: "gitpm/repository@1" as const, default_branch: "main", default_calendar: calendar, allowed_top_level_files: [], ui_poll_interval_seconds: 5 }, path: ".gitpm/repository.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) }; return this.repository; }
+  async getConfigurationImpact() { return this.configurationImpact; }
+  async updateConfiguration(_draftId: string, kind: ConfigurationKind, entity: ConfigurationResult, _fingerprint: string, document: ConfigurationDocument) { this.configurationUpdates += 1; const result: ConfigurationResult = { ...entity, document }; this.configurations.set(kind, result); return result; }
+  async updateRepositoryConfiguration(_draftId: string, entity: RepositoryResult, _fingerprint: string, document: RepositoryDocument) { this.repository = { ...entity, document }; return this.repository; }
 }
 
 afterEach(cleanup);
@@ -37,7 +42,7 @@ describe("administration UI", () => {
     fireEvent.change(within(calendarForm).getByLabelText("Name"), { target: { value: "Default" } });
     fireEvent.click(within(calendarForm).getByRole("button", { name: /Add non-working date/u }));
     fireEvent.change(within(calendarForm).getByLabelText("Non-working date 1"), { target: { value: "2026-01-01" } }); fireEvent.submit(calendarForm);
-    expect(await screen.findByText("Default")).toBeTruthy();
+    expect(await screen.findByText(/Default \(Repository default calendar\)/u)).toBeTruthy();
     expect(screen.getByLabelText("Working week preview").querySelectorAll(".working")).toHaveLength(5);
 
     const onOpenPerson = vi.fn();
@@ -139,6 +144,34 @@ describe("administration UI", () => {
     expect(changed).toHaveBeenCalled();
   });
 
+  it("changes the repository default calendar and UI polling interval", async () => {
+    const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
+    await admin.createEntity("DRF-ADMIN", "calendars", "", { schema: "gitpm/calendar@1", id: "C-26-111111", name: "Old default", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
+    await admin.createEntity("DRF-ADMIN", "calendars", "", { schema: "gitpm/calendar@1", id: "C-26-222222", name: "New default", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
+    render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="settings" onChanged={vi.fn(async () => undefined)} />);
+    const repositoryCard = (await screen.findByRole("heading", { name: "Repository settings" })).closest<HTMLElement>(".config-editor")!;
+    expect(within(repositoryCard).getByText("Old default")).toBeTruthy();
+    fireEvent.click(within(repositoryCard).getByRole("button", { name: "Edit Repository settings" }));
+    const dialog = screen.getByRole("dialog", { name: "Edit: Repository settings" });
+    fireEvent.change(within(dialog).getByLabelText("Repository default calendar"), { target: { value: "C-26-222222" } });
+    fireEvent.change(within(dialog).getByLabelText("UI polling interval"), { target: { value: "7" } });
+    fireEvent.submit(within(dialog).getByRole("button", { name: "Save" }).closest("form")!);
+    await waitFor(() => expect(admin.repository?.document).toMatchObject({ default_calendar: "C-26-222222", ui_poll_interval_seconds: 7 }));
+  });
+
+  it("shows concrete reference blockers instead of submitting an unsafe configuration update", async () => {
+    const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
+    admin.configurationImpact = { blocking: true, issues: [{ code: "CONFIG_REFERENCE", path: "projects/P-26-111111/tasks/T-26-222222.yaml", field: "status", message: "Status backlog is still in use" }] };
+    render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="settings" onChanged={vi.fn(async () => undefined)} />);
+    const statusesCard = (await screen.findByRole("heading", { name: "Statuses" })).closest<HTMLElement>(".config-editor")!;
+    fireEvent.click(within(statusesCard).getByRole("button", { name: "Edit Statuses" }));
+    const dialog = screen.getByRole("dialog", { name: "Edit: Statuses" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete Backlog" }));
+    fireEvent.submit(within(dialog).getByRole("button", { name: "Save" }).closest("form")!);
+    expect(await within(dialog).findByText(/projects\/P-26-111111\/tasks\/T-26-222222.yaml/u)).toBeTruthy();
+    expect(admin.configurationUpdates).toBe(0);
+  });
+
   it("creates the official Russian 2026 preset with understandable defaults", async () => {
     const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
     render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="ru" surface="calendar" onChanged={vi.fn(async () => undefined)} />);
@@ -173,24 +206,25 @@ describe("administration UI", () => {
     expect(admin.mutations).toBe(0);
   });
 
-  it("keeps archive reversible and confirms permanent administration deletion", async () => {
+  it("blocks default-calendar archival and confirms permanent administration deletion", async () => {
     const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
     await admin.createEntity("DRF-ADMIN", "calendars", "", { schema: "gitpm/calendar@1", id: "CAL-26-111111", name: "Default", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
     const confirmAction = vi.fn(() => false);
     render(<AdminWorkspace api={api} confirmAction={confirmAction} draft={draft} role="Maintainer" locale="en" surface="calendar" onChanged={vi.fn(async () => undefined)} />);
-    await screen.findByText("Default");
+    await screen.findByText(/Default \(Repository default calendar\)/u);
     fireEvent.click(screen.getByRole("button", { name: "Edit calendar" }));
 
     const deleteButton = screen.getByRole("button", { name: "Delete" });
     expect(deleteButton.className).toContain("danger");
-    expect(screen.getByRole("button", { name: "Archive" }).className).not.toContain("danger");
+    expect((screen.getByRole("button", { name: "Archive" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(/Choose another repository default calendar/u)).toBeTruthy();
     fireEvent.click(deleteButton);
     expect(confirmAction).toHaveBeenCalledWith("Delete Default permanently? This action cannot be undone.");
     expect(screen.getByRole("dialog", { name: "Edit calendar: Default" })).toBeTruthy();
 
     confirmAction.mockReturnValue(true);
     fireEvent.click(deleteButton);
-    await waitFor(() => expect(screen.queryByText("Default")).toBeNull());
+    await waitFor(() => expect(screen.queryByText(/Default \(Repository default calendar\)/u)).toBeNull());
   });
 
   it("shows each person's projects as clickable links in the people directory", async () => {

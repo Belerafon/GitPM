@@ -177,6 +177,34 @@ describe("entity API contract", () => {
     expect(entityStore.getRepositoryConfiguration).toHaveBeenCalledWith("DRF-API");
   });
 
+  it("updates repository configuration through the Maintainer-only route", async () => {
+    const document = { schema: "gitpm/repository@1" as const, default_branch: "main", default_calendar: "C-26-QD7FJ4", allowed_top_level_files: ["README.md"], ui_poll_interval_seconds: 7 };
+    const repository = { document, path: ".gitpm/repository.yaml", blob_id: "b".repeat(40), draft_fingerprint: "c".repeat(64) };
+    const entityStore = { updateRepositoryConfiguration: vi.fn(async () => repository) } as unknown as EntityStore;
+    const app = buildApp({ authenticate: () => ({ userId: "42", role: "Maintainer" }), draftManager: manager(), entityStore });
+    apps.push(app);
+    const response = await app.inject({
+      method: "PUT",
+      url: "/api/drafts/DRF-API/config/repository",
+      payload: { expected_fingerprint: metadata.fingerprint, expected_blob_id: "a".repeat(40), document },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ document: { ui_poll_interval_seconds: 7 } });
+    expect(entityStore.updateRepositoryConfiguration).toHaveBeenCalledWith("DRF-API", "42", metadata.fingerprint, "a".repeat(40), document);
+  });
+
+  it("returns concrete configuration impact without mutating the draft", async () => {
+    const document = { schema: "gitpm/statuses@2" as const, statuses: [{ slug: "backlog", title: "Backlog", color: "gray", active: true, category: "backlog" }] };
+    const impact = { blocking: true, issues: [{ code: "CONFIG_REFERENCE", path: "projects/P-26-MGP84K/project.yaml", field: "status", message: "Status in-progress is still in use" }] };
+    const entityStore = { getConfigurationImpact: vi.fn(async () => impact) } as unknown as EntityStore;
+    const app = buildApp({ authenticate: () => ({ userId: "42", role: "Developer" }), draftManager: manager(), entityStore });
+    apps.push(app);
+    const response = await app.inject({ method: "POST", url: "/api/drafts/DRF-API/config/statuses/impact", payload: { document } });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(impact);
+    expect(entityStore.getConfigurationImpact).toHaveBeenCalledWith("DRF-API", "statuses", document);
+  });
+
   it("creates an entity through the domain store", async () => {
     const entityStore = {
       create: vi.fn(async () => ({

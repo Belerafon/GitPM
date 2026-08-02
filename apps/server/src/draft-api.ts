@@ -9,8 +9,10 @@ import {
   ApiContractError,
   decodeConfigurationDocument,
   decodeEntityDocument,
+  decodeRepositoryDocument,
   type ConfigurationDocument,
   type HttpDocument as GitPmDocument,
+  type RepositoryDocument as RepositoryConfigurationDocument,
 } from "@gitpm/contracts";
 import { ChangesError } from "@gitpm/changes";
 import type { ChangesService } from "@gitpm/changes";
@@ -22,7 +24,7 @@ import { validateRepository } from "@gitpm/validation";
 import { WorktreeReadError } from "./worktree-api.js";
 import { RepositoryConnectionError } from "./repository-connection.js";
 import { SecurityBoundaryError } from "@gitpm/security";
-import type { GitPmDocument as RepositoryDocument } from "@gitpm/repository-format";
+import type { GitPmDocument as RepositoryFormatDocument } from "@gitpm/repository-format";
 import { ExportError } from "@gitpm/export";
 
 export type ProjectRole = "Reporter" | "Developer" | "Maintainer";
@@ -63,8 +65,8 @@ function publicMetadata(metadata: DraftMetadata) {
   };
 }
 
-function repositoryDocument(document: GitPmDocument | ConfigurationDocument): RepositoryDocument {
-  return document as unknown as RepositoryDocument;
+function repositoryDocument(document: GitPmDocument | ConfigurationDocument | RepositoryConfigurationDocument): RepositoryFormatDocument {
+  return document as unknown as RepositoryFormatDocument;
 }
 
 function repositoryInput(document: GitPmDocument): Readonly<Record<string, unknown>> {
@@ -680,6 +682,38 @@ export function registerEntityApi(
       const actor = await authenticate(request);
       await requireDraftRead(manager, actor, request.params.draftId);
       return await store.getRepositoryConfiguration(request.params.draftId);
+    },
+  );
+
+  app.put<{ Params: { draftId: string }; Body: { expected_fingerprint: string; expected_blob_id: string; document: RepositoryConfigurationDocument } }>(
+    "/api/drafts/:draftId/config/repository",
+    {
+      schema: { body: HTTP_REQUEST_BODY_SCHEMAS.updateConfiguration },
+      preValidation: async (request) => { decodeRepositoryDocument(request.body.document); },
+    },
+    async (request) => {
+      const actor = await authenticate(request);
+      if (actor.role !== "Maintainer") throw new DraftRuntimeError("DRAFT_FORBIDDEN", "Repository configuration mutation requires Maintainer");
+      return await store.updateRepositoryConfiguration(
+        request.params.draftId,
+        actor.userId,
+        request.body.expected_fingerprint,
+        request.body.expected_blob_id,
+        repositoryDocument(request.body.document),
+      );
+    },
+  );
+
+  app.post<{ Params: { draftId: string; kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks" }; Body: { document: ConfigurationDocument } }>(
+    "/api/drafts/:draftId/config/:kind/impact",
+    {
+      schema: { body: HTTP_REQUEST_BODY_SCHEMAS.configurationImpact },
+      preValidation: async (request) => { decodeConfigurationDocument(request.body.document); },
+    },
+    async (request) => {
+      const actor = await authenticate(request);
+      await requireDraftRead(manager, actor, request.params.draftId);
+      return await store.getConfigurationImpact(request.params.draftId, request.params.kind, repositoryDocument(request.body.document));
     },
   );
 

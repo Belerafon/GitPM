@@ -100,7 +100,7 @@ describe("time entry API integration", () => {
       payload: { expected_fingerprint: replaceSourceBody.draft_fingerprint, expected_blob_id: replaceSourceBody.blob_id, person: "U-26-5EBAE3", performed_on: "2026-09-02", hours: 1.5, category: "regular", note_markdown: "corrected" },
     });
     expect(replaced.statusCode).toBe(200);
-    const replacedBody = JSON.parse(replaced.body) as { readonly voided: { readonly document: { readonly id: string; readonly state: string; readonly replacement: string } }; readonly created: { readonly document: { readonly id: string; readonly state: string; readonly hours: number }; readonly draft_fingerprint: string } };
+    const replacedBody = JSON.parse(replaced.body) as { readonly voided: { readonly document: { readonly id: string; readonly state: string; readonly replacement: string } }; readonly created: { readonly document: { readonly id: string; readonly state: string; readonly hours: number }; readonly blob_id: string; readonly draft_fingerprint: string } };
     expect(replacedBody.voided.document).toMatchObject({ id: replaceSourceBody.document.id, state: "voided", replacement: replacedBody.created.document.id });
     expect(replacedBody.created.document).toMatchObject({ state: "active", hours: 1.5 });
     fingerprint = replacedBody.created.draft_fingerprint;
@@ -165,8 +165,17 @@ describe("time entry API integration", () => {
     expect(inactiveCategory.statusCode).toBe(409);
     expect(JSON.parse(inactiveCategory.body)).toMatchObject({ error: { code: "TIME_ENTRY_CATEGORY_INACTIVE" } });
 
+    const historicalCorrection = await app.inject({
+      method: "POST",
+      url: `/api/drafts/DRF-TIME/projects/${project}/tasks/${task}/time-entries/${replacedBody.created.document.id}/replace`,
+      payload: { expected_fingerprint: inactiveCategories.draft_fingerprint, expected_blob_id: replacedBody.created.blob_id, person: "U-26-5EBAE3", performed_on: "2026-09-02", hours: 2, category: "regular", note_markdown: "historical correction" },
+    });
+    expect(historicalCorrection.statusCode).toBe(200);
+    expect(JSON.parse(historicalCorrection.body)).toMatchObject({ created: { document: { person: "U-26-5EBAE3", category: "regular", hours: 2 } } });
+    const historicalCorrectionBody = JSON.parse(historicalCorrection.body) as { readonly created: { readonly draft_fingerprint: string } };
+
     const doneTask = await entityStore.get("DRF-TIME", "tasks", task);
-    const archived = await entityStore.archive("DRF-TIME", "42", "tasks", task, inactiveCategories.draft_fingerprint, doneTask.blob_id);
+    const archived = await entityStore.archive("DRF-TIME", "42", "tasks", task, historicalCorrectionBody.created.draft_fingerprint, doneTask.blob_id);
     const archivedTask = await app.inject({
       method: "POST",
       url: `/api/drafts/DRF-TIME/projects/${project}/tasks/${task}/time-entries`,

@@ -32,6 +32,18 @@ export interface RepositoryResult {
   readonly draft_fingerprint: string;
 }
 
+export interface ConfigurationImpactIssue {
+  readonly code: string;
+  readonly path: string;
+  readonly field?: string;
+  readonly message: string;
+}
+
+export interface ConfigurationImpact {
+  readonly blocking: boolean;
+  readonly issues: readonly ConfigurationImpactIssue[];
+}
+
 export interface PublicSession {
   readonly user: {
     readonly id: string;
@@ -370,6 +382,18 @@ const repositoryResultSchema = objectSchema({
   draft_fingerprint: stringSchema,
 });
 
+const configurationImpactIssueSchema = objectSchema({
+  code: stringSchema,
+  path: stringSchema,
+  field: stringSchema,
+  message: stringSchema,
+}, ["code", "path", "message"]);
+
+const configurationImpactSchema = objectSchema({
+  blocking: booleanSchema,
+  issues: arraySchema(configurationImpactIssueSchema),
+});
+
 const publicSessionSchema = objectSchema({
   user: objectSchema(
     { id: stringSchema, username: stringSchema, name: stringSchema, email: stringSchema },
@@ -555,6 +579,7 @@ export const HTTP_RESPONSE_SCHEMAS = {
   entityResults: arraySchema(entityResultSchema),
   configurationResult: configurationResultSchema,
   repositoryResult: repositoryResultSchema,
+  configurationImpact: configurationImpactSchema,
   projectWorkspace: objectSchema({
     project: entityResultSchema,
     milestones: arraySchema(entityResultSchema),
@@ -617,6 +642,7 @@ export const decodeEntityResult = createDecoder<EntityResult>("EntityResult", HT
 export const decodeEntityResults = createDecoder<readonly EntityResult[]>("EntityResult[]", HTTP_RESPONSE_SCHEMAS.entityResults);
 export const decodeConfigurationResult = createDecoder<ConfigurationResult>("ConfigurationResult", HTTP_RESPONSE_SCHEMAS.configurationResult);
 export const decodeRepositoryResult = createDecoder<RepositoryResult>("RepositoryResult", HTTP_RESPONSE_SCHEMAS.repositoryResult);
+export const decodeConfigurationImpact = createDecoder<ConfigurationImpact>("ConfigurationImpact", HTTP_RESPONSE_SCHEMAS.configurationImpact);
 export const decodeProjectWorkspace = createDecoder<ProjectWorkspaceResult>("ProjectWorkspaceResult", HTTP_RESPONSE_SCHEMAS.projectWorkspace);
 export const decodeChangesList = createDecoder<ChangesList>("ChangesList", HTTP_RESPONSE_SCHEMAS.changesList);
 export const decodeSemanticDiff = createDecoder<SemanticDiff>("SemanticDiff", HTTP_RESPONSE_SCHEMAS.semanticDiff);
@@ -680,6 +706,7 @@ export const HTTP_REQUEST_BODY_SCHEMAS = {
     expected_blob_id: stringSchema,
     document: configurationDocumentRequestSchema,
   }),
+  configurationImpact: objectSchema({ document: configurationDocumentRequestSchema }),
   commit: objectSchema({ message: stringSchema }),
   mergeRequest: objectSchema({ title: stringSchema, description: stringSchema }, ["title"]),
   revertDraft: objectSchema({ draft_id: stringSchema }),

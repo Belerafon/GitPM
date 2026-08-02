@@ -508,4 +508,51 @@ describe("domain entity store", () => {
     );
     expect((configuration.document.statuses as Array<Record<string, unknown>>)[0]?.title).toBe("Queue");
   });
+
+  it("updates repository configuration and protects the active default calendar", async () => {
+    const { manager, store } = await runtime();
+    const draft = await manager.createDraft("DRF-REPOSITORY", "42");
+    const originalCalendar = await store.get("DRF-REPOSITORY", "calendars", "C-26-QD7FJ4");
+    await expect(store.archive("DRF-REPOSITORY", "42", "calendars", "C-26-QD7FJ4", draft.fingerprint, originalCalendar.blob_id))
+      .rejects.toMatchObject({ code: "DEFAULT_CALENDAR_ARCHIVE_RESTRICTED" });
+
+    const created = await store.create("DRF-REPOSITORY", "42", draft.fingerprint, {
+      schema: "gitpm/calendar@1", id: "C-26-7GQW87", name: "Replacement calendar", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active",
+    });
+    const repository = await store.getRepositoryConfiguration("DRF-REPOSITORY");
+    const updated = await store.updateRepositoryConfiguration(
+      "DRF-REPOSITORY",
+      "42",
+      created.draft_fingerprint,
+      repository.blob_id,
+      { ...repository.document, default_calendar: "C-26-7GQW87", ui_poll_interval_seconds: 7 },
+    );
+    expect(updated.document).toMatchObject({ default_calendar: "C-26-7GQW87", ui_poll_interval_seconds: 7 });
+    const archived = await store.archive("DRF-REPOSITORY", "42", "calendars", "C-26-QD7FJ4", updated.draft_fingerprint, originalCalendar.blob_id);
+    expect(archived.document.lifecycle).toBe("archived");
+  });
+
+  it("previews and blocks configuration changes that invalidate repository data", async () => {
+    const { manager, store } = await runtime();
+    const draft = await manager.createDraft("DRF-CONFIG-IMPACT", "42");
+    const statuses = await store.getConfiguration("DRF-CONFIG-IMPACT", "statuses");
+    const nextStatuses = {
+      ...statuses.document,
+      statuses: (statuses.document.statuses as Array<Record<string, unknown>>).filter((status) => status.slug !== "in-progress"),
+    };
+    const impact = await store.getConfigurationImpact("DRF-CONFIG-IMPACT", "statuses", nextStatuses);
+    expect(impact).toMatchObject({ blocking: true });
+    expect(impact.issues).toContainEqual(expect.objectContaining({ code: "CONFIG_REFERENCE", path: "projects/P-26-MGP84K/project.yaml", field: "status" }));
+    await expect(store.updateConfiguration("DRF-CONFIG-IMPACT", "42", "statuses", draft.fingerprint, statuses.blob_id, nextStatuses))
+      .rejects.toMatchObject({ code: "CONFIGURATION_UPDATE_BLOCKED", details: expect.arrayContaining([expect.objectContaining({ path: "projects/P-26-MGP84K/project.yaml" })]) });
+    expect((await store.getConfiguration("DRF-CONFIG-IMPACT", "statuses")).document.statuses).toEqual(statuses.document.statuses);
+
+    const tracks = await store.getConfiguration("DRF-CONFIG-IMPACT", "schedule-tracks");
+    const nextTracks = { ...tracks.document, tracks: (tracks.document.tracks as Array<Record<string, unknown>>).filter((track) => track.slug !== "plan") };
+    const trackImpact = await store.getConfigurationImpact("DRF-CONFIG-IMPACT", "schedule-tracks", nextTracks);
+    expect(trackImpact.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "SCHEDULE_TRACK_UNKNOWN", path: expect.stringContaining("projects/") }),
+      expect.objectContaining({ code: "PLANNING_UNKNOWN_TRACK", path: ".gitpm/schedule-tracks.yaml" }),
+    ]));
+  });
 });

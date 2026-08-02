@@ -58,6 +58,144 @@ interface RepositoryIndex {
   readonly bySchemaAndId: ReadonlyMap<string, IndexedEntity>;
 }
 
+export type ConfigurationKind = "statuses" | "issue-types" | "work-categories" | "schedule-tracks";
+
+export interface ConfigurationImpactIssue {
+  readonly code: string;
+  readonly path: string;
+  readonly field?: string;
+  readonly message: string;
+}
+
+export interface ConfigurationImpact {
+  readonly blocking: boolean;
+  readonly issues: readonly ConfigurationImpactIssue[];
+}
+
+const CONFIGURATION_FILES: Readonly<Record<ConfigurationKind, { readonly path: string; readonly schema: string; readonly list: string }>> = {
+  statuses: { path: ".gitpm/statuses.yaml", schema: "gitpm/statuses@2", list: "statuses" },
+  "issue-types": { path: ".gitpm/issue-types.yaml", schema: "gitpm/issue-types@1", list: "issue_types" },
+  "work-categories": { path: ".gitpm/work-categories.yaml", schema: "gitpm/work-categories@1", list: "categories" },
+  "schedule-tracks": { path: ".gitpm/schedule-tracks.yaml", schema: "gitpm/schedule-tracks@1", list: "tracks" },
+};
+
+const records = (value: unknown): readonly Record<string, unknown>[] => Array.isArray(value)
+  ? value.filter((item): item is Record<string, unknown> => item !== null && typeof item === "object" && !Array.isArray(item))
+  : [];
+const stringValues = (value: unknown): readonly string[] => Array.isArray(value)
+  ? value.filter((item): item is string => typeof item === "string")
+  : [];
+const objectValue = (value: unknown): Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value)
+  ? value as Record<string, unknown>
+  : {};
+
+function configurationImpact(
+  kind: ConfigurationKind,
+  current: GitPmDocument,
+  next: GitPmDocument,
+  entities: readonly IndexedEntity[],
+): ConfigurationImpact {
+  const issues: ConfigurationImpactIssue[] = [];
+  const issueKeys = new Set<string>();
+  const add = (issue: ConfigurationImpactIssue): void => {
+    const key = `${issue.code}\n${issue.path}\n${issue.field ?? ""}\n${issue.message}`;
+    if (!issueKeys.has(key)) { issueKeys.add(key); issues.push(issue); }
+  };
+  const metadata = CONFIGURATION_FILES[kind];
+  const currentSlugs = new Set(records(current[metadata.list]).flatMap((item) => typeof item.slug === "string" ? [item.slug] : []));
+  const nextSlugs = new Set(records(next[metadata.list]).flatMap((item) => typeof item.slug === "string" ? [item.slug] : []));
+  const removed = new Set([...currentSlugs].filter((slug) => !nextSlugs.has(slug)));
+
+  if (kind === "statuses" || kind === "issue-types" || kind === "work-categories") {
+    for (const entity of entities) {
+      const document = entity.document;
+      if (kind === "statuses" && (document.schema === "gitpm/project@2" || document.schema === "gitpm/task@2") && typeof document.status === "string" && removed.has(document.status)) {
+        add({ code: "CONFIG_REFERENCE", path: entity.relative, field: "status", message: `Status ${document.status} is still in use` });
+      }
+      if (kind === "issue-types" && document.schema === "gitpm/task@2" && typeof document.type === "string" && removed.has(document.type)) {
+        add({ code: "CONFIG_REFERENCE", path: entity.relative, field: "type", message: `Issue type ${document.type} is still in use` });
+      }
+      if (kind === "work-categories" && document.schema === "gitpm/time-entry@1" && typeof document.category === "string" && removed.has(document.category)) {
+        add({ code: "CONFIG_REFERENCE", path: entity.relative, field: "category", message: `Work category ${document.category} is still in use` });
+      }
+      if (document.schema === "gitpm/saved-view@1") {
+        const filters = objectValue(document.filters);
+        const field = kind === "statuses" ? "statuses" : kind === "issue-types" ? "types" : undefined;
+        if (field !== undefined) for (const slug of stringValues(filters[field])) if (removed.has(slug)) {
+          add({ code: "CONFIG_REFERENCE", path: entity.relative, field: `filters.${field}`, message: `${slug} is still used by this saved view` });
+        }
+      }
+    }
+  }
+
+  if (kind === "schedule-tracks") {
+    const definitions = records(next.tracks);
+    const tracks = new Map(definitions.flatMap((track) => typeof track.slug === "string" ? [[track.slug, track] as const] : []));
+    const actualTracks = definitions.filter((track) => track.kind === "actual");
+    if (actualTracks.length > 1) {
+      add({ code: "TRACK_ACTUAL_COUNT", path: metadata.path, field: "tracks", message: `At most one actual track is allowed (found ${actualTracks.length})` });
+    }
+    const defaults = objectValue(next.defaults);
+    const manualSlugs = definitions.filter((track) => track.kind === "manual" && typeof track.slug === "string").map((track) => String(track.slug));
+    const resolvePlanning = (planningValue: unknown) => {
+      const planning = objectValue(planningValue);
+      const enabled = Array.isArray(planning.enabled_tracks) ? stringValues(planning.enabled_tracks)
+        : Array.isArray(defaults.enabled_tracks) ? stringValues(defaults.enabled_tracks)
+          : manualSlugs;
+      return {
+        enabled,
+        primary: typeof planning.primary_track === "string" ? planning.primary_track : typeof defaults.primary_track === "string" ? defaults.primary_track : enabled[0] ?? "",
+        workload: typeof planning.workload_track === "string" ? planning.workload_track : typeof defaults.workload_track === "string" ? defaults.workload_track : (typeof planning.primary_track === "string" ? planning.primary_track : typeof defaults.primary_track === "string" ? defaults.primary_track : enabled[0] ?? ""),
+        comparison: typeof planning.comparison_track === "string" ? planning.comparison_track : typeof defaults.comparison_track === "string" ? defaults.comparison_track : undefined,
+        dashboard: Array.isArray(planning.dashboard_tracks) ? stringValues(planning.dashboard_tracks) : Array.isArray(defaults.dashboard_tracks) ? stringValues(defaults.dashboard_tracks) : enabled,
+      };
+    };
+    const checkPlanning = (pathValue: string, prefix: string, planningValue: unknown): ReturnType<typeof resolvePlanning> => {
+      const resolved = resolvePlanning(planningValue);
+      for (const [field, slugs] of [
+        ["enabled_tracks", resolved.enabled],
+        ["primary_track", [resolved.primary]],
+        ["workload_track", [resolved.workload]],
+        ["comparison_track", resolved.comparison === undefined ? [] : [resolved.comparison]],
+        ["dashboard_tracks", resolved.dashboard],
+      ] as const) for (const slug of slugs) if (slug !== "" && !tracks.has(slug)) {
+        add({ code: "PLANNING_UNKNOWN_TRACK", path: pathValue, field: `${prefix}.${field}`, message: `Unknown track ${slug}` });
+      }
+      return resolved;
+    };
+    checkPlanning(metadata.path, "defaults", defaults);
+    const projects = new Map(entities
+      .filter((entity) => entity.document.schema === "gitpm/project@2" && typeof entity.document.id === "string")
+      .map((entity) => [String(entity.document.id), entity]));
+    const projectPlanning = new Map<string, ReturnType<typeof resolvePlanning>>();
+    for (const [projectId, project] of projects) projectPlanning.set(projectId, checkPlanning(project.relative, "planning", project.document.planning));
+    for (const entity of entities) {
+      const schedules = objectValue(entity.document.schedules);
+      if (Object.keys(schedules).length === 0) continue;
+      const projectId = entity.document.schema === "gitpm/project@2" ? String(entity.document.id) : typeof entity.document.project === "string" ? entity.document.project : undefined;
+      const enabled = projectId === undefined ? undefined : new Set(projectPlanning.get(projectId)?.enabled ?? []);
+      for (const [slug, rawWindow] of Object.entries(schedules)) {
+        const window = objectValue(rawWindow);
+        const track = tracks.get(slug);
+        const field = `schedules.${slug}`;
+        if (track === undefined) {
+          add({ code: "SCHEDULE_TRACK_UNKNOWN", path: entity.relative, field, message: `Schedule track ${slug} is still in use` });
+          continue;
+        }
+        if (track.kind === "actual") add({ code: "SCHEDULE_ACTUAL_NOT_EDITABLE", path: entity.relative, field, message: `Track ${slug} has stored schedule data and cannot become actual` });
+        if (enabled !== undefined && !enabled.has(slug)) add({ code: "SCHEDULE_TRACK_NOT_ENABLED", path: entity.relative, field, message: `Track ${slug} has stored schedule data but would not be enabled` });
+        const capabilities = new Set(stringValues(track.capabilities));
+        if ((window.start !== undefined || window.finish !== undefined) && !capabilities.has("dates")) add({ code: "CAPABILITY_DATES_NOT_ALLOWED", path: entity.relative, field, message: `Track ${slug} has stored dates` });
+        if (window.effort_hours !== undefined && !capabilities.has("effort")) add({ code: "CAPABILITY_EFFORT_NOT_ALLOWED", path: entity.relative, field: `${field}.effort_hours`, message: `Track ${slug} has stored effort` });
+        if (stringValues(window.depends_on).length > 0 && !capabilities.has("dependencies")) add({ code: "CAPABILITY_DEPENDENCIES_NOT_ALLOWED", path: entity.relative, field: `${field}.depends_on`, message: `Track ${slug} has stored dependencies` });
+      }
+    }
+  }
+
+  issues.sort((left, right) => left.path.localeCompare(right.path) || (left.field ?? "").localeCompare(right.field ?? "") || left.code.localeCompare(right.code));
+  return { blocking: issues.length > 0, issues };
+}
+
 const entityTypeAliases: Readonly<Record<string, string>> = {
   project: "projects",
   task: "tasks",
@@ -457,12 +595,9 @@ export class EntityStore {
     return { project, milestones, tasks, draft_fingerprint: project.draft_fingerprint };
   }
 
-  async getConfiguration(draftId: string, kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks"): Promise<EntityResult> {
+  async getConfiguration(draftId: string, kind: ConfigurationKind): Promise<EntityResult> {
     const metadata = await this.drafts.getWorkspace(draftId);
-    const relative = kind === "statuses" ? ".gitpm/statuses.yaml"
-      : kind === "issue-types" ? ".gitpm/issue-types.yaml"
-        : kind === "work-categories" ? ".gitpm/work-categories.yaml"
-          : ".gitpm/schedule-tracks.yaml";
+    const relative = CONFIGURATION_FILES[kind].path;
     const absolute = await resolveDomainPath(metadata.worktree_path, relative);
     const document = parseYamlDocument(await readFile(absolute, "utf8"), relative);
     return {
@@ -489,29 +624,72 @@ export class EntityStore {
     };
   }
 
+  async getConfigurationImpact(draftId: string, kind: ConfigurationKind, document: GitPmDocument): Promise<ConfigurationImpact> {
+    const metadata = await this.drafts.getWorkspace(draftId);
+    const config = CONFIGURATION_FILES[kind];
+    if (document.schema !== config.schema) throw new DomainOperationError("ENTITY_IDENTITY_IMMUTABLE", "Configuration schema is immutable");
+    const repository = await this.index(draftId, metadata);
+    const current = repository.entities.find((entity) => entity.relative === config.path);
+    if (current === undefined) throw new DomainOperationError("ENTITY_NOT_FOUND", `${config.path} not found`);
+    return configurationImpact(kind, current.document, document, repository.entities);
+  }
+
   async updateConfiguration(
     draftId: string,
     owner: string,
-    kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks",
+    kind: ConfigurationKind,
     expectedFingerprint: string,
     expectedBlobId: string,
     document: GitPmDocument,
   ): Promise<EntityResult> {
-    const relative = kind === "statuses" ? ".gitpm/statuses.yaml"
-      : kind === "issue-types" ? ".gitpm/issue-types.yaml"
-        : kind === "work-categories" ? ".gitpm/work-categories.yaml"
-          : ".gitpm/schedule-tracks.yaml";
-    const expectedSchema = kind === "statuses" ? "gitpm/statuses@2"
-      : kind === "issue-types" ? "gitpm/issue-types@1"
-        : kind === "work-categories" ? "gitpm/work-categories@1"
-          : "gitpm/schedule-tracks@1";
-    if (document.schema !== expectedSchema) throw new DomainOperationError("ENTITY_IDENTITY_IMMUTABLE", "Configuration schema is immutable");
+    const config = CONFIGURATION_FILES[kind];
+    const relative = config.path;
+    if (document.schema !== config.schema) throw new DomainOperationError("ENTITY_IDENTITY_IMMUTABLE", "Configuration schema is immutable");
     const mutation = await this.drafts.withRepositoryMutation(draftId, owner, expectedFingerprint, this.mutationMode, async (metadata) => {
-      const referenceLabels = this.labels(await this.index(draftId, metadata));
+      const repository = await this.index(draftId, metadata);
+      const current = repository.entities.find((entity) => entity.relative === relative);
+      if (current === undefined) throw new DomainOperationError("ENTITY_NOT_FOUND", `${relative} not found`);
+      const impact = configurationImpact(kind, current.document, document, repository.entities);
+      if (impact.blocking) {
+        throw new DomainOperationError("CONFIGURATION_UPDATE_BLOCKED", `Configuration update is blocked by ${impact.issues.length} repository reference${impact.issues.length === 1 ? "" : "s"}`, impact.issues);
+      }
+      const referenceLabels = this.labels(repository);
       await this.drafts.assertFileBlobId(draftId, relative, expectedBlobId);
       const absolute = await resolveDomainPath(metadata.worktree_path, relative);
       const original = await readFile(absolute, "utf8");
       await atomicWriteDomainFile(metadata.worktree_path, relative, formatYamlDocument(document, referenceLabels));
+      try {
+        await this.assertRepositoryValid(metadata.worktree_path);
+      } catch (error) {
+        await atomicWriteDomainFile(metadata.worktree_path, relative, original);
+        throw error;
+      }
+      return relative;
+    });
+    return await this.getWithFingerprint(draftId, document, relative, mutation.metadata.fingerprint);
+  }
+
+  async updateRepositoryConfiguration(
+    draftId: string,
+    owner: string,
+    expectedFingerprint: string,
+    expectedBlobId: string,
+    document: GitPmDocument,
+  ): Promise<EntityResult> {
+    const relative = ".gitpm/repository.yaml";
+    if (document.schema !== "gitpm/repository@1") throw new DomainOperationError("ENTITY_IDENTITY_IMMUTABLE", "Repository configuration schema is immutable");
+    const mutation = await this.drafts.withRepositoryMutation(draftId, owner, expectedFingerprint, this.mutationMode, async (metadata) => {
+      const repository = await this.index(draftId, metadata);
+      const defaultCalendar = typeof document.default_calendar === "string"
+        ? repository.bySchemaAndId.get(`gitpm/calendar@1:${document.default_calendar}`)
+        : undefined;
+      if (defaultCalendar?.document.lifecycle !== "active") {
+        throw new DomainOperationError("DEFAULT_CALENDAR_UNAVAILABLE", "Repository default_calendar must reference an active Calendar", { default_calendar: document.default_calendar });
+      }
+      await this.drafts.assertFileBlobId(draftId, relative, expectedBlobId);
+      const absolute = await resolveDomainPath(metadata.worktree_path, relative);
+      const original = await readFile(absolute, "utf8");
+      await atomicWriteDomainFile(metadata.worktree_path, relative, formatYamlDocument(document, this.labels(repository)));
       try {
         await this.assertRepositoryValid(metadata.worktree_path);
       } catch (error) {
@@ -636,6 +814,16 @@ export class EntityStore {
       }
       await this.drafts.assertFileBlobId(draftId, found.relative, expectedBlobId);
       const repository = await this.index(draftId, metadata);
+      if (found.document.schema === "gitpm/calendar@1" && document.lifecycle === "archived") {
+        const repositoryConfiguration = repository.entities.find((entity) => entity.document.schema === "gitpm/repository@1")?.document;
+        if (repositoryConfiguration?.default_calendar === id) {
+          throw new DomainOperationError(
+            "DEFAULT_CALENDAR_ARCHIVE_RESTRICTED",
+            `Calendar ${id} is the repository default; choose another default_calendar before archiving it`,
+            { calendar: id, repository_path: ".gitpm/repository.yaml" },
+          );
+        }
+      }
       const referenceLabels = this.labels(repository, document);
       const originals = new Map<string, string>();
       try {

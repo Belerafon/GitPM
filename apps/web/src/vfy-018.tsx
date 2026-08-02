@@ -1,7 +1,7 @@
 import { createRoot } from "react-dom/client";
 import { App } from "./App.js";
 import type { GitPmApi } from "./api.js";
-import type { ChangesList, ConfigurationDocument, ConfigurationResult, DraftSnapshot, DraftStatus, EntityDocument, EntityResult, MergeRequestStatus, PublicSession, SemanticDiff, WriterMode } from "./types.js";
+import type { ChangesList, ConfigurationDocument, ConfigurationResult, DraftSnapshot, DraftStatus, EntityDocument, EntityResult, MergeRequestStatus, PublicSession, RepositoryDocument, RepositoryResult, SemanticDiff, WriterMode } from "./types.js";
 import "./styles.css";
 
 const session: PublicSession = { user: { id: "42", username: "vfy-developer" }, role: "Maintainer", expires_at: "2026-07-10T18:00:00.000Z" };
@@ -108,6 +108,7 @@ class BrowserAcceptanceApi implements GitPmApi {
   async reopenDraft(draftId: string) { return this.replace(draftId, { state: "open" }); }
   async cleanupDraft(draftId: string) { this.drafts = this.drafts.filter((draft) => draft.draft_id !== draftId); }
   async listEntities(_draftId: string, entityType: string, project?: string) { const names: Record<string, string> = { people: "person", calendars: "calendar", teams: "team", views: "saved-view" }; const schema = `gitpm/${names[entityType] ?? entityType.slice(0, -1)}@1`; return this.entities.filter((item) => item.document.schema === schema && (project === undefined || item.document.project === project)); }
+  async getEntity(_draftId: string, _entityType: string, id: string) { const entity = this.entities.find((item) => item.document.id === id); if (entity === undefined) throw new Error("entity not found"); return entity; }
   async projectWorkspace(draftId: string, projectId: string) { const project = (await this.listEntities(draftId, "projects")).find((item) => item.document.id === projectId); if (project === undefined) throw new Error("project not found"); return { project, milestones: await this.listEntities(draftId, "milestones", projectId), tasks: await this.listEntities(draftId, "tasks", projectId), draft_fingerprint: project.draft_fingerprint }; }
   async createEntity(_draftId: string, _entityType: string, _fingerprint: string, document: EntityDocument): Promise<EntityResult> { const result = this.entityResult(document); this.entities.push(result); this.capture(result.path); return result; }
   async updateEntity(_draftId: string, _entityType: string, entity: EntityResult, _fingerprint: string, document: EntityDocument): Promise<EntityResult> { const result = this.entityResult(document); this.entities = this.entities.map((item) => item.document.id === entity.document.id ? result : item); this.capture(result.path); return result; }
@@ -119,7 +120,9 @@ class BrowserAcceptanceApi implements GitPmApi {
     const existing = kind === "statuses" ? this.statusConfig : this.issueTypeConfig; if (existing !== undefined) return existing; const document = (kind === "statuses" ? { schema: "gitpm/statuses@2", statuses: [{ slug: "backlog", title: "Backlog", color: "gray", active: true }, { slug: "in-progress", title: "In progress", color: "blue", active: true }, { slug: "done", title: "Done", color: "green", active: true }] } : { schema: "gitpm/issue-types@1", issue_types: [{ slug: "task", title: "Task", color: "blue", active: true }] }) as ConfigurationDocument; const created = { document, path: `.gitpm/${kind}.yaml`, blob_id: "e".repeat(40), draft_fingerprint: "d".repeat(64) }; if (kind === "statuses") this.statusConfig = created; else this.issueTypeConfig = created; return created;
   }
   async getRepositoryConfiguration() { return { document: { schema: "gitpm/repository@1" as const, default_branch: "main", default_calendar: "C-26-QD7FJ4", allowed_top_level_files: [], ui_poll_interval_seconds: 5 }, path: ".gitpm/repository.yaml", blob_id: "e".repeat(40), draft_fingerprint: "d".repeat(64) }; }
+  async getConfigurationImpact() { return { blocking: false, issues: [] }; }
   async updateConfiguration(_draftId: string, kind: "statuses" | "issue-types", entity: ConfigurationResult, _fingerprint: string, document: ConfigurationDocument): Promise<ConfigurationResult> { const result = { ...entity, document, blob_id: "f".repeat(40), draft_fingerprint: "d".repeat(64) }; if (kind === "statuses") this.statusConfig = result; else this.issueTypeConfig = result; this.capture(result.path); return result; }
+  async updateRepositoryConfiguration(_draftId: string, entity: RepositoryResult, _fingerprint: string, document: RepositoryDocument): Promise<RepositoryResult> { const result = { ...entity, document }; this.capture(result.path); return result; }
   async listChanges(): Promise<ChangesList> { if (new URLSearchParams(window.location.search).get("git_error") === "1") throw new Error("Git diff недоступен: рабочее дерево изменилось"); return { files: this.changedFiles, changed_files_count: this.changedFiles.length, affected_projects: this.changedFiles.length === 0 ? [] : ["P-26-A1PHA1"] }; }
   async listWorktree(_draftId: string, path?: string) {
     const current = path ?? "";

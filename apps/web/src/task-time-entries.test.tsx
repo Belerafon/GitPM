@@ -73,7 +73,7 @@ describe("TaskTimeEntries", () => {
     const replaceTimeEntry = vi.fn(async () => ({ voided, created }));
     const api = {
       listTimeEntries: vi.fn(async (): Promise<readonly TimeEntryResult[]> => [original]),
-      getConfiguration: vi.fn(async (_draftId: string, kind: string) => ({ document: { schema: "gitpm/work-categories@1", categories: [{ slug: "regular", title: "Regular", active: true }] }, path: kind, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) })),
+      getConfiguration: vi.fn(() => new Promise<never>(() => undefined)),
       replaceTimeEntry,
     } as unknown as GitPmApi;
 
@@ -89,6 +89,32 @@ describe("TaskTimeEntries", () => {
     await waitFor(() => expect(screen.getByText("3.5 h")).toBeTruthy());
     expect(screen.getAllByText("2 h")).toHaveLength(1);
     expect(screen.getAllByRole("button", { name: "Correct" })).toHaveLength(1);
+  });
+
+  it("preserves archived person and inactive category when only historical hours are corrected", async () => {
+    const archivedPerson = { document: { schema: "gitpm/person@1", id: "U-26-OLD", name: "Former employee", lifecycle: "archived" }, path: "old.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) } as EntityResult;
+    const original = entry("E-26-HISTORY", { person: "U-26-OLD", category: "warranty", hours: 2 });
+    const replaceTimeEntry = vi.fn(async (_draftId: string, _projectId: string, _taskId: string, _entry: TimeEntryResult, _fingerprint: string, input: { person: string; category: string; hours: number }) => ({
+      voided: entry("E-26-HISTORY", { ...original.document, state: "voided", replacement: "E-26-HISTORY2" }),
+      created: entry("E-26-HISTORY2", { person: input.person, category: input.category, hours: input.hours }),
+    }));
+    const api = {
+      listTimeEntries: vi.fn(async (): Promise<readonly TimeEntryResult[]> => [original]),
+      getConfiguration: vi.fn(async (_draftId: string, kind: string) => ({ document: { schema: "gitpm/work-categories@1", categories: [{ slug: "regular", title: "Regular", active: true }, { slug: "warranty", title: "Warranty", active: false }] }, path: kind, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) })),
+      getEntity: vi.fn(async () => archivedPerson),
+      replaceTimeEntry,
+    } as unknown as GitPmApi;
+
+    render(<TaskTimeEntries api={api} draft={draft} fingerprint={draft.fingerprint} projectId="P-26-1" taskId="T-26-1" people={[person]} readOnly={false} locale="en" onFingerprintChange={vi.fn(async () => undefined)} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Correct" }));
+    const dialog = screen.getByRole("dialog", { name: "Correct effort entry" });
+    expect((within(dialog).getByLabelText("Person") as HTMLSelectElement).value).toBe("U-26-OLD");
+    expect(await within(dialog).findByRole("option", { name: "Former employee (Archived)" })).toBeTruthy();
+    expect((within(dialog).getByLabelText("Category") as HTMLSelectElement).value).toBe("warranty");
+    expect(within(dialog).getByRole("option", { name: "Warranty (Inactive)" })).toBeTruthy();
+    fireEvent.change(within(dialog).getByLabelText("Hours"), { target: { value: "2.5" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(replaceTimeEntry).toHaveBeenCalledWith("DRF-TIME", "P-26-1", "T-26-1", original, draft.fingerprint, expect.objectContaining({ person: "U-26-OLD", category: "warranty", hours: 2.5 })));
   });
 
   it("collapses and expands via the heading toggle", async () => {

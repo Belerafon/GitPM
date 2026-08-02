@@ -153,7 +153,7 @@ Move a task with
 Manage task comments with \`gitpm comment list|create|update|delete\`, mention notifications
 with \`gitpm notification list\`, actual effort with \`gitpm time-entry list|summary|create|replace|void\`,
 and repository configuration with
-\`gitpm config show|update --kind statuses|issue-types|work-categories|schedule-tracks [--allow-delete]\`.
+\`gitpm config show|update --kind repository|statuses|issue-types|work-categories|schedule-tracks [--allow-delete]\`.
 
 Then run \`format\`, \`validate --changed\`, and \`diff --semantic\` with \`--json\` and
 \`--project\` when scoped. Repeat \`--allow-delete\` on every subsequent mutation, verification,
@@ -282,8 +282,8 @@ All commands accept \`--json\`; use it for automation. Direct-mode commands do n
 - \`gitpm time-entry list|summary|create|replace|void ...\` reads or updates actual effort.
 - \`gitpm schedule set ...\` and \`gitpm planning show|set ...\` manage multi-track schedules
   and Project planning.
-- \`gitpm config show --kind statuses|issue-types|work-categories|schedule-tracks\` reads repository configuration.
-- \`gitpm config update --kind statuses|issue-types|work-categories|schedule-tracks [--file <yaml>] [--set <field>=<yaml-value>]...
+- \`gitpm config show --kind repository|statuses|issue-types|work-categories|schedule-tracks\` reads repository configuration.
+- \`gitpm config update --kind repository|statuses|issue-types|work-categories|schedule-tracks [--file <yaml>] [--set <field>=<yaml-value>]...
   [--unset <field>] [--allow-delete]\` updates repository configuration.
 - \`gitpm schema list|show <type> [--example]\` exposes the installed schema contract.
 - \`gitpm format [--project <id>] [--check] [--allow-delete]\` applies or checks canonical YAML.

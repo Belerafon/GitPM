@@ -204,6 +204,10 @@ export class DirectCliRuntime {
     return await this.repository.getConfiguration(DIRECT_WORKSPACE_ID, kind);
   }
 
+  async getRepositoryConfiguration(): Promise<EntityResult> {
+    return await this.repository.getRepositoryConfiguration(DIRECT_WORKSPACE_ID);
+  }
+
   async updateConfiguration(kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks", document: Record<string, unknown>, scope: AgentScope = {}): Promise<EntityResult> {
     return await this.repository.updateConfiguration(
       DIRECT_WORKSPACE_ID,
@@ -211,6 +215,10 @@ export class DirectCliRuntime {
       document,
       scope,
     );
+  }
+
+  async updateRepositoryConfiguration(document: Record<string, unknown>, scope: AgentScope = {}): Promise<EntityResult> {
+    return await this.repository.updateRepositoryConfiguration(DIRECT_WORKSPACE_ID, document, scope);
   }
 
   async listComments(projectId: string, taskId: string): Promise<readonly CommentResult[]> {

@@ -232,6 +232,10 @@ export class AgentWorkflow {
     return await this.repository.getConfiguration(draftId, kind);
   }
 
+  async getRepositoryConfiguration(draftId: string) {
+    return await this.repository.getRepositoryConfiguration(draftId);
+  }
+
   async updateConfiguration(
     draftId: string,
     kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks",
@@ -239,6 +243,14 @@ export class AgentWorkflow {
     scope: AgentScope = {},
   ) {
     return await this.repository.updateConfiguration(draftId, kind, document, scope);
+  }
+
+  async updateRepositoryConfiguration(
+    draftId: string,
+    document: Record<string, unknown>,
+    scope: AgentScope = {},
+  ) {
+    return await this.repository.updateRepositoryConfiguration(draftId, document, scope);
   }
 
   async listComments(draftId: string, projectId: string, taskId: string) {
