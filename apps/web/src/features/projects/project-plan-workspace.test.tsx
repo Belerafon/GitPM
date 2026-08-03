@@ -470,6 +470,16 @@ describe("ProjectPlanWorkspace", () => {
     expect(screen.getByRole("dialog", { name: "Edit: Alpha" })).toBeTruthy();
   });
 
+  it("§15.1: does not render the actual-hours report on the main project page (effort is a separate route)", async () => {
+    // The refactor extracted the actual-hours report into the dedicated effort route.
+    // The main project page must not surface it, so the two scopes stay separable.
+    const client = api();
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} />);
+    await screen.findByRole("heading", { name: "Alpha" });
+    expect(screen.queryByRole("heading", { name: "Actual hours report" })).toBeNull();
+    expect(screen.queryByText("Actual hours report")).toBeNull();
+  });
+
   it("shows every task inside the project plan and opens a stage as a first-class route", async () => {
     const client = api(); const onNavigate = vi.fn();
     render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={onNavigate} projectId={project.document.id} />);
