@@ -266,6 +266,7 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .project-plan-summary-metric strong { font-weight: 750; color: #244c3b; }
 .project-plan-summary-metric[aria-pressed="true"] { border-color: #6b9b87; background: #eaf4ee; color: #173f31; }
 .project-plan-summary-overdue[aria-pressed="true"] { border-color: #c97a6a; background: #fbeee9; color: #7a2f1f; }
+.project-plan-summary-blocked[aria-pressed="true"] { border-color: #c79a3e; background: #fbf3e0; color: #6b4f12; }
 .project-schedule-summary dl { display: flex; flex-wrap: wrap; gap: 1.25rem; margin: 0; }
 .project-schedule-summary dt { font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; color: #647068; }
 .project-schedule-summary dd { margin: 0; font-weight: 600; }
@@ -278,6 +279,8 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .actual-report-heading, .plan-actual-heading { display: flex; justify-content: space-between; gap: 1rem; align-items: start; }
 .actual-report-heading h4, .plan-actual-heading h5, .actual-breakdown h5 { margin: 0; }
 .actual-report-heading p, .plan-actual-heading p { margin: .2rem 0 0; color: #68706b; font-size: .72rem; }
+.plan-source { margin: .2rem 0 0; color: #68706b; font-size: .72rem; }
+.plan-source-label { font-weight: 650; color: #49524d; }
 .actual-report-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .6rem; }
 .actual-report-filters label { display: grid; gap: .2rem; color: #68706b; font-size: .7rem; }
 .actual-report-filters select, .actual-report-filters input { min-width: 0; padding: .45rem; }
@@ -295,7 +298,11 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .actual-report-table-wrap tbody th code { color: #68706b; font-size: .65rem; font-weight: 400; }
 .actual-report-stage-row th { background: #f3f6f2; font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: #647068; }
 .actual-report-task-row.is-rolled { background: #fafbfa; }
-.actual-report-task-row.is-rolled .actual-report-task-cell::after { content: attr(data-rolled-note); }
+.actual-report-task-cell { text-align: left; }
+.actual-report-task-link { display: inline-grid; gap: .1rem; padding: 0; border: 0; background: transparent; font: inherit; color: #1f5a45; text-decoration: underline; text-underline-offset: .15rem; cursor: pointer; }
+.actual-report-task-link:hover { color: #123c2f; }
+.actual-report-task-link:focus-visible { outline: 2px solid #6b9b87; outline-offset: 2px; border-radius: 3px; }
+.actual-report-task-link code { color: #68706b; font-size: .65rem; font-weight: 400; text-decoration: none; }
 .plan-cell-source { display: block; color: #8a948f; font-size: .62rem; font-weight: 400; }
 .actual-breakdowns { border-top: 1px solid #e3e6e1; padding-top: .5rem; }
 .actual-breakdowns > summary { cursor: pointer; font-size: .78rem; font-weight: 650; color: #333b36; }
@@ -309,6 +316,7 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .actual-report-show-voided { display: inline-flex; gap: .4rem; align-items: center; color: #333b36; font-size: .76rem; }
 .correction-history-details { display: grid; gap: .4rem; margin-top: .4rem; }
 .correction-history-explanation { margin: 0; color: #68706b; font-size: .72rem; }
+.correction-history-count { margin: 0; color: #68706b; font-size: .78rem; }
 @media (max-width: 900px) { .actual-report-filters { grid-template-columns: repeat(2, minmax(135px, 1fr)); } .actual-breakdowns-grid { grid-template-columns: 1fr; } }
 .project-plan-stage-progress progress { width: 100%; accent-color: #3f7967; }
 .project-plan-work { display: grid; gap: .8rem; }

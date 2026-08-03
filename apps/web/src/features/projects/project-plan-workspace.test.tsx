@@ -871,12 +871,13 @@ describe("ProjectPlanWorkspace", () => {
     expect(screen.getByText("Overdue task")).toBeTruthy();
   });
 
-  it("characterizes the task estimate meta with a raw unit suffix (to be localized)", async () => {
+  it("renders the task estimate meta through the localized hours formatter", async () => {
     const client = api();
     render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} />);
     await screen.findByRole("heading", { name: "Alpha" });
     const alphaRow = screen.getByText("Alpha task").closest(".project-plan-task-row") as HTMLElement;
-    expect(alphaRow.textContent).toContain("13h");
+    expect(alphaRow.textContent).toContain("13 hours");
+    expect(alphaRow.textContent).not.toMatch(/\d+h/u);
   });
 
   it("counts blocked tasks separately from in-progress tasks and the quick filter narrows to them", async () => {
