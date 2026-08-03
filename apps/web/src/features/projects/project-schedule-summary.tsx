@@ -24,10 +24,13 @@ export function ProjectScheduleSummary({ project, locale, milestones, tasks, sch
   const primaryFinish = primaryTrack === "" ? undefined : readModel.tracks.find((track) => track.track === primaryTrack)?.effective?.finish;
   const comparisonFinish = effectiveComparison === undefined ? undefined : readModel.tracks.find((track) => track.track === effectiveComparison)?.effective?.finish;
   const variance = primaryFinish !== undefined && comparisonFinish !== undefined ? finishVarianceDays(primaryFinish, comparisonFinish) : undefined;
-  if (effectiveComparison === undefined && readModel.overflowWarnings.length === 0) return null;
+  const hasDlRows = effectiveComparison !== undefined && (comparisonFinish !== undefined || primaryFinish !== undefined || variance !== undefined);
+  // The card exists only to surface a comparison row or an overflow warning. A primary
+  // finish alone is already shown in the project header, and merely configuring a
+  // comparison track is not enough to render an empty card.
+  if (readModel.overflowWarnings.length === 0 && !hasDlRows) return null;
   const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
   const openGantt = () => onNavigate("gantt", { projectId });
-  const hasDlRows = effectiveComparison !== undefined && (comparisonFinish !== undefined || primaryFinish !== undefined || variance !== undefined);
   const varianceLabel = (days: number): string => days === 0 ? t("snapshot.onTime") : days > 0 ? t("snapshot.varianceAhead", { count: days }) : t("snapshot.varianceBehind", { count: Math.abs(days) });
   return (
     <section className="card project-schedule-summary">
