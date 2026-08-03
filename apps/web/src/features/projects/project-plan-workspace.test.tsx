@@ -356,10 +356,10 @@ describe("ProjectPlanWorkspace", () => {
     const inspector = await screen.findByRole("complementary", { name: "Milestone" });
     expect(within(inspector).getByText("Schedule overflow")).toBeTruthy();
     expect(inspector.textContent).toContain("Plan");
-    expect(inspector.textContent).toContain("declared Aug 5, 2026");
-    expect(inspector.textContent).toContain("rolled Aug 1, 2026");
-    expect(inspector.textContent).toContain("declared Aug 10, 2026");
-    expect(inspector.textContent).toContain("rolled Aug 15, 2026");
+    expect(inspector.textContent).toContain("set to Aug 5, 2026");
+    expect(inspector.textContent).toContain("child items reach Aug 1, 2026");
+    expect(inspector.textContent).toContain("set to Aug 10, 2026");
+    expect(inspector.textContent).toContain("child items reach Aug 15, 2026");
   });
 
   it("edits and removes the Project group from the active project route", async () => {

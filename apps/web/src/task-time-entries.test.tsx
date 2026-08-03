@@ -46,9 +46,9 @@ describe("TaskTimeEntries", () => {
     await waitFor(() => expect(createTimeEntry).toHaveBeenCalled());
     await waitFor(() => expect(screen.getByText("3 h")).toBeTruthy());
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Void" })[0]!);
+    fireEvent.click(screen.getAllByRole("button", { name: "Void entry" })[0]!);
     await waitFor(() => expect(voidTimeEntry).toHaveBeenCalled());
-    await waitFor(() => expect(screen.queryAllByRole("button", { name: "Void" })).toHaveLength(1));
+    await waitFor(() => expect(screen.queryAllByRole("button", { name: "Void entry" })).toHaveLength(1));
   });
 
   it("defaults the date to today and the person to the first active assignee", async () => {

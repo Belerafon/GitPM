@@ -42,12 +42,22 @@ const text = (entity: EntityResult | undefined, key: string): string => typeof e
  * Actual-work filters narrow only the time entries. Task and milestone scoping
  * is resolved client-side (so a parent task's branch can include its subtasks'
  * records), therefore the server request never carries `task`/`milestone`.
+ *
+ * Voided entries are hidden by default. When the user has not picked an explicit
+ * state and has not enabled "show cancelled entries", the request is constrained
+ * to `state: "active"`. An explicit `<select>` choice always wins; toggling
+ * `showVoided` on (with no explicit state) fetches every state.
  */
-function requestFilters(filters: ReportFilters): ProjectTimeEntryFilters {
+function requestFilters(filters: ReportFilters, showVoided: boolean): ProjectTimeEntryFilters {
+  const state = filters.state !== ""
+    ? filters.state
+    : showVoided
+      ? undefined
+      : "active";
   return {
     ...(filters.person === "" ? {} : { person: filters.person }),
     ...(filters.category === "" ? {} : { category: filters.category }),
-    ...(filters.state === "" ? {} : { state: filters.state }),
+    ...(state === undefined ? {} : { state }),
     ...(filters.performed_from === "" ? {} : { performed_from: filters.performed_from }),
     ...(filters.performed_to === "" ? {} : { performed_to: filters.performed_to }),
   };
@@ -91,6 +101,7 @@ export function ProjectActualReport({ api, categories = [], comparisonFinish, dr
   const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
   const [filters, setFilters] = useState<ReportFilters>(EMPTY_FILTERS);
   const [scopeMode, setScopeMode] = useState<ScopeMode>("withSubtasks");
+  const [showVoided, setShowVoided] = useState(false);
   const [cutoff, setCutoff] = useState(comparisonFinish ?? "");
   const [entries, setEntries] = useState<Awaited<ReturnType<typeof listAllProjectTimeEntries>> | null>(null);
   const [knownPeople, setKnownPeople] = useState<readonly string[]>([]);
@@ -108,7 +119,7 @@ export function ProjectActualReport({ api, categories = [], comparisonFinish, dr
     let active = true;
     setLoading(true);
     setError(null);
-    void listAllProjectTimeEntries(api, draft.draft_id, projectId, requestFilters(filters))
+    void listAllProjectTimeEntries(api, draft.draft_id, projectId, requestFilters(filters, showVoided))
       .then((result) => {
         if (!active) return;
         setEntries(result);
@@ -118,7 +129,7 @@ export function ProjectActualReport({ api, categories = [], comparisonFinish, dr
       .catch((reason: unknown) => { if (active) setError(formatApiError(reason)); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [api, draft.draft_id, filters, projectId]);
+  }, [api, draft.draft_id, filters, projectId, showVoided]);
 
   const records = useMemo(() => (entries ?? []).map((entry) => record(entry, projectId)), [entries, projectId]);
   const actualByTask = useMemo(() => groupByTask(records), [records]);
@@ -309,7 +320,6 @@ export function ProjectActualReport({ api, categories = [], comparisonFinish, dr
       <dl className="actual-report-summary">
         <div><dt>{t("snapshot.actualHours")}</dt><dd>{formatDurationHours(locale, sumHours(scopeRecords))}</dd></div>
         <div><dt>{t("actualReport.activeEntries")}</dt><dd>{activeCount}</dd></div>
-        <div><dt>{t("actualReport.voidedEntries")}</dt><dd>{voidedCount}</dd></div>
         {actual?.start !== undefined && <div><dt>{t("timeEffort.firstActivity")}</dt><dd>{formatDateOnly(locale, actual.start)}</dd></div>}
         {actual?.finish !== undefined && <div><dt>{t("timeEffort.lastActivity")}</dt><dd>{formatDateOnly(locale, actual.finish)}</dd></div>}
         {after !== undefined && <div><dt>{t("snapshot.hoursAfter", { date: cutoff })}</dt><dd>{formatDurationHours(locale, after)}</dd></div>}
@@ -342,6 +352,17 @@ export function ProjectActualReport({ api, categories = [], comparisonFinish, dr
         <BreakdownTable heading={t("actualReport.byCategory")} empty={t("actualReport.empty")} hoursLabel={t("timeEffort.hours")} rows={categoryRows} />
         <BreakdownTable heading={t("actualReport.byDate")} empty={t("actualReport.empty")} hoursLabel={t("timeEffort.hours")} rows={dateRows} />
       </div>
+      <section className="actual-report-correction-history">
+        <label className="actual-report-show-voided">
+          <input type="checkbox" checked={showVoided} onChange={(event) => setShowVoided(event.target.checked)} />
+          {t("actualReport.showVoided")}
+        </label>
+        {voidedCount > 0 && <div className="correction-history-details">
+          <h5>{t("actualReport.correctionHistory")}</h5>
+          <p className="correction-history-count"><span>{t("actualReport.voidedEntries")}</span><span>{voidedCount}</span></p>
+          <p className="correction-history-explanation">{t("actualReport.voidedExplanation")}</p>
+        </div>}
+      </section>
     </>}
   </section>;
 }

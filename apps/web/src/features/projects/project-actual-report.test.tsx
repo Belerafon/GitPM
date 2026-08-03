@@ -127,23 +127,96 @@ describe("ProjectActualReport", () => {
     await waitFor(() => expect(screen.getByText("Plan of selected scope").parentElement?.textContent).toMatch(/25/u));
   });
 
-  it("excludes voided time entries from the actual hour sum and the activity window", async () => {
+  it("defaults to active records: requests state=active and hides the voided count from the main summary", async () => {
+    const task = { document: { schema: "gitpm/task@2", id: "T-26-ACTIVE-DEFAULT", project: "P-26-1", title: "Default task", type: "task", status: "done", lifecycle: "active" }, path: "t.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const items = [
+      { document: { schema: "gitpm/time-entry@1" as const, id: "E-26-ACTIVE-DEFAULT", project: "P-26-1", task: task.document.id, person: "U-1", performed_on: "2026-09-10", hours: 8, category: "regular", created_at: "2026-09-10T00:00:00.000Z", state: "active" as const }, path: "a", blob_id: "a", draft_fingerprint: "f" },
+      { document: { schema: "gitpm/time-entry@1" as const, id: "E-26-VOID-DEFAULT", project: "P-26-1", task: task.document.id, person: "U-1", performed_on: "2026-12-12", hours: 6, category: "regular", created_at: "2026-12-12T00:00:00.000Z", state: "voided" as const }, path: "v", blob_id: "a", draft_fingerprint: "f" },
+    ];
+    const listProjectTimeEntries = vi.fn(async (_draftId: string, _projectId: string, filters: Record<string, unknown> = {}) => {
+      const filtered = items.filter((item) => item.document.state === String(filters.state ?? item.document.state));
+      return { total: filtered.length, offset: Number(filters.offset ?? 0), limit: Number(filters.limit ?? 200), items: filtered };
+    });
+    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const projectDoc = project({ plan: { finish: "2026-09-30" } }, { primary_track: "plan", workload_track: "plan", comparison_track: "target" });
+    const { readModels, workloadTrack, comparisonFinish } = buildReportProps(projectDoc, [], [task], scheduling);
+    render(<ProjectActualReport api={api} comparisonFinish={comparisonFinish} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[task]} workloadTrack={workloadTrack} />);
+
+    // Default request narrows to active records only.
+    await waitFor(() => expect(listProjectTimeEntries).toHaveBeenLastCalledWith("DRF", "P-26-1", expect.objectContaining({ state: "active", offset: 0, limit: 200 })));
+    // Main summary reflects active-only data: actual hours = 8, active entries = 1.
+    await waitFor(() => expect(screen.getAllByText("Actual hours")[0]?.parentElement?.textContent).toMatch(/8 hours/u));
+    expect(screen.getAllByText("Active entries")[0]?.parentElement?.textContent).toMatch(/1/u);
+    // The voided-count label is not part of the main summary.
+    const summary = document.querySelector<HTMLElement>(".actual-report-summary")!;
+    expect(summary.textContent ?? "").not.toMatch(/Cancelled time entries/u);
+    // With no voided records fetched, the correction-history count block is absent.
+    expect(screen.queryByText("Correction history")).toBeNull();
+    expect(screen.queryByText("Cancelled time entries")).toBeNull();
+  });
+
+  it("§11.5: toggling 'Show cancelled entries' fetches all states and surfaces the voided count in a separate correction-history area", async () => {
     const task = { document: { schema: "gitpm/task@2", id: "T-26-VOID", project: "P-26-1", title: "Void task", type: "task", status: "done", lifecycle: "active" }, path: "t.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
     const items = [
       { document: { schema: "gitpm/time-entry@1" as const, id: "E-26-ACTIVE", project: "P-26-1", task: task.document.id, person: "U-1", performed_on: "2026-09-10", hours: 8, category: "regular", created_at: "2026-09-10T00:00:00.000Z", state: "active" as const }, path: "a", blob_id: "a", draft_fingerprint: "f" },
       { document: { schema: "gitpm/time-entry@1" as const, id: "E-26-VOID", project: "P-26-1", task: task.document.id, person: "U-1", performed_on: "2026-12-12", hours: 6, category: "regular", created_at: "2026-12-12T00:00:00.000Z", state: "voided" as const }, path: "v", blob_id: "a", draft_fingerprint: "f" },
     ];
-    const listProjectTimeEntries = vi.fn(async () => ({ total: items.length, offset: 0, limit: 200, items }));
+    const listProjectTimeEntries = vi.fn(async (_draftId: string, _projectId: string, filters: Record<string, unknown> = {}) => {
+      const filtered = items.filter((item) => item.document.state === String(filters.state ?? item.document.state));
+      return { total: filtered.length, offset: Number(filters.offset ?? 0), limit: Number(filters.limit ?? 200), items: filtered };
+    });
     const api = { listProjectTimeEntries } as unknown as GitPmApi;
     const projectDoc = project({ plan: { finish: "2026-09-30" }, target: { finish: "2026-09-15" } }, { primary_track: "plan", comparison_track: "target" });
     const { readModels, workloadTrack, comparisonFinish } = buildReportProps(projectDoc, [], [task], scheduling);
     render(<ProjectActualReport api={api} comparisonFinish={comparisonFinish} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[task]} workloadTrack={workloadTrack} />);
 
+    // By default only the active record is fetched; main summary "Actual hours" = 8 (not 14).
     await waitFor(() => expect(screen.getAllByText("Actual hours")[0]?.parentElement?.textContent).toMatch(/8 hours/u));
-    expect(screen.getAllByText("Last activity")[0]?.parentElement?.textContent).toMatch(/Sep|10/);
-    expect(screen.getAllByText("Last activity")[0]?.parentElement?.textContent).not.toMatch(/Dec/u);
-    expect(screen.getAllByText("Active entries")[0]?.parentElement?.textContent).toMatch(/1/);
-    expect(screen.getByText("Voided entries").parentElement?.textContent).toMatch(/1/);
+    expect(screen.getAllByText("Active entries")[0]?.parentElement?.textContent).toMatch(/1/u);
+    expect(screen.queryByText("Correction history")).toBeNull();
+
+    // Toggle the always-visible "Show cancelled entries" control.
+    fireEvent.click(screen.getByRole("checkbox", { name: /Show cancelled entries/u }));
+    // The next request must NOT constrain state (fetches all states).
+    await waitFor(() => expect(listProjectTimeEntries).toHaveBeenLastCalledWith("DRF", "P-26-1", expect.objectContaining({ offset: 0, limit: 200 })));
+    expect(listProjectTimeEntries.mock.calls[listProjectTimeEntries.mock.calls.length - 1]![2]).not.toHaveProperty("state");
+
+    // The correction-history area now surfaces the voided count and explanation.
+    await waitFor(() => expect(screen.getByText("Correction history")).toBeTruthy());
+    const history = screen.getByText("Correction history").closest("section")!;
+    expect(history.textContent).toMatch(/Cancelled time entries/u);
+    expect(history.textContent).toMatch(/1/u);
+    expect(history.textContent).toContain("Kept in history, but its hours are excluded from totals.");
+    // The main summary still excludes the voided count.
+    expect(document.querySelector(".actual-report-summary")!.textContent ?? "").not.toMatch(/Cancelled time entries/u);
+    // sumHours still ignores voided: actual hours stay at 8.
+    expect(screen.getAllByText("Actual hours")[0]?.parentElement?.textContent).toMatch(/8 hours/u);
+  });
+
+  it("§11.4: uses reworded 'Отменённ*' copy in Russian and never renders 'Аннулирован'", async () => {
+    const task = { document: { schema: "gitpm/task@2", id: "T-26-RU", project: "P-26-1", title: "Russian copy task", type: "task", status: "done", lifecycle: "active" }, path: "t.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const items = [
+      { document: { schema: "gitpm/time-entry@1" as const, id: "E-26-RU-ACTIVE", project: "P-26-1", task: task.document.id, person: "U-1", performed_on: "2026-09-10", hours: 5, category: "regular", created_at: "2026-09-10T00:00:00.000Z", state: "active" as const }, path: "a", blob_id: "a", draft_fingerprint: "f" },
+      { document: { schema: "gitpm/time-entry@1" as const, id: "E-26-RU-VOID", project: "P-26-1", task: task.document.id, person: "U-1", performed_on: "2026-12-12", hours: 4, category: "regular", created_at: "2026-12-12T00:00:00.000Z", state: "voided" as const }, path: "v", blob_id: "a", draft_fingerprint: "f" },
+    ];
+    const listProjectTimeEntries = vi.fn(async (_draftId: string, _projectId: string, filters: Record<string, unknown> = {}) => {
+      const filtered = items.filter((item) => item.document.state === String(filters.state ?? item.document.state));
+      return { total: filtered.length, offset: Number(filters.offset ?? 0), limit: Number(filters.limit ?? 200), items: filtered };
+    });
+    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const projectDoc = project({ plan: { finish: "2026-09-30" } }, { primary_track: "plan", workload_track: "plan", comparison_track: "target" });
+    const { readModels, workloadTrack, comparisonFinish } = buildReportProps(projectDoc, [], [task], scheduling);
+    const { container } = render(<ProjectActualReport api={api} comparisonFinish={comparisonFinish} draft={draft} locale="ru" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[task]} workloadTrack={workloadTrack} />);
+
+    // Toggle so the voided record loads and the correction-history area renders.
+    await waitFor(() => expect(screen.getByRole("checkbox", { name: /Показывать отменённые записи/u })).toBeTruthy());
+    fireEvent.click(screen.getByRole("checkbox", { name: /Показывать отменённые записи/u }));
+    await waitFor(() => expect(screen.getByText("История исправлений")).toBeTruthy());
+
+    // The old "Аннулирован*" wording must not appear anywhere in the rendered DOM.
+    expect(container.textContent ?? "").not.toMatch(/Аннулирован/u);
+    // The new "Отменённ*" wording is present (here in the dropdown option and the count label).
+    expect(container.textContent ?? "").toMatch(/Отменённ/u);
   });
 
   it("§14.4: shows both an explicit project budget and the larger sum of top-level task estimates", async () => {

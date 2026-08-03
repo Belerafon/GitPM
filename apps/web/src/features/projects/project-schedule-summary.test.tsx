@@ -93,17 +93,17 @@ describe("ProjectScheduleSummary", () => {
 
     const warning = screen.getByText("Schedule overflow").parentElement!;
     expect(warning.textContent).toContain("Plan");
-    expect(warning.textContent).toContain("declared Sep 5, 2026");
-    expect(warning.textContent).toContain("rolled Sep 1, 2026");
-    expect(warning.textContent).toContain("declared Sep 10, 2026");
-    expect(warning.textContent).toContain("rolled Sep 15, 2026");
+    expect(warning.textContent).toContain("set to Sep 5, 2026");
+    expect(warning.textContent).toContain("child items reach Sep 1, 2026");
+    expect(warning.textContent).toContain("set to Sep 10, 2026");
+    expect(warning.textContent).toContain("child items reach Sep 15, 2026");
   });
 
   it("makes overflow warnings clickable and opens the Gantt when a warning is activated", () => {
     const onNavigate = vi.fn();
     const { milestone, parent, child } = overflowingHierarchy();
     render(<ProjectScheduleSummary project={project({ plan: { start: "2026-09-05", finish: "2026-09-10" } })} projectId={projectId} onNavigate={onNavigate} locale="en" milestones={[milestone]} scheduling={scheduling} tasks={[parent, child]} />);
-    const warningButtons = screen.getAllByRole("button", { name: /declared/u });
+    const warningButtons = screen.getAllByRole("button", { name: /set to/u });
     expect(warningButtons.length).toBeGreaterThan(0);
     fireEvent.click(warningButtons[0]!);
     expect(onNavigate).toHaveBeenCalledWith("gantt", { projectId });
@@ -137,13 +137,13 @@ describe("SchedulingOverflowWarnings", () => {
   it("renders warnings as plain text when onOpenGantt is omitted", () => {
     render(<SchedulingOverflowWarnings locale="en" trackTitle={() => "Plan"} warnings={[{ track: "plan", field: "finish", declared: "2026-09-05", rolled: "2026-09-01" }]} />);
     expect(screen.queryByRole("button")).toBeNull();
-    expect(screen.getByText(/declared/u)).toBeTruthy();
+    expect(screen.getByText(/set to/u)).toBeTruthy();
   });
 
   it("renders warnings as activatable buttons when onOpenGantt is provided", () => {
     const onOpenGantt = vi.fn();
     render(<SchedulingOverflowWarnings locale="en" trackTitle={() => "Plan"} warnings={[{ track: "plan", field: "finish", declared: "2026-09-05", rolled: "2026-09-01" }]} onOpenGantt={onOpenGantt} />);
-    const button = screen.getByRole("button", { name: /declared/u });
+    const button = screen.getByRole("button", { name: /set to/u });
     fireEvent.click(button);
     expect(onOpenGantt).toHaveBeenCalledTimes(1);
   });
