@@ -856,6 +856,35 @@ describe("ProjectPlanWorkspace", () => {
     expect(screen.getByText("Overdue task")).toBeTruthy();
   });
 
+  it("characterizes the task estimate meta with a raw unit suffix (to be localized)", async () => {
+    const client = api();
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} />);
+    await screen.findByRole("heading", { name: "Alpha" });
+    const alphaRow = screen.getByText("Alpha task").closest(".project-plan-task-row") as HTMLElement;
+    expect(alphaRow.textContent).toContain("13h");
+  });
+
+  it("characterizes the four-metric summary without a Blocked metric (to be expanded)", async () => {
+    const client = api(summaryTasksFixture(), [summaryStage], summaryProject);
+    useSummaryStatusConfig(client);
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={summaryProject.document.id} />);
+    await screen.findByRole("heading", { name: "Summary project" });
+    expect(screen.getByRole("button", { name: "Active: 1" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Blocked/u })).toBeNull();
+  });
+
+  it("characterizes the plan-specific ordering of unordered tasks (to be unified)", async () => {
+    const stageNoOrder = result({ schema: "gitpm/milestone@2", id: "M-26-NOORDER", project: project.document.id, name: "Unordered", lifecycle: "active" });
+    const apple = result({ schema: "gitpm/task@2", id: "T-26-APPLE", project: project.document.id, milestone: stageNoOrder.document.id, title: "Apple task", type: "task", status: "backlog", lifecycle: "active", schedules: { plan: { finish: "2026-07-01" } } });
+    const cherry = result({ schema: "gitpm/task@2", id: "T-26-CHERRY", project: project.document.id, milestone: stageNoOrder.document.id, title: "Cherry task", type: "task", status: "backlog", lifecycle: "active", schedules: { plan: { finish: "2026-08-01" } } });
+    const banana = result({ schema: "gitpm/task@2", id: "T-26-BANANA", project: project.document.id, milestone: stageNoOrder.document.id, title: "Banana task", type: "task", status: "done", lifecycle: "active", schedules: { plan: { finish: "2026-09-01" } } });
+    const client = api([cherry, banana, apple], [stageNoOrder, laterStage]);
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} />);
+    const card = (await screen.findByRole("heading", { name: "Unordered" })).closest<HTMLElement>("article")!;
+    expect(Array.from(card.querySelectorAll(".project-plan-task-row strong"), (element) => element.textContent))
+      .toEqual(["Apple task", "Cherry task", "Banana task"]);
+  });
+
   it("selecting a specific status resets the summary filter to all", async () => {
     const client = api(summaryTasksFixture(), [summaryStage], summaryProject);
     useSummaryStatusConfig(client);
