@@ -131,6 +131,8 @@ export function SafeMarkdown({ source }: { readonly source: string }) {
 
 export type CoreSurface = "projects" | "tasks";
 
+type ProjectRiskLevel = "onTrack" | "near" | "overdue" | "unknown";
+
 export function CoreWorkspace({ api, draft, locale, surface = "projects", initialProjectId = "", initialTaskId = "", initialCommentId = "", initialStatusFilter = "", initialMilestoneFilter = "", onNavigate = () => undefined, confirmAction = () => true, onChanged }: {
   readonly api: GitPmApi;
   readonly draft: DraftStatus;
@@ -155,6 +157,10 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
   const [filter, setFilter] = useState(initialStatusFilter);
   const [milestoneFilter, setMilestoneFilter] = useState(initialMilestoneFilter);
   const [lifecycleFilter, setLifecycleFilter] = useState<LifecycleFilterValue>("active");
+  const [projectGroupFilter, setProjectGroupFilter] = useState("");
+  const [projectOwnerFilter, setProjectOwnerFilter] = useState("");
+  const [projectStatusFilter, setProjectStatusFilter] = useState("");
+  const [projectRiskFilter, setProjectRiskFilter] = useState("");
   const [fingerprint, setFingerprint] = useState(draft.fingerprint);
   const [error, setError] = useState<string | null>(null);
   const [statusOptions, setStatusOptions] = useState<readonly ConfigValue[]>([]);
@@ -259,10 +265,45 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
   const activeTasks = tasks.filter((item) => isOperationalTask(item.document, operationalProjectIds));
   const lifecycleTasks = tasks.filter((item) => matchesLifecycleFilter(isOperationalTask(item.document, operationalProjectIds) ? "active" : "archived", lifecycleFilter));
   const lifecycleProjects = projects.filter((item) => matchesLifecycleFilter(item.document.lifecycle === "active" ? "active" : "archived", lifecycleFilter));
+  const projectRisk = useCallback((project: EntityResult): ProjectRiskLevel => {
+    const due = value(project.document, "due");
+    if (!/^\d{4}-\d{2}-\d{2}$/u.test(due)) return "unknown";
+    const days = Math.ceil((Date.parse(`${due}T00:00:00Z`) - Date.now()) / 86_400_000);
+    return days < 0 ? "overdue" : days <= 14 ? "near" : "onTrack";
+  }, [value]);
   const existingGroups = useMemo(() => existingProjectGroups(projects, locale), [projects, locale]);
-  const projectGroupSections = useMemo(
-    () => groupProjects(lifecycleProjects, locale, message(locale, "core.ungroupedProjects")),
+  const projectGroupOptions = useMemo(
+    () => [...new Set(lifecycleProjects.map((project) => stringValue(project.document, "group").trim()).filter(Boolean))]
+      .sort((left, right) => left.localeCompare(right, locale)),
     [lifecycleProjects, locale],
+  );
+  const projectOwnerOptions = useMemo(() => {
+    const peopleNames = new Map(people.map((person) => [typeof person.document.id === "string" ? person.document.id : "", stringValue(person.document, "name")]));
+    const ownerIds = [...new Set(lifecycleProjects.map((project) => value(project.document, "owner")).filter(Boolean))];
+    return ownerIds
+      .map((id) => ({ id, name: peopleNames.get(id) ?? id }))
+      .sort((left, right) => left.name.localeCompare(right.name, locale));
+  }, [lifecycleProjects, people, locale, value]);
+  const projectStatusOptions = useMemo(
+    () => [...new Set([...statusOptions.map((item) => item.slug), ...lifecycleProjects.map((project) => value(project.document, "status"))])],
+    [lifecycleProjects, statusOptions, value],
+  );
+  const filteredProjects = useMemo(() => lifecycleProjects.filter((project) => {
+    if (projectGroupFilter !== "") {
+      const group = stringValue(project.document, "group").trim();
+      if ((projectGroupFilter === "__none__" ? group !== "" : group !== projectGroupFilter)) return false;
+    }
+    if (projectOwnerFilter !== "") {
+      const owner = value(project.document, "owner");
+      if (projectOwnerFilter === "__none__" ? owner !== "" : owner !== projectOwnerFilter) return false;
+    }
+    if (projectStatusFilter !== "" && value(project.document, "status") !== projectStatusFilter) return false;
+    if (projectRiskFilter !== "" && projectRisk(project) !== projectRiskFilter) return false;
+    return true;
+  }), [lifecycleProjects, projectGroupFilter, projectOwnerFilter, projectStatusFilter, projectRiskFilter, value, projectRisk]);
+  const projectGroupSections = useMemo(
+    () => groupProjects(filteredProjects, locale, message(locale, "core.ungroupedProjects")),
+    [filteredProjects, locale],
   );
   const statuses = useMemo(() => [...new Set([...statusOptions.map((item) => item.slug), ...activeTasks.map((item) => value(item.document, "status"))])], [activeTasks, statusOptions]);
   const statusTitle = (slug: string) => statusOptions.find((item) => item.slug === slug)?.title ?? slug;
@@ -276,7 +317,6 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
   const completedTasks = activeTasks.filter((item) => isCompletedStatus(statusOptions, value(item.document, "status"))).length;
   const openPerson = (personId: string) => onNavigate("people", { personId });
   const taskQuery = (status = filter, milestone = milestoneFilter) => ({ ...(status === "" ? {} : { status: [status] }), ...(milestone === "" ? {} : { milestone: [milestone] }) });
-  const projectRisk = (project: EntityResult) => { const due = value(project.document, "due"); if (!/^\d{4}-\d{2}-\d{2}$/u.test(due)) return "unknown" as const; const days = Math.ceil((Date.parse(`${due}T00:00:00Z`) - Date.now()) / 86_400_000); return days < 0 ? "overdue" as const : days <= 14 ? "near" as const : "onTrack" as const; };
   const renderProjectRegisterHeader = () => <div className="project-register-head"><span>{t("core.projects")}</span><span>{t("core.status")}</span><span>{t("core.owner")}</span><span>{t("core.tasks")}</span><span>{t("core.milestones")}</span><span>{t("core.due")}</span><span>{t("core.risk")}</span></div>;
   const renderProjectRow = (project: EntityResult) => {
     const projectTasks = activeTasks.filter((item) => item.document.project === project.document.id).length;
@@ -312,9 +352,10 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
     {feedback !== null && <div aria-live="polite" className={`save-feedback ${feedback.kind}`} role="status"><span>{feedback.text}</span></div>}
     <AsyncBoundary state={loadRequest.state} loading={t("status.loading")} retry={() => { void load(); }} error={(loadError, retry) => <div className="alert error">{loadError}<button onClick={retry}>{t("status.retry")}</button></div>}>
     <>
-    {surface === "projects" && <section className="project-directory"><div className="card-heading"><div><h3>{t("core.projectList")}</h3><p>{t("core.projectListDescription")}</p></div><LifecycleFilter onChange={setLifecycleFilter} t={t} value={lifecycleFilter} /><button className="primary" disabled={readOnly} onClick={() => { setError(null); setCreateEditor("project"); }} type="button">+ {t("core.createProjectAction")}</button><EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setCreateEditor(null)} open={createEditor === "project"} title={t("core.createProjectAction")}><form className="editor-drawer-form" onSubmit={createProject}><label>{t("core.name")}<input disabled={readOnly} name="name" required /></label><ProjectGroupField currentGroup="" disabled={readOnly} groups={existingGroups} key={createEditor === "project" ? "open" : "closed"} t={t} /><label>{t("core.description")}<textarea disabled={readOnly} name="description" /></label><div className="editor-drawer-actions"><button onClick={() => setCreateEditor(null)} type="button">{t("core.cancel")}</button><button className="primary" disabled={readOnly}>{t("core.createProject")}</button></div></form></EditorDrawer></div>
+    {surface === "projects" && <section className="project-directory"><div className="card-heading"><div><h3>{t("core.projectList")}</h3><p>{t("core.projectListDescription")}</p></div><button className="primary" disabled={readOnly} onClick={() => { setError(null); setCreateEditor("project"); }} type="button">+ {t("core.createProjectAction")}</button><EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setCreateEditor(null)} open={createEditor === "project"} title={t("core.createProjectAction")}><form className="editor-drawer-form" onSubmit={createProject}><label>{t("core.name")}<input disabled={readOnly} name="name" required /></label><ProjectGroupField currentGroup="" disabled={readOnly} groups={existingGroups} key={createEditor === "project" ? "open" : "closed"} t={t} /><label>{t("core.description")}<textarea disabled={readOnly} name="description" /></label><div className="editor-drawer-actions"><button onClick={() => setCreateEditor(null)} type="button">{t("core.cancel")}</button><button className="primary" disabled={readOnly}>{t("core.createProject")}</button></div></form></EditorDrawer></div>
+      <div className="project-filter-toolbar" role="group" aria-label={t("core.projectFilters")}><div className="project-filter-controls"><label>{t("core.group")}<select aria-label={t("core.group")} value={projectGroupFilter} onChange={(event) => setProjectGroupFilter(event.target.value)}><option value="">{t("core.allGroups")}</option><option value="__none__">{t("core.noGroup")}</option>{projectGroupOptions.map((group) => <option key={group} value={group}>{group}</option>)}</select></label><label>{t("core.owner")}<select aria-label={t("core.owner")} value={projectOwnerFilter} onChange={(event) => setProjectOwnerFilter(event.target.value)}><option value="">{t("core.allOwners")}</option><option value="__none__">{t("core.unassigned")}</option>{projectOwnerOptions.map((owner) => <option key={owner.id} value={owner.id}>{owner.name}</option>)}</select></label><label>{t("core.status")}<select aria-label={t("core.status")} value={projectStatusFilter} onChange={(event) => setProjectStatusFilter(event.target.value)}><option value="">{t("core.allStatuses")}</option>{projectStatusOptions.map((status) => <option key={status} value={status}>{statusTitle(status)}</option>)}</select></label><label>{t("core.risk")}<select aria-label={t("core.risk")} value={projectRiskFilter} onChange={(event) => setProjectRiskFilter(event.target.value)}><option value="">{t("core.allRisks")}</option><option value="onTrack">{t("core.riskOnTrack")}</option><option value="near">{t("core.riskNear")}</option><option value="overdue">{t("core.riskOverdue")}</option><option value="unknown">{t("core.riskUnknown")}</option></select></label><label>{t("core.lifecycleFilter")}<select aria-label={t("core.lifecycleFilter")} onChange={(event) => setLifecycleFilter(event.currentTarget.value as LifecycleFilterValue)} value={lifecycleFilter}><option value="active">{t("core.lifecycleActive")}</option><option value="archived">{t("core.lifecycleArchived")}</option><option value="all">{t("core.lifecycleAll")}</option></select></label></div></div>
       <dl className="project-register-summary"><div><dt>{t("core.projectsTotal")}</dt><dd>{activeProjects.length}</dd></div><div><dt>{t("core.tasksTotal")}</dt><dd>{activeTasks.length}</dd></div><div><dt>{t("core.milestonesTotal")}</dt><dd>{activeMilestones.length}</dd></div><div><dt>{t("core.completedTasks")}</dt><dd>{completedTasks}</dd></div></dl>
-      {lifecycleProjects.length === 0 ? <p>{t("core.empty")}</p> : <div className="project-groups">{projectGroupSections.map((group) => <section className="project-group" data-ungrouped={group.isUngrouped || undefined} key={group.key}><header className="project-group-heading"><h4>{group.title}</h4><span>{t("core.projectsCount", { count: group.projects.length })}</span></header><div className="project-register" aria-label={group.title}>{renderProjectRegisterHeader()}{group.projects.map(renderProjectRow)}</div></section>)}</div>}
+      {filteredProjects.length === 0 ? <p>{t("core.empty")}</p> : <div className="project-groups">{projectGroupSections.map((group) => <section className="project-group" data-ungrouped={group.isUngrouped || undefined} key={group.key}><header className="project-group-heading"><h4>{group.title}</h4><span>{t("core.projectsCount", { count: group.projects.length })}</span></header><div className="project-register" aria-label={group.title}>{renderProjectRegisterHeader()}{group.projects.map(renderProjectRow)}</div></section>)}</div>}
     </section>}
     {surface === "tasks" && task === undefined && selectedTask === "" && <LifecycleFilter onChange={setLifecycleFilter} t={t} value={lifecycleFilter} />}
     {surface === "tasks" && (task !== undefined ? <div className="task-detail-page"><button className="text-link back-link" onClick={() => onNavigate("tasks", { projectId, query: taskQuery() })}>← {t("core.backToTasks")}</button><TaskPanel api={api} catalog={catalog} confirmCommentDelete={() => confirmAction(t("comments.deleteConfirm"))} confirmDelete={confirmDelete} draft={draft} entity={task} fingerprint={fingerprint} focusedCommentId={initialCommentId || undefined} milestones={milestones} people={people} projects={activeProjects} readOnly={readOnly} externalFields={highlights[task.document.id]} locale={locale} statusOptions={statusOptions} tasks={tasks} typeOptions={typeOptions} value={value} effortString={effortStringOf} track={projectTrack(String(task.document.project))} scheduling={scheduling} planning={projectPlanningById.get(String(task.document.project))} onCommentChanged={async (nextFingerprint) => { setFingerprint(nextFingerprint); await onChanged(); }} onNavigate={onNavigate} onDeleted={() => onNavigate("tasks", { projectId })} onStatusChange={(status) => changeTaskStatus(task, status)} save={mutate} remove={remove} statusBusy={statusPending !== null} /></div> : selectedTask !== "" ? <div className="card empty-workspace"><p>{t("core.taskNotFound")}</p><button onClick={() => onNavigate("tasks", { projectId, query: taskQuery() })}>{t("core.backToTasks")}</button></div> : <section className="card task-area"><div className="task-toolbar"><div><h3>{projectId === "" ? t("core.allTasks") : t("core.tasksFor", { project: selectedProjectName })}</h3><p>{t(projectId === "" ? "core.allTasksHint" : "core.projectTasksHint")}</p></div><div className="task-toolbar-controls"><label>{t("core.project")}<select aria-label={t("core.project")} value={projectId} onChange={(event) => onNavigate("tasks", { projectId: event.target.value, query: taskQuery(filter, "") })}><option value="">{t("core.chooseProjectOption")}</option>{activeProjects.map((project) => <option key={project.document.id} value={project.document.id}>{value(project.document, "name")}</option>)}</select></label><label>{t("core.filter")}<select value={filter} onChange={(event) => onNavigate("tasks", { projectId, query: taskQuery(event.target.value, milestoneFilter) })}><option value="">{t("core.allStatuses")}</option>{statuses.map((status) => <option key={status} value={status}>{statusTitle(status)}</option>)}</select></label><label>{t("core.milestone")}<select aria-label={t("core.milestone")} value={milestoneFilter} onChange={(event) => onNavigate("tasks", { projectId, query: taskQuery(filter, event.target.value) })}><option value="">{t("core.allMilestones")}</option>{projectId !== "" && <option value="none">{t("stages.withoutStage")}</option>}{filterMilestones.map((milestone) => <option key={milestone.document.id} value={milestone.document.id}>{projectId === "" ? `${catalog.project(milestone.document.project).name} · ` : ""}{value(milestone.document, "name")}</option>)}</select></label></div></div>
