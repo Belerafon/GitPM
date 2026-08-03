@@ -329,7 +329,7 @@ describe("ProjectActualReport", () => {
     const { readModels, workloadTrack } = buildReportProps(projectDoc, [stage], [parentTask, childTask], multiTrackScheduling);
     render(<ProjectActualReport api={api} draft={draft} locale="en" milestones={[stage]} onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[parentTask, childTask]} workloadTrack={workloadTrack} />);
 
-    await waitFor(() => expect(screen.getByText("Zebra")).toBeTruthy());
+    await waitFor(() => expect(document.querySelector(`tr[data-task-id="${parentTask.document.id}"]`)).not.toBeNull());
     const parentRow = document.querySelector<HTMLElement>(`tr[data-task-id="${parentTask.document.id}"]`)!;
     const childRow = document.querySelector<HTMLElement>(`tr[data-task-id="${childTask.document.id}"]`)!;
     expect(parentRow.getAttribute("data-depth")).toBe("0");
