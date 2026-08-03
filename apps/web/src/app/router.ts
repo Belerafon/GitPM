@@ -74,7 +74,7 @@ export function serializeAppRoute(value: AppRoute): string {
     case "stages": pathname = value.projectId === undefined ? "/projects" : value.stageId === undefined ? `/projects/${segment(value.projectId)}` : `/projects/${segment(value.projectId)}/stages/${segment(value.stageId)}`; break;
     case "tasks": pathname = value.projectId === undefined ? "/projects" : value.taskId === undefined ? `/projects/${segment(value.projectId)}` : `/projects/${segment(value.projectId)}/tasks/${segment(value.taskId)}`; break;
     case "board": pathname = value.projectId === undefined ? "/board" : `/projects/${segment(value.projectId)}/board`; break;
-    case "effort": pathname = value.projectId === undefined ? "/effort" : `/projects/${segment(value.projectId)}/effort`; break;
+    case "effort": pathname = value.projectId === undefined ? "/projects" : `/projects/${segment(value.projectId)}/effort`; break;
     case "people": pathname = value.personId === undefined ? "/people" : `/people/${segment(value.personId)}`; break;
     case "calendars": pathname = "/calendars"; break;
     case "settings": pathname = "/settings"; break;
@@ -105,7 +105,10 @@ export function routeForDestination(destination: WorkspaceDestination | "workspa
     : selection.taskId === undefined
       ? route("projects", { projectId: selection.projectId }, routeQuery)
       : route("tasks", { projectId: selection.projectId, taskId: selection.taskId }, routeQuery);
-  if (destination === "board" || destination === "gantt" || destination === "effort") return route(destination, { projectId: selection.projectId }, routeQuery);
+  if (destination === "board" || destination === "gantt") return route(destination, { projectId: selection.projectId }, routeQuery);
+  if (destination === "effort") return selection.projectId === undefined
+    ? route("projects", {}, routeQuery)
+    : route("effort", { projectId: selection.projectId }, routeQuery);
   if (destination === "history") return route("history", { commit: selection.commit }, routeQuery);
   return route(destination, {}, routeQuery);
 }

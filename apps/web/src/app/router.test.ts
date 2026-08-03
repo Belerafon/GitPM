@@ -49,6 +49,12 @@ describe("app route model", () => {
     expect(serializeAppRoute(parsed!)).toBe("/projects/P-1/effort");
   });
 
+  it("never serializes a bare effort route without a project", () => {
+    // Effort is project-scoped: without a project it must fall back to the project
+    // directory instead of producing an unparseable /effort route.
+    expect(serializeAppRoute(routeForDestination("effort"))).toBe("/projects");
+  });
+
   it("rejects unknown, incomplete and malformed routes", () => {
     expect(parseAppRoute("/")).toBeNull();
     expect(parseAppRoute("/projects/P-1/unknown")).toBeNull();

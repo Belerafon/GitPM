@@ -15,8 +15,8 @@ import { ProjectPlanWorkspace } from "./features/projects/project-plan-workspace
 const fingerprint = "b".repeat(64);
 const draft: DraftStatus = { draft_id: "DRF-SCHED", owner_gitlab_user_id: "42", branch: "gitpm/42/DRF-SCHED", base_commit: "a".repeat(40), writer_mode: "ui", state: "open", fingerprint, created_at: "2026-07-01T00:00:00.000Z", updated_at: "2026-07-01T00:00:00.000Z" };
 
-const tracksConfig = (): ConfigurationDocument => ({ schema: "gitpm/schedule-tracks@1", tracks: [{ slug: "working", title: "Working", kind: "manual", capabilities: ["dates", "effort", "dependencies"] }, { slug: "actual", title: "Actual", kind: "actual", source: "time_entries" }], defaults: { enabled_tracks: ["working", "actual"], primary_track: "working", workload_track: "working", dashboard_tracks: ["working", "actual"] } });
-const planning = { primary_track: "working", workload_track: "working", enabled_tracks: ["working", "actual"], dashboard_tracks: ["working", "actual"] };
+const tracksConfig = (): ConfigurationDocument => ({ schema: "gitpm/schedule-tracks@1", tracks: [{ slug: "working", title: "Working", kind: "manual", capabilities: ["dates", "effort", "dependencies"] }, { slug: "target", title: "Target", kind: "manual", capabilities: ["dates"] }, { slug: "actual", title: "Actual", kind: "actual", source: "time_entries" }], defaults: { enabled_tracks: ["working", "target", "actual"], primary_track: "working", workload_track: "working", dashboard_tracks: ["working", "target", "actual"] } });
+const planning = { primary_track: "working", workload_track: "working", enabled_tracks: ["working", "target", "actual"], dashboard_tracks: ["working", "target", "actual"] };
 
 const result = (document: EntityDocument): EntityResult => ({ document, path: `${document.id}.yaml`, blob_id: "a".repeat(40), draft_fingerprint: fingerprint });
 const configResult = (document: ConfigurationDocument): ConfigurationResult => ({ document, path: document.schema, blob_id: "a".repeat(40), draft_fingerprint: fingerprint });
@@ -34,7 +34,7 @@ afterEach(() => { cleanup(); localStorage.clear(); });
 describe("unified scheduling model", () => {
   it("project snapshot resolves the primary finish through the configured working track", () => {
     const project = result({ schema: "gitpm/project@2", id: "P-26-111111", name: "Snapshot project", status: "in-progress", lifecycle: "active", planning, schedules: { working: { finish: "2026-09-30" } } });
-    render(<ProjectScheduleSummary project={project.document} projectId="P-26-111111" onNavigate={vi.fn()} locale="en" scheduling={new ScheduleResolver(scheduleTracksConfig(tracksConfig()))} comparisonTrack="working" />);
+    render(<ProjectScheduleSummary project={project.document} projectId="P-26-111111" onNavigate={vi.fn()} locale="en" scheduling={new ScheduleResolver(scheduleTracksConfig(tracksConfig()))} comparisonTrack="target" />);
     const label = screen.getByText("Primary schedule");
     expect(label.closest("div")?.textContent).toMatch(/Sep|30/);
   });
@@ -43,7 +43,7 @@ describe("unified scheduling model", () => {
     const projectId = "P-26-111111";
     const project = result({ schema: "gitpm/project@2", id: projectId, name: "Rolled snapshot", status: "in-progress", lifecycle: "active", planning });
     const task = result({ schema: "gitpm/task@2", id: "T-26-111111", project: projectId, title: "Child task", type: "task", status: "backlog", lifecycle: "active", schedules: { working: { start: "2026-09-01", finish: "2026-10-02" } } });
-    render(<ProjectScheduleSummary project={project.document} projectId={projectId} onNavigate={vi.fn()} locale="en" scheduling={new ScheduleResolver(scheduleTracksConfig(tracksConfig()))} tasks={[task]} comparisonTrack="working" />);
+    render(<ProjectScheduleSummary project={project.document} projectId={projectId} onNavigate={vi.fn()} locale="en" scheduling={new ScheduleResolver(scheduleTracksConfig(tracksConfig()))} tasks={[task]} comparisonTrack="target" />);
     const label = screen.getByText("Primary schedule");
     expect(label.closest("div")?.textContent).toMatch(/Oct|2/);
   });
@@ -52,7 +52,7 @@ describe("unified scheduling model", () => {
     const projectId = "P-26-DECLARED";
     const project = result({ schema: "gitpm/project@2", id: projectId, name: "Declared wins", status: "in-progress", lifecycle: "active", planning, schedules: { working: { start: "2026-09-01", finish: "2026-09-30" } } });
     const task = result({ schema: "gitpm/task@2", id: "T-26-DECLARED", project: projectId, title: "Later child", type: "task", status: "backlog", lifecycle: "active", schedules: { working: { start: "2026-09-01", finish: "2026-11-15" } } });
-    render(<ProjectScheduleSummary project={project.document} projectId={projectId} onNavigate={vi.fn()} locale="en" scheduling={new ScheduleResolver(scheduleTracksConfig(tracksConfig()))} tasks={[task]} comparisonTrack="working" />);
+    render(<ProjectScheduleSummary project={project.document} projectId={projectId} onNavigate={vi.fn()} locale="en" scheduling={new ScheduleResolver(scheduleTracksConfig(tracksConfig()))} tasks={[task]} comparisonTrack="target" />);
     const primary = screen.getByText("Primary schedule").closest("div")!;
     expect(primary.textContent).toMatch(/Sep|30/);
     expect(primary.textContent).not.toMatch(/Nov/u);

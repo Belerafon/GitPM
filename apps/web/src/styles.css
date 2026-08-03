@@ -278,9 +278,13 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .actual-report-heading, .plan-actual-heading { display: flex; justify-content: space-between; gap: 1rem; align-items: start; }
 .actual-report-heading h4, .plan-actual-heading h5, .actual-breakdown h5 { margin: 0; }
 .actual-report-heading p, .plan-actual-heading p { margin: .2rem 0 0; color: #68706b; font-size: .72rem; }
-.actual-report-filters { display: grid; grid-template-columns: repeat(4, minmax(135px, 1fr)); gap: .6rem; }
+.actual-report-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .6rem; }
 .actual-report-filters label { display: grid; gap: .2rem; color: #68706b; font-size: .7rem; }
 .actual-report-filters select, .actual-report-filters input { min-width: 0; padding: .45rem; }
+.actual-report-more-filters { grid-column: 1 / -1; }
+.actual-report-more-filters > summary { cursor: pointer; color: #49524d; font-size: .74rem; font-weight: 650; }
+.actual-report-more-filters-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .6rem; margin-top: .5rem; }
+.actual-report-more-filters-grid label { display: grid; gap: .2rem; color: #68706b; font-size: .7rem; }
 .actual-report-summary, .plan-actual-heading dl { display: flex; flex-wrap: wrap; gap: .75rem 1.25rem; margin: 0; }
 .plan-actual-report { display: grid; gap: .65rem; border: 1px solid #d9ddd6; border-radius: 9px; padding: .75rem; }
 .plan-actual-heading dl div { min-width: 74px; }
@@ -289,10 +293,23 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .actual-report-table-wrap th, .actual-report-table-wrap td, .actual-breakdown th, .actual-breakdown td { border-bottom: 1px solid #e3e6e1; padding: .42rem .5rem; text-align: left; }
 .actual-report-table-wrap tbody th span, .actual-report-table-wrap tbody th code { display: block; }
 .actual-report-table-wrap tbody th code { color: #68706b; font-size: .65rem; font-weight: 400; }
-.actual-breakdowns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; }
+.actual-report-stage-row th { background: #f3f6f2; font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: #647068; }
+.actual-report-task-row.is-rolled { background: #fafbfa; }
+.actual-report-task-row.is-rolled .actual-report-task-cell::after { content: attr(data-rolled-note); }
+.plan-cell-source { display: block; color: #8a948f; font-size: .62rem; font-weight: 400; }
+.actual-breakdowns { border-top: 1px solid #e3e6e1; padding-top: .5rem; }
+.actual-breakdowns > summary { cursor: pointer; font-size: .78rem; font-weight: 650; color: #333b36; }
+.actual-breakdowns-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; margin-top: .5rem; }
 .actual-breakdown { min-width: 0; border: 1px solid #e0e4df; border-radius: 9px; padding: .65rem; }
 .actual-breakdown h5 { margin-bottom: .4rem; }
-@media (max-width: 900px) { .actual-report-filters { grid-template-columns: repeat(2, minmax(135px, 1fr)); } .actual-breakdowns { grid-template-columns: 1fr; } .project-plan-toolbar { grid-template-columns: 1fr 1fr; } .project-plan-toolbar-heading { grid-column: 1 / -1; } }
+.project-effort-workspace { display: grid; gap: .8rem; }
+.project-effort-header { display: grid; gap: .2rem; }
+.project-effort-eyebrow { color: #617069; font-size: .64rem; font-weight: 750; letter-spacing: .075em; text-transform: uppercase; }
+.actual-report-correction-history { border-top: 1px solid #e3e6e1; padding-top: .5rem; }
+.actual-report-show-voided { display: inline-flex; gap: .4rem; align-items: center; color: #333b36; font-size: .76rem; }
+.correction-history-details { display: grid; gap: .4rem; margin-top: .4rem; }
+.correction-history-explanation { margin: 0; color: #68706b; font-size: .72rem; }
+@media (max-width: 900px) { .actual-report-filters { grid-template-columns: repeat(2, minmax(135px, 1fr)); } .actual-breakdowns-grid { grid-template-columns: 1fr; } .project-plan-toolbar { grid-template-columns: 1fr 1fr; } .project-plan-toolbar-heading { grid-column: 1 / -1; } }
 .project-plan-stage-progress progress { width: 100%; accent-color: #3f7967; }
 .project-plan-work { display: grid; gap: .8rem; }
 .project-plan-toolbar { position: sticky; z-index: 5; top: 0; display: grid; grid-template-columns: minmax(260px, 1fr) minmax(180px, 260px) minmax(180px, 260px) auto; gap: .65rem; align-items: end; border: 1px solid #d9ddd6; border-radius: 10px; background: #fff; padding: .6rem .75rem; }

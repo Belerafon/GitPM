@@ -48,10 +48,8 @@ export function ProjectEffortWorkspace({ api, draft, locale, projectId, onNaviga
 
   const scheduling = useMemo(() => new ScheduleResolver(scheduleTracksConfig(tracksConfig?.document)), [tracksConfig]);
   const projectDoc = workspace?.project.document;
-  const primaryTrack = projectDoc === undefined ? "" : scheduling.primaryTrack(projectDoc.planning);
   const workloadTrack = projectDoc === undefined ? "" : scheduling.workloadTrack(projectDoc.planning);
-  const comparison = projectDoc === undefined ? undefined : scheduling.comparisonTrack(projectDoc.planning);
-  const tracks = useMemo(() => [...new Set([primaryTrack, workloadTrack, comparison].filter((track): track is string => track !== undefined && track !== ""))], [comparison, primaryTrack, workloadTrack]);
+  const tracks = useMemo(() => [...new Set([workloadTrack].filter((track): track is string => track !== undefined && track !== ""))], [workloadTrack]);
   const hierarchy = useMemo(() => resolveSchedulingHierarchy({
     project: projectDoc,
     milestones: (workspace?.milestones ?? []).map((milestone) => milestone.document),
@@ -62,7 +60,6 @@ export function ProjectEffortWorkspace({ api, draft, locale, projectId, onNaviga
     })),
     tracks,
   }), [projectDoc, tracks, workspace?.milestones, workspace?.tasks]);
-  const comparisonFinish = projectDoc === undefined || comparison === undefined ? undefined : hierarchy.readModels.get(projectDoc.id)?.tracks.find((track) => track.track === comparison)?.effective?.finish;
   const categories = useMemo<readonly ActualReportCategory[]>(() => Array.isArray(categoriesConfig?.document.categories)
     ? (categoriesConfig!.document.categories as readonly unknown[]).filter((item): item is WorkCategoryEntry => typeof item === "object" && item !== null && typeof (item as WorkCategoryEntry).slug === "string" && typeof (item as WorkCategoryEntry).title === "string").map((item) => ({ slug: item.slug, title: item.title }))
     : [], [categoriesConfig]);
@@ -74,7 +71,7 @@ export function ProjectEffortWorkspace({ api, draft, locale, projectId, onNaviga
           <span className="project-effort-eyebrow">{t("core.project")} <code>{projectDoc.id}</code></span>
           <h2>{text(projectDoc, "name")}</h2>
         </header>
-        <ProjectActualReport api={api} categories={categories} comparisonFinish={comparisonFinish} draft={draft} locale={locale} milestones={workspace.milestones} onNavigate={onNavigate} people={people} project={workspace.project} projectId={projectId} readModels={hierarchy.readModels} tasks={workspace.tasks} trackTitle={(slug) => scheduling.trackTitle(slug)} workloadTrack={workloadTrack} />
+        <ProjectActualReport api={api} categories={categories} draft={draft} locale={locale} milestones={workspace.milestones} onNavigate={onNavigate} people={people} project={workspace.project} projectId={projectId} readModels={hierarchy.readModels} tasks={workspace.tasks} trackTitle={(slug) => scheduling.trackTitle(slug)} workloadTrack={workloadTrack} />
       </>}
     </AsyncBoundary>
   </section>;
