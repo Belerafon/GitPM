@@ -329,7 +329,7 @@ describe("ProjectActualReport", () => {
     const { readModels, workloadTrack } = buildReportProps(projectDoc, [stage], [parentTask, childTask], multiTrackScheduling);
     render(<ProjectActualReport api={api} draft={draft} locale="en" milestones={[stage]} onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[parentTask, childTask]} workloadTrack={workloadTrack} />);
 
-    await waitFor(() => expect(screen.getByText("Zebra")).toBeTruthy());
+    await waitFor(() => expect(document.querySelector(`tr[data-task-id="${parentTask.document.id}"]`)).not.toBeNull());
     const parentRow = document.querySelector<HTMLElement>(`tr[data-task-id="${parentTask.document.id}"]`)!;
     const childRow = document.querySelector<HTMLElement>(`tr[data-task-id="${childTask.document.id}"]`)!;
     expect(parentRow.getAttribute("data-depth")).toBe("0");
@@ -355,6 +355,24 @@ describe("ProjectActualReport", () => {
     expect((screen.getByLabelText("Task") as HTMLSelectElement).value).toBe(taskOne.document.id);
   });
 
+  it("auto-selects a task's milestone when the task is chosen from the list", async () => {
+    const milestoneA = { document: { schema: "gitpm/milestone@2", id: "M-26-A", project: "P-26-1", name: "Stage A", lifecycle: "active" }, path: "a.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const taskInA = { document: { schema: "gitpm/task@2", id: "T-26-INA", project: "P-26-1", milestone: milestoneA.document.id, title: "In A", type: "task", status: "in-progress", lifecycle: "active", schedules: { plan: { effort_hours: 5 } } }, path: "ina.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const orphan = { document: { schema: "gitpm/task@2", id: "T-26-ORPHAN", project: "P-26-1", title: "Orphan", type: "task", status: "in-progress", lifecycle: "active", schedules: { plan: { effort_hours: 2 } } }, path: "orphan.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const listProjectTimeEntries = vi.fn(async () => ({ total: 0, offset: 0, limit: 200, items: [] }));
+    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const projectDoc = project({}, { primary_track: "plan", workload_track: "plan", comparison_track: "target" });
+    const { readModels, workloadTrack } = buildReportProps(projectDoc, [milestoneA], [taskInA, orphan], scheduling);
+    render(<ProjectActualReport api={api} draft={draft} locale="en" milestones={[milestoneA]} onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[taskInA, orphan]} workloadTrack={workloadTrack} />);
+
+    await screen.findByLabelText("Task");
+    fireEvent.change(screen.getByLabelText("Task"), { target: { value: taskInA.document.id } });
+    expect((screen.getByLabelText("Milestone") as HTMLSelectElement).value).toBe(milestoneA.document.id);
+    // Selecting a task outside every active milestone clears the milestone filter so the two cannot disagree.
+    fireEvent.change(screen.getByLabelText("Task"), { target: { value: orphan.document.id } });
+    expect((screen.getByLabelText("Milestone") as HTMLSelectElement).value).toBe("");
+  });
+
   it("reset clears filters, scope mode, cutoff and the show-cancelled toggle", async () => {
     const taskOne = { document: { schema: "gitpm/task@2", id: "T-26-RST", project: "P-26-1", title: "Reset task", type: "task", status: "done", lifecycle: "active", schedules: { plan: { effort_hours: 5 } } }, path: "t.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
     const items = [
@@ -376,5 +394,23 @@ describe("ProjectActualReport", () => {
     fireEvent.click(screen.getByRole("button", { name: "Reset filters" }));
     await waitFor(() => expect((screen.getByRole("checkbox", { name: /Show cancelled entries/u }) as HTMLInputElement).checked).toBe(false));
     expect(screen.queryByText("Correction history")).toBeNull();
+  });
+
+  it("labels archived tasks and archived people with their names instead of technical ids", async () => {
+    const archivedPerson = { document: { schema: "gitpm/person@1", id: "U-ARCH", name: "Ivan Petrov", lifecycle: "archived" } } as EntityResult;
+    const archivedTask = { document: { schema: "gitpm/task@2", id: "T-ARCH", project: "P-26-1", title: "Legacy task", type: "task", status: "done", lifecycle: "archived" } } as EntityResult;
+    const items = [{ document: { schema: "gitpm/time-entry@1" as const, id: "E-1", project: "P-26-1", task: "T-ARCH", person: "U-ARCH", performed_on: "2026-05-01", hours: 5, category: "regular", created_at: "2026-05-01T00:00:00.000Z", state: "active" as const }, path: "1", blob_id: "a", draft_fingerprint: "f" }];
+    const listProjectTimeEntries = vi.fn(async () => ({ total: items.length, offset: 0, limit: 200, items }));
+    const api = { listProjectTimeEntries, listTimeEntries: vi.fn() } as unknown as GitPmApi;
+    const projectDoc = project({}, { primary_track: "working", workload_track: "estimate" });
+    const { readModels, workloadTrack } = buildReportProps(projectDoc, [], [archivedTask], multiTrackScheduling);
+    render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} people={[archivedPerson]} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[archivedTask]} workloadTrack={workloadTrack} />);
+
+    await waitFor(() => expect(document.querySelector('tr[data-task-id="T-ARCH"]')).not.toBeNull());
+    const archivedRow = document.querySelector('tr[data-task-id="T-ARCH"]') as HTMLElement;
+    expect(archivedRow.textContent).toContain("Archived task");
+    expect(archivedRow.textContent).toContain("T-ARCH");
+    expect(screen.getAllByText("Ivan Petrov (archived)").length).toBeGreaterThan(0);
+    expect(screen.queryByText("U-ARCH")).toBeNull();
   });
 });

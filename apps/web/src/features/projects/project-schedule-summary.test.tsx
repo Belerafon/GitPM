@@ -139,6 +139,12 @@ describe("ProjectScheduleSummary", () => {
     expect(container.firstChild).toBeNull();
   });
 
+  it("renders nothing when a comparison track is configured but no track has dates and there are no warnings", () => {
+    // §6.1: configuring comparison_track alone is not a reason to render an empty card.
+    const { container } = render(<ProjectScheduleSummary project={project({})} projectId={projectId} onNavigate={vi.fn()} locale="en" scheduling={scheduling} />);
+    expect(container.firstChild).toBeNull();
+  });
+
   it("localizes the variance for Russian without leaking the English day abbreviation", () => {
     render(<ProjectScheduleSummary project={project({ plan: { finish: "2026-03-20" }, target: { finish: "2026-02-28" } }, { primary_track: "plan", comparison_track: "target" })} projectId={projectId} onNavigate={vi.fn()} locale="ru" scheduling={scheduling} />);
     const variance = screen.getByText("Отклонение").parentElement!;

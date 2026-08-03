@@ -14,7 +14,7 @@ import { formatApiError, listAllProjectTimeEntries, type GitPmApi, type ProjectT
 import type { DraftStatus, EntityResult } from "../../types.js";
 import { scheduleEffortReader, scheduleTextReader } from "../../schedules.js";
 import type { WorkspaceNavigate } from "../../workspace-navigation.js";
-import { buildProjectTaskViewModel, flattenProjectTaskViewModel, orderActiveMilestones } from "./project-task-view-model.js";
+import { buildProjectTaskViewModel, canonicalTaskComparator, flattenProjectTaskViewModel, orderActiveMilestones } from "./project-task-view-model.js";
 import {
   buildTaskRelations,
   resolveEffortScope,
@@ -140,6 +140,7 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
   const reader = useMemo(() => scheduleTextReader(workloadTrack), [workloadTrack]);
 
   const relations = useMemo(() => buildTaskRelations(tasks), [tasks]);
+  const taskById = useMemo(() => new Map(tasks.map((task) => [task.document.id, task] as const)), [tasks]);
   const scope = useMemo<ReadonlySet<string>>(() => resolveEffortScope(relations, { taskId: filters.task, milestoneId: filters.milestone, mode: scopeMode }), [relations, filters.task, filters.milestone, scopeMode]);
   const scopeRootIds = useMemo(() => scopeRootIdsOf(scope, relations), [scope, relations]);
   const scopeRecords = useMemo(() => selectScopedRecords(records, scope), [records, scope]);
@@ -164,7 +165,12 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
 
   const filteredActualOnly = filters.person !== "" || filters.category !== "" || filters.performed_from !== "" || filters.performed_to !== "";
 
-  const personName = (id: string) => text(people.find((person) => person.document.id === id), "name") || id;
+  const personName = (id: string) => {
+    const person = people.find((item) => item.document.id === id);
+    if (person === undefined) return t("actualReport.unknownPerson", { id });
+    const name = text(person, "name") || id;
+    return person.document.lifecycle === "archived" ? t("actualReport.archivedEntity", { name }) : name;
+  };
   const categoryName = (slug: string) => categories.find((category) => category.slug === slug)?.title ?? slug;
   const milestoneName = (id: string) => text(milestones.find((milestone) => milestone.document.id === id), "name") || t("actualReport.noMilestone");
   const taskName = (id: string) => text(tasks.find((task) => task.document.id === id), "title") || id;
@@ -187,6 +193,7 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
     text: reader,
     effortOf: scheduleEffortReader(workloadTrack),
     locale,
+    compareTasks: canonicalTaskComparator(locale, reader),
   }), [project, milestones, tasks, reader, workloadTrack, locale]);
   const flattened = useMemo(() => flattenProjectTaskViewModel(viewModel), [viewModel]);
 
@@ -201,6 +208,7 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
     readonly planSource: "declared" | "rolled" | "missing";
     readonly actualBranch: number;
     readonly actualOwn: number;
+    readonly archived: boolean;
   }
   const planActualRows = useMemo<readonly PlanActualRow[]>(() => {
     const taskOnly = filters.task !== "" && scopeMode === "taskOnly";
@@ -222,10 +230,11 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
         planSource: plan.source,
         actualBranch,
         actualOwn,
+        archived: taskById.get(row.node.id)?.document.lifecycle === "archived",
       });
     }
     return rows;
-  }, [flattened, scope, filters.task, scopeMode, readModels, workloadTrack, actualByTask, relations]);
+  }, [flattened, scope, filters.task, scopeMode, readModels, workloadTrack, actualByTask, relations, taskById, taskName]);
 
   const planSources: string[] = [];
   if (wholeProject && projectBudget !== undefined) {
@@ -261,6 +270,15 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
     // that does not belong to it.
     if (value !== "" && filters.task !== "" && relations.milestoneOf.get(filters.task) !== value) patchFilter("task", "");
   };
+  const selectTask = (value: string) => {
+    patchFilter("task", value);
+    if (value === "") return;
+    // Selecting a task auto-selects its active milestone so the two filters cannot disagree.
+    // Tasks outside every active milestone clear the milestone filter.
+    const raw = relations.milestoneOf.get(value);
+    const milestone = raw !== undefined && orderedMilestones.some((item) => item.document.id === raw) ? raw : "";
+    if (milestone !== filters.milestone) patchFilter("milestone", milestone);
+  };
 
   const planCellSource = (row: PlanActualRow): string => row.planSource === "declared" ? t("actualReport.cellPlanDeclared") : row.planSource === "rolled" ? t("actualReport.cellPlanRolled") : "";
 
@@ -268,7 +286,7 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
     <div className="actual-report-heading"><div><h4>{t("snapshot.actualReport")}</h4><p>{t("actualReport.description")}</p></div><button type="button" onClick={resetAll}>{t("actualReport.reset")}</button></div>
     <div className="actual-report-filters">
       <label>{t("actualReport.milestone")}<select value={filters.milestone} onChange={(event) => selectMilestone(event.target.value)}><option value="">{t("actualReport.allMilestones")}</option>{orderedMilestones.map((milestone) => <option key={milestone.document.id} value={milestone.document.id}>{reader(milestone.document, "name")}</option>)}</select></label>
-      <label>{t("actualReport.task")}<select value={filters.task} onChange={(event) => patchFilter("task", event.target.value)}><option value="">{t("actualReport.allTasks")}</option>{flattened.map((row) => <option key={row.node.id} value={row.node.id}>{`${"\u00A0\u00A0".repeat(row.node.depth)}${row.node.title || taskName(row.node.id)}`}</option>)}</select></label>
+      <label>{t("actualReport.task")}<select value={filters.task} onChange={(event) => selectTask(event.target.value)}><option value="">{t("actualReport.allTasks")}</option>{flattened.map((row) => <option key={row.node.id} value={row.node.id}>{`${"\u00A0\u00A0".repeat(row.node.depth)}${row.node.title || taskName(row.node.id)}`}</option>)}</select></label>
       <label>{t("timeEffort.person")}<select value={filters.person} onChange={(event) => patchFilter("person", event.target.value)}><option value="">{t("actualReport.allPeople")}</option>{peopleOptions.map((id) => <option key={id} value={id}>{personName(id)}</option>)}</select></label>
       <label>{t("actualReport.from")}<input type="date" value={filters.performed_from} onChange={(event) => patchFilter("performed_from", event.target.value)} /></label>
       <label>{t("actualReport.to")}<input type="date" value={filters.performed_to} onChange={(event) => patchFilter("performed_to", event.target.value)} /></label>
@@ -312,7 +330,7 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
           </dl>
         </div>
         {filteredActualOnly && <p className="scope-hint">{t("actualReport.actualOnlyFilters")}</p>}
-        {planActualRows.length === 0 ? <p className="empty-copy">{t("actualReport.empty")}</p> : <div className="actual-report-table-wrap"><table><thead><tr><th scope="col">{t("actualReport.task")}</th><th scope="col">{t("actualReport.planned")}</th><th scope="col">{t("actualReport.actual")}</th><th scope="col">{t("actualReport.ownHours")}</th><th scope="col">{t("actualReport.variance")}</th></tr></thead><tbody>{planActualGroups.map((group, groupIndex) => <Fragment key={groupIndex}>{group.rows.some((row) => row.stage !== undefined) && <tr className="actual-report-stage-row"><th scope="rowgroup" colSpan={5}>{group.stage === undefined ? t("actualReport.noMilestone") : milestoneName(group.stage.document.id)}</th></tr>}{group.rows.map((row) => <tr key={row.id} className={`actual-report-task-row${row.planSource === "rolled" ? " is-rolled" : ""}`} data-depth={row.depth} data-task-id={row.id} data-plan-source={row.planSource}><th className="actual-report-task-cell" scope="row" style={{ paddingLeft: `${0.5 + row.depth * 1.2}rem` }}><button type="button" className="actual-report-task-link" aria-label={`${row.title} ${row.id}`} onClick={() => onNavigate("tasks", { projectId, taskId: row.id })}><span>{row.title}</span><code>{row.id}</code></button></th><td>{row.plan === undefined ? "—" : formatDurationHours(locale, row.plan)}{planCellSource(row) !== "" && <span className="plan-cell-source">{planCellSource(row)}</span>}</td><td>{formatDurationHours(locale, row.actualBranch)}</td><td>{formatDurationHours(locale, row.actualOwn)}</td><td>{row.plan === undefined ? "—" : formatDurationHours(locale, row.actualBranch - row.plan)}</td></tr>)}</Fragment>)}</tbody></table></div>}
+        {planActualRows.length === 0 ? <p className="empty-copy">{t("actualReport.empty")}</p> : <div className="actual-report-table-wrap"><table><thead><tr><th scope="col">{t("actualReport.task")}</th><th scope="col">{t("actualReport.planned")}</th><th scope="col">{t("actualReport.actual")}</th><th scope="col">{t("actualReport.ownHours")}</th><th scope="col">{t("actualReport.variance")}</th></tr></thead><tbody>{planActualGroups.map((group, groupIndex) => <Fragment key={groupIndex}>{group.rows.some((row) => row.stage !== undefined) && <tr className="actual-report-stage-row"><th scope="rowgroup" colSpan={5}>{group.stage === undefined ? t("actualReport.noMilestone") : milestoneName(group.stage.document.id)}</th></tr>}{group.rows.map((row) => <tr key={row.id} className={`actual-report-task-row${row.planSource === "rolled" ? " is-rolled" : ""}`} data-depth={row.depth} data-task-id={row.id} data-plan-source={row.planSource}><th className="actual-report-task-cell" scope="row" style={{ paddingLeft: `${0.5 + row.depth * 1.2}rem` }}><button type="button" className="actual-report-task-link" aria-label={`${row.title} ${row.id}`} onClick={() => onNavigate("tasks", { projectId, taskId: row.id })}><span>{row.title}</span>{row.archived && <span className="archived-reference"> · {t("actualReport.archivedTask")}</span>}<code>{row.id}</code></button></th><td>{row.plan === undefined ? "—" : formatDurationHours(locale, row.plan)}{planCellSource(row) !== "" && <span className="plan-cell-source">{planCellSource(row)}</span>}</td><td>{formatDurationHours(locale, row.actualBranch)}</td><td>{formatDurationHours(locale, row.actualOwn)}</td><td>{row.plan === undefined ? "—" : formatDurationHours(locale, row.actualBranch - row.plan)}</td></tr>)}</Fragment>)}</tbody></table></div>}
       </section>
       <details className="actual-breakdowns">
         <summary>{t("actualReport.breakdownsHeading")}</summary>
