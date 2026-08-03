@@ -42,6 +42,13 @@ describe("active filtering and totals", () => {
   it("sums active hours", () => {
     expect(sumHours(entries)).toBe(9.75);
   });
+
+  it("sumHours drops voided entries even when they are the only ones carrying hours", () => {
+    expect(sumHours([
+      entry({ id: "E-ACT", performed_on: "2026-08-17", hours: 4 }),
+      entry({ id: "E-VOID", performed_on: "2026-12-12", hours: 6, state: "voided" }),
+    ])).toBe(4);
+  });
 });
 
 describe("grouping", () => {
@@ -76,6 +83,19 @@ describe("actual window", () => {
 
   it("returns undefined when there are no active entries", () => {
     expect(actualWindow([entry({ id: "E-26-9", state: "voided" })])).toBeUndefined();
+  });
+
+  it("excludes voided entries from both the date span and the hour total", () => {
+    const window = actualWindow([
+      entry({ id: "E-EARLY", performed_on: "2026-08-10", hours: 2 }),
+      entry({ id: "E-LATE", performed_on: "2026-12-12", hours: 9, state: "voided" }),
+    ]);
+    expect(window).toEqual({
+      start: "2026-08-10",
+      finish: "2026-08-10",
+      effort_hours: 2,
+      activity_by_date: { "2026-08-10": 2 },
+    });
   });
 
   it("exposes discrete actual segments", () => {

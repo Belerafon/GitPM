@@ -9,6 +9,11 @@ import type { DraftStatus, EntityDocument, EntityResult } from "../../types.js";
 const configDocument = { schema: "gitpm/schedule-tracks@1", tracks: [{ slug: "plan", title: "Plan", kind: "manual", capabilities: ["dates", "effort", "dependencies"] }, { slug: "target", title: "Target", kind: "manual", capabilities: ["dates"] }, { slug: "actual", title: "Actual", kind: "actual", source: "time_entries" }], defaults: { enabled_tracks: ["plan", "target", "actual"], primary_track: "plan", workload_track: "plan", comparison_track: "target", dashboard_tracks: ["plan", "target", "actual"] } };
 const scheduling = new ScheduleResolver(scheduleTracksConfig(configDocument));
 
+// A track-agnostic configuration where the primary, workload, and comparison roles
+// are bound to three distinct made-up slugs (`working`, `estimate`, `forecast`).
+const multiTrackDocument = { schema: "gitpm/schedule-tracks@1", tracks: [{ slug: "working", title: "Working", kind: "manual", capabilities: ["dates", "effort"] }, { slug: "forecast", title: "Forecast", kind: "manual", capabilities: ["dates"] }, { slug: "estimate", title: "Estimate", kind: "manual", capabilities: ["dates", "effort"] }, { slug: "actual", title: "Actual", kind: "actual", source: "time_entries" }], defaults: { enabled_tracks: ["working", "forecast", "estimate", "actual"], primary_track: "working", workload_track: "estimate", comparison_track: "forecast", dashboard_tracks: ["working", "forecast", "estimate", "actual"] } };
+const multiTrackScheduling = new ScheduleResolver(scheduleTracksConfig(multiTrackDocument));
+
 const project = (schedules: Record<string, unknown>, planning?: Record<string, unknown>): EntityDocument =>
   ({ schema: "gitpm/project@2", id: "P-26-1", name: "Demo", status: "in-progress", lifecycle: "active", ...(planning === undefined ? {} : { planning }), schedules } as EntityDocument);
 
@@ -117,5 +122,52 @@ describe("ProjectSnapshot", () => {
     expect(screen.queryByText("Last activity")).toBeNull();
     expect(screen.queryByText("Actual hours report")).toBeNull();
     expect(screen.queryByText(/Hours after/u)).toBeNull();
+  });
+
+  it("reads primary and comparison finishes from their configured tracks and signs the variance (track-agnostic)", () => {
+    // Primary track `working` finishes BEFORE comparison track `forecast` => negative variance.
+    // The `estimate` (workload) finish must never appear as a project finish label here.
+    render(<ProjectSnapshot project={project({ working: { finish: "2026-04-10" }, forecast: { finish: "2026-05-01" }, estimate: { finish: "2026-06-20" } }, { primary_track: "working", workload_track: "estimate", comparison_track: "forecast" })} locale="en" scheduling={multiTrackScheduling} />);
+    const primary = screen.getByText("Primary finish").parentElement!;
+    expect(primary.textContent).toMatch(/Apr.{1,3}10/);
+    expect(primary.textContent).not.toMatch(/May|Jun/u);
+    const comparison = screen.getByText("Comparison finish").parentElement!;
+    expect(comparison.textContent).toMatch(/May.{1,3}1/);
+    const variance = screen.getByText("Variance").parentElement!;
+    expect(variance.textContent).toMatch(/-21 d/);
+  });
+
+  it("sources the Planned effort in the actual report from the workload track, not the primary track", async () => {
+    // The task carries different effort_hours under `working` (primary, 10h) and `estimate` (workload, 25h).
+    // Pins current behavior: the Planned value reflects the WORKLOAD track (estimate).
+    const task = { document: { schema: "gitpm/task@2", id: "T-26-WL", project: "P-26-1", title: "Workload task", type: "task", status: "done", lifecycle: "active", schedules: { working: { start: "2026-09-01", finish: "2026-09-30", effort_hours: 10 }, estimate: { start: "2026-09-01", finish: "2026-09-30", effort_hours: 25 } } }, path: "t.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const items = [
+      { document: { schema: "gitpm/time-entry@1" as const, id: "E-26-WL", project: "P-26-1", task: task.document.id, person: "U-1", performed_on: "2026-09-10", hours: 4, category: "regular", created_at: "2026-09-10T00:00:00.000Z", state: "active" as const }, path: "e", blob_id: "a", draft_fingerprint: "f" },
+    ];
+    const listProjectTimeEntries = vi.fn(async () => ({ total: items.length, offset: 0, limit: 200, items }));
+    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    render(<ProjectSnapshot api={api} draft={draft} locale="en" project={project({ working: { finish: "2026-09-30" } }, { primary_track: "working", workload_track: "estimate", comparison_track: "forecast" })} scheduling={multiTrackScheduling} tasks={[task]} />);
+
+    await waitFor(() => {
+      const summary = screen.getByText("Plan vs actual").closest<HTMLElement>(".plan-actual-report")!.querySelector<HTMLElement>(".plan-actual-heading dl")!;
+      expect(within(summary).getByText("Planned").parentElement?.textContent).toMatch(/25/);
+    });
+  });
+
+  it("excludes voided time entries from the actual hour sum and the activity window", async () => {
+    const task = { document: { schema: "gitpm/task@2", id: "T-26-VOID", project: "P-26-1", title: "Void task", type: "task", status: "done", lifecycle: "active" }, path: "t.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const items = [
+      { document: { schema: "gitpm/time-entry@1" as const, id: "E-26-ACTIVE", project: "P-26-1", task: task.document.id, person: "U-1", performed_on: "2026-09-10", hours: 3, category: "regular", created_at: "2026-09-10T00:00:00.000Z", state: "active" as const }, path: "a", blob_id: "a", draft_fingerprint: "f" },
+      { document: { schema: "gitpm/time-entry@1" as const, id: "E-26-VOID", project: "P-26-1", task: task.document.id, person: "U-1", performed_on: "2026-12-12", hours: 5, category: "regular", created_at: "2026-12-12T00:00:00.000Z", state: "voided" as const }, path: "v", blob_id: "a", draft_fingerprint: "f" },
+    ];
+    const listProjectTimeEntries = vi.fn(async () => ({ total: items.length, offset: 0, limit: 200, items }));
+    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    render(<ProjectSnapshot api={api} draft={draft} locale="en" project={project({ plan: { finish: "2026-09-30" }, target: { finish: "2026-09-15" } }, { primary_track: "plan", comparison_track: "target" })} scheduling={scheduling} tasks={[task]} />);
+
+    await waitFor(() => expect(screen.getByText("Actual hours").parentElement?.textContent).toMatch(/3 hours/));
+    expect(screen.getByText("Last activity").parentElement?.textContent).toMatch(/Sep|10/);
+    expect(screen.getByText("Last activity").parentElement?.textContent).not.toMatch(/Dec/u);
+    expect(screen.getByText("Active entries").parentElement?.textContent).toMatch(/1/);
+    expect(screen.getByText("Voided entries").parentElement?.textContent).toMatch(/1/);
   });
 });

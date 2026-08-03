@@ -165,6 +165,21 @@ describe("scheduling hierarchy resolution", () => {
     expect(readModelTrack(hierarchy.readModels.get("M-1")!, "plan")?.effective).toEqual({ start: "2026-08-02", finish: "2026-08-05", effort_hours: 5 });
     expect(readModelTrack(hierarchy.readModels.get("P-1")!, "plan")?.effective).toEqual({ start: "2026-08-01", finish: "2026-08-10", effort_hours: 7 });
   });
+
+  it("prefers a declared project window over the rolled-up child window at the project root", () => {
+    const hierarchy = resolveSchedulingHierarchy({
+      tracks: ["plan"],
+      project: { id: "P-DECL", schedules: { plan: { start: "2026-09-01", finish: "2026-09-30" } } },
+      tasks: [
+        { id: "T-LATE", schedules: { plan: { start: "2026-09-01", finish: "2026-11-15", effort_hours: 8 } } },
+      ],
+    });
+
+    const projectModel = hierarchy.readModels.get("P-DECL")!;
+    expect(readModelTrack(projectModel, "plan")?.declared).toEqual({ start: "2026-09-01", finish: "2026-09-30" });
+    expect(readModelTrack(projectModel, "plan")?.rolled).toEqual({ start: "2026-09-01", finish: "2026-11-15", effort_hours: 8 });
+    expect(readModelTrack(projectModel, "plan")?.effective).toEqual({ start: "2026-09-01", finish: "2026-09-30" });
+  });
 });
 
 describe("variance and overdue", () => {

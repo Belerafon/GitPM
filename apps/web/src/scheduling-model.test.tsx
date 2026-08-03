@@ -48,6 +48,16 @@ describe("unified scheduling model", () => {
     expect(label.parentElement?.textContent).toMatch(/Oct|2/);
   });
 
+  it("project snapshot prefers the declared project window over a later rolled-up child window", () => {
+    const projectId = "P-26-DECLARED";
+    const project = result({ schema: "gitpm/project@2", id: projectId, name: "Declared wins", status: "in-progress", lifecycle: "active", planning, schedules: { working: { start: "2026-09-01", finish: "2026-09-30" } } });
+    const task = result({ schema: "gitpm/task@2", id: "T-26-DECLARED", project: projectId, title: "Later child", type: "task", status: "backlog", lifecycle: "active", schedules: { working: { start: "2026-09-01", finish: "2026-11-15" } } });
+    render(<ProjectSnapshot project={project.document} locale="en" scheduling={new ScheduleResolver(scheduleTracksConfig(tracksConfig()))} tasks={[task]} />);
+    const primary = screen.getByText("Primary finish").parentElement!;
+    expect(primary.textContent).toMatch(/Sep|30/);
+    expect(primary.textContent).not.toMatch(/Nov/u);
+  });
+
   it("gantt reads working-track bars and dependencies", async () => {
     const projectId = "P-26-111111";
     const project = result({ schema: "gitpm/project@2", id: projectId, name: "Gantt project", status: "backlog", lifecycle: "active", planning });
