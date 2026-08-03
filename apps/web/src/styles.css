@@ -309,7 +309,7 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .actual-report-show-voided { display: inline-flex; gap: .4rem; align-items: center; color: #333b36; font-size: .76rem; }
 .correction-history-details { display: grid; gap: .4rem; margin-top: .4rem; }
 .correction-history-explanation { margin: 0; color: #68706b; font-size: .72rem; }
-@media (max-width: 900px) { .actual-report-filters { grid-template-columns: repeat(2, minmax(135px, 1fr)); } .actual-breakdowns-grid { grid-template-columns: 1fr; } .project-plan-toolbar { grid-template-columns: 1fr 1fr; } .project-plan-toolbar-heading { grid-column: 1 / -1; } }
+@media (max-width: 900px) { .actual-report-filters { grid-template-columns: repeat(2, minmax(135px, 1fr)); } .actual-breakdowns-grid { grid-template-columns: 1fr; } }
 .project-plan-stage-progress progress { width: 100%; accent-color: #3f7967; }
 .project-plan-work { display: grid; gap: .8rem; }
 .project-plan-toolbar { position: sticky; z-index: 5; top: 0; display: grid; grid-template-columns: minmax(260px, 1fr) minmax(180px, 260px) minmax(180px, 260px) auto; gap: .65rem; align-items: end; border: 1px solid #d9ddd6; border-radius: 10px; background: #fff; padding: .6rem .75rem; }
@@ -321,6 +321,9 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .project-plan-outside-warning.is-active { border-color: #c97a6a; background: #f3ddd4; }
 .project-plan-status-filter, .project-plan-milestone-filter { display: grid; gap: .2rem; color: #68706b; font-size: .7rem; min-width: 0; }
 .project-plan-toolbar select { min-width: 0; padding: .45rem; }
+/* Tablet toolbar grid must follow the base rule so the cascade does not collapse the
+   two-column layout back to the four-column desktop grid between 700px and 900px. */
+@media (max-width: 900px) { .project-plan-toolbar { grid-template-columns: 1fr 1fr; } .project-plan-toolbar-heading { grid-column: 1 / -1; } .task-field-settings[open] > div { right: auto; left: 0; } }
 .project-plan-filter-chips { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
 .filter-chip { display: inline-flex; gap: .3rem; align-items: center; border: 1px solid #cdd1c9; border-radius: 999px; background: #f3f6f2; padding: .2rem .35rem .2rem .6rem; font-size: .72rem; color: #333b36; }
 .filter-chip button { border: 0; background: transparent; color: #68706b; font-size: .8rem; line-height: 1; cursor: pointer; padding: 0 .15rem; }
