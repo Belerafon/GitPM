@@ -74,7 +74,7 @@ export function ProjectEffortWorkspace({ api, draft, locale, projectId, onNaviga
           <span className="project-effort-eyebrow">{t("core.project")} <code>{projectDoc.id}</code></span>
           <h2>{text(projectDoc, "name")}</h2>
         </header>
-        <ProjectActualReport api={api} categories={categories} comparisonFinish={comparisonFinish} draft={draft} locale={locale} milestones={workspace.milestones} people={people} projectId={projectId} readModels={hierarchy.readModels} tasks={workspace.tasks} workloadTrack={workloadTrack} />
+        <ProjectActualReport api={api} categories={categories} comparisonFinish={comparisonFinish} draft={draft} locale={locale} milestones={workspace.milestones} onNavigate={onNavigate} people={people} project={workspace.project} projectId={projectId} readModels={hierarchy.readModels} tasks={workspace.tasks} trackTitle={(slug) => scheduling.trackTitle(slug)} workloadTrack={workloadTrack} />
       </>}
     </AsyncBoundary>
   </section>;

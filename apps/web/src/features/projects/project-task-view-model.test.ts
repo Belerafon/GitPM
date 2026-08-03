@@ -4,6 +4,7 @@ import type { EntityDocument, EntityResult } from "../../types.js";
 import {
   buildProjectTaskViewModel,
   compareOrder,
+  flattenProjectTaskViewModel,
   orderActiveMilestones,
   type TaskViewModelNode,
 } from "./project-task-view-model.js";
@@ -287,5 +288,31 @@ describe("buildProjectTaskViewModel", () => {
 
     expect(tasks.map((t) => t.document.id)).toEqual(originalTaskIds);
     expect(milestones).toEqual([stage]);
+  });
+});
+
+describe("flattenProjectTaskViewModel", () => {
+  it("yields DFS-preorder rows across stages then the system group, carrying the stage entity", () => {
+    const stage1 = milestone("M-1", { task_order: ["T-A", "T-A1"] });
+    const stage2 = milestone("M-2", { task_order: ["T-B"] });
+    const rootA = task("T-A", { milestone: "M-1" });
+    const childA1 = task("T-A1", { milestone: "M-1", parent: "T-A" });
+    const grandA1a = task("T-A1a", { milestone: "M-1", parent: "T-A1" });
+    const rootB = task("T-B", { milestone: "M-2" });
+    const systemTask = task("T-SYS");
+
+    const view = buildProjectTaskViewModel({
+      project: project({ milestone_order: ["M-1", "M-2"] }),
+      milestones: [stage1, stage2],
+      tasks: [grandA1a, rootB, rootA, childA1, systemTask],
+      text,
+      effortOf,
+      locale: "en",
+    });
+
+    const rows = flattenProjectTaskViewModel(view);
+    expect(rows.map((row) => row.node.id)).toEqual(["T-A", "T-A1", "T-A1a", "T-B", "T-SYS"]);
+    expect(rows.map((row) => row.node.depth)).toEqual([0, 1, 2, 0, 0]);
+    expect(rows.map((row) => row.stage?.document.id)).toEqual(["M-1", "M-1", "M-1", "M-2", undefined]);
   });
 });

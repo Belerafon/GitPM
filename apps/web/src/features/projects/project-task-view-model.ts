@@ -57,6 +57,33 @@ export interface ProjectTaskViewModel {
   readonly system: ProjectTaskSystemGroup;
 }
 
+/**
+ * A single flattened view-model row: a task node paired with the milestone
+ * stage it belongs to. `stage` is `undefined` for rows in the system group.
+ */
+export interface TaskViewModelRow {
+  readonly node: TaskViewModelNode;
+  readonly stage: EntityResult | undefined;
+}
+
+/**
+ * Flatten the view model into DFS-preorder rows: stages in
+ * {@link orderActiveMilestones} order, then the system group, each traversed
+ * depth-first. The order is stable and matches the canonical manual order, so
+ * consumers that need a single flat list (such as the actual-report table) can
+ * reuse the shared hierarchy without rebuilding it.
+ */
+export function flattenProjectTaskViewModel(view: ProjectTaskViewModel): readonly TaskViewModelRow[] {
+  const rows: TaskViewModelRow[] = [];
+  const visit = (node: TaskViewModelNode, stage: EntityResult | undefined): void => {
+    rows.push({ node, stage });
+    for (const child of node.children) visit(child, stage);
+  };
+  for (const group of view.stages) for (const root of group.roots) visit(root, group.milestone);
+  for (const root of view.system.roots) visit(root, undefined);
+  return rows;
+}
+
 export interface OrderActiveMilestonesOptions {
   readonly project: EntityResult;
   readonly milestones: readonly EntityResult[];

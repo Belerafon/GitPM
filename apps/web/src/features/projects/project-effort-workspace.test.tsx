@@ -60,10 +60,10 @@ describe("ProjectEffortWorkspace", () => {
     expect(screen.getByText(projectId).tagName).toBe("CODE");
     await screen.findByRole("heading", { name: "Actual hours report" });
 
-    await waitFor(() => expect(screen.getByText("Actual hours").parentElement?.textContent).toMatch(/4 hours/u));
-    const planActual = screen.getByText("Plan vs actual").closest<HTMLElement>(".plan-actual-report")!;
-    const summary = planActual.querySelector<HTMLElement>(".plan-actual-heading dl")!;
-    expect(within(summary).getByText("Planned").parentElement?.textContent).toMatch(/25 hours/u);
+    await waitFor(() => expect(screen.getAllByText("Actual hours")[0]?.parentElement?.textContent).toMatch(/4 hours/u));
+    // The plan of the selected scope (whole project, sum of the single root task) is the
+    // workload-track estimate of 25h, surfaced through the new plan/actual summary.
+    await waitFor(() => expect(screen.getByText("Plan of selected scope").parentElement?.textContent).toMatch(/25 hours/u));
   });
 
   it("loads project, people, work-categories and schedule-tracks in parallel and never per task", async () => {
