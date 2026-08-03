@@ -30,6 +30,10 @@ type PlanEditor = { readonly kind: "project" | "new-stage" }
   | null;
 type TaskField = "assignees" | "due" | "estimate" | "status";
 type TaskFieldVisibility = Readonly<Record<TaskField, boolean>>;
+type SummaryFilter = "all" | "completed" | "in-progress" | "overdue";
+
+const normalizeSummaryFilter = (value: string | undefined): SummaryFilter =>
+  value === "completed" || value === "in-progress" || value === "overdue" ? value : "all";
 
 const TASK_FIELDS_STORAGE_KEY = "gitpm.projectPlan.taskFields";
 const defaultTaskFields: TaskFieldVisibility = { assignees: true, due: true, estimate: true, status: true };
@@ -108,7 +112,7 @@ const buildInsertedTaskOrder = (tasks: readonly EntityResult[], order: readonly 
   return [...depthFirst.slice(0, insertAt), newId, ...depthFirst.slice(insertAt)];
 };
 
-export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedStageId = "", selectedTaskId = "", initialStatusFilter = "", initialMilestoneFilter = "", onNavigate, onChanged, confirmAction = () => true }: {
+export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedStageId = "", selectedTaskId = "", initialStatusFilter = "", initialMilestoneFilter = "", initialSummaryFilter = "", onNavigate, onChanged, confirmAction = () => true }: {
   readonly api: GitPmApi;
   readonly draft: DraftStatus;
   readonly locale: Locale;
@@ -117,6 +121,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   readonly selectedTaskId?: string;
   readonly initialStatusFilter?: string;
   readonly initialMilestoneFilter?: string;
+  readonly initialSummaryFilter?: string;
   readonly onNavigate: WorkspaceNavigate;
   readonly onChanged: () => Promise<void>;
   readonly confirmAction?: (message: string) => boolean;
@@ -137,6 +142,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   const [stageSchedulesDraft, setStageSchedulesDraft] = useState<ScheduleMap | undefined>(undefined);
   const [statusFilter, setStatusFilter] = useState(initialStatusFilter);
   const [milestoneFilter, setMilestoneFilter] = useState(initialMilestoneFilter);
+  const [summaryFilter, setSummaryFilter] = useState<SummaryFilter>(normalizeSummaryFilter(initialSummaryFilter));
   const [taskFields, setTaskFields] = useState<TaskFieldVisibility>(readTaskFields);
   const [error, setError] = useState<string | null>(null);
   const [orderPending, setOrderPending] = useState<readonly string[] | null>(null);
@@ -197,7 +203,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   }, [api, draft.draft_id, draft.fingerprint, loader.run, locale, projectId]);
 
   useEffect(() => { void load(); }, [load]);
-  useEffect(() => { setStatusFilter(initialStatusFilter); setMilestoneFilter(initialMilestoneFilter); }, [initialMilestoneFilter, initialStatusFilter]);
+  useEffect(() => { setStatusFilter(initialStatusFilter); setMilestoneFilter(initialMilestoneFilter); setSummaryFilter(normalizeSummaryFilter(initialSummaryFilter)); }, [initialMilestoneFilter, initialStatusFilter, initialSummaryFilter]);
   useEffect(() => { writeTaskFields(taskFields); }, [taskFields]);
   useEffect(() => { writeInspectorWidth(inspectorWidth); }, [inspectorWidth]);
 
@@ -309,17 +315,6 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     () => [...(workspace?.tasks.filter((item) => isOperationalTask(item.document, activeProjectIds([workspace.project.document]))) ?? [])].sort((left, right) => compareTasks(left, right, locale, text, statuses)),
     [locale, statuses, text, workspace],
   );
-  const visibleTasks = useMemo(() => activeTasks.filter((task) =>
-    (statusFilter === "" || text(task.document, "status") === statusFilter)
-    && (milestoneFilter === "" || (milestoneFilter === "none" ? text(task.document, "milestone") === "" : text(task.document, "milestone") === milestoneFilter))), [activeTasks, milestoneFilter, statusFilter]);
-  const completed = activeTasks.filter((task) => isCompletedStatus(statuses, text(task.document, "status"))).length;
-  const overdue = activeTasks.filter((task) => !isCompletedStatus(statuses, text(task.document, "status")) && /^\d{4}-\d{2}-\d{2}$/u.test(text(task.document, "due")) && text(task.document, "due") < new Date().toISOString().slice(0, 10)).length;
-  const activeStageIds = new Set(activeStages.map((stage) => stage.document.id));
-  const visibleStages = milestoneFilter === "" ? activeStages : activeStages.filter((stage) => stage.document.id === milestoneFilter);
-  const outsideStages = activeTasks.filter((task) => !activeStageIds.has(text(task.document, "milestone")));
-  const visibleOutsideStages = visibleTasks.filter((task) => !activeStageIds.has(text(task.document, "milestone")));
-  const navigationQuery = { ...(statusFilter ? { status: [statusFilter] } : {}), ...(milestoneFilter ? { milestone: [milestoneFilter] } : {}) };
-  const progress = activeTasks.length === 0 ? 0 : Math.round(completed / activeTasks.length * 100);
   const statusTitle = (slug: string) => statuses.find((item) => item.slug === slug)?.title ?? slug;
   const dateLabel = (value: string) => /^\d{4}-\d{2}-\d{2}$/u.test(value) ? formatDateOnly(locale, value) : "—";
   const selectedStage = workspace?.milestones.find((item) => item.document.id === selectedStageId);
@@ -333,6 +328,33 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     })),
     tracks: primaryTrack === "" ? [] : [primaryTrack],
   });
+  const today = new Date().toISOString().slice(0, 10);
+  const overdueTaskIds = new Set<string>();
+  for (const task of activeTasks) {
+    const finish = schedulingHierarchy.readModels.get(task.document.id)?.tracks[0]?.effective?.finish;
+    if (typeof finish !== "string" || finish >= today) continue;
+    if (isCompletedStatus(statuses, text(task.document, "status"))) continue;
+    overdueTaskIds.add(task.document.id);
+  }
+  const completedCount = activeTasks.filter((task) => isCompletedStatus(statuses, text(task.document, "status"))).length;
+  const inProgressCount = activeTasks.filter((task) => statuses.find((item) => item.slug === text(task.document, "status"))?.category === "active").length;
+  const overdueCount = overdueTaskIds.size;
+  const visibleTasks = useMemo(() => activeTasks.filter((task) =>
+    (statusFilter === "" || text(task.document, "status") === statusFilter)
+    && (milestoneFilter === "" || (milestoneFilter === "none" ? text(task.document, "milestone") === "" : text(task.document, "milestone") === milestoneFilter))
+    && (summaryFilter === "all"
+      || (summaryFilter === "completed" && isCompletedStatus(statuses, text(task.document, "status")))
+      || (summaryFilter === "in-progress" && statuses.find((item) => item.slug === text(task.document, "status"))?.category === "active")
+      || (summaryFilter === "overdue" && overdueTaskIds.has(task.document.id)))), [activeTasks, milestoneFilter, overdueTaskIds, statusFilter, statuses, summaryFilter, text]);
+  const activeStageIds = new Set(activeStages.map((stage) => stage.document.id));
+  const visibleStages = milestoneFilter === "" ? activeStages : activeStages.filter((stage) => stage.document.id === milestoneFilter);
+  const outsideStages = activeTasks.filter((task) => !activeStageIds.has(text(task.document, "milestone")));
+  const visibleOutsideStages = visibleTasks.filter((task) => !activeStageIds.has(text(task.document, "milestone")));
+  const navigationQuery = {
+    ...(statusFilter ? { status: [statusFilter] } : {}),
+    ...(milestoneFilter ? { milestone: [milestoneFilter] } : {}),
+    ...(summaryFilter !== "all" ? { summary: [summaryFilter] } : {}),
+  };
   const selectedStageTrack = selectedStage === undefined
     ? undefined
     : schedulingHierarchy.readModels.get(selectedStage.document.id)?.tracks[0];
@@ -342,11 +364,27 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   const selectedTask = workspace?.tasks.find((item) => item.document.id === selectedTaskId);
   const catalog = useMemo(() => new EntityCatalog({ projects, milestones: workspace?.milestones ?? [], tasks: workspace?.tasks ?? [] }), [projects, workspace]);
   const closeInspector = () => onNavigate("projects", { projectId, ...(Object.keys(navigationQuery).length > 0 ? { query: navigationQuery } : {}) });
-  const applyFilters = (status: string, milestone: string) => {
+  const applyFilters = (status: string, milestone: string, summary: SummaryFilter) => {
     setStatusFilter(status);
     setMilestoneFilter(milestone);
-    const query = { ...(status ? { status: [status] } : {}), ...(milestone ? { milestone: [milestone] } : {}) };
+    setSummaryFilter(summary);
+    const query = {
+      ...(status ? { status: [status] } : {}),
+      ...(milestone ? { milestone: [milestone] } : {}),
+      ...(summary !== "all" ? { summary: [summary] } : {}),
+    };
     onNavigate("projects", { projectId, ...(Object.keys(query).length > 0 ? { query } : {}) });
+  };
+  const toggleSummary = (next: SummaryFilter) => applyFilters("", milestoneFilter, summaryFilter === next ? "all" : next);
+  const resetFilters = () => applyFilters("", "", "all");
+  const summaryMetricLabel = (value: SummaryFilter): string => value === "completed" ? t("projectPlan.summaryCompleted")
+    : value === "in-progress" ? t("projectPlan.summaryInProgress")
+    : value === "overdue" ? t("projectPlan.summaryOverdue")
+    : t("projectPlan.filterAll");
+  const milestoneChipLabel = (value: string): string => {
+    if (value === "none") return t("stages.withoutStage");
+    const stage = activeStages.find((item) => item.document.id === value);
+    return stage === undefined ? value : text(stage.document, "name");
   };
   const moveStage = (stageId: string, offset: -1 | 1) => {
     if (workspace === null || orderPending !== null || statusPending !== null) return;
@@ -569,19 +607,18 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
 
           <ProjectScheduleSummary project={workspace.project.document} locale={locale} milestones={workspace.milestones} tasks={workspace.tasks} scheduling={scheduling} projectId={projectId} onNavigate={onNavigate} />
 
-          <dl className="project-plan-summary">
-            <div><dt>{t("projectPlan.progress")}</dt><dd>{progress}% <small>{t("stages.progress", { completed, count: activeTasks.length })}</small></dd></div>
-            <div><dt>{t("projectPlan.stages")}</dt><dd>{activeStages.length}</dd></div>
-            <div><dt>{t("projectPlan.overdue")}</dt><dd>{overdue}</dd></div>
-            <div><dt>{t("projectPlan.withoutStage")}</dt><dd>{outsideStages.length}</dd></div>
-          </dl>
+          <div className="project-plan-summary" role="group" aria-label={t("projectPlan.activeFilters")}>
+            <button aria-label={`${t("projectPlan.summaryTotal")}: ${activeTasks.length}`} aria-pressed={summaryFilter === "all"} className="project-plan-summary-metric" onClick={() => applyFilters(statusFilter, milestoneFilter, "all")} type="button"><span>{t("projectPlan.summaryTotal")}</span><strong>{activeTasks.length}</strong></button>
+            <button aria-label={`${t("projectPlan.summaryCompleted")}: ${completedCount}`} aria-pressed={summaryFilter === "completed"} className="project-plan-summary-metric" onClick={() => toggleSummary("completed")} type="button"><span>{t("projectPlan.summaryCompleted")}</span><strong>{completedCount}</strong></button>
+            <button aria-label={`${t("projectPlan.summaryInProgress")}: ${inProgressCount}`} aria-pressed={summaryFilter === "in-progress"} className="project-plan-summary-metric" onClick={() => toggleSummary("in-progress")} type="button"><span>{t("projectPlan.summaryInProgress")}</span><strong>{inProgressCount}</strong></button>
+            <button aria-label={`${t("projectPlan.summaryOverdue")}: ${overdueCount}`} aria-pressed={summaryFilter === "overdue"} className="project-plan-summary-metric project-plan-summary-overdue" onClick={() => toggleSummary("overdue")} type="button"><span>{t("projectPlan.summaryOverdue")}</span><strong>{overdueCount}</strong></button>
+          </div>
 
           <section className="project-plan-work" ref={animatedList}>
             <div className="project-plan-toolbar">
-              <div><h2>{t("projectPlan.workHeading")}</h2><span>{t("projectPlan.workDescription")}</span></div>
-              <label>{t("core.filter")}<select value={statusFilter} onChange={(event) => applyFilters(event.target.value, milestoneFilter)}><option value="">{t("core.allStatuses")}</option>{statuses.map((status) => <option key={status.slug} value={status.slug}>{status.title}</option>)}</select></label>
-              <label>{t("core.milestone")}<select value={milestoneFilter} onChange={(event) => applyFilters(statusFilter, event.target.value)}><option value="">{t("core.allMilestones")}</option><option value="none">{t("stages.withoutStage")}</option>{activeStages.map((stage) => <option key={stage.document.id} value={stage.document.id}>{text(stage.document, "name")}</option>)}</select></label>
-              <details className="task-field-settings"><summary>{t("projectPlan.configureFields")}</summary><div>{(["assignees", "due", "estimate", "status"] as const).map((field) => <label key={field}><input checked={taskFields[field]} onChange={(event) => setTaskFields((current) => ({ ...current, [field]: event.target.checked }))} type="checkbox" />{t(`projectPlan.field.${field}` as MessageKey)}</label>)}</div></details>
+              <div className="project-plan-toolbar-heading"><h2>{t("projectPlan.workHeading")}</h2><span>{t("projectPlan.workDescription")}</span><span className="project-plan-stage-count">{t("projectPlan.stages")}: {activeStages.length}</span>{outsideStages.length > 0 && <button aria-pressed={milestoneFilter === "none"} className={`project-plan-outside-warning${milestoneFilter === "none" ? " is-active" : ""}`} onClick={() => applyFilters(statusFilter, milestoneFilter === "none" ? "" : "none", summaryFilter)} type="button">{t("projectPlan.withoutStage")}: {outsideStages.length}</button>}</div>
+              <div className="project-plan-toolbar-filters"><label>{t("core.filter")}<select onChange={(event) => applyFilters(event.target.value, milestoneFilter, "all")} value={statusFilter}><option value="">{t("core.allStatuses")}</option>{statuses.map((status) => <option key={status.slug} value={status.slug}>{status.title}</option>)}</select></label><label>{t("core.milestone")}<select onChange={(event) => applyFilters(statusFilter, event.target.value, summaryFilter)} value={milestoneFilter}><option value="">{t("core.allMilestones")}</option><option value="none">{t("stages.withoutStage")}</option>{activeStages.map((stage) => <option key={stage.document.id} value={stage.document.id}>{text(stage.document, "name")}</option>)}</select></label><details className="task-field-settings"><summary>{t("projectPlan.configureFields")}</summary><div>{(["assignees", "due", "estimate", "status"] as const).map((field) => <label key={field}><input checked={taskFields[field]} onChange={(event) => setTaskFields((current) => ({ ...current, [field]: event.target.checked }))} type="checkbox" />{t(`projectPlan.field.${field}` as MessageKey)}</label>)}</div></details></div>
+              <div className="project-plan-filter-chips">{summaryFilter === "all" && statusFilter === "" && milestoneFilter === "" ? <span className="filter-state">{t("projectPlan.filterAll")}</span> : <>{summaryFilter !== "all" && <span className="filter-chip">{summaryMetricLabel(summaryFilter)}<button aria-label={t("projectPlan.chipRemove", { filter: summaryMetricLabel(summaryFilter) })} onClick={() => applyFilters(statusFilter, milestoneFilter, "all")} type="button">×</button></span>}{statusFilter !== "" && <span className="filter-chip">{statusTitle(statusFilter)}<button aria-label={t("projectPlan.chipRemove", { filter: statusTitle(statusFilter) })} onClick={() => applyFilters("", milestoneFilter, summaryFilter)} type="button">×</button></span>}{milestoneFilter !== "" && <span className="filter-chip">{milestoneChipLabel(milestoneFilter)}<button aria-label={t("projectPlan.chipRemove", { filter: milestoneChipLabel(milestoneFilter) })} onClick={() => applyFilters(statusFilter, "", summaryFilter)} type="button">×</button></span>}<button className="filter-reset" onClick={resetFilters} type="button">{t("projectPlan.resetFilters")}</button></>}</div>
             </div>
             {activeStages.length === 0 && <div className="card empty-workspace">{t("projectPlan.emptyStages")}</div>}
             {visibleStages.map((stage) => <StageSection
