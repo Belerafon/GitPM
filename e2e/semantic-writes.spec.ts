@@ -296,7 +296,7 @@ test.describe("semantic scheduling writes", () => {
     await dialog.getByRole("button", { name: "Save", exact: true }).click();
     await expect(dialog).toBeHidden();
     await page.reload();
-    await expect(page.getByText("2.5 h", { exact: true })).toBeVisible();
+    await expect(page.locator(".time-entry-hours").filter({ hasText: "2.5 hours" })).toBeVisible();
 
     const listed = await request.get(`/api/drafts/${draftId}/projects/${FIXTURE_PROJECT_ID}/tasks/${taskId}/time-entries`);
     expect(listed.status(), await listed.text()).toBe(200);

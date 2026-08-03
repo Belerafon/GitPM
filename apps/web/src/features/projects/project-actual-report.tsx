@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { windowEffort, type SchedulingReadModel } from "@gitpm/scheduling";
 import {
   actualWindow,
@@ -141,7 +141,23 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
 
   const relations = useMemo(() => buildTaskRelations(tasks), [tasks]);
   const taskById = useMemo(() => new Map(tasks.map((task) => [task.document.id, task] as const)), [tasks]);
-  const scope = useMemo<ReadonlySet<string>>(() => resolveEffortScope(relations, { taskId: filters.task, milestoneId: filters.milestone, mode: scopeMode }), [relations, filters.task, filters.milestone, scopeMode]);
+  const orderedMilestones = useMemo(() => orderActiveMilestones({ project, milestones, text: reader, locale }), [project, milestones, reader, locale]);
+  const activeMilestoneIds = useMemo(() => new Set(orderedMilestones.map((milestone) => milestone.document.id)), [orderedMilestones]);
+  const scope = useMemo<ReadonlySet<string>>(() => {
+    // A selected task always wins: its subtree is the scope, even when the task lives in the
+    // "outside active milestones" group. The "none" milestone scope only applies when no task
+    // is selected, so picking an orphan task narrows to that task rather than every orphan.
+    if (filters.task !== "") {
+      return resolveEffortScope(relations, { taskId: filters.task, milestoneId: filters.milestone, mode: scopeMode });
+    }
+    if (filters.milestone === "none") {
+      return new Set(relations.ids.filter((id) => {
+        const milestone = relations.milestoneOf.get(id);
+        return milestone === undefined || !activeMilestoneIds.has(milestone);
+      }));
+    }
+    return resolveEffortScope(relations, { taskId: "", milestoneId: filters.milestone, mode: scopeMode });
+  }, [relations, filters.task, filters.milestone, scopeMode, activeMilestoneIds]);
   const scopeRootIds = useMemo(() => scopeRootIdsOf(scope, relations), [scope, relations]);
   const scopeRecords = useMemo(() => selectScopedRecords(records, scope), [records, scope]);
   const scopeActual = useMemo(() => sumHours(scopeRecords), [scopeRecords]);
@@ -175,7 +191,6 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
   const milestoneName = (id: string) => text(milestones.find((milestone) => milestone.document.id === id), "name") || t("actualReport.noMilestone");
   const taskName = (id: string) => text(tasks.find((task) => task.document.id === id), "title") || id;
 
-  const orderedMilestones = useMemo(() => orderActiveMilestones({ project, milestones, text: reader, locale }), [project, milestones, reader, locale]);
   const peopleOptions = [...new Set([...people.map((person) => person.document.id), ...knownPeople])].sort((left, right) => personName(left).localeCompare(personName(right), locale));
   const categoryOptions = [...new Set([...categories.map((category) => category.slug), ...knownCategories])].sort((left, right) => categoryName(left).localeCompare(categoryName(right), locale));
 
@@ -219,8 +234,12 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
       const plan = taskPlanEffort(readModels, workloadTrack, row.node.id, taskOnly ? "taskOnly" : "withSubtasks");
       const actualOwn = actualByTask.get(row.node.id) ?? 0;
       const actualBranch = taskOnly ? actualOwn : sumBranchActualWithinScope(actualByTask, relations, scope, row.node.id);
-      // Drop rows that contribute neither planned effort nor actual hours.
+      const archived = taskById.get(row.node.id)?.document.lifecycle === "archived";
+      // Drop rows that contribute neither planned effort nor actual hours. Archived tasks are
+      // part of the current plan only through their historical time records: an archived task
+      // without actuals is hidden so it cannot inflate the current estimate.
       if (plan.value === undefined && actualBranch === 0) continue;
+      if (archived && actualBranch === 0) continue;
       rows.push({
         id: row.node.id,
         title: row.node.title || taskName(row.node.id),
@@ -230,12 +249,11 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
         planSource: plan.source,
         actualBranch,
         actualOwn,
-        archived: taskById.get(row.node.id)?.document.lifecycle === "archived",
+        archived,
       });
     }
     return rows;
   }, [flattened, scope, filters.task, scopeMode, readModels, workloadTrack, actualByTask, relations, taskById, taskName]);
-
   const planSources: string[] = [];
   if (wholeProject && projectBudget !== undefined) {
     if (planOfWork !== undefined) planSources.push(t("actualReport.sourceRootSum"));
@@ -264,29 +282,61 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
   }, [planActualRows]);
 
   const resetAll = () => { setFilters(EMPTY_FILTERS); setScopeMode("withSubtasks"); setShowVoided(false); setCutoff(""); };
+  const milestoneScopeOfTask = useCallback((taskId: string): string => {
+    const raw = relations.milestoneOf.get(taskId);
+    return raw !== undefined && activeMilestoneIds.has(raw) ? raw : "none";
+  }, [activeMilestoneIds, relations.milestoneOf]);
   const selectMilestone = (value: string) => {
     patchFilter("milestone", value);
-    // "All milestones" keeps the selected task; a specific milestone only clears a task
-    // that does not belong to it.
-    if (value !== "" && filters.task !== "" && relations.milestoneOf.get(filters.task) !== value) patchFilter("task", "");
+    // "All milestones" keeps the selected task; a specific milestone or the outside-active
+    // group only keeps a task whose scope matches so the dropdown and the filter agree.
+    if (value !== "" && filters.task !== "" && milestoneScopeOfTask(filters.task) !== value) patchFilter("task", "");
   };
   const selectTask = (value: string) => {
     patchFilter("task", value);
     if (value === "") return;
-    // Selecting a task auto-selects its active milestone so the two filters cannot disagree.
-    // Tasks outside every active milestone clear the milestone filter.
-    const raw = relations.milestoneOf.get(value);
-    const milestone = raw !== undefined && orderedMilestones.some((item) => item.document.id === raw) ? raw : "";
+    // Selecting a task auto-selects its scope so the two filters cannot disagree. Tasks
+    // outside every active milestone select the dedicated "outside active milestones" group.
+    const milestone = milestoneScopeOfTask(value);
     if (milestone !== filters.milestone) patchFilter("milestone", milestone);
   };
+
+  /**
+   * Task-picker options narrowed by the milestone filter and grouped to mirror the plan
+   * tab. Each active milestone forms its own optgroup (in canonical order); orphan tasks
+   * form a trailing "outside active milestones" group. Selecting a specific milestone
+   * shows only its tasks, which keeps the picker consistent with the selected scope.
+   */
+  const taskSelectGroups = useMemo(() => {
+    type Group = { readonly label: string; readonly rows: readonly { readonly id: string; readonly title: string; readonly depth: number }[] };
+    const groups: Group[] = [];
+    const pushGroup = (label: string, rows: Group["rows"]): void => { if (rows.length > 0) groups.push({ label, rows }); };
+    for (const milestone of orderedMilestones) {
+      // The "outside active milestones" scope renders no milestone groups at all (only the
+      // trailing orphan group); a specific milestone renders only its own group.
+      if (filters.milestone === "none") continue;
+      if (filters.milestone !== "" && filters.milestone !== milestone.document.id) continue;
+      const rows = flattened
+        .filter((row) => row.stage?.document.id === milestone.document.id)
+        .map((row) => ({ id: row.node.id, title: row.node.title || taskName(row.node.id), depth: row.node.depth }));
+      pushGroup(reader(milestone.document, "name"), rows);
+    }
+    if (filters.milestone === "" || filters.milestone === "none") {
+      const rows = flattened
+        .filter((row) => row.stage === undefined)
+        .map((row) => ({ id: row.node.id, title: row.node.title || taskName(row.node.id), depth: row.node.depth }));
+      pushGroup(t("stages.withoutStage"), rows);
+    }
+    return groups;
+  }, [flattened, filters.milestone, orderedMilestones, reader, t, taskName]);
 
   const planCellSource = (row: PlanActualRow): string => row.planSource === "declared" ? t("actualReport.cellPlanDeclared") : row.planSource === "rolled" ? t("actualReport.cellPlanRolled") : "";
 
   return <section className="actual-hours-report">
     <div className="actual-report-heading"><div><h4>{t("snapshot.actualReport")}</h4><p>{t("actualReport.description")}</p></div><button type="button" onClick={resetAll}>{t("actualReport.reset")}</button></div>
     <div className="actual-report-filters">
-      <label>{t("actualReport.milestone")}<select value={filters.milestone} onChange={(event) => selectMilestone(event.target.value)}><option value="">{t("actualReport.allMilestones")}</option>{orderedMilestones.map((milestone) => <option key={milestone.document.id} value={milestone.document.id}>{reader(milestone.document, "name")}</option>)}</select></label>
-      <label>{t("actualReport.task")}<select value={filters.task} onChange={(event) => selectTask(event.target.value)}><option value="">{t("actualReport.allTasks")}</option>{flattened.map((row) => <option key={row.node.id} value={row.node.id}>{`${"\u00A0\u00A0".repeat(row.node.depth)}${row.node.title || taskName(row.node.id)}`}</option>)}</select></label>
+      <label>{t("actualReport.milestone")}<select value={filters.milestone} onChange={(event) => selectMilestone(event.target.value)}><option value="">{t("actualReport.allMilestones")}</option>{orderedMilestones.map((milestone) => <option key={milestone.document.id} value={milestone.document.id}>{reader(milestone.document, "name")}</option>)}<option value="none">{t("stages.withoutStage")}</option></select></label>
+      <label>{t("actualReport.task")}<select value={filters.task} onChange={(event) => selectTask(event.target.value)}><option value="">{t("actualReport.allTasks")}</option>{taskSelectGroups.map((group) => <optgroup key={group.label} label={group.label}>{group.rows.map((row) => <option key={row.id} value={row.id}>{`${"\u00A0\u00A0".repeat(row.depth)}${row.title}`}</option>)}</optgroup>)}</select></label>
       <label>{t("timeEffort.person")}<select value={filters.person} onChange={(event) => patchFilter("person", event.target.value)}><option value="">{t("actualReport.allPeople")}</option>{peopleOptions.map((id) => <option key={id} value={id}>{personName(id)}</option>)}</select></label>
       <label>{t("actualReport.from")}<input type="date" value={filters.performed_from} onChange={(event) => patchFilter("performed_from", event.target.value)} /></label>
       <label>{t("actualReport.to")}<input type="date" value={filters.performed_to} onChange={(event) => patchFilter("performed_to", event.target.value)} /></label>
@@ -330,6 +380,7 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
           </dl>
         </div>
         {filteredActualOnly && <p className="scope-hint">{t("actualReport.actualOnlyFilters")}</p>}
+        <p className="plan-actual-disclaimer">{t("actualReport.parentRollupDisclaimer")}</p>
         {planActualRows.length === 0 ? <p className="empty-copy">{t("actualReport.empty")}</p> : <div className="actual-report-table-wrap"><table><thead><tr><th scope="col">{t("actualReport.task")}</th><th scope="col">{t("actualReport.planned")}</th><th scope="col">{t("actualReport.actual")}</th><th scope="col">{t("actualReport.ownHours")}</th><th scope="col">{t("actualReport.variance")}</th></tr></thead><tbody>{planActualGroups.map((group, groupIndex) => <Fragment key={groupIndex}>{group.rows.some((row) => row.stage !== undefined) && <tr className="actual-report-stage-row"><th scope="rowgroup" colSpan={5}>{group.stage === undefined ? t("actualReport.noMilestone") : milestoneName(group.stage.document.id)}</th></tr>}{group.rows.map((row) => <tr key={row.id} className={`actual-report-task-row${row.planSource === "rolled" ? " is-rolled" : ""}`} data-depth={row.depth} data-task-id={row.id} data-plan-source={row.planSource}><th className="actual-report-task-cell" scope="row" style={{ paddingLeft: `${0.5 + row.depth * 1.2}rem` }}><button type="button" className="actual-report-task-link" aria-label={`${row.title} ${row.id}`} onClick={() => onNavigate("tasks", { projectId, taskId: row.id })}><span>{row.title}</span>{row.archived && <span className="archived-reference"> · {t("actualReport.archivedTask")}</span>}<code>{row.id}</code></button></th><td>{row.plan === undefined ? "—" : formatDurationHours(locale, row.plan)}{planCellSource(row) !== "" && <span className="plan-cell-source">{planCellSource(row)}</span>}</td><td>{formatDurationHours(locale, row.actualBranch)}</td><td>{formatDurationHours(locale, row.actualOwn)}</td><td>{row.plan === undefined ? "—" : formatDurationHours(locale, row.actualBranch - row.plan)}</td></tr>)}</Fragment>)}</tbody></table></div>}
       </section>
       <details className="actual-breakdowns">

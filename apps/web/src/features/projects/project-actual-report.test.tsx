@@ -366,11 +366,57 @@ describe("ProjectActualReport", () => {
     render(<ProjectActualReport api={api} draft={draft} locale="en" milestones={[milestoneA]} onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[taskInA, orphan]} workloadTrack={workloadTrack} />);
 
     await screen.findByLabelText("Task");
+    // From the default "All milestones" view both tasks are listed; selecting the orphan
+    // routes the milestone filter to the dedicated outside-active-milestones group.
+    fireEvent.change(screen.getByLabelText("Task"), { target: { value: orphan.document.id } });
+    expect((screen.getByLabelText("Milestone") as HTMLSelectElement).value).toBe("none");
+    // Re-expanding to "All milestones" keeps the selected task and re-lists every task...
+    fireEvent.change(screen.getByLabelText("Milestone"), { target: { value: "" } });
+    expect((screen.getByLabelText("Task") as HTMLSelectElement).value).toBe(orphan.document.id);
+    // ...so a task inside an active milestone can be picked, which auto-selects that milestone.
     fireEvent.change(screen.getByLabelText("Task"), { target: { value: taskInA.document.id } });
     expect((screen.getByLabelText("Milestone") as HTMLSelectElement).value).toBe(milestoneA.document.id);
-    // Selecting a task outside every active milestone clears the milestone filter so the two cannot disagree.
-    fireEvent.change(screen.getByLabelText("Task"), { target: { value: orphan.document.id } });
-    expect((screen.getByLabelText("Milestone") as HTMLSelectElement).value).toBe("");
+  });
+
+  it("narrows the task dropdown to the selected milestone and resets an incompatible task", async () => {
+    const milestoneA = { document: { schema: "gitpm/milestone@2", id: "M-26-A", project: "P-26-1", name: "Stage A", lifecycle: "active" }, path: "a.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const milestoneB = { document: { schema: "gitpm/milestone@2", id: "M-26-B", project: "P-26-1", name: "Stage B", lifecycle: "active" }, path: "b.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const taskInA = { document: { schema: "gitpm/task@2", id: "T-26-INA", project: "P-26-1", milestone: milestoneA.document.id, title: "In A", type: "task", status: "in-progress", lifecycle: "active", schedules: { plan: { effort_hours: 5 } } }, path: "ina.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const taskInB = { document: { schema: "gitpm/task@2", id: "T-26-INB", project: "P-26-1", milestone: milestoneB.document.id, title: "In B", type: "task", status: "in-progress", lifecycle: "active", schedules: { plan: { effort_hours: 5 } } }, path: "inb.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const orphan = { document: { schema: "gitpm/task@2", id: "T-26-ORPHAN", project: "P-26-1", title: "Orphan", type: "task", status: "in-progress", lifecycle: "active", schedules: { plan: { effort_hours: 2 } } }, path: "orphan.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const listProjectTimeEntries = vi.fn(async () => ({ total: 0, offset: 0, limit: 200, items: [] }));
+    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const projectDoc = project({}, { primary_track: "plan", workload_track: "plan", comparison_track: "target" });
+    const { readModels, workloadTrack } = buildReportProps(projectDoc, [milestoneA, milestoneB], [taskInA, taskInB, orphan], scheduling);
+    render(<ProjectActualReport api={api} draft={draft} locale="en" milestones={[milestoneA, milestoneB]} onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[taskInA, taskInB, orphan]} workloadTrack={workloadTrack} />);
+
+    const taskSelect = await screen.findByLabelText("Task") as HTMLSelectElement;
+    // By default every task is offered, grouped by stage with the orphans in their own group.
+    expect(Array.from(taskSelect.options).some((option) => option.value === taskInA.document.id)).toBe(true);
+    expect(Array.from(taskSelect.options).some((option) => option.value === taskInB.document.id)).toBe(true);
+    expect(Array.from(taskSelect.options).some((option) => option.value === orphan.document.id)).toBe(true);
+    expect(Array.from(taskSelect.querySelectorAll("optgroup")).map((group) => group.getAttribute("label"))).toEqual(["Stage A", "Stage B", "Tasks without a milestone"]);
+
+    // Selecting task A narrows the milestone and the dropdown to Stage A only.
+    fireEvent.change(taskSelect, { target: { value: taskInA.document.id } });
+    const narrowed = screen.getByLabelText("Task") as HTMLSelectElement;
+    expect(Array.from(narrowed.options).some((option) => option.value === taskInA.document.id)).toBe(true);
+    expect(Array.from(narrowed.options).some((option) => option.value === taskInB.document.id)).toBe(false);
+    expect(Array.from(narrowed.options).some((option) => option.value === orphan.document.id)).toBe(false);
+
+    // Switching the milestone to Stage B resets the now-incompatible task and shows only Stage B tasks.
+    fireEvent.change(screen.getByLabelText("Milestone"), { target: { value: milestoneB.document.id } });
+    const stageB = screen.getByLabelText("Task") as HTMLSelectElement;
+    expect(stageB.value).toBe("");
+    expect(Array.from(stageB.options).some((option) => option.value === taskInB.document.id)).toBe(true);
+    expect(Array.from(stageB.options).some((option) => option.value === taskInA.document.id)).toBe(false);
+
+    // The "outside active milestones" milestone option narrows the dropdown to orphans only.
+    fireEvent.change(screen.getByLabelText("Milestone"), { target: { value: "none" } });
+    const orphanScope = screen.getByLabelText("Task") as HTMLSelectElement;
+    expect(Array.from(orphanScope.options).some((option) => option.value === orphan.document.id)).toBe(true);
+    expect(Array.from(orphanScope.options).some((option) => option.value === taskInA.document.id)).toBe(false);
+    expect(Array.from(orphanScope.options).some((option) => option.value === taskInB.document.id)).toBe(false);
   });
 
   it("reset clears filters, scope mode, cutoff and the show-cancelled toggle", async () => {
@@ -412,5 +458,21 @@ describe("ProjectActualReport", () => {
     expect(archivedRow.textContent).toContain("T-ARCH");
     expect(screen.getAllByText("Ivan Petrov (archived)").length).toBeGreaterThan(0);
     expect(screen.queryByText("U-ARCH")).toBeNull();
+  });
+
+  it("hides archived tasks that have no historical time records so they cannot inflate the current estimate", async () => {
+    const archivedTask = { document: { schema: "gitpm/task@2", id: "T-ARCH-EMPTY", project: "P-26-1", title: "Ghost legacy", type: "task", status: "done", lifecycle: "archived", schedules: { estimate: { effort_hours: 99 } } }, path: "g.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const listProjectTimeEntries = vi.fn(async () => ({ total: 0, offset: 0, limit: 200, items: [] }));
+    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const projectDoc = project({}, { primary_track: "working", workload_track: "estimate" });
+    const { readModels, workloadTrack } = buildReportProps(projectDoc, [], [archivedTask], multiTrackScheduling);
+    render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[archivedTask]} workloadTrack={workloadTrack} />);
+
+    await waitFor(() => expect(listProjectTimeEntries).toHaveBeenCalled());
+    // The archived task carries a 99h estimate but no actuals, so it must not appear in the
+    // current effort table regardless of its planned estimate. (It may still be offered in the
+    // task picker, which lists every task for filtering.)
+    await waitFor(() => expect(document.querySelector('tr[data-task-id="T-ARCH-EMPTY"]')).toBeNull());
+    expect(document.querySelector(".plan-actual-report table tbody")?.textContent ?? "").not.toContain("99");
   });
 });

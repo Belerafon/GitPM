@@ -151,6 +151,41 @@ describe("ProjectScheduleSummary", () => {
     expect(variance.textContent).toMatch(/\+20 дн\./u);
     expect(variance.textContent).not.toMatch(/ d/u);
   });
+
+  it("collapses an actual-derived comparison track to nothing instead of leaking the slug", () => {
+    // §5: only manual, enabled, date-capable tracks may act as the comparison; an actual track
+    // configured as comparison_track must not render a card or expose its slug.
+    const { container } = render(<ProjectScheduleSummary project={project({ plan: { finish: "2026-03-20" }, actual: { finish: "2026-03-01" } }, { primary_track: "plan", comparison_track: "actual" })} projectId={projectId} onNavigate={vi.fn()} locale="en" scheduling={scheduling} />);
+    expect(container.firstChild).toBeNull();
+    expect(document.body.textContent ?? "").not.toContain("actual");
+  });
+
+  it("collapses a non-date comparison track to nothing instead of leaking the slug", () => {
+    // `effortOnly` is manual and enabled but has no `dates` capability, so it cannot provide a
+    // comparison finish and must not surface its slug.
+    const effortOnlyDocument = { schema: "gitpm/schedule-tracks@1", tracks: [{ slug: "plan", title: "Plan", kind: "manual", capabilities: ["dates", "effort"] }, { slug: "effortOnly", title: "Effort only", kind: "manual", capabilities: ["effort"] }], defaults: { enabled_tracks: ["plan", "effortOnly"], primary_track: "plan", workload_track: "plan", comparison_track: "effortOnly", dashboard_tracks: ["plan", "effortOnly"] } };
+    const effortOnlyScheduling = new ScheduleResolver(scheduleTracksConfig(effortOnlyDocument));
+    const { container } = render(<ProjectScheduleSummary project={project({ plan: { finish: "2026-03-20" }, effortOnly: { finish: "2026-03-01" } })} projectId={projectId} onNavigate={vi.fn()} locale="en" scheduling={effortOnlyScheduling} />);
+    expect(container.firstChild).toBeNull();
+    expect(document.body.textContent ?? "").not.toContain("effortOnly");
+  });
+
+  it("collapses a comparison track that is no longer enabled for the project", () => {
+    // The project disables the target track in its own planning; even though the track exists
+    // and is manual + date-capable, it is not enabled and therefore not a valid comparison.
+    const { container } = render(<ProjectScheduleSummary project={project({ plan: { finish: "2026-03-20" }, target: { finish: "2026-02-28" } }, { enabled_tracks: ["plan"], primary_track: "plan", comparison_track: "target" })} projectId={projectId} onNavigate={vi.fn()} locale="en" scheduling={scheduling} />);
+    expect(container.firstChild).toBeNull();
+    expect(document.body.textContent ?? "").not.toContain("target");
+  });
+
+  it("ignores archived tasks when computing the comparison finishes and overflow warnings", () => {
+    // §3: archived tasks must not shift the current comparison or generate overflow warnings.
+    const archivedTask = { document: { schema: "gitpm/task@2", id: "T-archived", project: projectId, milestone: "M-1", title: "Archived child", type: "task", status: "backlog", lifecycle: "archived", schedules: { plan: { start: "2026-09-01", finish: "2026-12-31" } } }, path: "archived.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const { milestone, parent, child } = overflowingHierarchy();
+    const { container } = render(<ProjectScheduleSummary project={project({ plan: { start: "2026-09-05", finish: "2026-09-10" } })} projectId={projectId} onNavigate={vi.fn()} locale="en" milestones={[milestone]} scheduling={primaryOnlyScheduling} tasks={[parent, child, archivedTask]} />);
+    // The archived task's Dec 31 finish and any overflow it would cause must not appear.
+    expect(container.textContent ?? "").not.toContain("Dec 31, 2026");
+  });
 });
 
 describe("SchedulingOverflowWarnings", () => {

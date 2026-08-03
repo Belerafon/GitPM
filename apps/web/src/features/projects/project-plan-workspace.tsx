@@ -2,10 +2,10 @@ import { activeProjectIds, ENTITY_ID_PREFIX, isOperationalTask, newUniqueEntityI
 import type { ProjectPlanning } from "@gitpm/contracts";
 import { resolveSchedulingHierarchy, validatePlanning, windowEffort, type PlanningSettings, type SchedulingHierarchyTask } from "@gitpm/scheduling";
 import { buildSchedule, ScheduleResolver, scheduleTracksConfig, scheduleTextReader, scheduleEffortReader, withSchedulesMap, type ScheduleMap } from "../../schedules.js";
-import { isBlockedStatus, isCompletedStatus } from "../../status-categories.js";
+import { isBlockedStatus, isCompletedStatus, isInProgressStatus } from "../../status-categories.js";
 import { ProjectScheduleSummary } from "./project-schedule-summary.js";
 import { buildTaskHierarchy } from "@gitpm/task-hierarchy";
-import { buildProjectTaskViewModel, canonicalTaskComparator, type ProjectTaskViewModel, type TaskViewModelNode } from "./project-task-view-model.js";
+import { buildProjectTaskViewModel, canonicalTaskComparator, isOutsideActiveMilestone, type ProjectTaskViewModel, type TaskViewModelNode } from "./project-task-view-model.js";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { ApiError, deleteRestrictionLabels, formatApiError, type GitPmApi } from "../../api.js";
 import { AsyncBoundary, useAsyncLoad } from "../../async-data.js";
@@ -340,7 +340,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   });
   const today = localCalendarDate();
   const activeStageIds = new Set(activeStages.map((stage) => stage.document.id));
-  const outsideStages = activeTasks.filter((task) => !activeStageIds.has(text(task.document, "milestone")));
+  const outsideStages = activeTasks.filter((task) => isOutsideActiveMilestone(activeStageIds, text(task.document, "milestone")));
   const summaryScopeTasks = milestoneFilter === ""
     ? activeTasks
     : milestoneFilter === "none"
@@ -354,20 +354,20 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     overdueTaskIds.add(task.document.id);
   }
   const completedCount = summaryScopeTasks.filter((task) => isCompletedStatus(statuses, text(task.document, "status"))).length;
-  const activeCategoryCount = summaryScopeTasks.filter((task) => {
-    const slug = text(task.document, "status");
-    return statuses.find((item) => item.slug === slug)?.category === "active" && !isBlockedStatus(statuses, slug);
-  }).length;
+  // "В работе" counts only direct-execution status (the in-progress semantic). The broad
+  // `active` category is intentionally avoided because it also covers review and other
+  // non-execution states; blocked is counted by its own metric below.
+  const inProgressCount = summaryScopeTasks.filter((task) => isInProgressStatus(statuses, text(task.document, "status"))).length;
   const blockedCount = summaryScopeTasks.filter((task) => isBlockedStatus(statuses, text(task.document, "status"))).length;
   const overdueCount = overdueTaskIds.size;
   const visibleTasks = useMemo(() => activeTasks.filter((task) =>
     (statusFilter === "" || text(task.document, "status") === statusFilter)
-    && (milestoneFilter === "" || (milestoneFilter === "none" ? text(task.document, "milestone") === "" : text(task.document, "milestone") === milestoneFilter))
+    && (milestoneFilter === "" || (milestoneFilter === "none" ? isOutsideActiveMilestone(activeStageIds, text(task.document, "milestone")) : text(task.document, "milestone") === milestoneFilter))
     && (summaryFilter === "all"
       || (summaryFilter === "completed" && isCompletedStatus(statuses, text(task.document, "status")))
-      || (summaryFilter === "active" && statuses.find((item) => item.slug === text(task.document, "status"))?.category === "active" && !isBlockedStatus(statuses, text(task.document, "status")))
+      || (summaryFilter === "active" && isInProgressStatus(statuses, text(task.document, "status")))
       || (summaryFilter === "blocked" && isBlockedStatus(statuses, text(task.document, "status")))
-      || (summaryFilter === "overdue" && overdueTaskIds.has(task.document.id)))), [activeTasks, milestoneFilter, overdueTaskIds, statusFilter, statuses, summaryFilter, text]);
+      || (summaryFilter === "overdue" && overdueTaskIds.has(task.document.id)))), [activeTasks, activeStageIds, milestoneFilter, overdueTaskIds, statusFilter, statuses, summaryFilter, text]);
   const filterActive = summaryFilter !== "all" || statusFilter !== "";
   const visibleStages = (milestoneFilter === "" ? activeStages : activeStages.filter((stage) => stage.document.id === milestoneFilter))
     .filter((stage) => !filterActive || visibleTasks.some((task) => task.document.milestone === stage.document.id));
@@ -633,7 +633,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
 
           <div className="project-plan-summary" role="group" aria-label={t("projectPlan.summaryGroup")}>
             <button aria-label={`${t("projectPlan.summaryTotal")}: ${summaryScopeTasks.length}`} aria-pressed={summaryFilter === "all" && statusFilter === ""} className="project-plan-summary-metric" onClick={() => applyFilters("", milestoneFilter, "all")} type="button"><span>{t("projectPlan.summaryTotal")}</span><strong>{summaryScopeTasks.length}</strong></button>
-            <button aria-label={`${t("projectPlan.summaryActive")}: ${activeCategoryCount}`} aria-pressed={summaryFilter === "active"} className="project-plan-summary-metric" onClick={() => toggleSummary("active")} type="button"><span>{t("projectPlan.summaryActive")}</span><strong>{activeCategoryCount}</strong></button>
+            <button aria-label={`${t("projectPlan.summaryActive")}: ${inProgressCount}`} aria-pressed={summaryFilter === "active"} className="project-plan-summary-metric" onClick={() => toggleSummary("active")} type="button"><span>{t("projectPlan.summaryActive")}</span><strong>{inProgressCount}</strong></button>
             <button aria-label={`${t("projectPlan.summaryBlocked")}: ${blockedCount}`} aria-pressed={summaryFilter === "blocked"} className="project-plan-summary-metric project-plan-summary-blocked" onClick={() => toggleSummary("blocked")} type="button"><span>{t("projectPlan.summaryBlocked")}</span><strong>{blockedCount}</strong></button>
             <button aria-label={`${t("projectPlan.summaryOverdue")}: ${overdueCount}`} aria-pressed={summaryFilter === "overdue"} className="project-plan-summary-metric project-plan-summary-overdue" onClick={() => toggleSummary("overdue")} type="button"><span>{t("projectPlan.summaryOverdue")}</span><strong>{overdueCount}</strong></button>
             <button aria-label={`${t("projectPlan.summaryCompleted")}: ${completedCount}`} aria-pressed={summaryFilter === "completed"} className="project-plan-summary-metric" onClick={() => toggleSummary("completed")} type="button"><span>{t("projectPlan.summaryCompleted")}</span><strong>{completedCount}</strong></button>

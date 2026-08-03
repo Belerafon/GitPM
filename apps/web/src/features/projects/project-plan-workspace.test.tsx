@@ -10,7 +10,7 @@ const draft: DraftStatus = { draft_id: "DRF-STAGES", owner_gitlab_user_id: "42",
 const result = (document: EntityDocument): EntityResult => ({ document, path: `${document.id}.yaml`, blob_id: "a".repeat(40), draft_fingerprint: fingerprint });
 const configuration = (document: ConfigurationDocument): ConfigurationResult => ({ document, path: document.schema, blob_id: "a".repeat(40), draft_fingerprint: fingerprint });
 
-const project = result({ schema: "gitpm/project@2", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
+const project = result({ schema: "gitpm/project@2", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active", milestone_order: ["M-26-222222", "M-26-777777"] });
 const archivedProject = result({ schema: "gitpm/project@2", id: "P-26-999999", name: "Archived", status: "backlog", lifecycle: "archived", group: "Research" });
 const person = result({ schema: "gitpm/person@1", id: "U-26-888888", name: "Ada", weekly_capacity_hours: 40, calendar: "C-26-999999", lifecycle: "active" });
 const stage = result({ schema: "gitpm/milestone@2", id: "M-26-222222", project: project.document.id, name: "Launch", lifecycle: "active", schedules: { plan: { finish: "2026-08-01" } } });
@@ -90,6 +90,21 @@ const useBlockedStatusConfig = (client: GitPmApi): void => {
     ? { schema: "gitpm/statuses@2", statuses: [
       { slug: "backlog", title: "Backlog", color: "gray", active: true, category: "backlog" },
       { slug: "in-progress", title: "In progress", color: "blue", active: true, category: "active" },
+      { slug: "blocked", title: "Blocked", color: "red", active: true, category: "active" },
+      { slug: "done", title: "Done", color: "green", active: true, category: "done" },
+    ] }
+    : kind === "schedule-tracks"
+    ? { schema: "gitpm/schedule-tracks@1", tracks: [{ slug: "plan", title: "Plan", kind: "manual", capabilities: ["dates", "effort", "dependencies"] }], defaults: { enabled_tracks: ["plan"], primary_track: "plan", workload_track: "plan", dashboard_tracks: ["plan"] } }
+    : { schema: "gitpm/issue-types@1", issue_types: [{ slug: "task", title: "Task", active: true }] }));
+};
+
+const useReviewStatusConfig = (client: GitPmApi): void => {
+  vi.spyOn(client, "getConfiguration").mockImplementation(async (_draftId: string, kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks") => configuration(kind === "statuses"
+    ? { schema: "gitpm/statuses@2", statuses: [
+      { slug: "backlog", title: "Backlog", color: "gray", active: true, category: "backlog" },
+      { slug: "planned", title: "Planned", color: "cyan", active: true, category: "active" },
+      { slug: "in-progress", title: "In progress", color: "blue", active: true, category: "active" },
+      { slug: "review", title: "Review", color: "orange", active: true, category: "active" },
       { slug: "blocked", title: "Blocked", color: "red", active: true, category: "active" },
       { slug: "done", title: "Done", color: "green", active: true, category: "done" },
     ] }
@@ -565,7 +580,8 @@ describe("ProjectPlanWorkspace", () => {
 
   it("numbers milestones and tasks and persists their manual order", async () => {
     const orderedStage = result({ ...stage.document, task_order: [urgent.document.id, large.document.id, linked.document.id] });
-    const client = api([linked, other, large, urgent], [orderedStage, laterStage]); const onNavigate = vi.fn();
+    const orderedProject = result({ ...project.document, milestone_order: [stage.document.id, laterStage.document.id] });
+    const client = api([linked, other, large, urgent], [orderedStage, laterStage], orderedProject); const onNavigate = vi.fn();
     render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={onNavigate} projectId={project.document.id} />);
 
     const stageHeading = await screen.findByRole("heading", { name: "Launch" });
@@ -898,6 +914,30 @@ describe("ProjectPlanWorkspace", () => {
     expect(screen.queryByText("Active task")).toBeNull();
   });
 
+  it("counts only the in-progress status in the In-progress metric and excludes review and blocked", async () => {
+    const stageM = result({ schema: "gitpm/milestone@2", id: "M-26-IPR", project: summaryProject.document.id, name: "Execution stage", lifecycle: "active" });
+    const tasks = [
+      result({ schema: "gitpm/task@2", id: "T-IP", project: summaryProject.document.id, milestone: stageM.document.id, title: "Executing item", type: "task", status: "in-progress", lifecycle: "active", schedules: { plan: { finish: "2026-12-01" } } }),
+      result({ schema: "gitpm/task@2", id: "T-RV", project: summaryProject.document.id, milestone: stageM.document.id, title: "In review item", type: "task", status: "review", lifecycle: "active", schedules: { plan: { finish: "2026-12-01" } } }),
+      result({ schema: "gitpm/task@2", id: "T-BL", project: summaryProject.document.id, milestone: stageM.document.id, title: "Halted item", type: "task", status: "blocked", lifecycle: "active", schedules: { plan: { finish: "2026-12-01" } } }),
+      result({ schema: "gitpm/task@2", id: "T-PL", project: summaryProject.document.id, milestone: stageM.document.id, title: "Drafting plan item", type: "task", status: "planned", lifecycle: "active", schedules: { plan: { finish: "2026-12-01" } } }),
+    ];
+    const client = api(tasks, [stageM], summaryProject);
+    useReviewStatusConfig(client);
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={summaryProject.document.id} />);
+
+    await screen.findByRole("heading", { name: "Summary project" });
+    // review shares the active category but is NOT direct execution, so only the in-progress task counts.
+    expect(screen.getByRole("button", { name: "In progress: 1" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Blocked: 1" })).toBeTruthy();
+    // Activating the In-progress metric keeps only the executing task; review and blocked disappear.
+    fireEvent.click(screen.getByRole("button", { name: "In progress: 1" }));
+    expect(screen.getByText("Executing item")).toBeTruthy();
+    expect(screen.queryByText("In review item")).toBeNull();
+    expect(screen.queryByText("Halted item")).toBeNull();
+    expect(screen.queryByText("Drafting plan item")).toBeNull();
+  });
+
   it("orders unordered plan tasks by the shared canonical tie-break (title, then id)", async () => {
     const stageNoOrder = result({ schema: "gitpm/milestone@2", id: "M-26-NOORDER", project: project.document.id, name: "Unordered", lifecycle: "active" });
     const apple = result({ schema: "gitpm/task@2", id: "T-26-APPLE", project: project.document.id, milestone: stageNoOrder.document.id, title: "Apple task", type: "task", status: "backlog", lifecycle: "active", schedules: { plan: { finish: "2026-07-01" } } });
@@ -928,6 +968,28 @@ describe("ProjectPlanWorkspace", () => {
     expect(orphanTitles).toEqual(["Archived milestone task", "Empty milestone", "No milestone field", "Unknown milestone"]);
     expect(orphanTitles).not.toContain("Active milestone task");
     expect(screen.getByText("Active milestone task").closest(".project-plan-stage")?.classList.contains("project-plan-unassigned")).toBe(false);
+  });
+
+  it("the Outside-active-milestones quick filter shows exactly the orphans counted by the metric", async () => {
+    const archivedStage = result({ schema: "gitpm/milestone@2", id: "M-26-ARCH", project: project.document.id, name: "Archived stage", lifecycle: "archived" });
+    const noField = result({ schema: "gitpm/task@2", id: "T-26-NOFIELD", project: project.document.id, title: "No milestone field", type: "task", status: "backlog", lifecycle: "active" });
+    const empty = result({ schema: "gitpm/task@2", id: "T-26-EMPTY", project: project.document.id, milestone: "", title: "Empty milestone", type: "task", status: "backlog", lifecycle: "active" });
+    const unknown = result({ schema: "gitpm/task@2", id: "T-26-UNKNOWN", project: project.document.id, milestone: "M-26-MISSING", title: "Unknown milestone", type: "task", status: "backlog", lifecycle: "active" });
+    const archivedMilestoneTask = result({ schema: "gitpm/task@2", id: "T-26-ARCHTASK", project: project.document.id, milestone: archivedStage.document.id, title: "Archived milestone task", type: "task", status: "backlog", lifecycle: "active" });
+    const activeMilestoneTask = result({ schema: "gitpm/task@2", id: "T-26-ACTIVE", project: project.document.id, milestone: stage.document.id, title: "Active milestone task", type: "task", status: "backlog", lifecycle: "active" });
+    const client = api([noField, empty, unknown, archivedMilestoneTask, activeMilestoneTask], [stage, archivedStage, laterStage]);
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} />);
+
+    await screen.findByRole("heading", { name: "Alpha" });
+    // The metric counts all four orphan variants (no field, empty, unknown id, archived milestone).
+    const outsideMetric = screen.getByRole("button", { name: /Outside active milestones: 4/u });
+    fireEvent.click(outsideMetric);
+    // After the click, the system group must list the SAME four orphans — not only the empty-milestone subset.
+    const orphanSection = document.querySelector(".project-plan-unassigned") as HTMLElement;
+    expect(orphanSection).not.toBeNull();
+    const orphanTitles = Array.from(orphanSection.querySelectorAll(".project-plan-task-row strong"), (element) => element?.textContent ?? "");
+    expect(orphanTitles).toEqual(["Archived milestone task", "Empty milestone", "No milestone field", "Unknown milestone"]);
+    expect(orphanTitles).not.toContain("Active milestone task");
   });
 
   it("does not list archived tasks in the current plan", async () => {
