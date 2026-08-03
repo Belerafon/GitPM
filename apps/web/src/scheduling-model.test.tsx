@@ -9,7 +9,7 @@ import { CoreWorkspace } from "./core-ui.js";
 import { GanttWorkspace } from "./gantt-ui.js";
 import { PeopleProfileWorkspace } from "./people-profile-ui.js";
 import { WorkloadWorkspace } from "./workload-ui.js";
-import { ProjectSnapshot } from "./features/projects/project-snapshot.js";
+import { ProjectScheduleSummary } from "./features/projects/project-schedule-summary.js";
 import { ProjectPlanWorkspace } from "./features/projects/project-plan-workspace.js";
 
 const fingerprint = "b".repeat(64);
@@ -34,7 +34,7 @@ afterEach(() => { cleanup(); localStorage.clear(); });
 describe("unified scheduling model", () => {
   it("project snapshot resolves the primary finish through the configured working track", () => {
     const project = result({ schema: "gitpm/project@2", id: "P-26-111111", name: "Snapshot project", status: "in-progress", lifecycle: "active", planning, schedules: { working: { finish: "2026-09-30" } } });
-    render(<ProjectSnapshot project={project.document} locale="en" scheduling={new ScheduleResolver(scheduleTracksConfig(tracksConfig()))} />);
+    render(<ProjectScheduleSummary project={project.document} locale="en" scheduling={new ScheduleResolver(scheduleTracksConfig(tracksConfig()))} comparisonTrack="working" />);
     const label = screen.getByText("Primary finish");
     expect(label.parentElement?.textContent).toMatch(/Sep|30/);
   });
@@ -43,7 +43,7 @@ describe("unified scheduling model", () => {
     const projectId = "P-26-111111";
     const project = result({ schema: "gitpm/project@2", id: projectId, name: "Rolled snapshot", status: "in-progress", lifecycle: "active", planning });
     const task = result({ schema: "gitpm/task@2", id: "T-26-111111", project: projectId, title: "Child task", type: "task", status: "backlog", lifecycle: "active", schedules: { working: { start: "2026-09-01", finish: "2026-10-02" } } });
-    render(<ProjectSnapshot project={project.document} locale="en" scheduling={new ScheduleResolver(scheduleTracksConfig(tracksConfig()))} tasks={[task]} />);
+    render(<ProjectScheduleSummary project={project.document} locale="en" scheduling={new ScheduleResolver(scheduleTracksConfig(tracksConfig()))} tasks={[task]} comparisonTrack="working" />);
     const label = screen.getByText("Primary finish");
     expect(label.parentElement?.textContent).toMatch(/Oct|2/);
   });
@@ -52,7 +52,7 @@ describe("unified scheduling model", () => {
     const projectId = "P-26-DECLARED";
     const project = result({ schema: "gitpm/project@2", id: projectId, name: "Declared wins", status: "in-progress", lifecycle: "active", planning, schedules: { working: { start: "2026-09-01", finish: "2026-09-30" } } });
     const task = result({ schema: "gitpm/task@2", id: "T-26-DECLARED", project: projectId, title: "Later child", type: "task", status: "backlog", lifecycle: "active", schedules: { working: { start: "2026-09-01", finish: "2026-11-15" } } });
-    render(<ProjectSnapshot project={project.document} locale="en" scheduling={new ScheduleResolver(scheduleTracksConfig(tracksConfig()))} tasks={[task]} />);
+    render(<ProjectScheduleSummary project={project.document} locale="en" scheduling={new ScheduleResolver(scheduleTracksConfig(tracksConfig()))} tasks={[task]} comparisonTrack="working" />);
     const primary = screen.getByText("Primary finish").parentElement!;
     expect(primary.textContent).toMatch(/Sep|30/);
     expect(primary.textContent).not.toMatch(/Nov/u);

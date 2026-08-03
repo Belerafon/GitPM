@@ -3,7 +3,7 @@ import type { ProjectPlanning } from "@gitpm/contracts";
 import { resolveSchedulingHierarchy, validatePlanning, windowEffort, type PlanningSettings, type SchedulingHierarchyTask } from "@gitpm/scheduling";
 import { buildSchedule, ScheduleResolver, scheduleTracksConfig, scheduleTextReader, scheduleEffortReader, withSchedulesMap, type ScheduleMap } from "../../schedules.js";
 import { isCompletedStatus } from "../../status-categories.js";
-import { ProjectSnapshot } from "./project-snapshot.js";
+import { ProjectScheduleSummary } from "./project-schedule-summary.js";
 import { buildTaskHierarchy } from "@gitpm/task-hierarchy";
 import { orderActiveMilestones } from "./project-task-view-model.js";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
@@ -129,7 +129,6 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   const [people, setPeople] = useState<readonly EntityResult[]>([]);
   const [statuses, setStatuses] = useState<readonly ConfigValue[]>([]);
   const [types, setTypes] = useState<readonly ConfigValue[]>([]);
-  const [workCategories, setWorkCategories] = useState<readonly ConfigValue[]>([]);
   const [tracksConfig, setTracksConfig] = useState<ConfigurationResult | null>(null);
   const [editor, setEditor] = useState<PlanEditor>(null);
   const [projectPlanningDraft, setProjectPlanningDraft] = useState<ProjectPlanning | undefined>(undefined);
@@ -177,24 +176,22 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
 
   const load = useCallback(async () => {
     await loader.run(async () => {
-      const [nextWorkspace, nextProjects, nextPeople, statusConfig, typeConfig, categoryConfig, tracksDocument] = await Promise.all([
+      const [nextWorkspace, nextProjects, nextPeople, statusConfig, typeConfig, tracksDocument] = await Promise.all([
         api.projectWorkspace(draft.draft_id, projectId),
         api.listEntities(draft.draft_id, "projects"),
         api.listEntities(draft.draft_id, "people"),
         api.getConfiguration(draft.draft_id, "statuses"),
         api.getConfiguration(draft.draft_id, "issue-types"),
-        api.getConfiguration(draft.draft_id, "work-categories"),
         api.getConfiguration(draft.draft_id, "schedule-tracks"),
       ]);
-      return { nextWorkspace, nextProjects, nextPeople, statusConfig, typeConfig, categoryConfig, tracksDocument };
-    }, ({ nextWorkspace, nextProjects, nextPeople, statusConfig, typeConfig, categoryConfig, tracksDocument }) => {
+      return { nextWorkspace, nextProjects, nextPeople, statusConfig, typeConfig, tracksDocument };
+    }, ({ nextWorkspace, nextProjects, nextPeople, statusConfig, typeConfig, tracksDocument }) => {
       setWorkspace(nextWorkspace);
       setProjects(nextProjects.filter((item) => item.document.lifecycle === "active"));
       setAvailableProjectGroups(existingProjectGroups(nextProjects, locale));
       setPeople(nextPeople.filter((item) => item.document.lifecycle === "active"));
       setStatuses(configValues(statusConfig.document, "statuses"));
       setTypes(configValues(typeConfig.document, "issue_types"));
-      setWorkCategories(Array.isArray(categoryConfig.document.categories) ? (categoryConfig.document.categories as readonly unknown[]).filter((item): item is ConfigValue => typeof item === "object" && item !== null && typeof (item as ConfigValue).slug === "string" && typeof (item as ConfigValue).title === "string") : []);
       setTracksConfig(tracksDocument);
     });
   }, [api, draft.draft_id, draft.fingerprint, loader.run, locale, projectId]);
@@ -570,7 +567,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
             </dl>
           </header>
 
-          <ProjectSnapshot project={workspace.project.document} locale={locale} api={api} categories={workCategories} draft={draft} milestones={workspace.milestones} people={people} tasks={workspace.tasks} scheduling={scheduling} />
+          <ProjectScheduleSummary project={workspace.project.document} locale={locale} milestones={workspace.milestones} tasks={workspace.tasks} scheduling={scheduling} />
 
           <dl className="project-plan-summary">
             <div><dt>{t("projectPlan.progress")}</dt><dd>{progress}% <small>{t("stages.progress", { completed, count: activeTasks.length })}</small></dd></div>

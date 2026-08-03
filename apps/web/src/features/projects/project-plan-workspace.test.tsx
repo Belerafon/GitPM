@@ -279,17 +279,10 @@ describe("ProjectPlanWorkspace", () => {
       schedules: { plan: { finish: "2026-08-20" }, target: { finish: "2026-08-30" } },
     });
     const client = api([], [], configuredProject);
-    const listProjectTimeEntries = vi.fn(async () => ({
-      total: 1,
-      offset: 0,
-      limit: 200,
-      items: [{ document: { schema: "gitpm/time-entry@1" as const, id: "E-26-111111", project: project.document.id, task: linked.document.id, person: person.document.id, performed_on: "2026-08-01", hours: 2, category: "regular", created_at: "2026-08-01T00:00:00.000Z", state: "active" as const }, path: "entry.yaml", blob_id: "a", draft_fingerprint: fingerprint }],
-    }));
-    Object.assign(client, { listProjectTimeEntries });
     useMultitrackConfig(client);
 
     render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} />);
-    await waitFor(() => expect(listProjectTimeEntries).toHaveBeenCalled());
+    await screen.findByRole("heading", { name: "Alpha" });
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     const dialog = screen.getByRole("dialog", { name: "Edit: Alpha" });
     const checkbox = within(dialog).getByText("Actual activity", { selector: ".planning-checkboxes span" }).closest("label")!.querySelector("input") as HTMLInputElement;
