@@ -14,7 +14,7 @@ import { formatApiError, listAllProjectTimeEntries, type GitPmApi, type ProjectT
 import type { DraftStatus, EntityResult } from "../../types.js";
 import { scheduleEffortReader, scheduleTextReader } from "../../schedules.js";
 import type { WorkspaceNavigate } from "../../workspace-navigation.js";
-import { buildProjectTaskViewModel, flattenProjectTaskViewModel, orderActiveMilestones } from "./project-task-view-model.js";
+import { buildProjectTaskViewModel, canonicalTaskComparator, flattenProjectTaskViewModel, orderActiveMilestones } from "./project-task-view-model.js";
 import {
   buildTaskRelations,
   resolveEffortScope,
@@ -187,6 +187,7 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
     text: reader,
     effortOf: scheduleEffortReader(workloadTrack),
     locale,
+    compareTasks: canonicalTaskComparator(locale, reader),
   }), [project, milestones, tasks, reader, workloadTrack, locale]);
   const flattened = useMemo(() => flattenProjectTaskViewModel(viewModel), [viewModel]);
 

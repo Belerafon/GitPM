@@ -551,7 +551,8 @@ describe("ProjectPlanWorkspace", () => {
   });
 
   it("numbers milestones and tasks and persists their manual order", async () => {
-    const client = api(); const onNavigate = vi.fn();
+    const orderedStage = result({ ...stage.document, task_order: [urgent.document.id, large.document.id, linked.document.id] });
+    const client = api([linked, other, large, urgent], [orderedStage, laterStage]); const onNavigate = vi.fn();
     render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={onNavigate} projectId={project.document.id} />);
 
     const stageHeading = await screen.findByRole("heading", { name: "Launch" });
@@ -873,7 +874,7 @@ describe("ProjectPlanWorkspace", () => {
     expect(screen.queryByRole("button", { name: /Blocked/u })).toBeNull();
   });
 
-  it("characterizes the plan-specific ordering of unordered tasks (to be unified)", async () => {
+  it("orders unordered plan tasks by the shared canonical tie-break (title, then id)", async () => {
     const stageNoOrder = result({ schema: "gitpm/milestone@2", id: "M-26-NOORDER", project: project.document.id, name: "Unordered", lifecycle: "active" });
     const apple = result({ schema: "gitpm/task@2", id: "T-26-APPLE", project: project.document.id, milestone: stageNoOrder.document.id, title: "Apple task", type: "task", status: "backlog", lifecycle: "active", schedules: { plan: { finish: "2026-07-01" } } });
     const cherry = result({ schema: "gitpm/task@2", id: "T-26-CHERRY", project: project.document.id, milestone: stageNoOrder.document.id, title: "Cherry task", type: "task", status: "backlog", lifecycle: "active", schedules: { plan: { finish: "2026-08-01" } } });
@@ -882,7 +883,7 @@ describe("ProjectPlanWorkspace", () => {
     render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} />);
     const card = (await screen.findByRole("heading", { name: "Unordered" })).closest<HTMLElement>("article")!;
     expect(Array.from(card.querySelectorAll(".project-plan-task-row strong"), (element) => element.textContent))
-      .toEqual(["Apple task", "Cherry task", "Banana task"]);
+      .toEqual(["Apple task", "Banana task", "Cherry task"]);
   });
 
   it("selecting a specific status resets the summary filter to all", async () => {

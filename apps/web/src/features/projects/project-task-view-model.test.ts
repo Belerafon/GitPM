@@ -3,6 +3,7 @@ import { scheduleEffortReader, scheduleTextReader } from "../../schedules.js";
 import type { EntityDocument, EntityResult } from "../../types.js";
 import {
   buildProjectTaskViewModel,
+  canonicalTaskComparator,
   compareOrder,
   flattenProjectTaskViewModel,
   orderActiveMilestones,
@@ -314,5 +315,27 @@ describe("flattenProjectTaskViewModel", () => {
     expect(rows.map((row) => row.node.id)).toEqual(["T-A", "T-A1", "T-A1a", "T-B", "T-SYS"]);
     expect(rows.map((row) => row.node.depth)).toEqual([0, 1, 2, 0, 0]);
     expect(rows.map((row) => row.stage?.document.id)).toEqual(["M-1", "M-1", "M-1", "M-2", undefined]);
+  });
+
+  it("produces one canonical task sequence shared by the Plan and Effort surfaces", () => {
+    const stage = milestone("M-1");
+    const cherry = task("T-CHERRY", { milestone: "M-1", title: "Cherry task" });
+    const apple = task("T-APPLE", { milestone: "M-1", title: "Apple task" });
+    const banana = task("T-BANANA", { milestone: "M-1", title: "Banana task" });
+    const compare = canonicalTaskComparator("en", text);
+    const projectDoc = project({ milestone_order: ["M-1"] });
+
+    // The Plan workspace and the Effort report receive the same tasks but in
+    // different input orders; both pass canonicalTaskComparator, so the visible
+    // sequence of task ids must be identical and follow the title tie-break.
+    const planOrder = flattenProjectTaskViewModel(buildProjectTaskViewModel({
+      project: projectDoc, milestones: [stage], tasks: [cherry, banana, apple], text, effortOf, locale: "en", compareTasks: compare,
+    })).map((row) => row.node.id);
+    const effortOrder = flattenProjectTaskViewModel(buildProjectTaskViewModel({
+      project: projectDoc, milestones: [stage], tasks: [banana, apple, cherry], text, effortOf, locale: "en", compareTasks: compare,
+    })).map((row) => row.node.id);
+
+    expect(planOrder).toEqual(["T-APPLE", "T-BANANA", "T-CHERRY"]);
+    expect(effortOrder).toEqual(planOrder);
   });
 });

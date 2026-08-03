@@ -19,6 +19,19 @@ export type TaskEffortReader = (document: Readonly<Record<string, unknown>>) => 
 export type TaskComparator = (left: EntityResult, right: EntityResult) => number;
 
 /**
+ * Build the canonical tie-break comparator shared by every surface that lists
+ * project tasks. Tasks absent from a milestone's `task_order` (and tasks in the
+ * system group) are ordered by localized title, then by id. Both the Plan and
+ * Effort tabs pass this comparator to {@link buildProjectTaskViewModel} so the
+ * sequence of task ids cannot drift between surfaces.
+ */
+export const canonicalTaskComparator = (locale: Locale, text: TaskTextReader): TaskComparator => (left, right) => {
+  const byTitle = text(left.document, "title").localeCompare(text(right.document, "title"), locale);
+  if (byTitle !== 0) return byTitle;
+  return left.document.id.localeCompare(right.document.id);
+};
+
+/**
  * A single task in the shared hierarchy view.
  *
  * `path` is the list of ancestor ids from the root down to and including this
