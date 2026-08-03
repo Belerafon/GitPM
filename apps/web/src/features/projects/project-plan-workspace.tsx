@@ -22,9 +22,10 @@ import { PersonLinks } from "../../person-link.js";
 import { DraftReadOnlyAlert, draftReadOnlyReason } from "../../draft-read-only.js";
 import { SchedulingOverflowWarnings } from "../../scheduling-overflow-warnings.js";
 
+type TaskInsertSpec = { readonly parentId?: string; readonly beforeId?: string; readonly afterId?: string };
 type PlanEditor = { readonly kind: "project" | "new-stage" }
   | { readonly kind: "edit-stage"; readonly stageId: string }
-  | { readonly kind: "task"; readonly stageId?: string; readonly parentId?: string }
+  | { readonly kind: "task"; readonly stageId?: string; readonly parentId?: string; readonly beforeId?: string; readonly afterId?: string }
   | null;
 type TaskField = "assignees" | "due" | "estimate" | "status";
 type TaskFieldVisibility = Readonly<Record<TaskField, boolean>>;
@@ -93,6 +94,24 @@ const taskHierarchy = (tasks: readonly EntityResult[], order: readonly string[] 
   tasks.map((entity) => ({ id: entity.document.id, parent: parentOf(entity.document), entity })),
   { order },
 );
+const buildInsertedTaskOrder = (tasks: readonly EntityResult[], order: readonly string[], newId: string, beforeId?: string, afterId?: string): string[] => {
+  const hierarchy = taskHierarchy(tasks, order);
+  const depthFirst = hierarchy.flatten().map((entry) => entry.task.id);
+  let insertAt = depthFirst.length;
+  if (beforeId !== undefined) {
+    const index = depthFirst.indexOf(beforeId);
+    if (index >= 0) insertAt = index;
+  } else if (afterId !== undefined) {
+    const index = depthFirst.indexOf(afterId);
+    if (index >= 0) {
+      const descendants = new Set(hierarchy.descendantsOf(afterId).map((task) => task.id));
+      let end = index + 1;
+      while (end < depthFirst.length && descendants.has(depthFirst[end]!)) end++;
+      insertAt = end;
+    }
+  }
+  return [...depthFirst.slice(0, insertAt), newId, ...depthFirst.slice(insertAt)];
+};
 
 export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedStageId = "", selectedTaskId = "", initialStatusFilter = "", initialMilestoneFilter = "", onNavigate, onChanged, confirmAction = () => true }: {
   readonly api: GitPmApi;
@@ -462,6 +481,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     const data = new FormData(event.currentTarget);
     const id = newUniqueEntityId(ENTITY_ID_PREFIX.task, new Set(workspace.tasks.map((item) => item.document.id)));
     const start = String(data.get("start")); const due = String(data.get("due")); const estimate = String(data.get("estimate"));
+    const priorWorkspace = workspace;
     const document = {
       schema: "gitpm/task@2", id, project: projectId, title: String(data.get("title")).trim(), type: String(data.get("type")), status: String(data.get("status")), lifecycle: "active",
       description_markdown: String(data.get("description")),
@@ -470,7 +490,24 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
       ...(editor.stageId === undefined ? {} : { milestone: editor.stageId }),
       ...(buildSchedule(primaryTrack, start, due, estimate) ? { schedules: buildSchedule(primaryTrack, start, due, estimate) } : {}),
     } as EntityDocument;
-    void mutate(async () => await api.createEntity(draft.draft_id, "tasks", workspace.draft_fingerprint, document));
+    const reorder = editor.stageId !== undefined && (editor.beforeId !== undefined || editor.afterId !== undefined)
+      ? { stageId: editor.stageId, beforeId: editor.beforeId, afterId: editor.afterId }
+      : null;
+    void mutate(async () => {
+      const created = await api.createEntity(draft.draft_id, "tasks", priorWorkspace.draft_fingerprint, document);
+      applyResult(created);
+      if (reorder === null) return created;
+      const stage = priorWorkspace.milestones.find((item) => item.document.id === reorder.stageId);
+      if (stage === undefined) return created;
+      const taskOrder = buildInsertedTaskOrder(
+        priorWorkspace.tasks.filter((task) => task.document.milestone === stage.document.id),
+        strings(stage.document, "task_order"),
+        created.document.id,
+        reorder.beforeId,
+        reorder.afterId,
+      );
+      return await api.updateEntity(draft.draft_id, "milestones", stage, created.draft_fingerprint, { ...stage.document, task_order: taskOrder } as EntityDocument);
+    }, id);
   };
 
   const archiveProject = () => {
@@ -563,7 +600,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
               people={people}
               onNavigate={onNavigate}
               onNewTask={() => setEditor({ kind: "task", stageId: stage.document.id })}
-              onNewSubtask={(parentId) => setEditor({ kind: "task", stageId: stage.document.id, parentId })}
+              onCreate={(spec) => setEditor({ kind: "task", stageId: stage.document.id, ...spec })}
               onMoveStage={(offset) => moveStage(stage.document.id, offset)}
               onMoveTask={(taskId, offset) => moveTask(stage, taskId, offset)}
               onStatusChange={changeTaskStatus}
@@ -591,7 +628,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
             />)}
             {(milestoneFilter === "" || milestoneFilter === "none") && <section className={`project-plan-stage project-plan-unassigned${visibleOutsideStages.length > 0 ? " has-work" : ""}`}>
               <header><div><span className="project-plan-stage-kind">{t("projectPlan.systemGroup")}</span><h3>{t("projectPlan.unassignedHeading")}</h3><p>{t("projectPlan.unassignedDescription")}</p></div><div className="project-plan-stage-actions"><button disabled={readOnly} onClick={() => setEditor({ kind: "task" })}>+ {t("core.createTaskAction")}</button></div></header>
-              <TaskRows allTasks={outsideStages} locale={locale} onNavigate={onNavigate} onNewSubtask={(parentId) => setEditor({ kind: "task", parentId })} onStatusChange={changeTaskStatus} people={people} projectId={projectId} query={navigationQuery} readOnly={readOnly} savingTaskIds={new Set([...(orderPending ?? []), ...(statusPending === null ? [] : [statusPending])])} selectedTaskId={selectedTaskId} statusBusy={statusPending !== null} statusOptions={statuses} statusTitle={statusTitle} taskFields={taskFields} tasks={visibleOutsideStages} text={text} number={number} t={t} />
+              <TaskRows allTasks={outsideStages} locale={locale} onCreate={(spec) => setEditor({ kind: "task", ...spec })} onNavigate={onNavigate} onStatusChange={changeTaskStatus} people={people} projectId={projectId} query={navigationQuery} readOnly={readOnly} savingTaskIds={new Set([...(orderPending ?? []), ...(statusPending === null ? [] : [statusPending])])} selectedTaskId={selectedTaskId} statusBusy={statusPending !== null} statusOptions={statuses} statusTitle={statusTitle} taskFields={taskFields} tasks={visibleOutsideStages} text={text} number={number} t={t} />
             </section>}
           </section>
         </div>
@@ -663,7 +700,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
       </EditorDrawer>;
     })()}
 
-    <EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setEditor(null)} open={editor?.kind === "task"} title={editor?.kind === "task" && editor.parentId !== undefined ? t("taskHierarchy.newSubtask") : t("core.createTaskAction")}>
+    <EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setEditor(null)} open={editor?.kind === "task"} title={editor?.kind === "task" && editor.parentId !== undefined && editor.beforeId === undefined && editor.afterId === undefined ? t("taskHierarchy.newSubtask") : t("core.createTaskAction")}>
       <form className="editor-drawer-form" onSubmit={createTask}>
         {editor?.kind === "task" && editor.parentId !== undefined && <p className="task-parent-context">{t("taskHierarchy.parent")}: <strong>{text(workspace?.tasks.find((task) => task.document.id === editor.parentId)?.document ?? { schema: "", id: "", lifecycle: "active" }, "title")}</strong></p>}
         <label>{t("core.title")}<input disabled={readOnly} name="title" required /></label>
@@ -683,7 +720,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
 type ScheduleTextReader = (document: Readonly<Record<string, unknown>>, key: string) => string;
 type ScheduleNumberReader = (document: Readonly<Record<string, unknown>>, key: string) => number | undefined;
 
-function StageSection({ stage, tasks, allTasks, stageIndex, stageCount, projectId, query, locale, people, readOnly, orderBusy, selected, changed, saving, selectedTaskId, changedTaskIds, savingTaskIds, statusTitle, statusOptions, statusBusy, taskFields, text, number, onNewTask, onNewSubtask, onMoveStage, onMoveTask, onStatusChange, onNavigate, t }: {
+function StageSection({ stage, tasks, allTasks, stageIndex, stageCount, projectId, query, locale, people, readOnly, orderBusy, selected, changed, saving, selectedTaskId, changedTaskIds, savingTaskIds, statusTitle, statusOptions, statusBusy, taskFields, text, number, onNewTask, onCreate, onMoveStage, onMoveTask, onStatusChange, onNavigate, t }: {
   readonly stage: EntityResult;
   readonly tasks: readonly EntityResult[];
   readonly allTasks: readonly EntityResult[];
@@ -708,7 +745,7 @@ function StageSection({ stage, tasks, allTasks, stageIndex, stageCount, projectI
   readonly text: ScheduleTextReader;
   readonly number: ScheduleNumberReader;
   readonly onNewTask: () => void;
-  readonly onNewSubtask: (parentId: string) => void;
+  readonly onCreate: (spec: TaskInsertSpec) => void;
   readonly onMoveStage: (offset: -1 | 1) => void;
   readonly onMoveTask: (taskId: string, offset: -1 | 1) => void;
   readonly onStatusChange: (task: EntityResult, status: string) => void;
@@ -729,11 +766,11 @@ function StageSection({ stage, tasks, allTasks, stageIndex, stageCount, projectI
       <div className="project-plan-stage-actions"><span className="plan-order-controls"><button aria-label={t("projectPlan.moveStageUp", { number: stageIndex + 1 })} disabled={readOnly || orderBusy || stageIndex === 0} onClick={() => onMoveStage(-1)} title={t("projectPlan.moveStageUp", { number: stageIndex + 1 })} type="button">↑</button><button aria-label={t("projectPlan.moveStageDown", { number: stageIndex + 1 })} disabled={readOnly || orderBusy || stageIndex === stageCount - 1} onClick={() => onMoveStage(1)} title={t("projectPlan.moveStageDown", { number: stageIndex + 1 })} type="button">↓</button></span><time dateTime={text(stage.document, "due")}>{text(stage.document, "due") ? formatDateOnly(locale, text(stage.document, "due")) : "—"}</time><button disabled={readOnly} onClick={onNewTask}>+ {t("core.createTaskAction")}</button></div>
     </header>
     <div className="project-plan-stage-progress"><progress aria-label={t("stages.progressLabel")} max="100" value={progress}>{progress}%</progress><span>{t("stages.progress", { completed, count: allTasks.length })}</span></div>
-    <TaskRows allTasks={allTasks} changedTaskIds={changedTaskIds} locale={locale} numberPrefix={stageIndex + 1} onMoveTask={onMoveTask} onNavigate={onNavigate} onNewSubtask={onNewSubtask} onStatusChange={onStatusChange} order={strings(stage.document, "task_order")} orderBusy={orderBusy} people={people} projectId={projectId} query={query} readOnly={readOnly} savingTaskIds={savingTaskIds} selectedTaskId={selectedTaskId} statusBusy={statusBusy} statusOptions={statusOptions} statusTitle={statusTitle} taskFields={taskFields} tasks={tasks} text={text} number={number} t={t} />
+    <TaskRows allTasks={allTasks} changedTaskIds={changedTaskIds} locale={locale} numberPrefix={stageIndex + 1} onCreate={onCreate} onMoveTask={onMoveTask} onNavigate={onNavigate} onStatusChange={onStatusChange} order={strings(stage.document, "task_order")} orderBusy={orderBusy} people={people} projectId={projectId} query={query} readOnly={readOnly} savingTaskIds={savingTaskIds} selectedTaskId={selectedTaskId} statusBusy={statusBusy} statusOptions={statusOptions} statusTitle={statusTitle} taskFields={taskFields} tasks={tasks} text={text} number={number} t={t} />
   </article>;
 }
 
-function TaskRows({ tasks, allTasks, projectId, query = {}, locale, people, numberPrefix, readOnly = true, order = [], orderBusy = false, selectedTaskId, changedTaskIds = new Set<string>(), savingTaskIds = new Set<string>(), statusTitle, statusOptions = [], statusBusy = false, taskFields, text, number, onMoveTask, onNewSubtask, onStatusChange, onNavigate, t }: {
+function TaskRows({ tasks, allTasks, projectId, query = {}, locale, people, numberPrefix, readOnly = true, order = [], orderBusy = false, selectedTaskId, changedTaskIds = new Set<string>(), savingTaskIds = new Set<string>(), statusTitle, statusOptions = [], statusBusy = false, taskFields, text, number, onMoveTask, onCreate, onStatusChange, onNavigate, t }: {
   readonly tasks: readonly EntityResult[];
   readonly allTasks: readonly EntityResult[];
   readonly projectId: string;
@@ -754,12 +791,13 @@ function TaskRows({ tasks, allTasks, projectId, query = {}, locale, people, numb
   readonly text: ScheduleTextReader;
   readonly number: ScheduleNumberReader;
   readonly onMoveTask?: (taskId: string, offset: -1 | 1) => void;
-  readonly onNewSubtask?: (parentId: string) => void;
+  readonly onCreate?: (spec: TaskInsertSpec) => void;
   readonly onStatusChange?: (task: EntityResult, status: string) => void;
   readonly onNavigate: WorkspaceNavigate;
   readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string;
 }) {
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+  const [openHandle, setOpenHandle] = useState<string | null>(null);
   const hierarchy = taskHierarchy(allTasks, order);
   if (tasks.length === 0) return <p className="project-plan-empty-tasks">{t("stages.emptyTasks")}</p>;
   const included = new Set(tasks.map((task) => task.document.id));
@@ -768,7 +806,7 @@ function TaskRows({ tasks, allTasks, projectId, query = {}, locale, people, numb
     included.has(entry.task.id)
     && !hierarchy.ancestorsOf(entry.task.id).some((ancestor) => collapsed.has(ancestor.id)));
   const visibleEntryIds = new Set(entries.map((entry) => entry.task.id));
-  return <div className="project-plan-task-list">{entries.map((entry) => {
+  return <div className="project-plan-task-list">{entries.map((entry, index) => {
     const task = entry.task.entity;
     const selected = selectedTaskId === task.document.id;
     const taskPath = hierarchy.pathTo(task.document.id);
@@ -794,14 +832,70 @@ function TaskRows({ tasks, allTasks, projectId, query = {}, locale, people, numb
       "--task-tree-width": `${1.5 + entry.depth * 1.15}rem`,
       "--task-tree-parent-offset": `${.75 + Math.max(0, entry.depth - 1) * 1.15}rem`,
     } as CSSProperties;
-    return <div className={`project-plan-task-row${selected ? " selected" : ""}${isContextOnly ? " filter-context" : ""}${changedTaskIds.has(task.document.id) ? " recently-changed" : ""}${savingTaskIds.has(task.document.id) ? " is-saving" : ""}`} data-depth={entry.depth} data-flip-key={`task:${task.document.id}`} key={task.document.id} style={style}>
+    const nextEntry = entries[index + 1];
+    const nextTask = nextEntry?.task.entity;
+    const nextParentId = nextEntry?.parentId;
+    const insertDepth = nextEntry === undefined ? entry.depth : nextEntry.depth;
+    const rows = [<div className={`project-plan-task-row${selected ? " selected" : ""}${isContextOnly ? " filter-context" : ""}${changedTaskIds.has(task.document.id) ? " recently-changed" : ""}${savingTaskIds.has(task.document.id) ? " is-saving" : ""}`} data-depth={entry.depth} data-flip-key={`task:${task.document.id}`} key={task.document.id} style={style}>
       <span className={`project-plan-task-tree${hasVisibleChildren ? " has-visible-children" : ""}`}>
         {ancestorRailLevels.map((level) => <span aria-hidden="true" className="project-plan-task-ancestor-rail" key={level} style={{ left: `${.75 + level * 1.15}rem` }} />)}
         {entry.depth > 0 && <span aria-hidden="true" className={`project-plan-task-branch${isLastVisibleSibling ? " last" : ""}`} />}
         <span className="project-plan-task-tree-control">{entry.hasChildren ? <button aria-expanded={!collapsed.has(task.document.id)} aria-label={collapsed.has(task.document.id) ? t("taskHierarchy.expand", { title: text(task.document, "title") }) : t("taskHierarchy.collapse", { title: text(task.document, "title") })} onClick={() => setCollapsed((current) => { const next = new Set(current); if (next.has(task.document.id)) next.delete(task.document.id); else next.add(task.document.id); return next; })} title={collapsed.has(task.document.id) ? t("taskHierarchy.expand", { title: text(task.document, "title") }) : t("taskHierarchy.collapse", { title: text(task.document, "title") })} type="button"><svg aria-hidden="true" viewBox="0 0 12 12"><path d={collapsed.has(task.document.id) ? "M4 2.5 8 6 4 9.5" : "m2.5 4 3.5 4 3.5-4"} /></svg></button> : null}</span>
       </span>
       <button aria-current={selected ? "true" : undefined} className="project-plan-task-selector" onClick={() => onNavigate("tasks", { projectId, taskId: task.document.id, ...(Object.keys(query).length > 0 ? { query } : {}) })} type="button"><span className="project-plan-task-kind">{t("projectPlan.taskLabel")} {taskNumber}. <code>{task.document.id}</code>.</span><strong>{text(task.document, "title")}</strong>{entry.hasChildren && <small>{t("taskHierarchy.directProgress", { completed: completedChildren, count: children.length })}</small>}</button>
-      <span className="project-plan-task-meta">{taskFields.assignees && <span className="task-assignees"><PersonLinks empty={t("core.unassigned")} onOpen={(personId) => onNavigate("people", { personId })} people={people} personIds={assignees} /></span>}{taskFields.due && text(task.document, "due") && <time dateTime={text(task.document, "due")}>{formatDateOnly(locale, text(task.document, "due"))}</time>}{taskFields.estimate && number(task.document, "estimate_hours") !== undefined && <span>{number(task.document, "estimate_hours")}h</span>}{taskFields.status && (onStatusChange === undefined || readOnly ? <span className="state open">{statusTitle(text(task.document, "status"))}</span> : <select aria-label={`${t("core.status")}: ${text(task.document, "title")}`} className="inline-status-select" disabled={statusBusy} onChange={(event) => onStatusChange(task, event.target.value)} title={t("tooltip.changeStatus")} value={text(task.document, "status")}>{statusOptions.map((status) => <option key={status.slug} value={status.slug}>{status.title}</option>)}</select>)}{onNewSubtask !== undefined && <button aria-label={t("taskHierarchy.addSubtaskTo", { id: task.document.id })} className="task-add-subtask" disabled={readOnly} onClick={() => onNewSubtask(task.document.id)} type="button">+ {t("taskHierarchy.subtask")}</button>}{onMoveTask !== undefined && <span className="plan-order-controls"><button aria-label={t("projectPlan.moveTaskUp", { number: taskNumber })} disabled={readOnly || orderBusy || siblingIndex === 0} onClick={() => onMoveTask(task.document.id, -1)} title={t("projectPlan.moveTaskUp", { number: taskNumber })} type="button">↑</button><button aria-label={t("projectPlan.moveTaskDown", { number: taskNumber })} disabled={readOnly || orderBusy || siblingIndex === siblings.length - 1} onClick={() => onMoveTask(task.document.id, 1)} title={t("projectPlan.moveTaskDown", { number: taskNumber })} type="button">↓</button></span>}</span>
-    </div>;
-  })}</div>;
+      <span className="project-plan-task-meta">{taskFields.assignees && <span className="task-assignees"><PersonLinks empty={t("core.unassigned")} onOpen={(personId) => onNavigate("people", { personId })} people={people} personIds={assignees} /></span>}{taskFields.due && text(task.document, "due") && <time dateTime={text(task.document, "due")}>{formatDateOnly(locale, text(task.document, "due"))}</time>}{taskFields.estimate && number(task.document, "estimate_hours") !== undefined && <span>{number(task.document, "estimate_hours")}h</span>}{taskFields.status && (onStatusChange === undefined || readOnly ? <span className="state open">{statusTitle(text(task.document, "status"))}</span> : <select aria-label={`${t("core.status")}: ${text(task.document, "title")}`} className="inline-status-select" disabled={statusBusy} onChange={(event) => onStatusChange(task, event.target.value)} title={t("tooltip.changeStatus")} value={text(task.document, "status")}>{statusOptions.map((status) => <option key={status.slug} value={status.slug}>{status.title}</option>)}</select>)}{onMoveTask !== undefined && <span className="plan-order-controls"><button aria-label={t("projectPlan.moveTaskUp", { number: taskNumber })} disabled={readOnly || orderBusy || siblingIndex === 0} onClick={() => onMoveTask(task.document.id, -1)} title={t("projectPlan.moveTaskUp", { number: taskNumber })} type="button">↑</button><button aria-label={t("projectPlan.moveTaskDown", { number: taskNumber })} disabled={readOnly || orderBusy || siblingIndex === siblings.length - 1} onClick={() => onMoveTask(task.document.id, 1)} title={t("projectPlan.moveTaskDown", { number: taskNumber })} type="button">↓</button></span>}</span>
+    </div>];
+    if (onCreate !== undefined && !readOnly) rows.push(<TaskInsertHandle
+      key={`insert-${task.document.id}`}
+      anchorTask={task}
+      anchorParentId={entry.parentId}
+      nextTask={nextTask}
+      nextParentId={nextParentId}
+      depth={insertDepth}
+      open={openHandle === task.document.id}
+      onOpenChange={(next) => setOpenHandle(next ? task.document.id : null)}
+      onCreate={onCreate}
+      text={text}
+      t={t}
+    />);
+    return rows;
+  }).flat()}</div>;
+}
+
+function TaskInsertHandle({ anchorTask, anchorParentId, nextTask, nextParentId, depth, open, onOpenChange, onCreate, text, t }: {
+  readonly anchorTask: EntityResult;
+  readonly anchorParentId?: string;
+  readonly nextTask?: EntityResult;
+  readonly nextParentId?: string;
+  readonly depth: number;
+  readonly open: boolean;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly onCreate: (spec: TaskInsertSpec) => void;
+  readonly text: ScheduleTextReader;
+  readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string;
+}) {
+  const anchorTitle = text(anchorTask.document, "title");
+  const nextTitle = nextTask === undefined ? "" : text(nextTask.document, "title");
+  const pick = (spec: TaskInsertSpec) => { onOpenChange(false); onCreate(spec); };
+  const insertLeft = `${1.35 + depth * 1.15}rem`;
+  return <div className={`task-insert-handle${open ? " is-open" : ""}`} style={{ "--insert-left": insertLeft } as CSSProperties}>
+    <span className="task-insert-zone" aria-hidden="true" />
+    <button
+      aria-expanded={open}
+      aria-haspopup="menu"
+      aria-label={t("taskHierarchy.insertButton")}
+      className="task-insert-button"
+      onClick={() => onOpenChange(!open)}
+      title={t("taskHierarchy.insertButton")}
+      type="button">+</button>
+    {open && <>
+      <button aria-hidden="true" className="task-insert-menu-backdrop" onClick={() => onOpenChange(false)} tabIndex={-1} type="button" />
+      <div className="task-insert-menu" role="menu">
+        <button className="task-insert-menu-item" onClick={() => pick({ parentId: anchorTask.document.id })} role="menuitem" type="button">{t("taskHierarchy.insertSubtaskOf", { title: anchorTitle })}</button>
+        {nextTask === undefined
+          ? <button className="task-insert-menu-item" onClick={() => pick({ parentId: anchorParentId, afterId: anchorTask.document.id })} role="menuitem" type="button">{t("taskHierarchy.insertAfter", { title: anchorTitle })}</button>
+          : <button className="task-insert-menu-item" onClick={() => pick({ parentId: nextParentId, beforeId: nextTask.document.id })} role="menuitem" type="button">{t("taskHierarchy.insertBetween", { before: anchorTitle, after: nextTitle })}</button>}
+      </div>
+    </>}
+  </div>;
 }

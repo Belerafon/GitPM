@@ -622,7 +622,10 @@ describe("ProjectPlanWorkspace", () => {
     expect(expandRoot.getAttribute("aria-expanded")).toBe("false");
     expect(expandRoot.querySelector("svg path")?.getAttribute("d")).toBe("M4 2.5 8 6 4 9.5");
     fireEvent.click(expandRoot);
-    fireEvent.click(within(stageCard).getByRole("button", { name: `Add subtask to task ${child.document.id}` }));
+    const childRow = screen.getByText("Child task").closest(".project-plan-task-row") as HTMLElement;
+    const childHandle = childRow.nextElementSibling as HTMLElement;
+    fireEvent.click(within(childHandle).getByRole("button", { name: "Insert task" }));
+    fireEvent.click(within(childHandle).getByRole("menuitem", { name: /Subtask of .*Child task/u }));
     const dialog = screen.getByRole("dialog", { name: "New subtask" });
     expect(within(dialog).getByText("Child task")).toBeTruthy();
     fireEvent.change(within(dialog).getByLabelText("Title"), { target: { value: "Nested child" } });
@@ -635,6 +638,36 @@ describe("ProjectPlanWorkspace", () => {
       parent: child.document.id,
       title: "Nested child",
     });
+  });
+
+  it("inserts a new task between two siblings and rewrites the milestone task_order", async () => {
+    const taskA = result({ schema: "gitpm/task@2", id: "T-26-AAAAAA", project: project.document.id, milestone: stage.document.id, title: "Task A", type: "task", status: "backlog", lifecycle: "active" });
+    const taskB = result({ schema: "gitpm/task@2", id: "T-26-BBBBBB", project: project.document.id, milestone: stage.document.id, title: "Task B", type: "task", status: "backlog", lifecycle: "active" });
+    const taskC = result({ schema: "gitpm/task@2", id: "T-26-CCCCCC", project: project.document.id, milestone: stage.document.id, title: "Task C", type: "task", status: "backlog", lifecycle: "active" });
+    const orderedStage = result({ ...stage.document, task_order: [taskA.document.id, taskB.document.id, taskC.document.id] });
+    const client = api([taskA, taskB, taskC], [orderedStage, laterStage]);
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} />);
+
+    await screen.findByRole("heading", { name: "Launch" });
+    expect(Array.from(document.querySelectorAll(".project-plan-task-row strong"), (element) => element.textContent)).toEqual(["Task A", "Task B", "Task C"]);
+
+    const aRow = screen.getByText("Task A").closest(".project-plan-task-row") as HTMLElement;
+    const aHandle = aRow.nextElementSibling as HTMLElement;
+    fireEvent.click(within(aHandle).getByRole("button", { name: "Insert task" }));
+    fireEvent.click(within(aHandle).getByRole("menuitem", { name: /Task between .*Task A.* and .*Task B/u }));
+
+    const dialog = screen.getByRole("dialog", { name: "New task" });
+    fireEvent.change(within(dialog).getByLabelText("Title"), { target: { value: "Inserted task" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create task" }));
+
+    await waitFor(() => expect(client.createEntity).toHaveBeenCalled());
+    const createdId = client.createEntity.mock.calls[0]?.[3].id as string;
+    expect(client.createEntity.mock.calls[0]?.[3]).toMatchObject({ project: project.document.id, milestone: stage.document.id, title: "Inserted task" });
+    expect(client.createEntity.mock.calls[0]?.[3]).not.toHaveProperty("parent");
+
+    await waitFor(() => expect(client.updateEntity).toHaveBeenCalled());
+    const milestoneUpdate = client.updateEntity.mock.calls.find((call) => call[1] === "milestones");
+    expect(milestoneUpdate?.[4]).toMatchObject({ id: stage.document.id, task_order: [taskA.document.id, createdId, taskB.document.id, taskC.document.id] });
   });
 
   it("creates a task in the selected milestone context through the project workspace", async () => {
