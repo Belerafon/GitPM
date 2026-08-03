@@ -2,7 +2,7 @@ import { activeProjectIds, ENTITY_ID_PREFIX, isOperationalTask, newUniqueEntityI
 import type { ProjectPlanning } from "@gitpm/contracts";
 import { resolveSchedulingHierarchy, validatePlanning, windowEffort, type PlanningSettings, type SchedulingHierarchyTask } from "@gitpm/scheduling";
 import { buildSchedule, ScheduleResolver, scheduleTracksConfig, scheduleTextReader, scheduleEffortReader, withSchedulesMap, type ScheduleMap } from "../../schedules.js";
-import { isCompletedStatus } from "../../status-categories.js";
+import { isBlockedStatus, isCompletedStatus } from "../../status-categories.js";
 import { ProjectScheduleSummary } from "./project-schedule-summary.js";
 import { buildTaskHierarchy } from "@gitpm/task-hierarchy";
 import { buildProjectTaskViewModel, canonicalTaskComparator, type ProjectTaskViewModel, type TaskViewModelNode } from "./project-task-view-model.js";
@@ -30,10 +30,10 @@ type PlanEditor = { readonly kind: "project" | "new-stage" }
   | null;
 type TaskField = "assignees" | "due" | "estimate" | "status";
 type TaskFieldVisibility = Readonly<Record<TaskField, boolean>>;
-type SummaryFilter = "all" | "completed" | "active" | "overdue";
+type SummaryFilter = "all" | "completed" | "active" | "blocked" | "overdue";
 
 const normalizeSummaryFilter = (value: string | undefined): SummaryFilter =>
-  value === "completed" || value === "overdue" || value === "active" ? value
+  value === "completed" || value === "overdue" || value === "active" || value === "blocked" ? value
     : value === "in-progress" ? "active"
     : "all";
 
@@ -354,14 +354,19 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     overdueTaskIds.add(task.document.id);
   }
   const completedCount = summaryScopeTasks.filter((task) => isCompletedStatus(statuses, text(task.document, "status"))).length;
-  const activeCategoryCount = summaryScopeTasks.filter((task) => statuses.find((item) => item.slug === text(task.document, "status"))?.category === "active").length;
+  const activeCategoryCount = summaryScopeTasks.filter((task) => {
+    const slug = text(task.document, "status");
+    return statuses.find((item) => item.slug === slug)?.category === "active" && !isBlockedStatus(statuses, slug);
+  }).length;
+  const blockedCount = summaryScopeTasks.filter((task) => isBlockedStatus(statuses, text(task.document, "status"))).length;
   const overdueCount = overdueTaskIds.size;
   const visibleTasks = useMemo(() => activeTasks.filter((task) =>
     (statusFilter === "" || text(task.document, "status") === statusFilter)
     && (milestoneFilter === "" || (milestoneFilter === "none" ? text(task.document, "milestone") === "" : text(task.document, "milestone") === milestoneFilter))
     && (summaryFilter === "all"
       || (summaryFilter === "completed" && isCompletedStatus(statuses, text(task.document, "status")))
-      || (summaryFilter === "active" && statuses.find((item) => item.slug === text(task.document, "status"))?.category === "active")
+      || (summaryFilter === "active" && statuses.find((item) => item.slug === text(task.document, "status"))?.category === "active" && !isBlockedStatus(statuses, text(task.document, "status")))
+      || (summaryFilter === "blocked" && isBlockedStatus(statuses, text(task.document, "status")))
       || (summaryFilter === "overdue" && overdueTaskIds.has(task.document.id)))), [activeTasks, milestoneFilter, overdueTaskIds, statusFilter, statuses, summaryFilter, text]);
   const filterActive = summaryFilter !== "all" || statusFilter !== "";
   const visibleStages = (milestoneFilter === "" ? activeStages : activeStages.filter((stage) => stage.document.id === milestoneFilter))
@@ -396,6 +401,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   const resetFilters = () => applyFilters("", "", "all");
   const summaryMetricLabel = (value: SummaryFilter): string => value === "completed" ? t("projectPlan.summaryCompleted")
     : value === "active" ? t("projectPlan.summaryActive")
+    : value === "blocked" ? t("projectPlan.summaryBlocked")
     : value === "overdue" ? t("projectPlan.summaryOverdue")
     : t("projectPlan.filterAll");
   const milestoneChipLabel = (value: string): string => {
@@ -628,6 +634,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
           <div className="project-plan-summary" role="group" aria-label={t("projectPlan.summaryGroup")}>
             <button aria-label={`${t("projectPlan.summaryTotal")}: ${summaryScopeTasks.length}`} aria-pressed={summaryFilter === "all" && statusFilter === ""} className="project-plan-summary-metric" onClick={() => applyFilters("", milestoneFilter, "all")} type="button"><span>{t("projectPlan.summaryTotal")}</span><strong>{summaryScopeTasks.length}</strong></button>
             <button aria-label={`${t("projectPlan.summaryActive")}: ${activeCategoryCount}`} aria-pressed={summaryFilter === "active"} className="project-plan-summary-metric" onClick={() => toggleSummary("active")} type="button"><span>{t("projectPlan.summaryActive")}</span><strong>{activeCategoryCount}</strong></button>
+            <button aria-label={`${t("projectPlan.summaryBlocked")}: ${blockedCount}`} aria-pressed={summaryFilter === "blocked"} className="project-plan-summary-metric project-plan-summary-blocked" onClick={() => toggleSummary("blocked")} type="button"><span>{t("projectPlan.summaryBlocked")}</span><strong>{blockedCount}</strong></button>
             <button aria-label={`${t("projectPlan.summaryOverdue")}: ${overdueCount}`} aria-pressed={summaryFilter === "overdue"} className="project-plan-summary-metric project-plan-summary-overdue" onClick={() => toggleSummary("overdue")} type="button"><span>{t("projectPlan.summaryOverdue")}</span><strong>{overdueCount}</strong></button>
             <button aria-label={`${t("projectPlan.summaryCompleted")}: ${completedCount}`} aria-pressed={summaryFilter === "completed"} className="project-plan-summary-metric" onClick={() => toggleSummary("completed")} type="button"><span>{t("projectPlan.summaryCompleted")}</span><strong>{completedCount}</strong></button>
           </div>

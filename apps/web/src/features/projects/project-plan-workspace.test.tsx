@@ -85,6 +85,19 @@ const useSummaryStatusConfig = (client: GitPmApi): void => {
     : { schema: "gitpm/issue-types@1", issue_types: [{ slug: "task", title: "Task", active: true }] }));
 };
 
+const useBlockedStatusConfig = (client: GitPmApi): void => {
+  vi.spyOn(client, "getConfiguration").mockImplementation(async (_draftId: string, kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks") => configuration(kind === "statuses"
+    ? { schema: "gitpm/statuses@2", statuses: [
+      { slug: "backlog", title: "Backlog", color: "gray", active: true, category: "backlog" },
+      { slug: "in-progress", title: "In progress", color: "blue", active: true, category: "active" },
+      { slug: "blocked", title: "Blocked", color: "red", active: true, category: "active" },
+      { slug: "done", title: "Done", color: "green", active: true, category: "done" },
+    ] }
+    : kind === "schedule-tracks"
+    ? { schema: "gitpm/schedule-tracks@1", tracks: [{ slug: "plan", title: "Plan", kind: "manual", capabilities: ["dates", "effort", "dependencies"] }], defaults: { enabled_tracks: ["plan"], primary_track: "plan", workload_track: "plan", dashboard_tracks: ["plan"] } }
+    : { schema: "gitpm/issue-types@1", issue_types: [{ slug: "task", title: "Task", active: true }] }));
+};
+
 const summaryTasksFixture = (): readonly EntityResult[] => [
   result({ schema: "gitpm/task@2", id: "T-26-DONE", project: summaryProject.document.id, milestone: summaryStage.document.id, title: "Done task", type: "task", status: "done", lifecycle: "active", schedules: { plan: { finish: "2026-07-10" } } }),
   result({ schema: "gitpm/task@2", id: "T-26-ACT", project: summaryProject.document.id, milestone: summaryStage.document.id, title: "Active task", type: "task", status: "in-progress", lifecycle: "active", schedules: { plan: { finish: "2026-12-01" } } }),
@@ -720,11 +733,12 @@ describe("ProjectPlanWorkspace", () => {
     await screen.findByRole("heading", { name: "Summary project" });
     expect(screen.getByRole("button", { name: "Total tasks: 3" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Completed: 1" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Active: 1" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "In progress: 1" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Blocked: 0" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Overdue: 1" })).toBeTruthy();
   });
 
-  it("orders the summary metrics Total, Active, Overdue, Completed", async () => {
+  it("orders the summary metrics Total, In progress, Blocked, Overdue, Completed", async () => {
     const client = api(summaryTasksFixture(), [summaryStage], summaryProject);
     useSummaryStatusConfig(client);
     render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={summaryProject.document.id} />);
@@ -732,7 +746,7 @@ describe("ProjectPlanWorkspace", () => {
     await screen.findByRole("heading", { name: "Summary project" });
     const group = screen.getByRole("group", { name: "Summary and quick task filters" });
     const labels = Array.from(group.querySelectorAll("button.project-plan-summary-metric > span"), (element) => element.textContent);
-    expect(labels).toEqual(["Total tasks", "Active", "Overdue", "Completed"]);
+    expect(labels).toEqual(["Total tasks", "In progress", "Blocked", "Overdue", "Completed"]);
   });
 
   it("hides milestones without matching tasks under a summary filter and restores them on toggle", async () => {
@@ -751,12 +765,12 @@ describe("ProjectPlanWorkspace", () => {
     expect(screen.getByRole("heading", { name: "Stage A" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Stage B" })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Active: 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "In progress: 1" }));
     expect(screen.queryByRole("heading", { name: "Stage A" })).toBeNull();
     expect(screen.getByRole("heading", { name: "Stage B" })).toBeTruthy();
     expect(screen.getByText("B active")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Active: 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "In progress: 1" }));
     expect(screen.getByRole("heading", { name: "Stage A" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Stage B" })).toBeTruthy();
   });
@@ -772,7 +786,7 @@ describe("ProjectPlanWorkspace", () => {
     render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={summaryProject.document.id} />);
 
     await screen.findByRole("heading", { name: "Summary project" });
-    fireEvent.click(screen.getByRole("button", { name: "Active: 0" }));
+    fireEvent.click(screen.getByRole("button", { name: "In progress: 0" }));
     expect(screen.getByText("No tasks match the active filters.")).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "Stage A" })).toBeNull();
   });
@@ -797,7 +811,7 @@ describe("ProjectPlanWorkspace", () => {
     fireEvent.change(screen.getByRole("combobox", { name: "Milestone" }), { target: { value: stageA.document.id } });
     expect(screen.getByRole("button", { name: "Total tasks: 2" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Completed: 1" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Active: 1" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "In progress: 1" })).toBeTruthy();
     // Selecting a concrete status does NOT change the quick metric numbers.
     fireEvent.change(screen.getByRole("combobox", { name: "Filter tasks" }), { target: { value: "done" } });
     expect(screen.getByRole("button", { name: "Completed: 1" })).toBeTruthy();
@@ -810,7 +824,7 @@ describe("ProjectPlanWorkspace", () => {
     render(<ProjectPlanWorkspace api={client} draft={draft} initialSummaryFilter="in-progress" locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={summaryProject.document.id} />);
 
     await screen.findByRole("heading", { name: "Summary project" });
-    expect(screen.getByRole("button", { name: "Active: 1" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "In progress: 1" }).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("bases overdue on the effective finish roll-up and excludes done and undated tasks", async () => {
@@ -865,13 +879,22 @@ describe("ProjectPlanWorkspace", () => {
     expect(alphaRow.textContent).toContain("13h");
   });
 
-  it("characterizes the four-metric summary without a Blocked metric (to be expanded)", async () => {
-    const client = api(summaryTasksFixture(), [summaryStage], summaryProject);
-    useSummaryStatusConfig(client);
+  it("counts blocked tasks separately from in-progress tasks and the quick filter narrows to them", async () => {
+    const stageM = result({ schema: "gitpm/milestone@2", id: "M-26-BLK", project: summaryProject.document.id, name: "Blocked stage", lifecycle: "active" });
+    const tasks = [
+      result({ schema: "gitpm/task@2", id: "T-ACT", project: summaryProject.document.id, milestone: stageM.document.id, title: "Active task", type: "task", status: "in-progress", lifecycle: "active", schedules: { plan: { finish: "2026-12-01" } } }),
+      result({ schema: "gitpm/task@2", id: "T-BLK", project: summaryProject.document.id, milestone: stageM.document.id, title: "Blocked task", type: "task", status: "blocked", lifecycle: "active", schedules: { plan: { finish: "2026-12-01" } } }),
+    ];
+    const client = api(tasks, [stageM], summaryProject);
+    useBlockedStatusConfig(client);
     render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={summaryProject.document.id} />);
+
     await screen.findByRole("heading", { name: "Summary project" });
-    expect(screen.getByRole("button", { name: "Active: 1" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /Blocked/u })).toBeNull();
+    expect(screen.getByRole("button", { name: "In progress: 1" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Blocked: 1" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Blocked: 1" }));
+    expect(screen.getByText("Blocked task")).toBeTruthy();
+    expect(screen.queryByText("Active task")).toBeNull();
   });
 
   it("orders unordered plan tasks by the shared canonical tie-break (title, then id)", async () => {
