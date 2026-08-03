@@ -112,6 +112,11 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
   const [entries, setEntries] = useState<readonly RawEntry[] | null>(null);
   const [knownPeople, setKnownPeople] = useState<readonly string[]>([]);
   const [knownCategories, setKnownCategories] = useState<readonly string[]>([]);
+  // Task ids that have at least one non-voided time record anywhere in the project. The first
+  // fetch is unfiltered and active-state, so this set is seeded with the complete history; it
+  // only grows on later filtered fetches so an archived task with history is never hidden from
+  // the selector just because a person or date filter currently narrows the visible records.
+  const [historicalTaskIds, setHistoricalTaskIds] = useState<ReadonlySet<string>>(() => new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -130,6 +135,11 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
         setEntries(result);
         setKnownPeople((current) => [...new Set([...current, ...result.map((entry) => entry.document.person)])].sort());
         setKnownCategories((current) => [...new Set([...current, ...result.map((entry) => entry.document.category)])].sort());
+        setHistoricalTaskIds((current) => {
+          const next = new Set(current);
+          for (const entry of result) if (entry.document.state !== "voided") next.add(entry.document.task);
+          return next.size === current.size ? current : next;
+        });
       })
       .catch((reason: unknown) => { if (active) setError(formatApiError(reason)); })
       .finally(() => { if (active) setLoading(false); });
@@ -311,24 +321,30 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
     type Group = { readonly label: string; readonly rows: readonly { readonly id: string; readonly title: string; readonly depth: number }[] };
     const groups: Group[] = [];
     const pushGroup = (label: string, rows: Group["rows"]): void => { if (rows.length > 0) groups.push({ label, rows }); };
+    // The selector lists every active task plus archived tasks that own historical time records.
+    // An archived task with no history never appears: it cannot inflate the current plan and has
+    // no hours to report. History is read from the project-wide `historicalTaskIds`, not the
+    // filtered current result, so a person or date filter cannot silently drop such a task.
+    const selectable = (id: string): boolean => {
+      const task = taskById.get(id);
+      if (task === undefined) return true;
+      return task.document.lifecycle !== "archived" || historicalTaskIds.has(id);
+    };
+    const toRow = (row: { readonly node: { readonly id: string; readonly title: string; readonly depth: number } }): { readonly id: string; readonly title: string; readonly depth: number } => ({ id: row.node.id, title: row.node.title || taskName(row.node.id), depth: row.node.depth });
     for (const milestone of orderedMilestones) {
       // The "outside active milestones" scope renders no milestone groups at all (only the
       // trailing orphan group); a specific milestone renders only its own group.
       if (filters.milestone === "none") continue;
       if (filters.milestone !== "" && filters.milestone !== milestone.document.id) continue;
-      const rows = flattened
-        .filter((row) => row.stage?.document.id === milestone.document.id)
-        .map((row) => ({ id: row.node.id, title: row.node.title || taskName(row.node.id), depth: row.node.depth }));
+      const rows = flattened.filter((row) => row.stage?.document.id === milestone.document.id && selectable(row.node.id)).map(toRow);
       pushGroup(reader(milestone.document, "name"), rows);
     }
     if (filters.milestone === "" || filters.milestone === "none") {
-      const rows = flattened
-        .filter((row) => row.stage === undefined)
-        .map((row) => ({ id: row.node.id, title: row.node.title || taskName(row.node.id), depth: row.node.depth }));
+      const rows = flattened.filter((row) => row.stage === undefined && selectable(row.node.id)).map(toRow);
       pushGroup(t("stages.withoutStage"), rows);
     }
     return groups;
-  }, [flattened, filters.milestone, orderedMilestones, reader, t, taskName]);
+  }, [flattened, filters.milestone, historicalTaskIds, orderedMilestones, reader, t, taskById, taskName]);
 
   const planCellSource = (row: PlanActualRow): string => row.planSource === "declared" ? t("actualReport.cellPlanDeclared") : row.planSource === "rolled" ? t("actualReport.cellPlanRolled") : "";
 

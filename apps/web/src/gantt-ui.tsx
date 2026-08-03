@@ -70,8 +70,12 @@ export function projectTimelineProjection(tasks: readonly EntityResult[], milest
     schedules: item.document.schedules as SchedulingHierarchyTask["schedules"],
   }));
   const activeMilestoneEntities = milestones.filter((item) => item.document.lifecycle === "active");
+  const activeMilestoneIds = new Set(activeMilestoneEntities.map((item) => item.document.id));
+  // A task pointing at an unknown or archived milestone rolls into the project (milestone =
+  // undefined) instead of being dropped, so the Gantt range and deadline stay complete.
+  const normalizedSubjects = subjects.map((subject) => ({ ...subject, milestone: subject.milestone !== undefined && activeMilestoneIds.has(subject.milestone) ? subject.milestone : undefined }));
   const milestoneSubjects = activeMilestoneEntities.map((item) => ({ id: item.document.id, schedules: item.document.schedules as SchedulingHierarchyTask["schedules"] }));
-  const scheduleHierarchy = resolveSchedulingHierarchy({ tasks: subjects, milestones: milestoneSubjects, tracks: modelTracks });
+  const scheduleHierarchy = resolveSchedulingHierarchy({ tasks: normalizedSubjects, milestones: milestoneSubjects, tracks: modelTracks });
   const ganttMilestones = activeMilestoneEntities.map((item) => {
     const finish = scheduleHierarchy.readModels.get(item.document.id)?.tracks.find((track) => track.track === options.primaryTrack)?.effective?.finish;
     return { id: item.document.id, finish: typeof finish === "string" ? finish : undefined };

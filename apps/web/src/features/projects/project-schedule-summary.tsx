@@ -1,5 +1,5 @@
 import { finishVarianceDays, resolveSchedulingHierarchy, type SchedulingHierarchyTask } from "@gitpm/scheduling";
-import { formatDateOnly, message, type Locale, type MessageKey } from "../../i18n.js";
+import { formatDateOnly, formatVarianceDays, message, type Locale, type MessageKey } from "../../i18n.js";
 import type { EntityDocument, EntityResult } from "../../types.js";
 import { type ScheduleResolver, trackHasCapability } from "../../schedules.js";
 import { SchedulingOverflowWarnings } from "../../scheduling-overflow-warnings.js";
@@ -31,14 +31,18 @@ export function ProjectScheduleSummary({ project, locale, milestones, tasks, sch
   // Archived milestones and tasks must not shift the current schedule, generate overflow
   // warnings, or inflate the comparison; only active entities feed the current comparison.
   const activeMilestones = (milestones ?? []).filter((milestone) => milestone.document.lifecycle === "active");
+  const activeMilestoneIds = new Set(activeMilestones.map((milestone) => milestone.document.id));
   const activeTasks = (tasks ?? []).filter((task) => task.document.lifecycle === "active");
+  // A task tied to an unknown or archived milestone must still count toward the current
+  // project deadline and its overflow warnings: normalizing the milestone to `undefined` keeps
+  // the task in the rollup instead of letting it fall out of every active-milestone bucket.
   const hierarchy = resolveSchedulingHierarchy({
     project,
     milestones: activeMilestones.map((milestone) => milestone.document),
     tasks: activeTasks.map((task): SchedulingHierarchyTask => ({
       ...task.document,
       parent: typeof task.document.parent === "string" && task.document.parent !== "" ? task.document.parent : undefined,
-      milestone: typeof task.document.milestone === "string" && task.document.milestone !== "" ? task.document.milestone : undefined,
+      milestone: typeof task.document.milestone === "string" && task.document.milestone !== "" && activeMilestoneIds.has(task.document.milestone) ? task.document.milestone : undefined,
     })),
     tracks,
   });
@@ -57,7 +61,7 @@ export function ProjectScheduleSummary({ project, locale, milestones, tasks, sch
   if (readModel.overflowWarnings.length === 0 && !hasDlRows) return null;
   const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
   const openGantt = () => onNavigate("gantt", { projectId });
-  const varianceLabel = (days: number): string => days === 0 ? t("snapshot.onTime") : days > 0 ? t("snapshot.varianceAhead", { count: days }) : t("snapshot.varianceBehind", { count: Math.abs(days) });
+  const varianceLabel = (days: number): string => formatVarianceDays(locale, days);
   return (
     <section className="card project-schedule-summary">
       <div className="project-schedule-summary-header">

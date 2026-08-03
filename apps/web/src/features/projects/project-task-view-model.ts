@@ -174,6 +174,17 @@ export function orderActiveMilestones({ project, milestones, text, locale }: Ord
 export const isOutsideActiveMilestone = (activeMilestoneIds: ReadonlySet<string>, milestoneId: string): boolean =>
   milestoneId === "" || !activeMilestoneIds.has(milestoneId);
 
+/**
+ * Resolve a task's milestone for the CURRENT plan. A milestone that is empty,
+ * unknown, or archived (anything outside the active-milestone set) collapses to
+ * `undefined` so the task rolls into the project instead of being dropped or
+ * pinned to a stale stage. Every surface that computes the current scheduling
+ * hierarchy must normalize through this helper so the aggregated deadline,
+ * overflow warnings, and plan rollups cannot drift apart.
+ */
+export const normalizeActiveMilestone = (activeMilestoneIds: ReadonlySet<string>, milestoneId: string): string | undefined =>
+  milestoneId !== "" && activeMilestoneIds.has(milestoneId) ? milestoneId : undefined;
+
 interface NodeBuildContext {
   readonly text: TaskTextReader;
   readonly effortOf: TaskEffortReader;

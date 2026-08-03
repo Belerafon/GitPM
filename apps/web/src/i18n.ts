@@ -82,3 +82,25 @@ export function formatDurationHours(locale: Locale, hours: number): string {
 export function pluralCategory(locale: Locale, value: number): Intl.LDMLPluralRule {
   return new Intl.PluralRules(localeDefinition(locale).languageTag).select(value);
 }
+
+/**
+ * Day unit declined for the locale and count, read from the `snapshot.dayUnit.*` plural keys.
+ * Russian declines through день/дня/дней; English collapses to day/days. Used by the schedule
+ * variance label so Russian never shows the abbreviated "+20 дн." form.
+ */
+export function dayUnit(locale: Locale, count: number): string {
+  const messages = localeDefinition(locale).messages;
+  const key = `snapshot.dayUnit.${pluralCategory(locale, count)}` as MessageKey;
+  return messages[key] ?? "days";
+}
+
+/**
+ * Render a finish-variance in days as a locale-correct signed string ("+1 день", "+2 дня",
+ * "+5 дней", "-3 дня", "+20 days"). Zero collapses to the localized "on schedule" message.
+ * The sign is mathematical and locale-neutral; only the day unit is localized and declined.
+ */
+export function formatVarianceDays(locale: Locale, days: number): string {
+  if (days === 0) return message(locale, "snapshot.onTime");
+  const sign = days > 0 ? "+" : "-";
+  return `${sign}${Math.abs(days)} ${dayUnit(locale, Math.abs(days))}`;
+}

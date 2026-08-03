@@ -328,18 +328,21 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   const statusTitle = (slug: string) => statuses.find((item) => item.slug === slug)?.title ?? slug;
   const dateLabel = (value: string) => /^\d{4}-\d{2}-\d{2}$/u.test(value) ? formatDateOnly(locale, value) : "—";
   const selectedStage = workspace?.milestones.find((item) => item.document.id === selectedStageId);
+  const activeStageIds = new Set(activeStages.map((stage) => stage.document.id));
+  // Tasks tied to an unknown or archived milestone are normalized to `undefined` so they roll
+  // into the project deadline and overflow checks instead of disappearing from every active
+  // stage bucket.
   const schedulingHierarchy = resolveSchedulingHierarchy({
     project: workspace?.project.document,
     milestones: activeStages.map((stage) => stage.document),
     tasks: activeTasks.map((task): SchedulingHierarchyTask => ({
       ...task.document,
       parent: typeof task.document.parent === "string" && task.document.parent !== "" ? task.document.parent : undefined,
-      milestone: typeof task.document.milestone === "string" && task.document.milestone !== "" ? task.document.milestone : undefined,
+      milestone: typeof task.document.milestone === "string" && task.document.milestone !== "" && activeStageIds.has(task.document.milestone) ? task.document.milestone : undefined,
     })),
     tracks: primaryTrack === "" ? [] : [primaryTrack],
   });
   const today = localCalendarDate();
-  const activeStageIds = new Set(activeStages.map((stage) => stage.document.id));
   const outsideStages = activeTasks.filter((task) => isOutsideActiveMilestone(activeStageIds, text(task.document, "milestone")));
   const summaryScopeTasks = milestoneFilter === ""
     ? activeTasks

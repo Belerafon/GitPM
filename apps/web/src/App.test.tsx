@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App.js";
 import type { ExportDownload, GitPmApi } from "./api.js";
 import { POLL_INTERVAL_MS } from "./draft-context.js";
-import { assertLocalePacks, formatDateOnly, formatDurationHours, formatNumber, localeRegistry, LOCALE_STORAGE_KEY, message, pluralCategory, registerLocale, selectLocale } from "./i18n.js";
+import { assertLocalePacks, formatDateOnly, formatDurationHours, formatNumber, formatVarianceDays, localeRegistry, LOCALE_STORAGE_KEY, message, pluralCategory, registerLocale, selectLocale } from "./i18n.js";
 import type { ChangesList, CommitFileDiff, CommitHistoryDetail, CommitResult, ConfigurationDocument, ConfigurationResult, DraftSnapshot, DraftStatus, EntityResult, MergeRequestStatus, PublicSession, PushResult, RepositoryDocument, RepositoryResult, RevertDraftResult, SemanticDiff, WriterMode, WorktreeDirectory, WorktreeFile } from "./types.js";
 
 const session: PublicSession = {
@@ -136,6 +136,25 @@ describe("localization runtime", () => {
     expect(formatNumber("ru", 1234.5)).toMatch(/1[\s\u00a0\u202f]234,5/u);
     expect(formatDurationHours("ru", 2)).toMatch(/2 часа/iu);
     expect([1, 2, 5].map((value) => pluralCategory("ru", value))).toEqual(["one", "few", "many"]);
+  });
+
+  it("declines the Russian variance days fully and never uses 'дн.' or latin 'd'", () => {
+    // Russian plural declension: один день, два дня, пять дней; sign is locale-neutral.
+    expect(formatVarianceDays("ru", 1)).toBe("+1 день");
+    expect(formatVarianceDays("ru", 2)).toBe("+2 дня");
+    expect(formatVarianceDays("ru", 5)).toBe("+5 дней");
+    expect(formatVarianceDays("ru", 20)).toBe("+20 дней");
+    expect(formatVarianceDays("ru", 21)).toBe("+21 день");
+    expect(formatVarianceDays("ru", -3)).toBe("-3 дня");
+    expect(formatVarianceDays("ru", 0)).toBe("Сроки совпадают");
+    for (const value of [1, 2, 5, 20, -3]) expect(formatVarianceDays("ru", value)).not.toMatch(/ дн\.| d/u);
+  });
+
+  it("formats the English variance days as '+N day(s)'", () => {
+    expect(formatVarianceDays("en", 1)).toBe("+1 day");
+    expect(formatVarianceDays("en", 2)).toBe("+2 days");
+    expect(formatVarianceDays("en", -3)).toBe("-3 days");
+    expect(formatVarianceDays("en", 0)).toBe("On schedule");
   });
 
   it("enables a synthetic locale by registering pack metadata only", async () => {

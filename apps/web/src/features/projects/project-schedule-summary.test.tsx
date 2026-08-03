@@ -145,11 +145,12 @@ describe("ProjectScheduleSummary", () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it("localizes the variance for Russian without leaking the English day abbreviation", () => {
+  it("localizes the variance for Russian with full day declension and no abbreviated 'дн.' or 'd'", () => {
     render(<ProjectScheduleSummary project={project({ plan: { finish: "2026-03-20" }, target: { finish: "2026-02-28" } }, { primary_track: "plan", comparison_track: "target" })} projectId={projectId} onNavigate={vi.fn()} locale="ru" scheduling={scheduling} />);
     const variance = screen.getByText("Отклонение").parentElement!;
-    expect(variance.textContent).toMatch(/\+20 дн\./u);
-    expect(variance.textContent).not.toMatch(/ d/u);
+    // 20 uses the Russian 'many' plural form -> "дней", never the abbreviated "дн." or latin "d".
+    expect(variance.textContent).toMatch(/\+20 дней/u);
+    expect(variance.textContent).not.toMatch(/ дн\.| d/u);
   });
 
   it("collapses an actual-derived comparison track to nothing instead of leaking the slug", () => {
@@ -185,6 +186,29 @@ describe("ProjectScheduleSummary", () => {
     const { container } = render(<ProjectScheduleSummary project={project({ plan: { start: "2026-09-05", finish: "2026-09-10" } })} projectId={projectId} onNavigate={vi.fn()} locale="en" milestones={[milestone]} scheduling={primaryOnlyScheduling} tasks={[parent, child, archivedTask]} />);
     // The archived task's Dec 31 finish and any overflow it would cause must not appear.
     expect(container.textContent ?? "").not.toContain("Dec 31, 2026");
+  });
+
+  it("counts an active task tied to an UNKNOWN milestone toward the project finish and overflow", () => {
+    // The project declares a Dec 1 finish; an active task (milestone "M-unknown", which is not
+    // a known active milestone) reaches Dec 10. Normalizing the milestone to undefined keeps the
+    // task inside the project rollup so the aggregated deadline and the overflow warning surface
+    // Dec 10 instead of silently dropping the task.
+    const orphanTask = { document: { schema: "gitpm/task@2", id: "T-unknown-stage", project: projectId, milestone: "M-unknown", title: "Orphan by stage", type: "task", status: "in-progress", lifecycle: "active", schedules: { plan: { finish: "2026-12-10" } } }, path: "orphan.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    render(<ProjectScheduleSummary project={project({ plan: { finish: "2026-12-01" } })} projectId={projectId} onNavigate={vi.fn()} locale="en" scheduling={primaryOnlyScheduling} tasks={[orphanTask]} />);
+    expect(document.body.textContent ?? "").toContain("Dec 10, 2026");
+    expect(document.body.textContent ?? "").toContain("Dec 1, 2026");
+  });
+
+  it("counts an active task tied to an ARCHIVED milestone toward the project finish and overflow", () => {
+    // The milestone "M-archived" exists but is archived, so the active task is effectively orphan
+    // and must roll into the project deadline (Dec 10), not vanish with its archived stage.
+    const archivedMilestone = { document: { schema: "gitpm/milestone@2", id: "M-archived", project: projectId, name: "Closed stage", lifecycle: "archived" }, path: "m.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const taskInArchivedStage = { document: { schema: "gitpm/task@2", id: "T-in-archived", project: projectId, milestone: "M-archived", title: "Active in archived stage", type: "task", status: "in-progress", lifecycle: "active", schedules: { plan: { finish: "2026-12-10" } } }, path: "t.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    render(<ProjectScheduleSummary project={project({ plan: { finish: "2026-12-01" } })} projectId={projectId} onNavigate={vi.fn()} locale="en" milestones={[archivedMilestone]} scheduling={primaryOnlyScheduling} tasks={[taskInArchivedStage]} />);
+    expect(document.body.textContent ?? "").toContain("Dec 10, 2026");
+    expect(document.body.textContent ?? "").toContain("Dec 1, 2026");
+    // The archived milestone's own name must not appear as a current stage.
+    expect(document.body.textContent ?? "").not.toContain("Closed stage");
   });
 });
 

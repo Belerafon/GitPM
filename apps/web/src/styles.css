@@ -290,6 +290,7 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .actual-report-more-filters-grid label { display: grid; gap: .2rem; color: #68706b; font-size: .7rem; }
 .actual-report-summary, .plan-actual-heading dl { display: flex; flex-wrap: wrap; gap: .75rem 1.25rem; margin: 0; }
 .plan-actual-report { display: grid; gap: .65rem; border: 1px solid #d9ddd6; border-radius: 9px; padding: .75rem; }
+.plan-actual-disclaimer { margin: .15rem 0 .1rem; padding-top: .4rem; border-top: 1px dashed #e3e6e1; color: #68706b; font-size: .72rem; line-height: 1.4; max-width: 54ch; }
 .plan-actual-heading dl div { min-width: 74px; }
 .actual-report-table-wrap { overflow-x: auto; }
 .actual-report-table-wrap table, .actual-breakdown table { width: 100%; border-collapse: collapse; font-size: .76rem; }

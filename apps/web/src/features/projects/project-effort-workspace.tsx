@@ -7,6 +7,7 @@ import { ScheduleResolver, scheduleTracksConfig } from "../../schedules.js";
 import type { ConfigurationResult, DraftStatus, EntityDocument, EntityResult, ProjectWorkspaceResult } from "../../types.js";
 import type { WorkspaceNavigate } from "../../workspace-navigation.js";
 import { ProjectActualReport, type ActualReportCategory } from "./project-actual-report.js";
+import { normalizeActiveMilestone } from "./project-task-view-model.js";
 
 interface WorkCategoryEntry { readonly slug: string; readonly title: string }
 
@@ -50,16 +51,26 @@ export function ProjectEffortWorkspace({ api, draft, locale, projectId, onNaviga
   const projectDoc = workspace?.project.document;
   const workloadTrack = projectDoc === undefined ? "" : scheduling.workloadTrack(projectDoc.planning);
   const tracks = useMemo(() => [...new Set([workloadTrack].filter((track): track is string => track !== undefined && track !== ""))], [workloadTrack]);
-  const hierarchy = useMemo(() => resolveSchedulingHierarchy({
-    project: projectDoc,
-    milestones: (workspace?.milestones ?? []).map((milestone) => milestone.document),
-    tasks: (workspace?.tasks ?? []).map((task): SchedulingHierarchyTask => ({
-      ...task.document,
-      parent: typeof task.document.parent === "string" && task.document.parent !== "" ? task.document.parent : undefined,
-      milestone: typeof task.document.milestone === "string" && task.document.milestone !== "" ? task.document.milestone : undefined,
-    })),
-    tracks,
-  }), [projectDoc, tracks, workspace?.milestones, workspace?.tasks]);
+  // The current plan is built from ACTIVE tasks and ACTIVE milestones only: an archived task
+  // must never inflate the plan, the schedule, or a parent branch. Archived tasks still reach
+  // the actual report (as the `tasks` prop) so that those with historical time records can be
+  // shown; their estimate simply no longer contributes because they are absent from the
+  // read models. A task whose milestone points at an unknown or archived milestone is normalized
+  // to `undefined` so it rolls into the project deadline instead of being dropped.
+  const hierarchy = useMemo(() => {
+    const allTasks = workspace?.tasks ?? [];
+    const activeMilestoneIds = new Set((workspace?.milestones ?? []).filter((milestone) => milestone.document.lifecycle === "active").map((milestone) => milestone.document.id));
+    return resolveSchedulingHierarchy({
+      project: projectDoc,
+      milestones: (workspace?.milestones ?? []).filter((milestone) => milestone.document.lifecycle === "active").map((milestone) => milestone.document),
+      tasks: allTasks.filter((task) => task.document.lifecycle === "active").map((task): SchedulingHierarchyTask => ({
+        ...task.document,
+        parent: typeof task.document.parent === "string" && task.document.parent !== "" ? task.document.parent : undefined,
+        milestone: normalizeActiveMilestone(activeMilestoneIds, typeof task.document.milestone === "string" ? task.document.milestone : ""),
+      })),
+      tracks,
+    });
+  }, [projectDoc, tracks, workspace?.milestones, workspace?.tasks]);
   const categories = useMemo<readonly ActualReportCategory[]>(() => Array.isArray(categoriesConfig?.document.categories)
     ? (categoriesConfig!.document.categories as readonly unknown[]).filter((item): item is WorkCategoryEntry => typeof item === "object" && item !== null && typeof (item as WorkCategoryEntry).slug === "string" && typeof (item as WorkCategoryEntry).title === "string").map((item) => ({ slug: item.slug, title: item.title }))
     : [], [categoriesConfig]);
