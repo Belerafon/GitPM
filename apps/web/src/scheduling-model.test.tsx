@@ -34,26 +34,26 @@ afterEach(() => { cleanup(); localStorage.clear(); });
 describe("unified scheduling model", () => {
   it("project snapshot resolves the primary finish through the configured working track", () => {
     const project = result({ schema: "gitpm/project@2", id: "P-26-111111", name: "Snapshot project", status: "in-progress", lifecycle: "active", planning, schedules: { working: { finish: "2026-09-30" } } });
-    render(<ProjectScheduleSummary project={project.document} locale="en" scheduling={new ScheduleResolver(scheduleTracksConfig(tracksConfig()))} comparisonTrack="working" />);
-    const label = screen.getByText("Primary finish");
-    expect(label.parentElement?.textContent).toMatch(/Sep|30/);
+    render(<ProjectScheduleSummary project={project.document} projectId="P-26-111111" onNavigate={vi.fn()} locale="en" scheduling={new ScheduleResolver(scheduleTracksConfig(tracksConfig()))} comparisonTrack="working" />);
+    const label = screen.getByText("Primary schedule");
+    expect(label.closest("div")?.textContent).toMatch(/Sep|30/);
   });
 
   it("project snapshot rolls up the primary finish when the project has no declared schedule", () => {
     const projectId = "P-26-111111";
     const project = result({ schema: "gitpm/project@2", id: projectId, name: "Rolled snapshot", status: "in-progress", lifecycle: "active", planning });
     const task = result({ schema: "gitpm/task@2", id: "T-26-111111", project: projectId, title: "Child task", type: "task", status: "backlog", lifecycle: "active", schedules: { working: { start: "2026-09-01", finish: "2026-10-02" } } });
-    render(<ProjectScheduleSummary project={project.document} locale="en" scheduling={new ScheduleResolver(scheduleTracksConfig(tracksConfig()))} tasks={[task]} comparisonTrack="working" />);
-    const label = screen.getByText("Primary finish");
-    expect(label.parentElement?.textContent).toMatch(/Oct|2/);
+    render(<ProjectScheduleSummary project={project.document} projectId={projectId} onNavigate={vi.fn()} locale="en" scheduling={new ScheduleResolver(scheduleTracksConfig(tracksConfig()))} tasks={[task]} comparisonTrack="working" />);
+    const label = screen.getByText("Primary schedule");
+    expect(label.closest("div")?.textContent).toMatch(/Oct|2/);
   });
 
   it("project snapshot prefers the declared project window over a later rolled-up child window", () => {
     const projectId = "P-26-DECLARED";
     const project = result({ schema: "gitpm/project@2", id: projectId, name: "Declared wins", status: "in-progress", lifecycle: "active", planning, schedules: { working: { start: "2026-09-01", finish: "2026-09-30" } } });
     const task = result({ schema: "gitpm/task@2", id: "T-26-DECLARED", project: projectId, title: "Later child", type: "task", status: "backlog", lifecycle: "active", schedules: { working: { start: "2026-09-01", finish: "2026-11-15" } } });
-    render(<ProjectScheduleSummary project={project.document} locale="en" scheduling={new ScheduleResolver(scheduleTracksConfig(tracksConfig()))} tasks={[task]} comparisonTrack="working" />);
-    const primary = screen.getByText("Primary finish").parentElement!;
+    render(<ProjectScheduleSummary project={project.document} projectId={projectId} onNavigate={vi.fn()} locale="en" scheduling={new ScheduleResolver(scheduleTracksConfig(tracksConfig()))} tasks={[task]} comparisonTrack="working" />);
+    const primary = screen.getByText("Primary schedule").closest("div")!;
     expect(primary.textContent).toMatch(/Sep|30/);
     expect(primary.textContent).not.toMatch(/Nov/u);
   });

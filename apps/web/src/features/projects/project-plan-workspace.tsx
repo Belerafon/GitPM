@@ -567,7 +567,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
             </dl>
           </header>
 
-          <ProjectScheduleSummary project={workspace.project.document} locale={locale} milestones={workspace.milestones} tasks={workspace.tasks} scheduling={scheduling} />
+          <ProjectScheduleSummary project={workspace.project.document} locale={locale} milestones={workspace.milestones} tasks={workspace.tasks} scheduling={scheduling} projectId={projectId} onNavigate={onNavigate} />
 
           <dl className="project-plan-summary">
             <div><dt>{t("projectPlan.progress")}</dt><dd>{progress}% <small>{t("stages.progress", { completed, count: activeTasks.length })}</small></dd></div>
@@ -646,7 +646,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
           <button aria-label={t("core.closeEditor")} className="inspector-close" onClick={closeInspector} title={t("core.closeEditor")} type="button">×</button>
           <span className="eyebrow">{t("core.milestone")}</span><h2>{text(selectedStage.document, "name")}</h2><code className="project-plan-inspector-id">{selectedStage.document.id}</code><p>{text(selectedStage.document, "description_markdown") || t("core.noDescription")}</p>
           <dl className="project-plan-inspector-stats"><div><dt>{t("stages.progressLabel")}</dt><dd>{activeTasks.filter((task) => task.document.milestone === selectedStage.document.id && isCompletedStatus(statuses, text(task.document, "status"))).length}/{activeTasks.filter((task) => task.document.milestone === selectedStage.document.id).length}</dd></div><div><dt>{t("stages.estimate")}</dt><dd>{selectedStageEstimate === undefined ? "—" : formatDurationHours(locale, selectedStageEstimate)}</dd></div><div><dt>{t("core.due")}</dt><dd>{dateLabel(selectedStageDue ?? "")}</dd></div></dl>
-          <SchedulingOverflowWarnings locale={locale} trackTitle={(track) => scheduling.trackTitle(track)} warnings={selectedStageWarnings} />
+          <SchedulingOverflowWarnings locale={locale} trackTitle={(track) => scheduling.trackTitle(track)} warnings={selectedStageWarnings} onOpenGantt={() => onNavigate("gantt", { projectId })} />
           <div className="inspector-actions"><button disabled={readOnly} onClick={() => openStageEditor(selectedStage)}>{t("core.edit")}</button>{selectedStage.document.lifecycle === "archived" ? <button disabled={readOnly} onClick={() => { void mutate(async () => await api.restoreEntity(draft.draft_id, "milestones", selectedStage, workspace.draft_fingerprint)); }}>{t("core.restore")}</button> : <button disabled={readOnly} onClick={() => archiveStage(selectedStage)}>{t("core.archive")}</button>}<button className="primary" disabled={readOnly || selectedStage.document.lifecycle === "archived"} onClick={() => setEditor({ kind: "task", stageId: selectedStage.document.id })}>+ {t("core.createTaskAction")}</button></div>
         </aside>}
 
