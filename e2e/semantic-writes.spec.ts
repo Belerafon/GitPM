@@ -157,14 +157,17 @@ test.describe("semantic scheduling writes", () => {
     await page.goto(`/projects/${FIXTURE_PROJECT_ID}/effort`);
     await expect(page.getByRole("heading", { name: "Actual hours report", exact: true })).toBeVisible();
     const report = page.locator(".actual-hours-report");
+    // Breakdowns live in a collapsible "Actual detail" block; expand it before reading rows.
+    await report.locator(".actual-breakdowns").locator("summary").click();
     const byDate = report.locator(".actual-breakdown").filter({ has: page.getByRole("heading", { name: "By date", exact: true }) });
     await expect(byDate.getByRole("row").filter({ hasText: "Sep 10, 2026" })).toContainText("3.75");
     await expect(byDate.getByRole("row").filter({ hasText: "Dec 20, 2026" })).toContainText("2");
 
     await report.getByRole("combobox", { name: "Task", exact: true }).selectOption(taskId);
     await report.getByRole("combobox", { name: "Person", exact: true }).selectOption("U-26-15QJP8");
+    // Category, cutoff and scope live in the collapsible "Additional filters" block.
+    await report.locator(".actual-report-more-filters").locator("summary").click();
     await report.getByRole("combobox", { name: "Category", exact: true }).selectOption("regular");
-    await report.getByRole("combobox", { name: "State", exact: true }).selectOption("active");
     await report.getByLabel("Performed from", { exact: true }).fill("2026-09-10");
     await report.getByLabel("Performed to", { exact: true }).fill("2026-12-20");
     await report.getByLabel("Hours after date", { exact: true }).fill("2026-09-10");
