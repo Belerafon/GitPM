@@ -29,10 +29,10 @@ export function ProjectScheduleSummary({ project, locale, milestones, tasks, sch
   const openGantt = () => onNavigate("gantt", { projectId });
   const hasDlRows = (comparison !== undefined && comparisonFinish !== undefined) || (comparison !== undefined && primaryFinish !== undefined) || variance !== undefined;
   return (
-    <section className="card project-snapshot">
-      <div className="project-snapshot-header">
+    <section className="card project-schedule-summary">
+      <div className="project-schedule-summary-header">
         <h3>{comparison !== undefined ? t("snapshot.comparisonHeading") : t("snapshot.scheduleHeading")}</h3>
-        <button className="project-snapshot-gantt" onClick={openGantt} type="button">{t("snapshot.openGantt")}</button>
+        <button className="project-schedule-summary-gantt" onClick={openGantt} type="button">{t("snapshot.openGantt")}</button>
       </div>
       {hasDlRows && <dl>
         {comparison !== undefined && primaryFinish !== undefined && <div><dt><span className="schedule-track-title">{scheduling.trackTitle(primaryTrack)}</span><span className="schedule-track-role">{t("snapshot.primaryGraph")}</span></dt><dd>{formatDateOnly(locale, primaryFinish)}</dd></div>}
