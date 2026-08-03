@@ -38,7 +38,7 @@ export function ProjectEffortWorkspace({ api, draft, locale, projectId, onNaviga
       return { nextWorkspace, nextPeople, categories, tracks };
     }, ({ nextWorkspace, nextPeople, categories, tracks }) => {
       setWorkspace(nextWorkspace);
-      setPeople(nextPeople.filter((item) => item.document.lifecycle === "active"));
+      setPeople(nextPeople.filter((item) => item.document.lifecycle === "active" || item.document.lifecycle === "archived"));
       setCategoriesConfig(categories);
       setTracksConfig(tracks);
     });

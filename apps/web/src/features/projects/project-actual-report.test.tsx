@@ -377,4 +377,22 @@ describe("ProjectActualReport", () => {
     await waitFor(() => expect((screen.getByRole("checkbox", { name: /Show cancelled entries/u }) as HTMLInputElement).checked).toBe(false));
     expect(screen.queryByText("Correction history")).toBeNull();
   });
+
+  it("labels archived tasks and archived people with their names instead of technical ids", async () => {
+    const archivedPerson = { document: { schema: "gitpm/person@1", id: "U-ARCH", name: "Ivan Petrov", lifecycle: "archived" } } as EntityResult;
+    const archivedTask = { document: { schema: "gitpm/task@2", id: "T-ARCH", project: "P-26-1", title: "Legacy task", type: "task", status: "done", lifecycle: "archived" } } as EntityResult;
+    const items = [{ document: { schema: "gitpm/time-entry@1" as const, id: "E-1", project: "P-26-1", task: "T-ARCH", person: "U-ARCH", performed_on: "2026-05-01", hours: 5, category: "regular", created_at: "2026-05-01T00:00:00.000Z", state: "active" as const }, path: "1", blob_id: "a", draft_fingerprint: "f" }];
+    const listProjectTimeEntries = vi.fn(async () => ({ total: items.length, offset: 0, limit: 200, items }));
+    const api = { listProjectTimeEntries, listTimeEntries: vi.fn() } as unknown as GitPmApi;
+    const projectDoc = project({}, { primary_track: "working", workload_track: "estimate" });
+    const { readModels, workloadTrack } = buildReportProps(projectDoc, [], [archivedTask], multiTrackScheduling);
+    render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} people={[archivedPerson]} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[archivedTask]} workloadTrack={workloadTrack} />);
+
+    await waitFor(() => expect(document.querySelector('tr[data-task-id="T-ARCH"]')).not.toBeNull());
+    const archivedRow = document.querySelector('tr[data-task-id="T-ARCH"]') as HTMLElement;
+    expect(archivedRow.textContent).toContain("Archived task");
+    expect(archivedRow.textContent).toContain("T-ARCH");
+    expect(screen.getAllByText("Ivan Petrov (archived)").length).toBeGreaterThan(0);
+    expect(screen.queryByText("U-ARCH")).toBeNull();
+  });
 });

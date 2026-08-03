@@ -886,6 +886,35 @@ describe("ProjectPlanWorkspace", () => {
       .toEqual(["Apple task", "Banana task", "Cherry task"]);
   });
 
+  it("groups every task without an active milestone into one system group whose count matches the list", async () => {
+    const archivedStage = result({ schema: "gitpm/milestone@2", id: "M-26-ARCH", project: project.document.id, name: "Archived stage", lifecycle: "archived" });
+    const noField = result({ schema: "gitpm/task@2", id: "T-26-NOFIELD", project: project.document.id, title: "No milestone field", type: "task", status: "backlog", lifecycle: "active" });
+    const empty = result({ schema: "gitpm/task@2", id: "T-26-EMPTY", project: project.document.id, milestone: "", title: "Empty milestone", type: "task", status: "backlog", lifecycle: "active" });
+    const unknown = result({ schema: "gitpm/task@2", id: "T-26-UNKNOWN", project: project.document.id, milestone: "M-26-MISSING", title: "Unknown milestone", type: "task", status: "backlog", lifecycle: "active" });
+    const archivedMilestoneTask = result({ schema: "gitpm/task@2", id: "T-26-ARCHTASK", project: project.document.id, milestone: archivedStage.document.id, title: "Archived milestone task", type: "task", status: "backlog", lifecycle: "active" });
+    const activeMilestoneTask = result({ schema: "gitpm/task@2", id: "T-26-ACTIVE", project: project.document.id, milestone: stage.document.id, title: "Active milestone task", type: "task", status: "backlog", lifecycle: "active" });
+    const client = api([noField, empty, unknown, archivedMilestoneTask, activeMilestoneTask], [stage, archivedStage, laterStage]);
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} />);
+
+    await screen.findByRole("heading", { name: "Alpha" });
+    expect(screen.getByRole("button", { name: /Outside active milestones: 4/u })).toBeTruthy();
+    const orphanSection = document.querySelector(".project-plan-unassigned") as HTMLElement;
+    expect(orphanSection).not.toBeNull();
+    const orphanTitles = Array.from(orphanSection.querySelectorAll(".project-plan-task-row strong"), (element) => element?.textContent ?? "");
+    expect(orphanTitles).toEqual(["Archived milestone task", "Empty milestone", "No milestone field", "Unknown milestone"]);
+    expect(orphanTitles).not.toContain("Active milestone task");
+    expect(screen.getByText("Active milestone task").closest(".project-plan-stage")?.classList.contains("project-plan-unassigned")).toBe(false);
+  });
+
+  it("does not list archived tasks in the current plan", async () => {
+    const ghost = result({ schema: "gitpm/task@2", id: "T-26-GHOST", project: project.document.id, milestone: stage.document.id, title: "Ghost task", type: "task", status: "backlog", lifecycle: "archived" });
+    const client = api([ghost, linked], [stage, laterStage]);
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} />);
+    await screen.findByRole("heading", { name: "Alpha" });
+    expect(screen.queryByText("Ghost task")).toBeNull();
+    expect(screen.getByText("Linked task")).toBeTruthy();
+  });
+
   it("selecting a specific status resets the summary filter to all", async () => {
     const client = api(summaryTasksFixture(), [summaryStage], summaryProject);
     useSummaryStatusConfig(client);

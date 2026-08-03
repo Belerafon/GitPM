@@ -140,6 +140,7 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
   const reader = useMemo(() => scheduleTextReader(workloadTrack), [workloadTrack]);
 
   const relations = useMemo(() => buildTaskRelations(tasks), [tasks]);
+  const taskById = useMemo(() => new Map(tasks.map((task) => [task.document.id, task] as const)), [tasks]);
   const scope = useMemo<ReadonlySet<string>>(() => resolveEffortScope(relations, { taskId: filters.task, milestoneId: filters.milestone, mode: scopeMode }), [relations, filters.task, filters.milestone, scopeMode]);
   const scopeRootIds = useMemo(() => scopeRootIdsOf(scope, relations), [scope, relations]);
   const scopeRecords = useMemo(() => selectScopedRecords(records, scope), [records, scope]);
@@ -164,7 +165,12 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
 
   const filteredActualOnly = filters.person !== "" || filters.category !== "" || filters.performed_from !== "" || filters.performed_to !== "";
 
-  const personName = (id: string) => text(people.find((person) => person.document.id === id), "name") || id;
+  const personName = (id: string) => {
+    const person = people.find((item) => item.document.id === id);
+    if (person === undefined) return t("actualReport.unknownPerson", { id });
+    const name = text(person, "name") || id;
+    return person.document.lifecycle === "archived" ? t("actualReport.archivedEntity", { name }) : name;
+  };
   const categoryName = (slug: string) => categories.find((category) => category.slug === slug)?.title ?? slug;
   const milestoneName = (id: string) => text(milestones.find((milestone) => milestone.document.id === id), "name") || t("actualReport.noMilestone");
   const taskName = (id: string) => text(tasks.find((task) => task.document.id === id), "title") || id;
@@ -202,6 +208,7 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
     readonly planSource: "declared" | "rolled" | "missing";
     readonly actualBranch: number;
     readonly actualOwn: number;
+    readonly archived: boolean;
   }
   const planActualRows = useMemo<readonly PlanActualRow[]>(() => {
     const taskOnly = filters.task !== "" && scopeMode === "taskOnly";
@@ -223,10 +230,11 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
         planSource: plan.source,
         actualBranch,
         actualOwn,
+        archived: taskById.get(row.node.id)?.document.lifecycle === "archived",
       });
     }
     return rows;
-  }, [flattened, scope, filters.task, scopeMode, readModels, workloadTrack, actualByTask, relations]);
+  }, [flattened, scope, filters.task, scopeMode, readModels, workloadTrack, actualByTask, relations, taskById, taskName]);
 
   const planSources: string[] = [];
   if (wholeProject && projectBudget !== undefined) {
@@ -313,7 +321,7 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
           </dl>
         </div>
         {filteredActualOnly && <p className="scope-hint">{t("actualReport.actualOnlyFilters")}</p>}
-        {planActualRows.length === 0 ? <p className="empty-copy">{t("actualReport.empty")}</p> : <div className="actual-report-table-wrap"><table><thead><tr><th scope="col">{t("actualReport.task")}</th><th scope="col">{t("actualReport.planned")}</th><th scope="col">{t("actualReport.actual")}</th><th scope="col">{t("actualReport.ownHours")}</th><th scope="col">{t("actualReport.variance")}</th></tr></thead><tbody>{planActualGroups.map((group, groupIndex) => <Fragment key={groupIndex}>{group.rows.some((row) => row.stage !== undefined) && <tr className="actual-report-stage-row"><th scope="rowgroup" colSpan={5}>{group.stage === undefined ? t("actualReport.noMilestone") : milestoneName(group.stage.document.id)}</th></tr>}{group.rows.map((row) => <tr key={row.id} className={`actual-report-task-row${row.planSource === "rolled" ? " is-rolled" : ""}`} data-depth={row.depth} data-task-id={row.id} data-plan-source={row.planSource}><th className="actual-report-task-cell" scope="row" style={{ paddingLeft: `${0.5 + row.depth * 1.2}rem` }}><button type="button" className="actual-report-task-link" aria-label={`${row.title} ${row.id}`} onClick={() => onNavigate("tasks", { projectId, taskId: row.id })}><span>{row.title}</span><code>{row.id}</code></button></th><td>{row.plan === undefined ? "—" : formatDurationHours(locale, row.plan)}{planCellSource(row) !== "" && <span className="plan-cell-source">{planCellSource(row)}</span>}</td><td>{formatDurationHours(locale, row.actualBranch)}</td><td>{formatDurationHours(locale, row.actualOwn)}</td><td>{row.plan === undefined ? "—" : formatDurationHours(locale, row.actualBranch - row.plan)}</td></tr>)}</Fragment>)}</tbody></table></div>}
+        {planActualRows.length === 0 ? <p className="empty-copy">{t("actualReport.empty")}</p> : <div className="actual-report-table-wrap"><table><thead><tr><th scope="col">{t("actualReport.task")}</th><th scope="col">{t("actualReport.planned")}</th><th scope="col">{t("actualReport.actual")}</th><th scope="col">{t("actualReport.ownHours")}</th><th scope="col">{t("actualReport.variance")}</th></tr></thead><tbody>{planActualGroups.map((group, groupIndex) => <Fragment key={groupIndex}>{group.rows.some((row) => row.stage !== undefined) && <tr className="actual-report-stage-row"><th scope="rowgroup" colSpan={5}>{group.stage === undefined ? t("actualReport.noMilestone") : milestoneName(group.stage.document.id)}</th></tr>}{group.rows.map((row) => <tr key={row.id} className={`actual-report-task-row${row.planSource === "rolled" ? " is-rolled" : ""}`} data-depth={row.depth} data-task-id={row.id} data-plan-source={row.planSource}><th className="actual-report-task-cell" scope="row" style={{ paddingLeft: `${0.5 + row.depth * 1.2}rem` }}><button type="button" className="actual-report-task-link" aria-label={`${row.title} ${row.id}`} onClick={() => onNavigate("tasks", { projectId, taskId: row.id })}><span>{row.title}</span>{row.archived && <span className="archived-reference"> · {t("actualReport.archivedTask")}</span>}<code>{row.id}</code></button></th><td>{row.plan === undefined ? "—" : formatDurationHours(locale, row.plan)}{planCellSource(row) !== "" && <span className="plan-cell-source">{planCellSource(row)}</span>}</td><td>{formatDurationHours(locale, row.actualBranch)}</td><td>{formatDurationHours(locale, row.actualOwn)}</td><td>{row.plan === undefined ? "—" : formatDurationHours(locale, row.actualBranch - row.plan)}</td></tr>)}</Fragment>)}</tbody></table></div>}
       </section>
       <details className="actual-breakdowns">
         <summary>{t("actualReport.breakdownsHeading")}</summary>
