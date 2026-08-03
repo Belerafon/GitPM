@@ -309,4 +309,48 @@ describe("core UI", () => {
     expect(within(row).queryByRole("combobox")).toBeNull();
     expect(within(row).getByText("Done")).toBeTruthy();
   });
+
+  it("filters the project directory by group, owner, status, risk and lifecycle from the toolbar", async () => {
+    const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
+    const owner = await entityApi.createEntity("DRF-CORE", "people", "", { schema: "gitpm/person@1", id: "U-26-000001", name: "Owner One", lifecycle: "active" });
+    await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-000001", name: "Alpha", status: "backlog", lifecycle: "active", group: "Delivery", owner: owner.document.id, schedules: { plan: { finish: "2020-01-01" } } });
+    await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-000002", name: "Beta", status: "done", lifecycle: "active", group: "Research" });
+    await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-000003", name: "Gamma", status: "backlog", lifecycle: "active", group: "Delivery", schedules: { plan: { finish: "2099-12-31" } } });
+    await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-000004", name: "Delta", status: "backlog", lifecycle: "archived", group: "Delivery" });
+
+    const onNavigate = vi.fn();
+    const { container } = render(<CoreWorkspace api={api} draft={draft} locale="en" surface="projects" onNavigate={onNavigate} onChanged={vi.fn(async () => undefined)} />);
+    await screen.findByRole("heading", { name: "Delivery" });
+    const toolbar = container.querySelector<HTMLElement>(".project-filter-controls")!;
+    const rows = () => Array.from(container.querySelectorAll(".project-register-row strong")).map((node) => node.textContent);
+
+    expect(container.querySelector(".project-directory > .card-heading .lifecycle-filter")).toBeNull();
+    expect(within(toolbar).getByRole("combobox", { name: "Lifecycle" })).toBeTruthy();
+    expect(rows()).toEqual(["Alpha", "Gamma", "Beta"]);
+
+    fireEvent.change(within(toolbar).getByLabelText("Group"), { target: { value: "Research" } });
+    expect(rows()).toEqual(["Beta"]);
+    fireEvent.change(within(toolbar).getByLabelText("Group"), { target: { value: "__none__" } });
+    expect(rows()).toEqual([]);
+    fireEvent.change(within(toolbar).getByLabelText("Group"), { target: { value: "" } });
+
+    fireEvent.change(within(toolbar).getByLabelText("Project owner"), { target: { value: owner.document.id } });
+    expect(rows()).toEqual(["Alpha"]);
+    fireEvent.change(within(toolbar).getByLabelText("Project owner"), { target: { value: "__none__" } });
+    expect(rows()).toEqual(["Gamma", "Beta"]);
+    fireEvent.change(within(toolbar).getByLabelText("Project owner"), { target: { value: "" } });
+
+    fireEvent.change(within(toolbar).getByLabelText("Status"), { target: { value: "done" } });
+    expect(rows()).toEqual(["Beta"]);
+    fireEvent.change(within(toolbar).getByLabelText("Status"), { target: { value: "" } });
+
+    fireEvent.change(within(toolbar).getByLabelText("Risk"), { target: { value: "overdue" } });
+    expect(rows()).toEqual(["Alpha"]);
+    fireEvent.change(within(toolbar).getByLabelText("Risk"), { target: { value: "unknown" } });
+    expect(rows()).toEqual(["Beta"]);
+    fireEvent.change(within(toolbar).getByLabelText("Risk"), { target: { value: "" } });
+
+    fireEvent.change(within(toolbar).getByLabelText("Lifecycle"), { target: { value: "archived" } });
+    expect(rows()).toEqual(["Delta"]);
+  });
 });
