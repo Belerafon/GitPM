@@ -154,7 +154,7 @@ test.describe("semantic scheduling writes", () => {
     await expect(page.locator(".time-entry-summary").getByText("Total hours", { exact: true }).locator("xpath=..")).toContainText("5.75");
     await expect(page.locator(".task-time-entries").getByText("Last activity", { exact: true }).locator("xpath=..")).toContainText("Dec 20, 2026");
 
-    await page.goto(`/projects/${FIXTURE_PROJECT_ID}`);
+    await page.goto(`/projects/${FIXTURE_PROJECT_ID}/effort`);
     await expect(page.getByRole("heading", { name: "Actual hours report", exact: true })).toBeVisible();
     const report = page.locator(".actual-hours-report");
     const byDate = report.locator(".actual-breakdown").filter({ has: page.getByRole("heading", { name: "By date", exact: true }) });
@@ -169,16 +169,15 @@ test.describe("semantic scheduling writes", () => {
     await report.getByLabel("Performed to", { exact: true }).fill("2026-12-20");
     await report.getByLabel("Hours after date", { exact: true }).fill("2026-09-10");
     const planActual = report.locator(".plan-actual-heading");
-    await expect(planActual.getByText("Planned", { exact: true }).locator("xpath=..")).toContainText("8 hours");
-    await expect(planActual.getByText("Actual", { exact: true }).locator("xpath=..")).toContainText("5.75 hours");
-    await expect(planActual.getByText("Variance", { exact: true }).locator("xpath=..")).toContainText("-2.25 hours");
+    await expect(planActual.getByText("Plan of selected scope", { exact: true }).locator("xpath=..")).toContainText("8 hours");
+    await expect(planActual.getByText("Actual with filters", { exact: true }).locator("xpath=..")).toContainText("5.75 hours");
     await expect(report.getByText("Hours after 2026-09-10", { exact: true }).locator("xpath=..")).toContainText("2 hours");
 
     const external = await request.patch(`/api/drafts/${draftId}/writer-mode`, { data: { writer_mode: "external" } });
     expect(external.status(), await external.text()).toBe(200);
     await page.reload();
     await expect(page.getByRole("heading", { name: "Actual hours report", exact: true })).toBeVisible();
-    await expect(page.getByText("Actual hours", { exact: true }).locator("xpath=..")).toContainText("7.25 hours");
+    await expect(page.locator(".actual-report-summary").getByText("Actual hours", { exact: true }).locator("xpath=..")).toContainText("7.25 hours");
     const ui = await request.patch(`/api/drafts/${draftId}/writer-mode`, { data: { writer_mode: "ui" } });
     expect(ui.status(), await ui.text()).toBe(200);
 
@@ -206,9 +205,9 @@ test.describe("semantic scheduling writes", () => {
     const targetEntries = await request.get(`/api/drafts/${draftId}/projects/${targetProjectId}/time-entries`);
     expect(targetEntries.status(), await targetEntries.text()).toBe(200);
     expect((await targetEntries.json() as { items: Array<{ document: { task: string } }> }).items.filter((entry) => entry.document.task === taskId)).toHaveLength(3);
-    await page.goto(`/projects/${targetProjectId}`);
+    await page.goto(`/projects/${targetProjectId}/effort`);
     await expect(page.getByRole("heading", { name: "Actual hours report", exact: true })).toBeVisible();
-    await expect(page.getByText("Actual hours", { exact: true }).locator("xpath=..")).toContainText("5.75");
+    await expect(page.locator(".actual-report-summary").getByText("Actual hours", { exact: true }).locator("xpath=..")).toContainText("5.75");
   });
 
   test("creates a person with the repository default calendar through the real UI and API", async ({ page, request }) => {

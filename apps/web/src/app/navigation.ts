@@ -11,7 +11,7 @@ export const navigationGroups: readonly NavigationGroup[] = [
 ];
 
 export const routeViews: Readonly<Record<AppRouteName, MessageKey>> = {
-  workspaces: "nav.drafts", projects: "nav.projects", stages: "core.milestones", tasks: "nav.tasks", board: "nav.board",
+  workspaces: "nav.drafts", projects: "nav.projects", stages: "core.milestones", tasks: "nav.tasks", board: "nav.board", effort: "nav.effort",
   people: "nav.people", calendars: "nav.calendar", settings: "nav.settings", workload: "nav.workload", gantt: "nav.gantt",
   changes: "nav.changes", files: "nav.files", history: "nav.history", connection: "nav.repositoryConnection",
 };

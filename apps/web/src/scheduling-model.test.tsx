@@ -9,7 +9,7 @@ import { CoreWorkspace } from "./core-ui.js";
 import { GanttWorkspace } from "./gantt-ui.js";
 import { PeopleProfileWorkspace } from "./people-profile-ui.js";
 import { WorkloadWorkspace } from "./workload-ui.js";
-import { ProjectSnapshot } from "./features/projects/project-snapshot.js";
+import { ProjectScheduleSummary } from "./features/projects/project-schedule-summary.js";
 import { ProjectPlanWorkspace } from "./features/projects/project-plan-workspace.js";
 
 const fingerprint = "b".repeat(64);
@@ -34,18 +34,28 @@ afterEach(() => { cleanup(); localStorage.clear(); });
 describe("unified scheduling model", () => {
   it("project snapshot resolves the primary finish through the configured working track", () => {
     const project = result({ schema: "gitpm/project@2", id: "P-26-111111", name: "Snapshot project", status: "in-progress", lifecycle: "active", planning, schedules: { working: { finish: "2026-09-30" } } });
-    render(<ProjectSnapshot project={project.document} locale="en" scheduling={new ScheduleResolver(scheduleTracksConfig(tracksConfig()))} />);
-    const label = screen.getByText("Primary finish");
-    expect(label.parentElement?.textContent).toMatch(/Sep|30/);
+    render(<ProjectScheduleSummary project={project.document} projectId="P-26-111111" onNavigate={vi.fn()} locale="en" scheduling={new ScheduleResolver(scheduleTracksConfig(tracksConfig()))} comparisonTrack="working" />);
+    const label = screen.getByText("Primary schedule");
+    expect(label.closest("div")?.textContent).toMatch(/Sep|30/);
   });
 
   it("project snapshot rolls up the primary finish when the project has no declared schedule", () => {
     const projectId = "P-26-111111";
     const project = result({ schema: "gitpm/project@2", id: projectId, name: "Rolled snapshot", status: "in-progress", lifecycle: "active", planning });
     const task = result({ schema: "gitpm/task@2", id: "T-26-111111", project: projectId, title: "Child task", type: "task", status: "backlog", lifecycle: "active", schedules: { working: { start: "2026-09-01", finish: "2026-10-02" } } });
-    render(<ProjectSnapshot project={project.document} locale="en" scheduling={new ScheduleResolver(scheduleTracksConfig(tracksConfig()))} tasks={[task]} />);
-    const label = screen.getByText("Primary finish");
-    expect(label.parentElement?.textContent).toMatch(/Oct|2/);
+    render(<ProjectScheduleSummary project={project.document} projectId={projectId} onNavigate={vi.fn()} locale="en" scheduling={new ScheduleResolver(scheduleTracksConfig(tracksConfig()))} tasks={[task]} comparisonTrack="working" />);
+    const label = screen.getByText("Primary schedule");
+    expect(label.closest("div")?.textContent).toMatch(/Oct|2/);
+  });
+
+  it("project snapshot prefers the declared project window over a later rolled-up child window", () => {
+    const projectId = "P-26-DECLARED";
+    const project = result({ schema: "gitpm/project@2", id: projectId, name: "Declared wins", status: "in-progress", lifecycle: "active", planning, schedules: { working: { start: "2026-09-01", finish: "2026-09-30" } } });
+    const task = result({ schema: "gitpm/task@2", id: "T-26-DECLARED", project: projectId, title: "Later child", type: "task", status: "backlog", lifecycle: "active", schedules: { working: { start: "2026-09-01", finish: "2026-11-15" } } });
+    render(<ProjectScheduleSummary project={project.document} projectId={projectId} onNavigate={vi.fn()} locale="en" scheduling={new ScheduleResolver(scheduleTracksConfig(tracksConfig()))} tasks={[task]} comparisonTrack="working" />);
+    const primary = screen.getByText("Primary schedule").closest("div")!;
+    expect(primary.textContent).toMatch(/Sep|30/);
+    expect(primary.textContent).not.toMatch(/Nov/u);
   });
 
   it("gantt reads working-track bars and dependencies", async () => {
@@ -74,6 +84,58 @@ describe("unified scheduling model", () => {
     const { container } = render(<WorkloadWorkspace api={api} draft={draft} locale="en" onNavigate={vi.fn()} />);
     await waitFor(() => expect(container.querySelector(".workload-table")).not.toBeNull());
     expect(Array.from(container.querySelectorAll(".workload-table td")).some((cell) => /40h/u.test(cell.textContent ?? ""))).toBe(true);
+  });
+
+  it("§14.11: allocates per person using each assignee's own working calendar, independent of primary/comparison roles", async () => {
+    // Two assignees on DIFFERENT calendars. Ada works Mon–Fri with no holidays. Bo works
+    // Mon–Fri but has a Wednesday holiday in week 1. The task window spans two ISO weeks
+    // (Mon Jul 6 – Fri Jul 17). Effort lives on the WORKLOAD track (`estimate`); the
+    // primary track (`working`) carries a 999h sentinel that must be ignored, and the
+    // comparison track (`forecast`) is unrelated. This pins that the project-overview
+    // refactor did not touch the calendar/availability algorithm and did not tie the
+    // working calendar to the primary track.
+    const multiTrackCfg: ConfigurationDocument = { schema: "gitpm/schedule-tracks@1", tracks: [{ slug: "working", title: "Working", kind: "manual", capabilities: ["dates", "effort"] }, { slug: "forecast", title: "Forecast", kind: "manual", capabilities: ["dates"] }, { slug: "estimate", title: "Estimate", kind: "manual", capabilities: ["dates", "effort"] }, { slug: "actual", title: "Actual", kind: "actual", source: "time_entries" }], defaults: { enabled_tracks: ["working", "forecast", "estimate", "actual"], primary_track: "working", workload_track: "estimate", comparison_track: "forecast", dashboard_tracks: ["working", "forecast", "estimate", "actual"] } };
+    const getConfiguration = vi.fn(async (_draftId: string, kind: string): Promise<ConfigurationResult> => {
+      if (kind === "schedule-tracks") return configResult(multiTrackCfg);
+      if (kind === "statuses") return configResult({ schema: "gitpm/statuses@2", statuses: [{ slug: "backlog", title: "Backlog", active: true, category: "backlog" }] });
+      return configResult({ schema: "gitpm/issue-types@1", issue_types: [{ slug: "task", title: "Task", active: true }] });
+    });
+    const projectId = "P-26-CAL";
+    const adaId = "U-26-ADA";
+    const boId = "U-26-BO";
+    const engCalendarId = "C-26-ENG";
+    const supportCalendarId = "C-26-SUP";
+    const eng = result({ schema: "gitpm/calendar@1", id: engCalendarId, name: "Engineering", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
+    const support = result({ schema: "gitpm/calendar@1", id: supportCalendarId, name: "Support", working_weekdays: [1, 2, 3, 4, 5], holidays: ["2026-07-08"], lifecycle: "active" });
+    const ada = result({ schema: "gitpm/person@1", id: adaId, name: "Ada", weekly_capacity_hours: 40, calendar: engCalendarId, lifecycle: "active" });
+    const bo = result({ schema: "gitpm/person@1", id: boId, name: "Bo", weekly_capacity_hours: 40, calendar: supportCalendarId, lifecycle: "active" });
+    const calProject = result({ schema: "gitpm/project@2", id: projectId, name: "Calendar project", status: "backlog", lifecycle: "active", planning: { enabled_tracks: ["working", "forecast", "estimate", "actual"], primary_track: "working", workload_track: "estimate", comparison_track: "forecast", dashboard_tracks: ["working", "forecast", "estimate", "actual"] } });
+    const calTask = result({ schema: "gitpm/task@2", id: "T-26-CAL", project: projectId, title: "Shared task", type: "task", status: "backlog", lifecycle: "active", schedules: { working: { effort_hours: 999 }, estimate: { start: "2026-07-06", finish: "2026-07-17", effort_hours: 80 } }, assignees: [adaId, boId] });
+    const entities = [eng, support, ada, bo, calProject, calTask];
+    const api = { listEntities: listEntitiesMock(entities), getConfiguration } as unknown as GitPmApi;
+    const { container } = render(<WorkloadWorkspace api={api} draft={draft} locale="en" onNavigate={vi.fn()} />);
+    await waitFor(() => expect(container.querySelector(".workload-table")).not.toBeNull());
+
+    const adaWeek1 = container.querySelector<HTMLElement>(`td[data-person-id="${adaId}"][data-week="2026-07-06"]`)!;
+    const boWeek1 = container.querySelector<HTMLElement>(`td[data-person-id="${boId}"][data-week="2026-07-06"]`)!;
+    const adaWeek2 = container.querySelector<HTMLElement>(`td[data-person-id="${adaId}"][data-week="2026-07-13"]`)!;
+    const boWeek2 = container.querySelector<HTMLElement>(`td[data-person-id="${boId}"][data-week="2026-07-13"]`)!;
+
+    // Ada (no holiday): 80h split two ways = 40h, spread evenly across her 10 working
+    // days => 20h land in each week, against full 40h weekly capacity.
+    expect(adaWeek1.querySelector("strong")!.textContent).toBe("20h / 40h");
+    expect(adaWeek2.querySelector("strong")!.textContent).toBe("20h / 40h");
+    // Bo's Wednesday holiday removes one working day from week 1: only ~17.78h land in
+    // week 1 (and her weekly capacity also drops to 32h), while the balance shifts into
+    // week 2 (~22.22h). This is only explainable if allocation honored Bo's own calendar.
+    expect(boWeek1.querySelector("strong")!.textContent).toBe("17.78h / 32h");
+    expect(boWeek2.querySelector("strong")!.textContent).toBe("22.22h / 40h");
+    // Per-person allocation differs in both weeks precisely because the calendars differ.
+    expect(adaWeek1.querySelector("strong")!.textContent).not.toBe(boWeek1.querySelector("strong")!.textContent);
+    expect(adaWeek2.querySelector("strong")!.textContent).not.toBe(boWeek2.querySelector("strong")!.textContent);
+    // The primary-track 999h sentinel never reaches any cell — allocation is driven by
+    // the workload track, not the primary track, and is independent of comparison roles.
+    expect(Array.from(container.querySelectorAll(".workload-table td")).some((cell) => /999/u.test(cell.textContent ?? ""))).toBe(false);
   });
 
   it("people profile resolves the per-project working primary track", async () => {
