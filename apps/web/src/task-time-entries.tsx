@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { actualWindow, sumHours } from "@gitpm/time-entries";
 import { formatApiError, type GitPmApi } from "./api.js";
-import { formatDateOnly, message, type Locale, type MessageKey } from "./i18n.js";
+import { formatDateOnly, formatDurationHours, message, type Locale, type MessageKey } from "./i18n.js";
 import type { DraftStatus, EntityResult } from "./types.js";
 import type { TimeEntryResult } from "./api.js";
 import { EditorDrawer } from "./editor-drawer.js";
@@ -39,7 +39,17 @@ export function TaskTimeEntries(props: {
   const [correction, setCorrection] = useState<TimeEntryCorrection | null>(null);
   const [historicalPerson, setHistoricalPerson] = useState<EntityResult | null>(null);
 
-  const personName = useCallback((id: string): string => people.find((person) => person.document.id === id)?.document.name ?? (historicalPerson?.document.id === id ? historicalPerson.document.name : undefined) ?? id, [historicalPerson, people]);
+  const personName = useCallback((id: string): string => {
+    const person = people.find((item) => item.document.id === id);
+    const historical = historicalPerson?.document.id === id ? historicalPerson : undefined;
+    const match = person ?? historical;
+    if (match !== undefined) {
+      const name = typeof match.document.name === "string" && match.document.name !== "" ? match.document.name : id;
+      // Archived people are shown by name with an explicit "(archived)" marker rather than their technical id.
+      return match.document.lifecycle === "archived" ? t("actualReport.archivedEntity", { name }) : name;
+    }
+    return id;
+  }, [historicalPerson, people, t]);
 
   useEffect(() => { void (async () => {
     let loadError: string | null = null;
@@ -186,7 +196,7 @@ export function TaskTimeEntries(props: {
         <>
           {error !== null && <div className="alert error">{error}</div>}
           <dl className="time-entry-summary">
-            <div><dt>{t("timeEffort.totalHours")}</dt><dd>{totalHours || "—"}</dd></div>
+            <div><dt>{t("timeEffort.totalHours")}</dt><dd>{totalHours > 0 ? formatDurationHours(locale, totalHours) : "—"}</dd></div>
             <div><dt>{t("timeEffort.firstActivity")}</dt><dd>{actual?.start ? formatDateOnly(locale, actual.start) : "—"}</dd></div>
             <div><dt>{t("timeEffort.lastActivity")}</dt><dd>{actual?.finish ? formatDateOnly(locale, actual.finish) : "—"}</dd></div>
           </dl>
@@ -194,7 +204,7 @@ export function TaskTimeEntries(props: {
             {entries.map((entry) => (
               <li key={entry.document.id} className={`time-entry-row${entry.document.state === "voided" ? " voided" : ""}`}>
                 <span className="time-entry-date">{formatDateOnly(locale, entry.document.performed_on)}</span>
-                <span className="time-entry-hours">{entry.document.hours} h</span>
+                <span className="time-entry-hours">{formatDurationHours(locale, entry.document.hours)}</span>
                 <span className="time-entry-person">{personName(entry.document.person)}</span>
                 <span className="time-entry-category">{categories.find((category) => category.slug === entry.document.category)?.title ?? entry.document.category}</span>
                 {typeof entry.document.note_markdown === "string" && entry.document.note_markdown !== "" && <span className="time-entry-note">{entry.document.note_markdown}</span>}

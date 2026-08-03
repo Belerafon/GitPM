@@ -121,8 +121,6 @@ interface HierarchyPayload extends HierarchyTask {
   readonly entity: EntityResult;
 }
 
-const FAR_FUTURE_DUE = "9999-12-31";
-
 const strings = (document: Readonly<Record<string, unknown>>, key: string): readonly string[] =>
   Array.isArray(document[key])
     ? (document[key] as readonly unknown[]).filter((item): item is string => typeof item === "string")
@@ -145,10 +143,12 @@ export const compareOrder = (order: readonly string[], leftId: string, rightId: 
 };
 
 /**
- * Return active milestones ordered by `project.milestone_order`, then by the
- * primary-track `due` date, then by localized name. The explicit
- * `milestone_order` is the canonical signal; the `due` and `name` tie-breakers
- * keep unlisted milestones on a stable, predictable sequence.
+ * Return active milestones ordered by `project.milestone_order`, then by localized
+ * name, then by id. The explicit `milestone_order` is the canonical signal; the
+ * `name` and `id` tie-breakers keep unlisted milestones on a stable, predictable
+ * sequence that is independent of any schedule track. Earlier versions fell back to
+ * the track-specific `due` date here, which made Plan and Effort disagree whenever
+ * the primary and workload tracks carried different finishes.
  */
 export function orderActiveMilestones({ project, milestones, text, locale }: OrderActiveMilestonesOptions): readonly EntityResult[] {
   const order = strings(project.document, "milestone_order");
@@ -158,11 +158,21 @@ export function orderActiveMilestones({ project, milestones, text, locale }: Ord
     .sort((left, right) => {
       const byOrder = compareOrder(order, left.document.id, right.document.id);
       if (byOrder !== 0) return byOrder;
-      const byDue = (text(left.document, "due") || FAR_FUTURE_DUE).localeCompare(text(right.document, "due") || FAR_FUTURE_DUE);
-      if (byDue !== 0) return byDue;
-      return text(left.document, "name").localeCompare(text(right.document, "name"), locale);
+      const byName = text(left.document, "name").localeCompare(text(right.document, "name"), locale);
+      if (byName !== 0) return byName;
+      return left.document.id.localeCompare(right.document.id);
     });
 }
+
+/**
+ * One canonical rule for "this task is not attached to an active milestone". A task
+ * qualifies when its `milestone` is empty, points at a milestone that is absent,
+ * archived, or simply not in the supplied active set. Plan and Effort surfaces must
+ * pass the same active-milestone id set so the counter, the quick filter, the task
+ * list, the system group, and the effort scoping cannot drift apart.
+ */
+export const isOutsideActiveMilestone = (activeMilestoneIds: ReadonlySet<string>, milestoneId: string): boolean =>
+  milestoneId === "" || !activeMilestoneIds.has(milestoneId);
 
 interface NodeBuildContext {
   readonly text: TaskTextReader;

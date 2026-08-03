@@ -85,16 +85,31 @@ describe("orderActiveMilestones", () => {
     expect(ordered.map((m) => m.document.id)).toEqual(["M-3", "M-1", "M-2"]);
   });
 
-  it("falls back to due then localized name for ids missing from milestone_order", () => {
-    const early = milestone("M-EARLY", { name: "Early", schedules: { [TRACK]: { finish: "2026-01-01" } } });
-    const late = milestone("M-LATE", { name: "Late", schedules: { [TRACK]: { finish: "2026-12-01" } } });
+  it("falls back to localized name then id for ids missing from milestone_order, ignoring track due dates", () => {
+    // The tie-breaker must be track-independent so Plan (primary track) and Effort
+    // (workload track) render milestones in the same order even when their finishes differ.
+    const lateByName = milestone("M-LATE", { name: "Late", schedules: { [TRACK]: { finish: "2026-01-01" } } });
+    const earlyByName = milestone("M-EARLY", { name: "Early", schedules: { [TRACK]: { finish: "2026-12-01" } } });
     const ordered = orderActiveMilestones({
       project: project(),
-      milestones: [late, early],
+      milestones: [lateByName, earlyByName],
       text,
       locale: "en",
     });
+    // Name wins over the track `due` date: "Early" before "Late" even though Late is due earlier.
     expect(ordered.map((m) => m.document.id)).toEqual(["M-EARLY", "M-LATE"]);
+  });
+
+  it("breaks name ties by id so the order is stable and track-independent", () => {
+    const a = milestone("M-2", { name: "Sprint" });
+    const b = milestone("M-1", { name: "Sprint" });
+    const ordered = orderActiveMilestones({
+      project: project(),
+      milestones: [a, b],
+      text,
+      locale: "en",
+    });
+    expect(ordered.map((m) => m.document.id)).toEqual(["M-1", "M-2"]);
   });
 });
 
@@ -336,6 +351,22 @@ describe("flattenProjectTaskViewModel", () => {
     })).map((row) => row.node.id);
 
     expect(planOrder).toEqual(["T-APPLE", "T-BANANA", "T-CHERRY"]);
+    expect(effortOrder).toEqual(planOrder);
+  });
+
+  it("orders milestones identically under the primary-track and workload-track readers", () => {
+    // The Plan tab reads dates through the primary track and the Effort tab through the workload
+    // track; milestone order must not depend on that choice. Two milestones carry conflicting
+    // finishes across the two tracks so a track-dependent tie-break would diverge.
+    const primaryReader = scheduleTextReader("primary");
+    const workloadReader = scheduleTextReader("workload");
+    const stageA = milestone("M-A", { name: "Sprint", schedules: { primary: { finish: "2026-12-01" }, workload: { finish: "2026-01-01" } } });
+    const stageB = milestone("M-B", { name: "Sprint", schedules: { primary: { finish: "2026-01-01" }, workload: { finish: "2026-12-01" } } });
+    const projectDoc = project();
+    const planOrder = orderActiveMilestones({ project: projectDoc, milestones: [stageA, stageB], text: primaryReader, locale: "en" }).map((m) => m.document.id);
+    const effortOrder = orderActiveMilestones({ project: projectDoc, milestones: [stageA, stageB], text: workloadReader, locale: "en" }).map((m) => m.document.id);
+    // Same name => id tie-break wins; the conflicting track finishes must not influence the order.
+    expect(planOrder).toEqual(["M-A", "M-B"]);
     expect(effortOrder).toEqual(planOrder);
   });
 });

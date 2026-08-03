@@ -37,14 +37,14 @@ describe("TaskTimeEntries", () => {
 
     render(<TaskTimeEntries api={api} draft={draft} fingerprint={draft.fingerprint} projectId="P-26-1" taskId="T-26-1" people={[person]} readOnly={false} locale="en" onFingerprintChange={vi.fn(async () => undefined)} />);
 
-    await waitFor(() => expect(screen.getByText("4 h")).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByText("4 hours").length).toBeGreaterThan(0));
     expect(screen.getByText(/Total hours/).parentElement?.textContent).toMatch(/4/);
 
     fireEvent.change(screen.getByLabelText("Date"), { target: { value: "2026-09-03" } });
     fireEvent.change(screen.getByLabelText("Hours"), { target: { value: "3" } });
     fireEvent.click(screen.getByRole("button", { name: "Add effort" }));
     await waitFor(() => expect(createTimeEntry).toHaveBeenCalled());
-    await waitFor(() => expect(screen.getByText("3 h")).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByText("3 hours").length).toBeGreaterThan(0));
 
     fireEvent.click(screen.getAllByRole("button", { name: "Void entry" })[0]!);
     await waitFor(() => expect(voidTimeEntry).toHaveBeenCalled());
@@ -86,8 +86,8 @@ describe("TaskTimeEntries", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(replaceTimeEntry).toHaveBeenCalledWith("DRF-TIME", "P-26-1", "T-26-1", original, draft.fingerprint, expect.objectContaining({ hours: 3.5, note_markdown: "corrected" })));
-    await waitFor(() => expect(screen.getByText("3.5 h")).toBeTruthy());
-    expect(screen.getAllByText("2 h")).toHaveLength(1);
+    await waitFor(() => expect(screen.getAllByText("3.5 hours").length).toBeGreaterThan(0));
+    expect(screen.getAllByText("2 hours").length).toBe(1);
     expect(screen.getAllByRole("button", { name: "Correct" })).toHaveLength(1);
   });
 
