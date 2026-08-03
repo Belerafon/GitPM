@@ -113,7 +113,7 @@ const workloadSummary = (readModels: ReadonlyMap<string, SchedulingReadModel>, w
  * except in `taskOnly` mode, where rolled estimates are deliberately rejected so
  * the scope reflects only the selected task.
  */
-export function resolveTaskPlanEffort(readModels: ReadonlyMap<string, SchedulingReadModel>, workloadTrack: string, taskId: string, mode: EffortScopeMode): EffortPlanValue {
+export function taskPlanEffort(readModels: ReadonlyMap<string, SchedulingReadModel>, workloadTrack: string, taskId: string, mode: EffortScopeMode): EffortPlanValue {
   const declared = windowEffort(workloadSummary(readModels, workloadTrack, taskId)?.declared);
   if (declared !== undefined) return { value: declared, source: "declared" };
   if (mode === "taskOnly") return { value: undefined, source: "missing" };
@@ -150,7 +150,7 @@ export function sumBranchActualWithinScope(actualByTask: ReadonlyMap<string, num
 export function sumScopePlan(readModels: ReadonlyMap<string, SchedulingReadModel>, workloadTrack: string, scopeRootIds: readonly string[], mode: EffortScopeMode): number | undefined {
   let total: number | undefined;
   for (const id of scopeRootIds) {
-    const { value } = resolveTaskPlanEffort(readModels, workloadTrack, id, mode);
+    const { value } = taskPlanEffort(readModels, workloadTrack, id, mode);
     if (value === undefined) continue;
     total = (total ?? 0) + value;
   }

@@ -18,7 +18,7 @@ import { buildProjectTaskViewModel, flattenProjectTaskViewModel, orderActiveMile
 import {
   buildTaskRelations,
   resolveEffortScope,
-  resolveTaskPlanEffort,
+  taskPlanEffort,
   roundHours,
   scopeRootIdsOf,
   selectScopedRecords,
@@ -208,7 +208,7 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
     const rows: PlanActualRow[] = [];
     for (const row of flattened) {
       if (!scope.has(row.node.id)) continue;
-      const plan = resolveTaskPlanEffort(readModels, workloadTrack, row.node.id, taskOnly ? "taskOnly" : "withSubtasks");
+      const plan = taskPlanEffort(readModels, workloadTrack, row.node.id, taskOnly ? "taskOnly" : "withSubtasks");
       const actualOwn = actualByTask.get(row.node.id) ?? 0;
       const actualBranch = taskOnly ? actualOwn : sumBranchActualWithinScope(actualByTask, relations, scope, row.node.id);
       // Drop rows that contribute neither planned effort nor actual hours.
@@ -233,7 +233,7 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
     planSources.push(t("actualReport.sourceProjectBudget"));
   } else if (planOfWork !== undefined) {
     if (filters.task !== "") {
-      const own = resolveTaskPlanEffort(readModels, workloadTrack, filters.task, scopeMode);
+      const own = taskPlanEffort(readModels, workloadTrack, filters.task, scopeMode);
       planSources.push(own.source === "declared" ? t("actualReport.sourceTaskExplicit") : own.source === "rolled" ? t("actualReport.sourceSubtaskSum") : t("actualReport.sourceMissing"));
     } else {
       planSources.push(t("actualReport.sourceRootSum"));

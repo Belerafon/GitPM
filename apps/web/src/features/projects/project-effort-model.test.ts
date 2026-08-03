@@ -4,7 +4,7 @@ import type { EntityResult } from "../../types.js";
 import {
   buildTaskRelations,
   resolveEffortScope,
-  resolveTaskPlanEffort,
+  taskPlanEffort,
   roundHours,
   scopeRootIdsOf,
   selectScopedRecords,
@@ -56,20 +56,20 @@ describe("resolveEffortScope", () => {
   });
 });
 
-describe("resolveTaskPlanEffort", () => {
+describe("taskPlanEffort", () => {
   it("prefers a declared estimate and labels it declared", () => {
     const rm = readModels([{ id: "A", declared: 12, rolled: 30 }], TRACK);
-    expect(resolveTaskPlanEffort(rm, TRACK, "A", "withSubtasks")).toEqual({ value: 12, source: "declared" });
+    expect(taskPlanEffort(rm, TRACK, "A", "withSubtasks")).toEqual({ value: 12, source: "declared" });
   });
 
   it("falls back to rolled children in withSubtasks mode", () => {
     const rm = readModels([{ id: "A", rolled: 30 }], TRACK);
-    expect(resolveTaskPlanEffort(rm, TRACK, "A", "withSubtasks")).toEqual({ value: 30, source: "rolled" });
+    expect(taskPlanEffort(rm, TRACK, "A", "withSubtasks")).toEqual({ value: 30, source: "rolled" });
   });
 
   it("returns a missing plan in taskOnly mode when there is no declared estimate", () => {
     const rm = readModels([{ id: "A", rolled: 30 }], TRACK);
-    expect(resolveTaskPlanEffort(rm, TRACK, "A", "taskOnly")).toEqual({ value: undefined, source: "missing" });
+    expect(taskPlanEffort(rm, TRACK, "A", "taskOnly")).toEqual({ value: undefined, source: "missing" });
   });
 });
 
