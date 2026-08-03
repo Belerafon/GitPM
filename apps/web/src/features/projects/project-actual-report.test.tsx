@@ -40,8 +40,7 @@ const buildReportProps = (projectDoc: EntityDocument, milestones: readonly Entit
     tracks,
   });
   const readModel = hierarchy.readModels.get(projectDoc.id)!;
-  const comparisonFinish = comparison === undefined ? undefined : readModel.tracks.find((track) => track.track === comparison)?.effective?.finish;
-  return { readModels: hierarchy.readModels, workloadTrack, comparisonFinish };
+  return { readModels: hierarchy.readModels, workloadTrack };
 };
 
 afterEach(() => { cleanup(); onNavigate.mockClear(); });
@@ -56,12 +55,13 @@ describe("ProjectActualReport", () => {
     const api = { listProjectTimeEntries, listTimeEntries: vi.fn() } as unknown as GitPmApi;
     const task = { document: { schema: "gitpm/task@2", id: "T-1", project: "P-26-1", title: "T", type: "task", status: "done", lifecycle: "active" }, path: "t.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
     const projectDoc = project({ plan: { finish: "2026-03-20" }, target: { finish: "2026-02-28" } }, { primary_track: "plan", comparison_track: "target" });
-    const { readModels, workloadTrack, comparisonFinish } = buildReportProps(projectDoc, [], [task], scheduling);
-    render(<ProjectActualReport api={api} comparisonFinish={comparisonFinish} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[task]} workloadTrack={workloadTrack} />);
+    const { readModels, workloadTrack } = buildReportProps(projectDoc, [], [task], scheduling);
+    render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[task]} workloadTrack={workloadTrack} />);
     // "Actual hours" appears in both the activity summary and the plan/actual block; the
     // activity summary is the first one in DOM order.
     await waitFor(() => expect(screen.getAllByText("Actual hours")[0]?.parentElement?.textContent).toMatch(/203\.5/));
     expect(screen.getAllByText("Last activity")[0]?.parentElement?.textContent).toContain("Apr");
+    fireEvent.change(screen.getByLabelText("Hours after date"), { target: { value: "2026-02-28" } });
     expect(screen.getByText("Hours after 2026-02-28").parentElement?.textContent).toMatch(/203\.5/);
     expect(screen.getByText("Actual hours report")).toBeTruthy();
     expect(listProjectTimeEntries.mock.calls.map((call) => call[2]?.offset)).toEqual([0, 200]);
@@ -87,13 +87,12 @@ describe("ProjectActualReport", () => {
     });
     const api = { listProjectTimeEntries } as unknown as GitPmApi;
     const projectDoc = project({ plan: { start: "2026-09-01", finish: "2026-09-30" } }, { enabled_tracks: ["plan", "actual"], primary_track: "plan", workload_track: "plan", dashboard_tracks: ["plan", "actual"] });
-    const { readModels, workloadTrack, comparisonFinish } = buildReportProps(projectDoc, [milestone], [taskOne, taskTwo], scheduling);
-    render(<ProjectActualReport api={api} categories={[{ slug: "regular", title: "Regular work" }, { slug: "support", title: "Support" }]} comparisonFinish={comparisonFinish} draft={draft} locale="en" milestones={[milestone]} onNavigate={onNavigate} people={[person]} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[taskOne, taskTwo]} workloadTrack={workloadTrack} />);
+    const { readModels, workloadTrack } = buildReportProps(projectDoc, [milestone], [taskOne, taskTwo], scheduling);
+    render(<ProjectActualReport api={api} categories={[{ slug: "regular", title: "Regular work" }, { slug: "support", title: "Support" }]} draft={draft} locale="en" milestones={[milestone]} onNavigate={onNavigate} people={[person]} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[taskOne, taskTwo]} workloadTrack={workloadTrack} />);
 
     fireEvent.change(screen.getByLabelText("Task"), { target: { value: taskOne.document.id } });
     fireEvent.change(screen.getByLabelText("Person"), { target: { value: person.document.id } });
     fireEvent.change(screen.getByLabelText("Category"), { target: { value: "regular" } });
-    fireEvent.change(screen.getByLabelText("State"), { target: { value: "active" } });
     fireEvent.change(screen.getByLabelText("Performed from"), { target: { value: "2026-09-01" } });
     fireEvent.change(screen.getByLabelText("Performed to"), { target: { value: "2026-09-30" } });
     fireEvent.change(screen.getByLabelText("Hours after date"), { target: { value: "2026-09-05" } });
@@ -121,8 +120,8 @@ describe("ProjectActualReport", () => {
     const listProjectTimeEntries = vi.fn(async () => ({ total: items.length, offset: 0, limit: 200, items }));
     const api = { listProjectTimeEntries } as unknown as GitPmApi;
     const projectDoc = project({ working: { finish: "2026-09-30" } }, { primary_track: "working", workload_track: "estimate", comparison_track: "forecast" });
-    const { readModels, workloadTrack, comparisonFinish } = buildReportProps(projectDoc, [], [task], multiTrackScheduling);
-    render(<ProjectActualReport api={api} comparisonFinish={comparisonFinish} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[task]} workloadTrack={workloadTrack} />);
+    const { readModels, workloadTrack } = buildReportProps(projectDoc, [], [task], multiTrackScheduling);
+    render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[task]} workloadTrack={workloadTrack} />);
 
     await waitFor(() => expect(screen.getByText("Plan of selected scope").parentElement?.textContent).toMatch(/25/u));
   });
@@ -139,8 +138,8 @@ describe("ProjectActualReport", () => {
     });
     const api = { listProjectTimeEntries } as unknown as GitPmApi;
     const projectDoc = project({ plan: { finish: "2026-09-30" } }, { primary_track: "plan", workload_track: "plan", comparison_track: "target" });
-    const { readModels, workloadTrack, comparisonFinish } = buildReportProps(projectDoc, [], [task], scheduling);
-    render(<ProjectActualReport api={api} comparisonFinish={comparisonFinish} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[task]} workloadTrack={workloadTrack} />);
+    const { readModels, workloadTrack } = buildReportProps(projectDoc, [], [task], scheduling);
+    render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[task]} workloadTrack={workloadTrack} />);
 
     // Default request narrows to active records only.
     await waitFor(() => expect(listProjectTimeEntries).toHaveBeenLastCalledWith("DRF", "P-26-1", expect.objectContaining({ state: "active", offset: 0, limit: 200 })));
@@ -167,8 +166,8 @@ describe("ProjectActualReport", () => {
     });
     const api = { listProjectTimeEntries } as unknown as GitPmApi;
     const projectDoc = project({ plan: { finish: "2026-09-30" }, target: { finish: "2026-09-15" } }, { primary_track: "plan", comparison_track: "target" });
-    const { readModels, workloadTrack, comparisonFinish } = buildReportProps(projectDoc, [], [task], scheduling);
-    render(<ProjectActualReport api={api} comparisonFinish={comparisonFinish} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[task]} workloadTrack={workloadTrack} />);
+    const { readModels, workloadTrack } = buildReportProps(projectDoc, [], [task], scheduling);
+    render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[task]} workloadTrack={workloadTrack} />);
 
     // By default only the active record is fetched; main summary "Actual hours" = 8 (not 14).
     await waitFor(() => expect(screen.getAllByText("Actual hours")[0]?.parentElement?.textContent).toMatch(/8 hours/u));
@@ -181,12 +180,12 @@ describe("ProjectActualReport", () => {
     await waitFor(() => expect(listProjectTimeEntries).toHaveBeenLastCalledWith("DRF", "P-26-1", expect.objectContaining({ offset: 0, limit: 200 })));
     expect(listProjectTimeEntries.mock.calls[listProjectTimeEntries.mock.calls.length - 1]![2]).not.toHaveProperty("state");
 
-    // The correction-history area now surfaces the voided count and explanation.
+    // The correction-history area now surfaces the voided entry details (not just a count).
     await waitFor(() => expect(screen.getByText("Correction history")).toBeTruthy());
     const history = screen.getByText("Correction history").closest("section")!;
-    expect(history.textContent).toMatch(/Cancelled time entries/u);
-    expect(history.textContent).toMatch(/1/u);
     expect(history.textContent).toContain("Kept in history, but its hours are excluded from totals.");
+    expect(history.textContent).toContain("Void task");
+    expect(history.textContent).toMatch(/6 hours/u);
     // The main summary still excludes the voided count.
     expect(document.querySelector(".actual-report-summary")!.textContent ?? "").not.toMatch(/Cancelled time entries/u);
     // sumHours still ignores voided: actual hours stay at 8.
@@ -205,8 +204,8 @@ describe("ProjectActualReport", () => {
     });
     const api = { listProjectTimeEntries } as unknown as GitPmApi;
     const projectDoc = project({ plan: { finish: "2026-09-30" } }, { primary_track: "plan", workload_track: "plan", comparison_track: "target" });
-    const { readModels, workloadTrack, comparisonFinish } = buildReportProps(projectDoc, [], [task], scheduling);
-    const { container } = render(<ProjectActualReport api={api} comparisonFinish={comparisonFinish} draft={draft} locale="ru" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[task]} workloadTrack={workloadTrack} />);
+    const { readModels, workloadTrack } = buildReportProps(projectDoc, [], [task], scheduling);
+    const { container } = render(<ProjectActualReport api={api} draft={draft} locale="ru" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[task]} workloadTrack={workloadTrack} />);
 
     // Toggle so the voided record loads and the correction-history area renders.
     await waitFor(() => expect(screen.getByRole("checkbox", { name: /Показывать отменённые записи/u })).toBeTruthy());
@@ -215,8 +214,8 @@ describe("ProjectActualReport", () => {
 
     // The old "Аннулирован*" wording must not appear anywhere in the rendered DOM.
     expect(container.textContent ?? "").not.toMatch(/Аннулирован/u);
-    // The new "Отменённ*" wording is present (here in the dropdown option and the count label).
-    expect(container.textContent ?? "").toMatch(/Отменённ/u);
+    // The new "Отменённ*" wording is present (here in the show-voided control and history).
+    expect(container.textContent ?? "").toMatch(/отменённ/iu);
   });
 
   it("§14.4: shows both an explicit project budget and the larger sum of top-level task estimates", async () => {
@@ -227,8 +226,8 @@ describe("ProjectActualReport", () => {
     const listProjectTimeEntries = vi.fn(async () => ({ total: 0, offset: 0, limit: 200, items: [] }));
     const api = { listProjectTimeEntries } as unknown as GitPmApi;
     const projectDoc = project({ estimate: { effort_hours: 80 } }, { primary_track: "working", workload_track: "estimate", comparison_track: "forecast" });
-    const { readModels, workloadTrack, comparisonFinish } = buildReportProps(projectDoc, [], [rootOne, rootTwo], multiTrackScheduling);
-    render(<ProjectActualReport api={api} comparisonFinish={comparisonFinish} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[rootOne, rootTwo]} trackTitle={(slug) => multiTrackScheduling.trackTitle(slug)} workloadTrack={workloadTrack} />);
+    const { readModels, workloadTrack } = buildReportProps(projectDoc, [], [rootOne, rootTwo], multiTrackScheduling);
+    render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[rootOne, rootTwo]} trackTitle={(slug) => multiTrackScheduling.trackTitle(slug)} workloadTrack={workloadTrack} />);
 
     await waitFor(() => expect(screen.getByText("Estimate of planned work").parentElement?.textContent).toMatch(/708 hours/u));
     expect(screen.getByText("Project budget").parentElement?.textContent).toMatch(/80 hours/u);
@@ -248,8 +247,8 @@ describe("ProjectActualReport", () => {
     const listProjectTimeEntries = vi.fn(async () => ({ total: 0, offset: 0, limit: 200, items: [] }));
     const api = { listProjectTimeEntries } as unknown as GitPmApi;
     const projectDoc = project({}, { primary_track: "working", workload_track: "estimate", comparison_track: "forecast" });
-    const { readModels, workloadTrack, comparisonFinish } = buildReportProps(projectDoc, [], [parentTask, childOne, childTwo], multiTrackScheduling);
-    render(<ProjectActualReport api={api} comparisonFinish={comparisonFinish} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[parentTask, childOne, childTwo]} workloadTrack={workloadTrack} />);
+    const { readModels, workloadTrack } = buildReportProps(projectDoc, [], [parentTask, childOne, childTwo], multiTrackScheduling);
+    render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[parentTask, childOne, childTwo]} workloadTrack={workloadTrack} />);
 
     // Scope to the parent (with subtasks): branch plan must be 80, not 80+30+50=160.
     fireEvent.change(screen.getByLabelText("Task"), { target: { value: parentTask.document.id } });
@@ -263,8 +262,8 @@ describe("ProjectActualReport", () => {
     const table = parentRow.closest("table")!;
     expect(within(table).getByText("Child one").closest("tr")?.getAttribute("data-depth")).toBe("1");
     expect(within(table).getByText("Child two").closest("tr")?.getAttribute("data-depth")).toBe("1");
-    // Parent row plan cell (after the milestone column) holds 80, not 160.
-    expect(parentRow.querySelectorAll("td")[1]?.textContent).toMatch(/80 hours/u);
+    // Parent row plan cell (the milestone column is gone, so plan is the first td).
+    expect(parentRow.querySelectorAll("td")[0]?.textContent).toMatch(/80 hours/u);
     // Source label notes the explicit task estimate.
     expect(screen.getByText("Planned estimate source:").parentElement?.textContent).toContain("Explicit task estimate");
   });
@@ -276,8 +275,8 @@ describe("ProjectActualReport", () => {
     const listProjectTimeEntries = vi.fn(async () => ({ total: 0, offset: 0, limit: 200, items: [] }));
     const api = { listProjectTimeEntries } as unknown as GitPmApi;
     const projectDoc = project({}, { primary_track: "working", workload_track: "estimate", comparison_track: "forecast" });
-    const { readModels, workloadTrack, comparisonFinish } = buildReportProps(projectDoc, [], [parentTask, childOne, childTwo], multiTrackScheduling);
-    render(<ProjectActualReport api={api} comparisonFinish={comparisonFinish} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[parentTask, childOne, childTwo]} workloadTrack={workloadTrack} />);
+    const { readModels, workloadTrack } = buildReportProps(projectDoc, [], [parentTask, childOne, childTwo], multiTrackScheduling);
+    render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[parentTask, childOne, childTwo]} workloadTrack={workloadTrack} />);
 
     fireEvent.change(screen.getByLabelText("Task"), { target: { value: parentTask.document.id } });
     await waitFor(() => expect(screen.getByText("Plan of selected scope").parentElement?.textContent).toMatch(/80 hours/u));
@@ -295,23 +294,23 @@ describe("ProjectActualReport", () => {
     const listProjectTimeEntries = vi.fn(async () => ({ total: items.length, offset: 0, limit: 200, items }));
     const api = { listProjectTimeEntries } as unknown as GitPmApi;
     const projectDoc = project({}, { primary_track: "working", workload_track: "estimate", comparison_track: "forecast" });
-    const { readModels, workloadTrack, comparisonFinish } = buildReportProps(projectDoc, [], [parentTask, childOne, childTwo], multiTrackScheduling);
-    render(<ProjectActualReport api={api} comparisonFinish={comparisonFinish} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[parentTask, childOne, childTwo]} workloadTrack={workloadTrack} />);
+    const { readModels, workloadTrack } = buildReportProps(projectDoc, [], [parentTask, childOne, childTwo], multiTrackScheduling);
+    render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[parentTask, childOne, childTwo]} workloadTrack={workloadTrack} />);
 
     await waitFor(() => expect(screen.getAllByText("Actual hours")[0]?.parentElement?.textContent).toMatch(/50 hours/u));
     const parentRow = document.querySelector<HTMLElement>(`tr[data-task-id="${parentTask.document.id}"]`)!;
-    // Columns: milestone, plan, actual(branch), own. Branch actual = 50; own = 0.
-    expect(parentRow.querySelectorAll("td")[2]?.textContent).toMatch(/50 hours/u);
-    expect(parentRow.querySelectorAll("td")[3]?.textContent).toMatch(/0 hours/u);
+    // Columns (milestone column removed): plan, actual(branch), own. Branch actual = 50; own = 0.
+    expect(parentRow.querySelectorAll("td")[1]?.textContent).toMatch(/50 hours/u);
+    expect(parentRow.querySelectorAll("td")[2]?.textContent).toMatch(/0 hours/u);
   });
 
   it("navigates to a task when a table row title is clicked", async () => {
-    const task = { document: { schema: "gitpm/task@2", id: "T-26-NAV", project: "P-26-1", title: "Navigate me", type: "task", status: "in-progress", lifecycle: "active" }, path: "t.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const task = { document: { schema: "gitpm/task@2", id: "T-26-NAV", project: "P-26-1", title: "Navigate me", type: "task", status: "in-progress", lifecycle: "active", schedules: { plan: { effort_hours: 5 } } }, path: "t.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
     const listProjectTimeEntries = vi.fn(async () => ({ total: 0, offset: 0, limit: 200, items: [] }));
     const api = { listProjectTimeEntries } as unknown as GitPmApi;
     const projectDoc = project({}, { primary_track: "plan", workload_track: "plan", comparison_track: "target" });
-    const { readModels, workloadTrack, comparisonFinish } = buildReportProps(projectDoc, [], [task], scheduling);
-    render(<ProjectActualReport api={api} comparisonFinish={comparisonFinish} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[task]} workloadTrack={workloadTrack} />);
+    const { readModels, workloadTrack } = buildReportProps(projectDoc, [], [task], scheduling);
+    render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[task]} workloadTrack={workloadTrack} />);
 
     await waitFor(() => expect(screen.getByRole("button", { name: /Navigate me/u })).toBeTruthy());
     fireEvent.click(screen.getByRole("button", { name: /Navigate me/u }));
@@ -327,8 +326,8 @@ describe("ProjectActualReport", () => {
     const listProjectTimeEntries = vi.fn(async () => ({ total: 0, offset: 0, limit: 200, items: [] }));
     const api = { listProjectTimeEntries } as unknown as GitPmApi;
     const projectDoc = project({}, { primary_track: "working", workload_track: "estimate", comparison_track: "forecast" });
-    const { readModels, workloadTrack, comparisonFinish } = buildReportProps(projectDoc, [stage], [parentTask, childTask], multiTrackScheduling);
-    render(<ProjectActualReport api={api} comparisonFinish={comparisonFinish} draft={draft} locale="en" milestones={[stage]} onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[parentTask, childTask]} workloadTrack={workloadTrack} />);
+    const { readModels, workloadTrack } = buildReportProps(projectDoc, [stage], [parentTask, childTask], multiTrackScheduling);
+    render(<ProjectActualReport api={api} draft={draft} locale="en" milestones={[stage]} onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[parentTask, childTask]} workloadTrack={workloadTrack} />);
 
     await waitFor(() => expect(screen.getByText("Zebra")).toBeTruthy());
     const parentRow = document.querySelector<HTMLElement>(`tr[data-task-id="${parentTask.document.id}"]`)!;
@@ -337,5 +336,45 @@ describe("ProjectActualReport", () => {
     expect(childRow.getAttribute("data-depth")).toBe("1");
     // Parent appears before child in DOM order (manual order, not alphabetical).
     expect(parentRow.compareDocumentPosition(childRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  it("keeps the selected task when switching back to All milestones", async () => {
+    const milestone = { document: { schema: "gitpm/milestone@2", id: "M-26-KEEP", project: "P-26-1", name: "Keep", lifecycle: "active" }, path: "m.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const taskOne = { document: { schema: "gitpm/task@2", id: "T-26-KEEP", project: "P-26-1", milestone: milestone.document.id, title: "Keep task", type: "task", status: "done", lifecycle: "active", schedules: { plan: { effort_hours: 5 } } }, path: "t.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const listProjectTimeEntries = vi.fn(async () => ({ total: 0, offset: 0, limit: 200, items: [] }));
+    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const projectDoc = project({}, { primary_track: "plan", workload_track: "plan", comparison_track: "target" });
+    const { readModels, workloadTrack } = buildReportProps(projectDoc, [milestone], [taskOne], scheduling);
+    render(<ProjectActualReport api={api} draft={draft} locale="en" milestones={[milestone]} onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[taskOne]} workloadTrack={workloadTrack} />);
+
+    const taskSelect = await screen.findByLabelText("Task") as HTMLSelectElement;
+    fireEvent.change(taskSelect, { target: { value: taskOne.document.id } });
+    expect(taskSelect.value).toBe(taskOne.document.id);
+    // Switching the milestone filter back to "All milestones" must NOT discard the task.
+    fireEvent.change(screen.getByLabelText("Milestone"), { target: { value: "" } });
+    expect((screen.getByLabelText("Task") as HTMLSelectElement).value).toBe(taskOne.document.id);
+  });
+
+  it("reset clears filters, scope mode, cutoff and the show-cancelled toggle", async () => {
+    const taskOne = { document: { schema: "gitpm/task@2", id: "T-26-RST", project: "P-26-1", title: "Reset task", type: "task", status: "done", lifecycle: "active", schedules: { plan: { effort_hours: 5 } } }, path: "t.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const items = [
+      { document: { schema: "gitpm/time-entry@1" as const, id: "E-26-RST-V", project: "P-26-1", task: taskOne.document.id, person: "U-1", performed_on: "2026-09-10", hours: 4, category: "regular", created_at: "2026-09-10T00:00:00.000Z", state: "voided" as const }, path: "v", blob_id: "a", draft_fingerprint: "f" },
+    ];
+    const listProjectTimeEntries = vi.fn(async (_d: string, _p: string, filters: Record<string, unknown> = {}) => {
+      const all = [{ document: { schema: "gitpm/time-entry@1" as const, id: "E-26-RST-A", project: "P-26-1", task: taskOne.document.id, person: "U-1", performed_on: "2026-09-09", hours: 3, category: "regular", created_at: "2026-09-09T00:00:00.000Z", state: "active" as const }, path: "a", blob_id: "a", draft_fingerprint: "f" }, ...items];
+      const filtered = all.filter((entry) => entry.document.state === String(filters.state ?? entry.document.state));
+      return { total: filtered.length, offset: 0, limit: 200, items: filtered };
+    });
+    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const projectDoc = project({}, { primary_track: "plan", workload_track: "plan", comparison_track: "target" });
+    const { readModels, workloadTrack } = buildReportProps(projectDoc, [], [taskOne], scheduling);
+    render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[taskOne]} workloadTrack={workloadTrack} />);
+
+    const voidedCheckbox = await screen.findByRole("checkbox", { name: /Show cancelled entries/u });
+    fireEvent.click(voidedCheckbox);
+    await waitFor(() => expect(screen.getByText("Correction history")).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Reset filters" }));
+    await waitFor(() => expect((screen.getByRole("checkbox", { name: /Show cancelled entries/u }) as HTMLInputElement).checked).toBe(false));
+    expect(screen.queryByText("Correction history")).toBeNull();
   });
 });

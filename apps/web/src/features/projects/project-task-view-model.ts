@@ -4,9 +4,9 @@ import type { EntityResult } from "../../types.js";
 
 /**
  * Read-only presentation model that produces the canonical manual order of a
- * project's tasks. The Plan workspace and the upcoming Effort workspace share
- * this single source of truth so stage grouping, stage ordering, and the
- * DFS-preorder task tree cannot drift apart.
+ * project's tasks. The Plan workspace and the Effort workspace share this single
+ * source of truth so stage grouping, stage ordering, and the DFS-preorder task
+ * tree cannot drift apart.
  *
  * The model never mutates its inputs. Every field on a {@link TaskViewModelNode}
  * is derived from the supplied documents through the track-agnostic
@@ -133,15 +133,9 @@ export const compareOrder = (order: readonly string[], leftId: string, rightId: 
 
 /**
  * Return active milestones ordered by `project.milestone_order`, then by the
- * primary-track `due` date, then by localized name. This mirrors the previous
- * inline sort in the Plan workspace so the refactored workspace renders stages
- * in exactly the same sequence.
- *
- * Note (divergence from the §9.2 canonical spec): the spec only calls for
- * `milestone_order` with a stable fallback for unlisted ids. The historical
- * implementation additionally breaks ties among unlisted milestones using
- * `due` then `name`. This model preserves the historical tie-breakers to keep
- * the refactor behavior-neutral; the orchestrator may retire them later.
+ * primary-track `due` date, then by localized name. The explicit
+ * `milestone_order` is the canonical signal; the `due` and `name` tie-breakers
+ * keep unlisted milestones on a stable, predictable sequence.
  */
 export function orderActiveMilestones({ project, milestones, text, locale }: OrderActiveMilestonesOptions): readonly EntityResult[] {
   const order = strings(project.document, "milestone_order");
@@ -206,13 +200,10 @@ const toPayload = (entity: EntityResult): HierarchyPayload => {
  * points to a milestone that is absent or not active form a separate system
  * group rendered after the stages.
  *
- * Note (divergence from the §9.2 canonical spec): the spec orders the system
- * group by "the project-level task order if any, otherwise stable by id". There
- * is no project-level task-order field today, and the Plan workspace has
- * historically ordered the system group by its analytical comparator
- * (completion, then due, then title). When `compareTasks` is supplied the model
- * reproduces that historical order; otherwise it falls back to the relative
- * order of the supplied `tasks`.
+ * When `compareTasks` is supplied the model reproduces the analytical order
+ * (completion, then due, then title) used to break ties among tasks absent from
+ * a milestone's `task_order` and to order the system group; otherwise the
+ * relative order of the supplied `tasks` array is the stable fallback.
  */
 export function buildProjectTaskViewModel(options: BuildProjectTaskViewModelOptions): ProjectTaskViewModel {
   const { project, milestones, tasks, text, effortOf, locale, compareTasks } = options;

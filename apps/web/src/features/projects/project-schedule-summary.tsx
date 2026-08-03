@@ -7,9 +7,9 @@ import type { WorkspaceNavigate } from "../../workspace-navigation.js";
 
 export function ProjectScheduleSummary({ project, locale, milestones, tasks, scheduling, comparisonTrack, projectId, onNavigate }: { readonly project: EntityDocument; readonly locale: Locale; readonly milestones?: readonly EntityResult[]; readonly tasks?: readonly EntityResult[]; readonly scheduling: ScheduleResolver; readonly comparisonTrack?: string; readonly projectId: string; readonly onNavigate: WorkspaceNavigate }) {
   const primaryTrack = scheduling.primaryTrack(project.planning);
-  const workloadTrack = scheduling.workloadTrack(project.planning);
-  const comparison = comparisonTrack ?? scheduling.comparisonTrack(project.planning);
-  const tracks = [...new Set([primaryTrack, workloadTrack, comparison].filter((track): track is string => track !== undefined && track !== ""))];
+  const requestedComparison = comparisonTrack ?? scheduling.comparisonTrack(project.planning);
+  const effectiveComparison = requestedComparison === undefined || requestedComparison === "" || requestedComparison === primaryTrack ? undefined : requestedComparison;
+  const tracks = [...new Set([primaryTrack, effectiveComparison].filter((track): track is string => track !== undefined && track !== ""))];
   const hierarchy = resolveSchedulingHierarchy({
     project,
     milestones: (milestones ?? []).map((milestone) => milestone.document),
@@ -22,22 +22,23 @@ export function ProjectScheduleSummary({ project, locale, milestones, tasks, sch
   });
   const readModel = hierarchy.readModels.get(project.id)!;
   const primaryFinish = primaryTrack === "" ? undefined : readModel.tracks.find((track) => track.track === primaryTrack)?.effective?.finish;
-  const comparisonFinish = comparison === undefined ? undefined : readModel.tracks.find((track) => track.track === comparison)?.effective?.finish;
+  const comparisonFinish = effectiveComparison === undefined ? undefined : readModel.tracks.find((track) => track.track === effectiveComparison)?.effective?.finish;
   const variance = primaryFinish !== undefined && comparisonFinish !== undefined ? finishVarianceDays(primaryFinish, comparisonFinish) : undefined;
-  if (comparison === undefined && readModel.overflowWarnings.length === 0) return null;
+  if (effectiveComparison === undefined && readModel.overflowWarnings.length === 0) return null;
   const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
   const openGantt = () => onNavigate("gantt", { projectId });
-  const hasDlRows = (comparison !== undefined && comparisonFinish !== undefined) || (comparison !== undefined && primaryFinish !== undefined) || variance !== undefined;
+  const hasDlRows = effectiveComparison !== undefined && (comparisonFinish !== undefined || primaryFinish !== undefined || variance !== undefined);
+  const varianceLabel = (days: number): string => days === 0 ? t("snapshot.onTime") : days > 0 ? t("snapshot.varianceAhead", { count: days }) : t("snapshot.varianceBehind", { count: Math.abs(days) });
   return (
     <section className="card project-schedule-summary">
       <div className="project-schedule-summary-header">
-        <h3>{comparison !== undefined ? t("snapshot.comparisonHeading") : t("snapshot.scheduleHeading")}</h3>
+        <h3>{effectiveComparison !== undefined ? t("snapshot.comparisonHeading") : t("snapshot.scheduleHeading")}</h3>
         <button className="project-schedule-summary-gantt" onClick={openGantt} type="button">{t("snapshot.openGantt")}</button>
       </div>
       {hasDlRows && <dl>
-        {comparison !== undefined && primaryFinish !== undefined && <div><dt><span className="schedule-track-title">{scheduling.trackTitle(primaryTrack)}</span><span className="schedule-track-role">{t("snapshot.primaryGraph")}</span></dt><dd>{formatDateOnly(locale, primaryFinish)}</dd></div>}
-        {comparison !== undefined && comparisonFinish !== undefined && <div><dt><span className="schedule-track-title">{scheduling.trackTitle(comparison)}</span><span className="schedule-track-role">{t("snapshot.comparisonGraph")}</span></dt><dd>{formatDateOnly(locale, comparisonFinish)}</dd></div>}
-        {variance !== undefined && <div><dt>{t("snapshot.variance")}</dt><dd data-variance={variance}>{variance === 0 ? t("snapshot.onTime") : variance > 0 ? `+${variance} d` : `${variance} d`}</dd></div>}
+        {effectiveComparison !== undefined && primaryFinish !== undefined && <div><dt><span className="schedule-track-title">{scheduling.trackTitle(primaryTrack)}</span><span className="schedule-track-role">{t("snapshot.primaryGraph")}</span></dt><dd>{formatDateOnly(locale, primaryFinish)}</dd></div>}
+        {effectiveComparison !== undefined && comparisonFinish !== undefined && <div><dt><span className="schedule-track-title">{scheduling.trackTitle(effectiveComparison)}</span><span className="schedule-track-role">{t("snapshot.comparisonGraph")}</span></dt><dd>{formatDateOnly(locale, comparisonFinish)}</dd></div>}
+        {variance !== undefined && <div><dt>{t("snapshot.variance")}</dt><dd data-variance={variance}>{varianceLabel(variance)}</dd></div>}
       </dl>}
       <SchedulingOverflowWarnings locale={locale} trackTitle={(track) => scheduling.trackTitle(track)} warnings={readModel.overflowWarnings} onOpenGantt={openGantt} />
     </section>
