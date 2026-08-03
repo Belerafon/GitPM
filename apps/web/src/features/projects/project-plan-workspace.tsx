@@ -5,6 +5,7 @@ import { buildSchedule, ScheduleResolver, scheduleTracksConfig, scheduleTextRead
 import { isCompletedStatus } from "../../status-categories.js";
 import { ProjectSnapshot } from "./project-snapshot.js";
 import { buildTaskHierarchy } from "@gitpm/task-hierarchy";
+import { orderActiveMilestones } from "./project-task-view-model.js";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { ApiError, deleteRestrictionLabels, formatApiError, type GitPmApi } from "../../api.js";
 import { AsyncBoundary, useAsyncLoad } from "../../async-data.js";
@@ -72,12 +73,6 @@ const strings = (document: Readonly<Record<string, unknown>>, key: string): stri
 const configValues = (document: Readonly<Record<string, unknown>>, key: "statuses" | "issue_types"): ConfigValue[] => Array.isArray(document[key])
   ? (document[key] as unknown[]).filter((item): item is ConfigValue => typeof item === "object" && item !== null && typeof (item as ConfigValue).slug === "string" && typeof (item as ConfigValue).title === "string" && (item as ConfigValue).active === true)
   : [];
-const compareOrder = (order: readonly string[], leftId: string, rightId: string) => {
-  const left = order.indexOf(leftId); const right = order.indexOf(rightId);
-  if (left < 0 && right >= 0) return 1;
-  if (left >= 0 && right < 0) return -1;
-  return left >= 0 && right >= 0 ? left - right : 0;
-};
 const moveId = (ids: readonly string[], id: string, offset: -1 | 1): string[] | null => {
   const from = ids.indexOf(id); const to = from + offset;
   if (from < 0 || to < 0 || to >= ids.length) return null;
@@ -309,11 +304,10 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     }
   };
 
-  const activeStages = useMemo(() => [...(workspace?.milestones.filter((item) => item.document.lifecycle === "active") ?? [])].sort((left, right) => {
-    const byOrder = compareOrder(strings(workspace?.project.document ?? { schema: "", id: "", lifecycle: "active" }, "milestone_order"), left.document.id, right.document.id);
-    const byDue = (text(left.document, "due") || "9999-12-31").localeCompare(text(right.document, "due") || "9999-12-31");
-    return byOrder || byDue || text(left.document, "name").localeCompare(text(right.document, "name"), locale);
-  }), [locale, workspace]);
+  const activeStages = useMemo(() => workspace === null
+    ? []
+    : orderActiveMilestones({ project: workspace.project, milestones: workspace.milestones, text, locale }),
+    [locale, text, workspace]);
   const activeTasks = useMemo(
     () => [...(workspace?.tasks.filter((item) => isOperationalTask(item.document, activeProjectIds([workspace.project.document]))) ?? [])].sort((left, right) => compareTasks(left, right, locale, text, statuses)),
     [locale, statuses, text, workspace],
