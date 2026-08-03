@@ -337,4 +337,44 @@ describe("ProjectActualReport", () => {
     // Parent appears before child in DOM order (manual order, not alphabetical).
     expect(parentRow.compareDocumentPosition(childRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
+
+  it("keeps the selected task when switching back to All milestones", async () => {
+    const milestone = { document: { schema: "gitpm/milestone@2", id: "M-26-KEEP", project: "P-26-1", name: "Keep", lifecycle: "active" }, path: "m.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const taskOne = { document: { schema: "gitpm/task@2", id: "T-26-KEEP", project: "P-26-1", milestone: milestone.document.id, title: "Keep task", type: "task", status: "done", lifecycle: "active", schedules: { plan: { effort_hours: 5 } } }, path: "t.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const listProjectTimeEntries = vi.fn(async () => ({ total: 0, offset: 0, limit: 200, items: [] }));
+    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const projectDoc = project({}, { primary_track: "plan", workload_track: "plan", comparison_track: "target" });
+    const { readModels, workloadTrack } = buildReportProps(projectDoc, [milestone], [taskOne], scheduling);
+    render(<ProjectActualReport api={api} draft={draft} locale="en" milestones={[milestone]} onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[taskOne]} workloadTrack={workloadTrack} />);
+
+    const taskSelect = await screen.findByLabelText("Task") as HTMLSelectElement;
+    fireEvent.change(taskSelect, { target: { value: taskOne.document.id } });
+    expect(taskSelect.value).toBe(taskOne.document.id);
+    // Switching the milestone filter back to "All milestones" must NOT discard the task.
+    fireEvent.change(screen.getByLabelText("Milestone"), { target: { value: "" } });
+    expect((screen.getByLabelText("Task") as HTMLSelectElement).value).toBe(taskOne.document.id);
+  });
+
+  it("reset clears filters, scope mode, cutoff and the show-cancelled toggle", async () => {
+    const taskOne = { document: { schema: "gitpm/task@2", id: "T-26-RST", project: "P-26-1", title: "Reset task", type: "task", status: "done", lifecycle: "active", schedules: { plan: { effort_hours: 5 } } }, path: "t.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const items = [
+      { document: { schema: "gitpm/time-entry@1" as const, id: "E-26-RST-V", project: "P-26-1", task: taskOne.document.id, person: "U-1", performed_on: "2026-09-10", hours: 4, category: "regular", created_at: "2026-09-10T00:00:00.000Z", state: "voided" as const }, path: "v", blob_id: "a", draft_fingerprint: "f" },
+    ];
+    const listProjectTimeEntries = vi.fn(async (_d: string, _p: string, filters: Record<string, unknown> = {}) => {
+      const all = [{ document: { schema: "gitpm/time-entry@1" as const, id: "E-26-RST-A", project: "P-26-1", task: taskOne.document.id, person: "U-1", performed_on: "2026-09-09", hours: 3, category: "regular", created_at: "2026-09-09T00:00:00.000Z", state: "active" as const }, path: "a", blob_id: "a", draft_fingerprint: "f" }, ...items];
+      const filtered = all.filter((entry) => entry.document.state === String(filters.state ?? entry.document.state));
+      return { total: filtered.length, offset: 0, limit: 200, items: filtered };
+    });
+    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const projectDoc = project({}, { primary_track: "plan", workload_track: "plan", comparison_track: "target" });
+    const { readModels, workloadTrack } = buildReportProps(projectDoc, [], [taskOne], scheduling);
+    render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[taskOne]} workloadTrack={workloadTrack} />);
+
+    const voidedCheckbox = await screen.findByRole("checkbox", { name: /Show cancelled entries/u });
+    fireEvent.click(voidedCheckbox);
+    await waitFor(() => expect(screen.getByText("Correction history")).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Reset filters" }));
+    await waitFor(() => expect((screen.getByRole("checkbox", { name: /Show cancelled entries/u }) as HTMLInputElement).checked).toBe(false));
+    expect(screen.queryByText("Correction history")).toBeNull();
+  });
 });
