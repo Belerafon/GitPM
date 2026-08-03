@@ -53,7 +53,7 @@ function api(
   } as unknown as GitPmApi & { createEntity: typeof createEntity; updateEntity: typeof updateEntity; deleteEntity: typeof deleteEntity };
 }
 
-afterEach(() => { cleanup(); localStorage.clear(); });
+afterEach(() => { cleanup(); localStorage.clear(); vi.useRealTimers(); });
 
 const multitrackConfig: ConfigurationDocument = {
   schema: "gitpm/schedule-tracks@1",
@@ -711,6 +711,7 @@ describe("ProjectPlanWorkspace", () => {
   });
 
   it("renders interactive summary metrics with counts from status categories", async () => {
+    vi.useFakeTimers({ now: new Date("2026-07-20T12:00:00Z"), toFake: ["Date"] });
     const client = api(summaryTasksFixture(), [summaryStage], summaryProject);
     useSummaryStatusConfig(client);
     render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={summaryProject.document.id} />);
@@ -718,11 +719,48 @@ describe("ProjectPlanWorkspace", () => {
     await screen.findByRole("heading", { name: "Summary project" });
     expect(screen.getByRole("button", { name: "Total tasks: 3" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Completed: 1" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "In progress: 1" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Active: 1" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Overdue: 1" })).toBeTruthy();
   });
 
+  it("scopes summary counts to the selected milestone and keeps them independent of the status filter", async () => {
+    vi.useFakeTimers({ now: new Date("2026-07-20T12:00:00Z"), toFake: ["Date"] });
+    const stageA = result({ schema: "gitpm/milestone@2", id: "M-26-A", project: summaryProject.document.id, name: "Stage A", lifecycle: "active" });
+    const stageB = result({ schema: "gitpm/milestone@2", id: "M-26-B", project: summaryProject.document.id, name: "Stage B", lifecycle: "active" });
+    const tasks = [
+      result({ schema: "gitpm/task@2", id: "T-A-DONE", project: summaryProject.document.id, milestone: stageA.document.id, title: "A done", type: "task", status: "done", lifecycle: "active" }),
+      result({ schema: "gitpm/task@2", id: "T-A-ACT", project: summaryProject.document.id, milestone: stageA.document.id, title: "A active", type: "task", status: "in-progress", lifecycle: "active" }),
+      result({ schema: "gitpm/task@2", id: "T-B-DONE", project: summaryProject.document.id, milestone: stageB.document.id, title: "B done", type: "task", status: "done", lifecycle: "active" }),
+    ];
+    const client = api(tasks, [stageA, stageB], summaryProject);
+    useSummaryStatusConfig(client);
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={summaryProject.document.id} />);
+
+    await screen.findByRole("heading", { name: "Summary project" });
+    expect(screen.getByRole("button", { name: "Total tasks: 3" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Completed: 2" })).toBeTruthy();
+    // Narrowing to Stage A keeps 2 tasks (1 done, 1 active); the quick metrics must follow.
+    fireEvent.change(screen.getByRole("combobox", { name: "Milestone" }), { target: { value: stageA.document.id } });
+    expect(screen.getByRole("button", { name: "Total tasks: 2" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Completed: 1" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Active: 1" })).toBeTruthy();
+    // Selecting a concrete status does NOT change the quick metric numbers.
+    fireEvent.change(screen.getByRole("combobox", { name: "Filter tasks" }), { target: { value: "done" } });
+    expect(screen.getByRole("button", { name: "Completed: 1" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Total tasks: 2" })).toBeTruthy();
+  });
+
+  it("treats the legacy in-progress summary query value as active", async () => {
+    const client = api(summaryTasksFixture(), [summaryStage], summaryProject);
+    useSummaryStatusConfig(client);
+    render(<ProjectPlanWorkspace api={client} draft={draft} initialSummaryFilter="in-progress" locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={summaryProject.document.id} />);
+
+    await screen.findByRole("heading", { name: "Summary project" });
+    expect(screen.getByRole("button", { name: "Active: 1" }).getAttribute("aria-pressed")).toBe("true");
+  });
+
   it("bases overdue on the effective finish roll-up and excludes done and undated tasks", async () => {
+    vi.useFakeTimers({ now: new Date("2026-07-20T12:00:00Z"), toFake: ["Date"] });
     const rollupParent = result({ schema: "gitpm/task@2", id: "T-26-PAR", project: summaryProject.document.id, milestone: summaryStage.document.id, title: "Rollup parent", type: "task", status: "backlog", lifecycle: "active" });
     const rollupChild = result({ schema: "gitpm/task@2", id: "T-26-CHL", project: summaryProject.document.id, milestone: summaryStage.document.id, parent: rollupParent.document.id, title: "Rollup child", type: "task", status: "done", lifecycle: "active", schedules: { plan: { finish: "2026-07-10" } } });
     const donePast = result({ schema: "gitpm/task@2", id: "T-26-DP", project: summaryProject.document.id, milestone: summaryStage.document.id, title: "Done past", type: "task", status: "done", lifecycle: "active", schedules: { plan: { finish: "2026-07-05" } } });
@@ -775,7 +813,8 @@ describe("ProjectPlanWorkspace", () => {
     expect(screen.getByRole("button", { name: "Completed: 1" }).getAttribute("aria-pressed")).toBe("true");
     fireEvent.change(screen.getByRole("combobox", { name: "Filter tasks" }), { target: { value: "done" } });
     expect(screen.getByRole("button", { name: "Completed: 1" }).getAttribute("aria-pressed")).toBe("false");
-    expect(screen.getByRole("button", { name: "Total tasks: 3" }).getAttribute("aria-pressed")).toBe("true");
+    // Total is only pressed when no quick filter AND no specific status are active.
+    expect(screen.getByRole("button", { name: "Total tasks: 3" }).getAttribute("aria-pressed")).toBe("false");
   });
 
   it("renders removable chips for each active filter and Reset clears them all", async () => {
@@ -784,7 +823,7 @@ describe("ProjectPlanWorkspace", () => {
     render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={summaryProject.document.id} />);
 
     await screen.findByRole("heading", { name: "Summary project" });
-    expect(screen.getByText("All tasks")).toBeTruthy();
+    expect(screen.queryByText("All tasks")).toBeNull();
     fireEvent.change(screen.getByRole("combobox", { name: "Milestone" }), { target: { value: summaryStage.document.id } });
     fireEvent.change(screen.getByRole("combobox", { name: "Filter tasks" }), { target: { value: "done" } });
     const statusChip = screen.getByRole("button", { name: "Remove filter: Done" });
@@ -796,7 +835,7 @@ describe("ProjectPlanWorkspace", () => {
     expect(screen.getByRole("button", { name: "Remove filter: Summary stage" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Reset" }));
     expect(screen.queryByRole("button", { name: "Remove filter: Summary stage" })).toBeNull();
-    expect(screen.getByText("All tasks")).toBeTruthy();
+    expect(screen.queryByText("All tasks")).toBeNull();
   });
 
   it("syncs the summary filter into the navigation query", async () => {

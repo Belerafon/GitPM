@@ -65,7 +65,7 @@ describe("ProjectScheduleSummary", () => {
     expect(primaryRow.querySelector("dd")!.textContent).toContain("Mar");
     const comparisonRow = screen.getByText("Comparison schedule").closest("dt")!.parentElement!;
     expect(comparisonRow.querySelector("dd")!.textContent).toContain("Feb");
-    expect(screen.getByText("Variance").parentElement?.textContent).toMatch(/\+20 d/);
+    expect(screen.getByText("Variance").parentElement?.textContent).toMatch(/\+20 days/);
   });
 
   it("opens the Gantt for the project when the open-Gantt action is clicked", () => {
@@ -129,7 +129,21 @@ describe("ProjectScheduleSummary", () => {
     const comparisonRow = screen.getByText("Comparison schedule").closest("dt")!.parentElement!;
     expect(comparisonRow.querySelector("dd")!.textContent).toMatch(/May.{1,3}1/);
     const variance = screen.getByText("Variance").parentElement!;
-    expect(variance.textContent).toMatch(/-21 d/);
+    expect(variance.textContent).toMatch(/-21 days/);
+  });
+
+  it("hides the comparison card when the comparison track equals the primary track", () => {
+    // §5.3: a comparison track that points at the same slug as the primary track must not
+    // duplicate the primary finish as a second row.
+    const { container } = render(<ProjectScheduleSummary project={project({ plan: { finish: "2026-03-20" }, target: { finish: "2026-02-28" } }, { primary_track: "plan", comparison_track: "plan" })} projectId={projectId} onNavigate={vi.fn()} locale="en" scheduling={scheduling} />);
+    expect(container.firstChild).toBeNull();
+  });
+
+  it("localizes the variance for Russian without leaking the English day abbreviation", () => {
+    render(<ProjectScheduleSummary project={project({ plan: { finish: "2026-03-20" }, target: { finish: "2026-02-28" } }, { primary_track: "plan", comparison_track: "target" })} projectId={projectId} onNavigate={vi.fn()} locale="ru" scheduling={scheduling} />);
+    const variance = screen.getByText("Отклонение").parentElement!;
+    expect(variance.textContent).toMatch(/\+20 дн\./u);
+    expect(variance.textContent).not.toMatch(/ d/u);
   });
 });
 
