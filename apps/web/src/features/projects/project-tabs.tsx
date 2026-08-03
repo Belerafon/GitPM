@@ -5,6 +5,7 @@ const tabs: readonly { readonly destination: WorkspaceDestination; readonly labe
   { destination: "projects", label: "projectTabs.overview" },
   { destination: "board", label: "projectTabs.board" },
   { destination: "gantt", label: "projectTabs.gantt" },
+  { destination: "effort", label: "projectTabs.effort" },
 ];
 
 export function ProjectTabs({ active, projectId, query, onNavigate, t }: {

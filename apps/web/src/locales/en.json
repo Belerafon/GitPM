@@ -39,6 +39,7 @@
   "nav.settings": "Statuses and task types",
   "nav.workload": "Team workload",
   "nav.gantt": "Gantt",
+  "nav.effort": "Effort",
   "nav.changes": "Changes",
   "nav.files": "Files",
   "nav.history": "History",
@@ -626,6 +627,7 @@
   ,"projectTabs.tasks": "Tasks"
   ,"projectTabs.board": "Board"
   ,"projectTabs.gantt": "Gantt"
+  ,"projectTabs.effort": "Effort"
   ,"planning.heading": "Project planning"
   ,"planning.enabledTracks": "Enabled tracks"
   ,"planning.primaryTrack": "Primary track"

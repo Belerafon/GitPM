@@ -39,6 +39,7 @@
   "nav.settings": "Статусы и типы задач",
   "nav.workload": "Загрузка команды",
   "nav.gantt": "Диаграмма Ганта",
+  "nav.effort": "Трудозатраты",
   "nav.changes": "Изменения",
   "nav.files": "Файлы",
   "nav.history": "История",
@@ -626,6 +627,7 @@
   ,"projectTabs.tasks": "Задачи"
   ,"projectTabs.board": "Доска"
   ,"projectTabs.gantt": "Диаграмма Ганта"
+  ,"projectTabs.effort": "Трудозатраты"
   ,"planning.heading": "Планирование проекта"
   ,"planning.enabledTracks": "Включённые контуры"
   ,"planning.primaryTrack": "Основной контур"
