@@ -270,6 +270,15 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
     // that does not belong to it.
     if (value !== "" && filters.task !== "" && relations.milestoneOf.get(filters.task) !== value) patchFilter("task", "");
   };
+  const selectTask = (value: string) => {
+    patchFilter("task", value);
+    if (value === "") return;
+    // Selecting a task auto-selects its active milestone so the two filters cannot disagree.
+    // Tasks outside every active milestone clear the milestone filter.
+    const raw = relations.milestoneOf.get(value);
+    const milestone = raw !== undefined && orderedMilestones.some((item) => item.document.id === raw) ? raw : "";
+    if (milestone !== filters.milestone) patchFilter("milestone", milestone);
+  };
 
   const planCellSource = (row: PlanActualRow): string => row.planSource === "declared" ? t("actualReport.cellPlanDeclared") : row.planSource === "rolled" ? t("actualReport.cellPlanRolled") : "";
 
@@ -277,7 +286,7 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
     <div className="actual-report-heading"><div><h4>{t("snapshot.actualReport")}</h4><p>{t("actualReport.description")}</p></div><button type="button" onClick={resetAll}>{t("actualReport.reset")}</button></div>
     <div className="actual-report-filters">
       <label>{t("actualReport.milestone")}<select value={filters.milestone} onChange={(event) => selectMilestone(event.target.value)}><option value="">{t("actualReport.allMilestones")}</option>{orderedMilestones.map((milestone) => <option key={milestone.document.id} value={milestone.document.id}>{reader(milestone.document, "name")}</option>)}</select></label>
-      <label>{t("actualReport.task")}<select value={filters.task} onChange={(event) => patchFilter("task", event.target.value)}><option value="">{t("actualReport.allTasks")}</option>{flattened.map((row) => <option key={row.node.id} value={row.node.id}>{`${"\u00A0\u00A0".repeat(row.node.depth)}${row.node.title || taskName(row.node.id)}`}</option>)}</select></label>
+      <label>{t("actualReport.task")}<select value={filters.task} onChange={(event) => selectTask(event.target.value)}><option value="">{t("actualReport.allTasks")}</option>{flattened.map((row) => <option key={row.node.id} value={row.node.id}>{`${"\u00A0\u00A0".repeat(row.node.depth)}${row.node.title || taskName(row.node.id)}`}</option>)}</select></label>
       <label>{t("timeEffort.person")}<select value={filters.person} onChange={(event) => patchFilter("person", event.target.value)}><option value="">{t("actualReport.allPeople")}</option>{peopleOptions.map((id) => <option key={id} value={id}>{personName(id)}</option>)}</select></label>
       <label>{t("actualReport.from")}<input type="date" value={filters.performed_from} onChange={(event) => patchFilter("performed_from", event.target.value)} /></label>
       <label>{t("actualReport.to")}<input type="date" value={filters.performed_to} onChange={(event) => patchFilter("performed_to", event.target.value)} /></label>

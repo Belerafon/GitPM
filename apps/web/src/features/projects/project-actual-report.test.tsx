@@ -355,6 +355,24 @@ describe("ProjectActualReport", () => {
     expect((screen.getByLabelText("Task") as HTMLSelectElement).value).toBe(taskOne.document.id);
   });
 
+  it("auto-selects a task's milestone when the task is chosen from the list", async () => {
+    const milestoneA = { document: { schema: "gitpm/milestone@2", id: "M-26-A", project: "P-26-1", name: "Stage A", lifecycle: "active" }, path: "a.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const taskInA = { document: { schema: "gitpm/task@2", id: "T-26-INA", project: "P-26-1", milestone: milestoneA.document.id, title: "In A", type: "task", status: "in-progress", lifecycle: "active", schedules: { plan: { effort_hours: 5 } } }, path: "ina.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const orphan = { document: { schema: "gitpm/task@2", id: "T-26-ORPHAN", project: "P-26-1", title: "Orphan", type: "task", status: "in-progress", lifecycle: "active", schedules: { plan: { effort_hours: 2 } } }, path: "orphan.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const listProjectTimeEntries = vi.fn(async () => ({ total: 0, offset: 0, limit: 200, items: [] }));
+    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const projectDoc = project({}, { primary_track: "plan", workload_track: "plan", comparison_track: "target" });
+    const { readModels, workloadTrack } = buildReportProps(projectDoc, [milestoneA], [taskInA, orphan], scheduling);
+    render(<ProjectActualReport api={api} draft={draft} locale="en" milestones={[milestoneA]} onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[taskInA, orphan]} workloadTrack={workloadTrack} />);
+
+    await screen.findByLabelText("Task");
+    fireEvent.change(screen.getByLabelText("Task"), { target: { value: taskInA.document.id } });
+    expect((screen.getByLabelText("Milestone") as HTMLSelectElement).value).toBe(milestoneA.document.id);
+    // Selecting a task outside every active milestone clears the milestone filter so the two cannot disagree.
+    fireEvent.change(screen.getByLabelText("Task"), { target: { value: orphan.document.id } });
+    expect((screen.getByLabelText("Milestone") as HTMLSelectElement).value).toBe("");
+  });
+
   it("reset clears filters, scope mode, cutoff and the show-cancelled toggle", async () => {
     const taskOne = { document: { schema: "gitpm/task@2", id: "T-26-RST", project: "P-26-1", title: "Reset task", type: "task", status: "done", lifecycle: "active", schedules: { plan: { effort_hours: 5 } } }, path: "t.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
     const items = [
