@@ -723,6 +723,59 @@ describe("ProjectPlanWorkspace", () => {
     expect(screen.getByRole("button", { name: "Overdue: 1" })).toBeTruthy();
   });
 
+  it("orders the summary metrics Total, Active, Overdue, Completed", async () => {
+    const client = api(summaryTasksFixture(), [summaryStage], summaryProject);
+    useSummaryStatusConfig(client);
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={summaryProject.document.id} />);
+
+    await screen.findByRole("heading", { name: "Summary project" });
+    const group = screen.getByRole("group", { name: "Summary and quick task filters" });
+    const labels = Array.from(group.querySelectorAll("button.project-plan-summary-metric > span"), (element) => element.textContent);
+    expect(labels).toEqual(["Total tasks", "Active", "Overdue", "Completed"]);
+  });
+
+  it("hides milestones without matching tasks under a summary filter and restores them on toggle", async () => {
+    vi.useFakeTimers({ now: new Date("2026-07-20T12:00:00Z"), toFake: ["Date"] });
+    const stageA = result({ schema: "gitpm/milestone@2", id: "M-26-A", project: summaryProject.document.id, name: "Stage A", lifecycle: "active" });
+    const stageB = result({ schema: "gitpm/milestone@2", id: "M-26-B", project: summaryProject.document.id, name: "Stage B", lifecycle: "active" });
+    const tasks = [
+      result({ schema: "gitpm/task@2", id: "T-A-DONE", project: summaryProject.document.id, milestone: stageA.document.id, title: "A done", type: "task", status: "done", lifecycle: "active" }),
+      result({ schema: "gitpm/task@2", id: "T-B-ACT", project: summaryProject.document.id, milestone: stageB.document.id, title: "B active", type: "task", status: "in-progress", lifecycle: "active", schedules: { plan: { finish: "2026-12-01" } } }),
+    ];
+    const client = api(tasks, [stageA, stageB], summaryProject);
+    useSummaryStatusConfig(client);
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={summaryProject.document.id} />);
+
+    await screen.findByRole("heading", { name: "Summary project" });
+    expect(screen.getByRole("heading", { name: "Stage A" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Stage B" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Active: 1" }));
+    expect(screen.queryByRole("heading", { name: "Stage A" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Stage B" })).toBeTruthy();
+    expect(screen.getByText("B active")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Active: 1" }));
+    expect(screen.getByRole("heading", { name: "Stage A" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Stage B" })).toBeTruthy();
+  });
+
+  it("shows an empty state when the active summary filter matches no tasks", async () => {
+    vi.useFakeTimers({ now: new Date("2026-07-20T12:00:00Z"), toFake: ["Date"] });
+    const stageA = result({ schema: "gitpm/milestone@2", id: "M-26-A", project: summaryProject.document.id, name: "Stage A", lifecycle: "active" });
+    const tasks = [
+      result({ schema: "gitpm/task@2", id: "T-A-DONE", project: summaryProject.document.id, milestone: stageA.document.id, title: "A done", type: "task", status: "done", lifecycle: "active" }),
+    ];
+    const client = api(tasks, [stageA], summaryProject);
+    useSummaryStatusConfig(client);
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={summaryProject.document.id} />);
+
+    await screen.findByRole("heading", { name: "Summary project" });
+    fireEvent.click(screen.getByRole("button", { name: "Active: 0" }));
+    expect(screen.getByText("No tasks match the active filters.")).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Stage A" })).toBeNull();
+  });
+
   it("scopes summary counts to the selected milestone and keeps them independent of the status filter", async () => {
     vi.useFakeTimers({ now: new Date("2026-07-20T12:00:00Z"), toFake: ["Date"] });
     const stageA = result({ schema: "gitpm/milestone@2", id: "M-26-A", project: summaryProject.document.id, name: "Stage A", lifecycle: "active" });
