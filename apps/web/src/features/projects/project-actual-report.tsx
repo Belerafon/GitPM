@@ -112,25 +112,65 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
   const [entries, setEntries] = useState<readonly RawEntry[] | null>(null);
   const [knownPeople, setKnownPeople] = useState<readonly string[]>([]);
   const [knownCategories, setKnownCategories] = useState<readonly string[]>([]);
-  // Task ids that have at least one non-voided time record anywhere in the project. The first
-  // fetch is unfiltered and active-state, so this set is seeded with the complete history; it
-  // only grows on later filtered fetches so an archived task with history is never hidden from
-  // the selector just because a person or date filter currently narrows the visible records.
+  // Task ids that have at least one non-voided time record anywhere in the project. Populated
+  // exclusively by the independent full-index request (Request A below), never by the filtered
+  // display request, so a person, category, or date filter can never shrink the set of tasks
+  // recognized as historical.
   const [historicalTaskIds, setHistoricalTaskIds] = useState<ReadonlySet<string>>(() => new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Historical accumulators (entries, knownPeople, knownCategories, historicalTaskIds) belong to
-  // one working copy. When the project or the draft changes they must be cleared so the previous
-  // copy's archived tasks, people, categories, and records cannot leak into the new one. The data
-  // effect below re-populates them from the first unfiltered fetch of the new copy.
+  // Every accumulator below belongs to one working copy (projectId + draft). When either
+  // changes the whole state of the previous copy is cleared — entries, historical index,
+  // catalogs, filters, scope mode, show-cancelled toggle, cutoff, and errors — so nothing can
+  // leak across projects or drafts. The two data effects that follow re-populate the state from
+  // the new copy.
   useEffect(() => {
     setEntries(null);
     setKnownPeople([]);
     setKnownCategories([]);
     setHistoricalTaskIds(new Set());
+    setFilters(EMPTY_FILTERS);
+    setScopeMode("withSubtasks");
+    setShowVoided(false);
+    setCutoff("");
+    setError(null);
   }, [projectId, draft.draft_id]);
 
+  // Request A — full historical index. Depends only on api, projectId, and draft.draft_id. It
+  // never carries user filters (person, category, date range, state, task, milestone,
+  // showVoided) so the resulting set of historical task ids, people, and categories is always
+  // complete regardless of what the user selects in the report toolbar. A single project-wide
+  // paginated call is used; per-task requests are forbidden. A cancellation flag discards any
+  // response that arrives after the working copy changed.
+  useEffect(() => {
+    let active = true;
+    void listAllProjectTimeEntries(api, draft.draft_id, projectId)
+      .then((result) => {
+        if (!active) return;
+        const taskIds = new Set<string>();
+        const people = new Set<string>();
+        const categories = new Set<string>();
+        for (const entry of result) {
+          if (entry.document.state !== "voided") taskIds.add(entry.document.task);
+          people.add(entry.document.person);
+          categories.add(entry.document.category);
+        }
+        setHistoricalTaskIds(taskIds);
+        setKnownPeople([...people].sort());
+        setKnownCategories([...categories].sort());
+      })
+      .catch(() => { /* A failed index request degrades gracefully: the selector omits
+                        archived tasks and the dropdowns fall back to catalog-level options.
+                        The filtered display request (Request B) surfaces its own errors. */ });
+    return () => { active = false; };
+  }, [api, draft.draft_id, projectId]);
+
+  // Request B — displayed records. Narrowed by the user's person, category, date-range, and
+  // state filters. Updates only the visible rows, sums, and groupings. It never touches the
+  // full historical index (Request A), which stays complete across filter changes. A
+  // cancellation flag discards any response that arrives after the filters or the working copy
+  // changed, so a slow filtered response can never overwrite a newer one or the full index.
   useEffect(() => {
     if (filters.performed_from !== "" && filters.performed_to !== "" && filters.performed_from > filters.performed_to) {
       setError(t("actualReport.invalidRange"));
@@ -141,21 +181,11 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
     setLoading(true);
     setError(null);
     void listAllProjectTimeEntries(api, draft.draft_id, projectId, requestFilters(filters, showVoided))
-      .then((result) => {
-        if (!active) return;
-        setEntries(result);
-        setKnownPeople((current) => [...new Set([...current, ...result.map((entry) => entry.document.person)])].sort());
-        setKnownCategories((current) => [...new Set([...current, ...result.map((entry) => entry.document.category)])].sort());
-        setHistoricalTaskIds((current) => {
-          const next = new Set(current);
-          for (const entry of result) if (entry.document.state !== "voided") next.add(entry.document.task);
-          return next.size === current.size ? current : next;
-        });
-      })
+      .then((result) => { if (active) setEntries(result); })
       .catch((reason: unknown) => { if (active) setError(formatApiError(reason)); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [api, draft.draft_id, filters, projectId, showVoided]);
+  }, [api, draft.draft_id, projectId, filters, showVoided]);
 
   const records = useMemo(() => (entries ?? []).map((entry) => toRecord(entry, projectId)), [entries, projectId]);
   const reader = useMemo(() => scheduleTextReader(workloadTrack), [workloadTrack]);
@@ -170,7 +200,6 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
   const activeTaskIds = useMemo(() => new Set(tasks.filter((task) => task.document.lifecycle === "active").map((task) => task.document.id)), [tasks]);
   const currentPlanRelations = useMemo(() => buildTaskRelations(tasks.filter((task) => task.document.lifecycle === "active"), { activeTaskIds }), [activeTaskIds, tasks]);
   const historicalRelations = useMemo(() => buildTaskRelations(tasks), [tasks]);
-  const taskById = useMemo(() => new Map(tasks.map((task) => [task.document.id, task] as const)), [tasks]);
   const orderedMilestones = useMemo(() => orderActiveMilestones({ project, milestones, text: reader, locale }), [project, milestones, reader, locale]);
   const activeMilestoneIds = useMemo(() => new Set(orderedMilestones.map((milestone) => milestone.document.id)), [orderedMilestones]);
   const scope = useMemo<ReadonlySet<string>>(() => {
@@ -234,16 +263,28 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
   const voidedRecords = useMemo(() => (entries ?? []).filter((entry) => scope.has(entry.document.task) && entry.document.state === "voided"), [entries, scope]);
   const after = cutoff === "" ? undefined : hoursAfterDate(scopeRecords, cutoff);
 
+  // The current-plan view model is built from ACTIVE tasks only. Because buildTaskHierarchy
+  // treats a task whose parent is absent from the input as a root, passing active tasks alone
+  // normalizes every parent link: an active child of an archived, deleted, missing, or
+  // self-referential parent becomes a root of its stage instead of vanishing under a parent
+  // the active tree cannot resolve. Archived tasks are never inserted back into this tree —
+  // they surface as flat historical rows (see planActualRows) so they cannot determine an
+  // active task's depth, indent, or order.
+  const activeTasks = useMemo(() => tasks.filter((task) => task.document.lifecycle === "active"), [tasks]);
   const viewModel = useMemo(() => buildProjectTaskViewModel({
     project,
     milestones,
-    tasks,
+    tasks: activeTasks,
     text: reader,
     effortOf: scheduleEffortReader(workloadTrack),
     locale,
     compareTasks: canonicalTaskComparator(locale, reader),
-  }), [project, milestones, tasks, reader, workloadTrack, locale]);
+  }), [project, milestones, activeTasks, reader, workloadTrack, locale]);
   const flattened = useMemo(() => flattenProjectTaskViewModel(viewModel), [viewModel]);
+  // Archived tasks that own non-voided time records anywhere in the project. Identified by the
+  // independent full-index request (Request A), not the filtered display records, so they
+  // remain visible in the selector and the historical rows regardless of the current filter.
+  const archivedTasksWithHistory = useMemo(() => tasks.filter((task) => task.document.lifecycle === "archived" && historicalTaskIds.has(task.document.id)), [tasks, historicalTaskIds]);
 
   const patchFilter = <Key extends keyof ReportFilters>(key: Key, value: ReportFilters[Key]) => setFilters((current) => ({ ...current, [key]: value }));
 
@@ -267,12 +308,8 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
       const plan = taskPlanEffort(readModels, workloadTrack, row.node.id, taskOnly ? "taskOnly" : "withSubtasks");
       const actualOwn = actualByTask.get(row.node.id) ?? 0;
       const actualBranch = taskOnly ? actualOwn : sumBranchActualWithinScope(actualByTask, historicalRelations, scope, row.node.id);
-      const archived = taskById.get(row.node.id)?.document.lifecycle === "archived";
-      // Drop rows that contribute neither planned effort nor actual hours. Archived tasks are
-      // part of the current plan only through their historical time records: an archived task
-      // without actuals is hidden so it cannot inflate the current estimate.
+      // Active rows that contribute neither planned effort nor actual hours are dropped.
       if (plan.value === undefined && actualBranch === 0) continue;
-      if (archived && actualBranch === 0) continue;
       rows.push({
         id: row.node.id,
         title: row.node.title || taskName(row.node.id),
@@ -282,11 +319,32 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
         planSource: plan.source,
         actualBranch,
         actualOwn,
-        archived,
+        archived: false,
+      });
+    }
+    // Historical rows: archived tasks that own time records. They are always flat (depth 0),
+    // never carry a current-plan estimate, and never determine an active task's depth. They
+    // only surface their accumulated actual hours so the report retains the project's history
+    // without inserting archived tasks back into the active tree.
+    for (const task of archivedTasksWithHistory) {
+      const id = task.document.id;
+      if (!scope.has(id)) continue;
+      const actualOwn = actualByTask.get(id) ?? 0;
+      if (actualOwn === 0) continue;
+      rows.push({
+        id,
+        title: taskName(id),
+        depth: 0,
+        stage: undefined,
+        plan: undefined,
+        planSource: "missing",
+        actualBranch: actualOwn,
+        actualOwn,
+        archived: true,
       });
     }
     return rows;
-  }, [flattened, scope, filters.task, scopeMode, readModels, workloadTrack, actualByTask, historicalRelations, taskById, taskName]);
+  }, [flattened, scope, filters.task, scopeMode, readModels, workloadTrack, actualByTask, historicalRelations, archivedTasksWithHistory, taskName]);
   const planSources: string[] = [];
   if (wholeProject && projectBudget !== undefined) {
     if (planOfWork !== undefined) planSources.push(t("actualReport.sourceRootSum"));
@@ -342,32 +400,36 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
    */
   const taskSelectGroups = useMemo(() => {
     type Group = { readonly label: string; readonly rows: readonly { readonly id: string; readonly title: string; readonly depth: number }[] };
+    type SelectRow = { readonly id: string; readonly title: string; readonly depth: number };
     const groups: Group[] = [];
     const pushGroup = (label: string, rows: Group["rows"]): void => { if (rows.length > 0) groups.push({ label, rows }); };
-    // The selector lists every active task plus archived tasks that own historical time records.
-    // An archived task with no history never appears: it cannot inflate the current plan and has
-    // no hours to report. History is read from the project-wide `historicalTaskIds`, not the
-    // filtered current result, so a person or date filter cannot silently drop such a task.
-    const selectable = (id: string): boolean => {
-      const task = taskById.get(id);
-      if (task === undefined) return true;
-      return task.document.lifecycle !== "archived" || historicalTaskIds.has(id);
-    };
-    const toRow = (row: { readonly node: { readonly id: string; readonly title: string; readonly depth: number } }): { readonly id: string; readonly title: string; readonly depth: number } => ({ id: row.node.id, title: row.node.title || taskName(row.node.id), depth: row.node.depth });
+    const toRow = (row: { readonly node: { readonly id: string; readonly title: string; readonly depth: number } }): SelectRow => ({ id: row.node.id, title: row.node.title || taskName(row.node.id), depth: row.node.depth });
+    // Archived tasks that own time records surface as flat (depth 0) historical options alongside
+    // the active tasks in the same milestone group. They never carry a nesting prefix because
+    // they are not children of the current plan tree. An archived task with no history never
+    // appears. History is read from the project-wide `historicalTaskIds` (Request A), not the
+    // filtered display records, so a person or date filter cannot silently drop such a task.
+    const archivedOption = (task: EntityResult): SelectRow => ({ id: task.document.id, title: taskName(task.document.id), depth: 0 });
+    const archivedInMilestone = (milestoneId: string): readonly SelectRow[] => archivedTasksWithHistory
+      .filter((task) => reader(task.document, "milestone") === milestoneId)
+      .map(archivedOption);
+    const archivedOutsideActive = archivedTasksWithHistory
+      .filter((task) => { const m = reader(task.document, "milestone"); return m === "" || !activeMilestoneIds.has(m); })
+      .map(archivedOption);
     for (const milestone of orderedMilestones) {
       // The "outside active milestones" scope renders no milestone groups at all (only the
       // trailing orphan group); a specific milestone renders only its own group.
       if (filters.milestone === "none") continue;
       if (filters.milestone !== "" && filters.milestone !== milestone.document.id) continue;
-      const rows = flattened.filter((row) => row.stage?.document.id === milestone.document.id && selectable(row.node.id)).map(toRow);
+      const rows = [...flattened.filter((row) => row.stage?.document.id === milestone.document.id).map(toRow), ...archivedInMilestone(milestone.document.id)];
       pushGroup(reader(milestone.document, "name"), rows);
     }
     if (filters.milestone === "" || filters.milestone === "none") {
-      const rows = flattened.filter((row) => row.stage === undefined && selectable(row.node.id)).map(toRow);
+      const rows = [...flattened.filter((row) => row.stage === undefined).map(toRow), ...archivedOutsideActive];
       pushGroup(t("stages.withoutStage"), rows);
     }
     return groups;
-  }, [flattened, filters.milestone, historicalTaskIds, orderedMilestones, reader, t, taskById, taskName]);
+  }, [flattened, filters.milestone, orderedMilestones, reader, t, taskName, archivedTasksWithHistory, activeMilestoneIds]);
 
   const planCellSource = (row: PlanActualRow): string => row.planSource === "declared" ? t("actualReport.cellPlanDeclared") : row.planSource === "rolled" ? t("actualReport.cellPlanRolled") : "";
 
