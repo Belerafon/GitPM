@@ -3,6 +3,7 @@ import { formatDateOnly, formatVarianceDays, message, type Locale, type MessageK
 import type { EntityDocument, EntityResult } from "../../types.js";
 import { type ScheduleResolver, trackHasCapability } from "../../schedules.js";
 import { SchedulingOverflowWarnings } from "../../scheduling-overflow-warnings.js";
+import { normalizeActiveMilestone, normalizeActiveParent } from "./project-task-view-model.js";
 import type { WorkspaceNavigate } from "../../workspace-navigation.js";
 
 /**
@@ -33,16 +34,17 @@ export function ProjectScheduleSummary({ project, locale, milestones, tasks, sch
   const activeMilestones = (milestones ?? []).filter((milestone) => milestone.document.lifecycle === "active");
   const activeMilestoneIds = new Set(activeMilestones.map((milestone) => milestone.document.id));
   const activeTasks = (tasks ?? []).filter((task) => task.document.lifecycle === "active");
-  // A task tied to an unknown or archived milestone must still count toward the current
-  // project deadline and its overflow warnings: normalizing the milestone to `undefined` keeps
-  // the task in the rollup instead of letting it fall out of every active-milestone bucket.
+  // Both `parent` and `milestone` are normalized against the active sets so a task whose parent
+  // is non-existent, archived, deleted, or self-referential still counts toward the current
+  // project deadline and its overflow warnings instead of being dropped silently.
+  const activeTaskIds = new Set(activeTasks.map((task) => task.document.id));
   const hierarchy = resolveSchedulingHierarchy({
     project,
     milestones: activeMilestones.map((milestone) => milestone.document),
     tasks: activeTasks.map((task): SchedulingHierarchyTask => ({
       ...task.document,
-      parent: typeof task.document.parent === "string" && task.document.parent !== "" ? task.document.parent : undefined,
-      milestone: typeof task.document.milestone === "string" && task.document.milestone !== "" && activeMilestoneIds.has(task.document.milestone) ? task.document.milestone : undefined,
+      parent: normalizeActiveParent(activeTaskIds, task.document.id, typeof task.document.parent === "string" && task.document.parent !== "" ? task.document.parent : undefined),
+      milestone: normalizeActiveMilestone(activeMilestoneIds, typeof task.document.milestone === "string" ? task.document.milestone : ""),
     })),
     tracks,
   });

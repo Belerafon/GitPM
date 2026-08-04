@@ -28,17 +28,32 @@ export interface EffortPlanValue {
   readonly source: EffortPlanSource;
 }
 
+export interface BuildTaskRelationsOptions {
+  /**
+   * When supplied, a task's parent is kept only if it is non-empty, not a self-reference, and
+   * present in this set. Any other parent value collapses to root. This is what separates the
+   * current-plan relations (active tasks, normalized parents) from the historical relations
+   * (all tasks, raw parents): only the current-plan variant passes an active-task set so an
+   * active child of an archived or missing parent becomes a root of the current plan.
+   */
+  readonly activeTaskIds?: ReadonlySet<string>;
+}
+
 const text = (entity: EntityResult | undefined, key: string): string =>
   typeof entity?.document[key] === "string" ? String(entity.document[key]) : "";
 
 export const roundHours = (value: number): number => Math.round((value + Number.EPSILON) * 10_000) / 10_000;
 
 /**
- * Build parent/child and milestone maps across ALL project tasks. The maps span
- * the whole project (not a filtered view) so a parent's branch can reach its
- * descendants regardless of which milestone filter narrows the visible rows.
+ * Build parent/child and milestone maps across a task set. When `options.activeTaskIds` is
+ * supplied the parent links are normalized for the CURRENT plan: a parent that is empty,
+ * absent, archived, deleted, or self-referential is dropped so the task becomes a root.
+ * Without that option every raw parent link is kept, which is what the historical relations
+ * (archived tasks included) need so a parent's branch can still reach its descendants for
+ * actual-hour grouping regardless of which milestone filter narrows the visible rows.
  */
-export function buildTaskRelations(tasks: readonly EntityResult[]): EffortTaskRelations {
+export function buildTaskRelations(tasks: readonly EntityResult[], options?: BuildTaskRelationsOptions): EffortTaskRelations {
+  const activeTaskIds = options?.activeTaskIds;
   const childrenByParent = new Map<string, string[]>();
   const parentOf = new Map<string, string>();
   const milestoneOf = new Map<string, string>();
@@ -46,7 +61,10 @@ export function buildTaskRelations(tasks: readonly EntityResult[]): EffortTaskRe
   for (const task of tasks) {
     const id = task.document.id;
     ids.push(id);
-    const parent = text(task, "parent");
+    const rawParent = text(task, "parent");
+    const parent = activeTaskIds === undefined
+      ? rawParent
+      : rawParent !== "" && rawParent !== id && activeTaskIds.has(rawParent) ? rawParent : "";
     if (parent !== "") {
       parentOf.set(id, parent);
       const peers = childrenByParent.get(parent) ?? [];

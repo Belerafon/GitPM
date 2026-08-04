@@ -201,4 +201,41 @@ describe("unified scheduling model", () => {
     expect(metadata.textContent).toContain("Jul 24, 2026");
     expect(metadata.textContent).toContain("16 h");
   });
+
+  it("rolls an active task with a non-existent parent into the project deadline", () => {
+    // Scenario 1: the task points at a parent id that does not exist. After normalization it
+    // becomes a root, so its Dec 10 finish reaches the rolled-up project schedule instead of
+    // being silently dropped under a parent the hierarchy cannot resolve.
+    const projectId = "P-26-ORPHAN";
+    const projectDoc = result({ schema: "gitpm/project@2", id: projectId, name: "Orphan project", status: "in-progress", lifecycle: "active", planning, schedules: { target: { finish: "2026-09-15" } } }).document;
+    const orphan = result({ schema: "gitpm/task@2", id: "T-26-ORPHAN", project: projectId, parent: "T-26-GONE", title: "Orphan task", type: "task", status: "backlog", lifecycle: "active", schedules: { working: { finish: "2026-12-10", effort_hours: 20 } } });
+    render(<ProjectScheduleSummary project={projectDoc} projectId={projectId} onNavigate={vi.fn()} locale="en" scheduling={new ScheduleResolver(scheduleTracksConfig(tracksConfig()))} tasks={[orphan]} comparisonTrack="target" />);
+    const primary = screen.getByText("Primary schedule").closest("div")!;
+    expect(primary.textContent).toMatch(/Dec|10/);
+  });
+
+  it("rolls an active child of an archived parent into the project deadline", () => {
+    // Scenario 2: the parent is archived. The active child must not disappear under it; the
+    // child's finish reaches the rolled-up project schedule and the archived parent's own
+    // stale window does not.
+    const projectId = "P-26-ARCHPARENT";
+    const projectDoc = result({ schema: "gitpm/project@2", id: projectId, name: "Archived parent project", status: "in-progress", lifecycle: "active", planning, schedules: { target: { finish: "2026-09-15" } } }).document;
+    const archivedParent = result({ schema: "gitpm/task@2", id: "T-26-AP", project: projectId, title: "Archived parent", type: "task", status: "done", lifecycle: "archived", schedules: { working: { finish: "2026-01-01", effort_hours: 99 } } });
+    const activeChild = result({ schema: "gitpm/task@2", id: "T-26-AC", project: projectId, parent: archivedParent.document.id, title: "Active child", type: "task", status: "backlog", lifecycle: "active", schedules: { working: { finish: "2026-12-10", effort_hours: 20 } } });
+    render(<ProjectScheduleSummary project={projectDoc} projectId={projectId} onNavigate={vi.fn()} locale="en" scheduling={new ScheduleResolver(scheduleTracksConfig(tracksConfig()))} tasks={[archivedParent, activeChild]} comparisonTrack="target" />);
+    const primary = screen.getByText("Primary schedule").closest("div")!;
+    expect(primary.textContent).toMatch(/Dec|10/);
+    expect(primary.textContent).not.toMatch(/Jan/u);
+  });
+
+  it("treats a self-referential parent as a root and still rolls the task finish up", () => {
+    // Scenario 4: the task points parent at its own id. There must be no recursion and the
+    // task's finish must reach the rolled-up project schedule.
+    const projectId = "P-26-SELF";
+    const projectDoc = result({ schema: "gitpm/project@2", id: projectId, name: "Self-ref project", status: "in-progress", lifecycle: "active", planning, schedules: { target: { finish: "2026-09-15" } } }).document;
+    const selfRef = result({ schema: "gitpm/task@2", id: "T-26-SELF", project: projectId, parent: "T-26-SELF", title: "Self-ref task", type: "task", status: "backlog", lifecycle: "active", schedules: { working: { finish: "2026-12-10", effort_hours: 20 } } });
+    render(<ProjectScheduleSummary project={projectDoc} projectId={projectId} onNavigate={vi.fn()} locale="en" scheduling={new ScheduleResolver(scheduleTracksConfig(tracksConfig()))} tasks={[selfRef]} comparisonTrack="target" />);
+    const primary = screen.getByText("Primary schedule").closest("div")!;
+    expect(primary.textContent).toMatch(/Dec|10/);
+  });
 });
