@@ -64,7 +64,9 @@ describe("ProjectActualReport", () => {
     fireEvent.change(screen.getByLabelText("Hours after date"), { target: { value: "2026-02-28" } });
     expect(screen.getByText("Hours after 2026-02-28").parentElement?.textContent).toMatch(/203\.5/);
     expect(screen.getByText("Actual hours report")).toBeTruthy();
-    expect(listProjectTimeEntries.mock.calls.map((call) => call[2]?.offset)).toEqual([0, 200]);
+    // Two independent paginated requests fire on mount: the full historical index (Request A)
+    // and the filtered display records (Request B). Both paginate past the 200-item first page.
+    expect(listProjectTimeEntries.mock.calls.map((call) => call[2]?.offset)).toEqual([0, 0, 200, 200]);
   });
 
   it("applies actual-only filters without relabeling the plan and shows the plan-not-filtered notice", async () => {
@@ -595,5 +597,237 @@ describe("ProjectActualReport", () => {
     const filteredSelect = screen.getByLabelText("Task") as HTMLSelectElement;
     expect(Array.from(filteredSelect.options).some((option) => option.value === archivedWithHistory.document.id)).toBe(true);
     expect(Array.from(filteredSelect.options).some((option) => option.value === archivedWithoutHistory.document.id)).toBe(false);
+  });
+
+  // ── Mandatory test 1: archived parent promotes the active child to a root ─────────
+  it("archived parent: active child becomes a root row, a flat selector option, and a plan contributor", async () => {
+    const archivedParent = { document: { schema: "gitpm/task@2", id: "T-ARCH-PAR", project: "P-26-1", title: "Archived parent", type: "task", status: "done", lifecycle: "archived", schedules: { estimate: { effort_hours: 50 } } }, path: "ap.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const activeChild = { document: { schema: "gitpm/task@2", id: "T-ACT-CHILD", project: "P-26-1", parent: archivedParent.document.id, title: "Active child", type: "task", status: "in-progress", lifecycle: "active", schedules: { estimate: { effort_hours: 20 } } }, path: "ac.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const listProjectTimeEntries = vi.fn(async () => ({ total: 0, offset: 0, limit: 200, items: [] }));
+    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const projectDoc = project({}, { primary_track: "working", workload_track: "estimate" });
+    const { readModels, workloadTrack } = buildActiveReportProps(projectDoc, [], [archivedParent, activeChild], multiTrackScheduling);
+    render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[archivedParent, activeChild]} workloadTrack={workloadTrack} />);
+
+    const childRow = await waitFor(() => { const row = document.querySelector<HTMLElement>(`tr[data-task-id="${activeChild.document.id}"]`); expect(row).not.toBeNull(); return row!; });
+    // Root depth: the archived parent does not pull the active child down.
+    expect(childRow.getAttribute("data-depth")).toBe("0");
+    expect(childRow.querySelector<HTMLElement>(".actual-report-task-cell")?.style.paddingLeft).toBe("0.5rem");
+    // Current plan includes the child's 20h estimate; the archived parent's 50h is excluded.
+    const plan = screen.getByText("Plan of selected scope").parentElement!;
+    expect(plan.textContent ?? "").toMatch(/20 hours/u);
+    expect(plan.textContent ?? "").not.toMatch(/50|70/u);
+    // Selector option carries no nesting prefix (depth 0 → no \u00A0 characters).
+    const taskSelect = screen.getByLabelText("Task") as HTMLSelectElement;
+    const childOption = Array.from(taskSelect.options).find((option) => option.value === activeChild.document.id)!;
+    expect(childOption.textContent).toBe("Active child");
+    // The archived parent (no history) is absent from both the table and the selector.
+    expect(document.querySelector(`tr[data-task-id="${archivedParent.document.id}"]`)).toBeNull();
+    expect(Array.from(taskSelect.options).some((option) => option.value === archivedParent.document.id)).toBe(false);
+  });
+
+  // ── Mandatory test 2: archived parent with history stays historical ──────────────
+  it("archived parent with history surfaces as a historical row while the active child stays root", async () => {
+    const archivedParent = { document: { schema: "gitpm/task@2", id: "T-ARCH-PAR-H", project: "P-26-1", title: "Archived parent with hours", type: "task", status: "done", lifecycle: "archived", schedules: { estimate: { effort_hours: 50 } } }, path: "ap.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const activeChild = { document: { schema: "gitpm/task@2", id: "T-ACT-CHILD-H", project: "P-26-1", parent: archivedParent.document.id, title: "Active child H", type: "task", status: "in-progress", lifecycle: "active", schedules: { estimate: { effort_hours: 20 } } }, path: "ac.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const items = [{ document: { schema: "gitpm/time-entry@1" as const, id: "E-ARCH-PAR-H", project: "P-26-1", task: archivedParent.document.id, person: "U-1", performed_on: "2026-05-01", hours: 5, category: "regular", created_at: "2026-05-01T00:00:00.000Z", state: "active" as const }, path: "e", blob_id: "a", draft_fingerprint: "f" }];
+    const listProjectTimeEntries = vi.fn(async () => ({ total: items.length, offset: 0, limit: 200, items }));
+    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const projectDoc = project({}, { primary_track: "working", workload_track: "estimate" });
+    const { readModels, workloadTrack } = buildActiveReportProps(projectDoc, [], [archivedParent, activeChild], multiTrackScheduling);
+    render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[archivedParent, activeChild]} workloadTrack={workloadTrack} />);
+
+    // The archived parent surfaces as a flat historical row with its 5 hours.
+    const archivedRow = await waitFor(() => { const row = document.querySelector<HTMLElement>(`tr[data-task-id="${archivedParent.document.id}"]`); expect(row).not.toBeNull(); return row!; });
+    expect(archivedRow.getAttribute("data-depth")).toBe("0");
+    expect(archivedRow.textContent).toContain("Archived task");
+    expect(archivedRow.querySelectorAll("td")[1]?.textContent).toMatch(/5 hours/u);
+    // The active child is a root (depth 0), not pulled under its archived parent.
+    const childRow = document.querySelector<HTMLElement>(`tr[data-task-id="${activeChild.document.id}"]`)!;
+    expect(childRow.getAttribute("data-depth")).toBe("0");
+    // The child's current estimate (20h) is preserved in its plan cell.
+    expect(childRow.querySelectorAll("td")[0]?.textContent).toMatch(/20 hours/u);
+    // The plan total includes the active child's 20h, never the archived parent's 50h.
+    const plan = screen.getByText("Plan of selected scope").parentElement!;
+    expect(plan.textContent ?? "").toMatch(/20 hours/u);
+    expect(plan.textContent ?? "").not.toMatch(/50|70/u);
+  });
+
+  // ── Mandatory test 3: missing parent promotes the task to a root ────────────────
+  it("missing parent: task with an unknown parent id is rendered as root, in the selector, and in the plan", async () => {
+    const orphan = { document: { schema: "gitpm/task@2", id: "T-ORPHAN", project: "P-26-1", parent: "T-GONE", title: "Orphan task", type: "task", status: "in-progress", lifecycle: "active", schedules: { estimate: { effort_hours: 12 } } }, path: "o.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const listProjectTimeEntries = vi.fn(async () => ({ total: 0, offset: 0, limit: 200, items: [] }));
+    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const projectDoc = project({}, { primary_track: "working", workload_track: "estimate" });
+    const { readModels, workloadTrack } = buildActiveReportProps(projectDoc, [], [orphan], multiTrackScheduling);
+    render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[orphan]} workloadTrack={workloadTrack} />);
+
+    const orphanRow = await waitFor(() => { const row = document.querySelector<HTMLElement>(`tr[data-task-id="${orphan.document.id}"]`); expect(row).not.toBeNull(); return row!; });
+    expect(orphanRow.getAttribute("data-depth")).toBe("0");
+    // Present in the selector.
+    const taskSelect = screen.getByLabelText("Task") as HTMLSelectElement;
+    expect(Array.from(taskSelect.options).some((option) => option.value === orphan.document.id)).toBe(true);
+    // Participates in the current plan (12h).
+    const plan = screen.getByText("Plan of selected scope").parentElement!;
+    expect(plan.textContent ?? "").toMatch(/12 hours/u);
+  });
+
+  // ── Mandatory test 4: race between the full-index and the filtered request ──────
+  it("filtered response can resolve before the full index without losing archived tasks", async () => {
+    const activeTask = { document: { schema: "gitpm/task@2", id: "T-RACE-ACT", project: "P-26-1", title: "Race active", type: "task", status: "in-progress", lifecycle: "active", schedules: { estimate: { effort_hours: 8 } } }, path: "a.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const archivedTask = { document: { schema: "gitpm/task@2", id: "T-RACE-ARCH", project: "P-26-1", title: "Race archived", type: "task", status: "done", lifecycle: "archived" }, path: "h.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const personA = "U-RACE-A";
+    const personB = "U-RACE-B";
+    const personAEntity = { document: { schema: "gitpm/person@1", id: personA, name: "Race A", lifecycle: "active" } } as EntityResult;
+    const personBEntity = { document: { schema: "gitpm/person@1", id: personB, name: "Race B", lifecycle: "active" } } as EntityResult;
+    const allItems = [
+      { document: { schema: "gitpm/time-entry@1" as const, id: "E-RACE-A", project: "P-26-1", task: activeTask.document.id, person: personA, performed_on: "2026-05-01", hours: 4, category: "regular", created_at: "2026-05-01T00:00:00.000Z", state: "active" as const }, path: "a", blob_id: "a", draft_fingerprint: "f" },
+      { document: { schema: "gitpm/time-entry@1" as const, id: "E-RACE-B", project: "P-26-1", task: archivedTask.document.id, person: personB, performed_on: "2026-05-02", hours: 5, category: "regular", created_at: "2026-05-02T00:00:00.000Z", state: "active" as const }, path: "b", blob_id: "a", draft_fingerprint: "f" },
+    ];
+    let resolveFullIndex!: () => void;
+    let resolveFiltered!: () => void;
+    const fullIndexGate = new Promise<void>((resolve) => { resolveFullIndex = resolve; });
+    const filteredGate = new Promise<void>((resolve) => { resolveFiltered = resolve; });
+    const listProjectTimeEntries = vi.fn(async (_d: string, _p: string, filters: Record<string, unknown> = {}) => {
+      // Request A: full unfiltered index — no state filter. Held until resolveFullIndex.
+      if (filters.state === undefined) { await fullIndexGate; return { total: allItems.length, offset: 0, limit: 200, items: allItems }; }
+      // Request B with a person filter — held until resolveFiltered.
+      if (filters.person !== undefined) { await filteredGate; const items = allItems.filter((item) => item.document.person === filters.person); return { total: items.length, offset: 0, limit: 200, items }; }
+      // Request B initial (mount, no person) — returns immediately.
+      return { total: allItems.length, offset: 0, limit: 200, items: allItems };
+    });
+    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const projectDoc = project({}, { primary_track: "working", workload_track: "estimate" });
+    const { readModels, workloadTrack } = buildActiveReportProps(projectDoc, [], [activeTask, archivedTask], multiTrackScheduling);
+    render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} people={[personAEntity, personBEntity]} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[activeTask, archivedTask]} workloadTrack={workloadTrack} />);
+
+    // The full-index request (A) fires on mount and must never carry user filters.
+    await waitFor(() => expect(listProjectTimeEntries.mock.calls.some((call) => (call[2] as Record<string, unknown> | undefined)?.state === undefined)).toBe(true));
+    const fullIndexCall = listProjectTimeEntries.mock.calls.find((call) => (call[2] as Record<string, unknown> | undefined)?.state === undefined)![2] as Record<string, unknown>;
+    expect(fullIndexCall.person).toBeUndefined();
+    expect(fullIndexCall.category).toBeUndefined();
+
+    // Select person A — Request B fires with the person filter.
+    await screen.findByLabelText("Person");
+    fireEvent.change(screen.getByLabelText("Person"), { target: { value: personA } });
+    await waitFor(() => expect(listProjectTimeEntries.mock.calls.some((call) => (call[2] as Record<string, unknown> | undefined)?.person === personA)).toBe(true));
+    const filteredCall = listProjectTimeEntries.mock.calls.find((call) => (call[2] as Record<string, unknown> | undefined)?.person === personA)![2] as Record<string, unknown>;
+    expect(filteredCall.state).toBe("active");
+
+    // Resolve the filtered response first, then the full-index response.
+    resolveFiltered();
+    resolveFullIndex();
+
+    // The displayed rows are narrowed to person A (4h). The archived task (person B's 5h) is
+    // absent from the plan/actual table because its display records are filtered out.
+    await waitFor(() => expect(screen.getAllByText("Actual hours")[0]?.parentElement?.textContent).toMatch(/4 hours/u));
+    expect(document.querySelector(`tr[data-task-id="${archivedTask.document.id}"]`)).toBeNull();
+    // But the full historical index retains the archived task, so it stays selectable — no
+    // page reload is needed to recover it after resetting the filter.
+    const taskSelect = screen.getByLabelText("Task") as HTMLSelectElement;
+    expect(Array.from(taskSelect.options).some((option) => option.value === archivedTask.document.id)).toBe(true);
+  });
+
+  // ── Mandatory test 5a: changing the draft clears old state ──────────────────────
+  it("changing the draft clears old tasks, entries, people, and categories", async () => {
+    const activeTask = { document: { schema: "gitpm/task@2", id: "T-DRAFT-ACT", project: "P-26-1", title: "Draft active", type: "task", status: "in-progress", lifecycle: "active", schedules: { estimate: { effort_hours: 5 } } }, path: "a.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const archivedTask = { document: { schema: "gitpm/task@2", id: "T-DRAFT-ARCH", project: "P-26-1", title: "Draft archived", type: "task", status: "done", lifecycle: "archived" }, path: "h.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const draft1Entry = { document: { schema: "gitpm/time-entry@1" as const, id: "E-D1", project: "P-26-1", task: archivedTask.document.id, person: "U-ONLY-D1", performed_on: "2026-05-01", hours: 5, category: "catD1", created_at: "2026-05-01T00:00:00.000Z", state: "active" as const }, path: "1", blob_id: "a", draft_fingerprint: "f" };
+    const listProjectTimeEntries = vi.fn(async (draftId: string, _p: string, _filters: Record<string, unknown> = {}) => {
+      const items = draftId === "DRF" ? [draft1Entry] : [];
+      return { total: items.length, offset: 0, limit: 200, items };
+    });
+    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const projectDoc = project({}, { primary_track: "working", workload_track: "estimate" });
+    const { readModels, workloadTrack } = buildActiveReportProps(projectDoc, [], [activeTask, archivedTask], multiTrackScheduling);
+    const draftTwo: DraftStatus = { ...draft, draft_id: "DRF-2" };
+    const rendered = render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[activeTask, archivedTask]} workloadTrack={workloadTrack} />);
+
+    // Draft 1: the archived task with history is selectable and its person/category appear.
+    await waitFor(() => {
+      const select = screen.getByLabelText("Task") as HTMLSelectElement;
+      expect(Array.from(select.options).some((option) => option.value === archivedTask.document.id)).toBe(true);
+    });
+    expect(Array.from((screen.getByLabelText("Person") as HTMLSelectElement).options).some((option) => option.value === "U-ONLY-D1")).toBe(true);
+    expect(Array.from((screen.getByLabelText("Category") as HTMLSelectElement).options).some((option) => option.value === "catD1")).toBe(true);
+
+    // Switch to draft 2 (which has no archived task, no entries, no unique person/category).
+    rendered.rerender(<ProjectActualReport api={api} draft={draftTwo} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[activeTask]} workloadTrack={workloadTrack} />);
+
+    // New requests use the new draft id.
+    await waitFor(() => expect(listProjectTimeEntries.mock.calls.some((call) => call[0] === "DRF-2")).toBe(true));
+    // The archived task, its person, and its category are all gone.
+    await waitFor(() => {
+      const select = screen.getByLabelText("Task") as HTMLSelectElement;
+      expect(Array.from(select.options).some((option) => option.value === archivedTask.document.id)).toBe(false);
+    });
+    expect(Array.from((screen.getByLabelText("Person") as HTMLSelectElement).options).some((option) => option.value === "U-ONLY-D1")).toBe(false);
+    expect(Array.from((screen.getByLabelText("Category") as HTMLSelectElement).options).some((option) => option.value === "catD1")).toBe(false);
+  });
+
+  // ── Mandatory test 5b: changing the projectId clears old state ──────────────────
+  it("changing the projectId clears old tasks, entries, people, and categories", async () => {
+    const activeTask = { document: { schema: "gitpm/task@2", id: "T-PROJ-ACT", project: "P-26-1", title: "Project active", type: "task", status: "in-progress", lifecycle: "active", schedules: { estimate: { effort_hours: 5 } } }, path: "a.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const archivedTask = { document: { schema: "gitpm/task@2", id: "T-PROJ-ARCH", project: "P-26-1", title: "Project archived", type: "task", status: "done", lifecycle: "archived" }, path: "h.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const project1Entry = { document: { schema: "gitpm/time-entry@1" as const, id: "E-P1", project: "P-26-1", task: archivedTask.document.id, person: "U-ONLY-P1", performed_on: "2026-05-01", hours: 5, category: "catP1", created_at: "2026-05-01T00:00:00.000Z", state: "active" as const }, path: "1", blob_id: "a", draft_fingerprint: "f" };
+    const listProjectTimeEntries = vi.fn(async (_d: string, projectId: string, _filters: Record<string, unknown> = {}) => {
+      const items = projectId === "P-26-1" ? [project1Entry] : [];
+      return { total: items.length, offset: 0, limit: 200, items };
+    });
+    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const projectDoc = project({}, { primary_track: "working", workload_track: "estimate" });
+    const projectTwoDoc = { ...projectDoc, id: "P-26-2" } as EntityDocument;
+    const { readModels, workloadTrack } = buildActiveReportProps(projectDoc, [], [activeTask, archivedTask], multiTrackScheduling);
+    const rendered = render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[activeTask, archivedTask]} workloadTrack={workloadTrack} />);
+
+    await waitFor(() => {
+      const select = screen.getByLabelText("Task") as HTMLSelectElement;
+      expect(Array.from(select.options).some((option) => option.value === archivedTask.document.id)).toBe(true);
+    });
+    expect(Array.from((screen.getByLabelText("Person") as HTMLSelectElement).options).some((option) => option.value === "U-ONLY-P1")).toBe(true);
+
+    // Switch to project 2 (no archived task, no entries).
+    rendered.rerender(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectTwoDoc)} projectId="P-26-2" readModels={readModels} tasks={[activeTask]} workloadTrack={workloadTrack} />);
+
+    await waitFor(() => expect(listProjectTimeEntries.mock.calls.some((call) => call[1] === "P-26-2")).toBe(true));
+    await waitFor(() => {
+      const select = screen.getByLabelText("Task") as HTMLSelectElement;
+      expect(Array.from(select.options).some((option) => option.value === archivedTask.document.id)).toBe(false);
+    });
+    expect(Array.from((screen.getByLabelText("Person") as HTMLSelectElement).options).some((option) => option.value === "U-ONLY-P1")).toBe(false);
+  });
+
+  // ── Mandatory test 6: resetting a filter restores hidden archived tasks ─────────
+  it("resetting the person filter restores a hidden archived task without reloading the page", async () => {
+    const activeTask = { document: { schema: "gitpm/task@2", id: "T-RESET-ACT", project: "P-26-1", title: "Reset active", type: "task", status: "in-progress", lifecycle: "active", schedules: { estimate: { effort_hours: 3 } } }, path: "a.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const archivedTask = { document: { schema: "gitpm/task@2", id: "T-RESET-ARCH", project: "P-26-1", title: "Reset archived", type: "task", status: "done", lifecycle: "archived" }, path: "h.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
+    const personA = "U-RESET-A";
+    const personB = "U-RESET-B";
+    const allItems = [
+      { document: { schema: "gitpm/time-entry@1" as const, id: "E-RESET-A", project: "P-26-1", task: archivedTask.document.id, person: personA, performed_on: "2026-05-01", hours: 5, category: "regular", created_at: "2026-05-01T00:00:00.000Z", state: "active" as const }, path: "a", blob_id: "a", draft_fingerprint: "f" },
+      { document: { schema: "gitpm/time-entry@1" as const, id: "E-RESET-B", project: "P-26-1", task: activeTask.document.id, person: personB, performed_on: "2026-05-02", hours: 3, category: "regular", created_at: "2026-05-02T00:00:00.000Z", state: "active" as const }, path: "b", blob_id: "a", draft_fingerprint: "f" },
+    ];
+    const listProjectTimeEntries = vi.fn(async (_d: string, _p: string, filters: Record<string, unknown> = {}) => {
+      const filtered = allItems.filter((item) => filters.person === undefined || item.document.person === filters.person);
+      return { total: filtered.length, offset: 0, limit: 200, items: filtered };
+    });
+    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const projectDoc = project({}, { primary_track: "working", workload_track: "estimate" });
+    const { readModels, workloadTrack } = buildActiveReportProps(projectDoc, [], [activeTask, archivedTask], multiTrackScheduling);
+    render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[activeTask, archivedTask]} workloadTrack={workloadTrack} />);
+
+    // Initially both tasks appear: the archived task has person A's 5h.
+    await waitFor(() => expect(document.querySelector(`tr[data-task-id="${archivedTask.document.id}"]`)).not.toBeNull());
+
+    // Select person B — the archived task's row (person A's records) is hidden from the report.
+    fireEvent.change(screen.getByLabelText("Person"), { target: { value: personB } });
+    await waitFor(() => expect(document.querySelector(`tr[data-task-id="${archivedTask.document.id}"]`)).toBeNull());
+    // But the full historical index is unchanged: the archived task stays in the selector.
+    const taskSelect = screen.getByLabelText("Task") as HTMLSelectElement;
+    expect(Array.from(taskSelect.options).some((option) => option.value === archivedTask.document.id)).toBe(true);
+
+    // Reset the person filter — the archived task reappears in the table without reloading.
+    fireEvent.change(screen.getByLabelText("Person"), { target: { value: "" } });
+    await waitFor(() => expect(document.querySelector(`tr[data-task-id="${archivedTask.document.id}"]`)).not.toBeNull());
   });
 });
