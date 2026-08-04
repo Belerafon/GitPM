@@ -120,6 +120,17 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Historical accumulators (entries, knownPeople, knownCategories, historicalTaskIds) belong to
+  // one working copy. When the project or the draft changes they must be cleared so the previous
+  // copy's archived tasks, people, categories, and records cannot leak into the new one. The data
+  // effect below re-populates them from the first unfiltered fetch of the new copy.
+  useEffect(() => {
+    setEntries(null);
+    setKnownPeople([]);
+    setKnownCategories([]);
+    setHistoricalTaskIds(new Set());
+  }, [projectId, draft.draft_id]);
+
   useEffect(() => {
     if (filters.performed_from !== "" && filters.performed_to !== "" && filters.performed_from > filters.performed_to) {
       setError(t("actualReport.invalidRange"));
@@ -149,7 +160,16 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
   const records = useMemo(() => (entries ?? []).map((entry) => toRecord(entry, projectId)), [entries, projectId]);
   const reader = useMemo(() => scheduleTextReader(workloadTrack), [workloadTrack]);
 
-  const relations = useMemo(() => buildTaskRelations(tasks), [tasks]);
+  // Two relation models are kept deliberately separate. `historicalRelations` spans ALL tasks
+  // (archived included, raw parent links) so historical time records, archived task display,
+  // name lookups, and actual-hour grouping can still reach every descendant. `currentPlanRelations`
+  // spans ACTIVE tasks only and normalizes parent links against the active-task set, so an active
+  // child of an archived or missing parent becomes a root of the current plan instead of
+  // disappearing from the plan rollup. The plan and root-task calculations go through
+  // `currentPlanRelations`; everything that touches actual hours goes through `historicalRelations`.
+  const activeTaskIds = useMemo(() => new Set(tasks.filter((task) => task.document.lifecycle === "active").map((task) => task.document.id)), [tasks]);
+  const currentPlanRelations = useMemo(() => buildTaskRelations(tasks.filter((task) => task.document.lifecycle === "active"), { activeTaskIds }), [activeTaskIds, tasks]);
+  const historicalRelations = useMemo(() => buildTaskRelations(tasks), [tasks]);
   const taskById = useMemo(() => new Map(tasks.map((task) => [task.document.id, task] as const)), [tasks]);
   const orderedMilestones = useMemo(() => orderActiveMilestones({ project, milestones, text: reader, locale }), [project, milestones, reader, locale]);
   const activeMilestoneIds = useMemo(() => new Set(orderedMilestones.map((milestone) => milestone.document.id)), [orderedMilestones]);
@@ -158,17 +178,20 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
     // "outside active milestones" group. The "none" milestone scope only applies when no task
     // is selected, so picking an orphan task narrows to that task rather than every orphan.
     if (filters.task !== "") {
-      return resolveEffortScope(relations, { taskId: filters.task, milestoneId: filters.milestone, mode: scopeMode });
+      return resolveEffortScope(historicalRelations, { taskId: filters.task, milestoneId: filters.milestone, mode: scopeMode });
     }
     if (filters.milestone === "none") {
-      return new Set(relations.ids.filter((id) => {
-        const milestone = relations.milestoneOf.get(id);
+      return new Set(historicalRelations.ids.filter((id) => {
+        const milestone = historicalRelations.milestoneOf.get(id);
         return milestone === undefined || !activeMilestoneIds.has(milestone);
       }));
     }
-    return resolveEffortScope(relations, { taskId: "", milestoneId: filters.milestone, mode: scopeMode });
-  }, [relations, filters.task, filters.milestone, scopeMode, activeMilestoneIds]);
-  const scopeRootIds = useMemo(() => scopeRootIdsOf(scope, relations), [scope, relations]);
+    return resolveEffortScope(historicalRelations, { taskId: "", milestoneId: filters.milestone, mode: scopeMode });
+  }, [historicalRelations, filters.task, filters.milestone, scopeMode, activeMilestoneIds]);
+  // Plan roots are resolved from the CURRENT plan relations so an active task whose parent is
+  // archived or missing still contributes its estimate to the plan. Actual-hour aggregation
+  // (below) uses the historical relations and the full scope.
+  const scopeRootIds = useMemo(() => scopeRootIdsOf(scope, currentPlanRelations), [scope, currentPlanRelations]);
   const scopeRecords = useMemo(() => selectScopedRecords(records, scope), [records, scope]);
   const scopeActual = useMemo(() => sumHours(scopeRecords), [scopeRecords]);
   const actualByTask = useMemo(() => {
@@ -243,7 +266,7 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
       if (!scope.has(row.node.id)) continue;
       const plan = taskPlanEffort(readModels, workloadTrack, row.node.id, taskOnly ? "taskOnly" : "withSubtasks");
       const actualOwn = actualByTask.get(row.node.id) ?? 0;
-      const actualBranch = taskOnly ? actualOwn : sumBranchActualWithinScope(actualByTask, relations, scope, row.node.id);
+      const actualBranch = taskOnly ? actualOwn : sumBranchActualWithinScope(actualByTask, historicalRelations, scope, row.node.id);
       const archived = taskById.get(row.node.id)?.document.lifecycle === "archived";
       // Drop rows that contribute neither planned effort nor actual hours. Archived tasks are
       // part of the current plan only through their historical time records: an archived task
@@ -263,7 +286,7 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
       });
     }
     return rows;
-  }, [flattened, scope, filters.task, scopeMode, readModels, workloadTrack, actualByTask, relations, taskById, taskName]);
+  }, [flattened, scope, filters.task, scopeMode, readModels, workloadTrack, actualByTask, historicalRelations, taskById, taskName]);
   const planSources: string[] = [];
   if (wholeProject && projectBudget !== undefined) {
     if (planOfWork !== undefined) planSources.push(t("actualReport.sourceRootSum"));
@@ -293,9 +316,9 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
 
   const resetAll = () => { setFilters(EMPTY_FILTERS); setScopeMode("withSubtasks"); setShowVoided(false); setCutoff(""); };
   const milestoneScopeOfTask = useCallback((taskId: string): string => {
-    const raw = relations.milestoneOf.get(taskId);
+    const raw = historicalRelations.milestoneOf.get(taskId);
     return raw !== undefined && activeMilestoneIds.has(raw) ? raw : "none";
-  }, [activeMilestoneIds, relations.milestoneOf]);
+  }, [activeMilestoneIds, historicalRelations.milestoneOf]);
   const selectMilestone = (value: string) => {
     patchFilter("milestone", value);
     // "All milestones" keeps the selected task; a specific milestone or the outside-active

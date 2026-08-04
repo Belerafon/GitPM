@@ -470,8 +470,7 @@ describe("ProjectActualReport", () => {
 
     await waitFor(() => expect(listProjectTimeEntries).toHaveBeenCalled());
     // The archived task carries a 99h estimate but no actuals, so it must not appear in the
-    // current effort table regardless of its planned estimate. (It may still be offered in the
-    // task picker, which lists every task for filtering.)
+    // current effort table regardless of its planned estimate, nor in the task selector.
     await waitFor(() => expect(document.querySelector('tr[data-task-id="T-ARCH-EMPTY"]')).toBeNull());
     expect(document.querySelector(".plan-actual-report table tbody")?.textContent ?? "").not.toContain("99");
   });

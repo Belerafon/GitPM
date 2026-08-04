@@ -6,6 +6,8 @@ import {
   canonicalTaskComparator,
   compareOrder,
   flattenProjectTaskViewModel,
+  normalizeActiveMilestone,
+  normalizeActiveParent,
   orderActiveMilestones,
   type TaskViewModelNode,
 } from "./project-task-view-model.js";
@@ -57,6 +59,39 @@ const task = (id: string, extra: Partial<EntityDocument> = {}): EntityResult => 
 });
 
 const ids = (nodes: readonly TaskViewModelNode[]): string[] => nodes.map((node) => node.id);
+
+describe("normalizeActiveParent", () => {
+  it("keeps a parent that belongs to the active-task set", () => {
+    const activeTaskIds = new Set(["T-A", "T-B"]);
+    expect(normalizeActiveParent(activeTaskIds, "T-B", "T-A")).toBe("T-A");
+  });
+
+  it("drops a parent that is absent from the active-task set (non-existent, archived, or deleted)", () => {
+    const activeTaskIds = new Set(["T-A"]);
+    expect(normalizeActiveParent(activeTaskIds, "T-A", "T-GONE")).toBeUndefined();
+  });
+
+  it("drops a self-referential parent so the task becomes a root without recursion", () => {
+    const activeTaskIds = new Set(["T-A"]);
+    expect(normalizeActiveParent(activeTaskIds, "T-A", "T-A")).toBeUndefined();
+  });
+
+  it("drops empty, blank, and undefined parents", () => {
+    const activeTaskIds = new Set(["T-A"]);
+    expect(normalizeActiveParent(activeTaskIds, "T-A", undefined)).toBeUndefined();
+    expect(normalizeActiveParent(activeTaskIds, "T-A", "")).toBeUndefined();
+    expect(normalizeActiveParent(activeTaskIds, "T-A", "   ")).toBeUndefined();
+  });
+});
+
+describe("normalizeActiveMilestone", () => {
+  it("keeps an active milestone and drops everything else", () => {
+    const activeMilestoneIds = new Set(["M-ACTIVE"]);
+    expect(normalizeActiveMilestone(activeMilestoneIds, "M-ACTIVE")).toBe("M-ACTIVE");
+    expect(normalizeActiveMilestone(activeMilestoneIds, "M-ARCHIVED")).toBeUndefined();
+    expect(normalizeActiveMilestone(activeMilestoneIds, "")).toBeUndefined();
+  });
+});
 
 describe("compareOrder", () => {
   it("places listed ids by position and unlisted ids after", () => {

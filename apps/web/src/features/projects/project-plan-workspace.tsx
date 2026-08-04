@@ -5,7 +5,7 @@ import { buildSchedule, ScheduleResolver, scheduleTracksConfig, scheduleTextRead
 import { isBlockedStatus, isCompletedStatus, isInProgressStatus } from "../../status-categories.js";
 import { ProjectScheduleSummary } from "./project-schedule-summary.js";
 import { buildTaskHierarchy } from "@gitpm/task-hierarchy";
-import { buildProjectTaskViewModel, canonicalTaskComparator, isOutsideActiveMilestone, type ProjectTaskViewModel, type TaskViewModelNode } from "./project-task-view-model.js";
+import { buildProjectTaskViewModel, canonicalTaskComparator, isOutsideActiveMilestone, normalizeActiveParent, normalizeActiveMilestone, type ProjectTaskViewModel, type TaskViewModelNode } from "./project-task-view-model.js";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { ApiError, deleteRestrictionLabels, formatApiError, type GitPmApi } from "../../api.js";
 import { AsyncBoundary, useAsyncLoad } from "../../async-data.js";
@@ -329,16 +329,20 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   const dateLabel = (value: string) => /^\d{4}-\d{2}-\d{2}$/u.test(value) ? formatDateOnly(locale, value) : "—";
   const selectedStage = workspace?.milestones.find((item) => item.document.id === selectedStageId);
   const activeStageIds = new Set(activeStages.map((stage) => stage.document.id));
-  // Tasks tied to an unknown or archived milestone are normalized to `undefined` so they roll
-  // into the project deadline and overflow checks instead of disappearing from every active
-  // stage bucket.
+  // The current scheduling hierarchy is built from ACTIVE tasks and ACTIVE milestones only.
+  // Both `parent` and `milestone` are normalized against the active sets so a task pointing at a
+  // non-existent, archived, deleted, or self-referential parent becomes a root of its active
+  // milestone (or of the project rollup) instead of disappearing from the aggregated deadline,
+  // the overflow warnings, the plan estimate, or the root-task list. Source documents are never
+  // mutated — only this computed view-model value is normalized.
+  const activeTaskIds = new Set(activeTasks.map((task) => task.document.id));
   const schedulingHierarchy = resolveSchedulingHierarchy({
     project: workspace?.project.document,
     milestones: activeStages.map((stage) => stage.document),
     tasks: activeTasks.map((task): SchedulingHierarchyTask => ({
       ...task.document,
-      parent: typeof task.document.parent === "string" && task.document.parent !== "" ? task.document.parent : undefined,
-      milestone: typeof task.document.milestone === "string" && task.document.milestone !== "" && activeStageIds.has(task.document.milestone) ? task.document.milestone : undefined,
+      parent: normalizeActiveParent(activeTaskIds, task.document.id, typeof task.document.parent === "string" && task.document.parent !== "" ? task.document.parent : undefined),
+      milestone: normalizeActiveMilestone(activeStageIds, typeof task.document.milestone === "string" ? task.document.milestone : ""),
     })),
     tracks: primaryTrack === "" ? [] : [primaryTrack],
   });

@@ -6,6 +6,7 @@ import { buildTaskHierarchy } from "@gitpm/task-hierarchy";
 import { formatDateOnly, formatDurationHours, message, type Locale, type MessageKey } from "./i18n.js";
 import type { ConfigurationResult, DraftStatus, EntityResult, GitPmDocument } from "./types.js";
 import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
+import { normalizeActiveMilestone, normalizeActiveParent } from "./features/projects/project-task-view-model.js";
 import type { WorkspaceNavigate } from "./workspace-navigation.js";
 
 const DAY_MS = 86_400_000;
@@ -63,17 +64,20 @@ export function projectTimelineProjection(tasks: readonly EntityResult[], milest
   const active = tasks.filter((item) => item.document.lifecycle === "active");
   const modelTracks = [...new Set([...options.visibleTracks, options.primaryTrack, options.dependencyTrack])]
     .filter((slug) => tracks.find((track) => track.slug === slug)?.kind !== "actual");
+  const activeTaskIds = new Set(active.map((item) => item.document.id));
+  // Both `parent` and `milestone` are normalized against the active sets. A task pointing at a
+  // non-existent, archived, deleted, or self-referential parent becomes a root instead of
+  // vanishing from the Gantt range; a task tied to an unknown or archived milestone rolls into
+  // the project instead of being dropped.
   const subjects: readonly SchedulingHierarchyTask[] = active.map((item) => ({
     id: item.document.id,
-    parent: stringValue(item.document, "parent") || undefined,
+    parent: normalizeActiveParent(activeTaskIds, item.document.id, stringValue(item.document, "parent") || undefined),
     milestone: stringValue(item.document, "milestone") || undefined,
     schedules: item.document.schedules as SchedulingHierarchyTask["schedules"],
   }));
   const activeMilestoneEntities = milestones.filter((item) => item.document.lifecycle === "active");
   const activeMilestoneIds = new Set(activeMilestoneEntities.map((item) => item.document.id));
-  // A task pointing at an unknown or archived milestone rolls into the project (milestone =
-  // undefined) instead of being dropped, so the Gantt range and deadline stay complete.
-  const normalizedSubjects = subjects.map((subject) => ({ ...subject, milestone: subject.milestone !== undefined && activeMilestoneIds.has(subject.milestone) ? subject.milestone : undefined }));
+  const normalizedSubjects = subjects.map((subject) => ({ ...subject, milestone: normalizeActiveMilestone(activeMilestoneIds, typeof subject.milestone === "string" ? subject.milestone : "") }));
   const milestoneSubjects = activeMilestoneEntities.map((item) => ({ id: item.document.id, schedules: item.document.schedules as SchedulingHierarchyTask["schedules"] }));
   const scheduleHierarchy = resolveSchedulingHierarchy({ tasks: normalizedSubjects, milestones: milestoneSubjects, tracks: modelTracks });
   const ganttMilestones = activeMilestoneEntities.map((item) => {

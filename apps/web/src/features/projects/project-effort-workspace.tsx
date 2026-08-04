@@ -7,7 +7,7 @@ import { ScheduleResolver, scheduleTracksConfig } from "../../schedules.js";
 import type { ConfigurationResult, DraftStatus, EntityDocument, EntityResult, ProjectWorkspaceResult } from "../../types.js";
 import type { WorkspaceNavigate } from "../../workspace-navigation.js";
 import { ProjectActualReport, type ActualReportCategory } from "./project-actual-report.js";
-import { normalizeActiveMilestone } from "./project-task-view-model.js";
+import { normalizeActiveMilestone, normalizeActiveParent } from "./project-task-view-model.js";
 
 interface WorkCategoryEntry { readonly slug: string; readonly title: string }
 
@@ -56,16 +56,20 @@ export function ProjectEffortWorkspace({ api, draft, locale, projectId, onNaviga
   // the actual report (as the `tasks` prop) so that those with historical time records can be
   // shown; their estimate simply no longer contributes because they are absent from the
   // read models. A task whose milestone points at an unknown or archived milestone is normalized
-  // to `undefined` so it rolls into the project deadline instead of being dropped.
+  // to `undefined` so it rolls into the project deadline instead of being dropped. A task whose
+  // parent points at a non-existent, archived, deleted, or self-referential task is normalized to
+  // `undefined` so it becomes a root and stays in the plan instead of vanishing under a parent
+  // that the active hierarchy cannot resolve.
   const hierarchy = useMemo(() => {
-    const allTasks = workspace?.tasks ?? [];
+    const activeTasks = (workspace?.tasks ?? []).filter((task) => task.document.lifecycle === "active");
+    const activeTaskIds = new Set(activeTasks.map((task) => task.document.id));
     const activeMilestoneIds = new Set((workspace?.milestones ?? []).filter((milestone) => milestone.document.lifecycle === "active").map((milestone) => milestone.document.id));
     return resolveSchedulingHierarchy({
       project: projectDoc,
       milestones: (workspace?.milestones ?? []).filter((milestone) => milestone.document.lifecycle === "active").map((milestone) => milestone.document),
-      tasks: allTasks.filter((task) => task.document.lifecycle === "active").map((task): SchedulingHierarchyTask => ({
+      tasks: activeTasks.map((task): SchedulingHierarchyTask => ({
         ...task.document,
-        parent: typeof task.document.parent === "string" && task.document.parent !== "" ? task.document.parent : undefined,
+        parent: normalizeActiveParent(activeTaskIds, task.document.id, typeof task.document.parent === "string" && task.document.parent !== "" ? task.document.parent : undefined),
         milestone: normalizeActiveMilestone(activeMilestoneIds, typeof task.document.milestone === "string" ? task.document.milestone : ""),
       })),
       tracks,

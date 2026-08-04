@@ -185,6 +185,28 @@ export const isOutsideActiveMilestone = (activeMilestoneIds: ReadonlySet<string>
 export const normalizeActiveMilestone = (activeMilestoneIds: ReadonlySet<string>, milestoneId: string): string | undefined =>
   milestoneId !== "" && activeMilestoneIds.has(milestoneId) ? milestoneId : undefined;
 
+/**
+ * Resolve a task's parent for the CURRENT plan. A parent that is empty, absent,
+ * archived, deleted, self-referential, or simply outside the active-task set
+ * collapses to `undefined` so the task becomes a root of its active milestone
+ * (or of the "outside active milestones" group) instead of disappearing from the
+ * aggregated deadline, the plan rollups, the root-task list, or the effort tree.
+ *
+ * Every surface that builds the current scheduling hierarchy must normalize the
+ * parent through this helper — alongside {@link normalizeActiveMilestone} — so an
+ * orphaned or archived parent can never hide an active child from the current
+ * plan. Source task documents are never mutated; only the computed view-model
+ * value is normalized.
+ */
+export const normalizeActiveParent = (
+  activeTaskIds: ReadonlySet<string>,
+  taskId: string,
+  parentId: string | undefined,
+): string | undefined => {
+  if (parentId === undefined || parentId === "" || parentId === taskId || !activeTaskIds.has(parentId)) return undefined;
+  return parentId;
+};
+
 interface NodeBuildContext {
   readonly text: TaskTextReader;
   readonly effortOf: TaskEffortReader;
