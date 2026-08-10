@@ -222,11 +222,12 @@ describe("core UI", () => {
 
   it("shows task ancestry and rollups and creates a same-milestone subtask from task details", async () => {
     const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
+    const person = await entityApi.createEntity("DRF-CORE", "people", "", { schema: "gitpm/person@1", id: "U-26-666666", name: "Ada", weekly_capacity_hours: 40, calendar: "C-26-111111", lifecycle: "active" });
     const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
     const milestone = await entityApi.createEntity("DRF-CORE", "milestones", "", { schema: "gitpm/milestone@2", id: "M-26-222222", project: project.document.id, name: "Beta", lifecycle: "active" });
     const rootTitle = "Root task with a deliberately long title that must stay inside the task editor";
     const root = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-333333", project: project.document.id, milestone: milestone.document.id, title: rootTitle, type: "task", status: "backlog", lifecycle: "active" });
-    const child = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-444444", parent: root.document.id, project: project.document.id, milestone: milestone.document.id, title: "Child", type: "task", status: "backlog", lifecycle: "active", schedules: { plan: { effort_hours: 3 } } });
+    const child = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-444444", parent: root.document.id, project: project.document.id, milestone: milestone.document.id, title: "Child", type: "task", status: "backlog", lifecycle: "active", schedules: { plan: { effort_hours: 3 } }, assignees: [person.document.id] });
     const grandchild = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-555555", parent: child.document.id, project: project.document.id, milestone: milestone.document.id, title: "Grandchild", type: "task", status: "done", lifecycle: "active", schedules: { plan: { effort_hours: 5 } } });
 
     const { container } = render(<CoreWorkspace api={api} draft={draft} initialProjectId={project.document.id} initialTaskId={child.document.id} locale="en" surface="tasks" onChanged={vi.fn(async () => undefined)} />);
@@ -244,12 +245,21 @@ describe("core UI", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /New subtask/u }));
     const dialog = screen.getByRole("dialog", { name: "New subtask" });
+    expect(within(dialog).getByText("Ada")).toBeTruthy();
     fireEvent.change(within(dialog).getByLabelText("Title"), { target: { value: "Nested work" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Create task" }));
     await waitFor(() => expect(entityApi.entities.some((item) =>
       item.document.title === "Nested work"
       && item.document.parent === child.document.id
-      && item.document.milestone === milestone.document.id)).toBe(true));
+      && item.document.milestone === milestone.document.id
+      && JSON.stringify(item.document.assignees) === JSON.stringify([person.document.id]))).toBe(true));
+
+    fireEvent.click(screen.getByRole("button", { name: /New subtask/u }));
+    const overrideDialog = screen.getByRole("dialog", { name: "New subtask" });
+    fireEvent.click(within(overrideDialog).getByRole("button", { name: "Remove Ada" }));
+    fireEvent.change(within(overrideDialog).getByLabelText("Title"), { target: { value: "Explicitly unassigned" } });
+    fireEvent.click(within(overrideDialog).getByRole("button", { name: "Create task" }));
+    await waitFor(() => expect(entityApi.entities.find((item) => item.document.title === "Explicitly unassigned")?.document.assignees).toEqual([]));
 
     expect(grandchild.document.parent).toBe(child.document.id);
   });

@@ -32,7 +32,11 @@ parallel storage model.
 7. Moving a Task between Projects or Milestones is an atomic subtree operation. All
    descendants and their comments move together. An optional target parent may attach
    the subtree in the destination; full repository validation and rollback still apply.
-8. No status or completion propagation is added.
+8. When the UI creates a subtask, its assignee picker starts with the direct parent's
+   assignees. The user may change or clear that selection before creation. The resulting
+   assignee list is persisted on the child, and later assignee changes remain independent
+   between parent and child.
+9. No status or completion propagation is added.
 
 ## Consequences
 

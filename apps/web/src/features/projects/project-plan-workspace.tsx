@@ -391,6 +391,9 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   const selectedStageEstimate = windowEffort(selectedStageTrack?.rolled);
   const selectedStageDue = typeof selectedStageTrack?.effective?.finish === "string" ? selectedStageTrack.effective.finish : undefined;
   const selectedTask = workspace?.tasks.find((item) => item.document.id === selectedTaskId);
+  const newTaskAssignees = editor?.kind === "task" && editor.parentId !== undefined
+    ? strings(workspace?.tasks.find((item) => item.document.id === editor.parentId)?.document ?? {}, "assignees")
+    : [];
   const catalog = useMemo(() => new EntityCatalog({ projects, milestones: workspace?.milestones ?? [], tasks: workspace?.tasks ?? [] }), [projects, workspace]);
   const closeInspector = () => onNavigate("projects", { projectId, ...(Object.keys(navigationQuery).length > 0 ? { query: navigationQuery } : {}) });
   const applyFilters = (status: string, milestone: string, summary: SummaryFilter) => {
@@ -770,7 +773,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
         <label>{t("core.title")}<input disabled={readOnly} name="title" required /></label>
         <label>{t("core.status")}<select disabled={readOnly} name="status">{statuses.map((item) => <option key={item.slug} value={item.slug}>{item.title}</option>)}</select></label>
         <label>{t("core.type")}<select disabled={readOnly} name="type">{types.map((item) => <option key={item.slug} value={item.slug}>{item.title}</option>)}</select></label>
-        <AssigneeChecks disabled={readOnly} people={people} selected={[]} t={t} />
+        <AssigneeChecks disabled={readOnly} people={people} selected={newTaskAssignees} t={t} />
         <label>{t("projectPlan.start")}<input disabled={readOnly} name="start" type="date" /></label>
         <label>{t("core.due")}<input disabled={readOnly} name="due" type="date" /></label>
         <label>{t("projectPlan.estimate")}<input disabled={readOnly} min="0" name="estimate" step="0.25" type="number" /></label>
