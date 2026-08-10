@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { GitPmApi } from "./api.js";
 import { DraftProvider, useDrafts } from "./draft-context.js";
 import { formatDateTime, localeRegistry, LOCALE_STORAGE_KEY, message, selectLocale, type Locale, type MessageKey } from "./i18n.js";
@@ -12,6 +12,7 @@ import { WorkloadWorkspace } from "./workload-ui.js";
 import type { WorkspaceDestination, WorkspaceSelection } from "./workspace-navigation.js";
 import { parseAppRoute, routeForDestination, serializeAppRoute, type AppRoute } from "./app/router.js";
 import { AppShell } from "./app/AppShell.js";
+import { ControlHints } from "./app/ControlHints.js";
 import { navigationDestinations, navigationGroups, routeViews } from "./app/navigation.js";
 import { SectionTabs, type SectionTab } from "./app/SectionTabs.js";
 import { ProjectTabs } from "./features/projects/project-tabs.js";
@@ -82,7 +83,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
         ? "nav.repository"
         : view;
   const workspaceSelection: WorkspaceSelection = { projectId: activeRoute?.projectId, stageId: activeRoute?.stageId, taskId: activeRoute?.taskId, personId: activeRoute?.personId, commit: activeRoute?.commit, query: activeRoute?.query };
-  const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
+  const t = useCallback((key: MessageKey, values?: Readonly<Record<string, string | number>>) => message(locale, key, values), [locale]);
   const workspaceName = (id: string) => repositoryMode && id === "DRF-LOCAL" ? t("drafts.localName") : id;
   const workspaceState = (state: string) => t(({ open: "drafts.stateOpen", closed: "drafts.stateClosed", published: "drafts.statePublished", abandoned: "drafts.stateAbandoned" } as const)[state as "open" | "closed" | "published" | "abandoned"] ?? "drafts.state");
   const submit = (event: FormEvent) => {
@@ -183,14 +184,14 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
     navigateToRoute(routeForDestination(repositoryMode ? "projects" : "workspaces"), true);
   }, [activeRoute, drafts.session, repositoryMode]);
 
-  if (drafts.session === undefined) return <main className="center-card"><p>{t("status.loading")}</p></main>;
+  if (drafts.session === undefined) return <><ControlHints t={t} /><main className="center-card"><p>{t("status.loading")}</p></main></>;
   if (drafts.session === null) return (
-    <main className="center-card auth-card">
+    <><ControlHints t={t} /><main className="center-card auth-card">
       <img className="brand-mark" src="/gitpm-icon.svg" alt="" /><h1>{t("auth.heading")}</h1><p>{t("auth.description")}</p>
       <button className="primary" onClick={() => { void api.login().then(navigate); }}>{t("auth.login")}</button>
       <LocalePicker locale={locale} setLocale={setLocale} t={t} />
       {drafts.error !== null && <p className="alert error">{t("status.error", { message: drafts.error })}</p>}
-    </main>
+    </main></>
   );
 
   const snapshot = drafts.snapshot;
@@ -208,7 +209,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
   };
   const openRepositoryStatus = () => navigateToRoute(routeForDestination("changes"));
   return (
-    <AppShell activeView={shellActiveView}
+    <><ControlHints t={t} /><AppShell activeView={shellActiveView}
       banner={drafts.error !== null && <div className="alert error">{t("status.error", { message: drafts.error })}<button onClick={() => { void drafts.refresh(); }}>{t("status.retry")}</button></div>}
       breadcrumbs={breadcrumbs}
         headerMeta={<><strong>{repository?.name ?? t("app.repository")}</strong>{directMode && repository?.branch !== undefined && <span className="runtime-context"><code>{repository.branch}</code></span>}<span className="runtime-context">{t("auth.localMode")} · {t("auth.role", { role: drafts.session.role })}</span></>}
@@ -300,7 +301,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
         {view === "nav.effort" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <ProjectEffortWorkspace api={api} draft={active} key={`nav.effort:${activeRoute?.projectId ?? ""}`} locale={locale} projectId={activeRoute?.projectId ?? ""} onNavigate={openWorkspace} />)}
         {view === "nav.workload" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <WorkloadWorkspace api={api} draft={active} locale={locale} onNavigate={openWorkspace} />)}
         {!projectWorkspaceRoute && !["nav.drafts", "nav.projects", "nav.tasks", "nav.people", "nav.calendar", "nav.settings", "nav.changes", "nav.files", "nav.history", "nav.repositoryConnection", "nav.board", "nav.gantt", "nav.effort", "nav.workload"].includes(view) && <div className="card empty-workspace">{t("common.notAvailable")}</div>}
-    </AppShell>
+    </AppShell></>
   );
 }
 
