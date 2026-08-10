@@ -350,8 +350,10 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .filter-reset { border: 1px solid #c9cbc5; border-radius: 8px; background: #fff; color: #49524d; font-size: .72rem; padding: .25rem .55rem; cursor: pointer; }
 .task-field-settings { position: relative; }
 .task-field-settings summary { cursor: pointer; border: 1px solid #c9cbc5; border-radius: 8px; padding: .48rem .65rem; font-size: .76rem; font-weight: 650; list-style: none; }
-.task-field-settings[open] > div { position: absolute; z-index: 10; top: calc(100% + .35rem); right: 0; display: grid; min-width: 190px; gap: .5rem; border: 1px solid #d9ddd6; border-radius: 9px; background: #fff; box-shadow: 0 8px 24px rgba(24, 53, 42, .14); padding: .7rem; }
+.task-field-settings[open] > div { position: absolute; z-index: 10; top: calc(100% + .35rem); right: 0; display: grid; width: min(270px, calc(100vw - 2rem)); gap: .5rem; border: 1px solid #d9ddd6; border-radius: 9px; background: #fff; box-shadow: 0 8px 24px rgba(24, 53, 42, .14); padding: .7rem; }
+.task-field-settings[open] p { margin: 0 0 .15rem; color: #68706b; font-size: .72rem; line-height: 1.4; }
 .task-field-settings[open] label { display: flex; align-items: center; gap: .4rem; color: #333b36; font-size: .78rem; }
+.task-field-settings input[type="checkbox"] { flex: 0 0 1rem; width: 1rem; min-width: 1rem; height: 1rem; margin: 0; padding: 0; accent-color: #347a58; }
 .project-plan-stage { display: grid; gap: .65rem; overflow: hidden; border: 1px solid #d9ddd6; border-radius: 10px; background: #fff; box-shadow: 0 1px 2px rgba(24, 53, 42, .04); }
 .project-plan-archive { display: grid; gap: .8rem; }
 .project-plan-archived-stage { border-color: #c9c3b7; background: #fbfaf7; }
