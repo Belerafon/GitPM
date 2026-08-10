@@ -25,12 +25,13 @@ const NAVIGATION_ICON: Partial<Record<MessageKey, ReactNode>> = {
   "nav.settings": <svg aria-hidden="true" viewBox="0 0 16 16"><path d="M2 4h12M2 8h12M2 12h12" /><circle cx="6" cy="4" r="1.5" /><circle cx="10.5" cy="8" r="1.5" /><circle cx="5" cy="12" r="1.5" /></svg>,
 };
 
-export function AppShell({ activeView, banner, breadcrumbs, children, headerMeta, headerTitle, navigationGroups, onNavigate, onOpenRepositoryStatus, repositoryMode, repositoryStatus, t, topActions }: {
+export function AppShell({ activeView, banner, breadcrumbs, children, headerMeta, headerSearch, headerTitle, navigationGroups, onNavigate, onOpenRepositoryStatus, repositoryMode, repositoryStatus, t, topActions }: {
   readonly activeView: MessageKey;
   readonly banner?: ReactNode;
   readonly breadcrumbs?: ReactNode;
   readonly children: ReactNode;
   readonly headerMeta: ReactNode;
+  readonly headerSearch?: ReactNode;
   readonly headerTitle: string;
   readonly navigationGroups: readonly NavigationGroup[];
   readonly onNavigate: (key: MessageKey) => void;
@@ -105,6 +106,7 @@ export function AppShell({ activeView, banner, breadcrumbs, children, headerMeta
       <header className="topbar">
         <button aria-controls="primary-navigation" aria-expanded={navigationOpen} aria-label={t("nav.openMenu")} className="navigation-toggle" onClick={() => setNavigationOpen((open) => !open)} ref={navigationButtonRef} title={t("nav.openMenu")}><span aria-hidden="true">☰</span></button>
         <div className="page-context"><h1>{headerTitle}</h1><p>{headerMeta}</p></div>
+        {headerSearch}
         <div className="top-actions">{topActions}</div>
       </header>
       {breadcrumbs !== undefined && <nav aria-label={t("nav.breadcrumbs")} className="breadcrumbs">{breadcrumbs}</nav>}

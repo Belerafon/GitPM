@@ -59,6 +59,17 @@ describe("HttpGitPmApi request bodies", () => {
     }));
   });
 
+  it("encodes global-search input and decodes the compact result contract", async () => {
+    const payload = { query: "Анна + QA", items: [{ entity_type: "person", id: "U-26-5EBAE3", title: "Анна", context: "anna@example.test", lifecycle: "active" }], total: 1 };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(payload), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await new HttpGitPmApi().searchEntities("DRF-1", "Анна + QA", 8);
+
+    expect(result).toEqual(payload);
+    expect(fetchMock).toHaveBeenCalledWith("/api/drafts/DRF-1/search?q=%D0%90%D0%BD%D0%BD%D0%B0+%2B+QA&limit=8", expect.objectContaining({ credentials: "include" }));
+  });
+
   it("decodes the project time-entry envelope and serializes filters", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({
       total: 1,

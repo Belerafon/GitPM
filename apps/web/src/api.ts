@@ -14,6 +14,7 @@ import {
     decodeDirectRevertResult,
   decodeEntityResult,
   decodeEntityResults,
+  decodeGlobalSearchResult,
   decodeMergeRequestStatus,
   decodeNotifications,
   decodeProjectWorkspace,
@@ -37,7 +38,7 @@ import {
   type ConfigurationResult,
   type Decoder,
 } from "@gitpm/contracts";
-import type { ChangesList, CommentResult, CommitFileDiff, CommitHistoryDetail, CommitHistoryItem, CommitResult, ConfigurationImpact, DirectRevertResult, DraftSnapshot, DraftStatus, EntityResult, GitPmDocument, MergeRequestStatus, NotificationsResult, ProjectWorkspaceResult, PublicSession, PushResult, RepositoryConnectionStatus, RepositoryConnectionTest, RepositoryConnectionUpdate, RepositoryDocument, RepositoryResult, RestoreCommitFilesResult, RevertDraftResult, SemanticDiff, TimeEntryDocument, WorkloadReport, WriterMode, WorktreeDirectory, WorktreeFile } from "./types.js";
+import type { ChangesList, CommentResult, CommitFileDiff, CommitHistoryDetail, CommitHistoryItem, CommitResult, ConfigurationImpact, DirectRevertResult, DraftSnapshot, DraftStatus, EntityResult, GitPmDocument, GlobalSearchResult, MergeRequestStatus, NotificationsResult, ProjectWorkspaceResult, PublicSession, PushResult, RepositoryConnectionStatus, RepositoryConnectionTest, RepositoryConnectionUpdate, RepositoryDocument, RepositoryResult, RestoreCommitFilesResult, RevertDraftResult, SemanticDiff, TimeEntryDocument, WorkloadReport, WriterMode, WorktreeDirectory, WorktreeFile } from "./types.js";
 
 export interface TimeEntryResult {
   readonly document: TimeEntryDocument;
@@ -169,6 +170,7 @@ export interface GitPmApi {
   cleanupDraft(draftId: string): Promise<void>;
   exportData?(draftId: string, options: ExportOptions): Promise<ExportDownload>;
   listEntities(draftId: string, entityType: string, project?: string): Promise<readonly EntityResult[]>;
+  searchEntities?(draftId: string, query: string, limit?: number): Promise<GlobalSearchResult>;
   getEntity(draftId: string, entityType: string, id: string): Promise<EntityResult>;
   projectWorkspace(draftId: string, projectId: string): Promise<ProjectWorkspaceResult>;
   createEntity(draftId: string, entityType: string, fingerprint: string, document: GitPmDocument): Promise<EntityResult>;
@@ -354,6 +356,10 @@ export class HttpGitPmApi implements GitPmApi {
   async listEntities(draftId: string, entityType: string, project?: string): Promise<readonly EntityResult[]> {
     const query = project === undefined ? "" : `?project=${encodeURIComponent(project)}`;
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/entities/${encodeURIComponent(entityType)}${query}`, decodeEntityResults);
+  }
+  async searchEntities(draftId: string, search: string, limit = 20): Promise<GlobalSearchResult> {
+    const query = new URLSearchParams({ q: search, limit: String(limit) });
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/search?${query.toString()}`, decodeGlobalSearchResult);
   }
   async workload(draftId: string, filters: { readonly project?: string; readonly milestone?: string; readonly team?: string } = {}): Promise<WorkloadReport> {
     const query = new URLSearchParams();

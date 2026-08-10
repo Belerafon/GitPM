@@ -7,7 +7,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { DraftManager } from "@gitpm/drafts";
 import { GitClient } from "@gitpm/git-client";
 import type { GitPmDocument } from "@gitpm/repository-format";
-import { CommentStore, DomainOperationError, EntityStore, TimeEntryStore, planEntityCreation, planEntityUpdate, type CommentActor } from "./index.js";
+import { CommentStore, DomainOperationError, EntityStore, TimeEntryStore, planEntityCreation, planEntityUpdate, searchRepositoryDocuments, type CommentActor } from "./index.js";
 
 const execFileAsync = promisify(execFile);
 const roots: string[] = [];
@@ -47,6 +47,36 @@ async function runtime(): Promise<{ manager: DraftManager; store: EntityStore; c
 }
 
 afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))));
+
+describe("global repository search", () => {
+  const documents: GitPmDocument[] = [
+    { schema: "gitpm/project@2", id: "P-26-Y9S1D8", name: "Платёжный шлюз", group: "Финансы", status: "backlog", lifecycle: "active" },
+    { schema: "gitpm/task@2", id: "T-26-FM5Q4W", project: "P-26-Y9S1D8", title: "Подключить банк", type: "task", status: "backlog", lifecycle: "archived" },
+    { schema: "gitpm/milestone@2", id: "M-26-KK4VXH", project: "P-26-Y9S1D8", name: "Пилот", lifecycle: "active" },
+    { schema: "gitpm/person@1", id: "U-26-KB9RXB", name: "Анна Кузнецова", email: "anna@example.test", weekly_capacity_hours: 40, calendar: "C-26-7GQW87", lifecycle: "active" },
+    { schema: "gitpm/team@1", id: "G-26-22K88P", name: "Core team", members: ["U-26-KB9RXB"], lifecycle: "active" },
+    { schema: "gitpm/calendar@1", id: "C-26-7GQW87", name: "Standard week", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" },
+    { schema: "gitpm/saved-view@1", id: "V-26-B0C5A1", project: "P-26-Y9S1D8", name: "Hidden search view", kind: "list", filters: {}, lifecycle: "active" },
+  ];
+
+  it("ranks identity matches and returns navigation context without full documents", () => {
+    expect(searchRepositoryDocuments(documents, "t-26-fm5q4w")).toEqual({
+      query: "t-26-fm5q4w",
+      total: 1,
+      items: [{ entity_type: "task", id: "T-26-FM5Q4W", title: "Подключить банк", context: "Платёжный шлюз", project_id: "P-26-Y9S1D8", lifecycle: "archived" }],
+    });
+    expect(searchRepositoryDocuments(documents, "платёж").items.map((item) => item.entity_type)).toEqual(["project", "task", "milestone"]);
+  });
+
+  it("searches locale-neutral context fields, includes all supported types, and applies the limit", () => {
+    expect(searchRepositoryDocuments(documents, "ANNA@EXAMPLE.TEST").items[0]).toMatchObject({ entity_type: "person", id: "U-26-KB9RXB" });
+    expect(searchRepositoryDocuments(documents, "Анна").items.map((item) => item.entity_type)).toEqual(["person", "team"]);
+    expect(searchRepositoryDocuments(documents, "standard").items[0]).toMatchObject({ entity_type: "calendar" });
+    expect(searchRepositoryDocuments(documents, "п", 2)).toMatchObject({ total: 3, items: expect.any(Array) });
+    expect(searchRepositoryDocuments(documents, "п", 2).items).toHaveLength(2);
+    expect(searchRepositoryDocuments(documents, "hidden")).toMatchObject({ total: 0, items: [] });
+  });
+});
 
 describe("entity create planning", () => {
   const calendar = { schema: "gitpm/calendar@1", id: "C-26-QD7FJ4", name: "Default", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" };
