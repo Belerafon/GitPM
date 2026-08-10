@@ -1,0 +1,11 @@
+schema: gitpm/task@2
+id: T-26-KR8D2S # task: Уточнить состав работ
+project: P-26-GN7R3S # project: Диагностика неполного плана
+title: Уточнить состав работ
+type: task
+status: backlog
+lifecycle: active
+milestone: M-26-GN7R3S # milestone: Этап 1: Согласование наименования, габаритных размеров и общих технических требований
+description_markdown: У задачи намеренно не заданы даты для демонстрации подсказки под Гантом.
+labels:
+  - демо

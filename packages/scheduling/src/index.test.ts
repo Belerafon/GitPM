@@ -357,4 +357,23 @@ describe("gantt model", () => {
     const model = buildGanttModel(subjects, { primaryTrack: "plan", actual });
     expect(model.rows[0]!.actual).toEqual([{ date: "2026-08-03", hours: 7 }]);
   });
+
+  it("ignores malformed calendar dates instead of producing an unusable range", () => {
+    const subjects: readonly Schedulable[] = [
+      schedulable("T-26-1", {
+        plan: { start: "2026-02-30", finish: "2026-03-10" },
+        target: { start: "not-a-date", finish: "2026-04-10" },
+      }),
+    ];
+    const actual = new Map<string, readonly { date: string; hours: number }[]>([["T-26-1", [{ date: "2026-13-01", hours: 2 }]]]);
+    const model = buildGanttModel(subjects, {
+      primaryTrack: "plan",
+      visibleTracks: ["plan", "target"],
+      actual,
+      milestones: [{ id: "M-1", finish: "2026-04-31" }],
+    });
+
+    expect(model.rows[0]).toMatchObject({ primary: undefined, bars: [], actual: [] });
+    expect(model.range).toBeUndefined();
+  });
 });

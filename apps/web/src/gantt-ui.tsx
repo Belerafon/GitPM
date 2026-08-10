@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
-import { buildGanttModel, resolveSchedulingHierarchy, type GanttActualSegment, type SchedulingHierarchyTask, type TrackDefinition } from "@gitpm/scheduling";
+import { buildGanttModel, isIsoCalendarDate, resolveSchedulingHierarchy, type GanttActualSegment, type SchedulingHierarchyTask, type TrackDefinition } from "@gitpm/scheduling";
 import { scheduleTracksConfig, ScheduleResolver } from "./schedules.js";
 import { listAllProjectTimeEntries, type GitPmApi } from "./api.js";
 import { buildTaskHierarchy } from "@gitpm/task-hierarchy";
@@ -16,7 +16,6 @@ const GANTT_BAR_TOP = 51;
 const GANTT_BAR_HEIGHT = 36;
 const DEPENDENCY_CLEARANCE = 16;
 const DEPENDENCY_COLORS = ["#6c5c91", "#b24c63", "#2f6f9f", "#9a5b13", "#8a4f9e", "#c2410c", "#4361a3", "#39796b", "#8b3a3a", "#7a5c00", "#ad3f8c", "#3e6f2b"] as const;
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/u;
 const dayNumber = (value: string) => Math.floor(Date.parse(`${value}T00:00:00Z`) / DAY_MS);
 const isoDate = (day: number) => new Date(day * DAY_MS).toISOString().slice(0, 10);
 const stringValue = (document: GitPmDocument, key: string) => typeof document[key] === "string" ? document[key] as string : "";
@@ -43,6 +42,14 @@ interface ViewModel {
   readonly dependencies: readonly { readonly from: string; readonly to: string }[];
 }
 
+type GanttTaskDiagnosticKind = "missing" | "incomplete" | "invalid" | "range";
+interface GanttTaskDiagnostic {
+  readonly id: string;
+  readonly title: string;
+  readonly track?: string;
+  readonly kind: GanttTaskDiagnosticKind;
+}
+
 function rowDateRange(locale: Locale, row: ViewRow): string {
   const start = row.bar?.start ?? row.actual[0]?.date;
   const finish = row.bar?.finish ?? row.actual[row.actual.length - 1]?.date ?? start;
@@ -52,10 +59,52 @@ function rowDateRange(locale: Locale, row: ViewRow): string {
 function aggregateSegments(segments: readonly GanttActualSegment[]): readonly GanttActualSegment[] {
   const byDate = new Map<string, number>();
   for (const segment of segments) {
-    if (!ISO_DATE.test(segment.date)) continue;
+    if (!isIsoCalendarDate(segment.date)) continue;
     byDate.set(segment.date, (byDate.get(segment.date) ?? 0) + segment.hours);
   }
   return [...byDate.entries()].map(([date, hours]) => ({ date, hours: Math.round((hours + Number.EPSILON) * 10_000) / 10_000 })).sort((left, right) => left.date.localeCompare(right.date));
+}
+
+export function ganttTaskDateDiagnostics(tasks: readonly EntityResult[], visibleTracks: readonly string[]): readonly GanttTaskDiagnostic[] {
+  if (visibleTracks.length === 0) return [];
+  return tasks.filter((item) => item.document.lifecycle === "active").flatMap((item) => {
+    const schedules = item.document.schedules as Record<string, { start?: unknown; finish?: unknown }> | undefined;
+    let incompleteTrack: string | undefined;
+    let invalidTrack: string | undefined;
+    let rangeTrack: string | undefined;
+    let hasValidWindow = false;
+    for (const track of visibleTracks) {
+      const window = schedules?.[track];
+      const hasStart = window?.start !== undefined && window.start !== "";
+      const hasFinish = window?.finish !== undefined && window.finish !== "";
+      if (!hasStart && !hasFinish) continue;
+      if (!hasStart || !hasFinish) {
+        incompleteTrack ??= track;
+        continue;
+      }
+      if (!isIsoCalendarDate(window?.start) || !isIsoCalendarDate(window?.finish)) {
+        invalidTrack ??= track;
+        continue;
+      }
+      if (window.start > window.finish) {
+        rangeTrack ??= track;
+        continue;
+      }
+      hasValidWindow = true;
+    }
+    const kindAndTrack: readonly [GanttTaskDiagnosticKind, string?] | undefined = invalidTrack !== undefined
+      ? ["invalid", invalidTrack]
+      : rangeTrack !== undefined
+        ? ["range", rangeTrack]
+        : incompleteTrack !== undefined
+          ? ["incomplete", incompleteTrack]
+          : hasValidWindow
+            ? undefined
+            : ["missing"];
+    if (kindAndTrack === undefined) return [];
+    const [kind, track] = kindAndTrack;
+    return [{ id: item.document.id, title: stringValue(item.document, "title") || item.document.id, kind, ...(track === undefined ? {} : { track }) }];
+  });
 }
 
 export function projectTimelineProjection(tasks: readonly EntityResult[], milestones: readonly EntityResult[], actual: ReadonlyMap<string, readonly GanttActualSegment[]>, tracks: readonly TrackDefinition[], options: { readonly primaryTrack: string; readonly visibleTracks: readonly string[]; readonly dependencyTrack: string }): ViewModel | null {
@@ -105,13 +154,13 @@ export function projectTimelineProjection(tasks: readonly EntityResult[], milest
         entity, id: row.id, title: stringValue(entity.document, "title") || row.id, depth: hierarchy.depthOf(row.id),
         milestone: stringValue(entity.document, "milestone") || undefined,
         bar: primaryBar, bars,
-        actual: row.actual.filter((segment) => ISO_DATE.test(segment.date)).map((segment): ViewActual => ({ date: segment.date, hours: segment.hours, offset: dayNumber(segment.date) - first })),
+        actual: row.actual.filter((segment) => isIsoCalendarDate(segment.date)).map((segment): ViewActual => ({ date: segment.date, hours: segment.hours, offset: dayNumber(segment.date) - first })),
         dependencies: row.dependencies.map((dependency) => dependency.from).filter((id) => orderedIds.has(id)),
       };
     })
     .sort((left, right) => (order.get(left.id) ?? 0) - (order.get(right.id) ?? 0));
   const milestoneFinishes = new Map(ganttMilestones.map((milestone) => [milestone.id, milestone.finish]));
-  const activeMilestones = milestones.filter((item) => item.document.lifecycle === "active" && ISO_DATE.test(milestoneFinishes.get(item.document.id) ?? ""));
+  const activeMilestones = milestones.filter((item) => item.document.lifecycle === "active" && isIsoCalendarDate(milestoneFinishes.get(item.document.id)));
   return {
     start: isoDate(first), due: isoDate(last), days, rows: viewRows,
     milestones: activeMilestones.map((item) => { const due = milestoneFinishes.get(item.document.id)!; return { id: item.document.id, name: stringValue(item.document, "name"), due, offset: dayNumber(due) - first }; }),
@@ -191,7 +240,15 @@ export function GanttWorkspace({ api, draft, locale, initialProjectId = "", onNa
   const timelineWidth = Math.max(720, (model?.days.length ?? 0) * dayWidth);
   const today = new Date().toISOString().slice(0, 10);
   const todayOffset = model?.days.indexOf(today) ?? -1;
-  const undatedCount = tasks.filter((item) => item.document.lifecycle === "active" && visibleTracks.every((track) => { const window = (item.document.schedules as Record<string, { start?: string; finish?: string }> | undefined)?.[track]; return typeof window?.start !== "string" || typeof window?.finish !== "string"; })).length;
+  const diagnostics = useMemo(() => ganttTaskDateDiagnostics(tasks, visibleTracks), [tasks, visibleTracks]);
+  const diagnosticMessage = (diagnostic: GanttTaskDiagnostic): string => {
+    const values = { task: diagnostic.title, track: diagnostic.track === undefined ? "" : trackTitle(tracks, diagnostic.track) };
+    if (diagnostic.kind === "invalid") return t("gantt.diagnosticInvalid", values);
+    if (diagnostic.kind === "range") return t("gantt.diagnosticRange", values);
+    if (diagnostic.kind === "incomplete") return t("gantt.diagnosticIncomplete", values);
+    return t("gantt.diagnosticMissing", values);
+  };
+  const shownDiagnostics = diagnostics.slice(0, 10);
 
   return <section className="gantt-workspace">
     <div className="section-heading"><span className="eyebrow draft-context-id">{draft.draft_id}</span><h2 aria-hidden="true">{t("gantt.heading")}</h2><p>{t("gantt.description")}</p></div>
@@ -205,7 +262,7 @@ export function GanttWorkspace({ api, draft, locale, initialProjectId = "", onNa
       {dependencyTracks.length > 0 && <label>{t("gantt.dependencyTrack")}<select aria-label={t("gantt.dependencyTrack")} value={dependencyTrack} onChange={(event) => setDependencyTrack(event.target.value)}>{dependencyTracks.map((track) => <option key={track.slug} value={track.slug}>{trackTitle(tracks, track.slug)}</option>)}</select></label>}
     </section>}
     <div className="gantt-legend" aria-label={t("gantt.legend")}><span className="task">{t("gantt.legendTask")}</span><span className="milestone">{t("gantt.legendMilestone")}</span><span className="dependency">{t("gantt.legendDependency")}</span><span className="today">{t("gantt.legendToday")}</span></div>
-    {model === null ? <section className="card empty-workspace"><strong>{t("gantt.empty")}</strong>{undatedCount > 0 && <span>{t("gantt.undatedHint", { count: undatedCount })}</span>}</section> : <section className="card gantt-scroll" aria-label={t("gantt.chart")} data-start={model.start} data-due={model.due}>
+    {model === null ? <section className="card empty-workspace"><strong>{t("gantt.empty")}</strong></section> : <section className="card gantt-scroll" aria-label={t("gantt.chart")} data-start={model.start} data-due={model.due}>
       <div className="gantt-labels"><div className="gantt-label-head">{t("gantt.tasks")}</div>{model.rows.map((row) => <div className="gantt-label" key={row.id} style={{ paddingInlineStart: `${.75 + row.depth * 1.1}rem` }}><button className="gantt-task-link" onClick={() => onNavigate("tasks", { projectId, taskId: row.id })}><strong>{row.title}</strong><span>{rowDateRange(locale, row)}</span>{row.milestone !== undefined && <small>{milestoneNames.get(row.milestone)}</small>}</button></div>)}</div>
       <div className="gantt-timeline" style={{ width: `${timelineWidth}px` }}>
         <div className="gantt-days" style={{ gridTemplateColumns: `repeat(${model.days.length}, ${dayWidth}px)` }}>{model.days.map((day) => <time key={day} dateTime={day}><span>{day.slice(8)}</span><small>{day.slice(5, 7)}</small></time>)}</div>
@@ -233,6 +290,12 @@ export function GanttWorkspace({ api, draft, locale, initialProjectId = "", onNa
         <defs>{model.dependencies.map((dependency, index) => <marker id={`${markerPrefix}-gantt-arrow-${index}`} key={`${dependency.from}-${dependency.to}`} markerHeight="6" markerWidth="6" orient="auto" refX="5" refY="3"><path d="M0,0 L0,6 L6,3 z" style={{ fill: DEPENDENCY_COLORS[index % DEPENDENCY_COLORS.length] }} /></marker>)}</defs></svg>
       </div>
     </section>}
+    {model !== null && model.rows.length === 0 && model.milestones.length > 0 && <p className="gantt-milestone-only">{t("gantt.milestoneOnly")}</p>}
+    {diagnostics.length > 0 && <details className="card gantt-diagnostics" open={model === null || model.rows.length === 0}>
+      <summary>{t("gantt.diagnosticsSummary", { count: diagnostics.length })}</summary>
+      <ul>{shownDiagnostics.map((diagnostic) => <li key={diagnostic.id}><button className="text-link" type="button" onClick={() => onNavigate("tasks", { projectId, taskId: diagnostic.id })}>{diagnosticMessage(diagnostic)}</button></li>)}</ul>
+      {diagnostics.length > shownDiagnostics.length && <p>{t("gantt.diagnosticsMore", { count: diagnostics.length - shownDiagnostics.length })}</p>}
+    </details>}
     </>
     </AsyncBoundary>
   </section>;

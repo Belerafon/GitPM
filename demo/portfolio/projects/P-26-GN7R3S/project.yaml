@@ -1,0 +1,26 @@
+schema: gitpm/project@2
+id: P-26-GN7R3S # project: Диагностика неполного плана
+name: Диагностика неполного плана
+status: planned
+lifecycle: active
+group: Демонстрационные сценарии
+description_markdown: Проверка устойчивого отображения Ганта при датированных этапах и задачах с неполными датами.
+planning:
+  enabled_tracks:
+    - plan
+    - actual
+  primary_track: plan
+  workload_track: plan
+  dashboard_tracks:
+    - plan
+    - actual
+schedules:
+  plan:
+    start: 2024-12-17
+    finish: 2026-05-17
+milestone_order:
+  - M-26-GN7R3S # milestone: Этап 1: Согласование наименования, габаритных размеров и общих технических требований
+  - M-26-H4R8Q2 # milestone: Контрольная дата завершения
+labels:
+  - демо
+  - диагностика
