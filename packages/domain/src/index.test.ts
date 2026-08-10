@@ -560,6 +560,55 @@ describe("domain entity store", () => {
     expect(restoredTask.document.lifecycle).toBe("active");
   });
 
+  it("archives and restores a Milestone with linked Tasks atomically and can restore one Task with its Milestone", async () => {
+    const { manager, store } = await runtime();
+    const draft = await manager.createDraft("DRF-MILESTONE-ARCHIVE", "42");
+    const milestone = await store.get("DRF-MILESTONE-ARCHIVE", "milestones", "M-26-461GDJ");
+    const archivedMilestone = await store.archive(
+      "DRF-MILESTONE-ARCHIVE", "42", "milestones", "M-26-461GDJ", draft.fingerprint, milestone.blob_id, { includeTasks: true },
+    );
+    const archivedFirst = await store.get("DRF-MILESTONE-ARCHIVE", "tasks", "T-26-P9G3P8");
+    const archivedSecond = await store.get("DRF-MILESTONE-ARCHIVE", "tasks", "T-26-RHBNH8");
+    expect([archivedMilestone.document.lifecycle, archivedFirst.document.lifecycle, archivedSecond.document.lifecycle]).toEqual(["archived", "archived", "archived"]);
+
+    const restoredFirst = await store.restore(
+      "DRF-MILESTONE-ARCHIVE", "42", "tasks", "T-26-P9G3P8", archivedMilestone.draft_fingerprint, archivedFirst.blob_id, { restoreMilestone: true },
+    );
+    expect(restoredFirst.document.lifecycle).toBe("active");
+    expect((await store.get("DRF-MILESTONE-ARCHIVE", "milestones", "M-26-461GDJ")).document.lifecycle).toBe("active");
+    expect((await store.get("DRF-MILESTONE-ARCHIVE", "tasks", "T-26-RHBNH8")).document.lifecycle).toBe("archived");
+
+    const currentMilestone = await store.get("DRF-MILESTONE-ARCHIVE", "milestones", "M-26-461GDJ");
+    const rearchived = await store.archive(
+      "DRF-MILESTONE-ARCHIVE", "42", "milestones", "M-26-461GDJ", restoredFirst.draft_fingerprint, currentMilestone.blob_id, { includeTasks: true },
+    );
+    const restoredMilestone = await store.restore(
+      "DRF-MILESTONE-ARCHIVE", "42", "milestones", "M-26-461GDJ", rearchived.draft_fingerprint, rearchived.blob_id, { includeTasks: true },
+    );
+    expect(restoredMilestone.document.lifecycle).toBe("active");
+    expect((await store.get("DRF-MILESTONE-ARCHIVE", "tasks", "T-26-P9G3P8")).document.lifecycle).toBe("active");
+    expect((await store.get("DRF-MILESTONE-ARCHIVE", "tasks", "T-26-RHBNH8")).document.lifecycle).toBe("active");
+  });
+
+  it("rolls back a Milestone restore with Tasks when any Task reference is inactive", async () => {
+    const { manager, store } = await runtime();
+    const draft = await manager.createDraft("DRF-MILESTONE-ROLLBACK", "42");
+    const milestone = await store.get("DRF-MILESTONE-ROLLBACK", "milestones", "M-26-461GDJ");
+    const archivedMilestone = await store.archive(
+      "DRF-MILESTONE-ROLLBACK", "42", "milestones", "M-26-461GDJ", draft.fingerprint, milestone.blob_id, { includeTasks: true },
+    );
+    const person = await store.get("DRF-MILESTONE-ROLLBACK", "people", "U-26-5EBAE3");
+    const archivedPerson = await store.archive(
+      "DRF-MILESTONE-ROLLBACK", "42", "people", "U-26-5EBAE3", archivedMilestone.draft_fingerprint, person.blob_id,
+    );
+    const currentMilestone = await store.get("DRF-MILESTONE-ROLLBACK", "milestones", "M-26-461GDJ");
+    await expect(store.restore(
+      "DRF-MILESTONE-ROLLBACK", "42", "milestones", "M-26-461GDJ", archivedPerson.draft_fingerprint, currentMilestone.blob_id, { includeTasks: true },
+    )).rejects.toMatchObject({ code: "ENTITY_RESTORE_REFERENCES_INACTIVE" });
+    expect((await store.get("DRF-MILESTONE-ROLLBACK", "milestones", "M-26-461GDJ")).document.lifecycle).toBe("archived");
+    expect((await store.get("DRF-MILESTONE-ROLLBACK", "tasks", "T-26-P9G3P8")).document.lifecycle).toBe("archived");
+  });
+
   it("previews and blocks configuration changes that invalidate repository data", async () => {
     const { manager, store } = await runtime();
     const draft = await manager.createDraft("DRF-CONFIG-IMPACT", "42");

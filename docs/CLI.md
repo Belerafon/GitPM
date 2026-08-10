@@ -18,8 +18,8 @@ gitpm entity import [--draft <id>] --type <type> --format csv|yaml|jsonl (--file
 gitpm entity list [--draft <id>] --type <type> [--project <id>]
 gitpm entity show [--draft <id>] --type <type> --id <entity-id>
 gitpm entity delete [--draft <id>] --type <type> --id <entity-id> [--unlink-references|--cascade-references] [--dry-run] [--allow-delete] [--project <id>]
-gitpm entity archive [--draft <id>] --type <type> --id <entity-id> [--project <id>] [--allow-delete]
-gitpm entity restore [--draft <id>] --type <type> --id <entity-id> [--project <id>] [--allow-delete]
+gitpm entity archive [--draft <id>] --type <type> --id <entity-id> [--include-tasks] [--project <id>] [--allow-delete]
+gitpm entity restore [--draft <id>] --type <type> --id <entity-id> [--include-tasks|--restore-milestone] [--project <id>] [--allow-delete]
 gitpm entity move [--draft <id>] --type task --id <entity-id> --to-project <id> [--to-milestone <id>] [--to-parent <task-id>] [--allow-delete] [--project <id>]
 gitpm schedule set [--draft <id>] --type project|task|milestone --id <entity-id> --track <slug> [--start <yyyy-mm-dd>] [--finish <yyyy-mm-dd>] [--effort-hours <n>] [--depends-on <task-id>]... [--clear-start] [--clear-finish] [--clear-effort] [--clear-dependencies] [--project <id>] [--allow-delete]
 gitpm planning show [--draft <id>] --project <id>
@@ -130,6 +130,11 @@ Project (поддерживается только для `project`; други�
 Project, Calendar, parent, Milestone, assignee, dependency и других ссылок сущности. При
 недоступной ссылке возвращается `ENTITY_RESTORE_REFERENCES_INACTIVE`. Generic `entity update`
 не может менять `lifecycle`: для переходов обязательны `archive` и `restore`.
+
+Для Milestone флаг `--include-tasks` атомарно архивирует или восстанавливает сам этап и все
+связанные задачи соответствующего lifecycle. Для архивной Task флаг `--restore-milestone`
+атомарно восстанавливает задачу и её архивный Milestone. Составной переход использует один
+optimistic fingerprint, проверяет итоговый репозиторий целиком и не оставляет частичный результат.
 
 `entity move` атомарно перемещает Task, всё её поддерево и комментарии в другой Project
 и опционально другой Milestone. `--to-parent` прикрепляет корень перемещаемого поддерева

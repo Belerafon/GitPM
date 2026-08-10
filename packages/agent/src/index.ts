@@ -7,6 +7,7 @@ import {
   type CommentActor,
   type TimeEntryActor,
   type TimeEntryProjectFilters,
+  type LifecycleTransitionOptions,
 } from "@gitpm/domain";
 import type { GitClient } from "@gitpm/git-client";
 import type { GitLabMergeRequestProtocol, MergeRequestState } from "@gitpm/gitlab";
@@ -210,12 +211,12 @@ export class AgentWorkflow {
     return await this.repository.deleteEntity(draftId, entityType, id, unlinkReferences, scope, cascadeReferences);
   }
 
-  async archiveEntity(draftId: string, entityType: string, id: string, scope: AgentScope = {}) {
-    return await this.repository.archiveEntity(draftId, entityType, id, scope);
+  async archiveEntity(draftId: string, entityType: string, id: string, scope: AgentScope = {}, options: LifecycleTransitionOptions = {}) {
+    return await this.repository.archiveEntity(draftId, entityType, id, scope, options);
   }
 
-  async restoreEntity(draftId: string, entityType: string, id: string, scope: AgentScope = {}) {
-    return await this.repository.restoreEntity(draftId, entityType, id, scope);
+  async restoreEntity(draftId: string, entityType: string, id: string, scope: AgentScope = {}, options: LifecycleTransitionOptions = {}) {
+    return await this.repository.restoreEntity(draftId, entityType, id, scope, options);
   }
 
   async moveTask(

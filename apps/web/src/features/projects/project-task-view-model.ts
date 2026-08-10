@@ -70,6 +70,11 @@ export interface ProjectTaskViewModel {
   readonly system: ProjectTaskSystemGroup;
 }
 
+export interface ProjectArchiveViewModel {
+  readonly stages: readonly ProjectTaskStageGroup[];
+  readonly tasks: ProjectTaskSystemGroup;
+}
+
 /**
  * A single flattened view-model row: a task node paired with the milestone
  * stage it belongs to. `stage` is `undefined` for rows in the system group.
@@ -253,8 +258,9 @@ const toPayload = (entity: EntityResult): HierarchyPayload => {
  * Stage groups follow {@link orderActiveMilestones}. Within a stage, root tasks
  * are ordered by the milestone's flat DFS-preorder `task_order`; child tasks
  * nest depth-first under their parent. Tasks whose `milestone` is empty or
- * points to a milestone that is absent or not active form a separate system
- * group rendered after the stages.
+ * points to no known milestone form a separate system group rendered after the
+ * stages. Tasks linked to archived milestones belong to the archive view and
+ * are deliberately absent from the active plan's system group.
  *
  * When `compareTasks` is supplied the model reproduces the analytical order
  * (completion, then due, then title) used to break ties among tasks absent from
@@ -265,6 +271,7 @@ export function buildProjectTaskViewModel(options: BuildProjectTaskViewModelOpti
   const { project, milestones, tasks, text, effortOf, locale, compareTasks } = options;
   const orderedMilestones = orderActiveMilestones({ project, milestones, text, locale });
   const activeMilestoneIds = new Set(orderedMilestones.map((milestone) => milestone.document.id));
+  const knownMilestoneIds = new Set(milestones.map((milestone) => milestone.document.id));
   const hierarchyCompare = compareTasks === undefined
     ? undefined
     : (left: HierarchyPayload, right: HierarchyPayload) => compareTasks(left.entity, right.entity);
@@ -281,7 +288,7 @@ export function buildProjectTaskViewModel(options: BuildProjectTaskViewModelOpti
 
   const systemTasks = tasks.filter((task) => {
     const milestoneId = text(task.document, "milestone");
-    return milestoneId === "" || !activeMilestoneIds.has(milestoneId);
+    return milestoneId === "" || (!activeMilestoneIds.has(milestoneId) && !knownMilestoneIds.has(milestoneId));
   });
   const systemHierarchy = buildTaskHierarchy(systemTasks.map(toPayload), {
     ...(hierarchyCompare === undefined ? {} : { compare: hierarchyCompare }),
@@ -292,4 +299,46 @@ export function buildProjectTaskViewModel(options: BuildProjectTaskViewModelOpti
   };
 
   return { stages, system };
+}
+
+/**
+ * Build the project archive without changing repository relationships. Archived
+ * milestones retain every linked task (active or archived) in their original
+ * hierarchy. Archived tasks that do not belong to an archived milestone are
+ * listed in a separate archive task group.
+ */
+export function buildProjectArchiveViewModel(options: BuildProjectTaskViewModelOptions): ProjectArchiveViewModel {
+  const { project, milestones, tasks, text, effortOf, locale, compareTasks } = options;
+  const order = strings(project.document, "milestone_order");
+  const archivedMilestones = milestones
+    .filter((milestone) => milestone.document.lifecycle === "archived")
+    .slice()
+    .sort((left, right) => {
+      const byOrder = compareOrder(order, left.document.id, right.document.id);
+      if (byOrder !== 0) return byOrder;
+      const byName = text(left.document, "name").localeCompare(text(right.document, "name"), locale);
+      return byName !== 0 ? byName : left.document.id.localeCompare(right.document.id);
+    });
+  const archivedMilestoneIds = new Set(archivedMilestones.map((milestone) => milestone.document.id));
+  const hierarchyCompare = compareTasks === undefined
+    ? undefined
+    : (left: HierarchyPayload, right: HierarchyPayload) => compareTasks(left.entity, right.entity);
+  const stages = archivedMilestones.map((milestone): ProjectTaskStageGroup => {
+    const taskOrder = strings(milestone.document, "task_order");
+    const stageTasks = tasks.filter((task) => text(task.document, "milestone") === milestone.document.id);
+    const hierarchy = buildTaskHierarchy(stageTasks.map(toPayload), {
+      ...(taskOrder.length === 0 ? {} : { order: taskOrder }),
+      ...(hierarchyCompare === undefined ? {} : { compare: hierarchyCompare }),
+    });
+    return { kind: "stage", milestone, roots: buildNodes(hierarchy, taskOrder, { text, effortOf }) };
+  });
+  const standaloneTasks = tasks.filter((task) => task.document.lifecycle === "archived"
+    && !archivedMilestoneIds.has(text(task.document, "milestone")));
+  const hierarchy = buildTaskHierarchy(standaloneTasks.map(toPayload), {
+    ...(hierarchyCompare === undefined ? {} : { compare: hierarchyCompare }),
+  });
+  return {
+    stages,
+    tasks: { kind: "system", roots: buildNodes(hierarchy, [], { text, effortOf }) },
+  };
 }

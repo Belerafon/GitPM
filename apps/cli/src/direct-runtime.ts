@@ -6,7 +6,7 @@ import {
 import { ChangesService, type SemanticDiff } from "@gitpm/changes";
 import { GitClient, GitCommandError } from "@gitpm/git-client";
 import { DirectRepositoryBackend, directPushStrategy, DraftManager, GITPM_GUIDANCE_PATHS } from "@gitpm/drafts";
-import { CommentStore, TimeEntryStore, type CommentActor, type CommentResult, type DeletePlan, type EntityCreateBatchResult, type EntityResult, type TimeEntryActor, type TimeEntryProjectFilters, type TimeEntryProjectList, type TimeEntryResult } from "@gitpm/domain";
+import { CommentStore, TimeEntryStore, type CommentActor, type CommentResult, type DeletePlan, type EntityCreateBatchResult, type EntityResult, type LifecycleTransitionOptions, type TimeEntryActor, type TimeEntryProjectFilters, type TimeEntryProjectList, type TimeEntryResult } from "@gitpm/domain";
 import type { GitPmDocument } from "@gitpm/repository-format";
 import { ExportService, type ExportArtifact, type ExportRequest } from "@gitpm/export";
 import { HistoryService } from "@gitpm/history";
@@ -180,12 +180,12 @@ export class DirectCliRuntime {
     );
   }
 
-  async archiveEntity(entityType: string, id: string, scope: AgentScope = {}): Promise<EntityResult> {
-    return await this.repository.archiveEntity(DIRECT_WORKSPACE_ID, entityType, id, scope);
+  async archiveEntity(entityType: string, id: string, scope: AgentScope = {}, options: LifecycleTransitionOptions = {}): Promise<EntityResult> {
+    return await this.repository.archiveEntity(DIRECT_WORKSPACE_ID, entityType, id, scope, options);
   }
 
-  async restoreEntity(entityType: string, id: string, scope: AgentScope = {}): Promise<EntityResult> {
-    return await this.repository.restoreEntity(DIRECT_WORKSPACE_ID, entityType, id, scope);
+  async restoreEntity(entityType: string, id: string, scope: AgentScope = {}, options: LifecycleTransitionOptions = {}): Promise<EntityResult> {
+    return await this.repository.restoreEntity(DIRECT_WORKSPACE_ID, entityType, id, scope, options);
   }
 
   async exportData(request: ExportRequest): Promise<ExportArtifact> {

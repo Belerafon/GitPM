@@ -774,7 +774,12 @@ export const HTTP_REQUEST_BODY_SCHEMAS = {
     expected_blob_id: stringSchema,
     document: entityDocumentRequestSchema,
   }),
-  entityFingerprint: objectSchema({ expected_fingerprint: stringSchema, expected_blob_id: stringSchema }),
+  entityFingerprint: objectSchema({
+    expected_fingerprint: stringSchema,
+    expected_blob_id: stringSchema,
+    include_tasks: booleanSchema,
+    restore_milestone: booleanSchema,
+  }, ["expected_fingerprint", "expected_blob_id"]),
   moveTask: objectSchema({
     expected_fingerprint: stringSchema,
     expected_blob_id: stringSchema,

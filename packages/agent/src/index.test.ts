@@ -168,10 +168,11 @@ describe("agent file and CLI workflow core", () => {
     await workflow.commitAll("DRF-ENTITY", "Delete person with unlink", { allowDelete: true });
 
     const milestoneBefore = await workflow.getEntity("DRF-ENTITY", "milestones", "M-26-461GDJ");
-    const archived = await workflow.archiveEntity("DRF-ENTITY", "milestones", "M-26-461GDJ");
+    const archived = await workflow.archiveEntity("DRF-ENTITY", "milestones", "M-26-461GDJ", {}, { includeTasks: true });
     expect(archived.document.lifecycle).toBe("archived");
     expect(await readFile(path.join(worktree, ...milestoneBefore.path.split("/")), "utf8")).toContain("lifecycle: archived");
-    await workflow.commitAll("DRF-ENTITY", "Archive milestone");
+    expect((await workflow.getEntity("DRF-ENTITY", "tasks", "T-26-P9G3P8")).document.lifecycle).toBe("archived");
+    await workflow.commitAll("DRF-ENTITY", "Archive milestone and tasks");
 
     const moved = await workflow.moveTask("DRF-ENTITY", "T-26-G2TG9R", "P-26-MGP84K", undefined, undefined, { allowDelete: true });
     expect(moved.document.project).toBe("P-26-MGP84K");

@@ -138,8 +138,8 @@ const commandHelp: Readonly<Record<string, string>> = {
     "  gitpm entity list [--draft <id>] --type <type> [--project <id>] [--json]",
     "  gitpm entity show [--draft <id>] --type <type> --id <entity-id> [--json]",
     "  gitpm entity delete [--draft <id>] --type <type> --id <entity-id> [--unlink-references|--cascade-references] [--dry-run] [--allow-delete] [--project <id>] [--json]",
-    "  gitpm entity archive [--draft <id>] --type <type> --id <entity-id> [--project <id>] [--allow-delete] [--json]",
-    "  gitpm entity restore [--draft <id>] --type <type> --id <entity-id> [--project <id>] [--allow-delete] [--json]",
+    "  gitpm entity archive [--draft <id>] --type <type> --id <entity-id> [--include-tasks] [--project <id>] [--allow-delete] [--json]",
+    "  gitpm entity restore [--draft <id>] --type <type> --id <entity-id> [--include-tasks|--restore-milestone] [--project <id>] [--allow-delete] [--json]",
     "  gitpm entity move [--draft <id>] --type task --id <entity-id> --to-project <id> [--to-milestone <id>] [--to-parent <task-id>] [--allow-delete] [--project <id>] [--json]",
     "",
     "create accepts a YAML mapping. schema, id and lifecycle may be omitted when --type is supplied.",
@@ -276,8 +276,8 @@ function commandArgumentSpec(command: string | undefined, args: readonly string[
     if (action === "list") return { values: [...common, "--project"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
     if (action === "show") return { values: [...common, "--id"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
     if (action === "delete") return { values: [...common, "--id", "--project"], booleans: ["--unlink-references", "--cascade-references", "--dry-run", "--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
-    if (action === "archive") return { values: [...common, "--id", "--project"], booleans: ["--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
-    if (action === "restore") return { values: [...common, "--id", "--project"], booleans: ["--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
+    if (action === "archive") return { values: [...common, "--id", "--project"], booleans: ["--include-tasks", "--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
+    if (action === "restore") return { values: [...common, "--id", "--project"], booleans: ["--include-tasks", "--restore-milestone", "--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
     if (action === "move") return { values: [...common, "--id", "--to-project", "--to-milestone", "--to-parent", "--project"], booleans: ["--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
     return { booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
   }
@@ -583,6 +583,9 @@ async function runEntity(args: readonly string[], cwd: string, dependencies: Cli
   const action = args[0] === "bulk-import" ? "import" : args[0];
   const validActions = ["create", "update", "import", "list", "show", "delete", "archive", "restore", "move"];
   if (typeof action !== "string" || !validActions.includes(action)) throw new RepositoryFormatError("CLI_USAGE", "entity requires create, update, import, list, show, delete, archive, restore or move");
+  if (action === "restore" && args.includes("--include-tasks") && args.includes("--restore-milestone")) {
+    throw new RepositoryFormatError("CLI_USAGE", "--include-tasks and --restore-milestone cannot be used together");
+  }
   const draftId = flagValue(args, "--draft");
   const agent = args.includes("--draft") ? requireAgent(dependencies) : undefined;
   if (agent !== undefined && action === "create" && agent.createEntity === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Entity creation is unavailable");
@@ -661,9 +664,10 @@ async function runEntity(args: readonly string[], cwd: string, dependencies: Cli
   if (action === "archive") {
     const requestedType = required(entityType, "--type");
     const requestedId = required(flagValue(args, "--id"), "--id");
+    const options = { includeTasks: args.includes("--include-tasks") };
     const archived = agent?.archiveEntity === undefined
-      ? await direct!.archiveEntity(requestedType, requestedId, agentScope(args))
-      : await agent.archiveEntity(required(draftId, "--draft"), requestedType, requestedId, agentScope(args));
+      ? await direct!.archiveEntity(requestedType, requestedId, agentScope(args), options)
+      : await agent.archiveEntity(required(draftId, "--draft"), requestedType, requestedId, agentScope(args), options);
     return {
       exitCode: 0,
       output: render(json, { ok: true, code: "OK", path: archived.path, draft_fingerprint: archived.draft_fingerprint, document: archived.document }, `Archived ${archived.path}`),
@@ -673,9 +677,10 @@ async function runEntity(args: readonly string[], cwd: string, dependencies: Cli
   if (action === "restore") {
     const requestedType = required(entityType, "--type");
     const requestedId = required(flagValue(args, "--id"), "--id");
+    const options = { includeTasks: args.includes("--include-tasks"), restoreMilestone: args.includes("--restore-milestone") };
     const restored = agent?.restoreEntity === undefined
-      ? await direct!.restoreEntity(requestedType, requestedId, agentScope(args))
-      : await agent.restoreEntity(required(draftId, "--draft"), requestedType, requestedId, agentScope(args));
+      ? await direct!.restoreEntity(requestedType, requestedId, agentScope(args), options)
+      : await agent.restoreEntity(required(draftId, "--draft"), requestedType, requestedId, agentScope(args), options);
     return {
       exitCode: 0,
       output: render(json, { ok: true, code: "OK", path: restored.path, draft_fingerprint: restored.draft_fingerprint, document: restored.document }, `Restored ${restored.path}`),

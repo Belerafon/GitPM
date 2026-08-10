@@ -168,9 +168,9 @@ Restrictions, cascade, and unlink paths are reported without writing. Then delet
 \`--allow-delete\`; add \`--unlink-references\` for a person to remove references first, or
 \`--cascade-references\` for a project to delete every project-owned entity.
 Archive a reversible lifecycle state with
-\`gitpm entity archive --draft ${draftId} --type <type> --id <entity-id> [--project <project-id>] [--allow-delete] --json\`.
+\`gitpm entity archive --draft ${draftId} --type <type> --id <entity-id> [--include-tasks] [--project <project-id>] [--allow-delete] --json\`.
 Restore it with
-\`gitpm entity restore --draft ${draftId} --type <type> --id <entity-id> [--project <project-id>] [--allow-delete] --json\`.
+\`gitpm entity restore --draft ${draftId} --type <type> --id <entity-id> [--include-tasks|--restore-milestone] [--project <project-id>] [--allow-delete] --json\`.
 Move a task with
 \`gitpm entity move --draft ${draftId} --type task --id <entity-id> --to-project <id> [--to-milestone <id>] --allow-delete --json\`.
 
@@ -317,11 +317,13 @@ non-repeatable options with \`CLI_USAGE\`; never retry a misspelled flag by drop
   person before deleting (people only). \`--cascade-references\` deletes every entity owned by a
   project before deleting that project (projects only). \`--allow-delete\` authorizes the physical
   deletion scope.
-- \`gitpm entity archive --draft <id> --type <type> --id <entity-id> [--project <id>]
-  [--allow-delete]\` sets
-  lifecycle to archived (reversible; the file stays and references remain valid).
-- \`gitpm entity restore --draft <id> --type <type> --id <entity-id> [--project <id>]
-  [--allow-delete]\` restores an archived entity after validating that its lifecycle references are active.
+- \`gitpm entity archive --draft <id> --type <type> --id <entity-id> [--include-tasks] [--project <id>]
+  [--allow-delete]\` sets lifecycle to archived (reversible; the file stays and references remain
+  valid). For a Milestone, \`--include-tasks\` atomically archives its active linked Tasks too.
+- \`gitpm entity restore --draft <id> --type <type> --id <entity-id> [--include-tasks|--restore-milestone]
+  [--project <id>] [--allow-delete]\` restores an archived entity after validating that its lifecycle
+  references are active. For a Milestone, \`--include-tasks\` restores its archived linked Tasks; for
+  a Task, \`--restore-milestone\` restores its archived Milestone in the same validated mutation.
 - \`gitpm entity move --draft <id> --type task --id <entity-id> --to-project <id>
   [--to-milestone <id>] [--allow-delete] [--project <id>]\` relocates a task and its comments
   to another Project.

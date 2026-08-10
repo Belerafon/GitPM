@@ -33,6 +33,11 @@ export interface EntityResult {
   readonly draft_fingerprint: string;
 }
 
+export interface LifecycleTransitionOptions {
+  readonly includeTasks?: boolean;
+  readonly restoreMilestone?: boolean;
+}
+
 export interface EntityCreateBatchResult {
   readonly items: readonly { readonly document: GitPmDocument; readonly path: string; readonly source_index: number }[];
   readonly draft_fingerprint: string;
@@ -480,6 +485,20 @@ function assertRestoreReferencesActive(document: GitPmDocument, repository: Repo
       inactive,
     );
   }
+}
+
+function repositoryWithDocuments(repository: RepositoryIndex, documentsByPath: ReadonlyMap<string, GitPmDocument>): RepositoryIndex {
+  const entities = repository.entities.map((entity) => {
+    const document = documentsByPath.get(entity.relative);
+    return document === undefined ? entity : { ...entity, document };
+  });
+  return {
+    fingerprint: repository.fingerprint,
+    entities,
+    bySchemaAndId: new Map(entities
+      .filter((entity) => typeof entity.document.id === "string")
+      .map((entity) => [`${entity.document.schema}:${String(entity.document.id)}`, entity])),
+  };
 }
 
 export function entityDisplayLabel(document: GitPmDocument): string | undefined {
@@ -932,7 +951,14 @@ export class EntityStore {
     id: string,
     expectedFingerprint: string,
     expectedBlobId: string,
+    options: LifecycleTransitionOptions = {},
   ): Promise<EntityResult> {
+    if (options.restoreMilestone === true) {
+      throw new DomainOperationError("ENTITY_LIFECYCLE_OPTION_UNSUPPORTED", "restoreMilestone is available only when restoring a Task");
+    }
+    if (options.includeTasks === true) {
+      return await this.transitionLifecycleGroup(draftId, owner, entityType, id, expectedFingerprint, expectedBlobId, "archived", options);
+    }
     const current = await this.get(draftId, entityType, id);
     return await this.update(draftId, owner, entityType, id, expectedFingerprint, expectedBlobId, {
       ...current.document,
@@ -947,15 +973,85 @@ export class EntityStore {
     id: string,
     expectedFingerprint: string,
     expectedBlobId: string,
+    options: LifecycleTransitionOptions = {},
   ): Promise<EntityResult> {
     const current = await this.get(draftId, entityType, id);
     if (current.document.lifecycle !== "archived") {
       throw new DomainOperationError("ENTITY_NOT_ARCHIVED", `Entity ${id} is not archived`);
     }
+    if (options.includeTasks === true || options.restoreMilestone === true) {
+      return await this.transitionLifecycleGroup(draftId, owner, entityType, id, expectedFingerprint, expectedBlobId, "active", options);
+    }
     return await this.update(draftId, owner, entityType, id, expectedFingerprint, expectedBlobId, {
       ...current.document,
       lifecycle: "active",
     }, undefined, "restore");
+  }
+
+  private async transitionLifecycleGroup(
+    draftId: string,
+    owner: string,
+    entityType: string,
+    id: string,
+    expectedFingerprint: string,
+    expectedBlobId: string,
+    lifecycle: "active" | "archived",
+    options: LifecycleTransitionOptions,
+  ): Promise<EntityResult> {
+    let primaryDocument: GitPmDocument | undefined;
+    const mutation = await this.drafts.withRepositoryMutation(draftId, owner, expectedFingerprint, this.mutationMode, async (metadata) => {
+      const found = await this.find(draftId, metadata, entityType, id);
+      await this.drafts.assertFileBlobId(draftId, found.relative, expectedBlobId);
+      const repository = await this.index(draftId, metadata);
+      const documentsByPath = new Map<string, GitPmDocument>();
+      const update = (entity: IndexedEntity): void => {
+        if (entity.document.lifecycle !== lifecycle) documentsByPath.set(entity.relative, { ...entity.document, lifecycle });
+      };
+
+      update(found);
+      if (options.includeTasks === true) {
+        if (found.document.schema !== "gitpm/milestone@2") {
+          throw new DomainOperationError("ENTITY_LIFECYCLE_OPTION_UNSUPPORTED", "includeTasks is supported only for Milestones");
+        }
+        for (const entity of repository.entities) {
+          if (entity.document.schema === "gitpm/task@2" && entity.document.milestone === id) update(entity);
+        }
+      }
+      if (options.restoreMilestone === true) {
+        if (lifecycle !== "active" || found.document.schema !== "gitpm/task@2") {
+          throw new DomainOperationError("ENTITY_LIFECYCLE_OPTION_UNSUPPORTED", "restoreMilestone is supported only when restoring a Task");
+        }
+        const milestoneId = typeof found.document.milestone === "string" ? found.document.milestone : "";
+        if (milestoneId === "") {
+          throw new DomainOperationError("ENTITY_RESTORE_MILESTONE_UNAVAILABLE", `Task ${id} does not reference a Milestone`);
+        }
+        const milestone = repository.bySchemaAndId.get(`gitpm/milestone@2:${milestoneId}`);
+        if (milestone === undefined) throw new DomainOperationError("REF_MISSING", `${milestoneId} does not reference a Milestone`);
+        update(milestone);
+      }
+
+      primaryDocument = documentsByPath.get(found.relative) ?? found.document;
+      const simulated = repositoryWithDocuments(repository, documentsByPath);
+      if (lifecycle === "active") {
+        for (const document of documentsByPath.values()) assertRestoreReferencesActive(document, simulated);
+      }
+      const originals = new Map<string, string>();
+      try {
+        const referenceLabels = this.labels(simulated);
+        for (const entity of repository.entities) {
+          const document = documentsByPath.get(entity.relative);
+          if (document === undefined) continue;
+          originals.set(entity.relative, await readFile(entity.absolute, "utf8"));
+          await atomicWriteDomainFile(metadata.worktree_path, entity.relative, formatYamlDocument(document, referenceLabels));
+        }
+        await this.assertRepositoryValid(metadata.worktree_path);
+      } catch (error) {
+        for (const [relative, original] of originals) await atomicWriteDomainFile(metadata.worktree_path, relative, original);
+        throw error;
+      }
+      return found.relative;
+    });
+    return await this.getWithFingerprint(draftId, primaryDocument!, mutation.result, mutation.metadata.fingerprint);
   }
 
   async moveTask(

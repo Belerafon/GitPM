@@ -407,6 +407,7 @@ export function TaskPanel({ api, catalog, draft, entity, fingerprint, milestones
   const targetMilestones = moveTargetMilestones.filter((item) => item.document.lifecycle === "active" && item.document.project === targetProject);
   const projectTasks = tasks.filter((item) => item.document.project === entity.document.project);
   const projectIsActive = projects.some((item) => item.document.id === entity.document.project && item.document.lifecycle === "active");
+  const archivedMilestone = milestones.find((item) => item.document.id === entity.document.milestone && item.document.lifecycle === "archived");
   useEffect(() => {
     if (editor !== "move" || targetProject === "") {
       setMoveTargetTasks([]);
@@ -488,7 +489,7 @@ export function TaskPanel({ api, catalog, draft, entity, fingerprint, milestones
     });
   };
   return <section className={`card task-detail-card${externalFields?.includes("$local") ? " recently-changed" : externalFields ? " external-update" : ""}`} data-external-fields={externalFields?.join(",")}>
-    {entity.document.lifecycle === "archived" && projectIsActive && <div className="alert warning"><span>{t("core.archived")}</span><button className="primary" disabled={readOnly} onClick={() => { void save(async () => await api.restoreEntity(draft.draft_id, "tasks", entity, fingerprint)); }} type="button">{t("core.restore")}</button></div>}
+    {entity.document.lifecycle === "archived" && projectIsActive && <div className="alert warning"><span>{archivedMilestone === undefined ? t("core.archived") : t("projectArchive.taskNeedsMilestone", { name: value(archivedMilestone.document, "name") })}</span><button className="primary" disabled={readOnly} onClick={() => { void save(async () => await api.restoreEntity(draft.draft_id, "tasks", entity, fingerprint, archivedMilestone === undefined ? {} : { restoreMilestone: true })); }} type="button">{archivedMilestone === undefined ? t("core.restore") : t("projectArchive.restoreTaskAndMilestone")}</button></div>}
     {!projectIsActive && <div className="alert warning">{t("core.inactiveProjectTask")}</div>}
     {ancestors.length > 0 && <nav aria-label={t("taskHierarchy.path")} className="task-hierarchy-breadcrumbs">{ancestors.map((ancestor) => <button className="text-link" key={ancestor.id} onClick={() => onNavigate("tasks", { projectId: references.project.id, taskId: ancestor.id })} type="button">{value(ancestor.entity.document, "title")}</button>)}</nav>}
     <div className="detail-heading"><div><span className="eyebrow">{t("core.details")}</span><h2>{value(entity.document, "title")}</h2><code>{entity.document.id}</code></div>{onStatusChange === undefined || readOnly ? <span className="state open" title={t("tooltip.taskStatus")}>{statusTitle}</span> : <select aria-label={`${t("core.status")}: ${value(entity.document, "title")}`} className="inline-status-select" disabled={statusBusy} onChange={(event) => onStatusChange(event.target.value)} title={t("tooltip.changeStatus")} value={entityStatus}>{statusOptions.map((item) => <option key={item.slug} value={item.slug}>{item.title}</option>)}</select>}</div>
