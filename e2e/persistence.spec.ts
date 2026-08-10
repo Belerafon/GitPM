@@ -54,13 +54,15 @@ async function startServer(): Promise<RunningServer> {
 async function stopServer(server: RunningServer): Promise<void> {
   const pid = server.child.pid;
   if (pid === undefined || server.child.exitCode !== null) return;
+  const exited = new Promise<void>((resolve) => server.child.once("exit", () => resolve()));
   if (isWindows) {
     spawnSync("taskkill", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore", windowsHide: true });
   } else {
     try { process.kill(-pid, "SIGTERM"); } catch { /* already stopped */ }
   }
+  if (server.child.exitCode !== null) return;
   await Promise.race([
-    new Promise<void>((resolve) => server.child.once("exit", () => resolve())),
+    exited,
     new Promise<void>((resolve) => setTimeout(resolve, 5_000)),
   ]);
 }

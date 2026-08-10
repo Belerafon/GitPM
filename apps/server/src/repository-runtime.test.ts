@@ -3,29 +3,45 @@ import { cp, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { buildRepositoryApp, loadRepositoryRuntimeConfiguration } from "./repository-runtime.js";
 
 const execFileAsync = promisify(execFile);
 const temporaryDirectories: string[] = [];
+let templateRoot: string;
+let templateRepository: string;
+let templateRemote: string;
 
 async function git(cwd: string, ...args: string[]): Promise<string> {
   const { stdout } = await execFileAsync("git", args, { cwd, encoding: "utf8", windowsHide: true });
   return stdout.trim();
 }
 
+beforeAll(async () => {
+  templateRoot = await mkdtemp(path.join(os.tmpdir(), "gitpm-repository-runtime-template-"));
+  templateRepository = path.join(templateRoot, "selected-repository");
+  templateRemote = path.join(templateRoot, "remote.git");
+  await cp(path.resolve("fixtures", "schema-v1", "demo"), templateRepository, { recursive: true });
+  await git(templateRepository, "init", "-b", "main");
+  await git(templateRepository, "add", ".");
+  await git(templateRepository, "-c", "user.name=Local User", "-c", "user.email=local@example.test", "commit", "-m", "Initial data");
+  await git(templateRoot, "init", "--bare", templateRemote);
+  await git(templateRepository, "remote", "add", "origin", templateRemote);
+  await git(templateRepository, "push", "-u", "origin", "main");
+});
+
+afterAll(async () => rm(templateRoot, { recursive: true, force: true }));
+
 async function fixtureRepository(): Promise<{ root: string; repository: string; data: string; remote: string }> {
   const root = await mkdtemp(path.join(os.tmpdir(), "gitpm-repository-runtime-"));
   temporaryDirectories.push(root);
   const repository = path.join(root, "selected-repository");
   const remote = path.join(root, "remote.git");
-  await cp(path.resolve("fixtures", "schema-v1", "demo"), repository, { recursive: true });
-  await git(repository, "init", "-b", "main");
-  await git(repository, "add", ".");
-  await git(repository, "-c", "user.name=Local User", "-c", "user.email=local@example.test", "commit", "-m", "Initial data");
-  await git(root, "init", "--bare", remote);
-  await git(repository, "remote", "add", "origin", remote);
-  await git(repository, "push", "-u", "origin", "main");
+  await Promise.all([
+    cp(templateRepository, repository, { recursive: true }),
+    cp(templateRemote, remote, { recursive: true }),
+  ]);
+  await git(repository, "remote", "set-url", "origin", remote);
   return { root, repository, data: path.join(root, "runtime-data"), remote };
 }
 

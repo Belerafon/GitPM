@@ -3,14 +3,14 @@ import { FIXTURE_PROJECT_ID, cleanupDrafts, createDraft } from "./helpers.js";
 
 const activeDraftStorageKey = "gitpm.activeWorkingCopy";
 const e2eDraftInitializedKey = "gitpm.e2e.activeWorkingCopyInitialized";
-const uiDraftId = "DRF-UI-WORKSPACE";
+const uiDraftId = "DRF-APP-WORKSPACE";
 
 test.describe("GitPM browser UI", () => {
   let sharedRequest: APIRequestContext;
 
   test.beforeAll(async () => {
     sharedRequest = await createRequestContext.newContext({ baseURL: "http://127.0.0.1:5174" });
-    await cleanupDrafts(sharedRequest, "DRF-UI-");
+    await cleanupDrafts(sharedRequest, "DRF-APP-");
     await createDraft(sharedRequest, uiDraftId);
   });
 
@@ -26,7 +26,7 @@ test.describe("GitPM browser UI", () => {
   });
 
   test.afterAll(async () => {
-    await cleanupDrafts(sharedRequest, "DRF-UI-");
+    await cleanupDrafts(sharedRequest, "DRF-APP-");
     await sharedRequest.dispose();
   });
 
@@ -40,7 +40,7 @@ test.describe("GitPM browser UI", () => {
     await expect(page.getByRole("heading", { name: "Проекты", exact: true })).toBeVisible();
     await expect(page.getByText("Локальный режим · Роль: Maintainer", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Репозиторий", exact: true })).toBeVisible();
-    await expect(page.getByRole("combobox", { name: "Текущая рабочая копия", exact: true })).toHaveValue("DRF-UI-WORKSPACE");
+    await expect(page.getByRole("combobox", { name: "Текущая рабочая копия", exact: true })).toHaveValue("DRF-APP-WORKSPACE");
     await expect(page.getByRole("heading", { name: "Проекты", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Выйти", exact: true })).toHaveCount(0);
     await expect(page.locator("main.center-card")).toHaveCount(0);
@@ -50,7 +50,7 @@ test.describe("GitPM browser UI", () => {
   test("opens the configured repository directly on its projects", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("button", { name: "Проекты", exact: true })).toHaveClass(/active/u);
-    await expect(page.getByRole("combobox", { name: "Текущая рабочая копия", exact: true })).toHaveValue("DRF-UI-WORKSPACE");
+    await expect(page.getByRole("combobox", { name: "Текущая рабочая копия", exact: true })).toHaveValue("DRF-APP-WORKSPACE");
     await expect(page.getByRole("button", { name: /^GitPM launch/u })).toBeVisible();
     await expect(page.getByRole("button", { name: /^Operations/u })).toBeVisible();
   });
@@ -227,16 +227,16 @@ test.describe("GitPM browser UI", () => {
     await page.getByRole("button", { name: "Репозиторий", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Рабочие копии", exact: true })).toBeVisible();
 
-    await page.getByRole("textbox", { name: "ID рабочей копии", exact: true }).fill("DRF-UI-SECOND");
+    await page.getByRole("textbox", { name: "ID рабочей копии", exact: true }).fill("DRF-APP-SECOND");
     await page.getByRole("button", { name: "Создать рабочую копию", exact: true }).click();
-    await expect(page.getByRole("combobox", { name: "Текущая рабочая копия", exact: true })).toHaveValue("DRF-UI-SECOND");
+    await expect(page.getByRole("combobox", { name: "Текущая рабочая копия", exact: true })).toHaveValue("DRF-APP-SECOND");
 
     await page.reload();
-    await expect(page.getByRole("combobox", { name: "Текущая рабочая копия", exact: true })).toHaveValue("DRF-UI-SECOND");
+    await expect(page.getByRole("combobox", { name: "Текущая рабочая копия", exact: true })).toHaveValue("DRF-APP-SECOND");
     await expect(page.getByRole("button", { name: "Репозиторий", exact: true })).toHaveClass(/active/u);
 
     await page.getByRole("button", { name: "Репозиторий", exact: true }).click();
-    await page.getByRole("button", { name: /DRF-UI-WORKSPACE.*gitpm\/local-user\/DRF-UI-WORKSPACE/u }).click();
-    await expect(page.getByRole("combobox", { name: "Текущая рабочая копия", exact: true })).toHaveValue("DRF-UI-WORKSPACE");
+    await page.getByRole("button", { name: /DRF-APP-WORKSPACE.*gitpm\/local-user\/DRF-APP-WORKSPACE/u }).click();
+    await expect(page.getByRole("combobox", { name: "Текущая рабочая копия", exact: true })).toHaveValue("DRF-APP-WORKSPACE");
   });
 });

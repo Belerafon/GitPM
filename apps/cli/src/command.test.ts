@@ -3,7 +3,7 @@ import { execFile } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { describe, expect, it, onTestFinished } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, onTestFinished } from "vitest";
 import { run } from "./command.js";
 import { DirectCliRuntime } from "./direct-runtime.js";
 import type { AgentWorkflow } from "@gitpm/agent";
@@ -11,6 +11,8 @@ import type { GitPmDocument } from "@gitpm/repository-format";
 
 const execFileAsync = promisify(execFile);
 const demo = path.join(process.cwd(), "fixtures", "schema-v1", "demo");
+let directTemplateRoot: string;
+let directTemplateSource: string;
 
 function removeAfterTest(root: string): void {
   onTestFinished(async () => rm(root, { recursive: true, force: true }));
@@ -28,6 +30,17 @@ async function git(cwd: string, ...args: string[]): Promise<string> {
   return stdout.trim();
 }
 
+beforeAll(async () => {
+  directTemplateRoot = await mkdtemp(path.join(os.tmpdir(), "gitpm-cli-direct-template-"));
+  directTemplateSource = path.join(directTemplateRoot, "source");
+  await cp(demo, directTemplateSource, { recursive: true });
+  await git(directTemplateSource, "init", "-b", "main");
+  await git(directTemplateSource, "add", ".");
+  await git(directTemplateSource, "-c", "user.name=GitPM Test", "-c", "user.email=gitpm@example.test", "commit", "-m", "initial portfolio");
+});
+
+afterAll(async () => rm(directTemplateRoot, { recursive: true, force: true }));
+
 async function directFixture(options: { withRemote?: boolean } = {}): Promise<{
   root: string;
   checkout: string;
@@ -40,10 +53,7 @@ async function directFixture(options: { withRemote?: boolean } = {}): Promise<{
   const source = path.join(root, "source");
   const remote = path.join(root, "remote.git");
   const data = path.join(root, "data");
-  await cp(demo, source, { recursive: true });
-  await git(source, "init", "-b", "main");
-  await git(source, "add", ".");
-  await git(source, "-c", "user.name=GitPM Test", "-c", "user.email=gitpm@example.test", "commit", "-m", "initial portfolio");
+  await cp(directTemplateSource, source, { recursive: true });
   if (options.withRemote === true) {
     await git(root, "init", "--bare", remote);
     await git(source, "remote", "add", "origin", remote);

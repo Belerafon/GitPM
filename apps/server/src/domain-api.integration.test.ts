@@ -3,7 +3,7 @@ import { cp, mkdtemp, mkdir, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { DraftManager } from "@gitpm/drafts";
 import { EntityStore } from "@gitpm/domain";
 import { GitClient } from "@gitpm/git-client";
@@ -14,6 +14,9 @@ const execFileAsync = promisify(execFile);
 const roots: string[] = [];
 const apps: ReturnType<typeof buildApp>[] = [];
 const demo = path.join(process.cwd(), "fixtures", "schema-v1", "demo");
+let templateRoot: string;
+let templateSource: string;
+let templateRemote: string;
 
 interface ApiEntityResult {
   readonly document: GitPmDocument;
@@ -26,20 +29,33 @@ async function git(cwd: string, ...args: string[]): Promise<void> {
   await execFileAsync("git", args, { cwd, windowsHide: true });
 }
 
+beforeAll(async () => {
+  templateRoot = await mkdtemp(path.join(os.tmpdir(), "gitpm-domain-api-template-"));
+  templateSource = path.join(templateRoot, "source");
+  templateRemote = path.join(templateRoot, "remote.git");
+  await mkdir(templateSource);
+  await cp(demo, templateSource, { recursive: true });
+  await git(templateSource, "init", "-b", "main");
+  await git(templateSource, "add", ".");
+  await git(templateSource, "-c", "user.name=GitPM Test", "-c", "user.email=gitpm@example.test", "commit", "-m", "fixture");
+  await git(templateRoot, "init", "--bare", templateRemote);
+  await git(templateSource, "remote", "add", "origin", templateRemote);
+  await git(templateSource, "push", "origin", "main");
+});
+
+afterAll(async () => rm(templateRoot, { recursive: true, force: true }));
+
 async function runtime() {
   const root = await mkdtemp(path.join(os.tmpdir(), "gitpm-domain-api-"));
   roots.push(root);
   const source = path.join(root, "source");
   const remote = path.join(root, "remote.git");
   const data = path.join(root, "data");
-  await mkdir(source);
-  await cp(demo, source, { recursive: true });
-  await git(source, "init", "-b", "main");
-  await git(source, "add", ".");
-  await git(source, "-c", "user.name=GitPM Test", "-c", "user.email=gitpm@example.test", "commit", "-m", "fixture");
-  await git(root, "init", "--bare", remote);
-  await git(source, "remote", "add", "origin", remote);
-  await git(source, "push", "origin", "main");
+  await Promise.all([
+    cp(templateSource, source, { recursive: true }),
+    cp(templateRemote, remote, { recursive: true }),
+  ]);
+  await git(source, "remote", "set-url", "origin", remote);
   const client = new GitClient({ dataDirectory: data, remoteUrl: remote, defaultBranch: "main", allowLocalTestRemote: true });
   const manager = new DraftManager(client, data);
   const store = new EntityStore(manager);

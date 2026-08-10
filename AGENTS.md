@@ -181,10 +181,13 @@ corepack pnpm verify:local
 `verify:local` first proves that the lockfile installs unchanged with
 `pnpm install --frozen-lockfile`, then runs the complete `pnpm verify` suite. The verification
 runner prints each command, PID, timeout, 30-second heartbeat, per-step result, and final timing
-summary. Override conservative local concurrency with `GITPM_TEST_WORKERS` and
-`GITPM_E2E_WORKERS` only when the machine has spare capacity. Override the heartbeat interval
-with `GITPM_VERIFY_HEARTBEAT_SECONDS` and a step timeout with
-`GITPM_VERIFY_TIMEOUT_MINUTES`.
+summary. Vitest uses half of the available logical CPUs, capped at four workers; override it with
+`GITPM_TEST_WORKERS` when diagnosing a constrained machine. Playwright intentionally stays at one
+worker because its files share repository servers and polling state; `GITPM_E2E_WORKERS` is a
+diagnostic override, not an accepted setting for the required gate. Do not overlap complete gates
+from multiple worktrees: their browser servers use fixed ports and concurrent Git-heavy suites
+make both runs slower. Override the heartbeat interval with `GITPM_VERIFY_HEARTBEAT_SECONDS` and a
+step timeout with `GITPM_VERIFY_TIMEOUT_MINUTES`.
 
 If the selected gate cannot run, do not describe the work as verified: report the exact failing
 or skipped command and the reason. Narrow tests are useful while iterating but never replace the
