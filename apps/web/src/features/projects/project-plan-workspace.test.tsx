@@ -532,7 +532,8 @@ describe("ProjectPlanWorkspace", () => {
     expect(screen.getByText("Without stage")).toBeTruthy();
     expect(stageCard.querySelector(".project-plan-stage-assignees")?.textContent).toContain("Ada");
     expect(screen.getByText("Linked task").closest(".project-plan-task-row")?.querySelector(".task-assignees")?.textContent).toBe("Ada");
-    fireEvent.click(screen.getByText("Customize task fields"));
+    fireEvent.click(screen.getByText("Task row fields"));
+    expect(screen.getByText("Choose which details appear in task rows. This setting applies to every project in this browser.")).toBeTruthy();
     fireEvent.click(screen.getByRole("checkbox", { name: "Assignees" }));
     expect(stageCard.querySelector(".project-plan-stage-assignees")).toBeNull();
     expect(screen.getByText("Linked task").closest(".project-plan-task-row")?.querySelector(".task-assignees")).toBeNull();

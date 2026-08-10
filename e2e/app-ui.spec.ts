@@ -79,6 +79,21 @@ test.describe("GitPM browser UI", () => {
     await expect(page.locator(".project-plan-task-selector").filter({ hasText: "Approve schema v1" })).toBeVisible();
   });
 
+  test("keeps task row field controls compact and explains their scope", async ({ page }) => {
+    await page.goto(`/projects/${FIXTURE_PROJECT_ID}/tasks`);
+    await page.locator(".interface-settings > summary").click();
+    await page.locator(".locale-picker select").selectOption("en");
+    await page.locator(".interface-settings > summary").click();
+
+    const settings = page.locator(".task-field-settings");
+    await settings.locator("summary").click();
+    await expect(settings.getByText("Choose which details appear in task rows. This setting applies to every project in this browser.", { exact: true })).toBeVisible();
+    const checkboxes = settings.getByRole("checkbox");
+    await expect(checkboxes).toHaveCount(4);
+    const widths = await checkboxes.evaluateAll((controls) => controls.map((control) => control.getBoundingClientRect().width));
+    expect(widths.every((width) => width >= 15 && width <= 17)).toBe(true);
+  });
+
   test("shows a person's project responsibilities and daily availability calendar", async ({ page }) => {
     await page.goto("/people/U-26-5EBAE3");
     await page.locator(".interface-settings > summary").click();
