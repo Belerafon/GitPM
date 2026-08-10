@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { scheduleEffortReader, scheduleTextReader } from "../../schedules.js";
 import type { EntityDocument, EntityResult } from "../../types.js";
 import {
+  buildProjectArchiveViewModel,
   buildProjectTaskViewModel,
   canonicalTaskComparator,
   compareOrder,
@@ -197,7 +198,7 @@ describe("buildProjectTaskViewModel", () => {
     expect(bNode!.children).toEqual([]);
   });
 
-  it("routes tasks with empty, archived, or absent milestone into the system group", () => {
+  it("keeps archived-milestone tasks out of the active plan system group", () => {
     const activeStage = milestone("M-ACTIVE");
     const archivedStage = milestone("M-ARCH", { lifecycle: "archived" });
     const noMilestone = task("T-NONE");
@@ -216,14 +217,28 @@ describe("buildProjectTaskViewModel", () => {
 
     expect(ids(view.stages[0]!.roots)).toEqual(["T-ACTIVE"]);
     const systemDfs = view.system.roots.flatMap((root) => [root.id, ...root.children.map((c) => c.id)]);
-    expect(systemDfs).toEqual(["T-NONE", "T-ARCHIVED", "T-MISSING"]);
+    expect(systemDfs).toEqual(["T-NONE", "T-MISSING"]);
     expect(view.system.roots.every((root) => root.milestoneId === undefined || root.milestoneId !== "M-ACTIVE")).toBe(true);
-    const archived = view.system.roots.find((r) => r.id === "T-ARCHIVED")!;
-    expect(archived.milestoneId).toBe("M-ARCH");
+    expect(view.system.roots.find((r) => r.id === "T-ARCHIVED")).toBeUndefined();
     const missing = view.system.roots.find((r) => r.id === "T-MISSING")!;
     expect(missing.milestoneId).toBe("M-GONE");
     const none = view.system.roots.find((r) => r.id === "T-NONE")!;
     expect(none.milestoneId).toBeUndefined();
+  });
+
+  it("preserves archived milestone hierarchy and separates standalone archived tasks", () => {
+    const archivedStage = milestone("M-ARCH", { lifecycle: "archived", task_order: ["T-ACTIVE", "T-CHILD"] });
+    const activeInArchive = task("T-ACTIVE", { milestone: "M-ARCH" });
+    const archivedChild = task("T-CHILD", { milestone: "M-ARCH", parent: "T-ACTIVE", lifecycle: "archived" });
+    const standalone = task("T-STANDALONE", { lifecycle: "archived" });
+    const view = buildProjectArchiveViewModel({
+      project: project(), milestones: [archivedStage], tasks: [standalone, archivedChild, activeInArchive], text, effortOf, locale: "en",
+    });
+
+    expect(view.stages).toHaveLength(1);
+    expect(view.stages[0]!.roots[0]!.id).toBe("T-ACTIVE");
+    expect(view.stages[0]!.roots[0]!.children.map((child) => child.id)).toEqual(["T-CHILD"]);
+    expect(view.tasks.roots.map((root) => root.id)).toEqual(["T-STANDALONE"]);
   });
 
   it("reads due from the text reader and estimate from the effort reader for the configured track", () => {

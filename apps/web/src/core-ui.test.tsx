@@ -220,6 +220,18 @@ describe("core UI", () => {
     expect(onNavigate).toHaveBeenCalledWith("stages", { projectId: project.document.id, stageId: milestone.document.id });
   });
 
+  it("offers to restore an archived Task together with its archived Milestone", async () => {
+    const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
+    const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
+    const milestone = await entityApi.createEntity("DRF-CORE", "milestones", "", { schema: "gitpm/milestone@2", id: "M-26-222222", project: project.document.id, name: "Archived stage", lifecycle: "archived" });
+    const task = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-333333", project: project.document.id, milestone: milestone.document.id, title: "Archived task", type: "task", status: "backlog", lifecycle: "archived" });
+    const restore = vi.spyOn(entityApi, "restoreEntity");
+    render(<CoreWorkspace api={api} draft={draft} initialProjectId={project.document.id} initialTaskId={task.document.id} locale="en" surface="tasks" onNavigate={vi.fn()} onChanged={vi.fn(async () => undefined)} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Restore task and milestone" }));
+    await waitFor(() => expect(restore).toHaveBeenCalledWith(draft.draft_id, "tasks", task, expect.any(String), { restoreMilestone: true }));
+  });
+
   it("shows task ancestry and rollups and creates a same-milestone subtask from task details", async () => {
     const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
     const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });

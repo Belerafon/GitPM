@@ -11,6 +11,7 @@ import {
   type DeletePlan,
   type EntityCreateBatchResult,
   type EntityResult,
+  type LifecycleTransitionOptions,
 } from "@gitpm/domain";
 import type { GitClient } from "@gitpm/git-client";
 import type { GitLabMergeRequestProtocol, MergeRequestState } from "@gitpm/gitlab";
@@ -291,10 +292,14 @@ export class RepositoryWorkflow {
     entityType: string,
     id: string,
     scope: AgentScope = {},
+    options: LifecycleTransitionOptions = {},
   ): Promise<EntityResult> {
     const workspace = await this.beginMutation(workspaceId, scope);
     const current = await this.entities.get(workspaceId, entityType, id);
-    this.assertPlannedPaths([{ path: current.path, kind: "Modified" }], scope);
+    const related = options.includeTasks === true && current.document.schema === "gitpm/milestone@2"
+      ? (await this.entities.list(workspaceId, "tasks", String(current.document.project))).filter((task) => task.document.milestone === id)
+      : [];
+    this.assertPlannedPaths([current, ...related].map((entity) => ({ path: entity.path, kind: "Modified" as const })), scope);
     return await this.entities.archive(
       workspaceId,
       workspace.owner_id,
@@ -302,6 +307,7 @@ export class RepositoryWorkflow {
       id,
       workspace.fingerprint,
       current.blob_id,
+      options,
     );
   }
 
@@ -310,10 +316,17 @@ export class RepositoryWorkflow {
     entityType: string,
     id: string,
     scope: AgentScope = {},
+    options: LifecycleTransitionOptions = {},
   ): Promise<EntityResult> {
     const workspace = await this.beginMutation(workspaceId, scope);
     const current = await this.entities.get(workspaceId, entityType, id);
-    this.assertPlannedPaths([{ path: current.path, kind: "Modified" }], scope);
+    const relatedTasks = options.includeTasks === true && current.document.schema === "gitpm/milestone@2"
+      ? (await this.entities.list(workspaceId, "tasks", String(current.document.project))).filter((task) => task.document.milestone === id)
+      : [];
+    const milestone = options.restoreMilestone === true && current.document.schema === "gitpm/task@2" && typeof current.document.milestone === "string"
+      ? await this.entities.get(workspaceId, "milestones", current.document.milestone)
+      : undefined;
+    this.assertPlannedPaths([current, ...relatedTasks, ...(milestone === undefined ? [] : [milestone])].map((entity) => ({ path: entity.path, kind: "Modified" as const })), scope);
     return await this.entities.restore(
       workspaceId,
       workspace.owner_id,
@@ -321,6 +334,7 @@ export class RepositoryWorkflow {
       id,
       workspace.fingerprint,
       current.blob_id,
+      options,
     );
   }
 

@@ -241,4 +241,29 @@ describe("domain API integration", () => {
     expect(changed).not.toContain("people/U-26-KB9RXB.yaml");
     expect(changed).not.toContain("T-26-FM5Q4W.yaml");
   }, 120_000);
+
+  it("accepts atomic Milestone lifecycle options over HTTP", async () => {
+    const { app, manager } = await runtime();
+    const draft = await manager.createDraft("DRF-HTTP-ARCHIVE", "42");
+    const milestone = (await app.inject({ method: "GET", url: "/api/drafts/DRF-HTTP-ARCHIVE/entities/milestones/M-26-461GDJ" })).json<ApiEntityResult>();
+    const archivedResponse = await app.inject({
+      method: "POST",
+      url: "/api/drafts/DRF-HTTP-ARCHIVE/entities/milestones/M-26-461GDJ/archive",
+      payload: { expected_fingerprint: draft.fingerprint, expected_blob_id: milestone.blob_id, include_tasks: true },
+    });
+    expect(archivedResponse.statusCode).toBe(200);
+    const archived = archivedResponse.json<ApiEntityResult>();
+    expect(archived.document.lifecycle).toBe("archived");
+    const task = (await app.inject({ method: "GET", url: "/api/drafts/DRF-HTTP-ARCHIVE/entities/tasks/T-26-P9G3P8" })).json<ApiEntityResult>();
+    expect(task.document.lifecycle).toBe("archived");
+
+    const restoredResponse = await app.inject({
+      method: "POST",
+      url: "/api/drafts/DRF-HTTP-ARCHIVE/entities/tasks/T-26-P9G3P8/restore",
+      payload: { expected_fingerprint: archived.draft_fingerprint, expected_blob_id: task.blob_id, restore_milestone: true },
+    });
+    expect(restoredResponse.statusCode).toBe(200);
+    expect(restoredResponse.json<ApiEntityResult>().document.lifecycle).toBe("active");
+    expect((await app.inject({ method: "GET", url: "/api/drafts/DRF-HTTP-ARCHIVE/entities/milestones/M-26-461GDJ" })).json<ApiEntityResult>().document.lifecycle).toBe("active");
+  }, 120_000);
 });

@@ -174,8 +174,8 @@ export interface GitPmApi {
   createEntity(draftId: string, entityType: string, fingerprint: string, document: GitPmDocument): Promise<EntityResult>;
   updateEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string, document: GitPmDocument): Promise<EntityResult>;
   moveTask(draftId: string, entity: EntityResult, fingerprint: string, targetProject: string, targetMilestone?: string, targetParent?: string): Promise<EntityResult>;
-  archiveEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string): Promise<EntityResult>;
-  restoreEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string): Promise<EntityResult>;
+  archiveEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string, options?: LifecycleMutationOptions): Promise<EntityResult>;
+  restoreEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string, options?: LifecycleMutationOptions): Promise<EntityResult>;
   deleteEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string, unlinkReferences?: boolean, cascadeReferences?: boolean): Promise<void>;
   getConfiguration(draftId: string, kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks"): Promise<ConfigurationResult>;
   getRepositoryConfiguration(draftId: string): Promise<RepositoryResult>;
@@ -216,6 +216,11 @@ export interface GitPmApi {
   createTimeEntry(draftId: string, projectId: string, taskId: string, fingerprint: string, input: { readonly person: string; readonly performed_on: string; readonly hours: number; readonly category: string; readonly note_markdown?: string }): Promise<TimeEntryResult>;
   voidTimeEntry(draftId: string, projectId: string, taskId: string, entry: TimeEntryResult, fingerprint: string): Promise<TimeEntryResult>;
   replaceTimeEntry(draftId: string, projectId: string, taskId: string, entry: TimeEntryResult, fingerprint: string, input: { readonly person: string; readonly performed_on: string; readonly hours: number; readonly category: string; readonly note_markdown?: string }): Promise<TimeEntryReplacementResult>;
+}
+
+export interface LifecycleMutationOptions {
+  readonly includeTasks?: boolean;
+  readonly restoreMilestone?: boolean;
 }
 
 export async function listAllProjectTimeEntries(api: Pick<GitPmApi, "listProjectTimeEntries">, draftId: string, projectId: string, filters: ProjectTimeEntryFilters = {}): Promise<readonly TimeEntryResult[]> {
@@ -371,11 +376,11 @@ export class HttpGitPmApi implements GitPmApi {
   async moveTask(draftId: string, entity: EntityResult, expected_fingerprint: string, target_project: string, target_milestone?: string, target_parent?: string): Promise<EntityResult> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/entities/tasks/${encodeURIComponent(entity.document.id)}/move`, decodeEntityResult, { method: "POST", body: JSON.stringify({ expected_fingerprint, expected_blob_id: entity.blob_id, target_project, target_milestone, target_parent }) });
   }
-  async archiveEntity(draftId: string, entityType: string, entity: EntityResult, expected_fingerprint: string): Promise<EntityResult> {
-    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entity.document.id)}/archive`, decodeEntityResult, { method: "POST", body: JSON.stringify({ expected_fingerprint, expected_blob_id: entity.blob_id }) });
+  async archiveEntity(draftId: string, entityType: string, entity: EntityResult, expected_fingerprint: string, options: LifecycleMutationOptions = {}): Promise<EntityResult> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entity.document.id)}/archive`, decodeEntityResult, { method: "POST", body: JSON.stringify({ expected_fingerprint, expected_blob_id: entity.blob_id, ...(options.includeTasks === undefined ? {} : { include_tasks: options.includeTasks }), ...(options.restoreMilestone === undefined ? {} : { restore_milestone: options.restoreMilestone }) }) });
   }
-  async restoreEntity(draftId: string, entityType: string, entity: EntityResult, expected_fingerprint: string): Promise<EntityResult> {
-    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entity.document.id)}/restore`, decodeEntityResult, { method: "POST", body: JSON.stringify({ expected_fingerprint, expected_blob_id: entity.blob_id }) });
+  async restoreEntity(draftId: string, entityType: string, entity: EntityResult, expected_fingerprint: string, options: LifecycleMutationOptions = {}): Promise<EntityResult> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entity.document.id)}/restore`, decodeEntityResult, { method: "POST", body: JSON.stringify({ expected_fingerprint, expected_blob_id: entity.blob_id, ...(options.includeTasks === undefined ? {} : { include_tasks: options.includeTasks }), ...(options.restoreMilestone === undefined ? {} : { restore_milestone: options.restoreMilestone }) }) });
   }
   async deleteEntity(draftId: string, entityType: string, entity: EntityResult, expected_fingerprint: string, unlinkReferences = false, cascadeReferences = false): Promise<void> {
     await this.requestEmpty(`/api/drafts/${encodeURIComponent(draftId)}/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entity.document.id)}`, { method: "DELETE", body: JSON.stringify({ expected_fingerprint, expected_blob_id: entity.blob_id, ...(unlinkReferences ? { unlink_references: true } : {}), ...(cascadeReferences ? { cascade_references: true } : {}) }) });

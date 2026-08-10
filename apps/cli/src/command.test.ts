@@ -81,6 +81,26 @@ describe("CLI P02 commands", () => {
     expect(after).toMatchObject({ report: { included_tasks: 0, weeks: [], rows: [], exclusions: { archived: 2 } } });
   }, 120_000);
 
+  it("archives and restores a Milestone with its Tasks through lifecycle flags", async () => {
+    const { direct } = await directFixture();
+    const invoke = async (args: string[]) => JSON.parse((await run([...args, "--json"], process.cwd(), { direct })).output);
+
+    expect(await invoke(["entity", "archive", "--type", "milestones", "--id", "M-26-461GDJ", "--include-tasks"])).toMatchObject({
+      ok: true,
+      document: { lifecycle: "archived" },
+    });
+    expect(await invoke(["entity", "show", "--type", "tasks", "--id", "T-26-P9G3P8"])).toMatchObject({
+      document: { lifecycle: "archived" },
+    });
+    expect(await invoke(["entity", "restore", "--type", "milestones", "--id", "M-26-461GDJ", "--include-tasks"])).toMatchObject({
+      ok: true,
+      document: { lifecycle: "active" },
+    });
+    expect(await invoke(["entity", "show", "--type", "tasks", "--id", "T-26-P9G3P8"])).toMatchObject({
+      document: { lifecycle: "active" },
+    });
+  }, 120_000);
+
   it("prints a stable version", async () => {
     expect(await run(["--version"])).toEqual({ exitCode: 0, output: "0.1.0" });
     expect(JSON.parse((await run(["--version", "--json"])).output)).toMatchObject({ ok: true, version: "0.1.0", repository_schema: 1, schema_digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u) });
@@ -183,6 +203,10 @@ describe("CLI P02 commands", () => {
     const help = await run(["help", "nonsense", "--json"]);
     expect(help.exitCode).toBe(2);
     expect(JSON.parse(help.output)).toMatchObject({ ok: false, code: "CLI_USAGE" });
+
+    const conflictingRestore = await run(["entity", "restore", "--type", "tasks", "--id", "T-26-P9G3P8", "--include-tasks", "--restore-milestone", "--json"]);
+    expect(conflictingRestore.exitCode).toBe(1);
+    expect(JSON.parse(conflictingRestore.output)).toMatchObject({ ok: false, code: "CLI_USAGE" });
   });
 });
 

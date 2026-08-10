@@ -710,7 +710,7 @@ export function registerEntityApi(
     },
   );
 
-  app.post<{ Params: { draftId: string; entityType: string; id: string }; Body: { expected_fingerprint: string; expected_blob_id: string } }>(
+  app.post<{ Params: { draftId: string; entityType: string; id: string }; Body: { expected_fingerprint: string; expected_blob_id: string; include_tasks?: boolean; restore_milestone?: boolean } }>(
     "/api/drafts/:draftId/entities/:entityType/:id/archive",
     { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.entityFingerprint } },
     async (request) => {
@@ -723,11 +723,12 @@ export function registerEntityApi(
         request.params.id,
         request.body.expected_fingerprint,
         request.body.expected_blob_id,
+        { includeTasks: request.body.include_tasks, restoreMilestone: request.body.restore_milestone },
       );
     },
   );
 
-  app.post<{ Params: { draftId: string; entityType: string; id: string }; Body: { expected_fingerprint: string; expected_blob_id: string } }>(
+  app.post<{ Params: { draftId: string; entityType: string; id: string }; Body: { expected_fingerprint: string; expected_blob_id: string; include_tasks?: boolean; restore_milestone?: boolean } }>(
     "/api/drafts/:draftId/entities/:entityType/:id/restore",
     { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.entityFingerprint } },
     async (request) => {
@@ -740,6 +741,7 @@ export function registerEntityApi(
         request.params.id,
         request.body.expected_fingerprint,
         request.body.expected_blob_id,
+        { includeTasks: request.body.include_tasks, restoreMilestone: request.body.restore_milestone },
       );
     },
   );

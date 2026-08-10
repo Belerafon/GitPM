@@ -38,6 +38,17 @@ function api(
     if (type === "tasks") currentTasks = currentTasks.map((item) => item.document.id === document.id ? updated : item);
     return updated;
   });
+  const transition = async (type: string, entity: EntityResult, lifecycle: "active" | "archived", options: { readonly includeTasks?: boolean } = {}) => {
+    const updated = result({ ...entity.document, lifecycle });
+    if (type === "milestones") {
+      currentStages = currentStages.map((item) => item.document.id === entity.document.id ? updated : item);
+      if (options.includeTasks === true) currentTasks = currentTasks.map((task) => task.document.milestone === entity.document.id ? result({ ...task.document, lifecycle }) : task);
+    }
+    if (type === "tasks") currentTasks = currentTasks.map((item) => item.document.id === entity.document.id ? updated : item);
+    return updated;
+  };
+  const archiveEntity = vi.fn(async (_draftId: string, type: string, entity: EntityResult, _fingerprint: string, options: { readonly includeTasks?: boolean } = {}) => await transition(type, entity, "archived", options));
+  const restoreEntity = vi.fn(async (_draftId: string, type: string, entity: EntityResult, _fingerprint: string, options: { readonly includeTasks?: boolean } = {}) => await transition(type, entity, "active", options));
   const deleteEntity = vi.fn(async () => undefined);
   return {
     projectWorkspace: vi.fn(async () => ({ project: currentProject, milestones: currentStages, tasks: currentTasks, draft_fingerprint: fingerprint })),
@@ -49,8 +60,10 @@ function api(
     listEntities: vi.fn(async (_draftId: string, type: string) => type === "people" ? [person] : type === "projects" ? [currentProject, archivedProject] : []),
     createEntity,
     updateEntity,
+    archiveEntity,
+    restoreEntity,
     deleteEntity,
-  } as unknown as GitPmApi & { createEntity: typeof createEntity; updateEntity: typeof updateEntity; deleteEntity: typeof deleteEntity };
+  } as unknown as GitPmApi & { createEntity: typeof createEntity; updateEntity: typeof updateEntity; archiveEntity: typeof archiveEntity; restoreEntity: typeof restoreEntity; deleteEntity: typeof deleteEntity };
 }
 
 afterEach(() => { cleanup(); localStorage.clear(); vi.useRealTimers(); });
@@ -950,7 +963,31 @@ describe("ProjectPlanWorkspace", () => {
       .toEqual(["Apple task", "Banana task", "Cherry task"]);
   });
 
-  it("groups every task without an active milestone into one system group whose count matches the list", async () => {
+  it("offers an explicit atomic archive choice for a Milestone and its Tasks", async () => {
+    const client = api([linked, urgent], [stage, laterStage]);
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} selectedStageId={stage.document.id} />);
+    await screen.findByRole("heading", { name: "Alpha" });
+    const inspector = screen.getByRole("complementary", { name: "Milestone" });
+    fireEvent.click(within(inspector).getByRole("button", { name: "Archive" }));
+    const dialog = screen.getByRole("dialog", { name: "Archive milestone: Launch" });
+    fireEvent.click(within(dialog).getByRole("button", { name: /Milestone and tasks \(2\)/u }));
+    await waitFor(() => expect(client.archiveEntity).toHaveBeenCalledWith(draft.draft_id, "milestones", stage, fingerprint, { includeTasks: true }));
+  });
+
+  it("restores an archived Milestone with its archived Tasks from the project archive", async () => {
+    const archivedStage = result({ ...stage.document, lifecycle: "archived" });
+    const archivedLinked = result({ ...linked.document, lifecycle: "archived" });
+    const client = api([archivedLinked], [archivedStage, laterStage]);
+    render(<ProjectPlanWorkspace api={client} draft={draft} initialArchiveMode locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} selectedStageId={stage.document.id} />);
+    await screen.findByRole("heading", { name: "Project archive" });
+    const inspector = screen.getByRole("complementary", { name: "Milestone" });
+    fireEvent.click(within(inspector).getByRole("button", { name: "Restore" }));
+    const dialog = screen.getByRole("dialog", { name: "Restore milestone: Launch" });
+    fireEvent.click(within(dialog).getByRole("button", { name: /Milestone and tasks \(1\)/u }));
+    await waitFor(() => expect(client.restoreEntity).toHaveBeenCalledWith(draft.draft_id, "milestones", archivedStage, fingerprint, { includeTasks: true }));
+  });
+
+  it("keeps archived Milestone content out of the active plan and preserves it in the project archive", async () => {
     const archivedStage = result({ schema: "gitpm/milestone@2", id: "M-26-ARCH", project: project.document.id, name: "Archived stage", lifecycle: "archived" });
     const noField = result({ schema: "gitpm/task@2", id: "T-26-NOFIELD", project: project.document.id, title: "No milestone field", type: "task", status: "backlog", lifecycle: "active" });
     const empty = result({ schema: "gitpm/task@2", id: "T-26-EMPTY", project: project.document.id, milestone: "", title: "Empty milestone", type: "task", status: "backlog", lifecycle: "active" });
@@ -961,13 +998,20 @@ describe("ProjectPlanWorkspace", () => {
     render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} />);
 
     await screen.findByRole("heading", { name: "Alpha" });
-    expect(screen.getByRole("button", { name: /Outside active milestones: 4/u })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Outside active milestones: 3/u })).toBeTruthy();
     const orphanSection = document.querySelector(".project-plan-unassigned") as HTMLElement;
     expect(orphanSection).not.toBeNull();
     const orphanTitles = Array.from(orphanSection.querySelectorAll(".project-plan-task-row strong"), (element) => element?.textContent ?? "");
-    expect(orphanTitles).toEqual(["Archived milestone task", "Empty milestone", "No milestone field", "Unknown milestone"]);
+    expect(orphanTitles).toEqual(["Empty milestone", "No milestone field", "Unknown milestone"]);
     expect(orphanTitles).not.toContain("Active milestone task");
+    expect(orphanTitles).not.toContain("Archived milestone task");
     expect(screen.getByText("Active milestone task").closest(".project-plan-stage")?.classList.contains("project-plan-unassigned")).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: /Archive · 1 milestones · 1 tasks/u }));
+    expect(await screen.findByRole("heading", { name: "Archived stage" })).toBeTruthy();
+    expect(screen.getByText("Archived milestone task")).toBeTruthy();
+    expect(document.querySelector(".project-plan-archived-stage")).not.toBeNull();
+    expect(document.querySelector(".project-plan-unassigned")).toBeNull();
   });
 
   it("the Outside-active-milestones quick filter shows exactly the orphans counted by the metric", async () => {
@@ -981,14 +1025,14 @@ describe("ProjectPlanWorkspace", () => {
     render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} />);
 
     await screen.findByRole("heading", { name: "Alpha" });
-    // The metric counts all four orphan variants (no field, empty, unknown id, archived milestone).
-    const outsideMetric = screen.getByRole("button", { name: /Outside active milestones: 4/u });
+    // The active metric excludes tasks whose known milestone is archived.
+    const outsideMetric = screen.getByRole("button", { name: /Outside active milestones: 3/u });
     fireEvent.click(outsideMetric);
-    // After the click, the system group must list the SAME four orphans — not only the empty-milestone subset.
+    // After the click, the system group lists only true unassigned/unknown references.
     const orphanSection = document.querySelector(".project-plan-unassigned") as HTMLElement;
     expect(orphanSection).not.toBeNull();
     const orphanTitles = Array.from(orphanSection.querySelectorAll(".project-plan-task-row strong"), (element) => element?.textContent ?? "");
-    expect(orphanTitles).toEqual(["Archived milestone task", "Empty milestone", "No milestone field", "Unknown milestone"]);
+    expect(orphanTitles).toEqual(["Empty milestone", "No milestone field", "Unknown milestone"]);
     expect(orphanTitles).not.toContain("Active milestone task");
   });
 
