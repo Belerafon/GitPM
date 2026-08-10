@@ -642,7 +642,7 @@ describe("ProjectPlanWorkspace", () => {
 
   it("renders arbitrary-depth subtasks, preserves ancestor context and creates a child in the same milestone", async () => {
     const root = result({ ...urgent.document, title: "Root task" });
-    const child = result({ ...large.document, parent: root.document.id, title: "Child task" });
+    const child = result({ ...large.document, parent: root.document.id, title: "Child task", assignees: [person.document.id] });
     const grandchild = result({ ...linked.document, parent: child.document.id, title: "Grandchild task" });
     const siblingChild = result({ ...other.document, milestone: stage.document.id, parent: root.document.id, status: "done", title: "Sibling child" });
     const client = api([root, child, grandchild, siblingChild]);
@@ -681,6 +681,7 @@ describe("ProjectPlanWorkspace", () => {
     fireEvent.click(within(childHandle).getByRole("menuitem", { name: /Subtask of .*Child task/u }));
     const dialog = screen.getByRole("dialog", { name: "New subtask" });
     expect(within(dialog).getByText("Child task")).toBeTruthy();
+    expect(within(dialog).getByText("Ada")).toBeTruthy();
     fireEvent.change(within(dialog).getByLabelText("Title"), { target: { value: "Nested child" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Create task" }));
 
@@ -690,6 +691,7 @@ describe("ProjectPlanWorkspace", () => {
       milestone: stage.document.id,
       parent: child.document.id,
       title: "Nested child",
+      assignees: [person.document.id],
     });
   });
 
