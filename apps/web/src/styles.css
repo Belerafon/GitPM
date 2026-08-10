@@ -601,6 +601,7 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .admin-actions { display: flex; flex-wrap: wrap; gap: .35rem; }
 .people-admin-sections { display: grid; gap: 1.25rem; }
 .directory-card { min-width: 0; }
+.people-directory-card > .card-heading { justify-content: flex-start; }
 .directory-card > .editor-trigger { margin-bottom: 1rem; }
 .directory-table-wrap { overflow-x: auto; border: 1px solid #e2e4df; border-radius: 9px; }
 .directory-table { width: 100%; min-width: 760px; border-collapse: collapse; }
