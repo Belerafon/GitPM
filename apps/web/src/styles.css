@@ -33,7 +33,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 @media (min-width: 881px) {
   .app-shell.sidebar-collapsed { grid-template-columns: var(--sidebar-collapsed-width, 68px) 1fr; }
   .sidebar-collapsed .sidebar { padding: 1.4rem .5rem; }
+  .sidebar-collapsed .sidebar-heading { position: relative; justify-content: center; }
+  .sidebar-collapsed .brand { padding: 0; }
   .sidebar-collapsed .brand-title { display: none; }
+  .sidebar-collapsed .sidebar-collapse-toggle { position: absolute; top: 0; left: 100%; border-color: #aeb8b1; background: #f4f5f2; color: #18352a; }
+  .sidebar-collapsed .sidebar-collapse-toggle:hover:not(:disabled) { color: #f4f2e9; }
   .sidebar-collapsed .navigation-group-items { margin-left: 0; border-left: 0; padding-left: 0; }
   .sidebar-collapsed .navigation-group-label { display: none; }
   .sidebar-collapsed .navigation-groups button { justify-content: center; padding: .55rem 0; }
