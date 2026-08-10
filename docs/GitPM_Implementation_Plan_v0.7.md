@@ -52,6 +52,7 @@ v0.1 требует отдельный repository, предназначенны�
 people/
 teams/
 calendars/
+availability/
 projects/
 README.md
 .gitignore
@@ -76,8 +77,8 @@ M-26-3RC7NA
 - отдельного display key нет;
 - внутренние ссылки и mutation API используют ID;
 - title и name не являются идентичностью;
-- `P`, `T`, `M`, `U`, `G`, `C`, `V` и `N` обозначают соответственно Project, Task,
-  Milestone, Person, Team, Calendar, Saved View и Comment;
+- `P`, `T`, `M`, `U`, `G`, `C`, `V`, `N`, `E` и `A` обозначают соответственно Project, Task,
+  Milestone, Person, Team, Calendar, Saved View, Comment, Time Entry и Availability Event;
 - случайная часть генерируется криптографическим генератором, а уникальность
   проверяется в текущем repository state;
 - при независимом создании одинакового ID в несведённых offline branches
@@ -105,6 +106,8 @@ teams/
   G-26-......yaml
 calendars/
   C-26-......yaml
+availability/
+  A-26-......yaml
 projects/
   P-26-....../
     project.yaml
@@ -226,7 +229,16 @@ Create/import input может не содержать `calendar`; mutation boun
 
 `working_weekdays` содержит уникальные ISO weekday numbers 1-7. `holidays` содержит уникальные date-only строки. Timezone, рабочие интервалы внутри дня и DST отсутствуют.
 
-### 6.8. Saved View
+### 6.8. Availability Event
+
+Availability Event хранится в `availability/<id>.yaml` и содержит `schema`, `id`,
+`person`, `start`, `finish`, `kind`, `availability_percent`, `state` и `lifecycle`.
+Это глобальное персональное исключение поверх Calendar, а не Project-сущность.
+Активные состояния `planned` и `taken` уменьшают capacity; `cancelled` не влияет на расчёт.
+Диапазоны активных событий одного Person не пересекаются. Пересечение с Task остаётся
+допустимым плановым окном, но создаёт warning и отображается как пауза выполнения.
+
+### 6.9. Saved View
 
 Обязательные поля:
 
@@ -238,7 +250,7 @@ Create/import input может не содержать `calendar`; mutation boun
 `milestones` и `labels`; каждый фильтр хранится списком без повторов. Необязательный
 `group_by` поддерживает только значение `status`.
 
-### 6.9. Comment
+### 6.10. Comment
 
 Comment хранится под owning Task и содержит `schema`, `id`, `project`, `task`,
 stable `author`, `created_at`, `state` и `mentions`. Active comment дополнительно
@@ -247,7 +259,7 @@ Person ID и timestamp. Deleted comment удаляет body/mentions и сохр
 `deleted_at`/`deleted_by`, чтобы Git history и notification semantics оставались
 однозначными.
 
-### 6.10. Repository configuration
+### 6.11. Repository configuration
 
 `.gitpm/repository.yaml` содержит:
 
@@ -271,7 +283,7 @@ immutable `slug`, `title`, `color` token и `active`. Slug уникален вн
 планирования. Эти записи не являются ID-сущностями. Maintainer может редактировать
 все четыре документа через repository settings UI.
 
-### 6.11. Archived behavior
+### 6.12. Archived behavior
 
 - archived entities скрыты из активных списков по умолчанию;
 - archived Task не показывается на Board, Gantt и Workload;
@@ -591,11 +603,12 @@ Workload:
 
 - берет `estimate_hours` Task;
 - равномерно распределяет часы по ISO-неделям между `start` и `due`;
-- исключает archived Task и non-working dates Calendar;
+- исключает archived Task, non-working dates Calendar и дни с нулевой персональной доступностью;
+- пропорционально уменьшает capacity и распределение effort для частичной доступности;
 - делит часы поровну между несколькими assignee;
 - не перераспределяет долю archived или иначе недоступного assignee на оставшихся
   активных исполнителей и явно считает такую Task в `unavailable_assignees`;
-- сравнивает результат с `weekly_capacity_hours`;
+- сравнивает результат с `weekly_capacity_hours`, отдельно показывая базовую ёмкость и часы персональной недоступности;
 - показывает формулу и помечает отчет как approximation.
 
 ## 21. Агент через files и CLI

@@ -248,9 +248,9 @@ describe("HttpGitPmApi request bodies", () => {
 
   it("loads the shared workload report with repository filters", async () => {
     const report = {
-      formula: "equal-assignee-share/equal-person-working-day/v1",
+      formula: "equal-assignee-share/capacity-weighted-person-day/v2",
       weeks: ["2026-07-06"],
-      rows: [{ person_id: "U-26-5EBAE3", person_name: "Anna", week: "2026-07-06", allocated_hours: 8, capacity_hours: 40, utilization_percent: 20, task_ids: ["T-26-P9G3P8"], task_allocations: [{ task_id: "T-26-P9G3P8", allocated_hours: 8 }] }],
+      rows: [{ person_id: "U-26-5EBAE3", person_name: "Anna", week: "2026-07-06", allocated_hours: 8, base_capacity_hours: 40, capacity_hours: 40, unavailable_hours: 0, utilization_percent: 20, task_ids: ["T-26-P9G3P8"], task_allocations: [{ task_id: "T-26-P9G3P8", allocated_hours: 8 }] }],
       included_tasks: 1,
       exclusions: { archived: 0, undated: 0, unestimated: 0, unassigned: 0, unavailable_assignees: 0 },
     };

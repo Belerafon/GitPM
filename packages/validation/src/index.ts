@@ -60,6 +60,7 @@ const documentCache = new Map<string, Map<string, CachedDocument>>();
 const normalize = (value: string) => value.split(path.sep).join("/");
 
 const DOMAIN_DIRECTORIES = [".gitpm", "people", "teams", "calendars", "projects"] as const;
+const OPTIONAL_DOMAIN_DIRECTORIES = ["availability"] as const;
 const REQUIRED_DOCUMENTS = [
   ".gitpm/repository.yaml",
   ".gitpm/statuses.yaml",
@@ -118,12 +119,13 @@ function isAllowedDomainDirectory(relative: string): boolean {
 }
 
 function isAllowedDomainKeeper(relative: string): boolean {
-  return ["people/.gitkeep", "teams/.gitkeep", "projects/.gitkeep"].includes(relative);
+  return ["people/.gitkeep", "teams/.gitkeep", "projects/.gitkeep", "availability/.gitkeep"].includes(relative);
 }
 
 function isAllowedYamlContainer(relative: string): boolean {
   return /^\.gitpm\/(?:repository|statuses|issue-types|schedule-tracks|work-categories)\.yaml$/u.test(relative)
     || /^(?:people|teams|calendars)\/[^/]+\.yaml$/u.test(relative)
+    || /^availability\/A-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}\.yaml$/u.test(relative)
     || /^projects\/P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}\/project\.yaml$/u.test(relative)
     || /^projects\/P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}\/(?:milestones|tasks|views)\/[^/]+\.yaml$/u.test(relative)
     || /^projects\/P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}\/comments\/T-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}\/[^/]+\.yaml$/u.test(relative)
@@ -170,6 +172,22 @@ export async function discoverRepositoryFiles(repositoryRoot: string): Promise<R
     }
   }
 
+  for (const directory of OPTIONAL_DOMAIN_DIRECTORIES) {
+    const absolute = path.join(root, directory);
+    try {
+      const metadata = await lstat(absolute);
+      if (metadata.isSymbolicLink()) {
+        issues.push({ severity: "error", code: "FS_SYMLINK", path: directory, message: "Optional repository directory must not be a symlink" });
+      } else if (!metadata.isDirectory()) {
+        issues.push({ severity: "error", code: "REPOSITORY_DIRECTORY_REQUIRED", path: directory, message: "Repository path must be a directory" });
+      } else {
+        files.push(...await filesUnder(root, absolute, issues));
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+  }
+
   const relativeFiles = new Set(files.map((absolute) => normalize(path.relative(root, absolute))));
   for (const required of REQUIRED_DOCUMENTS) {
     if (!relativeFiles.has(required)) {
@@ -213,6 +231,7 @@ function expectedPath(document: GitPmDocument): string | undefined {
     case "gitpm/person@1": return `people/${id}.yaml`;
     case "gitpm/team@1": return `teams/${id}.yaml`;
     case "gitpm/calendar@1": return `calendars/${id}.yaml`;
+    case "gitpm/availability-event@1": return `availability/${id}.yaml`;
     case "gitpm/repository@1": return ".gitpm/repository.yaml";
     case "gitpm/statuses@2": return ".gitpm/statuses.yaml";
     case "gitpm/issue-types@1": return ".gitpm/issue-types.yaml";
@@ -260,6 +279,7 @@ function directReferences(document: GitPmDocument): string[] {
       ...((document.mentions as Array<{ person?: unknown }> | undefined) ?? []).map((item) => item.person),
     ]);
     case "gitpm/time-entry@1": return values([document.project, document.task, document.person, document.replacement]);
+    case "gitpm/availability-event@1": return values([document.person]);
     default: return [];
   }
 }
@@ -476,6 +496,7 @@ export async function validateRepository(repositoryRoot: string): Promise<Valida
     "people",
     "teams",
     "calendars",
+    "availability",
     "projects",
     ...values(repository?.value.allowed_top_level_files),
     ...values(repository?.value.allowed_top_level_directories),
@@ -576,6 +597,16 @@ export async function validateRepository(repositoryRoot: string): Promise<Valida
       }
     } else if (value.schema === "gitpm/person@1") {
       reference(value.calendar, "gitpm/calendar@1", document);
+    } else if (value.schema === "gitpm/availability-event@1") {
+      reference(value.person, "gitpm/person@1", document);
+      for (const field of ["start", "finish"] as const) if (typeof value[field] === "string") {
+        try { parseDateOnly(value[field] as string); } catch (error) {
+          add({ severity: "error", code: "DATE_INVALID", path: document.path, field, message: error instanceof Error ? error.message : String(error) });
+        }
+      }
+      if (typeof value.start === "string" && typeof value.finish === "string" && value.start > value.finish) {
+        add({ severity: "error", code: "DATE_RANGE", path: document.path, message: "start must not be after finish" });
+      }
     } else if (value.schema === "gitpm/team@1") {
       for (const member of values(value.members)) reference(member, "gitpm/person@1", document);
     } else if (value.schema === "gitpm/milestone@2") {
@@ -660,6 +691,35 @@ export async function validateRepository(repositoryRoot: string): Promise<Valida
   }
 
   const tasks = validDocuments.filter((document) => document.value.schema === "gitpm/task@2");
+  const availabilityEvents = validDocuments
+    .filter((document) => document.value.schema === "gitpm/availability-event@1" && document.value.lifecycle === "active" && document.value.state !== "cancelled")
+    .sort((left, right) => left.path.localeCompare(right.path));
+  for (let leftIndex = 0; leftIndex < availabilityEvents.length; leftIndex += 1) {
+    const left = availabilityEvents[leftIndex]!;
+    for (let rightIndex = leftIndex + 1; rightIndex < availabilityEvents.length; rightIndex += 1) {
+      const right = availabilityEvents[rightIndex]!;
+      if (left.value.person !== right.value.person) continue;
+      if (typeof left.value.start !== "string" || typeof left.value.finish !== "string" || typeof right.value.start !== "string" || typeof right.value.finish !== "string") continue;
+      if (left.value.start <= right.value.finish && right.value.start <= left.value.finish) {
+        add({ severity: "error", code: "AVAILABILITY_EVENT_OVERLAP", path: right.path, message: `${String(right.value.id)} overlaps ${String(left.value.id)} for ${String(right.value.person)}` });
+      }
+    }
+  }
+
+  for (const task of tasks) {
+    const projectId = typeof task.value.project === "string" ? task.value.project : "";
+    const planning = projectsById.get(projectId)?.value.planning as Partial<PlanningSettings> | undefined;
+    const track = schedulingConfig === undefined ? undefined : resolvePlanning(schedulingConfig, planning).workload_track;
+    const window = track === undefined ? undefined : (task.value.schedules as Record<string, Record<string, unknown>> | undefined)?.[track];
+    if (window === undefined || typeof window.start !== "string" || typeof window.finish !== "string") continue;
+    for (const event of availabilityEvents) {
+      if (!values(task.value.assignees).includes(String(event.value.person))) continue;
+      if (typeof event.value.start !== "string" || typeof event.value.finish !== "string" || Number(event.value.availability_percent) >= 100) continue;
+      if (window.start <= event.value.finish && event.value.start <= window.finish) {
+        add({ severity: "warning", code: "TASK_AVAILABILITY_CONFLICT", path: task.path, field: `schedules.${track}`, message: `${String(task.value.id)} intersects availability event ${String(event.value.id)} for ${String(event.value.person)}` });
+      }
+    }
+  }
   detectCycles(tasks, (value) => typeof value.parent === "string" ? [value.parent] : [], "TASK_PARENT_CYCLE", add);
   const dependencyTracks = new Set<string>();
   for (const task of tasks) for (const trackSlug of Object.keys((task.value.schedules as Record<string, Record<string, unknown>> | undefined) ?? {})) dependencyTracks.add(trackSlug);

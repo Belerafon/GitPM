@@ -29,7 +29,7 @@ afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recur
 describe("repository validation", () => {
   it("accepts the deterministic demo", async () => {
     const report = await validateRepository(demo);
-    expect(report).toMatchObject({ valid: true, documentCount: 17, errors: [], warnings: [] });
+    expect(report).toMatchObject({ valid: true, documentCount: 18, errors: [], warnings: [] });
   });
 
   it("enforces time entry state and replacement integrity while retaining inactive-category history", async () => {
@@ -168,7 +168,7 @@ describe("repository validation", () => {
     expect(report.errors).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: "FS_SYMLINK", path: "projects/linked" }),
     ]));
-    expect(report.documentCount).toBe(17);
+    expect(report.documentCount).toBe(18);
   });
 
   it("accepts saved milestone and task order", async () => {
@@ -252,6 +252,21 @@ describe("repository validation", () => {
     await replace(root, `projects/${project}/project.yaml`, "start: 2026-07-01", "start: 2026-10-01");
     const report = await validateRepository(root);
     expect(report.errors).toEqual(expect.arrayContaining([expect.objectContaining({ code: "DATE_RANGE" })]));
+  });
+
+  it("validates availability ranges, prevents ambiguous overlaps, and warns about affected task windows", async () => {
+    const conflict = await fixture();
+    await replace(conflict, "availability/A-26-VACATN.yaml", "start: 2026-08-17\nfinish: 2026-08-21", "start: 2026-07-01\nfinish: 2026-07-02");
+    let report = await validateRepository(conflict);
+    expect(report.valid).toBe(true);
+    expect(report.warnings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "TASK_AVAILABILITY_CONFLICT", path: `projects/${project}/tasks/${taskOne}.yaml`, field: "schedules.plan" }),
+    ]));
+
+    const overlap = await fixture();
+    await writeFile(path.join(overlap, "availability", "A-26-DAY0FF.yaml"), "schema: gitpm/availability-event@1\nid: A-26-DAY0FF\nperson: U-26-5EBAE3\nstart: 2026-08-20\nfinish: 2026-08-25\nkind: day-off\navailability_percent: 0\nstate: planned\nlifecycle: active\n", "utf8");
+    report = await validateRepository(overlap);
+    expect(report.errors).toEqual(expect.arrayContaining([expect.objectContaining({ code: "AVAILABILITY_EVENT_OVERLAP", path: "availability/A-26-VACATN.yaml" })]));
   });
 
   it("warns for archived references without making the repository invalid", async () => {

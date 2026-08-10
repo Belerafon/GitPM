@@ -1,4 +1,4 @@
-import { formatDateOnly, isoWeekday, parseDateOnly, workingDatesBetween, type CalendarDefinition } from "@gitpm/calendar";
+import { availabilityPercentOnDate, formatDateOnly, isoWeekday, parseDateOnly, workingDatesBetween, type AvailabilityException, type CalendarDefinition } from "@gitpm/calendar";
 import { resolvePlanning, type ScheduleTracksConfig } from "@gitpm/scheduling";
 import { activeProjectIds, isOperationalTask } from "@gitpm/shared";
 
@@ -34,12 +34,21 @@ export interface WorkloadCalendar extends CalendarDefinition {
   readonly lifecycle: "active" | "archived";
 }
 
+export interface WorkloadAvailabilityEvent extends AvailabilityException {
+  readonly id: string;
+  readonly person: string;
+  readonly state: "planned" | "taken" | "cancelled";
+  readonly lifecycle: "active" | "archived";
+}
+
 export interface PersonWeekWorkload {
   readonly person_id: string;
   readonly person_name: string;
   readonly week: string;
   readonly allocated_hours: number;
+  readonly base_capacity_hours: number;
   readonly capacity_hours: number;
+  readonly unavailable_hours: number;
   readonly utilization_percent: number | null;
   readonly task_ids: readonly string[];
   readonly task_allocations: readonly TaskWeekAllocation[];
@@ -59,7 +68,7 @@ export interface WorkloadExclusions {
 }
 
 export interface WorkloadReport {
-  readonly formula: "equal-assignee-share/equal-person-working-day/v1";
+  readonly formula: "equal-assignee-share/capacity-weighted-person-day/v2";
   readonly weeks: readonly string[];
   readonly rows: readonly PersonWeekWorkload[];
   readonly included_tasks: number;
@@ -83,11 +92,20 @@ function weekStartsBetween(start: string, finish: string): string[] {
   return result;
 }
 
-function calendarCapacity(week: string, person: WorkloadPerson, calendar: WorkloadCalendar): number {
-  if (calendar.working_weekdays.length === 0) return 0;
+function personExceptions(personId: string, events: readonly WorkloadAvailabilityEvent[]): readonly AvailabilityException[] {
+  return events.filter((event) => event.person === personId && event.lifecycle === "active" && event.state !== "cancelled");
+}
+
+function calendarCapacity(week: string, person: WorkloadPerson, calendar: WorkloadCalendar, events: readonly WorkloadAvailabilityEvent[]): { readonly base: number; readonly effective: number } {
+  if (calendar.working_weekdays.length === 0) return { base: 0, effective: 0 };
   const sunday = formatDateOnly(new Date(dayTime(week) + 6 * DAY_MS));
-  const availableDays = workingDatesBetween(week, sunday, calendar).length;
-  return round(person.weekly_capacity_hours * availableDays / calendar.working_weekdays.length);
+  const dates = workingDatesBetween(week, sunday, calendar);
+  const dailyCapacity = person.weekly_capacity_hours / calendar.working_weekdays.length;
+  const exceptions = personExceptions(person.id, events);
+  return {
+    base: round(dailyCapacity * dates.length),
+    effective: round(dates.reduce((sum, date) => sum + dailyCapacity * availabilityPercentOnDate(date, exceptions) / 100, 0)),
+  };
 }
 
 export function calculateWorkload(
@@ -95,6 +113,7 @@ export function calculateWorkload(
   people: readonly WorkloadPerson[],
   calendars: readonly WorkloadCalendar[],
   projects: readonly WorkloadProject[],
+  availabilityEvents: readonly WorkloadAvailabilityEvent[] = [],
 ): WorkloadReport {
   const activeProjects = activeProjectIds(projects);
   const activeCalendars = new Map(calendars.filter((calendar) => calendar.lifecycle === "active").map((calendar) => [calendar.id, calendar]));
@@ -113,7 +132,7 @@ export function calculateWorkload(
     included.push({ task, assignees, assigneeCount: task.assignees.length });
   }
 
-  if (included.length === 0) return { formula: "equal-assignee-share/equal-person-working-day/v1", weeks: [], rows: [], included_tasks: 0, exclusions };
+  if (included.length === 0) return { formula: "equal-assignee-share/capacity-weighted-person-day/v2", weeks: [], rows: [], included_tasks: 0, exclusions };
   const first = included.reduce((value, item) => dayTime(item.task.start!) < dayTime(value) ? item.task.start! : value, included[0]!.task.start!);
   const last = included.reduce((value, item) => dayTime(item.task.finish!) > dayTime(value) ? item.task.finish! : value, included[0]!.task.finish!);
   const weeks = weekStartsBetween(first, last);
@@ -125,8 +144,14 @@ export function calculateWorkload(
       const calendar = activeCalendars.get(person.calendar)!;
       const dates = workingDatesBetween(task.start!, task.finish!, calendar);
       if (dates.length === 0) continue;
-      const dailyShare = personShare / dates.length;
+      const exceptions = personExceptions(person.id, availabilityEvents);
+      const weightedDates = dates.map((date) => ({ date, weight: availabilityPercentOnDate(date, exceptions) / 100 }));
+      const totalWeight = weightedDates.reduce((sum, item) => sum + item.weight, 0);
+      if (totalWeight === 0) continue;
       for (const date of dates) {
+        const weight = weightedDates.find((item) => item.date === date)!.weight;
+        if (weight === 0) continue;
+        const dailyShare = personShare * weight / totalWeight;
         const key = `${person.id}:${isoWeekStart(date)}`;
         const allocation = allocations.get(key) ?? { hours: 0, taskHours: new Map<string, number>() };
         allocation.hours += dailyShare;
@@ -139,7 +164,7 @@ export function calculateWorkload(
   const rows = [...activePeople.values()].sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id)).flatMap((person) => weeks.map((week): PersonWeekWorkload => {
     const allocation = allocations.get(`${person.id}:${week}`);
     const allocated = round(allocation?.hours ?? 0);
-    const capacity = calendarCapacity(week, person, activeCalendars.get(person.calendar)!);
+    const capacity = calendarCapacity(week, person, activeCalendars.get(person.calendar)!, availabilityEvents);
     const taskAllocations = [...(allocation?.taskHours ?? [])]
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([taskId, hours]): TaskWeekAllocation => ({ task_id: taskId, allocated_hours: round(hours) }));
@@ -148,13 +173,15 @@ export function calculateWorkload(
       person_name: person.name,
       week,
       allocated_hours: allocated,
-      capacity_hours: capacity,
-      utilization_percent: capacity === 0 ? null : round(allocated / capacity * 100),
+      base_capacity_hours: capacity.base,
+      capacity_hours: capacity.effective,
+      unavailable_hours: round(capacity.base - capacity.effective),
+      utilization_percent: capacity.effective === 0 ? null : round(allocated / capacity.effective * 100),
       task_ids: taskAllocations.map((item) => item.task_id),
       task_allocations: taskAllocations,
     };
   }));
-  return { formula: "equal-assignee-share/equal-person-working-day/v1", weeks, rows, included_tasks: included.length, exclusions };
+  return { formula: "equal-assignee-share/capacity-weighted-person-day/v2", weeks, rows, included_tasks: included.length, exclusions };
 }
 
 export interface WorkloadEntityDocument extends Readonly<Record<string, unknown>> {
@@ -173,6 +200,7 @@ export interface WorkloadWorkspaceInput {
   readonly projects: readonly WorkloadEntityDocument[];
   readonly people: readonly WorkloadEntityDocument[];
   readonly calendars: readonly WorkloadEntityDocument[];
+  readonly availabilityEvents?: readonly WorkloadEntityDocument[];
   readonly teams?: readonly WorkloadEntityDocument[];
   readonly scheduleTracks: WorkloadEntityDocument;
   readonly filters?: WorkloadFilters;
@@ -225,5 +253,11 @@ export function buildWorkloadReport(input: WorkloadWorkspaceInput): WorkloadRepo
   const calendars = input.calendars.map((calendar): WorkloadCalendar => ({
     id: entityId(calendar), lifecycle: lifecycle(calendar), working_weekdays: documentNumbers(calendar, "working_weekdays"), holidays: documentStrings(calendar, "holidays"),
   }));
-  return calculateWorkload(tasks, people, calendars, projects);
+  const availabilityEvents = (input.availabilityEvents ?? []).map((event): WorkloadAvailabilityEvent => ({
+    id: entityId(event), person: documentText(event, "person") ?? "", start: documentText(event, "start") ?? "",
+    finish: documentText(event, "finish") ?? "", availability_percent: documentNumber(event, "availability_percent") ?? 100,
+    state: documentText(event, "state") === "taken" ? "taken" : documentText(event, "state") === "cancelled" ? "cancelled" : "planned",
+    lifecycle: lifecycle(event),
+  }));
+  return calculateWorkload(tasks, people, calendars, projects, availabilityEvents);
 }

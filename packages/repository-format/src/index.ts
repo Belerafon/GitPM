@@ -83,6 +83,7 @@ const fieldOrder: Record<string, readonly string[]> = {
   "gitpm/person@1": ["schema", "id", "name", "weekly_capacity_hours", "calendar", "lifecycle", "email"],
   "gitpm/team@1": ["schema", "id", "name", "members", "lifecycle"],
   "gitpm/calendar@1": ["schema", "id", "name", "working_weekdays", "holidays", "lifecycle"],
+  "gitpm/availability-event@1": ["schema", "id", "person", "start", "finish", "kind", "availability_percent", "state", "note_markdown", "lifecycle"],
   "gitpm/saved-view@1": ["schema", "id", "project", "name", "kind", "filters", "group_by", "lifecycle"],
   "gitpm/comment@1": ["schema", "id", "project", "task", "author", "created_at", "updated_at", "state", "body_markdown", "mentions", "deleted_at", "deleted_by"],
   "gitpm/repository@1": ["schema", "default_branch", "default_calendar", "allowed_top_level_files", "allowed_top_level_directories", "ui_poll_interval_seconds"],
@@ -153,6 +154,7 @@ const schemaKinds: Readonly<Record<string, string>> = {
   "gitpm/team@1": "team",
   "gitpm/calendar@1": "calendar",
   "gitpm/saved-view@1": "view",
+  "gitpm/availability-event@1": "availability",
 };
 
 function singleLine(value: string): string {

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { availabilityPercentOnDate } from "@gitpm/calendar";
 import { activeProjectIds, isOperationalTask } from "@gitpm/shared";
 import { scheduleText, scheduleEffort, ScheduleResolver, scheduleTracksConfig } from "./schedules.js";
 import { ApiError, deleteRestrictionLabels, type GitPmApi } from "./api.js";
@@ -10,6 +11,7 @@ import type { ConfigurationResult, DraftStatus, EntityResult, GitPmDocument, Git
 import type { WorkspaceNavigate } from "./workspace-navigation.js";
 import { draftReadOnlyReason } from "./draft-read-only.js";
 import { isCompletedStatus } from "./status-categories.js";
+import { availabilityKindLabel, PeopleAvailability } from "./people-availability-ui.js";
 
 const strings = (document: GitPmDocument, key: string) => Array.isArray(document[key]) ? (document[key] as unknown[]).filter((item): item is string => typeof item === "string") : [];
 const numbers = (document: GitPmDocument, key: string) => Array.isArray(document[key]) ? (document[key] as unknown[]).filter((item): item is number => typeof item === "number") : [];
@@ -23,6 +25,7 @@ const configValues = (document: GitPmDocument, key: "statuses" | "issue_types"):
 interface ProfileData {
   readonly people: readonly EntityResult[];
   readonly calendars: readonly EntityResult[];
+  readonly availabilityEvents: readonly EntityResult[];
   readonly teams: readonly EntityResult[];
   readonly projects: readonly EntityResult[];
   readonly tasks: readonly EntityResult[];
@@ -62,16 +65,17 @@ export function PeopleProfileWorkspace({ api, confirmAction = () => true, draft,
   const loadRequest = useAsyncLoad();
   const load = useCallback(async () => {
     await loadRequest.run(async () => {
-      const [people, calendars, teams, projects, tasks, statusConfig, tracksDocument] = await Promise.all([
+      const [people, calendars, availabilityEvents, teams, projects, tasks, statusConfig, tracksDocument] = await Promise.all([
         api.listEntities(draft.draft_id, "people"),
         api.listEntities(draft.draft_id, "calendars"),
+        api.listEntities(draft.draft_id, "availability-events"),
         api.listEntities(draft.draft_id, "teams"),
         api.listEntities(draft.draft_id, "projects"),
         api.listEntities(draft.draft_id, "tasks"),
         api.getConfiguration(draft.draft_id, "statuses"),
         api.getConfiguration(draft.draft_id, "schedule-tracks"),
       ]);
-      return { people, calendars, teams, projects, tasks, statuses: configValues(statusConfig.document, "statuses"), scheduling: new ScheduleResolver(scheduleTracksConfig(tracksDocument.document)) };
+      return { people, calendars, availabilityEvents, teams, projects, tasks, statuses: configValues(statusConfig.document, "statuses"), scheduling: new ScheduleResolver(scheduleTracksConfig(tracksDocument.document)) };
     }, setData);
   }, [api, draft.draft_id, draft.external_fingerprint, loadRequest.run]);
   useEffect(() => { void load(); }, [load]);
@@ -83,6 +87,28 @@ export function PeopleProfileWorkspace({ api, confirmAction = () => true, draft,
     try {
       const result = await api.updateEntity(draft.draft_id, "people", person, person.draft_fingerprint, document);
       setData((current) => current === null ? current : { ...current, people: current.people.map((item) => item.document.id === result.document.id ? result : item) });
+      await onChanged();
+      return true;
+    } catch (caught) { setError(caught instanceof Error ? caught.message : String(caught)); return false; }
+  };
+  const createAvailability = async (document: GitPmDocument) => {
+    if (person === undefined || readOnly || data === null) return false;
+    setError(null);
+    const fingerprint = data.availabilityEvents[0]?.draft_fingerprint ?? person.draft_fingerprint;
+    try {
+      await api.createEntity(draft.draft_id, "availability-events", fingerprint, document);
+      await load();
+      await onChanged();
+      return true;
+    } catch (caught) { setError(caught instanceof Error ? caught.message : String(caught)); return false; }
+  };
+  const updateAvailability = async (event: EntityResult, document: GitPmDocument) => {
+    if (person === undefined || readOnly || data === null) return false;
+    setError(null);
+    const fingerprint = data.availabilityEvents[0]?.draft_fingerprint ?? person.draft_fingerprint;
+    try {
+      await api.updateEntity(draft.draft_id, "availability-events", event, fingerprint, document);
+      await load();
       await onChanged();
       return true;
     } catch (caught) { setError(caught instanceof Error ? caught.message : String(caught)); return false; }
@@ -140,12 +166,12 @@ export function PeopleProfileWorkspace({ api, confirmAction = () => true, draft,
     {role !== "Maintainer" && <div className="alert warning">{t("admin.maintainerOnly")}</div>}
     {error !== null && <div className="alert error">{error}</div>}
     <AsyncBoundary state={loadRequest.state} loading={t("status.loading")} retry={() => { void load(); }} error={(error, retry) => <div className="alert error">{error}<button onClick={retry}>{t("status.retry")}</button></div>}>
-      {data !== null && <PeopleProfile archivePerson={archivePerson} data={data} deletePerson={deletePerson} editorOpen={editorOpen} locale={locale} onCloseEditor={() => setEditorOpen(false)} onEdit={() => setEditorOpen(true)} onNavigate={onNavigate} personId={personId} readOnly={readOnly} restorePerson={restorePerson} savePerson={updatePerson} t={t} />}
+      {data !== null && <PeopleProfile archivePerson={archivePerson} createAvailability={createAvailability} data={data} deletePerson={deletePerson} editorOpen={editorOpen} locale={locale} onCloseEditor={() => setEditorOpen(false)} onEdit={() => setEditorOpen(true)} onNavigate={onNavigate} personId={personId} readOnly={readOnly} restorePerson={restorePerson} savePerson={updatePerson} t={t} updateAvailability={updateAvailability} />}
     </AsyncBoundary>
   </section>;
 }
 
-function PeopleProfile({ archivePerson, data, deletePerson, editorOpen, locale, onCloseEditor, onEdit, personId, readOnly, restorePerson, savePerson, onNavigate, t }: { readonly archivePerson: () => Promise<boolean>; readonly data: ProfileData; readonly deletePerson: () => Promise<boolean>; readonly editorOpen: boolean; readonly locale: Locale; readonly onCloseEditor: () => void; readonly onEdit: () => void; readonly personId: string; readonly readOnly: boolean; readonly restorePerson: () => Promise<boolean>; readonly savePerson: (document: GitPmDocument) => Promise<boolean>; readonly onNavigate: WorkspaceNavigate; readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string }) {
+function PeopleProfile({ archivePerson, createAvailability, data, deletePerson, editorOpen, locale, onCloseEditor, onEdit, personId, readOnly, restorePerson, savePerson, onNavigate, t, updateAvailability }: { readonly archivePerson: () => Promise<boolean>; readonly createAvailability: (document: GitPmDocument) => Promise<boolean>; readonly data: ProfileData; readonly deletePerson: () => Promise<boolean>; readonly editorOpen: boolean; readonly locale: Locale; readonly onCloseEditor: () => void; readonly onEdit: () => void; readonly personId: string; readonly readOnly: boolean; readonly restorePerson: () => Promise<boolean>; readonly savePerson: (document: GitPmDocument) => Promise<boolean>; readonly onNavigate: WorkspaceNavigate; readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string; readonly updateAvailability: (event: EntityResult, document: GitPmDocument) => Promise<boolean> }) {
   const primaryTrackByProject = useMemo(() => new Map(data.projects.map((item) => [item.document.id, data.scheduling.primaryTrack(item.document.planning)])), [data.projects, data.scheduling]);
   const trackOf = useCallback((document: Readonly<Record<string, unknown>>): string => primaryTrackByProject.get(typeof document.project === "string" ? document.project : "") ?? "", [primaryTrackByProject]);
   const text = useCallback((document: Readonly<Record<string, unknown>>, key: string): string => key === "start" || key === "due" ? scheduleText(document, key, trackOf(document)) : typeof document[key] === "string" ? document[key] as string : "", [trackOf]);
@@ -208,6 +234,7 @@ function PeopleProfile({ archivePerson, data, deletePerson, editorOpen, locale, 
   const contributingProjects = activeProjects.filter((item) => projectTaskCounts.has(item.document.id)).sort((left, right) => text(left.document, "name").localeCompare(text(right.document, "name"), locale));
   const teams = data.teams.filter((item) => item.document.lifecycle === "active" && strings(item.document, "members").includes(personId));
   const calendar = data.calendars.find((item) => item.document.id === text(person.document, "calendar"));
+  const availabilityEvents = data.availabilityEvents.filter((item) => item.document.person === personId);
   const visibleAssignedTasks = assignedTasks.filter((task) => statusSelection.has(text(task.document, "status")) && projectSelection.has(text(task.document, "project")));
   const taskGroups = [...new Set(visibleAssignedTasks.map((task) => text(task.document, "project")))].map((projectId) => ({
     projectId,
@@ -237,10 +264,11 @@ function PeopleProfile({ archivePerson, data, deletePerson, editorOpen, locale, 
 
     <dl className="people-profile-stats"><div className="card"><dt>{t("people.assignedTasks")}</dt><dd>{assignedTasks.length}</dd></div><div className="card"><dt>{t("people.responsibleProjects")}</dt><dd>{ownedProjects.length}</dd></div><div className="card"><dt>{t("people.participatingProjects")}</dt><dd>{contributingProjects.length}</dd></div><div className="card"><dt>{t("people.teams")}</dt><dd>{teams.length}</dd></div></dl>
 
-    <TaskCalendar calendar={calendar} key={personId} locale={locale} onNavigate={onNavigate} projectNames={projectNames} tasks={assignedTasks} text={text} t={t} />
+    <TaskCalendar availabilityEvents={availabilityEvents} calendar={calendar} key={personId} locale={locale} onNavigate={onNavigate} projectNames={projectNames} tasks={assignedTasks} text={text} t={t} />
 
     <div className="people-profile-layout">
       <main className="people-profile-main">
+        <PeopleAvailability events={availabilityEvents} locale={locale} onCreate={createAvailability} onUpdate={updateAvailability} personId={personId} readOnly={readOnly} t={t} />
         <section className="card people-profile-section"><div className="card-heading"><div><h3>{t("people.tasksByProject")}</h3><p>{t("people.tasksDescription")}</p></div>{assignedTasks.length > 0 && <span className="people-profile-count">{t("people.visibleTasksOfTotal", { count: visibleAssignedTasks.length, total: assignedTasks.length })}</span>}</div>
           {assignedTasks.length > 0 && <PeopleTaskFilters projectOptions={projectOptions} projectSelection={projectSelection} statusOptions={statusOptions} statusSelection={statusSelection} t={t} onReset={resetFilters} onToggleProject={toggleProject} onToggleStatus={toggleStatus} />}
           {assignedTasks.length === 0 ? <p className="people-empty">{t("people.noTasks")}</p>
@@ -328,27 +356,33 @@ const calendarDates = (value: string) => {
   return result;
 };
 
-function TaskCalendar({ tasks, calendar, projectNames, locale, onNavigate, text, t }: { readonly tasks: readonly EntityResult[]; readonly calendar?: EntityResult; readonly projectNames: ReadonlyMap<string, string>; readonly locale: Locale; readonly onNavigate: WorkspaceNavigate; readonly text: (document: Readonly<Record<string, unknown>>, key: string) => string; readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string }) {
+function TaskCalendar({ availabilityEvents, tasks, calendar, projectNames, locale, onNavigate, text, t }: { readonly availabilityEvents: readonly EntityResult[]; readonly tasks: readonly EntityResult[]; readonly calendar?: EntityResult; readonly projectNames: ReadonlyMap<string, string>; readonly locale: Locale; readonly onNavigate: WorkspaceNavigate; readonly text: (document: Readonly<Record<string, unknown>>, key: string) => string; readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string }) {
   const [month, setMonth] = useState(() => initialTaskMonth(tasks, text));
   const dates = calendarDates(month);
   const workingWeekdays = new Set(calendar === undefined ? [1, 2, 3, 4, 5] : numbers(calendar.document, "working_weekdays"));
   const holidays = new Set(calendar === undefined ? [] : strings(calendar.document, "holidays").filter(validDate));
+  const availabilityText = (event: EntityResult, key: string) => typeof event.document[key] === "string" ? event.document[key] as string : "";
+  const activeAvailability = availabilityEvents.filter((event) => event.document.lifecycle === "active" && availabilityText(event, "state") !== "cancelled" && validDate(availabilityText(event, "start")) && validDate(availabilityText(event, "finish")));
+  const exceptions = activeAvailability.map((event) => ({ start: availabilityText(event, "start"), finish: availabilityText(event, "finish"), availability_percent: number(event.document, "availability_percent") }));
   const monthDays = dates.filter((date) => monthKey(date) === month);
   const dayTasks = (date: Date) => tasks.filter((task) => taskCoversDate(task, isoDate(date), text));
+  const dayAvailabilityEvents = (date: Date) => activeAvailability.filter((event) => availabilityText(event, "start") <= isoDate(date) && isoDate(date) <= availabilityText(event, "finish"));
+  const availability = (date: Date) => availabilityPercentOnDate(isoDate(date), exceptions);
   const isWorking = (date: Date) => workingWeekdays.has(date.getUTCDay() === 0 ? 7 : date.getUTCDay()) && !holidays.has(isoDate(date));
   const workdays = monthDays.filter(isWorking);
-  const freeDays = workdays.filter((date) => dayTasks(date).length === 0).length;
+  const freeDays = workdays.filter((date) => availability(date) > 0 && dayTasks(date).length === 0).length;
   const overlapDays = workdays.filter((date) => dayTasks(date).length > 1).length;
+  const availabilityConflictDays = workdays.filter((date) => availability(date) < 100 && dayTasks(date).length > 0).length;
   const monthLabel = new Intl.DateTimeFormat(locale, { month: "long", year: "numeric", timeZone: "UTC" }).format(monthDate(month));
   const projectIds = [...new Set(tasks.map((task) => text(task.document, "project")))];
 
   return <section className="card people-task-calendar"><div className="people-calendar-heading"><div><h3>{t("people.schedule")}</h3><p>{t("people.scheduleDescription")}</p></div><div className="people-calendar-navigation"><button aria-label={t("people.previousMonth")} onClick={() => setMonth((current) => moveMonth(current, -1))} title={t("people.previousMonth")}>←</button><strong aria-live="polite">{monthLabel}</strong><button aria-label={t("people.nextMonth")} onClick={() => setMonth((current) => moveMonth(current, 1))} title={t("people.nextMonth")}>→</button></div></div>
-    <div className="people-calendar-summary"><span className="calendar-summary-work">{t("people.workdayCount", { count: workdays.length })}</span><span className="calendar-summary-free">{t("people.freeDayCount", { count: freeDays })}</span><span className="calendar-summary-overlap">{t("people.overlapDayCount", { count: overlapDays })}</span></div>
-    <div className="people-calendar-legend"><span className="free">{t("people.legendFree")}</span><span className="busy">{t("people.legendBusy")}</span><span className="overlap">{t("people.legendOverlap")}</span><span className="off">{t("people.legendOff")}</span></div>
+    <div className="people-calendar-summary"><span className="calendar-summary-work">{t("people.workdayCount", { count: workdays.length })}</span><span className="calendar-summary-free">{t("people.freeDayCount", { count: freeDays })}</span><span className="calendar-summary-overlap">{t("people.overlapDayCount", { count: overlapDays })}</span><span className="calendar-summary-availability">{t("availability.conflictDayCount", { count: availabilityConflictDays })}</span></div>
+    <div className="people-calendar-legend"><span className="free">{t("people.legendFree")}</span><span className="busy">{t("people.legendBusy")}</span><span className="overlap">{t("people.legendOverlap")}</span><span className="unavailable">{t("availability.legendUnavailable")}</span><span className="off">{t("people.legendOff")}</span></div>
     <div className="people-project-legend">{projectIds.map((projectId) => <span key={projectId}>{projectNames.get(projectId) ?? projectId}</span>)}</div>
     <div className="people-calendar-scroll"><div className="people-calendar-grid" aria-label={t("people.calendarGrid")}>
       {[1, 2, 3, 4, 5, 6, 7].map((day) => <div className="people-calendar-weekday" key={day}>{t(`admin.day${day}` as MessageKey)}</div>)}
-      {dates.map((date) => { const dateValue = isoDate(date); const tasksForDay = dayTasks(date); const inMonth = monthKey(date) === month; const holiday = holidays.has(dateValue); const working = isWorking(date); const tone = !inMonth ? "outside" : !working ? "off" : tasksForDay.length > 1 ? "overlap" : tasksForDay.length === 1 ? "busy" : "free"; return <div aria-label={`${formatDateOnly(locale, dateValue)} · ${tasksForDay.length === 0 ? working ? t("people.free") : t(holiday ? "people.holiday" : "people.dayOff") : t("people.tasksOnDay", { count: tasksForDay.length })}`} className={`people-calendar-day ${tone}`} data-date={dateValue} key={dateValue}><div className="people-calendar-date"><time dateTime={dateValue}>{date.getUTCDate()}</time>{holiday && <span>{t("people.holiday")}</span>}{inMonth && working && tasksForDay.length === 0 && <span>{t("people.free")}</span>}{inMonth && tasksForDay.length > 1 && <strong>{t("people.overlapCount", { count: tasksForDay.length })}</strong>}</div><div className="people-calendar-events">{tasksForDay.slice(0, 3).map((task) => <button key={task.document.id} onClick={() => onNavigate("tasks", { projectId: text(task.document, "project"), taskId: task.document.id })} title={`${projectNames.get(text(task.document, "project")) ?? text(task.document, "project")} · ${text(task.document, "title")}`}><strong>{text(task.document, "title")}</strong><small>{projectNames.get(text(task.document, "project")) ?? text(task.document, "project")}</small></button>)}{tasksForDay.length > 3 && <span className="people-calendar-more">{t("people.moreTasks", { count: tasksForDay.length - 3 })}</span>}</div></div>; })}
+      {dates.map((date) => { const dateValue = isoDate(date); const tasksForDay = dayTasks(date); const eventsForDay = dayAvailabilityEvents(date); const availablePercent = availability(date); const inMonth = monthKey(date) === month; const holiday = holidays.has(dateValue); const working = isWorking(date); const tone = !inMonth ? "outside" : !working ? "off" : availablePercent === 0 ? "unavailable" : availablePercent < 100 ? "partial" : tasksForDay.length > 1 ? "overlap" : tasksForDay.length === 1 ? "busy" : "free"; return <div aria-label={`${formatDateOnly(locale, dateValue)} · ${availablePercent < 100 ? t("availability.availablePercent", { percent: formatNumber(locale, availablePercent) }) : tasksForDay.length === 0 ? working ? t("people.free") : t(holiday ? "people.holiday" : "people.dayOff") : t("people.tasksOnDay", { count: tasksForDay.length })}`} className={`people-calendar-day ${tone}`} data-date={dateValue} key={dateValue}><div className="people-calendar-date"><time dateTime={dateValue}>{date.getUTCDate()}</time>{holiday && <span>{t("people.holiday")}</span>}{eventsForDay.map((event) => <span className="people-calendar-absence" key={event.document.id}>{availabilityKindLabel(t, availabilityText(event, "kind"))}</span>)}{inMonth && working && availablePercent === 100 && tasksForDay.length === 0 && <span>{t("people.free")}</span>}{inMonth && availablePercent === 100 && tasksForDay.length > 1 && <strong>{t("people.overlapCount", { count: tasksForDay.length })}</strong>}</div><div className="people-calendar-events">{tasksForDay.slice(0, 3).map((task) => <button key={task.document.id} onClick={() => onNavigate("tasks", { projectId: text(task.document, "project"), taskId: task.document.id })} title={`${projectNames.get(text(task.document, "project")) ?? text(task.document, "project")} · ${text(task.document, "title")}`}><strong>{text(task.document, "title")}</strong><small>{availablePercent === 0 ? t("availability.taskPaused") : projectNames.get(text(task.document, "project")) ?? text(task.document, "project")}</small></button>)}{tasksForDay.length > 3 && <span className="people-calendar-more">{t("people.moreTasks", { count: tasksForDay.length - 3 })}</span>}</div></div>; })}
     </div></div>
   </section>;
 }

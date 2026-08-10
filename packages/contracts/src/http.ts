@@ -49,7 +49,9 @@ export interface PersonWeekWorkload {
   readonly person_name: string;
   readonly week: string;
   readonly allocated_hours: number;
+  readonly base_capacity_hours: number;
   readonly capacity_hours: number;
+  readonly unavailable_hours: number;
   readonly utilization_percent: number | null;
   readonly task_ids: readonly string[];
   readonly task_allocations: readonly TaskWeekAllocation[];
@@ -61,7 +63,7 @@ export interface TaskWeekAllocation {
 }
 
 export interface WorkloadReport {
-  readonly formula: "equal-assignee-share/equal-person-working-day/v1";
+  readonly formula: "equal-assignee-share/capacity-weighted-person-day/v2";
   readonly weeks: readonly string[];
   readonly rows: readonly PersonWeekWorkload[];
   readonly included_tasks: number;
@@ -394,6 +396,7 @@ const entityDocumentSchema = {
     { $ref: "https://gitpm.dev/schemas/v1/person.schema.json" },
     { $ref: "https://gitpm.dev/schemas/v1/team.schema.json" },
     { $ref: "https://gitpm.dev/schemas/v1/calendar.schema.json" },
+    { $ref: "https://gitpm.dev/schemas/v1/availability-event.schema.json" },
     { $ref: "https://gitpm.dev/schemas/v1/saved-view.schema.json" },
   ],
 } as const;
@@ -613,14 +616,16 @@ const notificationSchema = objectSchema({
   excerpt: stringSchema,
 });
 const workloadReportSchema = objectSchema({
-  formula: { const: "equal-assignee-share/equal-person-working-day/v1" },
+  formula: { const: "equal-assignee-share/capacity-weighted-person-day/v2" },
   weeks: stringArraySchema,
   rows: arraySchema(objectSchema({
     person_id: stringSchema,
     person_name: stringSchema,
     week: stringSchema,
     allocated_hours: numberSchema,
+    base_capacity_hours: numberSchema,
     capacity_hours: numberSchema,
+    unavailable_hours: numberSchema,
     utilization_percent: nullableNumberSchema,
     task_ids: stringArraySchema,
     task_allocations: arraySchema(objectSchema({

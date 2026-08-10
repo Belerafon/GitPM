@@ -144,7 +144,7 @@ describe("CLI P02 commands", () => {
   it("returns a neutral JSON validation report with stable codes", async () => {
     const valid = await run(["validate", "--json", "--root", demo]);
     expect(valid.exitCode).toBe(0);
-    expect(JSON.parse(valid.output)).toMatchObject({ ok: true, code: "OK", documentCount: 17 });
+    expect(JSON.parse(valid.output)).toMatchObject({ ok: true, code: "OK", documentCount: 18 });
 
     const root = await fixture();
     const calendar = path.join(root, "calendars", "C-26-QD7FJ4.yaml");

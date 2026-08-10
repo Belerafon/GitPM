@@ -12,7 +12,8 @@ JSON Schema 2020-12. Этот документ фиксирует правила
 ## Layout
 
 Обязательные каталоги верхнего уровня: `.gitpm`, `people`, `teams`, `calendars`
-и `projects`. Пути `AGENTS.md` и `.agents/skills/gitpm/SKILL.md` зарезервированы
+и `projects`. Опциональный доменный каталог `availability` содержит персональные события
+доступности; `gitpm init` создаёт его сразу. Пути `AGENTS.md` и `.agents/skills/gitpm/SKILL.md` зарезервированы
 для инструкций, которые GitPM создаёт в рабочем дереве каждого черновика независимо от writer mode.
 Это локальные runtime-файлы: GitPM не включает их в semantic diff, commit и MR.
 Дополнительные файлы верхнего уровня разрешены только если их
@@ -38,7 +39,7 @@ JSON Schema 2020-12. Этот документ фиксирует правила
 Файловый менеджер является низкоуровневым интерфейсом к рабочему дереву, а не
 редактором GitPM-сущностей. Он может изменять любые разрешённые пути рабочего
 дерева, кроме Git metadata, включая файлы в `.gitpm/`, `projects/`, `people/`,
-`teams/` и `calendars/`.
+`teams/`, `calendars/` и `availability/`.
 
 Обычные файлы можно скачивать без ограничений текстового предпросмотра; Git metadata,
 symbolic links и пути за пределами рабочего дерева остаются недоступными.
@@ -48,7 +49,7 @@ symbolic links и пути за пределами рабочего дерева
 изменения. Поэтому файловый менеджер может временно оставить repository в
 невалидном состоянии.
 
-Редактирование Project, Task, Milestone, Person, Team, Calendar и repository
+Редактирование Project, Task, Milestone, Person, Team, Calendar, Availability Event и repository
 configuration через формы GitPM или CLI использует доменный mutation pipeline:
 канонизацию YAML, проверку ссылок, полную validation и rollback при ошибке.
 Пользователь отвечает за корректность низкоуровневых файловых изменений.
@@ -71,7 +72,7 @@ Validation возвращает `REPOSITORY_DIRECTORY_REQUIRED`, если обя
 отсутствует или не является каталогом, `REPOSITORY_DOCUMENT_REQUIRED`, если отсутствует
 фиксированный конфигурационный документ, `FS_SYMLINK` для symlink в repository/domain path
 и `REPOSITORY_UNKNOWN_PATH` для неизвестного файла, пустого каталога или другого элемента
-внутри domain layout. Пустые корневые collection-каталоги `people/`, `teams/` и `projects/`
+внутри domain layout. Пустые корневые collection-каталоги `people/`, `teams/`, `availability/` и `projects/`
 могут содержать созданный `gitpm init` файл `.gitkeep`; другие non-YAML файлы внутри domain
 layout запрещены.
 
@@ -82,11 +83,13 @@ Person, Team и Calendar хранятся соответственно в `peopl
 и Saved View равны ID плюс `.yaml` в каталогах `milestones`, `tasks` и `views`.
 Comment хранится в `projects/<project-id>/comments/<task-id>/<comment-id>.yaml`;
 path фиксирует и owning Project, и Task.
+Availability Event хранится в `availability/<availability-event-id>.yaml` и ссылается
+на глобальный Person, поэтому отсутствие действует сразу во всех Project этого человека.
 
 ## Identity and references
 
 ID имеет форму `<type>-<YY>-<random>`, где type — один из `P`, `T`, `M`, `U`,
-`G`, `C`, `V`, `N`; `YY` — две последние цифры UTC-года создания, а random — шесть
+`G`, `C`, `V`, `N`, `E`, `A`; `YY` — две последние цифры UTC-года создания, а random — шесть
 символов Crockford Base32. Примеры: `P-26-7K4M9Q`, `T-26-X8D2FW`,
 `M-26-3RC7NA`, `N-26-ABC123`. Все ID уникальны в текущем состоянии repository. Ссылки
 используют только ID.
@@ -138,6 +141,20 @@ Web UI предлагает редактируемые предустановк�
 дополнительных нерабочих будней и даёт 247 рабочих дней; периоды отдыха и
 переносы сверены с
 [сообщением Правительства РФ о постановлении № 1466](https://government.ru/news/56309/).
+
+## Personal availability
+
+`gitpm/availability-event@1` задаёт персональное исключение поверх общего Calendar.
+Обязательные поля: `id`, `person`, `start`, `finish`, `kind`, `availability_percent`,
+`state` и `lifecycle`. `kind` принимает `vacation`, `day-off`, `sick-leave`, `training`
+или `other`; `state` — `planned`, `taken` или `cancelled`. Planning учитывает активные
+`planned` и `taken` события, а `cancelled` не уменьшает ёмкость. Пересекающиеся активные
+события одного Person запрещены кодом `AVAILABILITY_EVENT_OVERLAP`.
+
+Диапазон Task остаётся плановым окном и не переписывается при добавлении отсутствия.
+Пересечение даёт warning `TASK_AVAILABILITY_CONFLICT`: UI показывает паузу, а Workload
+не распределяет effort на дни с нулевой доступностью и уменьшает capacity пропорционально
+`availability_percent`.
 
 ## Scalar rules
 

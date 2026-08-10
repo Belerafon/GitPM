@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gitpm.dev/schemas/v1/availability-event.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "id", "person", "start", "finish", "kind", "availability_percent", "state", "lifecycle"],
+  "properties": {
+    "schema": {"const": "gitpm/availability-event@1"},
+    "id": {"$ref": "common.schema.json#/$defs/availabilityEventId"},
+    "person": {"$ref": "common.schema.json#/$defs/personId"},
+    "start": {"$ref": "common.schema.json#/$defs/date"},
+    "finish": {"$ref": "common.schema.json#/$defs/date"},
+    "kind": {"enum": ["vacation", "day-off", "sick-leave", "training", "other"]},
+    "availability_percent": {"type": "number", "minimum": 0, "maximum": 100, "multipleOf": 0.25},
+    "state": {"enum": ["planned", "taken", "cancelled"]},
+    "note_markdown": {"type": "string"},
+    "lifecycle": {"$ref": "common.schema.json#/$defs/lifecycle"}
+  }
+}

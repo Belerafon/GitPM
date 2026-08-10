@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CALENDAR_PRESETS, calendarPreset, isWorkingDate, isoWeekday, parseDateOnly, workingDatesBetween } from "./index.js";
+import { availabilityPercentOnDate, CALENDAR_PRESETS, calendarPreset, isWorkingDate, isoWeekday, parseDateOnly, workingDatesBetween } from "./index.js";
 import type { CalendarError } from "./index.js";
 
 const calendar = {
@@ -26,6 +26,13 @@ describe("date-only calendar", () => {
     expect(() => workingDatesBetween("2026-07-14", "2026-07-10", calendar)).toThrowError(
       expect.objectContaining<Partial<CalendarError>>({ code: "DATE_RANGE" }),
     );
+  });
+
+  it("resolves personal availability without changing the shared calendar", () => {
+    const exceptions = [{ start: "2026-07-09", finish: "2026-07-10", availability_percent: 0 }, { start: "2026-07-10", finish: "2026-07-10", availability_percent: 50 }];
+    expect(availabilityPercentOnDate("2026-07-08", exceptions)).toBe(100);
+    expect(availabilityPercentOnDate("2026-07-09", exceptions)).toBe(0);
+    expect(availabilityPercentOnDate("2026-07-10", exceptions)).toBe(0);
   });
 
   it("provides validated built-in presets", () => {

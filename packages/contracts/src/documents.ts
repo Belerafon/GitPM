@@ -8,6 +8,7 @@ import {
   DOCUMENT_SCHEMAS,
 } from "./generated-document-schemas.js";
 import type {
+  availabilityEventSchema,
   calendarSchema,
   commonSchema,
   issueTypesSchema,
@@ -24,6 +25,7 @@ export type JsonValue = null | boolean | number | string | readonly JsonValue[] 
 export type JsonRecord = { readonly [key: string]: JsonValue };
 export type Lifecycle = "active" | "archived";
 export type EntityDocumentSchema =
+  | typeof availabilityEventSchema.properties.schema.const
   | typeof projectSchema.properties.schema.const
   | typeof taskSchema.properties.schema.const
   | typeof milestoneSchema.properties.schema.const
@@ -59,7 +61,13 @@ export interface EntityDocument extends Readonly<Record<string, unknown>> {
   readonly members?: readonly string[];
   readonly working_weekdays?: readonly number[];
   readonly holidays?: readonly string[];
-  readonly kind?: "list" | "board";
+  readonly person?: string;
+  readonly start?: string;
+  readonly finish?: string;
+  readonly availability_percent?: number;
+  readonly state?: "planned" | "taken" | "cancelled";
+  readonly note_markdown?: string;
+  readonly kind?: "list" | "board" | "vacation" | "day-off" | "sick-leave" | "training" | "other";
   readonly filters?: SavedViewFilters;
   readonly group_by?: "status";
 }
@@ -137,6 +145,7 @@ export type MilestoneDocument = FromSchema<typeof milestoneSchema, SchemaReferen
 export type PersonDocument = FromSchema<typeof personSchema, SchemaReferences> & EntityDocument;
 export type TeamDocument = FromSchema<typeof teamSchema, SchemaReferences> & EntityDocument;
 export type CalendarDocument = FromSchema<typeof calendarSchema, SchemaReferences> & EntityDocument;
+export type AvailabilityEventDocument = FromSchema<typeof availabilityEventSchema, SchemaReferences> & EntityDocument;
 
 export interface SavedViewFilters {
   readonly statuses?: readonly string[];
@@ -149,6 +158,7 @@ export interface SavedViewFilters {
 export type SavedViewDocument = FromSchema<typeof savedViewSchema, SchemaReferences> & EntityDocument;
 
 export type StrictEntityDocument =
+  | AvailabilityEventDocument
   | ProjectDocument
   | TaskDocument
   | MilestoneDocument
@@ -242,6 +252,7 @@ export const ENTITY_TYPE_SCHEMAS = {
   people: "gitpm/person@1",
   teams: "gitpm/team@1",
   calendars: "gitpm/calendar@1",
+  "availability-events": "gitpm/availability-event@1",
   views: "gitpm/saved-view@1",
 } as const satisfies Readonly<Record<string, EntityDocumentSchema>>;
 

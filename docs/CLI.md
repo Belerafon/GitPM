@@ -64,7 +64,9 @@ gitpm --version [--json]
 
 В JSON-отчёте `workload report` каждая строка Person-week содержит как стабильный список
 `task_ids`, так и `task_allocations` с парами `task_id`/`allocated_hours`. Расшифровка использует
-ту же формулу распределения, что итоговое поле `allocated_hours`.
+ту же формулу распределения, что итоговое поле `allocated_hours`. Поля
+`base_capacity_hours`, `capacity_hours` и `unavailable_hours` разделяют базовую ёмкость,
+эффективную ёмкость и потери из-за персональных Availability Event.
 
 `gitpm export` использует единый с web/API сервис экспорта. PDF по умолчанию содержит
 разделы Projects и People; повторяемый `--section` добавляет или явно задаёт состав.
@@ -80,6 +82,12 @@ repository schema, repository ZIP — без `.git` по умолчанию ил
 материализуется из `.gitpm/repository.yaml/default_calendar`; `weekly_capacity_hours`
 остаётся обязательным явным значением. Сохранённый repository YAML всегда содержит полный
 канонический документ.
+
+Availability Event создаётся тем же generic-контуром, например
+`gitpm entity create --type availability-event --file absence.yaml`. Коллекция
+`availability-events` поддерживает `list/show/update/archive/restore/delete`; канонический
+путь — `availability/<A-id>.yaml`. Состояния `planned` и `taken` влияют на будущий Workload,
+`cancelled` сохраняет историю без уменьшения capacity.
 
 `entity update` атомарно изменяет любую поддерживаемую сущность. `--type` и `--id` однозначно
 выбирают существующую сущность. Небольшой patch задаётся повторяемыми `--set field=yaml-value` и
@@ -102,7 +110,7 @@ repository schema, repository ZIP — без `.git` по умолчанию ил
 строку. В JSON-результате элементы содержат `source_index`, `row`, сгенерированный `id` и
 канонический `path`.
 
-`schema list/show` доступны без runtime configuration. `schema list` возвращает девять
+`schema list/show` доступны без runtime configuration. `schema list` возвращает десять
 domain schemas (включая `comment` и `time-entry`), четыре repository configuration schemas
 и schema репозитория.
 `gitpm --version --json` дополнительно

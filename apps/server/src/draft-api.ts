@@ -116,7 +116,7 @@ function asTimeEntryActor(actor: RequestActor): TimeEntryActor {
 
 function requireEntityMutationRole(actor: RequestActor, entityType: string): void {
   requireMutationRole(actor);
-  if (["people", "teams", "calendars"].includes(entityType) && actor.role !== "Maintainer") {
+  if (["people", "teams", "calendars", "availability-events"].includes(entityType) && actor.role !== "Maintainer") {
     throw new DraftRuntimeError("DRAFT_FORBIDDEN", "Administrative mutation requires Maintainer");
   }
 }
@@ -630,17 +630,18 @@ export function registerEntityApi(
     async (request) => {
       const actor = await authenticate(request);
       await requireDraftRead(manager, actor, request.params.draftId);
-      const [tasks, projects, people, calendars, teams, tracks] = await Promise.all([
+      const [tasks, projects, people, calendars, availabilityEvents, teams, tracks] = await Promise.all([
         store.list(request.params.draftId, "tasks"),
         store.list(request.params.draftId, "projects"),
         store.list(request.params.draftId, "people"),
         store.list(request.params.draftId, "calendars"),
+        store.list(request.params.draftId, "availability-events"),
         store.list(request.params.draftId, "teams"),
         store.getConfiguration(request.params.draftId, "schedule-tracks"),
       ]);
       const documents = (items: readonly { readonly document: unknown }[]) => items.map((item) => item.document as WorkloadEntityDocument);
       return buildWorkloadReport({
-        tasks: documents(tasks), projects: documents(projects), people: documents(people), calendars: documents(calendars), teams: documents(teams),
+        tasks: documents(tasks), projects: documents(projects), people: documents(people), calendars: documents(calendars), availabilityEvents: documents(availabilityEvents), teams: documents(teams),
         scheduleTracks: tracks.document as WorkloadEntityDocument,
         filters: request.query,
       });
