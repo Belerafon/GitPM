@@ -613,6 +613,19 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .directory-table tbody tr:hover > * { background-color: #f8faf7; }
 .directory-table tbody tr.recently-changed > * { background-color: #fff3c9; }
 .team-directory-table td:last-child { width: 1%; white-space: nowrap; }
+.member-picker { display: block; min-width: 0; margin: 0; padding: .65rem; }
+.member-picker-scroll { max-height: 300px; overflow: auto; border: 1px solid #e2e4df; border-radius: 8px; background: #fff; }
+.member-picker-table { width: 100%; border-collapse: collapse; }
+.member-picker-table th, .member-picker-table td { border-right: 1px solid #e2e4df; border-bottom: 1px solid #e2e4df; padding: .65rem .7rem; text-align: left; vertical-align: middle; }
+.member-picker-table tr:last-child > * { border-bottom: 0; }
+.member-picker-table tr > *:last-child { border-right: 0; }
+.member-picker-table thead th { position: sticky; z-index: 1; top: 0; background: #f2f4f0; color: #59625c; font-size: .72rem; white-space: nowrap; }
+.member-picker-table tbody th { color: #2f3833; font-size: .82rem; font-weight: 650; }
+.member-picker-table tbody td { color: #646b66; font-size: .8rem; }
+.member-picker-table tbody tr:hover > * { background-color: #f8faf7; }
+.member-picker-table .member-picker-check-column, .member-picker-table tbody td:first-child { width: 42px; text-align: center; }
+.member-picker-table input[type="checkbox"] { display: block; width: 18px; height: 18px; margin: 0 auto; accent-color: #347a58; cursor: pointer; }
+.member-picker-empty { margin: 0; padding: .85rem; color: #646b66; font-size: .8rem; }
 .person-link { cursor: pointer; color: #245f4c; font-weight: 650; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
 .person-link:hover { color: #173f31; text-decoration-thickness: 2px; }
 .person-link:focus-visible { border-radius: 3px; outline: 2px solid #5a8d77; outline-offset: 2px; }

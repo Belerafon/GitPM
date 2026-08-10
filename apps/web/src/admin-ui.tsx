@@ -148,7 +148,17 @@ function CalendarDateList({ selected, t }: { readonly selected: readonly string[
   return <fieldset className="calendar-date-list"><legend>{t("admin.holidays")}</legend><p>{t("admin.holidaysHint")}</p><div>{dates.map((date, index) => <div className="calendar-date-row" key={index}><input aria-label={t("admin.holidayDate", { index: index + 1 })} name="holidays" onChange={(event) => { const value = event.currentTarget.value; setDates((current) => current.map((item, itemIndex) => itemIndex === index ? value : item)); }} required type="date" value={date} /><button aria-label={t("admin.removeHoliday", { date: date || index + 1 })} onClick={() => setDates((current) => current.filter((_item, itemIndex) => itemIndex !== index))} title={t("admin.removeHoliday", { date: date || index + 1 })} type="button">×</button></div>)}</div>{dates.length === 0 && <small>{t("admin.noHolidays")}</small>}<button className="calendar-date-add" onClick={() => setDates((current) => [...current, ""])} type="button">+ {t("admin.addHoliday")}</button></fieldset>;
 }
 
-function MemberChecks({ people, selected, t }: { people: readonly EntityResult[]; selected: readonly string[]; t: (key: MessageKey) => string }) { return <fieldset><legend>{t("admin.members")}</legend>{people.map((person) => <label key={person.document.id}><input type="checkbox" name="members" value={person.document.id} defaultChecked={selected.includes(person.document.id)} />{text(person.document, "name")}</label>)}</fieldset>; }
+function MemberChecks({ people, selected, t }: { people: readonly EntityResult[]; selected: readonly string[]; t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string }) {
+  return <fieldset className="member-picker"><legend>{t("admin.members")}</legend>
+    <div className="member-picker-scroll">
+      <table aria-label={t("admin.members")} className="member-picker-table">
+        <thead><tr><th aria-label={t("admin.members")} className="member-picker-check-column" scope="col">✓</th><th scope="col">{t("admin.person")}</th><th scope="col">{t("admin.capacity")}</th></tr></thead>
+        <tbody>{people.map((person) => { const name = text(person.document, "name"); return <tr key={person.document.id}><td><input aria-label={name} type="checkbox" name="members" value={person.document.id} defaultChecked={selected.includes(person.document.id)} /></td><th scope="row">{name}</th><td>{t("people.hoursPerWeek", { count: number(person.document, "weekly_capacity_hours") })}</td></tr>; })}</tbody>
+      </table>
+      {people.length === 0 && <p className="member-picker-empty">{t("core.noPeople")}</p>}
+    </div>
+  </fieldset>;
+}
 function WeekdayChecks({ selected, t }: { selected: readonly number[]; t: (key: MessageKey) => string }) { return <fieldset className="weekday-checks"><legend>{t("admin.weekdays")}</legend>{[1, 2, 3, 4, 5, 6, 7].map((day) => <label key={day}><input type="checkbox" name="weekdays" value={day} defaultChecked={selected.includes(day)} />{t(`admin.day${day}` as MessageKey)}</label>)}</fieldset>; }
 function TeamEditor(props: EditorProps & { people: readonly EntityResult[]; readonly onOpenPerson?: (personId: string) => void }) {
   const { api, draft, entity, fingerprint, readOnly, t, people, mutate, remove, confirmDelete, onOpenPerson } = props;

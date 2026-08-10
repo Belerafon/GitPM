@@ -62,6 +62,10 @@ describe("administration UI", () => {
     expect(onOpenPerson).toHaveBeenCalledWith(expect.stringMatching(/^U-/u));
     fireEvent.click(screen.getByRole("button", { name: /Create team/u }));
     const teamForm = within(screen.getByRole("dialog", { name: "Create team" })).getByRole("button", { name: "Create team" }).closest("form")!;
+    const memberTable = within(teamForm).getByRole("table", { name: "Members" });
+    expect(memberTable.closest(".member-picker-scroll")).toBeTruthy();
+    expect(within(memberTable).getByRole("columnheader", { name: "Person" })).toBeTruthy();
+    expect(within(memberTable).getByRole("columnheader", { name: "Weekly capacity (hours)" })).toBeTruthy();
     fireEvent.change(within(teamForm).getByLabelText("Name"), { target: { value: "Core" } }); fireEvent.click(within(teamForm).getByLabelText("Alice")); fireEvent.submit(teamForm);
     const teamTable = document.querySelector<HTMLElement>(".team-directory-table")!;
     expect(await within(teamTable).findByText("Core")).toBeTruthy();
