@@ -701,6 +701,20 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .people-calendar-events strong { color: #25352e; font-size: .65rem; }
 .people-calendar-events small { color: #66716b; font-size: .58rem; }
 .people-calendar-more { color: #7b4c47; font-size: .62rem; font-weight: 700; }
+.people-calendar-day.unavailable { background: repeating-linear-gradient(135deg, #f8e8e5, #f8e8e5 7px, #f3dcd8 7px, #f3dcd8 14px); }
+.people-calendar-day.partial { background: #fff4db; }
+.people-calendar-absence { color: #8a332b; font-weight: 750; }
+.people-calendar-legend .unavailable, .calendar-summary-availability { color: #8a332b; }
+.people-availability-section { display: grid; gap: .75rem; }
+.people-availability-summary { display: flex; gap: 1rem; margin: 0; }
+.people-availability-summary div { display: flex; gap: .35rem; align-items: baseline; }
+.people-availability-summary dt { color: #69716c; font-size: .75rem; }
+.people-availability-summary dd { margin: 0; font-weight: 750; }
+.people-availability-list { display: grid; gap: .45rem; }
+.people-availability-list > button { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(180px, auto) auto; gap: .75rem; align-items: center; text-align: left; }
+.people-availability-list > button > span:first-child { display: grid; gap: .1rem; }
+.people-availability-list > button small, .people-availability-list > button > span:last-child { color: #69716c; }
+.people-availability-list > button.cancelled { opacity: .62; }
 .people-schedule-list { display: grid; gap: 0; margin: .75rem 0 0; padding: 0; list-style: none; }
 .people-schedule-list li { position: relative; display: grid; grid-template-columns: 145px minmax(0, 1fr); gap: .85rem; padding: 0 0 .85rem 1rem; }
 .people-schedule-list li::before { position: absolute; top: .35rem; left: 0; width: 7px; height: 7px; border-radius: 50%; background: #5d9079; box-shadow: 0 0 0 3px #e4eee8; content: ""; }
@@ -743,7 +757,7 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .people-project-heading > strong { display: grid; place-items: center; min-width: 1.6rem; height: 1.6rem; border-radius: 999px; background: #edf3ee; color: #31584c; font-size: .75rem; }
 @media (max-width: 1100px) { .people-profile-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 900px) { .people-profile-layout { grid-template-columns: 1fr; } }
-@media (max-width: 700px) { .people-profile-header, .people-profile-stats { grid-template-columns: 1fr; } .people-profile-controls { min-width: 0; } .people-profile-controls > button { justify-self: stretch; } .people-profile-meta { grid-template-columns: 1fr 1fr; } .people-calendar-heading { align-items: stretch; flex-direction: column; } .people-calendar-navigation { width: 100%; } .people-task-list > button { grid-template-columns: 1fr auto; } .people-task-list time { grid-column: 1 / -1; text-align: left; } .people-schedule-list li { grid-template-columns: 1fr; gap: .2rem; } .people-schedule-list time { padding-top: 0; } }
+@media (max-width: 700px) { .people-profile-header, .people-profile-stats { grid-template-columns: 1fr; } .people-profile-controls { min-width: 0; } .people-profile-controls > button { justify-self: stretch; } .people-profile-meta { grid-template-columns: 1fr 1fr; } .people-calendar-heading { align-items: stretch; flex-direction: column; } .people-calendar-navigation { width: 100%; } .people-task-list > button { grid-template-columns: 1fr auto; } .people-task-list time { grid-column: 1 / -1; text-align: left; } .people-availability-summary { flex-wrap: wrap; } .people-availability-list > button { grid-template-columns: 1fr; gap: .25rem; } .people-schedule-list li { grid-template-columns: 1fr; gap: .2rem; } .people-schedule-list time { padding-top: 0; } }
 fieldset { display: flex; flex-wrap: wrap; gap: .5rem; border: 1px solid #dedfd9; border-radius: 8px; }
 fieldset label { display: flex; gap: .25rem; align-items: center; }
 .assignee-fieldset { display: grid; align-items: stretch; }

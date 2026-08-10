@@ -17,6 +17,7 @@ const entityTypeKeys: Readonly<Record<string, MessageKey>> = {
   "gitpm/person@1": "changes.entityPerson",
   "gitpm/team@1": "changes.entityTeam",
   "gitpm/calendar@1": "changes.entityCalendar",
+  "gitpm/availability-event@1": "changes.entityAvailability",
   "gitpm/saved-view@1": "changes.entityView",
   "gitpm/comment@1": "changes.entityComment",
   "gitpm/repository@1": "changes.entityRepository",

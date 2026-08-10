@@ -87,12 +87,13 @@ Work conservatively:
 
 - \`.gitpm/repository.yaml\`, \`.gitpm/statuses.yaml\`, and
   \`.gitpm/issue-types.yaml\` contain repository-wide configuration.
-- \`people/\`, \`teams/\`, and \`calendars/\` contain global entities.
+- \`people/\`, \`teams/\`, \`calendars/\`, and \`availability/\` contain global entities.
 - \`projects/<project-id>/project.yaml\` contains a Project.
 - Project milestones, tasks, saved views, and task comments live below the same Project.
 - Entity references use immutable IDs such as \`P-26-7K4M9Q\` and
   \`T-26-X8D2FW\`; paths and IDs are validated together.
-- Project-scoped work must not change global configuration, People, Teams, Calendars, or
+- Project-scoped work must not change global configuration, People, Teams, Calendars,
+  Availability Events, or
   another Project.
 - Archive is a lifecycle state. Physical deletion is separate, restricted by references, and
   always requires explicit authorization.
@@ -102,7 +103,7 @@ Work conservatively:
 - Use the \`gitpm\` CLI for every mutation, format, validation, semantic diff, commit, push,
   and Merge Request operation.
 - Never edit, rename, or delete files under \`.gitpm/\`, \`people/\`, \`teams/\`,
-  \`calendars/\`, or \`projects/\` directly.
+  \`calendars/\`, \`availability/\`, or \`projects/\` directly.
 - Never use raw \`git add\`, \`git commit\`, \`git push\`, Git hosting APIs, MCP, or UI API
   calls to mutate GitPM data.
 - Reading repository files and using read-only Git commands for orientation is allowed.
@@ -126,7 +127,7 @@ discover and read these files while Git ignores them:
 
 - read, parse, and convert these files freely;
 - use Python with \`openpyxl\` to read, create, or modify Excel workbooks;
-- never copy their bytes into \`projects/\`, \`people/\`, \`teams/\`, \`calendars/\`,
+- never copy their bytes into \`projects/\`, \`people/\`, \`teams/\`, \`calendars/\`, \`availability/\`,
   or \`.gitpm/\`;
 - never \`git add\` or commit incoming files under \`uploads/\`;
 - never delete or rename files under \`uploads/\` unless explicitly requested.
@@ -240,7 +241,7 @@ Apply these principles:
 
 The repository-wide documents are \`.gitpm/repository.yaml\`,
 \`.gitpm/statuses.yaml\`, and \`.gitpm/issue-types.yaml\`. Global entity directories are
-\`people/\`, \`teams/\`, and \`calendars/\`. A Project occupies
+\`people/\`, \`teams/\`, \`calendars/\`, and \`availability/\`. A Project occupies
 \`projects/<P-id>/\` and contains \`project.yaml\`, plus \`milestones/\`, \`tasks/\`,
 \`views/\`, and task-scoped \`comments/\`.
 
@@ -253,13 +254,15 @@ Core schemas and relations:
 - \`gitpm/person@1\`: name, weekly capacity, Calendar, lifecycle, optional email.
 - \`gitpm/team@1\`: name, Person members, lifecycle.
 - \`gitpm/calendar@1\`: working weekdays, holidays, lifecycle.
+- \`gitpm/availability-event@1\`: Person, date range, kind, availability percentage, state,
+  lifecycle, and an optional note.
 - \`gitpm/saved-view@1\`: owning Project, list or board kind, filters, optional status grouping.
 - \`gitpm/comment@1\`: owning Project and Task, author snapshot, timestamps, state, body, and
   mentions.
 
 IDs are immutable and have the form \`<type>-<UTC-year>-<six Crockford Base32 characters>\`.
 Type prefixes are \`P\` Project, \`T\` Task, \`M\` Milestone, \`U\` Person, \`G\` Team,
-\`C\` Calendar, and \`V\` Saved View. Do not rename IDs or move an entity by changing its
+\`C\` Calendar, \`A\` Availability Event, and \`V\` Saved View. Do not rename IDs or move an entity by changing its
 path. References must resolve, task/milestone/view references cannot cross Project boundaries,
 and active configuration slugs must exist. Dates are \`YYYY-MM-DD\`; estimates are
 nonnegative quarter-hour multiples. YAML uses UTF-8, LF, two-space indentation, no duplicate
@@ -284,7 +287,7 @@ orchestrating workflow requests the handoff.
 ## Respect the mutation boundary
 
 Never write, rename, or delete data below \`.gitpm/\`, \`people/\`, \`teams/\`,
-\`calendars/\`, or \`projects/\` with an editor, shell redirection, scripts, filesystem tools,
+\`calendars/\`, \`availability/\`, or \`projects/\` with an editor, shell redirection, scripts, filesystem tools,
 raw Git, an MCP server, or a private API call. Never modify \`AGENTS.md\` or this skill; GitPM
 manages them.
 
@@ -368,7 +371,7 @@ larger YAML patch. Read the current entity first, and verify the resulting seman
 ## Scope the work
 
 Use \`--project <project-id>\` whenever the request concerns one Project. Under Project scope,
-changes to global configuration, People, Teams, Calendars, guidance files, or another Project
+changes to global configuration, People, Teams, Calendars, Availability Events, guidance files, or another Project
 must not be treated as permission to widen scope. Ask the user if the requested outcome truly
 requires global changes.
 

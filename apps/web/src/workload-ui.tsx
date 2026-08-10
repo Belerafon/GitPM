@@ -27,6 +27,7 @@ export function WorkloadWorkspace({ api, draft, locale, onNavigate = () => undef
   const [tasks, setTasks] = useState<readonly EntityResult[]>([]);
   const [people, setPeople] = useState<readonly EntityResult[]>([]);
   const [calendars, setCalendars] = useState<readonly EntityResult[]>([]);
+  const [availabilityEvents, setAvailabilityEvents] = useState<readonly EntityResult[]>([]);
   const [projects, setProjects] = useState<readonly EntityResult[]>([]);
   const [teams, setTeams] = useState<readonly EntityResult[]>([]);
   const [milestones, setMilestones] = useState<readonly EntityResult[]>([]);
@@ -40,22 +41,22 @@ export function WorkloadWorkspace({ api, draft, locale, onNavigate = () => undef
   const loadRequest = useAsyncLoad();
   const load = useCallback(async () => {
     await loadRequest.run(async () => {
-      const [nextTasks, nextPeople, nextCalendars, nextProjects, nextTeams, nextMilestones, tracksDocument] = await Promise.all([
-        api.listEntities(draft.draft_id, "tasks"), api.listEntities(draft.draft_id, "people"), api.listEntities(draft.draft_id, "calendars"), api.listEntities(draft.draft_id, "projects"), api.listEntities(draft.draft_id, "teams"), api.listEntities(draft.draft_id, "milestones"), api.getConfiguration(draft.draft_id, "schedule-tracks"),
+      const [nextTasks, nextPeople, nextCalendars, nextAvailabilityEvents, nextProjects, nextTeams, nextMilestones, tracksDocument] = await Promise.all([
+        api.listEntities(draft.draft_id, "tasks"), api.listEntities(draft.draft_id, "people"), api.listEntities(draft.draft_id, "calendars"), api.listEntities(draft.draft_id, "availability-events"), api.listEntities(draft.draft_id, "projects"), api.listEntities(draft.draft_id, "teams"), api.listEntities(draft.draft_id, "milestones"), api.getConfiguration(draft.draft_id, "schedule-tracks"),
       ]);
-      return { nextTasks, nextPeople, nextCalendars, nextProjects, nextTeams, nextMilestones, tracksDocument };
-    }, ({ nextTasks, nextPeople, nextCalendars, nextProjects, nextTeams, nextMilestones, tracksDocument }) => {
-      setTasks(nextTasks); setPeople(nextPeople); setCalendars(nextCalendars); setProjects(nextProjects.filter((item) => item.document.lifecycle === "active")); setTeams(nextTeams.filter((item) => item.document.lifecycle === "active")); setMilestones(nextMilestones.filter((item) => item.document.lifecycle === "active")); setTracksConfig(tracksDocument); setError(null);
+      return { nextTasks, nextPeople, nextCalendars, nextAvailabilityEvents, nextProjects, nextTeams, nextMilestones, tracksDocument };
+    }, ({ nextTasks, nextPeople, nextCalendars, nextAvailabilityEvents, nextProjects, nextTeams, nextMilestones, tracksDocument }) => {
+      setTasks(nextTasks); setPeople(nextPeople); setCalendars(nextCalendars); setAvailabilityEvents(nextAvailabilityEvents); setProjects(nextProjects.filter((item) => item.document.lifecycle === "active")); setTeams(nextTeams.filter((item) => item.document.lifecycle === "active")); setMilestones(nextMilestones.filter((item) => item.document.lifecycle === "active")); setTracksConfig(tracksDocument); setError(null);
     });
   }, [api, draft.draft_id, draft.external_fingerprint, loadRequest.run]);
   useEffect(() => { void load(); }, [load]);
   const catalog = useMemo(() => new EntityCatalog({ projects, milestones }), [projects, milestones]);
   const filterMilestones = milestones.filter((item) => projectFilter === "" || item.document.project === projectFilter);
   const report = useMemo(() => buildWorkloadReport({
-    tasks: tasks.map((item) => item.document), projects: projects.map((item) => item.document), people: people.map((item) => item.document), calendars: calendars.map((item) => item.document), teams: teams.map((item) => item.document),
+    tasks: tasks.map((item) => item.document), projects: projects.map((item) => item.document), people: people.map((item) => item.document), calendars: calendars.map((item) => item.document), availabilityEvents: availabilityEvents.map((item) => item.document), teams: teams.map((item) => item.document),
     scheduleTracks: tracksConfig?.document ?? { schema: "gitpm/schedule-tracks@1", tracks: [], defaults: {} },
     filters: { ...(projectFilter === "" ? {} : { project: projectFilter }), ...(milestoneFilter === "" ? {} : { milestone: milestoneFilter }), ...(teamFilter === "" ? {} : { team: teamFilter }) },
-  }), [tasks, projects, people, calendars, teams, tracksConfig, projectFilter, milestoneFilter, teamFilter]);
+  }), [tasks, projects, people, calendars, availabilityEvents, teams, tracksConfig, projectFilter, milestoneFilter, teamFilter]);
   const visibleWeeks = period === "all" ? report.weeks : report.weeks.slice(0, Number(period));
   const activePeople = [...new Map(report.rows.map((row) => [row.person_id, row.person_name])).entries()];
   const rows = new Map(report.rows.map((row) => [`${row.person_id}:${row.week}`, row]));
@@ -96,6 +97,7 @@ export function WorkloadWorkspace({ api, draft, locale, onNavigate = () => undef
       {selectedRow !== undefined && <section className="workload-breakdown">
         <dl className="workload-breakdown-summary">
           <div><dt>{t("workload.allocation")}</dt><dd>{t("workload.hours", { allocated: formatNumber(locale, selectedRow.allocated_hours), capacity: formatNumber(locale, selectedRow.capacity_hours) })}</dd></div>
+          <div><dt>{t("workload.availabilityLoss")}</dt><dd>{t("workload.capacityLoss", { unavailable: formatNumber(locale, selectedRow.unavailable_hours), base: formatNumber(locale, selectedRow.base_capacity_hours) })}</dd></div>
           <div><dt>{overloaded(selectedRow) ? t("workload.overload") : t("workload.spareCapacity")}</dt><dd>{t("workload.hoursOnly", { hours: formatNumber(locale, overloaded(selectedRow) ? selectedRow.allocated_hours - selectedRow.capacity_hours : availableHours(selectedRow)) })}</dd></div>
         </dl>
         <p className="workload-transfer-hint">{t("workload.transferHint")}</p>

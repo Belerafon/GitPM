@@ -208,6 +208,9 @@ const entityTypeAliases: Readonly<Record<string, string>> = {
   person: "people",
   team: "teams",
   calendar: "calendars",
+  availability: "availability-events",
+  "availability-event": "availability-events",
+  "availability-events": "availability-events",
   view: "views",
   "saved-view": "views",
 };
@@ -222,6 +225,7 @@ const schemaIdPrefixes = {
   "gitpm/saved-view@1": ENTITY_ID_PREFIX.view,
   "gitpm/comment@1": ENTITY_ID_PREFIX.comment,
   "gitpm/time-entry@1": ENTITY_ID_PREFIX.entry,
+  "gitpm/availability-event@1": ENTITY_ID_PREFIX.availability,
 } as const;
 
 export interface EntityCreatePlanItem {
@@ -407,6 +411,7 @@ export function entityPathForDocument(document: GitPmDocument): string {
     case "gitpm/person@1": return `people/${id}.yaml`;
     case "gitpm/team@1": return `teams/${id}.yaml`;
     case "gitpm/calendar@1": return `calendars/${id}.yaml`;
+    case "gitpm/availability-event@1": return `availability/${id}.yaml`;
     default: throw new DomainOperationError("ENTITY_TYPE_INVALID", `Unsupported entity schema ${document.schema}`);
   }
 }
@@ -458,6 +463,9 @@ function restoreReferences(document: GitPmDocument): readonly RestoreReference[]
       break;
     case "gitpm/person@1":
       add("calendar", "gitpm/calendar@1", document.calendar);
+      break;
+    case "gitpm/availability-event@1":
+      add("person", "gitpm/person@1", document.person);
       break;
     case "gitpm/team@1":
       addMany("members", "gitpm/person@1", document.members);

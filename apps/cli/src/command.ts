@@ -367,11 +367,17 @@ const schemaAliases: Readonly<Record<string, string>> = {
   project: "project", projects: "project", task: "task", tasks: "task",
   milestone: "milestone", milestones: "milestone", person: "person", people: "person",
   team: "team", teams: "team", calendar: "calendar", calendars: "calendar",
+  availability: "availability-event", "availability-event": "availability-event", "availability-events": "availability-event",
   view: "saved-view", views: "saved-view", "saved-view": "saved-view",
   comment: "comment", repository: "repository", statuses: "statuses", "issue-types": "issue-types",
 };
 
 const schemaExamples: Readonly<Record<string, string>> = {
+  "availability-event": [
+    "schema: gitpm/availability-event@1", "id: A-26-X8D2FW", "person: U-26-7K4M9Q",
+    "start: 2026-08-17", "finish: 2026-08-28", "kind: vacation",
+    "availability_percent: 0", "state: planned", "lifecycle: active", "",
+  ].join("\n"),
   person: [
     "schema: gitpm/person@1", "id: U-26-7K4M9Q", "name: Ada Lovelace",
     "weekly_capacity_hours: 40", "calendar: C-26-QD7FJ4", "lifecycle: active",
@@ -1064,12 +1070,12 @@ async function runWorkload(args: readonly string[], dependencies: CliDependencie
       : await agent.listEntities!(draftId!, type);
     return result.items.map((item) => item.document as unknown as WorkloadEntityDocument);
   };
-  const [tasks, projects, people, calendars, teams, tracks] = await Promise.all([
-    readEntities("tasks"), readEntities("projects"), readEntities("people"), readEntities("calendars"), readEntities("teams"),
+  const [tasks, projects, people, calendars, availabilityEvents, teams, tracks] = await Promise.all([
+    readEntities("tasks"), readEntities("projects"), readEntities("people"), readEntities("calendars"), readEntities("availability-events"), readEntities("teams"),
     agent === undefined ? direct!.getConfiguration("schedule-tracks") : agent.getConfiguration!(draftId!, "schedule-tracks"),
   ]);
   const report = buildWorkloadReport({
-    tasks, projects, people, calendars, teams,
+    tasks, projects, people, calendars, availabilityEvents, teams,
     scheduleTracks: tracks.document as unknown as WorkloadEntityDocument,
     filters: {
       ...(flagValue(args, "--project") === undefined ? {} : { project: flagValue(args, "--project") }),
@@ -1343,7 +1349,7 @@ lifecycle: active
 const INIT_README_MD = `# Project portfolio managed by GitPM
 
 This repository was initialised by \`gitpm init\`. Use the GitPM web UI or CLI
-to create projects, people, teams, calendars and tasks. See
+to create projects, people, availability events, teams, calendars and tasks. See
 https://github.com/Belerafon/GitPM for details.
 
 Place local source documents in \`uploads/\`. Git ignores their contents; convert
@@ -1360,7 +1366,7 @@ const INIT_IGNORE = `# Keep uploads searchable by ripgrep-based agent tools even
 !uploads/**
 `;
 
-const INIT_KEEPERS = ["people", "teams", "projects"] as const;
+const INIT_KEEPERS = ["people", "teams", "projects", "availability"] as const;
 
 async function directoryIsEmpty(directory: string): Promise<boolean> {
   try {

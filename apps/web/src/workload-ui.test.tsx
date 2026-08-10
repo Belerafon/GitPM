@@ -27,19 +27,20 @@ const archivedProjectId = "P-26-999999";
 const archivedProject = result({ schema: "gitpm/project@2", id: archivedProjectId, name: "Legacy", status: "backlog", lifecycle: "archived" });
 const archivedProjectTask = result({ ...shared.document, id: "T-26-999999", project: archivedProjectId, title: "Legacy active task" });
 const reviewers = result({ schema: "gitpm/team@1", id: "G-26-555555", name: "Reviewers", members: [linusId], lifecycle: "active" });
+const absence = result({ schema: "gitpm/availability-event@1", id: "A-26-555555", person: adaId, start: "2026-07-09", finish: "2026-07-09", kind: "vacation", availability_percent: 0, state: "planned", lifecycle: "active" });
 
 afterEach(cleanup);
 describe("Workload UI", () => {
   it("renders deterministic Person-week values and excludes archived and undated Tasks", async () => {
-    const entities = [shared, span, spike, undated, archived, archivedProjectTask, ada, linus, calendar, project, archivedProject, reviewers];
+    const entities = [shared, span, spike, undated, archived, archivedProjectTask, ada, linus, calendar, absence, project, archivedProject, reviewers];
     const onNavigate = vi.fn();
-    const api = { listEntities: vi.fn(async (_draftId: string, type: string) => entities.filter((item) => ({ tasks: "gitpm/task@2", people: "gitpm/person@1", calendars: "gitpm/calendar@1", projects: "gitpm/project@2", teams: "gitpm/team@1" })[type] === item.document.schema)), getConfiguration: vi.fn(async (_draftId: string, kind: string) => kind === "schedule-tracks" ? tracksConfig() : { document: { schema: "gitpm/statuses@2", id: "statuses", lifecycle: "active", statuses: [] }, path: kind, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) }) } as unknown as GitPmApi;
+    const api = { listEntities: vi.fn(async (_draftId: string, type: string) => entities.filter((item) => ({ tasks: "gitpm/task@2", people: "gitpm/person@1", calendars: "gitpm/calendar@1", "availability-events": "gitpm/availability-event@1", projects: "gitpm/project@2", teams: "gitpm/team@1" })[type] === item.document.schema)), getConfiguration: vi.fn(async (_draftId: string, kind: string) => kind === "schedule-tracks" ? tracksConfig() : { document: { schema: "gitpm/statuses@2", id: "statuses", lifecycle: "active", statuses: [] }, path: kind, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) }) } as unknown as GitPmApi;
     const { container } = render(<WorkloadWorkspace api={api} draft={draft} locale="en" onNavigate={onNavigate} />);
     await waitFor(() => expect(container.querySelectorAll(".workload-table tbody tr")).toHaveLength(2));
     expect(screen.getByText("Included Tasks").nextElementSibling?.textContent).toBe("3");
     expect(screen.getByText("Excluded Tasks").nextElementSibling?.textContent).toBe("3");
-    expect(container.querySelector(`[data-person-id="${adaId}"][data-week="2026-07-06"]`)?.textContent).toContain("40h / 32h");
-    expect(container.querySelector(`[data-person-id="${adaId}"][data-week="2026-07-13"]`)?.textContent).toContain("18h / 40h");
+    expect(container.querySelector(`[data-person-id="${adaId}"][data-week="2026-07-06"]`)?.textContent).toContain("35.5h / 24h");
+    expect(container.querySelector(`[data-person-id="${adaId}"][data-week="2026-07-13"]`)?.textContent).toContain("22.5h / 40h");
     expect(container.querySelector(`[data-person-id="${linusId}"][data-week="2026-07-06"]`)?.textContent).toContain("20h / 25.6h");
     expect(container.querySelector(`[data-person-id="${adaId}"][data-week="2026-07-06"]`)?.className).toContain("overloaded");
     expect(screen.getByText("Near capacity")).toBeTruthy();
@@ -47,10 +48,11 @@ describe("Workload UI", () => {
     expect(screen.getByText("Archived").nextElementSibling?.textContent).toBe("2");
     fireEvent.click(screen.getByRole("button", { name: "Show workload details for Ada, week of Jul 6, 2026" }));
     const breakdown = screen.getByRole("dialog", { name: /Ada · Week of/u });
-    expect(within(breakdown).getByText("Overload").nextElementSibling?.textContent).toBe("8h");
+    expect(within(breakdown).getByText("Overload").nextElementSibling?.textContent).toBe("11.5h");
+    expect(within(breakdown).getByText("Personal unavailability").nextElementSibling?.textContent).toBe("8h unavailable of 32h base capacity");
     expect(within(breakdown).getByText("Contributing Tasks: 3")).toBeTruthy();
     expect(within(breakdown).getByText("Release spike")).toBeTruthy();
-    expect(within(breakdown).getAllByText(/Week of Jul 13, 2026 · 22h available/u).length).toBeGreaterThan(0);
+    expect(within(breakdown).getAllByText(/Week of Jul 13, 2026 · 17.5h available/u).length).toBeGreaterThan(0);
     fireEvent.click(within(breakdown).getAllByRole("link", { name: "Platform" })[0]!);
     expect(onNavigate).toHaveBeenCalledWith("projects", { projectId });
     fireEvent.click(screen.getByRole("button", { name: "Show workload details for Ada, week of Jul 6, 2026" }));

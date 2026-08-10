@@ -51,7 +51,7 @@ async function loadSchemas() {
 
 async function loadDocuments(root) {
   const documents = new Map();
-  for (const domainRoot of [".gitpm", "people", "teams", "calendars", "projects"]) {
+  for (const domainRoot of [".gitpm", "people", "teams", "calendars", "availability", "projects"]) {
     for (const yamlPath of await filesUnder(path.join(root, domainRoot), ".yaml")) {
       const relative = normalize(path.relative(root, yamlPath));
       documents.set(relative, parse(await readFile(yamlPath, "utf8"), { uniqueKeys: true }));
@@ -73,6 +73,7 @@ function expectedPath(document) {
     case "gitpm/person@1": return `people/${document.id}.yaml`;
     case "gitpm/team@1": return `teams/${document.id}.yaml`;
     case "gitpm/calendar@1": return `calendars/${document.id}.yaml`;
+    case "gitpm/availability-event@1": return `availability/${document.id}.yaml`;
     case "gitpm/repository@1": return ".gitpm/repository.yaml";
     case "gitpm/statuses@2": return ".gitpm/statuses.yaml";
     case "gitpm/issue-types@1": return ".gitpm/issue-types.yaml";
@@ -220,6 +221,10 @@ function validateReferences(documents) {
       case "gitpm/person@1":
         reference(document.calendar, "gitpm/calendar@1", `${relative}.calendar`);
         break;
+      case "gitpm/availability-event@1":
+        reference(document.person, "gitpm/person@1", `${relative}.person`);
+        if (document.start > document.finish) fail("DATE_RANGE", `${relative}: start must not be after finish`);
+        break;
       case "gitpm/team@1":
         for (const member of document.members) reference(member, "gitpm/person@1", `${relative}.members`);
         break;
@@ -295,6 +300,7 @@ async function validateTopLevel(root, documents) {
     "people",
     "teams",
     "calendars",
+    "availability",
     "projects",
     ...(repository.allowed_top_level_files ?? []),
     ...(repository.allowed_top_level_directories ?? []),

@@ -15,8 +15,8 @@ describe("workload calculator", () => {
     ], [ada, linus], [calendar], [project]);
     expect(report.weeks).toEqual(["2026-07-06"]);
     expect(report.rows).toEqual([
-      { person_id: ada.id, person_name: "Ada", week: "2026-07-06", allocated_hours: 28, capacity_hours: 32, utilization_percent: 87.5, task_ids: ["T-26-ADA000", "T-26-SHARED"], task_allocations: [{ task_id: "T-26-ADA000", allocated_hours: 8 }, { task_id: "T-26-SHARED", allocated_hours: 20 }] },
-      { person_id: linus.id, person_name: "Linus", week: "2026-07-06", allocated_hours: 20, capacity_hours: 25.6, utilization_percent: 78.125, task_ids: ["T-26-SHARED"], task_allocations: [{ task_id: "T-26-SHARED", allocated_hours: 20 }] },
+      { person_id: ada.id, person_name: "Ada", week: "2026-07-06", allocated_hours: 28, base_capacity_hours: 32, capacity_hours: 32, unavailable_hours: 0, utilization_percent: 87.5, task_ids: ["T-26-ADA000", "T-26-SHARED"], task_allocations: [{ task_id: "T-26-ADA000", allocated_hours: 8 }, { task_id: "T-26-SHARED", allocated_hours: 20 }] },
+      { person_id: linus.id, person_name: "Linus", week: "2026-07-06", allocated_hours: 20, base_capacity_hours: 25.6, capacity_hours: 25.6, unavailable_hours: 0, utilization_percent: 78.125, task_ids: ["T-26-SHARED"], task_allocations: [{ task_id: "T-26-SHARED", allocated_hours: 20 }] },
     ]);
   });
 
@@ -40,7 +40,7 @@ describe("workload calculator", () => {
     ], [ada, archived], [calendar], [project]);
 
     expect(report.rows).toEqual([
-      { person_id: ada.id, person_name: "Ada", week: "2026-07-06", allocated_hours: 20, capacity_hours: 32, utilization_percent: 62.5, task_ids: ["T-26-SHARED"], task_allocations: [{ task_id: "T-26-SHARED", allocated_hours: 20 }] },
+      { person_id: ada.id, person_name: "Ada", week: "2026-07-06", allocated_hours: 20, base_capacity_hours: 32, capacity_hours: 32, unavailable_hours: 0, utilization_percent: 62.5, task_ids: ["T-26-SHARED"], task_allocations: [{ task_id: "T-26-SHARED", allocated_hours: 20 }] },
     ]);
     expect(report.included_tasks).toBe(1);
     expect(report.exclusions.unavailable_assignees).toBe(1);
@@ -52,5 +52,16 @@ describe("workload calculator", () => {
     ], [ada], [calendar], [{ ...project, lifecycle: "archived" }]);
 
     expect(report).toMatchObject({ included_tasks: 0, weeks: [], rows: [], exclusions: { archived: 1 } });
+  });
+
+  it("removes personal absence from capacity and never allocates task effort to a fully unavailable day", () => {
+    const report = calculateWorkload([
+      projectTask({ id: "T-26-LEAVE0", title: "Spans leave", lifecycle: "active", estimate_hours: 40, start: "2026-07-06", finish: "2026-07-10", assignees: [ada.id] }),
+    ], [ada], [calendar], [project], [{
+      id: "A-26-LEAVE0", person: ada.id, start: "2026-07-09", finish: "2026-07-09", availability_percent: 0, state: "planned", lifecycle: "active",
+    }]);
+
+    expect(report.formula).toBe("equal-assignee-share/capacity-weighted-person-day/v2");
+    expect(report.rows[0]).toMatchObject({ allocated_hours: 40, base_capacity_hours: 32, capacity_hours: 24, unavailable_hours: 8, utilization_percent: 166.6667 });
   });
 });

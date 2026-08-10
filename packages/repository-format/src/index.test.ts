@@ -23,7 +23,7 @@ describe("safe YAML profile", () => {
   it("formats every demo document idempotently and removes comments", async () => {
     const fixtureRoot = path.join(process.cwd(), "fixtures", "schema-v1", "demo");
     const files = await yamlFiles(fixtureRoot);
-    expect(files).toHaveLength(17);
+    expect(files).toHaveLength(18);
     for (const file of files) {
       const original = `# removed by formatter\n${await readFile(file, "utf8")}`;
       const once = formatYamlText(original, file);

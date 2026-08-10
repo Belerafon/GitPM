@@ -16,6 +16,12 @@ export interface CalendarDefinition {
   readonly holidays: readonly string[];
 }
 
+export interface AvailabilityException {
+  readonly start: string;
+  readonly finish: string;
+  readonly availability_percent: number;
+}
+
 export type CalendarPresetId = "standard-five-day" | "russia-2026-five-day" | "every-day";
 
 export interface CalendarPreset extends CalendarDefinition {
@@ -124,4 +130,20 @@ export function workingDatesBetween(start: string, due: string, calendar: Calend
     if (calendar.working_weekdays.includes(isoWeekday(value)) && !calendar.holidays.includes(value)) result.push(value);
   }
   return result;
+}
+
+/** Returns the effective availability for a date. Overlaps use the lowest value defensively. */
+export function availabilityPercentOnDate(value: string, exceptions: readonly AvailabilityException[]): number {
+  parseDateOnly(value);
+  let percent = 100;
+  for (const exception of exceptions) {
+    parseDateOnly(exception.start);
+    parseDateOnly(exception.finish);
+    if (exception.start > exception.finish) throw new CalendarError("DATE_RANGE", "Availability start must not be after finish");
+    if (!Number.isFinite(exception.availability_percent) || exception.availability_percent < 0 || exception.availability_percent > 100) {
+      throw new CalendarError("AVAILABILITY_PERCENT_INVALID", "Availability percent must be between 0 and 100");
+    }
+    if (exception.start <= value && value <= exception.finish) percent = Math.min(percent, exception.availability_percent);
+  }
+  return percent;
 }

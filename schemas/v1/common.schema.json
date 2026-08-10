@@ -54,6 +54,10 @@
       "type": "string",
       "pattern": "^E-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}$"
     },
+    "availabilityEventId": {
+      "type": "string",
+      "pattern": "^A-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}$"
+    },
     "statusCategory": {
       "enum": ["backlog", "active", "done", "cancelled"]
     },

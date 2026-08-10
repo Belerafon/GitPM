@@ -32,6 +32,27 @@ describe("@gitpm/contracts runtime contracts", () => {
     expect(task.schedules?.plan?.effort_hours).toBe(2.5);
   });
 
+  it("decodes an availability event through entity result HTTP contracts", () => {
+    const result = decodeEntityResult({
+      document: {
+        schema: "gitpm/availability-event@1",
+        id: "A-26-VACATN",
+        person: "U-26-5EBAE3",
+        start: "2026-08-17",
+        finish: "2026-08-21",
+        kind: "vacation",
+        availability_percent: 0,
+        state: "planned",
+        lifecycle: "active",
+      },
+      path: "availability/A-26-VACATN.yaml",
+      blob_id: "a".repeat(40),
+      draft_fingerprint: "b".repeat(64),
+    });
+
+    expect(result.document.schema).toBe("gitpm/availability-event@1");
+  });
+
   it("rejects missing required entity fields and unknown properties", () => {
     expect(() => decodeEntityDocument({
       schema: "gitpm/project@2",

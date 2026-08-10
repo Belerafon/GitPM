@@ -117,6 +117,7 @@ const schemaFileNames: Readonly<Record<string, string>> = {
   "gitpm/person@1": "people",
   "gitpm/team@1": "teams",
   "gitpm/calendar@1": "calendars",
+  "gitpm/availability-event@1": "availability-events",
   "gitpm/saved-view@1": "saved-views",
   "gitpm/comment@1": "comments",
   "gitpm/schedule-tracks@1": "schedule-tracks",

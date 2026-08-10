@@ -62,6 +62,13 @@ describe("entity create planning", () => {
     expect(supplied.document.id).toBe("U-26-KB9RXB");
   });
 
+  it("creates availability events at their global canonical path", () => {
+    const event = planEntityCreation([{ person: "U-26-KB9RXB", start: "2026-08-17", finish: "2026-08-21", kind: "vacation", availability_percent: 0, state: "planned" }], [repository, calendar], "availability-event")[0]!;
+    expect(event.document).toMatchObject({ schema: "gitpm/availability-event@1", person: "U-26-KB9RXB", lifecycle: "active" });
+    expect(event.document.id).toMatch(/^A-\d{2}-[0-9A-HJKMNP-TV-Z]{6}$/u);
+    expect(event.path).toBe(`availability/${String(event.document.id)}.yaml`);
+  });
+
   it("rejects invalid, duplicate and inactive-calendar inputs before writing", () => {
     expect(() => planEntityCreation([{ id: "person-1", name: "Bad", weekly_capacity_hours: 40 }], [repository, calendar], "person"))
       .toThrowError(expect.objectContaining({ code: "ENTITY_ID_INVALID" }));

@@ -1,5 +1,68 @@
 /* This file is generated from schemas/v1. Run `corepack pnpm contracts:generate` to update it. */
 
+export const availabilityEventSchema = {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gitpm.dev/schemas/v1/availability-event.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "id",
+    "person",
+    "start",
+    "finish",
+    "kind",
+    "availability_percent",
+    "state",
+    "lifecycle"
+  ],
+  "properties": {
+    "schema": {
+      "const": "gitpm/availability-event@1"
+    },
+    "id": {
+      "$ref": "common.schema.json#/$defs/availabilityEventId"
+    },
+    "person": {
+      "$ref": "common.schema.json#/$defs/personId"
+    },
+    "start": {
+      "$ref": "common.schema.json#/$defs/date"
+    },
+    "finish": {
+      "$ref": "common.schema.json#/$defs/date"
+    },
+    "kind": {
+      "enum": [
+        "vacation",
+        "day-off",
+        "sick-leave",
+        "training",
+        "other"
+      ]
+    },
+    "availability_percent": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "multipleOf": 0.25
+    },
+    "state": {
+      "enum": [
+        "planned",
+        "taken",
+        "cancelled"
+      ]
+    },
+    "note_markdown": {
+      "type": "string"
+    },
+    "lifecycle": {
+      "$ref": "common.schema.json#/$defs/lifecycle"
+    }
+  }
+} as const;
+
 export const calendarSchema = {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://gitpm.dev/schemas/v1/calendar.schema.json",
@@ -225,6 +288,10 @@ export const commonSchema = {
     "entryId": {
       "type": "string",
       "pattern": "^E-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}$"
+    },
+    "availabilityEventId": {
+      "type": "string",
+      "pattern": "^A-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}$"
     },
     "statusCategory": {
       "enum": [
@@ -1126,9 +1193,10 @@ export const workCategoriesSchema = {
   }
 } as const;
 
-export const DOCUMENT_SCHEMA_DEFINITIONS = [calendarSchema, commentSchema, commonSchema, issueTypesSchema, milestoneSchema, personSchema, projectSchema, repositorySchema, savedViewSchema, scheduleTracksSchema, statusesSchema, taskSchema, teamSchema, timeEntrySchema, workCategoriesSchema] as const;
+export const DOCUMENT_SCHEMA_DEFINITIONS = [availabilityEventSchema, calendarSchema, commentSchema, commonSchema, issueTypesSchema, milestoneSchema, personSchema, projectSchema, repositorySchema, savedViewSchema, scheduleTracksSchema, statusesSchema, taskSchema, teamSchema, timeEntrySchema, workCategoriesSchema] as const;
 
 export const DOCUMENT_SCHEMAS = {
+  "gitpm/availability-event@1": availabilityEventSchema,
   "gitpm/calendar@1": calendarSchema,
   "gitpm/comment@1": commentSchema,
   "gitpm/issue-types@1": issueTypesSchema,
@@ -1146,6 +1214,7 @@ export const DOCUMENT_SCHEMAS = {
 } as const;
 
 export const DOCUMENT_SCHEMA_IDS = {
+  "gitpm/availability-event@1": "https://gitpm.dev/schemas/v1/availability-event.schema.json",
   "gitpm/calendar@1": "https://gitpm.dev/schemas/v1/calendar.schema.json",
   "gitpm/comment@1": "https://gitpm.dev/schemas/v1/comment.schema.json",
   "gitpm/issue-types@1": "https://gitpm.dev/schemas/v1/issue-types.schema.json",
@@ -1163,6 +1232,7 @@ export const DOCUMENT_SCHEMA_IDS = {
 } as const;
 
 export const DOCUMENT_SCHEMA_FILES = {
+  "availability-event": "gitpm/availability-event@1",
   "calendar": "gitpm/calendar@1",
   "comment": "gitpm/comment@1",
   "issue-types": "gitpm/issue-types@1",
