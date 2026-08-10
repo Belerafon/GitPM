@@ -479,7 +479,7 @@ export function WorktreeWorkspace({ api, draft, role, locale, onChanged, confirm
                       {isFile && <button type="button" role="menuitem" onClick={() => void downloadEntry(entry)} disabled={busy}>{t("worktree.download")}</button>}
                       <button type="button" role="menuitem" onClick={() => openRename(entry)} disabled={!canMutate || busy}>{t("worktree.rename")}</button>
                       <button type="button" role="menuitem" onClick={() => openMove(entry)} disabled={!canMutate || busy}>{t("worktree.move")}</button>
-                      <button type="button" role="menuitem" className="danger" onClick={() => removeEntry(entry)} disabled={!canMutate || busy}>{t("worktree.delete")}</button>
+                      <button type="button" role="menuitem" className="danger" data-control-hint={t("controlHint.deleteFile")} onClick={() => removeEntry(entry)} disabled={!canMutate || busy}>{t("worktree.delete")}</button>
                     </div>}
                     <button
                       type="button"
@@ -527,7 +527,7 @@ export function WorktreeWorkspace({ api, draft, role, locale, onChanged, confirm
                 <button type="button" onClick={() => void downloadEntry(previewEntry)} disabled={busy}>{t("worktree.download")}</button>
                 <button type="button" onClick={() => openRename(previewEntry)} disabled={!canMutate || busy}>{t("worktree.rename")}</button>
                 <button type="button" onClick={() => openMove(previewEntry)} disabled={!canMutate || busy}>{t("worktree.move")}</button>
-                <button type="button" className="danger" onClick={() => removeEntry(previewEntry)} disabled={!canMutate || busy}>{t("worktree.delete")}</button>
+                <button type="button" className="danger" data-control-hint={t("controlHint.deleteFile")} onClick={() => removeEntry(previewEntry)} disabled={!canMutate || busy}>{t("worktree.delete")}</button>
               </div>}
             </div>
           </header>

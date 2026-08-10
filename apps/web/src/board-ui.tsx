@@ -207,7 +207,7 @@ export function BoardWorkspace({ api, draft, locale, initialProjectId = "", init
             <button disabled={readOnly || archived} onClick={(event) => updateManagedView(event.currentTarget.form!, view, false)} type="button">{t("board.renameView")}</button>
             <button className="primary" disabled={readOnly || archived} onClick={(event) => updateManagedView(event.currentTarget.form!, view, true)} type="button">{t("board.updateView")}</button>
             {archived ? <button disabled={readOnly} onClick={() => restoreView(view)} type="button">{t("core.restore")}</button> : <button disabled={readOnly} onClick={() => archiveView(view)} type="button">{t("core.archive")}</button>}
-            <button className="danger" disabled={readOnly} onClick={() => deleteView(view)} type="button">{t("board.deleteView")}</button>
+            <button className="danger" data-control-hint={t("controlHint.deleteSavedView")} disabled={readOnly} onClick={() => deleteView(view)} type="button">{t("board.deleteView")}</button>
           </div></form>
         </article>;
       })}</div>

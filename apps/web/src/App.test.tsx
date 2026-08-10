@@ -172,6 +172,19 @@ describe("localization runtime", () => {
   });
 });
 
+describe("control hints", () => {
+  it("provides localized help on the sign-in screen outside the application shell", async () => {
+    const api = new FakeApi();
+    api.currentSession = null;
+    render(<App api={api} browserLanguages={["en"]} />);
+
+    const login = await screen.findByRole("button", { name: "Sign in with GitLab" });
+    fireEvent.mouseOver(login);
+
+    expect(screen.getByRole("tooltip").textContent).toBe("Open GitLab authorization to sign in to GitPM.");
+  });
+});
+
 describe("frontend draft lifecycle", () => {
   it("keeps the compact change count with Repository instead of duplicating it in the header", async () => {
     const api = new FakeApi();
