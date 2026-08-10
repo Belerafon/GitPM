@@ -45,10 +45,18 @@ describe("ControlHints", () => {
   });
 
   it("falls back to the accessible name for controls without dedicated help", () => {
-    render(<><ControlHints t={t} /><button aria-label="Open Alpha project"><strong>Alpha</strong></button></>);
+    render(<><ControlHints t={t} /><button aria-label="Move up">↑</button></>);
 
-    fireEvent.mouseOver(screen.getByRole("button", { name: "Open Alpha project" }));
+    fireEvent.mouseOver(screen.getByRole("button", { name: "Move up" }));
 
-    expect(screen.getByRole("tooltip").textContent).toBe("Open Alpha project");
+    expect(screen.getByRole("tooltip").textContent).toBe("Move up");
+  });
+
+  it("does not repeat visible control text as a tooltip", () => {
+    render(<><ControlHints t={t} /><button aria-label="Filters and sorting">Filters and sorting</button></>);
+
+    fireEvent.mouseOver(screen.getByRole("button", { name: "Filters and sorting" }));
+
+    expect(screen.queryByRole("tooltip")).toBeNull();
   });
 });
