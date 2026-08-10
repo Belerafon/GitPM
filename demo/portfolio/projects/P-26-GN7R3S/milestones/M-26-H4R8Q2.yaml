@@ -1,0 +1,9 @@
+schema: gitpm/milestone@2
+id: M-26-H4R8Q2 # milestone: Контрольная дата завершения
+project: P-26-GN7R3S # project: Диагностика неполного плана
+name: Контрольная дата завершения
+lifecycle: active
+description_markdown: Правая граница длинной шкалы для проверки горизонтальной прокрутки.
+schedules:
+  plan:
+    finish: 2026-05-17

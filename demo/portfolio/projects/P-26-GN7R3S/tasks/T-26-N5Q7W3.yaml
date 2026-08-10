@@ -1,0 +1,14 @@
+schema: gitpm/task@2
+id: T-26-N5Q7W3 # task: Зафиксировать дату начала
+project: P-26-GN7R3S # project: Диагностика неполного плана
+title: Зафиксировать дату начала
+type: task
+status: backlog
+lifecycle: active
+milestone: M-26-GN7R3S # milestone: Этап 1: Согласование наименования, габаритных размеров и общих технических требований
+description_markdown: У задачи намеренно заполнена только дата начала.
+schedules:
+  plan:
+    start: 2025-01-20
+labels:
+  - демо

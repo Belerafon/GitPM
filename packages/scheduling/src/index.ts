@@ -83,12 +83,23 @@ export interface PlanningIssue {
   readonly message: string;
 }
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/u;
+const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/u;
 const DAY_MS = 86_400_000;
 const round = (value: number): number => Math.round((value + Number.EPSILON) * 10_000) / 10_000;
 
+export function isIsoCalendarDate(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const match = ISO_DATE.exec(value);
+  if (match === null) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
 function assertIsoDate(value: string, label: string): void {
-  if (!ISO_DATE.test(value)) throw new Error(`${label} must be an ISO calendar date (YYYY-MM-DD): ${value}`);
+  if (!isIsoCalendarDate(value)) throw new Error(`${label} must be an ISO calendar date (YYYY-MM-DD): ${value}`);
 }
 
 export function resolveTrack(config: ScheduleTracksConfig, slug: string): TrackDefinition | undefined {
@@ -501,6 +512,7 @@ function barFromWindow(track: string, window: ScheduleWindow | RolledWindow | un
   const start = typeof window.start === "string" ? window.start : undefined;
   const finish = typeof window.finish === "string" ? window.finish : undefined;
   if (start === undefined || finish === undefined) return undefined;
+  if (!isIsoCalendarDate(start) || !isIsoCalendarDate(finish)) return undefined;
   if (start > finish) return undefined;
   return { track, start, finish };
 }
@@ -509,7 +521,7 @@ function ganttRange(rows: readonly GanttRow[], milestones: readonly GanttMilesto
   let start: string | undefined;
   let finish: string | undefined;
   const consider = (value: string | undefined): void => {
-    if (typeof value !== "string") return;
+    if (!isIsoCalendarDate(value)) return;
     if (start === undefined || value < start) start = value;
     if (finish === undefined || value > finish) finish = value;
   };
@@ -531,7 +543,7 @@ export function buildGanttModel(subjects: readonly Schedulable[], options: Build
       return bar === undefined ? [] : [bar];
     });
     const primary = barFromWindow(options.primaryTrack, subject.schedules?.[options.primaryTrack]);
-    const actual = options.actual?.get(subject.id) ?? [];
+    const actual = (options.actual?.get(subject.id) ?? []).filter((segment) => isIsoCalendarDate(segment.date));
     const dependencies = dependencyEdges(subject, dependencyTrack).map((from) => ({ track: dependencyTrack, from, to: subject.id }));
     return { id: subject.id, primary, bars, actual, dependencies };
   });

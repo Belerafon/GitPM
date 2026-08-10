@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GitPmApi } from "./api.js";
-import { projectTimelineProjection, dependencyPath, GanttWorkspace } from "./gantt-ui.js";
+import { projectTimelineProjection, dependencyPath, ganttTaskDateDiagnostics, GanttWorkspace } from "./gantt-ui.js";
 import type { DraftStatus, EntityDocument, EntityResult } from "./types.js";
 import type { TrackDefinition } from "@gitpm/scheduling";
 
@@ -75,6 +75,22 @@ describe("read-only Gantt", () => {
     expect(row.bars.find((bar) => !bar.primary)).toMatchObject({ track: "target", title: "Target", start: "2026-07-03", finish: "2026-07-07", offset: 2, duration: 5 });
   });
 
+  it("classifies incomplete, malformed, and reversed task windows without charting them", () => {
+    const missing = task("M", "Missing dates");
+    const incomplete = task("I", "Missing finish", "2026-07-01");
+    const invalid = task("V", "Invalid date", "2026-02-30", "2026-03-02");
+    const reversed = task("X", "Reversed range", "2026-07-10", "2026-07-01");
+    const valid = task("Y", "Valid range", "2026-07-01", "2026-07-02");
+
+    expect(ganttTaskDateDiagnostics([missing, incomplete, invalid, reversed, valid], ["plan"]).map(({ title, kind }) => ({ title, kind }))).toEqual([
+      { title: "Missing dates", kind: "missing" },
+      { title: "Missing finish", kind: "incomplete" },
+      { title: "Invalid date", kind: "invalid" },
+      { title: "Reversed range", kind: "range" },
+    ]);
+    expect(projectTimelineProjection([invalid, reversed], [], new Map(), [planTrack], { primaryTrack: "plan", visibleTracks: ["plan"], dependencyTrack: "plan" })).toBeNull();
+  });
+
   it("aggregates actual-activity markers per date and extends the range past the plan", () => {
     const task1 = task("A", "Active", "2026-07-01", "2026-07-10");
     const actual = new Map<string, readonly { readonly date: string; readonly hours: number }[]>([[task1.document.id, [{ date: "2026-07-02", hours: 3 }, { date: "2026-07-02", hours: 5 }, { date: "2026-12-20", hours: 2 }]]]);
@@ -114,6 +130,34 @@ describe("read-only Gantt", () => {
     fireEvent.pointerDown(bar); fireEvent.pointerMove(bar, { clientX: 400 }); fireEvent.pointerUp(bar);
     expect(updateEntity).not.toHaveBeenCalled(); expect(createEntity).not.toHaveBeenCalled(); expect(deleteEntity).not.toHaveBeenCalled();
     expect(listProjectTimeEntries).not.toHaveBeenCalled(); expect(listTimeEntries).not.toHaveBeenCalled();
+  });
+
+  it("keeps a milestone-only timeline compact and explains why tasks are absent", async () => {
+    const longMilestoneName = "Stage 1: Agree names, dimensions, and common technical requirements for the complete delivery";
+    const milestoneOnly = result({ schema: "gitpm/milestone@2", id: "M-26-LONG01", project: projectId, name: longMilestoneName, lifecycle: "active", schedules: { plan: { finish: "2026-05-17" } } });
+    const missing = task("D", "No schedule at all");
+    const incomplete = task("E", "Only a start", "2024-12-17");
+    const project = result({ schema: "gitpm/project@2", id: projectId, name: "Broken-looking Gantt", status: "backlog", lifecycle: "active" });
+    const entities = [project, missing, incomplete, milestoneOnly];
+    const onNavigate = vi.fn();
+    const api = {
+      listEntities: vi.fn(async (_draftId: string, type: string, projectFilter?: string) => entities.filter((item) => {
+        const schemas: Record<string, string> = { projects: "gitpm/project@2", tasks: "gitpm/task@2", milestones: "gitpm/milestone@2" };
+        return item.document.schema === schemas[type] && (projectFilter === undefined || item.document.project === projectFilter);
+      })),
+      getConfiguration: vi.fn(async () => ({ document: { schema: "gitpm/schedule-tracks@1", tracks: [planTrack], defaults: { enabled_tracks: ["plan"], primary_track: "plan", workload_track: "plan", dashboard_tracks: ["plan"] } }, path: "schedule-tracks", blob_id: "a", draft_fingerprint: "b" })),
+    } as unknown as GitPmApi;
+
+    const { container } = render(<GanttWorkspace api={api} draft={draft} locale="en" onNavigate={onNavigate} />);
+    await waitFor(() => expect(container.querySelector(".gantt-scroll")?.getAttribute("data-due")).toBe("2026-05-17"));
+    expect(container.querySelectorAll(".gantt-bar")).toHaveLength(0);
+    expect(container.querySelector(".gantt-milestone")?.textContent).toBe(longMilestoneName);
+    expect(screen.getByText("No dated tasks are shown; the timeline is based on dated milestones.")).toBeTruthy();
+    const diagnostics = container.querySelector<HTMLDetailsElement>(".gantt-diagnostics")!;
+    expect(diagnostics.open).toBe(true);
+    expect(within(diagnostics).getByText("No schedule at all: add start and finish dates in a visible track.")).toBeTruthy();
+    fireEvent.click(within(diagnostics).getByText("Only a start (Plan): provide both a start and a finish date."));
+    expect(onNavigate).toHaveBeenCalledWith("tasks", { projectId, taskId: incomplete.document.id });
   });
 
   it("reads every actual page and filters track controls by effective capabilities", async () => {
