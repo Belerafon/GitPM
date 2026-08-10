@@ -347,6 +347,32 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .filter-chip { display: inline-flex; gap: .3rem; align-items: center; border: 1px solid #cdd1c9; border-radius: 999px; background: #f3f6f2; padding: .2rem .35rem .2rem .6rem; font-size: .72rem; color: #333b36; }
 .filter-chip button { border: 0; background: transparent; color: #68706b; font-size: .8rem; line-height: 1; cursor: pointer; padding: 0 .15rem; }
 .filter-chip button:hover { color: #333b36; }
+.advanced-view-bar { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem .65rem; margin: .35rem 0 .75rem; }
+.advanced-view-trigger { display: inline-flex; align-items: center; gap: .45rem; white-space: nowrap; }
+.advanced-view-trigger > span { display: inline-grid; place-items: center; min-width: 1.25rem; height: 1.25rem; border-radius: 999px; background: #275b44; color: #fff; padding: 0 .3rem; font-size: .7rem; }
+.advanced-view-chips { display: flex; flex: 1 1 18rem; flex-wrap: wrap; align-items: center; gap: .35rem; min-width: 0; }
+.advanced-view-bar > small { margin-left: auto; color: #68706b; white-space: nowrap; }
+.advanced-view-clear { border: 0; background: transparent; color: #52675d; padding: .25rem .35rem; text-decoration: underline; text-underline-offset: .15rem; }
+.advanced-view-form { gap: 1.25rem; }
+.advanced-view-form > .editor-drawer-actions { margin-inline: 0; padding-inline: 0; }
+.project-plan-toolbar > .advanced-view-bar { grid-column: 1 / -1; margin-block: 0; }
+.advanced-view-form > section { display: grid; gap: .7rem; }
+.advanced-view-form > section > header { display: flex; align-items: start; justify-content: space-between; gap: .75rem; }
+.advanced-view-form h3, .advanced-view-form p { margin: 0; }
+.advanced-view-form header p { margin-top: .2rem; color: #68706b; font-size: .8rem; line-height: 1.4; }
+.advanced-sort-rules, .advanced-filter-children { display: grid; gap: .55rem; }
+.advanced-sort-rule { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(8rem, auto) auto; align-items: center; gap: .4rem; }
+.advanced-sort-rule > span { color: #68706b; font-size: .75rem; }
+.advanced-sort-rule > button, .advanced-filter-condition > button, .advanced-filter-group-heading > button { width: 2rem; min-width: 2rem; padding: .3rem; }
+.advanced-filter-group { display: grid; min-width: 0; gap: .65rem; border: 1px solid #cdd1c9; border-radius: .65rem; background: #fafbf9; padding: .7rem; }
+.advanced-filter-group.root { border-color: #9eafa6; background: #fff; }
+.advanced-filter-group legend { padding: 0 .3rem; color: #52675d; font-size: .76rem; font-weight: 700; }
+.advanced-filter-group-heading { display: flex; align-items: end; justify-content: space-between; gap: .5rem; }
+.advanced-filter-group-heading label { display: grid; gap: .2rem; color: #52675d; font-size: .74rem; }
+.advanced-filter-condition { display: grid; grid-template-columns: minmax(7rem, 1fr) minmax(7rem, 1fr) minmax(7rem, 1fr) auto; align-items: center; gap: .4rem; }
+.advanced-filter-condition:has(input:nth-last-of-type(2)), .advanced-filter-condition:has(select:nth-last-of-type(4)) { grid-template-columns: repeat(4, minmax(6rem, 1fr)) auto; }
+.advanced-filter-empty { border: 1px dashed #cdd1c9; border-radius: .45rem; color: #68706b; padding: .75rem; text-align: center; font-size: .8rem; }
+.advanced-filter-add { display: flex; flex-wrap: wrap; gap: .4rem; }
 .filter-reset { border: 1px solid #c9cbc5; border-radius: 8px; background: #fff; color: #49524d; font-size: .72rem; padding: .25rem .55rem; cursor: pointer; }
 .task-field-settings { position: relative; }
 .task-field-settings summary { cursor: pointer; border: 1px solid #c9cbc5; border-radius: 8px; padding: .48rem .65rem; font-size: .76rem; font-weight: 650; list-style: none; }
@@ -468,7 +494,7 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .empty-copy { color: #707671; }
 @media (max-width: 1350px) { .project-plan-layout.with-inspector { grid-template-columns: 1fr; } .project-plan-inspector { position: fixed; z-index: 50; inset: 0 0 0 auto; width: min(440px, 100vw); max-height: none; border: 0; border-left: 1px solid #d9ddd6; border-radius: 0; background: #fff; box-shadow: -12px 0 32px rgba(24, 53, 42, .16); padding: 1rem; } .plan-pane-resizer { display: none; } }
 @media (max-width: 1000px) { .project-plan-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .project-directory-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .project-detail-layout { grid-template-columns: 1fr; } .task-create { grid-template-columns: 1fr 1fr; } .task-layout { grid-template-columns: 1fr; } .task-panel { border-left: 0; border-top: 1px solid #dedfd9; padding: 1rem 0 0; } }
-@media (max-width: 700px) { .project-directory-grid, .project-plan-stats, .core-columns, .task-detail-meta { grid-template-columns: 1fr; } .project-directory .card-heading, .task-toolbar, .task-toolbar-controls, .project-filter-toolbar, .project-filter-controls, .project-plan-work-heading, .project-plan-stage > header { align-items: stretch; flex-direction: column; } .project-plan-header, .project-plan-toolbar { grid-template-columns: 1fr; } .project-plan-actions, .project-plan-stage-actions { flex-direction: column; align-items: stretch; } .project-plan-meta { grid-column: 1; } .project-plan-summary, .project-register-summary { gap: .6rem 1rem; } .project-register { overflow-x: auto; } .project-register-head, .project-register-row { min-width: 780px; } .project-plan-stage-progress { grid-template-columns: 1fr; } .project-plan-task-row { grid-template-columns: auto minmax(0, 1fr); } .project-plan-task-meta { grid-column: 2; flex-wrap: wrap; } .task-create, .task-row { grid-template-columns: 1fr; } }
+@media (max-width: 700px) { .project-directory-grid, .project-plan-stats, .core-columns, .task-detail-meta { grid-template-columns: 1fr; } .project-directory .card-heading, .task-toolbar, .task-toolbar-controls, .project-filter-toolbar, .project-filter-controls, .project-plan-work-heading, .project-plan-stage > header { align-items: stretch; flex-direction: column; } .project-plan-header, .project-plan-toolbar { grid-template-columns: 1fr; } .project-plan-actions, .project-plan-stage-actions { flex-direction: column; align-items: stretch; } .project-plan-meta { grid-column: 1; } .project-plan-summary, .project-register-summary { gap: .6rem 1rem; } .project-register { overflow-x: auto; } .project-register-head, .project-register-row { min-width: 780px; } .project-plan-stage-progress { grid-template-columns: 1fr; } .project-plan-task-row { grid-template-columns: auto minmax(0, 1fr); } .project-plan-task-meta { grid-column: 2; flex-wrap: wrap; } .task-create, .task-row { grid-template-columns: 1fr; } .advanced-view-bar { align-items: stretch; } .advanced-view-bar > small { margin-left: 0; } .advanced-sort-rule, .advanced-filter-condition, .advanced-filter-condition:has(input:nth-last-of-type(2)), .advanced-filter-condition:has(select:nth-last-of-type(4)) { grid-template-columns: 1fr auto; } .advanced-sort-rule > span, .advanced-sort-rule > select, .advanced-filter-condition > select, .advanced-filter-condition > input { grid-column: 1; } .advanced-sort-rule > button, .advanced-filter-condition > button { grid-column: 2; grid-row: 1; } }
 @media (max-width: 700px) {
   .project-plan-stage > header { grid-template-columns: 1fr; }
   .project-plan-stage-actions { grid-column: 1; flex-direction: row; justify-content: space-between; align-items: center; }

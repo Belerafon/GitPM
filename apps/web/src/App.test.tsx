@@ -361,13 +361,20 @@ describe("frontend draft lifecycle", () => {
     expect(await screen.findByText("First task")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /New project/u })).toBeNull();
 
-    fireEvent.change(screen.getByLabelText("Filter tasks"), { target: { value: "backlog" } });
-    expect(`${window.location.pathname}${window.location.search}`).toBe("/projects/P-26-7K4M9Q?status=backlog");
+    fireEvent.click(screen.getByRole("button", { name: /Filters and sorting/u }));
+    const filterDialog = screen.getByRole("dialog", { name: "Filters and sorting" });
+    fireEvent.click(within(filterDialog).getByRole("button", { name: /Add condition/u }));
+    fireEvent.change(within(filterDialog).getByLabelText("Field"), { target: { value: "status" } });
+    fireEvent.change(within(filterDialog).getByLabelText("Value"), { target: { value: "backlog" } });
+    fireEvent.click(within(filterDialog).getByRole("button", { name: "Apply" }));
+    const activeFilterSearch = window.location.search;
+    expect(new URLSearchParams(activeFilterSearch).has("filters")).toBe(true);
+    expect(screen.getByRole("button", { name: /Remove filter: Status/u })).toBeTruthy();
     fireEvent.click(await screen.findByRole("button", { name: /First task/u }));
-    expect(`${window.location.pathname}${window.location.search}`).toBe("/projects/P-26-7K4M9Q/tasks/T-26-X8D2FW?status=backlog");
+    expect(`${window.location.pathname}${window.location.search}`).toBe(`/projects/P-26-7K4M9Q/tasks/T-26-X8D2FW${activeFilterSearch}`);
     expect(await screen.findByRole("heading", { level: 1, name: "Plan" })).toBeTruthy();
     expect(screen.getByRole("complementary", { name: "Task details" })).toBeTruthy();
-    expect(screen.getByLabelText("Milestone")).toHaveProperty("value", "");
+    expect(screen.getByText("No milestone")).toBeTruthy();
     expect(screen.getByRole("button", { name: /First task/u }).getAttribute("aria-current")).toBe("true");
     breadcrumbs = screen.getByRole("navigation", { name: "Breadcrumbs" });
     expect(within(breadcrumbs).getByRole("button", { name: "Alpha" })).toBeTruthy();
