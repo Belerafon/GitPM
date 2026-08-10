@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { GitPmApi } from "./api.js";
 import { DraftProvider, useDrafts } from "./draft-context.js";
 import { formatDateTime, localeRegistry, LOCALE_STORAGE_KEY, message, selectLocale, type Locale, type MessageKey } from "./i18n.js";
@@ -275,7 +275,17 @@ function LocalePicker({ locale, setLocale, t }: { readonly locale: Locale; reado
 }
 
 function InterfaceSettings({ locale, setLocale, t }: { readonly locale: Locale; readonly setLocale: (locale: Locale) => void; readonly t: (key: MessageKey) => string }) {
-  return <details className="interface-settings">
+  const [open, setOpen] = useState(false);
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (event.target instanceof Node && !detailsRef.current?.contains(event.target)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    return () => document.removeEventListener("pointerdown", closeOnOutsidePointer);
+  }, [open]);
+  return <details className="interface-settings" onToggle={(event) => setOpen(event.currentTarget.open)} open={open} ref={detailsRef}>
     <summary aria-label={t("settings.interface")} title={t("settings.interface")}><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Zm8.1 4.7a8.6 8.6 0 0 0 0-2.4l2-1.5-2-3.5-2.5 1a9.6 9.6 0 0 0-2.1-1.2L15.2 3h-4l-.4 2.6a9.6 9.6 0 0 0-2.1 1.2l-2.4-1-2 3.5 2 1.5a8.6 8.6 0 0 0 0 2.4l-2 1.5 2 3.5 2.4-1a9.6 9.6 0 0 0 2.1 1.2l.4 2.6h4l.4-2.6a9.6 9.6 0 0 0 2.1-1.2l2.5 1 2-3.5-2.1-1.5Z" /></svg></summary>
     <div className="interface-settings-panel"><strong>{t("settings.interface")}</strong><LocalePicker locale={locale} setLocale={setLocale} t={t} /></div>
   </details>;

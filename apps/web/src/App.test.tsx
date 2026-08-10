@@ -406,6 +406,22 @@ describe("frontend draft lifecycle", () => {
     expect(api.payloads).toEqual([]);
   });
 
+  it("closes interface settings when clicking outside the panel", async () => {
+    const api = new FakeApi();
+    render(<App api={api} browserLanguages={["en"]} />);
+    await screen.findByRole("heading", { name: "Working copies" });
+    const settings = screen.getByLabelText("Interface settings").closest("details")!;
+
+    fireEvent.click(screen.getByLabelText("Interface settings"));
+    expect(settings.open).toBe(true);
+
+    fireEvent.pointerDown(screen.getByLabelText("Language"));
+    expect(settings.open).toBe(true);
+
+    fireEvent.pointerDown(screen.getByRole("heading", { name: "Working copies" }));
+    expect(settings.open).toBe(false);
+  });
+
   it("creates, polls, switches writer mode, closes, reopens and removes a working copy", async () => {
     const api = new FakeApi();
     render(<App api={api} browserLanguages={["en"]} confirmAction={() => true} />);
