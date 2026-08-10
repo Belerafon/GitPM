@@ -823,7 +823,7 @@ describe("ProjectPlanWorkspace", () => {
     expect(screen.queryByRole("heading", { name: "Stage A" })).toBeNull();
   });
 
-  it("scopes summary counts to the selected milestone and keeps them independent of the status filter", async () => {
+  it("scopes summary counts to filters configured in the compact drawer", async () => {
     vi.useFakeTimers({ now: new Date("2026-07-20T12:00:00Z"), toFake: ["Date"] });
     const stageA = result({ schema: "gitpm/milestone@2", id: "M-26-A", project: summaryProject.document.id, name: "Stage A", lifecycle: "active" });
     const stageB = result({ schema: "gitpm/milestone@2", id: "M-26-B", project: summaryProject.document.id, name: "Stage B", lifecycle: "active" });
@@ -839,15 +839,24 @@ describe("ProjectPlanWorkspace", () => {
     await screen.findByRole("heading", { name: "Summary project" });
     expect(screen.getByRole("button", { name: "Total tasks: 3" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Completed: 2" })).toBeTruthy();
-    // Narrowing to Stage A keeps 2 tasks (1 done, 1 active); the quick metrics must follow.
-    fireEvent.change(screen.getByRole("combobox", { name: "Milestone" }), { target: { value: stageA.document.id } });
+    // Narrowing to Stage A keeps 2 tasks (1 done, 1 active); the quick metrics follow the applied expression.
+    fireEvent.click(screen.getByRole("button", { name: /Filters and sorting/u }));
+    let dialog = screen.getByRole("dialog", { name: "Filters and sorting" });
+    fireEvent.click(within(dialog).getByRole("button", { name: /Add condition/u }));
+    fireEvent.change(within(dialog).getByLabelText("Field"), { target: { value: "milestone" } });
+    fireEvent.change(within(dialog).getByLabelText("Value"), { target: { value: stageA.document.id } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Apply" }));
     expect(screen.getByRole("button", { name: "Total tasks: 2" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Completed: 1" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "In progress: 1" })).toBeTruthy();
-    // Selecting a concrete status does NOT change the quick metric numbers.
-    fireEvent.change(screen.getByRole("combobox", { name: "Filter tasks" }), { target: { value: "done" } });
+    fireEvent.click(screen.getByRole("button", { name: /Filters and sorting/u }));
+    dialog = screen.getByRole("dialog", { name: "Filters and sorting" });
+    fireEvent.click(within(dialog).getByRole("button", { name: /Add condition/u }));
+    fireEvent.change(within(dialog).getAllByLabelText("Field")[1]!, { target: { value: "status" } });
+    fireEvent.change(within(dialog).getAllByLabelText("Value")[1]!, { target: { value: "done" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Apply" }));
     expect(screen.getByRole("button", { name: "Completed: 1" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Total tasks: 2" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Total tasks: 1" })).toBeTruthy();
   });
 
   it("treats the legacy in-progress summary query value as active", async () => {
@@ -1048,7 +1057,7 @@ describe("ProjectPlanWorkspace", () => {
     expect(screen.getByText("Linked task")).toBeTruthy();
   });
 
-  it("selecting a specific status resets the summary filter to all", async () => {
+  it("composes a summary shortcut with an advanced status filter", async () => {
     const client = api(summaryTasksFixture(), [summaryStage], summaryProject);
     useSummaryStatusConfig(client);
     render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={summaryProject.document.id} />);
@@ -1056,30 +1065,42 @@ describe("ProjectPlanWorkspace", () => {
     await screen.findByRole("heading", { name: "Summary project" });
     fireEvent.click(screen.getByRole("button", { name: "Completed: 1" }));
     expect(screen.getByRole("button", { name: "Completed: 1" }).getAttribute("aria-pressed")).toBe("true");
-    fireEvent.change(screen.getByRole("combobox", { name: "Filter tasks" }), { target: { value: "done" } });
-    expect(screen.getByRole("button", { name: "Completed: 1" }).getAttribute("aria-pressed")).toBe("false");
-    // Total is only pressed when no quick filter AND no specific status are active.
-    expect(screen.getByRole("button", { name: "Total tasks: 3" }).getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(screen.getByRole("button", { name: /Filters and sorting/u }));
+    const dialog = screen.getByRole("dialog", { name: "Filters and sorting" });
+    fireEvent.click(within(dialog).getByRole("button", { name: /Add condition/u }));
+    fireEvent.change(within(dialog).getByLabelText("Field"), { target: { value: "status" } });
+    fireEvent.change(within(dialog).getByLabelText("Value"), { target: { value: "done" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Apply" }));
+    expect(screen.getByRole("button", { name: "Completed: 1" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Total tasks: 1" }).getAttribute("aria-pressed")).toBe("false");
   });
 
-  it("renders removable chips for each active filter and Reset clears them all", async () => {
+  it("renders removable chips for applied drawer filters and keeps the form off the page", async () => {
     const client = api(summaryTasksFixture(), [summaryStage], summaryProject);
     useSummaryStatusConfig(client);
     render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={summaryProject.document.id} />);
 
     await screen.findByRole("heading", { name: "Summary project" });
     expect(screen.queryByText("All tasks")).toBeNull();
-    fireEvent.change(screen.getByRole("combobox", { name: "Milestone" }), { target: { value: summaryStage.document.id } });
-    fireEvent.change(screen.getByRole("combobox", { name: "Filter tasks" }), { target: { value: "done" } });
-    const statusChip = screen.getByRole("button", { name: "Remove filter: Done" });
-    const milestoneChip = screen.getByRole("button", { name: "Remove filter: Summary stage" });
+    expect(screen.queryByRole("dialog", { name: "Filters and sorting" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Filters and sorting/u }));
+    const dialog = screen.getByRole("dialog", { name: "Filters and sorting" });
+    fireEvent.click(within(dialog).getByRole("button", { name: /Add condition/u }));
+    fireEvent.change(within(dialog).getByLabelText("Field"), { target: { value: "milestone" } });
+    fireEvent.change(within(dialog).getByLabelText("Value"), { target: { value: summaryStage.document.id } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /Add condition/u }));
+    fireEvent.change(within(dialog).getAllByLabelText("Field")[1]!, { target: { value: "status" } });
+    fireEvent.change(within(dialog).getAllByLabelText("Value")[1]!, { target: { value: "done" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Apply" }));
+    const statusChip = screen.getByRole("button", { name: /Remove filter: Status/u });
+    const milestoneChip = screen.getByRole("button", { name: /Remove filter: Milestone/u });
     expect(statusChip).toBeTruthy();
     expect(milestoneChip).toBeTruthy();
     fireEvent.click(statusChip);
-    expect(screen.queryByRole("button", { name: "Remove filter: Done" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Remove filter: Summary stage" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Reset" }));
-    expect(screen.queryByRole("button", { name: "Remove filter: Summary stage" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Remove filter: Status/u })).toBeNull();
+    expect(screen.getByRole("button", { name: /Remove filter: Milestone/u })).toBeTruthy();
+    fireEvent.click(document.querySelector<HTMLElement>(".advanced-view-clear")!);
+    expect(screen.queryByRole("button", { name: /Remove filter: Milestone/u })).toBeNull();
     expect(screen.queryByText("All tasks")).toBeNull();
   });
 

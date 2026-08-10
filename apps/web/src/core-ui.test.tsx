@@ -98,6 +98,9 @@ describe("core UI", () => {
         ["Research", ["Research project"]],
         ["Ungrouped", ["Loose project"]],
       ]);
+    const filteredOrder = new Map(projects.slice(0, 4).map((project, index) => [project.document.id, index]));
+    expect(groupProjects(projects.slice(0, 4), "en", "Ungrouped", (left, right) => filteredOrder.get(left.document.id)! - filteredOrder.get(right.document.id)!)[0]?.projects.map((project) => project.document.name))
+      .toEqual(["Zulu project", "Alpha project"]);
 
     const onNavigate = vi.fn();
     const { container } = render(<CoreWorkspace api={api} draft={draft} locale="en" surface="projects" onNavigate={onNavigate} onChanged={vi.fn(async () => undefined)} />);
@@ -286,8 +289,7 @@ describe("core UI", () => {
     const filtered = render(<CoreWorkspace api={api} draft={draft} initialProjectId={project.document.id} initialMilestoneFilter={milestone.document.id} locale="en" surface="tasks" onNavigate={onNavigate} onChanged={vi.fn(async () => undefined)} />);
     expect(await screen.findByText("Linked")).toBeTruthy();
     expect(screen.queryByText("Unlinked")).toBeNull();
-    const toolbar = filtered.container.querySelector<HTMLElement>(".task-toolbar-controls")!;
-    expect((within(toolbar).getByRole("combobox", { name: "Milestone" }) as HTMLSelectElement).value).toBe(milestone.document.id);
+    expect(filtered.container.querySelector(".advanced-view-bar")).toBeTruthy();
   });
 
   it("moves a task through the explicit project transfer workflow", async () => {
@@ -332,7 +334,7 @@ describe("core UI", () => {
     expect(within(row).getByText("Done")).toBeTruthy();
   });
 
-  it("filters the project directory by group, owner, status, risk and lifecycle from the toolbar", async () => {
+  it("filters the project directory from a compact drawer and exposes removable chips", async () => {
     const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
     const owner = await entityApi.createEntity("DRF-CORE", "people", "", { schema: "gitpm/person@1", id: "U-26-000001", name: "Owner One", lifecycle: "active" });
     await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-000001", name: "Alpha", status: "backlog", lifecycle: "active", group: "Delivery", owner: owner.document.id, schedules: { plan: { finish: "2020-01-01" } } });
@@ -343,36 +345,37 @@ describe("core UI", () => {
     const onNavigate = vi.fn();
     const { container } = render(<CoreWorkspace api={api} draft={draft} locale="en" surface="projects" onNavigate={onNavigate} onChanged={vi.fn(async () => undefined)} />);
     await screen.findByRole("heading", { name: "Delivery" });
-    const toolbar = container.querySelector<HTMLElement>(".project-filter-controls")!;
     const rows = () => Array.from(container.querySelectorAll(".project-register-row strong")).map((node) => node.textContent);
 
-    expect(container.querySelector(".project-directory > .card-heading .lifecycle-filter")).toBeNull();
-    expect(within(toolbar).getByRole("combobox", { name: "Lifecycle" })).toBeTruthy();
+    expect(screen.queryByRole("dialog", { name: "Filters and sorting" })).toBeNull();
     expect(rows()).toEqual(["Alpha", "Gamma", "Beta"]);
 
-    fireEvent.change(within(toolbar).getByLabelText("Group"), { target: { value: "Research" } });
+    fireEvent.click(screen.getByRole("button", { name: /Filters and sorting/u }));
+    let dialog = screen.getByRole("dialog", { name: "Filters and sorting" });
+    fireEvent.click(within(dialog).getByRole("button", { name: /Add condition/u }));
+    fireEvent.change(within(dialog).getAllByLabelText("Field")[1]!, { target: { value: "group" } });
+    fireEvent.change(within(dialog).getAllByLabelText("Value")[1]!, { target: { value: "Research" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Apply" }));
     expect(rows()).toEqual(["Beta"]);
-    fireEvent.change(within(toolbar).getByLabelText("Group"), { target: { value: "__none__" } });
-    expect(rows()).toEqual([]);
-    fireEvent.change(within(toolbar).getByLabelText("Group"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: /Remove filter: Group/u }));
+    expect(rows()).toEqual(["Alpha", "Gamma", "Beta"]);
 
-    fireEvent.change(within(toolbar).getByLabelText("Project owner"), { target: { value: owner.document.id } });
+    fireEvent.click(screen.getByRole("button", { name: /Filters and sorting/u }));
+    dialog = screen.getByRole("dialog", { name: "Filters and sorting" });
+    fireEvent.click(within(dialog).getByRole("button", { name: /Add condition/u }));
+    fireEvent.change(within(dialog).getAllByLabelText("Field")[1]!, { target: { value: "risk" } });
+    fireEvent.change(within(dialog).getAllByLabelText("Value")[1]!, { target: { value: "overdue" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Apply" }));
     expect(rows()).toEqual(["Alpha"]);
-    fireEvent.change(within(toolbar).getByLabelText("Project owner"), { target: { value: "__none__" } });
-    expect(rows()).toEqual(["Gamma", "Beta"]);
-    fireEvent.change(within(toolbar).getByLabelText("Project owner"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Clear all" }));
+    expect(rows()).toEqual(["Alpha", "Delta", "Gamma", "Beta"]);
 
-    fireEvent.change(within(toolbar).getByLabelText("Status"), { target: { value: "done" } });
-    expect(rows()).toEqual(["Beta"]);
-    fireEvent.change(within(toolbar).getByLabelText("Status"), { target: { value: "" } });
-
-    fireEvent.change(within(toolbar).getByLabelText("Risk"), { target: { value: "overdue" } });
-    expect(rows()).toEqual(["Alpha"]);
-    fireEvent.change(within(toolbar).getByLabelText("Risk"), { target: { value: "unknown" } });
-    expect(rows()).toEqual(["Beta"]);
-    fireEvent.change(within(toolbar).getByLabelText("Risk"), { target: { value: "" } });
-
-    fireEvent.change(within(toolbar).getByLabelText("Lifecycle"), { target: { value: "archived" } });
+    fireEvent.click(screen.getByRole("button", { name: /Filters and sorting/u }));
+    dialog = screen.getByRole("dialog", { name: "Filters and sorting" });
+    fireEvent.click(within(dialog).getByRole("button", { name: /Add condition/u }));
+    fireEvent.change(within(dialog).getByLabelText("Field"), { target: { value: "lifecycle" } });
+    fireEvent.change(within(dialog).getByLabelText("Value"), { target: { value: "archived" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Apply" }));
     expect(rows()).toEqual(["Delta"]);
   });
 });

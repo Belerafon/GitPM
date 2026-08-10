@@ -70,9 +70,21 @@ describe("administration UI", () => {
     const teamTable = document.querySelector<HTMLElement>(".team-directory-table")!;
     expect(await within(teamTable).findByText("Core")).toBeTruthy();
     expect(admin.entities.find((item) => item.document.schema === "gitpm/team@1")?.document.members).toHaveLength(1);
-    fireEvent.change(screen.getByLabelText("Search teams or members"), { target: { value: "Alice" } });
+    const teamCard = teamTable.closest<HTMLElement>(".directory-card")!;
+    fireEvent.click(within(teamCard).getByRole("button", { name: /Filters and sorting/u }));
+    let filterDialog = screen.getByRole("dialog", { name: "Filters and sorting" });
+    fireEvent.click(within(filterDialog).getByRole("button", { name: /Add condition/u }));
+    fireEvent.change(within(filterDialog).getAllByLabelText("Field")[1]!, { target: { value: "members" } });
+    fireEvent.change(within(filterDialog).getAllByLabelText("Value")[1]!, { target: { value: admin.entities.find((item) => item.document.name === "Alice")!.document.id } });
+    fireEvent.click(within(filterDialog).getByRole("button", { name: "Apply" }));
     expect(within(teamTable).getByText("Core")).toBeTruthy();
-    fireEvent.change(screen.getByLabelText("Search teams or members"), { target: { value: "Nobody" } });
+    fireEvent.click(within(teamCard).getByRole("button", { name: /Remove filter: Members/u }));
+    fireEvent.click(within(teamCard).getByRole("button", { name: /Filters and sorting/u }));
+    filterDialog = screen.getByRole("dialog", { name: "Filters and sorting" });
+    fireEvent.click(within(filterDialog).getByRole("button", { name: /Add condition/u }));
+    fireEvent.change(within(filterDialog).getAllByLabelText("Field")[1]!, { target: { value: "name" } });
+    fireEvent.change(within(filterDialog).getAllByLabelText("Value")[1]!, { target: { value: "Nobody" } });
+    fireEvent.click(within(filterDialog).getByRole("button", { name: "Apply" }));
     expect(within(teamTable).queryByText("Core")).toBeNull();
 
     rendered.rerender(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="settings" onChanged={changed} />);

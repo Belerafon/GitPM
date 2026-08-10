@@ -44,11 +44,12 @@ test.describe("project overview geometry", () => {
       const workHeading = page.getByRole("heading", { name: "План работ", exact: true });
       await expect(workHeading).toBeVisible();
 
-      // The work-plan toolbar and its filters are visible.
+      // The work-plan toolbar stays compact: only the trigger and applied chips live inline.
       const toolbar = page.locator(".project-plan-toolbar");
       await expect(toolbar).toBeVisible();
-      await expect(toolbar.locator(".project-plan-status-filter select")).toBeVisible();
-      await expect(toolbar.locator(".project-plan-milestone-filter select")).toBeVisible();
+      const advancedFilterTrigger = toolbar.locator(".advanced-view-trigger");
+      await expect(advancedFilterTrigger).toBeVisible();
+      await expect(toolbar.locator(".advanced-view-form")).toHaveCount(0);
 
       const toolbarBox = await toolbar.boundingBox();
       expect(toolbarBox).not.toBeNull();
@@ -56,6 +57,15 @@ test.describe("project overview geometry", () => {
       // No page-level horizontal scroll is introduced by the overview layout.
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
       expect(overflow).toBeLessThanOrEqual(0);
+
+      // The complete filter and sorting editor is available in a separate drawer without
+      // introducing page-level overflow, including at the mobile viewport.
+      await advancedFilterTrigger.click();
+      await expect(page.locator(".editor-drawer .advanced-view-form")).toBeVisible();
+      const drawerOverflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+      expect(drawerOverflow).toBeLessThanOrEqual(0);
+      await page.keyboard.press("Escape");
+      await expect(page.locator(".editor-drawer")).toHaveCount(0);
 
       // Activating a quick filter must not blow the toolbar past the viewport either.
       // Use the "In progress" metric (not "Total tasks") so the narrow in-progress semantics

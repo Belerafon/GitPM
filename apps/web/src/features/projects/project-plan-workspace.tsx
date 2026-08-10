@@ -22,6 +22,8 @@ import type { WorkspaceNavigate } from "../../workspace-navigation.js";
 import { PersonLinks } from "../../person-link.js";
 import { DraftReadOnlyAlert, draftReadOnlyReason } from "../../draft-read-only.js";
 import { SchedulingOverflowWarnings } from "../../scheduling-overflow-warnings.js";
+import { AdvancedViewControls } from "../../advanced-view-controls.js";
+import { applyAdvancedViewQuery, countViewConditions, emptyViewQuery, parseAdvancedViewQuery, serializeAdvancedViewQuery, type AdvancedViewQuery, type ViewField } from "../../advanced-view-query.js";
 
 type TaskInsertSpec = { readonly parentId?: string; readonly beforeId?: string; readonly afterId?: string };
 type PlanEditor = { readonly kind: "project" | "new-stage" }
@@ -118,7 +120,7 @@ const buildInsertedTaskOrder = (tasks: readonly EntityResult[], order: readonly 
   return [...depthFirst.slice(0, insertAt), newId, ...depthFirst.slice(insertAt)];
 };
 
-export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedStageId = "", selectedTaskId = "", initialStatusFilter = "", initialMilestoneFilter = "", initialSummaryFilter = "", initialArchiveMode = false, onNavigate, onChanged, confirmAction = () => true }: {
+export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedStageId = "", selectedTaskId = "", initialStatusFilter = "", initialMilestoneFilter = "", initialSummaryFilter = "", initialAdvancedQuery, initialArchiveMode = false, onNavigate, onChanged, confirmAction = () => true }: {
   readonly api: GitPmApi;
   readonly draft: DraftStatus;
   readonly locale: Locale;
@@ -128,6 +130,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   readonly initialStatusFilter?: string;
   readonly initialMilestoneFilter?: string;
   readonly initialSummaryFilter?: string;
+  readonly initialAdvancedQuery?: string;
   readonly initialArchiveMode?: boolean;
   readonly onNavigate: WorkspaceNavigate;
   readonly onChanged: () => Promise<void>;
@@ -150,6 +153,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   const [statusFilter, setStatusFilter] = useState(initialStatusFilter);
   const [milestoneFilter, setMilestoneFilter] = useState(initialMilestoneFilter);
   const [summaryFilter, setSummaryFilter] = useState<SummaryFilter>(normalizeSummaryFilter(initialSummaryFilter));
+  const [advancedQuery, setAdvancedQuery] = useState<AdvancedViewQuery>(() => emptyViewQuery());
   const [archiveMode, setArchiveMode] = useState(initialArchiveMode);
   const [taskFields, setTaskFields] = useState<TaskFieldVisibility>(readTaskFields);
   const [error, setError] = useState<string | null>(null);
@@ -323,7 +327,27 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     .filter((milestone) => milestone.document.lifecycle === "archived")
     .map((milestone) => milestone.document.id)), [workspace]);
   const currentPlanTasks = useMemo(() => activeTasks.filter((task) => !archivedMilestoneIds.has(text(task.document, "milestone"))), [activeTasks, archivedMilestoneIds, text]);
-  const taskCompare = useMemo(() => canonicalTaskComparator(locale, text), [locale, text]);
+  const today = localCalendarDate();
+  const peopleOptions = useMemo(() => people.map((person) => ({ value: person.document.id, label: text(person.document, "name") })), [people, text]);
+  const taskAdvancedFields = useMemo<readonly ViewField<EntityResult>[]>(() => [
+    { id: "id", label: t("advancedView.field.id"), type: "text", read: (item) => item.document.id },
+    { id: "title", label: t("advancedView.field.title"), type: "text", read: (item) => text(item.document, "title") },
+    { id: "status", label: t("advancedView.field.status"), type: "select", options: statuses.map((status) => ({ value: status.slug, label: status.title })), read: (item) => text(item.document, "status") },
+    { id: "type", label: t("advancedView.field.type"), type: "select", options: types.map((type) => ({ value: type.slug, label: type.title })), read: (item) => text(item.document, "type") },
+    { id: "milestone", label: t("advancedView.field.milestone"), type: "select", options: (workspace?.milestones ?? []).map((milestone) => ({ value: milestone.document.id, label: text(milestone.document, "name") })), read: (item) => text(item.document, "milestone") },
+    { id: "assignees", label: t("advancedView.field.assignees"), type: "multi-select", options: peopleOptions, read: (item) => strings(item.document, "assignees") },
+    { id: "start", label: t("advancedView.field.start"), type: "date", read: (item) => text(item.document, "start") },
+    { id: "due", label: t("advancedView.field.due"), type: "date", read: (item) => text(item.document, "due") },
+    { id: "estimate", label: t("advancedView.field.estimate"), type: "number", read: (item) => effortOf(item.document) },
+    { id: "overdue", label: t("advancedView.field.overdue"), type: "boolean", read: (item) => { const due = text(item.document, "due"); return /^\d{4}-\d{2}-\d{2}$/u.test(due) && due < today && !isCompletedStatus(statuses, text(item.document, "status")); } },
+  ], [effortOf, locale, peopleOptions, statuses, text, today, types, workspace]);
+  useEffect(() => { setAdvancedQuery(parseAdvancedViewQuery(initialAdvancedQuery, taskAdvancedFields)); }, [initialAdvancedQuery, taskAdvancedFields]);
+  const advancedTasks = useMemo(() => applyAdvancedViewQuery(currentPlanTasks, taskAdvancedFields, advancedQuery, locale), [advancedQuery, currentPlanTasks, locale, taskAdvancedFields]);
+  const advancedOrder = useMemo(() => new Map(advancedTasks.map((task, index) => [task.document.id, index])), [advancedTasks]);
+  const taskCompare = useMemo(() => {
+    const canonical = canonicalTaskComparator(locale, text);
+    return advancedQuery.sort.length === 0 ? canonical : (left: EntityResult, right: EntityResult) => (advancedOrder.get(left.document.id) ?? Number.MAX_SAFE_INTEGER) - (advancedOrder.get(right.document.id) ?? Number.MAX_SAFE_INTEGER) || canonical(left, right);
+  }, [advancedOrder, advancedQuery.sort.length, locale, text]);
   const hierarchyCompare = useMemo<PayloadCompare>(() => { const compare = taskCompare; return (left, right) => compare(left.entity, right.entity); }, [taskCompare]);
   const taskViewModel = useMemo<ProjectTaskViewModel>(() => workspace === null
     ? { stages: [], system: { kind: "system", roots: [] } }
@@ -357,16 +381,15 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     })),
     tracks: primaryTrack === "" ? [] : [primaryTrack],
   });
-  const today = localCalendarDate();
   const outsideStages = currentPlanTasks.filter((task) => {
     const milestoneId = text(task.document, "milestone");
     return isOutsideActiveMilestone(activeStageIds, milestoneId);
   });
   const summaryScopeTasks = milestoneFilter === ""
-    ? currentPlanTasks
+    ? advancedTasks
     : milestoneFilter === "none"
-      ? outsideStages
-      : currentPlanTasks.filter((task) => text(task.document, "milestone") === milestoneFilter);
+      ? advancedTasks.filter((task) => isOutsideActiveMilestone(activeStageIds, text(task.document, "milestone")))
+      : advancedTasks.filter((task) => text(task.document, "milestone") === milestoneFilter);
   const overdueTaskIds = new Set<string>();
   for (const task of summaryScopeTasks) {
     const finish = schedulingHierarchy.readModels.get(task.document.id)?.tracks[0]?.effective?.finish;
@@ -381,15 +404,15 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   const inProgressCount = summaryScopeTasks.filter((task) => isInProgressStatus(statuses, text(task.document, "status"))).length;
   const blockedCount = summaryScopeTasks.filter((task) => isBlockedStatus(statuses, text(task.document, "status"))).length;
   const overdueCount = overdueTaskIds.size;
-  const visibleTasks = useMemo(() => currentPlanTasks.filter((task) =>
+  const visibleTasks = useMemo(() => advancedTasks.filter((task) =>
     (statusFilter === "" || text(task.document, "status") === statusFilter)
     && (milestoneFilter === "" || (milestoneFilter === "none" ? isOutsideActiveMilestone(activeStageIds, text(task.document, "milestone")) : text(task.document, "milestone") === milestoneFilter))
     && (summaryFilter === "all"
       || (summaryFilter === "completed" && isCompletedStatus(statuses, text(task.document, "status")))
       || (summaryFilter === "active" && isInProgressStatus(statuses, text(task.document, "status")))
       || (summaryFilter === "blocked" && isBlockedStatus(statuses, text(task.document, "status")))
-      || (summaryFilter === "overdue" && overdueTaskIds.has(task.document.id)))), [currentPlanTasks, activeStageIds, milestoneFilter, overdueTaskIds, statusFilter, statuses, summaryFilter, text]);
-  const filterActive = summaryFilter !== "all" || statusFilter !== "";
+      || (summaryFilter === "overdue" && overdueTaskIds.has(task.document.id)))), [advancedTasks, activeStageIds, milestoneFilter, overdueTaskIds, statusFilter, statuses, summaryFilter, text]);
+  const filterActive = summaryFilter !== "all" || statusFilter !== "" || countViewConditions(advancedQuery.filter) > 0;
   const visibleStages = (milestoneFilter === "" ? activeStages : activeStages.filter((stage) => stage.document.id === milestoneFilter))
     .filter((stage) => !filterActive || visibleTasks.some((task) => task.document.milestone === stage.document.id));
   const visibleOutsideStages = visibleTasks.filter((task) => {
@@ -401,6 +424,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     ...(statusFilter ? { status: [statusFilter] } : {}),
     ...(milestoneFilter ? { milestone: [milestoneFilter] } : {}),
     ...(summaryFilter !== "all" ? { summary: [summaryFilter] } : {}),
+    ...(countViewConditions(advancedQuery.filter) > 0 || advancedQuery.sort.length > 0 ? { filters: [serializeAdvancedViewQuery(advancedQuery)] } : {}),
   };
   const archivedStageTasks = archiveViewModel.stages.flatMap((group) => workspace?.tasks.filter((task) => task.document.milestone === group.milestone.document.id) ?? []);
   const standaloneArchivedTasks = workspace?.tasks.filter((task) => task.document.lifecycle === "archived" && !archivedMilestoneIds.has(text(task.document, "milestone"))) ?? [];
@@ -420,6 +444,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   const showArchive = (show: boolean) => {
     setArchiveMode(show);
     setStatusFilter(""); setMilestoneFilter(""); setSummaryFilter("all");
+    setAdvancedQuery(emptyViewQuery());
     onNavigate("projects", { projectId, ...(show ? { query: { archive: ["1"] } } : {}) });
   };
   const applyFilters = (status: string, milestone: string, summary: SummaryFilter) => {
@@ -430,11 +455,22 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
       ...(status ? { status: [status] } : {}),
       ...(milestone ? { milestone: [milestone] } : {}),
       ...(summary !== "all" ? { summary: [summary] } : {}),
+      ...(countViewConditions(advancedQuery.filter) > 0 || advancedQuery.sort.length > 0 ? { filters: [serializeAdvancedViewQuery(advancedQuery)] } : {}),
     };
     onNavigate("projects", { projectId, ...(Object.keys(query).length > 0 ? { query } : {}) });
   };
   const toggleSummary = (next: SummaryFilter) => applyFilters("", milestoneFilter, summaryFilter === next ? "all" : next);
-  const resetFilters = () => applyFilters("", "", "all");
+  const resetFilters = () => { setAdvancedQuery(emptyViewQuery()); setStatusFilter(""); setMilestoneFilter(""); setSummaryFilter("all"); onNavigate("projects", { projectId }); };
+  const applyAdvancedQuery = (next: AdvancedViewQuery) => {
+    setAdvancedQuery(next);
+    const query = {
+      ...(statusFilter ? { status: [statusFilter] } : {}),
+      ...(milestoneFilter ? { milestone: [milestoneFilter] } : {}),
+      ...(summaryFilter !== "all" ? { summary: [summaryFilter] } : {}),
+      ...(countViewConditions(next.filter) > 0 || next.sort.length > 0 ? { filters: [serializeAdvancedViewQuery(next)] } : {}),
+    };
+    onNavigate("projects", { projectId, ...(Object.keys(query).length > 0 ? { query } : {}) });
+  };
   const summaryMetricLabel = (value: SummaryFilter): string => value === "completed" ? t("projectPlan.summaryCompleted")
     : value === "active" ? t("projectPlan.summaryActive")
     : value === "blocked" ? t("projectPlan.summaryBlocked")
@@ -680,8 +716,6 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
           <section className="project-plan-work" ref={animatedList}>
             <div className="project-plan-toolbar">
               <div className="project-plan-toolbar-heading"><h2>{t("projectPlan.workHeading")}</h2><span>{t("projectPlan.workDescription")}</span><span className="project-plan-stage-count">{t("projectPlan.stages")}: {activeStages.length}</span>{outsideStages.length > 0 && <button aria-pressed={milestoneFilter === "none"} className={`project-plan-outside-warning${milestoneFilter === "none" ? " is-active" : ""}`} onClick={() => applyFilters(statusFilter, milestoneFilter === "none" ? "" : "none", summaryFilter)} type="button">{t("projectPlan.withoutStage")}: {outsideStages.length}</button>}</div>
-              <label className="project-plan-status-filter">{t("core.filter")}<select onChange={(event) => applyFilters(event.target.value, milestoneFilter, "all")} value={statusFilter}><option value="">{t("core.allStatuses")}</option>{statuses.map((status) => <option key={status.slug} value={status.slug}>{status.title}</option>)}</select></label>
-              <label className="project-plan-milestone-filter">{t("core.milestone")}<select onChange={(event) => applyFilters(statusFilter, event.target.value, summaryFilter)} value={milestoneFilter}><option value="">{t("core.allMilestones")}</option><option value="none">{t("stages.withoutStage")}</option>{activeStages.map((stage) => <option key={stage.document.id} value={stage.document.id}>{text(stage.document, "name")}</option>)}</select></label>
               <details className="task-field-settings">
                 <summary>{t("projectPlan.configureFields")}</summary>
                 <div>
@@ -689,6 +723,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
                   {(["assignees", "due", "estimate", "status"] as const).map((field) => <label key={field}><input checked={taskFields[field]} onChange={(event) => setTaskFields((current) => ({ ...current, [field]: event.target.checked }))} type="checkbox" />{t(`projectPlan.field.${field}` as MessageKey)}</label>)}
                 </div>
               </details>
+              <AdvancedViewControls fields={taskAdvancedFields} locale={locale} onChange={applyAdvancedQuery} query={advancedQuery} resultCount={visibleTasks.length} t={t} totalCount={currentPlanTasks.length} />
               {(summaryFilter !== "all" || statusFilter !== "" || milestoneFilter !== "") && <div className="project-plan-filter-chips">{summaryFilter !== "all" && <span className="filter-chip">{summaryMetricLabel(summaryFilter)}<button aria-label={t("projectPlan.chipRemove", { filter: summaryMetricLabel(summaryFilter) })} onClick={() => applyFilters(statusFilter, milestoneFilter, "all")} type="button">×</button></span>}{statusFilter !== "" && <span className="filter-chip">{statusTitle(statusFilter)}<button aria-label={t("projectPlan.chipRemove", { filter: statusTitle(statusFilter) })} onClick={() => applyFilters("", milestoneFilter, summaryFilter)} type="button">×</button></span>}{milestoneFilter !== "" && <span className="filter-chip">{milestoneChipLabel(milestoneFilter)}<button aria-label={t("projectPlan.chipRemove", { filter: milestoneChipLabel(milestoneFilter) })} onClick={() => applyFilters(statusFilter, "", summaryFilter)} type="button">×</button></span>}<button className="filter-reset" onClick={resetFilters} type="button">{t("projectPlan.resetFilters")}</button></div>}
             </div>
             {activeStages.length === 0 && <div className="card empty-workspace">{t("projectPlan.emptyStages")}</div>}
