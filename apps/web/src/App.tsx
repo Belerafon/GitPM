@@ -25,6 +25,7 @@ import { WorktreeWorkspace } from "./worktree-ui.js";
 import { RepositoryConnectionSettings } from "./repository-connection-ui.js";
 import { ExportMenu } from "./export-ui.js";
 import { entityRouteKey, initialNavigationTrail, restoreNavigationTrail, truncateNavigationTrail, visitNavigationTrail, type NavigationTrail } from "./app/navigation-trail.js";
+import { GlobalSearch } from "./global-search.js";
 
 interface AppProps {
   readonly api: GitPmApi;
@@ -212,7 +213,8 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
     <><ControlHints t={t} /><AppShell activeView={shellActiveView}
       banner={drafts.error !== null && <div className="alert error">{t("status.error", { message: drafts.error })}<button onClick={() => { void drafts.refresh(); }}>{t("status.retry")}</button></div>}
       breadcrumbs={breadcrumbs}
-        headerMeta={<><strong>{repository?.name ?? t("app.repository")}</strong>{directMode && repository?.branch !== undefined && <span className="runtime-context"><code>{repository.branch}</code></span>}<span className="runtime-context">{t("auth.localMode")} · {t("auth.role", { role: drafts.session.role })}</span></>}
+      headerMeta={<><strong>{repository?.name ?? t("app.repository")}</strong>{directMode && repository?.branch !== undefined && <span className="runtime-context"><code>{repository.branch}</code></span>}<span className="runtime-context">{t("auth.localMode")} · {t("auth.role", { role: drafts.session.role })}</span></>}
+      headerSearch={<GlobalSearch api={api} draftId={active?.draft_id} onNavigate={openWorkspace} t={t} />}
       headerTitle={pageTitle}
       navigationGroups={navigationGroups}
       onNavigate={selectNavigationView}

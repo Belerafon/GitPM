@@ -7,7 +7,7 @@ import { atomicWriteDomainFile, resolveDomainPath } from "@gitpm/security";
 import { ENTITY_ID_PREFIX, isEntityId, newUniqueEntityId, type EntityIdPrefix } from "@gitpm/shared";
 import { buildTaskHierarchy } from "@gitpm/task-hierarchy";
 import { discoverRepositoryFiles, validateDelete, validateRepository } from "@gitpm/validation";
-import { ENTITY_TYPE_SCHEMAS } from "@gitpm/contracts";
+import { ENTITY_TYPE_SCHEMAS, type GlobalSearchEntityType, type GlobalSearchItem, type GlobalSearchResult } from "@gitpm/contracts";
 
 export * from "./comments.js";
 export * from "./time-entries.js";
@@ -61,6 +61,108 @@ interface RepositoryIndex {
   readonly fingerprint: string;
   readonly entities: readonly IndexedEntity[];
   readonly bySchemaAndId: ReadonlyMap<string, IndexedEntity>;
+}
+
+interface SearchCandidate extends GlobalSearchItem {
+  readonly searchContext: readonly string[];
+}
+
+const SEARCH_TYPE_ORDER: Readonly<Record<GlobalSearchEntityType, number>> = {
+  project: 0,
+  task: 1,
+  milestone: 2,
+  person: 3,
+  team: 4,
+  calendar: 5,
+};
+
+function normalizedSearchText(value: string): string {
+  return value.normalize("NFKC").trim().toLowerCase();
+}
+
+function compareSearchText(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function searchRank(candidate: SearchCandidate, query: string): number | undefined {
+  const id = normalizedSearchText(candidate.id);
+  const title = normalizedSearchText(candidate.title);
+  if (id === query) return 0;
+  if (title === query) return 1;
+  if (title.startsWith(query)) return 2;
+  if (title.split(/[^\p{L}\p{N}]+/u).some((word) => word.startsWith(query))) return 3;
+  if (id.startsWith(query)) return 4;
+  if (title.includes(query)) return 5;
+  const context = candidate.searchContext.map(normalizedSearchText);
+  if (context.some((value) => value.startsWith(query))) return 6;
+  if (context.some((value) => value.includes(query))) return 7;
+  return undefined;
+}
+
+function stringField(document: GitPmDocument, key: string): string | undefined {
+  const value = document[key];
+  return typeof value === "string" && value.trim() !== "" ? value : undefined;
+}
+
+/** Builds the locale-neutral search read model from the current repository index. */
+export function searchRepositoryDocuments(documents: readonly GitPmDocument[], rawQuery: string, limit = 20): GlobalSearchResult {
+  const query = normalizedSearchText(rawQuery);
+  if (query === "") return { query: rawQuery.trim(), items: [], total: 0 };
+  const projectNames = new Map(documents
+    .filter((document) => document.schema === "gitpm/project@2" && typeof document.id === "string")
+    .map((document) => [String(document.id), stringField(document, "name") ?? String(document.id)]));
+  const personNames = new Map(documents
+    .filter((document) => document.schema === "gitpm/person@1" && typeof document.id === "string")
+    .map((document) => [String(document.id), stringField(document, "name") ?? String(document.id)]));
+  const candidates = documents.flatMap((document): readonly SearchCandidate[] => {
+    const id = stringField(document, "id");
+    const lifecycle = document.lifecycle === "archived" ? "archived" : "active";
+    if (id === undefined) return [];
+    if (document.schema === "gitpm/project@2") {
+      const title = stringField(document, "name") ?? id;
+      const group = stringField(document, "group");
+      return [{ entity_type: "project", id, title, ...(group === undefined ? {} : { context: group }), lifecycle, searchContext: group === undefined ? [] : [group] }];
+    }
+    if (document.schema === "gitpm/task@2") {
+      const projectId = stringField(document, "project");
+      if (projectId === undefined) return [];
+      const context = projectNames.get(projectId) ?? projectId;
+      return [{ entity_type: "task", id, title: stringField(document, "title") ?? id, context, project_id: projectId, lifecycle, searchContext: [context] }];
+    }
+    if (document.schema === "gitpm/milestone@2") {
+      const projectId = stringField(document, "project");
+      if (projectId === undefined) return [];
+      const context = projectNames.get(projectId) ?? projectId;
+      return [{ entity_type: "milestone", id, title: stringField(document, "name") ?? id, context, project_id: projectId, lifecycle, searchContext: [context] }];
+    }
+    if (document.schema === "gitpm/person@1") {
+      const email = stringField(document, "email");
+      return [{ entity_type: "person", id, title: stringField(document, "name") ?? id, ...(email === undefined ? {} : { context: email }), lifecycle, searchContext: email === undefined ? [] : [email] }];
+    }
+    if (document.schema === "gitpm/team@1") {
+      const memberIds = Array.isArray(document.members) ? document.members.filter((member): member is string => typeof member === "string") : [];
+      const members = memberIds.map((member) => personNames.get(member) ?? member);
+      const context = members.join(", ");
+      return [{ entity_type: "team", id, title: stringField(document, "name") ?? id, ...(context === "" ? {} : { context }), lifecycle, searchContext: [...memberIds, ...members] }];
+    }
+    if (document.schema === "gitpm/calendar@1") {
+      return [{ entity_type: "calendar", id, title: stringField(document, "name") ?? id, lifecycle, searchContext: [] }];
+    }
+    return [];
+  });
+  const matches = candidates.flatMap((candidate) => {
+    const rank = searchRank(candidate, query);
+    return rank === undefined ? [] : [{ candidate, rank }];
+  }).sort((left, right) => left.rank - right.rank
+    || SEARCH_TYPE_ORDER[left.candidate.entity_type] - SEARCH_TYPE_ORDER[right.candidate.entity_type]
+    || compareSearchText(left.candidate.title, right.candidate.title)
+    || compareSearchText(left.candidate.id, right.candidate.id));
+  const boundedLimit = Number.isFinite(limit) ? Math.max(1, Math.min(50, Math.trunc(limit))) : 20;
+  return {
+    query: rawQuery.trim(),
+    total: matches.length,
+    items: matches.slice(0, boundedLimit).map(({ candidate: { searchContext: _searchContext, ...item } }) => item),
+  };
 }
 
 export type ConfigurationKind = "statuses" | "issue-types" | "work-categories" | "schedule-tracks";
@@ -646,6 +748,12 @@ export class EntityStore {
       .filter((entity) => entity.document.schema === schema && (project === undefined || entity.document.project === project));
     const result = await this.results(draftId, metadata, matching);
     return [...result].sort((left, right) => String(left.document.id).localeCompare(String(right.document.id)));
+  }
+
+  async search(draftId: string, query: string, limit = 20): Promise<GlobalSearchResult> {
+    const metadata = await this.drafts.getWorkspace(draftId);
+    const repository = await this.index(draftId, metadata);
+    return searchRepositoryDocuments(repository.entities.map((entity) => entity.document), query, limit);
   }
 
   private async find(draftId: string, metadata: RepositoryWorkspace, entityType: string, id: string): Promise<IndexedEntity> {

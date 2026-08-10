@@ -316,6 +316,23 @@ export interface ProjectWorkspaceResult {
   readonly draft_fingerprint: string;
 }
 
+export type GlobalSearchEntityType = "project" | "task" | "milestone" | "person" | "team" | "calendar";
+
+export interface GlobalSearchItem {
+  readonly entity_type: GlobalSearchEntityType;
+  readonly id: string;
+  readonly title: string;
+  readonly context?: string;
+  readonly project_id?: string;
+  readonly lifecycle: "active" | "archived";
+}
+
+export interface GlobalSearchResult {
+  readonly query: string;
+  readonly items: readonly GlobalSearchItem[];
+  readonly total: number;
+}
+
 export interface CommentResult {
   readonly document: CommentDocument;
   readonly path: string;
@@ -638,6 +655,15 @@ const workloadReportSchema = objectSchema({
   }),
 });
 
+const globalSearchItemSchema = objectSchema({
+  entity_type: { enum: ["project", "task", "milestone", "person", "team", "calendar"] },
+  id: stringSchema,
+  title: stringSchema,
+  context: stringSchema,
+  project_id: stringSchema,
+  lifecycle: { enum: ["active", "archived"] },
+}, ["entity_type", "id", "title", "lifecycle"]);
+
 export const HTTP_RESPONSE_SCHEMAS = {
   authorization: objectSchema({ authorization_url: stringSchema, state: stringSchema }),
   publicSession: publicSessionSchema,
@@ -659,6 +685,7 @@ export const HTTP_RESPONSE_SCHEMAS = {
     tasks: arraySchema(entityResultSchema),
     draft_fingerprint: stringSchema,
   }),
+  globalSearch: objectSchema({ query: stringSchema, items: arraySchema(globalSearchItemSchema), total: integerSchema }),
   changesList: changesListSchema,
   semanticDiff: semanticDiffSchema,
   commitResult: objectSchema({ commit: stringSchema, branch: stringSchema, draft_fingerprint: stringSchema }),
@@ -729,6 +756,7 @@ export const decodeRepositoryResult = createDecoder<RepositoryResult>("Repositor
 export const decodeConfigurationImpact = createDecoder<ConfigurationImpact>("ConfigurationImpact", HTTP_RESPONSE_SCHEMAS.configurationImpact);
 export const decodeWorkloadReport = createDecoder<WorkloadReport>("WorkloadReport", HTTP_RESPONSE_SCHEMAS.workloadReport);
 export const decodeProjectWorkspace = createDecoder<ProjectWorkspaceResult>("ProjectWorkspaceResult", HTTP_RESPONSE_SCHEMAS.projectWorkspace);
+export const decodeGlobalSearchResult = createDecoder<GlobalSearchResult>("GlobalSearchResult", HTTP_RESPONSE_SCHEMAS.globalSearch);
 export const decodeChangesList = createDecoder<ChangesList>("ChangesList", HTTP_RESPONSE_SCHEMAS.changesList);
 export const decodeSemanticDiff = createDecoder<SemanticDiff>("SemanticDiff", HTTP_RESPONSE_SCHEMAS.semanticDiff);
 export const decodeCommitResult = createDecoder<CommitResult>("CommitResult", HTTP_RESPONSE_SCHEMAS.commitResult);

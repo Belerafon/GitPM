@@ -9,6 +9,7 @@ import {
   decodeDraftStatus,
   decodeEntityDocument,
   decodeEntityResult,
+  decodeGlobalSearchResult,
   decodeNotifications,
   describeAjvError,
   summarizeAjvErrors,
@@ -79,6 +80,16 @@ describe("@gitpm/contracts runtime contracts", () => {
 
     expect(() => decodeNotifications({ recipient_person_id: "U-26-5EBAE3", items: [notification] })).toThrow(ApiContractError);
     expect(decodeNotifications({ recipient_person_id: "U-26-5EBAE3", items: [{ ...notification, read: true }] }).items[0]?.read).toBe(true);
+  });
+
+  it("decodes the bounded global-search read model and rejects unknown entity kinds", () => {
+    const result = decodeGlobalSearchResult({
+      query: "approve",
+      items: [{ entity_type: "task", id: "T-26-P9G3P8", title: "Approve schema v1", context: "GitPM launch", project_id: "P-26-MGP84K", lifecycle: "active" }],
+      total: 1,
+    });
+    expect(result.items[0]).toMatchObject({ entity_type: "task", project_id: "P-26-MGP84K" });
+    expect(() => decodeGlobalSearchResult({ query: "x", items: [{ entity_type: "view", id: "V-1", title: "View", lifecycle: "active" }], total: 1 })).toThrow(ApiContractError);
   });
 
   it("derives entity and CLI schema catalogs from the shared registry", () => {

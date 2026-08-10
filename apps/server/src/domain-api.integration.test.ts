@@ -58,6 +58,22 @@ afterEach(async () => {
 });
 
 describe("domain API integration", () => {
+  it("searches the authenticated current draft and validates query bounds", async () => {
+    const { app, manager } = await runtime();
+    await manager.createDraft("DRF-SEARCH", "42");
+
+    const response = await app.inject({ method: "GET", url: "/api/drafts/DRF-SEARCH/search?q=approve&limit=10" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      query: "approve",
+      total: 1,
+      items: [{ entity_type: "task", id: "T-26-P9G3P8", title: "Approve schema v1", context: "GitPM launch", project_id: "P-26-MGP84K", lifecycle: "active" }],
+    });
+    expect((await app.inject({ method: "GET", url: "/api/drafts/DRF-SEARCH/search" })).statusCode).toBe(400);
+    expect((await app.inject({ method: "GET", url: "/api/drafts/DRF-SEARCH/search?q=x&limit=51" })).statusCode).toBe(400);
+  }, 120_000);
+
   it("excludes active Tasks owned by an archived Project from the workload endpoint", async () => {
     const { app, manager } = await runtime();
     const draft = await manager.createDraft("DRF-WORKLOAD-PROJECT", "42");

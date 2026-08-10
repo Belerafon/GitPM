@@ -611,6 +611,31 @@ export function registerEntityApi(
 ): void {
   app.get<{
     Params: { draftId: string };
+    Querystring: { q: string; limit?: number };
+  }>(
+    "/api/drafts/:draftId/search",
+    {
+      schema: {
+        querystring: {
+          type: "object",
+          additionalProperties: false,
+          required: ["q"],
+          properties: {
+            q: { type: "string", minLength: 1, maxLength: 200 },
+            limit: { type: "integer", minimum: 1, maximum: 50, default: 20 },
+          },
+        },
+      },
+    },
+    async (request) => {
+      const actor = await authenticate(request);
+      await requireDraftRead(manager, actor, request.params.draftId);
+      return await store.search(request.params.draftId, request.query.q, request.query.limit ?? 20);
+    },
+  );
+
+  app.get<{
+    Params: { draftId: string };
     Querystring: { project?: string; milestone?: string; team?: string };
   }>(
     "/api/drafts/:draftId/workload",
