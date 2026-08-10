@@ -188,6 +188,10 @@ describe("ProjectActualReport", () => {
     expect(history.textContent).toContain("Kept in history, but its hours are excluded from totals.");
     expect(history.textContent).toContain("Void task");
     expect(history.textContent).toMatch(/6 hours/u);
+    fireEvent.click(within(history).getByRole("button", { name: "Void task" }));
+    expect(onNavigate).toHaveBeenCalledWith("tasks", { projectId: "P-26-1", taskId: task.document.id });
+    fireEvent.click(within(history).getByRole("button", { name: /U-1/u }));
+    expect(onNavigate).toHaveBeenCalledWith("people", { personId: "U-1" });
     // The main summary still excludes the voided count.
     expect(document.querySelector(".actual-report-summary")!.textContent ?? "").not.toMatch(/Cancelled time entries/u);
     // sumHours still ignores voided: actual hours stay at 8.

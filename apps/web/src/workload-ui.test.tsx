@@ -51,7 +51,11 @@ describe("Workload UI", () => {
     expect(within(breakdown).getByText("Contributing Tasks: 3")).toBeTruthy();
     expect(within(breakdown).getByText("Release spike")).toBeTruthy();
     expect(within(breakdown).getAllByText(/Week of Jul 13, 2026 · 22h available/u).length).toBeGreaterThan(0);
-    fireEvent.click(within(breakdown).getByRole("button", { name: "Release spike" }));
+    fireEvent.click(within(breakdown).getAllByRole("link", { name: "Platform" })[0]!);
+    expect(onNavigate).toHaveBeenCalledWith("projects", { projectId });
+    fireEvent.click(screen.getByRole("button", { name: "Show workload details for Ada, week of Jul 6, 2026" }));
+    const reopenedBreakdown = screen.getByRole("dialog", { name: /Ada · Week of/u });
+    fireEvent.click(within(reopenedBreakdown).getByRole("button", { name: "Release spike" }));
     expect(onNavigate).toHaveBeenCalledWith("tasks", { projectId, taskId: spike.document.id });
     fireEvent.change(screen.getByLabelText("Team"), { target: { value: reviewers.document.id } });
     await waitFor(() => expect(screen.getByText("Included Tasks").nextElementSibling?.textContent).toBe("1"));

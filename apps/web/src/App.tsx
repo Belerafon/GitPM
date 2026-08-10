@@ -23,6 +23,7 @@ import { NotificationsMenu } from "./notifications-ui.js";
 import { WorktreeWorkspace } from "./worktree-ui.js";
 import { RepositoryConnectionSettings } from "./repository-connection-ui.js";
 import { ExportMenu } from "./export-ui.js";
+import { entityRouteKey, initialNavigationTrail, restoreNavigationTrail, truncateNavigationTrail, visitNavigationTrail, type NavigationTrail } from "./app/navigation-trail.js";
 
 interface AppProps {
   readonly api: GitPmApi;
@@ -51,6 +52,8 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
   const [draftId, setDraftId] = useState("");
   const [activeRoute, setActiveRoute] = useState<AppRoute | null>(() => parseAppRoute(window.location.href));
   const [catalog, setCatalog] = useState(() => new EntityCatalog({}));
+  const [navigationTrail, setNavigationTrail] = useState<NavigationTrail | null>(() => initialNavigationTrail(parseAppRoute(window.location.href)));
+  const [navigationLabels, setNavigationLabels] = useState<Readonly<Record<string, string>>>({});
   const repositoryMode = drafts.session?.mode === "repository";
   const directMode = drafts.session?.repository_mode === "direct";
   const repositoryTabs: readonly SectionTab[] = directMode
@@ -90,6 +93,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
   const navigateToRoute = (nextRoute: AppRoute, replace = false) => {
     const nextUrl = serializeAppRoute(nextRoute);
     if (`${window.location.pathname}${window.location.search}` !== nextUrl) window.history[replace ? "replaceState" : "pushState"]({}, "", nextUrl);
+    setNavigationTrail((current) => visitNavigationTrail(current, nextRoute));
     setActiveRoute(nextRoute);
   };
   const openWorkspace = (destination: WorkspaceDestination, selection: WorkspaceSelection = {}) => {
@@ -109,18 +113,44 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
     const needsProject = activeRoute?.projectId !== undefined;
     const needsTask = activeRoute?.taskId !== undefined;
     const needsStage = activeRoute?.stageId !== undefined;
-    if (activeDraft === undefined || (!needsProject && !needsTask && !needsStage)) { setCatalog(new EntityCatalog({})); return; }
+    const needsPerson = activeRoute?.personId !== undefined;
+    if (activeDraft === undefined || (!needsProject && !needsTask && !needsStage && !needsPerson)) { setCatalog(new EntityCatalog({})); return; }
     let current = true;
     void Promise.all([
       api.listEntities(activeDraft.draft_id, "projects"),
       needsStage ? api.listEntities(activeDraft.draft_id, "milestones", activeRoute?.projectId) : Promise.resolve([]),
       needsTask ? api.listEntities(activeDraft.draft_id, "tasks", activeRoute?.projectId) : Promise.resolve([]),
-    ]).then(([projects, milestones, tasks]) => { if (current) setCatalog(new EntityCatalog({ projects, milestones, tasks })); }).catch(() => { if (current) setCatalog(new EntityCatalog({})); });
+      needsPerson ? api.listEntities(activeDraft.draft_id, "people") : Promise.resolve([]),
+    ]).then(([projects, milestones, tasks, people]) => { if (current) setCatalog(new EntityCatalog({ projects, milestones, tasks, people })); }).catch(() => { if (current) setCatalog(new EntityCatalog({})); });
     return () => { current = false; };
-  }, [activeDraft?.draft_id, activeDraft?.fingerprint, activeDraft?.external_fingerprint, activeRoute?.projectId, activeRoute?.stageId, activeRoute?.taskId, api]);
+  }, [activeDraft?.draft_id, activeDraft?.fingerprint, activeDraft?.external_fingerprint, activeRoute?.projectId, activeRoute?.stageId, activeRoute?.taskId, activeRoute?.personId, api]);
+  useEffect(() => {
+    if (activeRoute === null) return;
+    const labels: Record<string, string> = {};
+    if (activeRoute.projectId !== undefined) labels[`project:${activeRoute.projectId}`] = catalog.project(activeRoute.projectId).name;
+    if (activeRoute.stageId !== undefined) labels[`stage:${activeRoute.stageId}`] = catalog.milestone(activeRoute.stageId)?.name ?? activeRoute.stageId;
+    if (activeRoute.taskId !== undefined) labels[`task:${activeRoute.taskId}`] = catalog.task(activeRoute.taskId).name;
+    if (activeRoute.personId !== undefined) labels[`person:${activeRoute.personId}`] = catalog.person(activeRoute.personId).name;
+    setNavigationLabels((current) => ({ ...current, ...labels }));
+  }, [activeRoute, catalog]);
+  const labelForTrailRoute = (route: AppRoute): string => {
+    const key = entityRouteKey(route);
+    if (key !== null && navigationLabels[key] !== undefined) return navigationLabels[key]!;
+    return route.taskId ?? route.stageId ?? route.personId ?? route.projectId ?? "";
+  };
+  const openTrailEntry = (index: number) => {
+    if (navigationTrail === null) return;
+    const nextTrail = truncateNavigationTrail(navigationTrail, index);
+    const nextRoute = nextTrail.entries.at(-1)!;
+    const nextUrl = serializeAppRoute(nextRoute);
+    if (`${window.location.pathname}${window.location.search}` !== nextUrl) window.history.pushState({}, "", nextUrl);
+    setNavigationTrail(nextTrail);
+    setActiveRoute(nextRoute);
+  };
   const breadcrumbs = (() => {
-    if (activeRoute?.projectId !== undefined && ["projects", "stages", "tasks"].includes(activeRoute.name)) return <>
-      <button onClick={() => navigateToRoute(routeForDestination("projects"))}>{t("nav.projects")}</button><span aria-hidden="true">›</span><span aria-current="page">{catalog.project(activeRoute.projectId).name}</span>
+    if (navigationTrail !== null && navigationTrail.entries.length > 0) return <>
+      <button onClick={() => navigateToRoute(routeForDestination(navigationTrail.root))}>{t(navigationTrail.root === "projects" ? "nav.projects" : "nav.people")}</button>
+      {navigationTrail.entries.map((entry, index) => <span className="navigation-trail-entry" key={`${entityRouteKey(entry)}:${index}`}><span aria-hidden="true">›</span>{index === navigationTrail.entries.length - 1 ? <span aria-current="page">{labelForTrailRoute(entry)}</span> : <button onClick={() => openTrailEntry(index)} title={labelForTrailRoute(entry)}>{labelForTrailRoute(entry)}</button>}</span>)}
     </>;
     if (activeRoute?.name === "history" && activeRoute.commit !== undefined) return <>
       <button onClick={() => navigateToRoute(routeForDestination("history"))}>{t("nav.history")}</button><span aria-hidden="true">›</span><code aria-current="page">{activeRoute.commit.slice(0, 12)}</code>
@@ -133,7 +163,11 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
   })();
 
   useEffect(() => {
-    const restoreRoute = () => setActiveRoute(parseAppRoute(window.location.href));
+    const restoreRoute = () => {
+      const restored = parseAppRoute(window.location.href);
+      setNavigationTrail((current) => restoreNavigationTrail(current, restored));
+      setActiveRoute(restored);
+    };
     window.addEventListener("popstate", restoreRoute);
     return () => window.removeEventListener("popstate", restoreRoute);
   }, []);
@@ -278,13 +312,15 @@ function InterfaceSettings({ locale, setLocale, t }: { readonly locale: Locale; 
   const [open, setOpen] = useState(false);
   const detailsRef = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
-    if (!open) return;
     const closeOnOutsidePointer = (event: PointerEvent) => {
-      if (event.target instanceof Node && !detailsRef.current?.contains(event.target)) setOpen(false);
+      if (detailsRef.current?.open === true && event.target !== null && !detailsRef.current.contains(event.target as Node)) {
+        detailsRef.current.open = false;
+        setOpen(false);
+      }
     };
     document.addEventListener("pointerdown", closeOnOutsidePointer);
     return () => document.removeEventListener("pointerdown", closeOnOutsidePointer);
-  }, [open]);
+  }, []);
   return <details className="interface-settings" onToggle={(event) => setOpen(event.currentTarget.open)} open={open} ref={detailsRef}>
     <summary aria-label={t("settings.interface")} title={t("settings.interface")}><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Zm8.1 4.7a8.6 8.6 0 0 0 0-2.4l2-1.5-2-3.5-2.5 1a9.6 9.6 0 0 0-2.1-1.2L15.2 3h-4l-.4 2.6a9.6 9.6 0 0 0-2.1 1.2l-2.4-1-2 3.5 2 1.5a8.6 8.6 0 0 0 0 2.4l-2 1.5 2 3.5 2.4-1a9.6 9.6 0 0 0 2.1 1.2l.4 2.6h4l.4-2.6a9.6 9.6 0 0 0 2.1-1.2l2.5 1 2-3.5-2.1-1.5Z" /></svg></summary>
     <div className="interface-settings-panel"><strong>{t("settings.interface")}</strong><LocalePicker locale={locale} setLocale={setLocale} t={t} /></div>

@@ -5,6 +5,7 @@ import { formatDateOnly, formatDurationHours, message, type Locale, type Message
 import type { DraftStatus, EntityResult } from "./types.js";
 import type { TimeEntryResult } from "./api.js";
 import { EditorDrawer } from "./editor-drawer.js";
+import { PersonLink } from "./person-link.js";
 
 interface WorkCategory { readonly slug: string; readonly title: string; readonly active: boolean }
 interface TimeEntryCorrection { readonly person: string; readonly performed_on: string; readonly hours: number; readonly category: string; readonly note: string }
@@ -27,8 +28,9 @@ export function TaskTimeEntries(props: {
   readonly locale: Locale;
   readonly assigneeIds?: readonly string[];
   readonly onFingerprintChange: (fingerprint: string) => Promise<void>;
+  readonly onOpenPerson?: (personId: string) => void;
 }) {
-  const { api, draft, projectId, taskId, people, readOnly, locale, assigneeIds = NO_ASSIGNEES } = props;
+  const { api, draft, projectId, taskId, people, readOnly, locale, onOpenPerson, assigneeIds = NO_ASSIGNEES } = props;
   const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
   const [entries, setEntries] = useState<readonly TimeEntryResult[]>([]);
   const [categories, setCategories] = useState<readonly WorkCategory[]>([]);
@@ -205,7 +207,7 @@ export function TaskTimeEntries(props: {
               <li key={entry.document.id} className={`time-entry-row${entry.document.state === "voided" ? " voided" : ""}`}>
                 <span className="time-entry-date">{formatDateOnly(locale, entry.document.performed_on)}</span>
                 <span className="time-entry-hours">{formatDurationHours(locale, entry.document.hours)}</span>
-                <span className="time-entry-person">{personName(entry.document.person)}</span>
+                <span className="time-entry-person"><PersonLink name={personName(entry.document.person)} onOpen={onOpenPerson} personId={entry.document.person} /></span>
                 <span className="time-entry-category">{categories.find((category) => category.slug === entry.document.category)?.title ?? entry.document.category}</span>
                 {typeof entry.document.note_markdown === "string" && entry.document.note_markdown !== "" && <span className="time-entry-note">{entry.document.note_markdown}</span>}
                 {entry.document.state === "active" && !readOnly && <><button className="text-link" disabled={busy} onClick={() => beginCorrection(entry)} type="button">{t("timeEffort.correct")}</button><button className="text-link" disabled={busy} onClick={() => void voidEntry(entry)} type="button">{t("timeEffort.void")}</button></>}

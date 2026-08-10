@@ -211,7 +211,8 @@ describe("frontend draft lifecycle", () => {
     api.entities = [
       { document: { schema: "gitpm/project@2", id: "P-26-7K4M9Q", name: "Alpha", status: "backlog", lifecycle: "active" }, path: "project.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) },
       { document: { schema: "gitpm/milestone@2", id: "M-26-3RC7NA", project: "P-26-7K4M9Q", name: "Launch", lifecycle: "active", due: "2026-08-01" }, path: "milestone.yaml", blob_id: "c".repeat(40), draft_fingerprint: "b".repeat(64) },
-      { document: { schema: "gitpm/task@2", id: "T-26-X8D2FW", project: "P-26-7K4M9Q", milestone: "M-26-3RC7NA", title: "First task", type: "task", status: "backlog", lifecycle: "active" }, path: "task.yaml", blob_id: "d".repeat(40), draft_fingerprint: "b".repeat(64) },
+      { document: { schema: "gitpm/task@2", id: "T-26-X8D2FW", project: "P-26-7K4M9Q", milestone: "M-26-3RC7NA", title: "First task", type: "task", status: "backlog", assignees: ["U-26-ADA"], lifecycle: "active" }, path: "task.yaml", blob_id: "d".repeat(40), draft_fingerprint: "b".repeat(64) },
+      { document: { schema: "gitpm/person@1", id: "U-26-ADA", name: "Ada Lovelace", weekly_capacity_hours: 40, lifecycle: "active" }, path: "person.yaml", blob_id: "e".repeat(40), draft_fingerprint: "b".repeat(64) },
     ];
     window.history.replaceState({}, "", "/projects/P-26-7K4M9Q/stages/M-26-3RC7NA");
     render(<App api={api} browserLanguages={["en"]} />);
@@ -220,10 +221,19 @@ describe("frontend draft lifecycle", () => {
     expect(await screen.findByRole("heading", { level: 2, name: "Launch" })).toBeTruthy();
     expect(screen.getByRole("navigation", { name: "Project navigation" })).toBeTruthy();
     const breadcrumbs = screen.getByRole("navigation", { name: "Breadcrumbs" });
-    expect((await within(breadcrumbs).findByText("Alpha")).getAttribute("aria-current")).toBe("page");
+    expect((await within(breadcrumbs).findByRole("button", { name: "Alpha" }))).toBeTruthy();
+    expect((await within(breadcrumbs).findByText("Launch")).getAttribute("aria-current")).toBe("page");
     fireEvent.click(screen.getByRole("button", { name: /First task/u }));
     expect(`${window.location.pathname}${window.location.search}`).toBe("/projects/P-26-7K4M9Q/tasks/T-26-X8D2FW");
     expect((await screen.findByRole("button", { name: /First task/u })).getAttribute("aria-current")).toBe("true");
+    expect((await within(breadcrumbs).findByText("First task")).getAttribute("aria-current")).toBe("page");
+    fireEvent.click((await screen.findAllByRole("link", { name: "Ada Lovelace" }))[0]!);
+    expect(await screen.findByRole("heading", { name: "Ada Lovelace" })).toBeTruthy();
+    expect((await within(breadcrumbs).findByText("Ada Lovelace")).getAttribute("aria-current")).toBe("page");
+    fireEvent.click(within(breadcrumbs).getByRole("button", { name: "First task" }));
+    expect(`${window.location.pathname}${window.location.search}`).toBe("/projects/P-26-7K4M9Q/tasks/T-26-X8D2FW");
+    expect((await within(breadcrumbs).findByText("First task")).getAttribute("aria-current")).toBe("page");
+    expect(within(breadcrumbs).queryByText("Ada Lovelace")).toBeNull();
   });
 
   it("opens the responsive navigation by keyboard, closes it with Escape, and restores scroll and focus after navigation", async () => {
@@ -347,7 +357,8 @@ describe("frontend draft lifecycle", () => {
     expect(screen.getByLabelText("Milestone")).toHaveProperty("value", "");
     expect(screen.getByRole("button", { name: /First task/u }).getAttribute("aria-current")).toBe("true");
     breadcrumbs = screen.getByRole("navigation", { name: "Breadcrumbs" });
-    expect(within(breadcrumbs).getByText("Alpha").getAttribute("aria-current")).toBe("page");
+    expect(within(breadcrumbs).getByRole("button", { name: "Alpha" })).toBeTruthy();
+    expect((await within(breadcrumbs).findByText("First task")).getAttribute("aria-current")).toBe("page");
   });
 
   it("labels a repository session and does not offer a meaningless sign-out action", async () => {
