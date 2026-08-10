@@ -61,6 +61,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .breadcrumbs { display: flex; align-items: center; flex-wrap: wrap; gap: .3rem; min-height: 38px; border-bottom: 1px solid #e4e5e0; color: #666c68; font-size: .78rem; }
 .breadcrumbs button { border: 0; background: transparent; color: #315f50; padding: .25rem; text-decoration: underline; text-underline-offset: 2px; }
 .breadcrumbs [aria-current="page"] { color: #343936; font-weight: 650; }
+.navigation-trail-entry { display: inline-flex; align-items: center; gap: .3rem; min-width: 0; }
+.navigation-trail-entry > button, .navigation-trail-entry > [aria-current="page"] { overflow: hidden; max-width: 18rem; text-overflow: ellipsis; white-space: nowrap; }
 .top-actions { display: flex; align-items: end; gap: .7rem; }
 .repository-status { white-space: nowrap; }
 .workspace-switcher { display: grid; min-width: 230px; gap: .2rem; text-align: left; }
@@ -626,9 +628,9 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .member-picker-table .member-picker-check-column, .member-picker-table tbody td:first-child { width: 42px; text-align: center; }
 .member-picker-table input[type="checkbox"] { display: block; width: 18px; height: 18px; margin: 0 auto; accent-color: #347a58; cursor: pointer; }
 .member-picker-empty { margin: 0; padding: .85rem; color: #646b66; font-size: .8rem; }
-.person-link { cursor: pointer; color: #245f4c; font-weight: 650; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
-.person-link:hover { color: #173f31; text-decoration-thickness: 2px; }
-.person-link:focus-visible { border-radius: 3px; outline: 2px solid #5a8d77; outline-offset: 2px; }
+.person-link, .project-link, .milestone-link { cursor: pointer; color: #245f4c; font-weight: 650; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+.person-link:hover, .project-link:hover, .milestone-link:hover { color: #173f31; text-decoration-thickness: 2px; }
+.person-link:focus-visible, .project-link:focus-visible, .milestone-link:focus-visible { border-radius: 3px; outline: 2px solid #5a8d77; outline-offset: 2px; }
 .person-links { display: inline; }
 .people-profile-workspace { margin-top: 1.25rem; }
 .people-profile-workspace > .back-link { margin-bottom: .75rem; }

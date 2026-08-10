@@ -24,4 +24,12 @@ describe("EntityCatalog", () => {
     expect(references.project.name).toBe("P-26-111111");
     expect(references.milestone?.name).toBe("M-26-222222");
   });
+
+  it("resolves people for navigation labels", () => {
+    const person = entity({ schema: "gitpm/person@1", id: "U-26-ADA", name: "Ada", lifecycle: "active" });
+    const catalog = new EntityCatalog({ people: [person] });
+
+    expect(catalog.person(person.document.id).name).toBe("Ada");
+    expect(catalog.person("U-26-MISSING").name).toBe("U-26-MISSING");
+  });
 });

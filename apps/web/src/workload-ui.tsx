@@ -7,6 +7,7 @@ import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
 import type { WorkspaceNavigate } from "./workspace-navigation.js";
 import { EntityCatalog } from "./entity-catalog.js";
 import { EditorDrawer } from "./editor-drawer.js";
+import { ProjectLink } from "./project-link.js";
 
 const text = (document: GitPmDocument, key: string): string | undefined => typeof document[key] === "string" ? document[key] as string : undefined;
 
@@ -105,7 +106,7 @@ export function WorkloadWorkspace({ api, draft, locale, onNavigate = () => undef
           const projectId = task === undefined ? undefined : text(task.document, "project");
           const candidates = transferCandidates(selectedRow, allocation, report.rows);
           return <article className="workload-contribution" key={allocation.task_id}>
-            <header><div><button className="text-link" disabled={projectId === undefined} onClick={() => { if (projectId !== undefined) { setSelectedCell(null); onNavigate("tasks", { projectId, taskId: allocation.task_id }); } }} type="button">{title}</button><p><code>{allocation.task_id}</code>{projectId === undefined ? "" : ` · ${catalog.project(projectId).name}`}</p></div><strong>{t("workload.contributionHours", { hours: formatNumber(locale, allocation.allocated_hours) })}</strong></header>
+            <header><div><button className="text-link" disabled={projectId === undefined} onClick={() => { if (projectId !== undefined) { setSelectedCell(null); onNavigate("tasks", { projectId, taskId: allocation.task_id }); } }} type="button">{title}</button><p><code>{allocation.task_id}</code>{projectId !== undefined && <> · <ProjectLink name={catalog.project(projectId).name} onOpen={(nextProjectId) => { setSelectedCell(null); onNavigate("projects", { projectId: nextProjectId }); }} projectId={projectId} /></>}</p></div><strong>{t("workload.contributionHours", { hours: formatNumber(locale, allocation.allocated_hours) })}</strong></header>
             <h4>{t("workload.transferHeading")}</h4>
             {candidates.length === 0 ? <p className="workload-no-transfer">{t("workload.noTransferWeeks")}</p> : <ul>{candidates.map((candidate) => <li key={candidate.week}><time dateTime={candidate.week}>{t("workload.transferWeek", { date: formatDateOnly(locale, candidate.week), hours: formatNumber(locale, availableHours(candidate)) })}</time></li>)}</ul>}
           </article>;

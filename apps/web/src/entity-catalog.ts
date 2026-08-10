@@ -23,11 +23,13 @@ export class EntityCatalog {
   readonly projects: ReadonlyMap<string, EntityReference>;
   readonly milestones: ReadonlyMap<string, EntityReference>;
   readonly tasks: ReadonlyMap<string, EntityReference>;
+  readonly people: ReadonlyMap<string, EntityReference>;
 
-  constructor({ projects = [], milestones = [], tasks = [] }: {
+  constructor({ projects = [], milestones = [], tasks = [], people = [] }: {
     readonly projects?: readonly EntityResult[];
     readonly milestones?: readonly EntityResult[];
     readonly tasks?: readonly EntityResult[];
+    readonly people?: readonly EntityResult[];
   }) {
     this.projects = new Map(projects.map((entity) => [entity.document.id, reference(entity)]));
     this.milestones = new Map(milestones.map((entity) => [entity.document.id, reference(entity)]));
@@ -36,6 +38,7 @@ export class EntityCatalog {
       name: text(entity.document, "title") || entity.document.id,
       lifecycle: entity.document.lifecycle,
     }]));
+    this.people = new Map(people.map((entity) => [entity.document.id, reference(entity)]));
   }
 
   project(id: unknown): EntityReference {
@@ -51,6 +54,11 @@ export class EntityCatalog {
   task(id: unknown): EntityReference {
     const key = typeof id === "string" ? id : "";
     return this.tasks.get(key) ?? { id: key, name: key, lifecycle: "active" };
+  }
+
+  person(id: unknown): EntityReference {
+    const key = typeof id === "string" ? id : "";
+    return this.people.get(key) ?? { id: key, name: key, lifecycle: "active" };
   }
 
   referencesForTask(document: GitPmDocument): TaskReferences {

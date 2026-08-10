@@ -35,10 +35,13 @@ describe("TaskTimeEntries", () => {
       voidTimeEntry,
     } as unknown as GitPmApi;
 
-    render(<TaskTimeEntries api={api} draft={draft} fingerprint={draft.fingerprint} projectId="P-26-1" taskId="T-26-1" people={[person]} readOnly={false} locale="en" onFingerprintChange={vi.fn(async () => undefined)} />);
+    const onOpenPerson = vi.fn();
+    render(<TaskTimeEntries api={api} draft={draft} fingerprint={draft.fingerprint} projectId="P-26-1" taskId="T-26-1" people={[person]} readOnly={false} locale="en" onFingerprintChange={vi.fn(async () => undefined)} onOpenPerson={onOpenPerson} />);
 
     await waitFor(() => expect(screen.getAllByText("4 hours").length).toBeGreaterThan(0));
     expect(screen.getByText(/Total hours/).parentElement?.textContent).toMatch(/4/);
+    fireEvent.click(screen.getByRole("link", { name: "Ada" }));
+    expect(onOpenPerson).toHaveBeenCalledWith("U-26-ADA");
 
     fireEvent.change(screen.getByLabelText("Date"), { target: { value: "2026-09-03" } });
     fireEvent.change(screen.getByLabelText("Hours"), { target: { value: "3" } });

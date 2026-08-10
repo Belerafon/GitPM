@@ -76,7 +76,7 @@ test.describe("GitPM browser UI", () => {
     await expect(page.getByRole("button", { name: /^GitPM launch/u })).toBeVisible();
     await expect(page.getByRole("button", { name: /^Operations/u })).toBeVisible();
     await page.goto(`/projects/${FIXTURE_PROJECT_ID}/tasks`);
-    await expect(page.getByRole("button", { name: /Approve schema v1/u })).toBeVisible();
+    await expect(page.locator(".project-plan-task-selector").filter({ hasText: "Approve schema v1" })).toBeVisible();
   });
 
   test("shows a person's project responsibilities and daily availability calendar", async ({ page }) => {
@@ -193,7 +193,7 @@ test.describe("GitPM browser UI", () => {
     await page.getByRole("button", { name: "Plan", exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/projects/${FIXTURE_PROJECT_ID}(?:\\?.*)?$`, "u"));
     await expect(page.getByRole("heading", { name: "Work plan", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: /Approve schema v1/u })).toBeVisible();
+    await expect(page.locator(".project-plan-task-selector").filter({ hasText: "Approve schema v1" })).toBeVisible();
     await page.getByRole("button", { name: /Alpha/u }).click();
     await expect(page).toHaveURL(new RegExp(`/projects/${FIXTURE_PROJECT_ID}/stages/[^/?]+$`, "u"));
     await expect(page.getByLabel("Milestone", { exact: true }).getByRole("heading", { name: "Alpha", exact: true })).toBeVisible();
