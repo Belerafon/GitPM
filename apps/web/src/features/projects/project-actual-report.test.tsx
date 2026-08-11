@@ -589,9 +589,11 @@ describe("ProjectActualReport", () => {
     const taskSelect = await screen.findByLabelText("Task") as HTMLSelectElement;
     // Initially the active task and the archived task WITH history are listed; the archived task
     // without history is not.
-    expect(Array.from(taskSelect.options).some((option) => option.value === activeTask.document.id)).toBe(true);
-    expect(Array.from(taskSelect.options).some((option) => option.value === archivedWithHistory.document.id)).toBe(true);
-    expect(Array.from(taskSelect.options).some((option) => option.value === archivedWithoutHistory.document.id)).toBe(false);
+    await waitFor(() => {
+      expect(Array.from(taskSelect.options).some((option) => option.value === activeTask.document.id)).toBe(true);
+      expect(Array.from(taskSelect.options).some((option) => option.value === archivedWithHistory.document.id)).toBe(true);
+      expect(Array.from(taskSelect.options).some((option) => option.value === archivedWithoutHistory.document.id)).toBe(false);
+    });
 
     // Narrowing to person A removes person B's records from the current result, but the archived
     // task with history (whose records belong to person B) must remain selectable because history

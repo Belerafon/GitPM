@@ -31,10 +31,13 @@ runner reports the active command and PID, emits a heartbeat every 30 seconds, e
 for every step, fails fast, and prints a timing summary. This makes slow Git and browser tests
 distinguishable from a stalled process.
 
-Local verification defaults to one Vitest worker and one Playwright worker to remain stable when
-several worktrees verify at once. On an otherwise idle machine,
-`GITPM_TEST_WORKERS=2` and `GITPM_E2E_WORKERS=2` opt into higher concurrency. Set
-`GITPM_VERIFY_HEARTBEAT_SECONDS` to change heartbeat frequency or
+Local verification runs Vitest with half of the available logical CPUs, capped at four workers.
+`GITPM_TEST_WORKERS` overrides that value for constrained-machine diagnosis. Playwright remains at
+one worker because its files share repository servers and polling state; measurements with two
+workers exposed fingerprint/polling races for only a modest wall-clock improvement.
+`GITPM_E2E_WORKERS` remains a diagnostic override and values above one are not accepted for the
+required gate. Run only one complete gate at a time: E2E uses fixed ports and concurrent Git-heavy
+suites slow each other down. Set `GITPM_VERIFY_HEARTBEAT_SECONDS` to change heartbeat frequency or
 `GITPM_VERIFY_TIMEOUT_MINUTES` to override every step timeout.
 
 For a text-only change to generated agent guidance, use `corepack pnpm verify:guidance`. It keeps
