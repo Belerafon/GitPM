@@ -234,8 +234,13 @@ corepack pnpm schema:verify
 corepack pnpm planning:verify
 ```
 
-`corepack pnpm verify` запускает полный набор, включая E2E и smoke; для локальной
-итерации лучше начинать с узкого package/test target.
+`corepack pnpm verify` запускает полный набор, включая E2E и smoke. Для обычной разработки
+используйте профили `verify:web`, `verify:server`, `verify:cli`, `verify:repository`,
+`verify:planning-domain`, `verify:workflow`, `verify:export` и `verify:tooling` по анализу влияния
+изменения. Browser-профили `verify:e2e-ui` и `verify:e2e-workflow` добавляются только для
+соответствующих сквозных сценариев. Полная матрица выбора описана в
+`docs/Test_Verification_Strategy.md`; `verify:local` остаётся для релизов и изменений, влияние
+которых нельзя надёжно ограничить.
 
 После `build` полный verify повторно проверяет типы только для web и E2E: Node workspace-пакеты
 уже прошли тот же `tsc` во время сборки. Самостоятельная команда `corepack pnpm typecheck`

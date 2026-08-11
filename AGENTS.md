@@ -151,47 +151,55 @@ Rules:
     that confirmation. Do not delete the branch as part of this cleanup; branch deletion requires
     a separate explicit user instruction.
 
-## Required local quality gate
+## Impact-based local quality gate
 
-This repository intentionally has no hosted GitHub Actions workflow. Local verification is
-therefore a required delivery contract, not an optional reminder. Select exactly one gate from
-the changed-file scope:
+This repository intentionally has no hosted GitHub Actions workflow, so local verification remains
+a required delivery contract. The contract is evidence proportional to the change, not an
+automatic run of every test. Before committing, inspect changed paths and imports, identify the
+producer and consumer boundaries that can change, and run every affected thematic profile:
 
-- If the only changed source files are `packages/drafts/src/direct-guidance.ts` and/or
-  `packages/drafts/src/worktree-guidance.ts`, run:
+- `verify:web` — React UI, styles, browser-side models and API client;
+- `verify:server` — HTTP routes, auth, repository runtime and stores;
+- `verify:cli` — CLI parsing, commands and direct/external workflows;
+- `verify:repository` — contracts, domain, repository format, validation, shared identities and
+  task hierarchy, including schema verification;
+- `verify:planning-domain` — calendar, scheduling, time-entry and workload logic;
+- `verify:workflow` — agent, changes, drafts, Git/GitLab, history, logging, publishing and security;
+- `verify:export` — document and PDF export;
+- `verify:tooling` — repository scripts and planning validators;
+- `verify:e2e-ui` and `verify:e2e-workflow` — browser coverage, added only when the affected
+  behavior crosses a browser boundary;
+- `verify:guidance` — text-only direct/worktree agent guidance changes.
 
-  ```bash
-  corepack pnpm verify:guidance
-  ```
+For example, a local background color, spacing, or button-size change normally requires
+`corepack pnpm verify:web`, not server, Git, schema, or all Playwright tests. Add `verify:e2e-ui`
+only if the change can affect geometry assertions, navigation, persistence, or browser-only
+interaction. A shared DTO or repository-format change requires `verify:repository` plus each
+public consumer profile whose behavior can change. Multiple profiles may be required; do not hide
+cross-boundary impact by selecting only the directory containing the edit.
 
-  This performs a frozen install, builds the guidance package and its dependencies, lints the
-  guidance files, and runs the fast generated-guidance contract tests. The slower draft lifecycle
-  integration suite is not required for text-only guidance changes.
+Each thematic profile performs a frozen install, builds the relevant dependency closure, lints
+the owned sources, runs the thematic tests, and checks whitespace. Documentation-only changes may
+use `git diff --check` with careful diff review; add a thematic profile when documentation changes
+an executable contract or generated example. The detailed ownership map and selection examples
+are in `docs/Test_Verification_Strategy.md`.
 
-- If the only changed file is this root `AGENTS.md`, no test command is required; the normal
-  diff and commit review is sufficient.
+Use the complete `corepack pnpm verify:local` only for release candidates or changes whose impact
+cannot be bounded confidently, such as root dependency/lockfile changes, root TypeScript,
+Vitest, Playwright, or build configuration, verification orchestration, and broad refactors across
+most groups. It is an escalation path, not the default for every source, test, or mixed-scope
+change.
 
-- For every other source, test, schema, build configuration, executable script, planning file,
-  or mixed-scope change, run the complete gate:
+The verification runner prints each command, PID, timeout, 30-second heartbeat, per-step result,
+and final timing summary. Vitest uses half of the available logical CPUs, capped at four workers;
+override it with `GITPM_TEST_WORKERS` only for diagnosis. Playwright stays at one worker because
+its files share repository servers and polling state. Do not overlap browser profiles from
+multiple worktrees because their ports are fixed. Override heartbeat or step timeout with
+`GITPM_VERIFY_HEARTBEAT_SECONDS` or `GITPM_VERIFY_TIMEOUT_MINUTES`.
 
-```bash
-corepack pnpm verify:local
-```
-
-`verify:local` first proves that the lockfile installs unchanged with
-`pnpm install --frozen-lockfile`, then runs the complete `pnpm verify` suite. The verification
-runner prints each command, PID, timeout, 30-second heartbeat, per-step result, and final timing
-summary. Vitest uses half of the available logical CPUs, capped at four workers; override it with
-`GITPM_TEST_WORKERS` when diagnosing a constrained machine. Playwright intentionally stays at one
-worker because its files share repository servers and polling state; `GITPM_E2E_WORKERS` is a
-diagnostic override, not an accepted setting for the required gate. Do not overlap complete gates
-from multiple worktrees: their browser servers use fixed ports and concurrent Git-heavy suites
-make both runs slower. Override the heartbeat interval with `GITPM_VERIFY_HEARTBEAT_SECONDS` and a
-step timeout with `GITPM_VERIFY_TIMEOUT_MINUTES`.
-
-If the selected gate cannot run, do not describe the work as verified: report the exact failing
-or skipped command and the reason. Narrow tests are useful while iterating but never replace the
-scope-appropriate final gate above.
+If a selected profile cannot run, do not describe the work as verified: report the exact failing
+or skipped command and reason. The handoff must state the impact analysis and every profile or
+narrower diagnostic command actually run.
 
 ## Change rules
 
