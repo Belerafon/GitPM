@@ -17,25 +17,28 @@ not required to make interactive directories queryable.
    - a recursively nested filter expression whose groups combine children with `and` or `or`;
    - typed conditions for text, dates, numbers, booleans, references and reference arrays;
    - an ordered list of ascending or descending sort rules.
-2. The main workspace stays compact. It shows one **Filters and sorting** button, applied condition
-   and sort chips, a per-chip remove action, **Clear all**, and the visible/total count. The full
-   builder is an accessible modal drawer with draft, Apply and Cancel behavior.
+2. The main workspace stays compact. Surfaces without a durable manual order show one **Filters and
+   sorting** button, applied condition and sort chips, a per-chip remove action, **Clear all**, and
+   the visible/total count. Project and Project-Task surfaces show the filter-only **Filters**
+   variant. The full builder is an accessible modal drawer with draft, Apply and Cancel behavior.
 3. Empty filter groups match all rows. Empty sort values are always placed last, in either direction.
    Equal rows retain their input order, so sorting is deterministic and stable.
 4. The initial directory query is `lifecycle = active`. This is an ordinary removable condition;
    clearing it exposes archived rows rather than creating an implicit second filter system.
-5. Project and project-Task queries are serialized into the route `filters` value. The parser accepts
-   only fields and operators declared by the current surface, with limits of 20,000 serialized
-   characters, eight group levels, 100 filter nodes and ten sort rules. Unknown or malformed URL
-   input falls back to an empty query.
-6. Task hierarchy remains intact after filtering. Matching descendants retain their ancestors as
-   context-only rows, while sorting changes sibling order without changing stored manual order.
+5. Project and Project-Task filter queries are serialized into the route `filters` value. The parser
+   accepts only fields and operators declared by the current surface, with limits of 20,000
+   serialized characters, eight group levels and 100 filter nodes. Legacy sort rules in these routes
+   are discarded. Unknown or malformed URL input falls back to an empty query.
+6. Projects, milestones and Tasks keep their durable manual order. Project and Project-Task surfaces
+   do not offer view sorting that could conflict with that order. Task hierarchy remains intact after
+   filtering, and matching descendants retain their ancestors as context-only rows.
 
 ## Supported entity surfaces
 
-- Projects: ID, name, group, owner, status, lifecycle, dates, overdue/risk, Task count and milestone
-  count.
-- Project Tasks: ID, title, status, type, milestone, assignees, dates, effort and overdue state.
+- Projects (filters only): ID, name, group, owner, status, lifecycle, dates, overdue/risk, Task count
+  and milestone count.
+- Project Tasks (filters only): ID, title, status, type, milestone, assignees, dates, effort and
+  overdue state.
 - People: ID, name, email, weekly capacity, calendar, Project count, teams and lifecycle.
 - Teams: ID, name, members, member count and lifecycle.
 - Calendars: ID, name, working-day count, holiday count and lifecycle.
@@ -52,4 +55,5 @@ explicit versioned repository-format change.
 - The browser performs the query over the already-loaded, scope-constrained entity set; it cannot
   widen a Project Task view to another Project.
 - Complex filters are shareable for the Project directory and Project Task workspace, but they are
-  not yet durable repository Saved Views.
+  not yet durable repository Saved Views. Sorting remains available on directories such as People
+  that do not have a durable manual order.

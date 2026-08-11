@@ -597,7 +597,8 @@ describe("ProjectPlanWorkspace", () => {
     const orderedStage = result({ ...stage.document, task_order: [urgent.document.id, large.document.id, linked.document.id] });
     const orderedProject = result({ ...project.document, milestone_order: [stage.document.id, laterStage.document.id] });
     const client = api([linked, other, large, urgent], [orderedStage, laterStage], orderedProject); const onNavigate = vi.fn();
-    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={onNavigate} projectId={project.document.id} />);
+    const legacySort = JSON.stringify({ filter: { kind: "group", id: "root", combinator: "and", children: [] }, sort: [{ id: "sort-title", field: "title", direction: "asc" }] });
+    render(<ProjectPlanWorkspace api={client} draft={draft} initialAdvancedQuery={legacySort} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={onNavigate} projectId={project.document.id} />);
 
     const stageHeading = await screen.findByRole("heading", { name: "Launch" });
     const stageCard = stageHeading.closest<HTMLElement>("article")!;
@@ -779,7 +780,7 @@ describe("ProjectPlanWorkspace", () => {
     const filterGroup = screen.getByRole("group", { name: "Summary and quick task filters" });
     fireEvent.click(within(filterGroup).getByRole("button", { name: "Overdue: 1" }));
     expect(within(filterGroup).getByRole("button", { name: "Overdue: 1" }).getAttribute("aria-pressed")).toBe("true");
-    expect(within(filterGroup).getByRole("button", { name: "Filters and sorting 1" })).toBeTruthy();
+    expect(within(filterGroup).getByRole("button", { name: "Filters 1" })).toBeTruthy();
     expect(within(filterGroup).getByRole("button", { name: "Remove filter: Overdue yes" })).toBeTruthy();
     expect(screen.getByText("Overdue task")).toBeTruthy();
     expect(screen.queryByText("Active task")).toBeNull();
@@ -795,14 +796,14 @@ describe("ProjectPlanWorkspace", () => {
     render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={summaryProject.document.id} />);
 
     await screen.findByRole("heading", { name: "Summary project" });
-    fireEvent.click(screen.getByRole("button", { name: "Filters and sorting" }));
-    const dialog = screen.getByRole("dialog", { name: "Filters and sorting" });
+    fireEvent.click(screen.getByRole("button", { name: "Filters" }));
+    const dialog = screen.getByRole("dialog", { name: "Filters" });
     const presets = within(dialog).getByRole("group", { name: "Quick presets" });
     fireEvent.click(within(presets).getByRole("button", { name: "Overdue" }));
 
     const filterGroup = screen.getByRole("group", { name: "Summary and quick task filters" });
     expect(within(filterGroup).getByRole("button", { name: "Overdue: 1" }).getAttribute("aria-pressed")).toBe("true");
-    expect(within(filterGroup).getByRole("button", { name: "Filters and sorting 1" })).toBeTruthy();
+    expect(within(filterGroup).getByRole("button", { name: "Filters 1" })).toBeTruthy();
     const overdueChip = within(filterGroup).getByRole("button", { name: "Remove filter: Overdue yes" });
     expect(overdueChip).toBeTruthy();
     expect(screen.getByText("Overdue task")).toBeTruthy();
@@ -810,7 +811,7 @@ describe("ProjectPlanWorkspace", () => {
 
     fireEvent.click(overdueChip);
     expect(within(filterGroup).getByRole("button", { name: "Overdue: 1" }).getAttribute("aria-pressed")).toBe("false");
-    expect(within(filterGroup).getByRole("button", { name: "Filters and sorting" })).toBeTruthy();
+    expect(within(filterGroup).getByRole("button", { name: "Filters" })).toBeTruthy();
     expect(within(filterGroup).queryByRole("button", { name: "Remove filter: Overdue yes" })).toBeNull();
   });
 
@@ -830,7 +831,7 @@ describe("ProjectPlanWorkspace", () => {
     await screen.findByRole("heading", { name: "Summary project" });
     const filterGroup = screen.getByRole("group", { name: "Summary and quick task filters" });
     expect(within(filterGroup).getByRole("button", { name: "Overdue: 1" }).getAttribute("aria-pressed")).toBe("false");
-    expect(within(filterGroup).getByRole("button", { name: "Filters and sorting 2" })).toBeTruthy();
+    expect(within(filterGroup).getByRole("button", { name: "Filters 2" })).toBeTruthy();
   });
 
   it("orders the summary metrics Total, In progress, Blocked, Overdue, Completed", async () => {
@@ -842,7 +843,7 @@ describe("ProjectPlanWorkspace", () => {
     const group = screen.getByRole("group", { name: "Summary and quick task filters" });
     const labels = Array.from(group.querySelectorAll("button.project-plan-summary-metric > span"), (element) => element.textContent);
     expect(labels).toEqual(["Total tasks", "In progress", "Blocked", "Overdue", "Completed"]);
-    expect(within(group).getByRole("button", { name: "Filters and sorting" })).toBeTruthy();
+    expect(within(group).getByRole("button", { name: "Filters" })).toBeTruthy();
     expect(group.closest(".project-plan-toolbar")).toBeTruthy();
     expect(document.querySelectorAll(".project-plan-summary")).toHaveLength(1);
   });
@@ -906,8 +907,8 @@ describe("ProjectPlanWorkspace", () => {
     expect(screen.getByRole("button", { name: "Total tasks: 3" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Completed: 2" })).toBeTruthy();
     // Narrowing to Stage A keeps 2 tasks (1 done, 1 active); the quick metrics follow the applied expression.
-    fireEvent.click(screen.getByRole("button", { name: /Filters and sorting/u }));
-    let dialog = screen.getByRole("dialog", { name: "Filters and sorting" });
+    fireEvent.click(screen.getByRole("button", { name: /Filters/u }));
+    let dialog = screen.getByRole("dialog", { name: "Filters" });
     fireEvent.click(within(dialog).getByRole("button", { name: /Add condition/u }));
     fireEvent.change(within(dialog).getByLabelText("Field"), { target: { value: "milestone" } });
     fireEvent.change(within(dialog).getByLabelText("Value"), { target: { value: stageA.document.id } });
@@ -915,8 +916,8 @@ describe("ProjectPlanWorkspace", () => {
     expect(screen.getByRole("button", { name: "Total tasks: 2" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Completed: 1" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "In progress: 1" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /Filters and sorting/u }));
-    dialog = screen.getByRole("dialog", { name: "Filters and sorting" });
+    fireEvent.click(screen.getByRole("button", { name: /Filters/u }));
+    dialog = screen.getByRole("dialog", { name: "Filters" });
     fireEvent.click(within(dialog).getByRole("button", { name: /Add condition/u }));
     fireEvent.change(within(dialog).getAllByLabelText("Field")[1]!, { target: { value: "status" } });
     fireEvent.change(within(dialog).getAllByLabelText("Value")[1]!, { target: { value: "done" } });
@@ -943,7 +944,7 @@ describe("ProjectPlanWorkspace", () => {
     await screen.findByRole("heading", { name: "Summary project" });
     const filterGroup = screen.getByRole("group", { name: "Summary and quick task filters" });
     expect(within(filterGroup).getByRole("button", { name: "Overdue: 1" }).getAttribute("aria-pressed")).toBe("true");
-    expect(within(filterGroup).getByRole("button", { name: "Filters and sorting 1" })).toBeTruthy();
+    expect(within(filterGroup).getByRole("button", { name: "Filters 1" })).toBeTruthy();
     expect(within(filterGroup).getByRole("button", { name: "Remove filter: Overdue yes" })).toBeTruthy();
   });
 
@@ -1144,16 +1145,16 @@ describe("ProjectPlanWorkspace", () => {
     await screen.findByRole("heading", { name: "Summary project" });
     fireEvent.click(screen.getByRole("button", { name: "Completed: 1" }));
     expect(screen.getByRole("button", { name: "Completed: 1" }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByRole("button", { name: "Filters and sorting 1" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Filters 1" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Remove filter: Completed" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /Filters and sorting/u }));
-    const dialog = screen.getByRole("dialog", { name: "Filters and sorting" });
+    fireEvent.click(screen.getByRole("button", { name: /Filters/u }));
+    const dialog = screen.getByRole("dialog", { name: "Filters" });
     fireEvent.click(within(dialog).getByRole("button", { name: /Add condition/u }));
     fireEvent.change(within(dialog).getByLabelText("Field"), { target: { value: "status" } });
     fireEvent.change(within(dialog).getByLabelText("Value"), { target: { value: "done" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Apply" }));
     expect(screen.getByRole("button", { name: "Completed: 1" }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByRole("button", { name: "Filters and sorting 2" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Filters 2" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Total tasks: 1" }).getAttribute("aria-pressed")).toBe("false");
   });
 
@@ -1164,9 +1165,9 @@ describe("ProjectPlanWorkspace", () => {
 
     await screen.findByRole("heading", { name: "Summary project" });
     expect(screen.queryByText("All tasks")).toBeNull();
-    expect(screen.queryByRole("dialog", { name: "Filters and sorting" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /Filters and sorting/u }));
-    const dialog = screen.getByRole("dialog", { name: "Filters and sorting" });
+    expect(screen.queryByRole("dialog", { name: "Filters" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Filters/u }));
+    const dialog = screen.getByRole("dialog", { name: "Filters" });
     fireEvent.click(within(dialog).getByRole("button", { name: /Add condition/u }));
     fireEvent.change(within(dialog).getByLabelText("Field"), { target: { value: "milestone" } });
     fireEvent.change(within(dialog).getByLabelText("Value"), { target: { value: summaryStage.document.id } });

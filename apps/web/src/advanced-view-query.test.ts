@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  applyAdvancedViewQuery, emptyViewQuery, parseAdvancedViewQuery, removeViewFilterNode, serializeAdvancedViewQuery,
+  applyAdvancedViewQuery, emptyViewQuery, filterOnlyViewQuery, parseAdvancedViewQuery, removeViewFilterNode, serializeAdvancedViewQuery,
   type AdvancedViewQuery, type ViewField,
 } from "./advanced-view-query.js";
 
@@ -45,6 +45,11 @@ describe("advanced view query", () => {
       { id: "s2", field: "due", direction: "desc" },
     ] };
     expect(applyAdvancedViewQuery(rows, fields, query, "en").map((row) => row.id)).toEqual(["P-3", "P-2", "P-4", "P-1"]);
+  });
+
+  it("drops sorting while preserving filters for filter-only surfaces", () => {
+    const query: AdvancedViewQuery = { filter: { kind: "group", id: "root", combinator: "and", children: [{ kind: "condition", id: "f1", field: "effort", operator: "greater-than", value: "10" }] }, sort: [{ id: "s1", field: "id", direction: "desc" }] };
+    expect(filterOnlyViewQuery(query)).toEqual({ ...query, sort: [] });
   });
 
   it("round-trips a validated URL value and rejects unknown fields", () => {

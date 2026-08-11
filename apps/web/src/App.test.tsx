@@ -361,8 +361,8 @@ describe("frontend draft lifecycle", () => {
     expect(await screen.findByText("First task")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /New project/u })).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: /Filters and sorting/u }));
-    const filterDialog = screen.getByRole("dialog", { name: "Filters and sorting" });
+    fireEvent.click(screen.getByRole("button", { name: /Filters/u }));
+    const filterDialog = screen.getByRole("dialog", { name: "Filters" });
     fireEvent.click(within(filterDialog).getByRole("button", { name: /Add condition/u }));
     fireEvent.change(within(filterDialog).getByLabelText("Field"), { target: { value: "status" } });
     fireEvent.change(within(filterDialog).getByLabelText("Value"), { target: { value: "backlog" } });

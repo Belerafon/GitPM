@@ -23,7 +23,7 @@ import { PersonLinks } from "../../person-link.js";
 import { DraftReadOnlyAlert, draftReadOnlyReason } from "../../draft-read-only.js";
 import { SchedulingOverflowWarnings } from "../../scheduling-overflow-warnings.js";
 import { AdvancedViewControls } from "../../advanced-view-controls.js";
-import { applyAdvancedViewQuery, countViewConditions, emptyViewQuery, newViewNodeId, parseAdvancedViewQuery, serializeAdvancedViewQuery, type AdvancedViewQuery, type ViewField, type ViewFilterNode } from "../../advanced-view-query.js";
+import { applyAdvancedViewQuery, countViewConditions, emptyViewQuery, filterOnlyViewQuery, newViewNodeId, parseAdvancedViewQuery, serializeAdvancedViewQuery, type AdvancedViewQuery, type ViewField, type ViewFilterNode } from "../../advanced-view-query.js";
 
 type TaskInsertSpec = { readonly parentId?: string; readonly beforeId?: string; readonly afterId?: string };
 type PlanEditor = { readonly kind: "project" | "new-stage" }
@@ -364,18 +364,14 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     { id: "overdue", label: t("advancedView.field.overdue"), type: "boolean", read: (item) => { const due = text(item.document, "due"); return /^\d{4}-\d{2}-\d{2}$/u.test(due) && due < today && !isCompletedStatus(statuses, text(item.document, "status")); } },
   ], [effortOf, locale, peopleOptions, statuses, text, today, types, workspace]);
   useEffect(() => {
-    const parsed = parseAdvancedViewQuery(initialAdvancedQuery, taskAdvancedFields);
+    const parsed = filterOnlyViewQuery(parseAdvancedViewQuery(initialAdvancedQuery, taskAdvancedFields));
     const next = normalizeSummaryFilter(initialSummaryFilter) === "overdue" ? withQuickOverdueFilter(parsed) : parsed;
     setAdvancedQuery(next);
     if (hasQuickOverdueFilter(next)) setSummaryFilter("all");
   }, [initialAdvancedQuery, initialSummaryFilter, taskAdvancedFields]);
   const advancedEvaluationQuery = useMemo(() => withoutQuickOverdueFilter(advancedQuery), [advancedQuery]);
   const advancedTasks = useMemo(() => applyAdvancedViewQuery(currentPlanTasks, taskAdvancedFields, advancedEvaluationQuery, locale), [advancedEvaluationQuery, currentPlanTasks, locale, taskAdvancedFields]);
-  const advancedOrder = useMemo(() => new Map(advancedTasks.map((task, index) => [task.document.id, index])), [advancedTasks]);
-  const taskCompare = useMemo(() => {
-    const canonical = canonicalTaskComparator(locale, text);
-    return advancedQuery.sort.length === 0 ? canonical : (left: EntityResult, right: EntityResult) => (advancedOrder.get(left.document.id) ?? Number.MAX_SAFE_INTEGER) - (advancedOrder.get(right.document.id) ?? Number.MAX_SAFE_INTEGER) || canonical(left, right);
-  }, [advancedOrder, advancedQuery.sort.length, locale, text]);
+  const taskCompare = useMemo(() => canonicalTaskComparator(locale, text), [locale, text]);
   const hierarchyCompare = useMemo<PayloadCompare>(() => { const compare = taskCompare; return (left, right) => compare(left.entity, right.entity); }, [taskCompare]);
   const taskViewModel = useMemo<ProjectTaskViewModel>(() => workspace === null
     ? { stages: [], system: { kind: "system", roots: [] } }
@@ -453,7 +449,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     ...(statusFilter ? { status: [statusFilter] } : {}),
     ...(milestoneFilter ? { milestone: [milestoneFilter] } : {}),
     ...(summaryFilter !== "all" ? { summary: [summaryFilter] } : {}),
-    ...(countViewConditions(advancedQuery.filter) > 0 || advancedQuery.sort.length > 0 ? { filters: [serializeAdvancedViewQuery(advancedQuery)] } : {}),
+    ...(countViewConditions(advancedQuery.filter) > 0 ? { filters: [serializeAdvancedViewQuery(advancedQuery)] } : {}),
   };
   const archivedStageTasks = archiveViewModel.stages.flatMap((group) => workspace?.tasks.filter((task) => task.document.milestone === group.milestone.document.id) ?? []);
   const standaloneArchivedTasks = workspace?.tasks.filter((task) => task.document.lifecycle === "archived" && !archivedMilestoneIds.has(text(task.document, "milestone"))) ?? [];
@@ -486,21 +482,22 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
       ...(status ? { status: [status] } : {}),
       ...(milestone ? { milestone: [milestone] } : {}),
       ...(summary !== "all" && summary !== "overdue" ? { summary: [summary] } : {}),
-      ...(countViewConditions(nextAdvancedQuery.filter) > 0 || nextAdvancedQuery.sort.length > 0 ? { filters: [serializeAdvancedViewQuery(nextAdvancedQuery)] } : {}),
+      ...(countViewConditions(nextAdvancedQuery.filter) > 0 ? { filters: [serializeAdvancedViewQuery(nextAdvancedQuery)] } : {}),
     };
     onNavigate("projects", { projectId, ...(Object.keys(query).length > 0 ? { query } : {}) });
   };
   const toggleSummary = (next: SummaryFilter) => applyFilters("", milestoneFilter, effectiveSummaryFilter === next ? "all" : next);
   const resetFilters = () => { setAdvancedQuery(emptyViewQuery()); setStatusFilter(""); setMilestoneFilter(""); setSummaryFilter("all"); onNavigate("projects", { projectId }); };
   const applyAdvancedQuery = (next: AdvancedViewQuery) => {
-    const nextSummaryFilter = hasQuickOverdueFilter(next) ? "all" : summaryFilter;
-    setAdvancedQuery(next);
+    const filterQuery = filterOnlyViewQuery(next);
+    const nextSummaryFilter = hasQuickOverdueFilter(filterQuery) ? "all" : summaryFilter;
+    setAdvancedQuery(filterQuery);
     setSummaryFilter(nextSummaryFilter);
     const query = {
       ...(statusFilter ? { status: [statusFilter] } : {}),
       ...(milestoneFilter ? { milestone: [milestoneFilter] } : {}),
       ...(nextSummaryFilter !== "all" ? { summary: [nextSummaryFilter] } : {}),
-      ...(countViewConditions(next.filter) > 0 || next.sort.length > 0 ? { filters: [serializeAdvancedViewQuery(next)] } : {}),
+      ...(countViewConditions(filterQuery.filter) > 0 ? { filters: [serializeAdvancedViewQuery(filterQuery)] } : {}),
     };
     onNavigate("projects", { projectId, ...(Object.keys(query).length > 0 ? { query } : {}) });
   };
@@ -749,6 +746,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
                 </div>
               </details>
               <AdvancedViewControls
+                allowSorting={false}
                 appliedControls={(summaryFilter !== "all" || statusFilter !== "" || milestoneFilter !== "") && <div className="project-plan-filter-chips">{summaryFilter !== "all" && <span className="filter-chip">{summaryMetricLabel(summaryFilter)}<button aria-label={t("projectPlan.chipRemove", { filter: summaryMetricLabel(summaryFilter) })} onClick={() => applyFilters(statusFilter, milestoneFilter, "all")} type="button">×</button></span>}{statusFilter !== "" && <span className="filter-chip">{statusTitle(statusFilter)}<button aria-label={t("projectPlan.chipRemove", { filter: statusTitle(statusFilter) })} onClick={() => applyFilters("", milestoneFilter, effectiveSummaryFilter)} type="button">×</button></span>}{milestoneFilter !== "" && <span className="filter-chip">{milestoneChipLabel(milestoneFilter)}<button aria-label={t("projectPlan.chipRemove", { filter: milestoneChipLabel(milestoneFilter) })} onClick={() => applyFilters(statusFilter, "", effectiveSummaryFilter)} type="button">×</button></span>}</div>}
                 externalFilterCount={Number(summaryFilter !== "all") + Number(statusFilter !== "") + Number(milestoneFilter !== "")}
                 fields={taskAdvancedFields}
