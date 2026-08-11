@@ -803,6 +803,13 @@ describe("ProjectPlanWorkspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Filters" }));
     const dialog = screen.getByRole("dialog", { name: "Filters" });
     const presets = within(dialog).getByRole("group", { name: "Quick presets" });
+    expect(within(presets).getAllByRole("button").map((button) => button.textContent)).toEqual([
+      "Overdue",
+      "Unassigned",
+      "Without a milestone",
+      "Without a finish date",
+    ]);
+    expect(within(dialog).getByText("Custom filters").closest("details")?.open).toBe(true);
     fireEvent.click(within(presets).getByRole("button", { name: "Overdue" }));
 
     const filterGroup = screen.getByRole("group", { name: "Summary and quick task filters" });
