@@ -78,6 +78,8 @@ export function ControlHints({ t }: {
   const hovered = useRef<HintTarget | null>(null);
   const focused = useRef<HintTarget | null>(null);
   const hoverReady = useRef(false);
+  const focusReady = useRef(false);
+  const keyboardMode = useRef(true);
   const described = useRef<{ readonly target: HTMLElement; readonly previous: string | null } | null>(null);
   const suspendedTitle = useRef<{ readonly target: HTMLElement; readonly title: string } | null>(null);
   const tooltip = useRef<HTMLDivElement | null>(null);
@@ -159,6 +161,14 @@ export function ControlHints({ t }: {
       if (current.target.isConnected && !current.target.hasAttribute("title")) current.target.setAttribute("title", current.title);
       suspendedTitle.current = null;
     };
+    const suspendTitle = (target: HTMLElement) => {
+      if (suspendedTitle.current?.target === target) return;
+      restoreTitle();
+      const title = target.getAttribute("title");
+      if (title === null) return;
+      suspendedTitle.current = { target, title };
+      target.removeAttribute("title");
+    };
     const hide = () => {
       restoreDescription();
       restoreTitle();
@@ -189,22 +199,21 @@ export function ControlHints({ t }: {
       return fallback.length > 180 ? `${fallback.slice(0, 177).trimEnd()}…` : fallback;
     };
     const show = (target: HintTarget) => {
+      suspendTitle(target.source);
       const text = hintText(target);
-      if (text === "") { hide(); return; }
-      restoreDescription();
-      if (suspendedTitle.current?.target !== target.source) restoreTitle();
-      const title = target.source.getAttribute("title");
-      if (title !== null) {
-        suspendedTitle.current = { target: target.source, title };
-        target.source.removeAttribute("title");
+      if (text === "") {
+        restoreDescription();
+        setHint(null);
+        return;
       }
+      restoreDescription();
       const previous = target.anchor.getAttribute("aria-describedby");
       target.anchor.setAttribute("aria-describedby", normalized(`${previous ?? ""} ${TOOLTIP_ID}`));
       described.current = { target: target.anchor, previous };
       setHint(positionFor(target.anchor, text));
     };
     const showCurrent = () => {
-      const target = (hoverReady.current ? hovered.current : null) ?? focused.current;
+      const target = (hoverReady.current ? hovered.current : null) ?? (focusReady.current ? focused.current : null);
       if (target === null) hide(); else show(target);
     };
     const onMouseOver = (event: MouseEvent) => {
@@ -215,6 +224,7 @@ export function ControlHints({ t }: {
       clearHoverTimer();
       hovered.current = target;
       hoverReady.current = false;
+      suspendTitle(target.source);
       hoverTimer = setTimeout(() => {
         hoverTimer = null;
         if (hovered.current?.source !== target.source) return;
@@ -237,6 +247,13 @@ export function ControlHints({ t }: {
       if (target === null) return;
       clearHoverTimer();
       focused.current = target;
+      focusReady.current = keyboardMode.current;
+      if (!focusReady.current) {
+        restoreDescription();
+        suspendTitle(target.source);
+        setHint(null);
+        return;
+      }
       if (hovered.current?.source === target.source) hoverReady.current = true;
       show(target);
     };
@@ -246,6 +263,7 @@ export function ControlHints({ t }: {
       const related = event.relatedTarget;
       if (related instanceof Node && target.source.contains(related)) return;
       focused.current = null;
+      focusReady.current = false;
       showCurrent();
     };
     const dismiss = () => {
@@ -253,10 +271,19 @@ export function ControlHints({ t }: {
       hovered.current = null;
       hoverReady.current = false;
       focused.current = null;
+      focusReady.current = false;
       hide();
     };
-    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") dismiss(); };
+    const onPointerDown = () => {
+      keyboardMode.current = false;
+      dismiss();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { dismiss(); return; }
+      keyboardMode.current = true;
+    };
 
+    document.addEventListener("pointerdown", onPointerDown, true);
     document.addEventListener("mouseover", onMouseOver);
     document.addEventListener("mouseout", onMouseOut);
     document.addEventListener("focusin", onFocusIn);
@@ -265,6 +292,7 @@ export function ControlHints({ t }: {
     window.addEventListener("resize", dismiss);
     window.addEventListener("scroll", dismiss, true);
     return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true);
       document.removeEventListener("mouseover", onMouseOver);
       document.removeEventListener("mouseout", onMouseOut);
       document.removeEventListener("focusin", onFocusIn);

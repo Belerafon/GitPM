@@ -59,6 +59,23 @@ describe("ControlHints", () => {
     expect(button.getAttribute("title")).toBe("Move milestone up");
   });
 
+  it("suppresses the native title immediately instead of showing two tooltips", () => {
+    render(<><ControlHints t={t} /><button aria-label="Collapse menu" title="Collapse menu">☰</button></>);
+    const button = screen.getByRole("button", { name: "Collapse menu" });
+
+    fireEvent.mouseOver(button);
+    expect(button.hasAttribute("title")).toBe(false);
+    expect(screen.queryByRole("tooltip")).toBeNull();
+
+    act(() => vi.advanceTimersByTime(1_000));
+    expect(screen.getByRole("tooltip").textContent).toBe("Collapse menu");
+    expect(button.hasAttribute("title")).toBe(false);
+
+    fireEvent.mouseOut(button, { relatedTarget: document.body });
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    expect(button.getAttribute("title")).toBe("Collapse menu");
+  });
+
   it("falls back to the accessible name for controls without dedicated help", () => {
     render(<><ControlHints t={t} /><button aria-label="Move up">↑</button></>);
 
@@ -140,6 +157,39 @@ describe("ControlHints", () => {
     act(() => vi.advanceTimersByTime(1_000));
 
     expect(screen.queryByRole("tooltip")).toBeNull();
+  });
+
+  it("does not show a field hint for autofocus caused by a pointer-opened editor", () => {
+    render(<><ControlHints t={t} /><button>Edit</button><label>Name<input /></label></>);
+    const edit = screen.getByRole("button", { name: "Edit" });
+    const name = screen.getByRole("textbox", { name: "Name" });
+
+    fireEvent.mouseOver(edit);
+    act(() => vi.advanceTimersByTime(1_000));
+    expect(screen.getByRole("tooltip")).toBeTruthy();
+
+    fireEvent.pointerDown(edit);
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    fireEvent.focusIn(name);
+    act(() => vi.advanceTimersByTime(1_000));
+
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    expect(name.hasAttribute("aria-describedby")).toBe(false);
+  });
+
+  it("hides a hover hint when the pointer leaves a pointer-focused field", () => {
+    render(<><ControlHints t={t} /><label>Hours<input type="number" /></label></>);
+    const input = screen.getByRole("spinbutton", { name: "Hours" });
+
+    fireEvent.pointerDown(input);
+    fireEvent.focusIn(input);
+    revealHover(input);
+    expect(screen.getByRole("tooltip")).toBeTruthy();
+
+    fireEvent.mouseOut(input, { relatedTarget: document.body });
+
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    expect(input.hasAttribute("aria-describedby")).toBe(false);
   });
 
   it("positions a short edge hint near its control and keeps the arrow pointed at it", () => {
