@@ -222,7 +222,7 @@ describe("ProjectPlanWorkspace", () => {
     const target = within(dialog).getByText("Target", { selector: ".planning-checkboxes span" }).closest("label")!;
 
     expect((target.querySelector("input") as HTMLInputElement).disabled).toBe(true);
-    expect(target.textContent).toContain("Clear this track's schedule data before disabling it.");
+    expect(target.textContent).toContain("This project already has schedule data in the track.");
   });
 
   it("allows disabling a project track immediately after its last draft window is cleared", async () => {
@@ -246,7 +246,7 @@ describe("ProjectPlanWorkspace", () => {
     fireEvent.change(within(dialog).getByLabelText("Due date"), { target: { value: "" } });
 
     expect(checkbox.disabled).toBe(false);
-    expect(target.textContent).not.toContain("Clear this track's schedule data before disabling it.");
+    expect(target.textContent).not.toContain("This project already has schedule data in the track.");
   });
 
   it("allows disabling an unused track", async () => {

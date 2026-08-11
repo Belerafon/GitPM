@@ -30,6 +30,22 @@ describe("ProjectPlanningEditor", () => {
     expect(Array.from(select.options).map((option) => option.textContent)).toEqual(["Working plan", "Target"]);
   });
 
+  it("explains custom track names, data sources, and every planning role", () => {
+    const namedTracks: readonly TrackDefinition[] = [
+      { slug: "commitment", title: "Commitment", kind: "manual", capabilities: ["dates", "effort"] },
+      { slug: "actual", title: "Actual Activity", kind: "actual", source: "time_entries" },
+    ];
+    render(<ProjectPlanningEditor planning={{ enabled_tracks: ["commitment", "actual"], primary_track: "commitment", workload_track: "commitment", dashboard_tracks: ["commitment", "actual"] }} tracks={namedTracks} disabled={false} locale="ru" onChange={vi.fn()} />);
+
+    expect(screen.getByText("Что такое контур?")).toBeTruthy();
+    expect(screen.getByText(/Названия вроде Commitment или Working plan задаёт администратор/u)).toBeTruthy();
+    expect(screen.getByText(/Пользователи заполняют данные проекта/u)).toBeTruthy();
+    expect(screen.getByText(/GitPM рассчитывает его автоматически по записям времени/u)).toBeTruthy();
+    const comparisonHelp = screen.getByRole("button", { name: "Справка: Контур сравнения" });
+    expect(comparisonHelp.getAttribute("data-control-hint")).toContain("базовый план или зафиксированные обязательства");
+    expect(screen.getByText("Как GitPM использует контуры")).toBeTruthy();
+  });
+
   it("disables workload tracks that lack the effort capability", () => {
     const noEffort: readonly TrackDefinition[] = [
       { slug: "plan", title: "Plan", kind: "manual", capabilities: ["dates", "effort"] },
@@ -56,7 +72,7 @@ describe("ProjectPlanningEditor", () => {
 
     const enabled = screen.getByText("Enabled tracks").closest<HTMLElement>(".planning-field")!;
     const checkboxes = within(enabled).getAllByRole("checkbox") as HTMLInputElement[];
-    expect(checkboxes.map((checkbox) => [checkbox.parentElement?.textContent, checkbox.checked])).toEqual([
+    expect(checkboxes.map((checkbox) => [checkbox.parentElement?.querySelector(".planning-track-name")?.textContent, checkbox.checked])).toEqual([
       ["Working", true],
       ["Target", false],
       ["Actual", true],
@@ -99,7 +115,7 @@ describe("ProjectPlanningEditor", () => {
     const actual = within(enabled).getByText("Actual activity").closest("label")!;
 
     expect((target.querySelector("input") as HTMLInputElement).disabled).toBe(true);
-    expect(target.textContent).toContain("Clear this track's schedule data before disabling it.");
+    expect(target.textContent).toContain("This project already has schedule data in the track.");
     expect((actual.querySelector("input") as HTMLInputElement).disabled).toBe(false);
   });
 
@@ -113,7 +129,7 @@ describe("ProjectPlanningEditor", () => {
     const forecast = screen.getByText("Forecast", { selector: ".planning-checkboxes span" }).closest("label")!;
 
     expect((forecast.querySelector("input") as HTMLInputElement).disabled).toBe(true);
-    expect(forecast.textContent).toContain("Keep at least one valid primary and workload track enabled.");
+    expect(forecast.textContent).toContain("This track is currently the only valid choice for a required role.");
   });
 
   it("blocks disabling the only dates-and-effort track", () => {
