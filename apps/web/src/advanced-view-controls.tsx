@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { EditorDrawer } from "./editor-drawer.js";
 import type { Locale, MessageKey } from "./i18n.js";
 import {
@@ -14,13 +14,18 @@ interface QuickViewPreset {
   readonly query: AdvancedViewQuery;
 }
 
-export function AdvancedViewControls<Row>({ fields, locale, query, onChange, resultCount, totalCount, t }: {
+export function AdvancedViewControls<Row>({ fields, locale, query, onChange, resultCount, totalCount, leadingControls, appliedControls, hasExternalFilters = false, groupLabel, onClear, t }: {
   readonly fields: readonly ViewField<Row>[];
   readonly locale: Locale;
   readonly query: AdvancedViewQuery;
   readonly onChange: (query: AdvancedViewQuery) => void;
   readonly resultCount: number;
   readonly totalCount: number;
+  readonly leadingControls?: ReactNode;
+  readonly appliedControls?: ReactNode;
+  readonly hasExternalFilters?: boolean;
+  readonly groupLabel?: string;
+  readonly onClear?: () => void;
   readonly t: Translator;
 }) {
   const [open, setOpen] = useState(false);
@@ -28,17 +33,21 @@ export function AdvancedViewControls<Row>({ fields, locale, query, onChange, res
   const conditions = useMemo(() => flattenConditions(query.filter), [query.filter]);
   const fieldMap = new Map(fields.map((field) => [field.id, field]));
   const presets = useMemo(() => quickViewPresets(fields, t), [fields, t]);
-  const clear = () => onChange(emptyViewQuery());
+  const clear = () => onClear === undefined ? onChange(emptyViewQuery()) : onClear();
+  const appliedCount = countViewConditions(query.filter) + query.sort.length;
+  const hasAppliedFilters = appliedCount > 0 || hasExternalFilters;
   const openEditor = () => { setDraft(query); setOpen(true); };
   const applyPreset = (preset: QuickViewPreset) => { onChange(preset.query); setDraft(preset.query); setOpen(false); };
   return <>
-    <div className="advanced-view-bar">
+    <div aria-label={groupLabel} className="advanced-view-bar" role={groupLabel === undefined ? undefined : "group"}>
       <div className="advanced-view-main">
-        <button aria-expanded={open} className="advanced-view-trigger" onClick={openEditor} type="button">{t("advancedView.open")} {countViewConditions(query.filter) + query.sort.length > 0 && <span>{countViewConditions(query.filter) + query.sort.length}</span>}</button>
+        {leadingControls}
+        <button aria-expanded={open} className="advanced-view-trigger" onClick={openEditor} type="button">{t("advancedView.open")} {appliedCount > 0 && <span>{appliedCount}</span>}</button>
         <div className="advanced-view-chips" aria-live="polite">
           {conditions.map((condition) => <span className="filter-chip" key={condition.id}>{conditionLabel(condition, fieldMap, locale, t)}<button aria-label={t("advancedView.removeFilter", { filter: conditionLabel(condition, fieldMap, locale, t) })} onClick={() => onChange({ ...query, filter: removeViewFilterNode(query.filter, condition.id) })} type="button">×</button></span>)}
           {query.sort.map((rule) => <span className="filter-chip sort-chip" key={rule.id}>{fieldMap.get(rule.field)?.label ?? rule.field} · {t(rule.direction === "asc" ? "advancedView.ascendingShort" : "advancedView.descendingShort")}<button aria-label={t("advancedView.removeSort", { field: fieldMap.get(rule.field)?.label ?? rule.field })} onClick={() => onChange({ ...query, sort: query.sort.filter((candidate) => candidate.id !== rule.id) })} type="button">×</button></span>)}
-          {(conditions.length > 0 || query.sort.length > 0) && <button className="advanced-view-clear" onClick={clear} type="button">{t("advancedView.clear")}</button>}
+          {appliedControls}
+          {hasAppliedFilters && <button className="advanced-view-clear" onClick={clear} type="button">{t("advancedView.clear")}</button>}
         </div>
       </div>
       <small>{t("advancedView.resultCount", { visible: resultCount, total: totalCount })}</small>

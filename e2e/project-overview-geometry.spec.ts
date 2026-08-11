@@ -69,10 +69,10 @@ test.describe("project overview geometry", () => {
 
       // Activating a quick filter must not blow the toolbar past the viewport either.
       // Use the "In progress" metric (not "Total tasks") so the narrow in-progress semantics
-      // and its chip + reset button are exercised under each viewport.
+      // and the shared reset action are exercised under each viewport.
       await page.getByRole("button", { name: /^В работе/u }).first().click();
-      // The active filter chip and the reset button must remain visible inside the viewport.
-      await expect(page.locator(".project-plan-filter-chips .filter-reset")).toBeVisible();
+      // Quick and advanced filters now share one toolbar and one reset action.
+      await expect(toolbar.locator(".advanced-view-clear")).toBeVisible();
       const overflowAfter = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
       expect(overflowAfter).toBeLessThanOrEqual(0);
     });

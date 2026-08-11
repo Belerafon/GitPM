@@ -774,6 +774,12 @@ describe("ProjectPlanWorkspace", () => {
     expect(screen.getByRole("button", { name: "In progress: 1" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Blocked: 0" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Overdue: 1" })).toBeTruthy();
+
+    const filterGroup = screen.getByRole("group", { name: "Summary and quick task filters" });
+    fireEvent.click(within(filterGroup).getByRole("button", { name: "Overdue: 1" }));
+    fireEvent.click(within(filterGroup).getByRole("button", { name: "Clear all" }));
+    expect(within(filterGroup).getByRole("button", { name: "Total tasks: 3" }).getAttribute("aria-pressed")).toBe("true");
+    expect(within(filterGroup).queryByRole("button", { name: "Clear all" })).toBeNull();
   });
 
   it("orders the summary metrics Total, In progress, Blocked, Overdue, Completed", async () => {
@@ -785,6 +791,9 @@ describe("ProjectPlanWorkspace", () => {
     const group = screen.getByRole("group", { name: "Summary and quick task filters" });
     const labels = Array.from(group.querySelectorAll("button.project-plan-summary-metric > span"), (element) => element.textContent);
     expect(labels).toEqual(["Total tasks", "In progress", "Blocked", "Overdue", "Completed"]);
+    expect(within(group).getByRole("button", { name: "Filters and sorting" })).toBeTruthy();
+    expect(group.closest(".project-plan-toolbar")).toBeTruthy();
+    expect(document.querySelectorAll(".project-plan-summary")).toHaveLength(1);
   });
 
   it("hides milestones without matching tasks under a summary filter and restores them on toggle", async () => {
