@@ -652,6 +652,7 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .calendar-week-preview span { border-radius: 6px; padding: .35rem .15rem; font-size: .68rem; text-align: center; }
 .calendar-week-preview .working { background: #dcecdf; color: #285936; font-weight: 700; }
 .calendar-week-preview .off { background: #f0f1ef; color: #777d78; }
+.calendar-summary-preview { display: grid; gap: .5rem; }
 .calendar-exceptions { display: flex; flex-wrap: wrap; gap: .35rem; color: #646b66; font-size: .74rem; }
 .calendar-exceptions > span { width: 100%; font-weight: 650; }
 .calendar-exceptions time { border-radius: 999px; background: #fff2cc; padding: .2rem .4rem; }
@@ -839,6 +840,16 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
 .config-summary-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .config-summary-heading h3 { margin: 0; font-size: 1rem; }
 .config-summary-heading .editor-trigger { padding: .48rem .7rem; }
+.repository-default-calendar { display: grid; gap: .55rem; border: 1px solid #dfe3dd; border-radius: 10px; background: #f9fbf8; padding: .8rem; }
+.repository-default-calendar > span { color: #68706b; font-size: .75rem; }
+.repository-calendar-link { width: fit-content; font-size: 1rem; font-weight: 720; }
+.repository-default-calendar > code, .repository-calendar-selection-preview > code { width: fit-content; color: #6a716c; font-size: .7rem; }
+.repository-calendar-open { justify-self: start; }
+.repository-config-values { margin: 0; }
+.repository-config-values dt { color: #68706b; font-size: .75rem; }
+.repository-config-values dd { margin: .25rem 0 0; font-weight: 650; }
+.repository-calendar-selection-preview { display: grid; gap: .55rem; border: 1px solid #dfe3dd; border-radius: 10px; background: #f7f9f6; padding: .75rem; }
+.repository-calendar-selection-preview > button { justify-self: start; }
 .config-summary-values { display: flex; flex-wrap: wrap; gap: .45rem; }
 .config-preview { display: inline-flex; align-items: center; gap: .38rem; width: fit-content; max-width: 100%; border: 1px solid; border-radius: 999px; padding: .3rem .58rem; font-size: .76rem; font-weight: 680; line-height: 1.2; }
 .config-preview-dot { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 999px; background: var(--config-swatch); }

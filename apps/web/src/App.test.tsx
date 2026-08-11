@@ -217,6 +217,20 @@ describe("frontend draft lifecycle", () => {
     expect(`${window.location.pathname}${window.location.search}`).toBe("/people");
   });
 
+  it("restores a calendar editor deep link", async () => {
+    const api = new FakeApi();
+    api.currentSession = { ...session, mode: "repository", repository: { name: "portfolio", path: "D:\\portfolio", has_remote: false }, gitlab: { configured: false } };
+    api.drafts = [draft({ draft_id: "DRF-LOCAL" })];
+    api.entities = [
+      { document: { schema: "gitpm/calendar@1", id: "C-26-QD7FJ4", name: "Standard work week", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" }, path: "calendars/C-26-QD7FJ4.yaml", blob_id: "c".repeat(40), draft_fingerprint: "b".repeat(64) },
+    ];
+    window.history.replaceState({}, "", "/calendars/C-26-QD7FJ4");
+    render(<App api={api} browserLanguages={["en"]} />);
+
+    expect(await screen.findByRole("dialog", { name: "Edit calendar: Standard work week" })).toBeTruthy();
+    expect(`${window.location.pathname}${window.location.search}`).toBe("/calendars/C-26-QD7FJ4");
+  });
+
   it("restores a project milestone deep link with project tabs and task navigation", async () => {
     const api = new FakeApi();
     api.currentSession = { ...session, mode: "repository", repository: { name: "portfolio", path: "D:\\portfolio", has_remote: false }, gitlab: { configured: false } };

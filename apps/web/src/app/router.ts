@@ -9,6 +9,7 @@ export interface AppRoute {
   readonly stageId?: string;
   readonly taskId?: string;
   readonly personId?: string;
+  readonly calendarId?: string;
   readonly commit?: string;
   readonly query: RouteQuery;
 }
@@ -61,6 +62,7 @@ export function parseAppRoute(input: string | URL): AppRoute | null {
   if (segments[0] === "projects" && segments[2] === "effort" && segments.length === 3) return route("effort", { projectId: segments[1] }, query);
   if (segments[0] === "projects" && segments[2] === "timeline" && segments.length === 3) return route("gantt", { projectId: segments[1] }, query);
   if (segments[0] === "people" && segments.length === 2) return route("people", { personId: segments[1] }, query);
+  if (segments[0] === "calendars" && segments.length === 2) return route("calendars", { calendarId: segments[1] }, query);
   if (segments[0] === "history" && segments.length === 2) return route("history", { commit: segments[1] }, query);
   return null;
 }
@@ -76,7 +78,7 @@ export function serializeAppRoute(value: AppRoute): string {
     case "board": pathname = value.projectId === undefined ? "/board" : `/projects/${segment(value.projectId)}/board`; break;
     case "effort": pathname = value.projectId === undefined ? "/projects" : `/projects/${segment(value.projectId)}/effort`; break;
     case "people": pathname = value.personId === undefined ? "/people" : `/people/${segment(value.personId)}`; break;
-    case "calendars": pathname = "/calendars"; break;
+    case "calendars": pathname = value.calendarId === undefined ? "/calendars" : `/calendars/${segment(value.calendarId)}`; break;
     case "settings": pathname = "/settings"; break;
     case "workload": pathname = "/workload"; break;
     case "gantt": pathname = value.projectId === undefined ? "/gantt" : `/projects/${segment(value.projectId)}/timeline`; break;
@@ -94,7 +96,7 @@ export function serializeAppRoute(value: AppRoute): string {
 export function routeForDestination(destination: WorkspaceDestination | "workspaces", selection: WorkspaceSelection = {}, query: RouteQuery = emptyQuery): AppRoute {
   const routeQuery = selection.query ?? query;
   if (destination === "workspaces") return route("workspaces", {}, routeQuery);
-  if (destination === "calendar") return route("calendars", {}, routeQuery);
+  if (destination === "calendar") return route("calendars", { calendarId: selection.calendarId }, routeQuery);
   if (destination === "people") return route("people", { personId: selection.personId }, routeQuery);
   if (destination === "projects") return route("projects", { projectId: selection.projectId }, routeQuery);
   if (destination === "stages") return selection.stageId === undefined
