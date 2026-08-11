@@ -222,7 +222,7 @@ export function TaskTimeEntries(props: {
               <label>{t("timeEffort.hours")}<input disabled={busy} min="0.25" name="hours" required step="0.25" type="number" /></label>
               <label>{t("timeEffort.category")}<select disabled={busy} name="category" required>{activeCategories.map((category) => <option key={category.slug} value={category.slug}>{category.title}</option>)}</select></label>
               <label>{t("timeEffort.note")}<input disabled={busy} name="note" type="text" /></label>
-              <button className="primary" disabled={busy} type="submit">{t("timeEffort.add")}</button>
+              <button className="primary" data-control-hint={t("controlHint.addTimeEntry")} disabled={busy} type="submit">{t("timeEffort.add")}</button>
             </form>
           )}
           <EditorDrawer closeLabel={t("core.closeEditor")} onClose={closeCorrection} open={editingEntry !== null && correction !== null} title={t("timeEffort.correctTitle")}>

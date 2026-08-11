@@ -34,7 +34,7 @@ export function ScheduleTracksEditor({ schedules, tracks, actualTrack, primaryTr
 
   return <fieldset className="schedule-tracks-editor" data-multi={multi || undefined}>
     {multi && <div className="schedule-tracks-tabs" role="tablist" aria-label={t("scheduleTracks.track")}>
-      {editable.map((track) => <button type="button" role="tab" key={track.slug} aria-selected={activeTrack?.slug === track.slug} className={activeTrack?.slug === track.slug ? "is-active" : ""} onClick={() => setActive(track.slug)}>{track.title}{track.slug === primaryTrack ? ` · ${t("scheduleTracks.primary")}` : ""}</button>)}
+      {editable.map((track) => <button type="button" role="tab" key={track.slug} aria-selected={activeTrack?.slug === track.slug} className={activeTrack?.slug === track.slug ? "is-active" : ""} data-control-hint={t("controlHint.scheduleTrackTab")} onClick={() => setActive(track.slug)}>{track.title}{track.slug === primaryTrack ? ` · ${t("scheduleTracks.primary")}` : ""}</button>)}
     </div>}
     {activeTrack !== undefined && <ScheduleTrackFields track={activeTrack} schedules={schedules} disabled={disabled} locale={locale} allTasks={dependencies} showDependencies={showDependencies} onPatch={(patch) => patchField(activeTrack.slug, patch)} onDependencies={(ids) => onChange(setScheduleDependencies(schedules, activeTrack.slug, ids))} />}
     {actualTrack !== undefined && <p className="schedule-tracks-actual-note">{t("scheduleTracks.actualNote", { title: actualTrack.title })}</p>}

@@ -8,8 +8,8 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible, a:focus-visible { outline: 3px solid #8bb8a4; outline-offset: 2px; }
 .control-hint { position: fixed; z-index: 1000; width: max-content; max-width: min(520px, calc(100vw - 2rem)); border: 1px solid rgba(255, 255, 255, .18); border-radius: 7px; background: #18352a; box-shadow: 0 8px 24px rgba(13, 29, 22, .24); color: #fff; padding: .58rem .72rem; font-size: .8rem; font-weight: 500; line-height: 1.5; overflow-wrap: anywhere; pointer-events: none; transform: translate(-50%, calc(-100% - .55rem)); }
 .control-hint.below { transform: translate(-50%, .55rem); }
-.control-hint::after { position: absolute; top: 100%; left: 50%; width: 8px; height: 8px; background: #18352a; content: ""; transform: translate(-50%, -50%) rotate(45deg); }
-.control-hint.below::after { top: 0; }
+.control-hint-arrow { position: absolute; top: 100%; width: 8px; height: 8px; background: #18352a; transform: translate(-50%, -50%) rotate(45deg); }
+.control-hint.below .control-hint-arrow { top: 0; }
 label:has(input:not([type="hidden"]), select, textarea), legend, [data-field-hint] { cursor: help; }
 [data-field-hint]:focus-visible { border-radius: 3px; outline: 2px solid #2f6f56; outline-offset: 2px; }
 .primary { border-color: #244f3a; background: #244f3a; color: #fff; }

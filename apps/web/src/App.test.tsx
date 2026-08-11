@@ -179,7 +179,7 @@ describe("control hints", () => {
     render(<App api={api} browserLanguages={["en"]} />);
 
     const login = await screen.findByRole("button", { name: "Sign in with GitLab" });
-    fireEvent.mouseOver(login);
+    fireEvent.focusIn(login);
 
     expect(screen.getByRole("tooltip").textContent).toBe("Open GitLab authorization to sign in to GitPM.");
   });
