@@ -53,4 +53,6 @@ When a repository document schema changes:
 2. run `corepack pnpm contracts:generate`;
 3. update the generic known-field UI read model when a new field must be edited dynamically;
 4. update affected HTTP DTO schemas and named decoders;
-5. run `corepack pnpm verify:local`.
+5. run `corepack pnpm verify:repository` and the affected server, CLI, web, or export consumer
+   profiles identified by the impact analysis; use `verify:local` only when the schema change is
+   genuinely cross-cutting and cannot be bounded.

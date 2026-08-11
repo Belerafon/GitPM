@@ -34,6 +34,30 @@ describe("local verification runner", () => {
       .toContain("packages/drafts/src/guidance.test.ts");
   });
 
+  it.each([
+    ["web", "test:web"],
+    ["server", "test:server"],
+    ["cli", "test:cli"],
+    ["repository", "test:repository"],
+    ["planning-domain", "test:planning-domain"],
+    ["workflow", "test:workflow"],
+    ["export", "test:export"],
+  ])("maps the %s impact profile to its thematic tests", (profile, testScript) => {
+    const plan = verificationPlan(parseArguments(["--profile", profile]));
+    expect(plan.find((step) => step.name === "thematic tests")?.args).toContain(testScript);
+    expect(plan.at(-1)?.name).toBe("diff whitespace");
+  });
+
+  it.each([
+    ["tooling", "test:tooling"],
+    ["e2e-ui", "e2e:ui"],
+    ["e2e-workflow", "e2e:workflow"],
+  ])("provides the %s specialized profile", (profile, testScript) => {
+    const plan = verificationPlan(parseArguments(["--profile", profile]));
+    expect(plan.some((step) => step.args.includes(testScript))).toBe(true);
+    expect(plan.at(-1)?.name).toBe("diff whitespace");
+  });
+
   it("rejects unknown profiles and renders useful elapsed time", () => {
     expect(() => parseArguments(["--profile", "mystery"])).toThrow("Unknown verification profile");
     expect(formatDuration(125_400)).toBe("2m 05s");

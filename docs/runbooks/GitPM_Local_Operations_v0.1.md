@@ -40,11 +40,18 @@ required gate. Run only one complete gate at a time: E2E uses fixed ports and co
 suites slow each other down. Set `GITPM_VERIFY_HEARTBEAT_SECONDS` to change heartbeat frequency or
 `GITPM_VERIFY_TIMEOUT_MINUTES` to override every step timeout.
 
-For a text-only change to generated agent guidance, use `corepack pnpm verify:guidance`. It keeps
-the frozen install, dependency build, lint, and direct/worktree guidance contract tests while
-skipping unrelated draft lifecycle and browser suites. If only the source-development
-`AGENTS.md` changed, no test command is required. Mixed changes still require
-`corepack pnpm verify:local`.
+For normal development, select one or more impact profiles from
+`docs/Test_Verification_Strategy.md`: `verify:web`, `verify:server`, `verify:cli`,
+`verify:repository`, `verify:planning-domain`, `verify:workflow`, `verify:export`, or
+`verify:tooling`. Add `verify:e2e-ui` or `verify:e2e-workflow` only when the changed behavior
+crosses the corresponding browser boundary. For a text-only change to generated agent guidance,
+use `verify:guidance`. Each profile keeps the frozen install and the build, lint, test, and
+specialized checks relevant to its ownership boundary while skipping unrelated suites.
+
+Use `corepack pnpm verify:local` for releases and changes whose impact cannot be bounded
+confidently, including root dependency/lockfile, build/test infrastructure, and broad
+cross-cutting refactors. It is no longer the default merely because a change touches source or
+more than one thematic group.
 
 ## Start and health verification
 

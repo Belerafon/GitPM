@@ -25,13 +25,109 @@ const guidanceFiles = [
   "packages/drafts/src/guidance.test.ts",
 ];
 
+const diffCheck = { name: "diff whitespace", command: git, args: ["diff", "--check"], timeoutMinutes: 2 };
+
+function pnpmStep(name, args, timeoutMinutes = 10) {
+  return { name, command: corepack, args: ["pnpm", ...args], timeoutMinutes };
+}
+
+function sourceProfile({ buildFilters, lintPaths, testScript, webTypecheck = false, extraSteps = [] }) {
+  const filterArguments = buildFilters.flatMap((filter) => ["--filter", `${filter}...`]);
+  return [
+    pnpmStep("build affected packages", [...filterArguments, "build"], 15),
+    pnpmStep("lint affected sources", ["exec", "eslint", ...lintPaths, "--max-warnings", "0"]),
+    ...(webTypecheck ? [pnpmStep("typecheck web", ["--filter", "@gitpm/web", "typecheck"])] : []),
+    pnpmStep("thematic tests", [testScript], 30),
+    ...extraSteps,
+    diffCheck,
+  ];
+}
+
 const profiles = {
   full: fullSteps,
   guidance: [
     { name: "build guidance dependencies", command: corepack, args: ["pnpm", "--filter", "@gitpm/drafts...", "build"], timeoutMinutes: 10 },
     { name: "lint guidance", command: corepack, args: ["pnpm", "exec", "eslint", ...guidanceFiles, "--max-warnings", "0"], timeoutMinutes: 5 },
     { name: "guidance tests", command: corepack, args: ["pnpm", "exec", "vitest", "run", "packages/drafts/src/guidance.test.ts"], timeoutMinutes: 5 },
-    { name: "diff whitespace", command: git, args: ["diff", "--check"], timeoutMinutes: 2 },
+    diffCheck,
+  ],
+  web: sourceProfile({
+    buildFilters: ["@gitpm/web"],
+    lintPaths: ["apps/web"],
+    testScript: "test:web",
+    webTypecheck: true,
+  }),
+  server: sourceProfile({
+    buildFilters: ["@gitpm/server"],
+    lintPaths: ["apps/server"],
+    testScript: "test:server",
+  }),
+  cli: sourceProfile({
+    buildFilters: ["@gitpm/cli"],
+    lintPaths: ["apps/cli"],
+    testScript: "test:cli",
+  }),
+  repository: sourceProfile({
+    buildFilters: ["@gitpm/domain", "@gitpm/validation"],
+    lintPaths: [
+      "packages/contracts",
+      "packages/domain",
+      "packages/repository-format",
+      "packages/shared",
+      "packages/task-hierarchy",
+      "packages/validation",
+    ],
+    testScript: "test:repository",
+    extraSteps: [pnpmStep("schema contracts", ["schema:verify"], 5)],
+  }),
+  "planning-domain": sourceProfile({
+    buildFilters: ["@gitpm/workload", "@gitpm/time-entries"],
+    lintPaths: [
+      "packages/calendar",
+      "packages/scheduling",
+      "packages/time-entries",
+      "packages/workload",
+    ],
+    testScript: "test:planning-domain",
+  }),
+  workflow: sourceProfile({
+    buildFilters: ["@gitpm/agent", "@gitpm/logging"],
+    lintPaths: [
+      "packages/agent",
+      "packages/changes",
+      "packages/drafts",
+      "packages/git-client",
+      "packages/gitlab",
+      "packages/history",
+      "packages/logging",
+      "packages/publishing",
+      "packages/security",
+    ],
+    testScript: "test:workflow",
+    extraSteps: [
+      { name: "security report", command: process.execPath, args: ["scripts/security-spike-report.mjs"], timeoutMinutes: 5 },
+    ],
+  }),
+  export: sourceProfile({
+    buildFilters: ["@gitpm/export"],
+    lintPaths: ["packages/export"],
+    testScript: "test:export",
+  }),
+  tooling: [
+    pnpmStep("lint tooling", ["exec", "eslint", "scripts", "playwright.config.ts", "--max-warnings", "0"]),
+    pnpmStep("tooling tests", ["test:tooling"]),
+    pnpmStep("planning validators", ["planning:verify"], 5),
+    diffCheck,
+  ],
+  "e2e-ui": [
+    pnpmStep("build browser runtime", ["--filter", "@gitpm/server...", "--filter", "@gitpm/web...", "build"], 15),
+    pnpmStep("UI browser tests", ["e2e:ui"], 20),
+    diffCheck,
+  ],
+  "e2e-workflow": [
+    pnpmStep("build browser runtime", ["--filter", "@gitpm/server...", "--filter", "@gitpm/web...", "build"], 15),
+    pnpmStep("workflow browser tests", ["e2e:workflow"], 20),
+    diffCheck,
   ],
 };
 
