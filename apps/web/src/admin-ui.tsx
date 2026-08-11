@@ -397,7 +397,11 @@ function ScheduleTracksConfigEditor({ api, draft, entity, locale, readOnly, t, m
     <header className="config-summary-heading"><h3>{title}</h3><button className="editor-trigger" aria-label={t("admin.editConfig", { name: title })} disabled={readOnly} onClick={() => { reset(); setOpen(true); }} type="button">{t("core.edit")}</button></header>
     <div className="config-summary-values">{tracks.map((track) => <span className="config-preview schedule-track-preview" key={track.slug}><span aria-hidden="true" className="config-preview-dot" />{track.title}<small>{track.kind === "manual" ? t("admin.manualTrack") : t("admin.actualTrack")}</small></span>)}</div>
     <EditorDrawer closeLabel={t("core.closeEditor")} onClose={close} open={open} title={`${t("core.edit")}: ${title}`}><form className="editor-drawer-form config-editor-form" onSubmit={submit} ref={formRef}>
-      <p className="config-hint">{t("admin.scheduleTracksHint")}</p>
+      <div className="config-hint schedule-tracks-hint">
+        <p>{t("admin.scheduleTracksHint")}</p>
+        <p>{t("admin.scheduleTracksKindsHint")}</p>
+        <p>{t("admin.scheduleTracksUsageHint")}</p>
+      </div>
       <ConfigurationImpactNotice issues={impactIssues} t={t} />
       <div className="config-list">{tracks.map((track, index) => <section className="config-row schedule-track-row" data-flip-key={`config:schedule-tracks:${track.slug}`} key={track.slug}>
         <header className="config-row-heading"><div className="config-identity"><strong>{track.title}</strong><span className="config-technical-id"><span>{t("admin.technicalId")}</span><code>{track.slug}</code></span></div><span className={`schedule-track-kind ${track.kind}`}>{track.kind === "manual" ? t("admin.manualTrack") : t("admin.actualTrack")}</span></header>

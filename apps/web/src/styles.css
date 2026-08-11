@@ -844,6 +844,8 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
 .config-preview-dot { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 999px; background: var(--config-swatch); }
 .config-preview.inactive { opacity: .55; filter: saturate(.4); text-decoration: line-through; }
 .config-hint { border-radius: 8px; background: #f2f5f2; margin: 0; padding: .7rem .8rem; color: #626b65; font-size: .78rem; line-height: 1.45; }
+.schedule-tracks-hint { display: grid; gap: .45rem; }
+.schedule-tracks-hint p { margin: 0; }
 .config-list { display: grid; gap: .7rem; }
 .config-editor-form .config-row { display: grid; gap: .75rem; border: 1px solid #dfe3dd; border-radius: 10px; background: #fff; padding: .8rem; }
 .config-row-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; }
