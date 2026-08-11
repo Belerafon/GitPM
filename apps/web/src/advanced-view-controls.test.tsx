@@ -60,9 +60,10 @@ describe("AdvancedViewControls", () => {
     fireEvent.click(screen.getByRole("button", { name: "Filters" }));
     const dialog = screen.getByRole("dialog", { name: "Filters" });
 
-    fireEvent.click(within(dialog).getByText("Custom filters"));
+    expect(within(dialog).getByText("Custom filters").closest("details")?.open).toBe(true);
     expect(within(dialog).queryByRole("heading", { name: "Sorting" })).toBeNull();
     expect(within(dialog).queryByRole("button", { name: /Add sorting/u })).toBeNull();
     expect(within(dialog).getByRole("heading", { level: 3, name: "Filters" })).toBeTruthy();
+    expect(within(dialog).getByRole("button", { name: "Without a finish date" })).toBeTruthy();
   });
 });

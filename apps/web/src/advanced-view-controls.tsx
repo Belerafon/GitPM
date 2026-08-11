@@ -57,7 +57,7 @@ export function AdvancedViewControls<Row>({ fields, locale, query, onChange, res
     <EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setOpen(false)} open={open} title={t(allowSorting ? "advancedView.title" : "advancedView.titleFilters")}>
       <form className="editor-drawer-form advanced-view-form" onSubmit={(event) => { event.preventDefault(); onChange(draft); setOpen(false); }}>
         <section className="advanced-view-presets"><h3>{t("advancedView.quickPresets")}</h3><div aria-label={t("advancedView.quickPresets")} role="group">{presets.map((preset) => <button key={preset.id} onClick={() => applyPreset(preset)} type="button">{preset.label}</button>)}</div></section>
-        <details className="advanced-view-custom">
+        <details className="advanced-view-custom" open>
           <summary>{t(allowSorting ? "advancedView.customSetup" : "advancedView.customFilters")}</summary>
           <div>
             {allowSorting && <section><header><h3>{t("advancedView.sorting")}</h3><button onClick={() => { const field = fields.find((candidate) => candidate.sortable !== false); if (field !== undefined) setDraft((current) => ({ ...current, sort: [...current.sort, { id: newViewNodeId("sort"), field: field.id, direction: "asc" }] })); }} type="button">+ {t("advancedView.addSort")}</button></header>
@@ -109,11 +109,19 @@ function quickViewPresets<Row>(fields: readonly ViewField<Row>[], t: Translator,
   const boolean = fields.find((field) => field.id === "overdue") ?? fields.find((field) => field.type === "boolean");
   const number = fields.find((field) => field.type === "number");
   const lifecycle = fields.find((field) => field.id === "lifecycle" && field.options?.some((option) => option.value === "active"));
+  const owner = fields.find((field) => field.id === "owner");
+  const assignees = fields.find((field) => field.id === "assignees");
+  const milestone = fields.find((field) => field.id === "milestone");
+  const due = fields.find((field) => field.id === "due");
   const presets: QuickViewPreset[] = [];
   if (!allowSorting) {
     if (boolean !== undefined) presets.push({ id: "boolean-true", label: boolean.label, query: filterPreset(boolean, "is-true") });
     if (lifecycle !== undefined) presets.push({ id: "lifecycle-active", label: t("advancedView.presetActive"), query: filterPreset(lifecycle, "equals", "active") });
-    return presets;
+    if (assignees !== undefined) presets.push({ id: "assignees-empty", label: t("advancedView.presetUnassigned"), query: filterPreset(assignees, "is-empty") });
+    else if (owner !== undefined) presets.push({ id: "owner-empty", label: t("advancedView.presetWithoutOwner"), query: filterPreset(owner, "is-empty") });
+    if (milestone !== undefined) presets.push({ id: "milestone-empty", label: t("advancedView.presetWithoutMilestone"), query: filterPreset(milestone, "is-empty") });
+    if (due !== undefined) presets.push({ id: "due-empty", label: t("advancedView.presetWithoutDue"), query: filterPreset(due, "is-empty") });
+    return presets.slice(0, 4);
   }
   if (primary !== undefined) {
     presets.push({ id: "primary-asc", label: t("advancedView.presetAlphabetical", { field: primary.label }), query: sortPreset(primary, "asc") });
