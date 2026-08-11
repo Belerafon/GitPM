@@ -191,16 +191,16 @@ export function TaskTimeEntries(props: {
   return (
     <section className="task-time-entries">
       <div className="task-time-entries-heading">
-        <h3><button aria-controls={`time-entry-body-${taskId}`} aria-expanded={open} className="section-toggle" onClick={() => setOpen((value) => !value)} type="button"><span aria-hidden="true" className="section-toggle-chevron">▾</span>{t("timeEffort.heading")}</button></h3>
+        <h3><button aria-controls={`time-entry-body-${taskId}`} aria-expanded={open} className="section-toggle" data-control-hint={t("fieldHint.actualHeading")} onClick={() => setOpen((value) => !value)} type="button"><span aria-hidden="true" className="section-toggle-chevron">▾</span>{t("timeEffort.heading")}</button></h3>
         {activeCount > 0 && <span className="task-time-entries-count">{activeCount}</span>}
       </div>
       {open && (
         <>
           {error !== null && <div className="alert error">{error}</div>}
           <dl className="time-entry-summary">
-            <div><dt>{t("timeEffort.totalHours")}</dt><dd>{totalHours > 0 ? formatDurationHours(locale, totalHours) : "—"}</dd></div>
-            <div><dt>{t("timeEffort.firstActivity")}</dt><dd>{actual?.start ? formatDateOnly(locale, actual.start) : "—"}</dd></div>
-            <div><dt>{t("timeEffort.lastActivity")}</dt><dd>{actual?.finish ? formatDateOnly(locale, actual.finish) : "—"}</dd></div>
+            <div><dt data-field-hint={t("fieldHint.totalHours")} tabIndex={0}>{t("timeEffort.totalHours")}</dt><dd>{totalHours > 0 ? formatDurationHours(locale, totalHours) : "—"}</dd></div>
+            <div><dt data-field-hint={t("fieldHint.firstActivity")} tabIndex={0}>{t("timeEffort.firstActivity")}</dt><dd>{actual?.start ? formatDateOnly(locale, actual.start) : "—"}</dd></div>
+            <div><dt data-field-hint={t("fieldHint.lastActivity")} tabIndex={0}>{t("timeEffort.lastActivity")}</dt><dd>{actual?.finish ? formatDateOnly(locale, actual.finish) : "—"}</dd></div>
           </dl>
           <ul className="time-entry-list">
             {entries.map((entry) => (
@@ -210,7 +210,7 @@ export function TaskTimeEntries(props: {
                 <span className="time-entry-person"><PersonLink name={personName(entry.document.person)} onOpen={onOpenPerson} personId={entry.document.person} /></span>
                 <span className="time-entry-category">{categories.find((category) => category.slug === entry.document.category)?.title ?? entry.document.category}</span>
                 {typeof entry.document.note_markdown === "string" && entry.document.note_markdown !== "" && <span className="time-entry-note">{entry.document.note_markdown}</span>}
-                {entry.document.state === "active" && !readOnly && <><button className="text-link" disabled={busy} onClick={() => beginCorrection(entry)} type="button">{t("timeEffort.correct")}</button><button className="text-link" disabled={busy} onClick={() => void voidEntry(entry)} type="button">{t("timeEffort.void")}</button></>}
+                {entry.document.state === "active" && !readOnly && <><button className="text-link" data-control-hint={t("fieldHint.correctTime")} disabled={busy} onClick={() => beginCorrection(entry)} type="button">{t("timeEffort.correct")}</button><button className="text-link" data-control-hint={t("fieldHint.voidTime")} disabled={busy} onClick={() => void voidEntry(entry)} type="button">{t("timeEffort.void")}</button></>}
               </li>
             ))}
             {entries.length === 0 && <li className="empty-copy">{t("timeEffort.empty")}</li>}

@@ -64,7 +64,7 @@ export function ProjectPlanningEditor({ planning, tracks, usedTracks = new Set()
           const requiredForPlanning = enabledTrack
             && ((manualWithDates(track) && enabledManual.length === 1) || (manualWithDates(track) && hasDatesEffort(track) && enabledWorkload.length === 1));
           const cannotDisable = inUse || requiredForPlanning;
-          return <label key={track.slug}><span><input type="checkbox" disabled={disabled || cannotDisable} checked={enabledTrack} onChange={(event) => setEnabled(toggle(track.slug, event.target.checked))} />{track.title}</span>{inUse ? <small>{t("planning.trackInUse")}</small> : requiredForPlanning ? <small>{t("planning.trackRequired")}</small> : null}</label>;
+          return <label data-field-hint={t("fieldHint.enabledTracks")} key={track.slug}><span><input type="checkbox" disabled={disabled || cannotDisable} checked={enabledTrack} onChange={(event) => setEnabled(toggle(track.slug, event.target.checked))} />{track.title}</span>{inUse ? <small>{t("planning.trackInUse")}</small> : requiredForPlanning ? <small>{t("planning.trackRequired")}</small> : null}</label>;
         })}
       </div>
     </div>
@@ -74,7 +74,7 @@ export function ProjectPlanningEditor({ planning, tracks, usedTracks = new Set()
     <div className="planning-field">
       <span className="planning-field-label">{t("planning.dashboardTracks")}</span>
       <div className="planning-checkboxes">
-        {enabledForSelect.map((track) => <label key={track.slug}><input type="checkbox" disabled={disabled} checked={dashboardSet.has(track.slug)} onChange={(event) => update({ dashboard_tracks: event.target.checked ? [...dashboard, track.slug] : dashboard.filter((slug) => slug !== track.slug) })} />{track.title}</label>)}
+        {enabledForSelect.map((track) => <label data-field-hint={t("fieldHint.dashboardTracks")} key={track.slug}><input type="checkbox" disabled={disabled} checked={dashboardSet.has(track.slug)} onChange={(event) => update({ dashboard_tracks: event.target.checked ? [...dashboard, track.slug] : dashboard.filter((slug) => slug !== track.slug) })} />{track.title}</label>)}
       </div>
     </div>
   </fieldset>;

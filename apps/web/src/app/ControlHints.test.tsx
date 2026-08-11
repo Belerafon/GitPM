@@ -59,4 +59,41 @@ describe("ControlHints", () => {
 
     expect(screen.queryByRole("tooltip")).toBeNull();
   });
+
+  it("shows localized mechanics for a labeled field on hover and keyboard focus", () => {
+    render(<><ControlHints t={t} /><label>Hours<input type="number" /></label></>);
+    const input = screen.getByRole("spinbutton", { name: "Hours" });
+
+    fireEvent.focusIn(input);
+
+    expect(screen.getByRole("tooltip").textContent).toContain("0.25-hour increments");
+    expect(input.getAttribute("aria-describedby")).toBe("gitpm-control-hint");
+  });
+
+  it("supports labels associated by htmlFor and standalone aria-label fields", () => {
+    render(<><ControlHints t={t} /><label htmlFor="draft">{t("drafts.id")}</label><input id="draft" /><input aria-label={t("search.label")} /></>);
+
+    fireEvent.mouseOver(screen.getByLabelText(t("drafts.id")));
+    expect(screen.getByRole("tooltip").textContent).toContain("1–128 ASCII letters");
+    fireEvent.mouseOut(screen.getByLabelText(t("drafts.id")), { relatedTarget: document.body });
+
+    fireEvent.focusIn(screen.getByLabelText(t("search.label")));
+    expect(screen.getByRole("tooltip").textContent).toContain("Archived entities are included");
+  });
+
+  it("uses explicit help for calculated read-only fields", () => {
+    render(<><ControlHints t={t} /><dt data-field-hint="Earliest active work date" tabIndex={0}>First activity</dt></>);
+
+    fireEvent.focusIn(screen.getByText("First activity"));
+
+    expect(screen.getByRole("tooltip").textContent).toBe("Earliest active work date");
+  });
+
+  it("inherits contextual help from a fieldset legend for dynamic options", () => {
+    render(<><ControlHints t={t} /><fieldset><legend data-field-hint="Filters the profile without changing tasks">Status</legend><label><input type="checkbox" />In progress</label></fieldset></>);
+
+    fireEvent.focusIn(screen.getByRole("checkbox", { name: "In progress" }));
+
+    expect(screen.getByRole("tooltip").textContent).toBe("Filters the profile without changing tasks");
+  });
 });

@@ -116,7 +116,7 @@ export function RepositoryConnectionSettings({ api, locale, maintainer, confirmA
     <form className="editor-drawer-form" onSubmit={save} key={`${connection.repository_url ?? ""}:${connection.gitlab.client_id ?? ""}`}>
       <h3 className="form-section-title">{t("repositoryConnection.originSection")}</h3>
       <label>{t("repositoryConnection.repositoryUrl")}
-        <input name="repository_url" type="url" placeholder="http://gitlab.local/group/project.git  или  git@gitlab.local:group/project.git" defaultValue={connection.repository_url ?? ""} disabled={!editable || busy} />
+        <input inputMode="url" name="repository_url" type="text" placeholder="http://gitlab.local/group/project.git  или  git@gitlab.local:group/project.git" defaultValue={connection.repository_url ?? ""} disabled={!editable || busy} />
       </label>
       <p className="field-help">{t("repositoryConnection.originHelp")}</p>
 

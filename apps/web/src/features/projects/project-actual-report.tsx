@@ -436,15 +436,15 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
   return <section className="actual-hours-report">
     <div className="actual-report-heading"><div><h4>{t("snapshot.actualReport")}</h4><p>{t("actualReport.description")}</p></div><button type="button" onClick={resetAll}>{t("actualReport.reset")}</button></div>
     <div className="actual-report-filters">
-      <label>{t("actualReport.milestone")}<select value={filters.milestone} onChange={(event) => selectMilestone(event.target.value)}><option value="">{t("actualReport.allMilestones")}</option>{orderedMilestones.map((milestone) => <option key={milestone.document.id} value={milestone.document.id}>{reader(milestone.document, "name")}</option>)}<option value="none">{t("stages.withoutStage")}</option></select></label>
+      <label data-field-hint={t("fieldHint.actualMilestone")}>{t("actualReport.milestone")}<select value={filters.milestone} onChange={(event) => selectMilestone(event.target.value)}><option value="">{t("actualReport.allMilestones")}</option>{orderedMilestones.map((milestone) => <option key={milestone.document.id} value={milestone.document.id}>{reader(milestone.document, "name")}</option>)}<option value="none">{t("stages.withoutStage")}</option></select></label>
       <label>{t("actualReport.task")}<select value={filters.task} onChange={(event) => selectTask(event.target.value)}><option value="">{t("actualReport.allTasks")}</option>{taskSelectGroups.map((group) => <optgroup key={group.label} label={group.label}>{group.rows.map((row) => <option key={row.id} value={row.id}>{`${"\u00A0\u00A0".repeat(row.depth)}${row.title}`}</option>)}</optgroup>)}</select></label>
-      <label>{t("timeEffort.person")}<select value={filters.person} onChange={(event) => patchFilter("person", event.target.value)}><option value="">{t("actualReport.allPeople")}</option>{peopleOptions.map((id) => <option key={id} value={id}>{personName(id)}</option>)}</select></label>
+      <label data-field-hint={t("fieldHint.actualPerson")}>{t("timeEffort.person")}<select value={filters.person} onChange={(event) => patchFilter("person", event.target.value)}><option value="">{t("actualReport.allPeople")}</option>{peopleOptions.map((id) => <option key={id} value={id}>{personName(id)}</option>)}</select></label>
       <label>{t("actualReport.from")}<input type="date" value={filters.performed_from} onChange={(event) => patchFilter("performed_from", event.target.value)} /></label>
       <label>{t("actualReport.to")}<input type="date" value={filters.performed_to} onChange={(event) => patchFilter("performed_to", event.target.value)} /></label>
       <details className="actual-report-more-filters">
         <summary>{t("actualReport.additionalFilters")}</summary>
         <div className="actual-report-more-filters-grid">
-          <label>{t("timeEffort.category")}<select value={filters.category} onChange={(event) => patchFilter("category", event.target.value)}><option value="">{t("actualReport.allCategories")}</option>{categoryOptions.map((slug) => <option key={slug} value={slug}>{categoryName(slug)}</option>)}</select></label>
+          <label data-field-hint={t("fieldHint.actualCategory")}>{t("timeEffort.category")}<select value={filters.category} onChange={(event) => patchFilter("category", event.target.value)}><option value="">{t("actualReport.allCategories")}</option>{categoryOptions.map((slug) => <option key={slug} value={slug}>{categoryName(slug)}</option>)}</select></label>
           <label>{t("actualReport.after")}<input type="date" value={cutoff} onChange={(event) => setCutoff(event.target.value)} /></label>
           {filters.task !== "" && <label>{t("actualReport.scopeMode")}<select value={scopeMode} onChange={(event) => setScopeMode(event.target.value as EffortScopeMode)}><option value="withSubtasks">{t("actualReport.scopeWithSubtasks")}</option><option value="taskOnly">{t("actualReport.scopeTaskOnly")}</option></select></label>}
         </div>
@@ -493,7 +493,7 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
         </div>
       </details>
       <section className="actual-report-correction-history">
-        <label className="actual-report-show-voided">
+        <label className="actual-report-show-voided" data-field-hint={t("fieldHint.showVoided")}>
           <input type="checkbox" checked={showVoided} onChange={(event) => setShowVoided(event.target.checked)} />
           {t("actualReport.showVoided")}
         </label>

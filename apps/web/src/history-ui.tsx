@@ -185,7 +185,7 @@ export function HistoryWorkspace({ api, draft, locale, canRevert, directMode = f
           <label className="history-search"><span>{t("history.searchCommits")}</span><input type="search" value={historyQuery} onChange={(event) => setHistoryQuery(event.target.value)} /></label>
           <label><span>{t("history.authorFilter")}</span><select value={authorFilter} onChange={(event) => setAuthorFilter(event.target.value)}><option value="">{t("history.allAuthors")}</option>{authors.map((author) => <option key={author}>{author}</option>)}</select></label>
           <label><span>{t("history.projectFilter")}</span><select value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}><option value="">{t("history.allProjects")}</option>{projects.map((project) => <option key={project}>{project}</option>)}</select></label>
-          <label><span>{t("history.dateFilter")}</span><input type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} /></label>
+          <label data-field-hint={t("fieldHint.historyDate")}><span>{t("history.dateFilter")}</span><input type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} /></label>
         </div>
         <div className="history-log" aria-label={t("history.heading")}>
           <div className="history-log-head"><span aria-hidden="true" /><span>{t("history.message")}</span><span>{t("history.author")}</span><span>{t("history.date")}</span><span>{t("history.commit")}</span></div>

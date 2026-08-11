@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { MessageKey } from "../i18n.js";
+import { localizedFieldHints } from "./field-hints.js";
 
 const CONTROL_SELECTOR = 'button:not([aria-hidden="true"]), [role="button"]:not([aria-hidden="true"]), summary:not([aria-hidden="true"])';
+const FIELD_CONTROL_SELECTOR = "input:not([type=hidden]), select, textarea";
 const TOOLTIP_ID = "gitpm-control-hint";
 
 interface HintState {
@@ -16,17 +18,55 @@ function normalized(value: string | null | undefined): string {
   return value?.replace(/\s+/gu, " ").trim() ?? "";
 }
 
-function controlFor(target: EventTarget | null): HTMLElement | null {
-  return target instanceof Element ? target.closest<HTMLElement>(CONTROL_SELECTOR) : null;
+interface HintTarget {
+  readonly anchor: HTMLElement;
+  readonly source: HTMLElement;
+}
+
+function fieldLabel(control: Element): HTMLLabelElement | null {
+  if (control instanceof HTMLInputElement || control instanceof HTMLSelectElement || control instanceof HTMLTextAreaElement) {
+    return control.labels?.item(0) ?? null;
+  }
+  return control.closest("label");
+}
+
+function hintTargetFor(target: EventTarget | null): HintTarget | null {
+  if (!(target instanceof Element)) return null;
+  const control = target.closest<HTMLElement>(CONTROL_SELECTOR);
+  if (control !== null) return { anchor: control, source: control };
+  const fieldControl = target.matches(FIELD_CONTROL_SELECTOR)
+    ? target as HTMLElement
+    : target.closest("label")?.querySelector<HTMLElement>(FIELD_CONTROL_SELECTOR) ?? null;
+  if (fieldControl !== null) {
+    const label = fieldLabel(fieldControl);
+    if (label !== null) return { anchor: fieldControl, source: label };
+    return { anchor: fieldControl, source: fieldControl };
+  }
+  const explanatory = target.closest<HTMLElement>("legend, [data-field-hint]");
+  return explanatory === null ? null : { anchor: explanatory, source: explanatory };
+}
+
+function fieldCaption(label: HTMLElement): string {
+  if (label.matches(FIELD_CONTROL_SELECTOR)) return normalized(label.getAttribute("aria-label"));
+  const directText = Array.from(label.childNodes)
+    .filter((node) => node.nodeType === Node.TEXT_NODE)
+    .map((node) => node.textContent ?? "")
+    .join(" ");
+  if (normalized(directText) !== "") return normalized(directText);
+  const caption = Array.from(label.children).find((child) => !child.matches(FIELD_CONTROL_SELECTOR) && !child.querySelector(FIELD_CONTROL_SELECTOR));
+  return normalized(caption?.textContent);
 }
 
 function positionFor(target: HTMLElement, text: string): HintState {
   const rect = target.getBoundingClientRect();
   const viewportWidth = window.innerWidth || 1024;
-  const horizontalMargin = Math.min(180, Math.max(16, viewportWidth / 2));
+  const tooltipWidth = Math.min(520, Math.max(0, viewportWidth - 32));
+  const horizontalMargin = Math.min(tooltipWidth / 2, Math.max(16, viewportWidth / 2));
   const center = rect.left + rect.width / 2;
   const left = Math.min(Math.max(center, horizontalMargin), Math.max(horizontalMargin, viewportWidth - horizontalMargin));
-  const below = rect.top < 76;
+  const charactersPerLine = Math.max(24, Math.floor(tooltipWidth / 7));
+  const estimatedHeight = Math.ceil(text.length / charactersPerLine) * 20 + 28;
+  const below = rect.top < Math.min(220, estimatedHeight + 16);
   return { below, left, text, top: below ? rect.bottom : rect.top };
 }
 
@@ -34,8 +74,8 @@ export function ControlHints({ t }: {
   readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string;
 }) {
   const [hint, setHint] = useState<HintState | null>(null);
-  const hovered = useRef<HTMLElement | null>(null);
-  const focused = useRef<HTMLElement | null>(null);
+  const hovered = useRef<HintTarget | null>(null);
+  const focused = useRef<HintTarget | null>(null);
   const described = useRef<{ readonly target: HTMLElement; readonly previous: string | null } | null>(null);
   const suspendedTitle = useRef<{ readonly target: HTMLElement; readonly title: string } | null>(null);
 
@@ -76,6 +116,7 @@ export function ControlHints({ t }: {
     [t("comments.submit"), t("controlHint.submitComment")],
     [t("notifications.markAllRead"), t("controlHint.markNotificationsRead")],
   ]), [t]);
+  const fieldHints = useMemo(() => localizedFieldHints(t), [t]);
 
   useEffect(() => {
     const restoreDescription = () => {
@@ -98,66 +139,73 @@ export function ControlHints({ t }: {
       restoreTitle();
       setHint(null);
     };
-    const hintText = (target: HTMLElement): string => {
-      const explicit = normalized(target.dataset.controlHint);
+    const hintText = (target: HintTarget): string => {
+      const explicit = normalized(target.source.dataset.controlHint ?? target.source.dataset.fieldHint);
       if (explicit !== "") return explicit;
-      const ariaLabel = normalized(target.getAttribute("aria-label"));
-      const visibleLabel = normalized(target.textContent);
+      const ariaLabel = normalized(target.source.getAttribute("aria-label"));
+      const visibleLabel = normalized(target.source.textContent);
+      const field = fieldHints.get(fieldCaption(target.source));
+      if (field !== undefined) return field;
+      const groupLegend = target.source.closest("fieldset")?.querySelector<HTMLElement>(":scope > legend");
+      const groupField = groupLegend === undefined || groupLegend === null
+        ? undefined
+        : normalized(groupLegend.dataset.fieldHint) || fieldHints.get(fieldCaption(groupLegend));
+      if (groupField !== undefined) return groupField;
       const common = commonHints.get(ariaLabel) ?? commonHints.get(visibleLabel);
       if (common !== undefined) return common;
-      const nativeTitle = normalized(target.getAttribute("title") ?? (suspendedTitle.current?.target === target ? suspendedTitle.current.title : null));
+      const nativeTitle = normalized(target.source.getAttribute("title") ?? (suspendedTitle.current?.target === target.source ? suspendedTitle.current.title : null));
       if (nativeTitle !== "" && nativeTitle !== visibleLabel) return nativeTitle;
       // Visible text already explains a text button. Repeating it in a tooltip adds noise and
       // can cover adjacent controls. Keep the accessible-name fallback for icon-only controls.
       const fallback = /[\p{L}\p{N}]/u.test(visibleLabel) ? "" : ariaLabel;
       return fallback.length > 180 ? `${fallback.slice(0, 177).trimEnd()}…` : fallback;
     };
-    const show = (target: HTMLElement) => {
+    const show = (target: HintTarget) => {
       const text = hintText(target);
       if (text === "") { hide(); return; }
       restoreDescription();
-      if (suspendedTitle.current?.target !== target) restoreTitle();
-      const title = target.getAttribute("title");
+      if (suspendedTitle.current?.target !== target.source) restoreTitle();
+      const title = target.source.getAttribute("title");
       if (title !== null) {
-        suspendedTitle.current = { target, title };
-        target.removeAttribute("title");
+        suspendedTitle.current = { target: target.source, title };
+        target.source.removeAttribute("title");
       }
-      const previous = target.getAttribute("aria-describedby");
-      target.setAttribute("aria-describedby", normalized(`${previous ?? ""} ${TOOLTIP_ID}`));
-      described.current = { target, previous };
-      setHint(positionFor(target, text));
+      const previous = target.anchor.getAttribute("aria-describedby");
+      target.anchor.setAttribute("aria-describedby", normalized(`${previous ?? ""} ${TOOLTIP_ID}`));
+      described.current = { target: target.anchor, previous };
+      setHint(positionFor(target.anchor, text));
     };
     const showCurrent = () => {
       const target = hovered.current ?? focused.current;
       if (target === null) hide(); else show(target);
     };
     const onMouseOver = (event: MouseEvent) => {
-      const target = controlFor(event.target);
+      const target = hintTargetFor(event.target);
       if (target === null) return;
       const related = event.relatedTarget;
-      if (related instanceof Node && target.contains(related)) return;
+      if (related instanceof Node && target.source.contains(related)) return;
       hovered.current = target;
       show(target);
     };
     const onMouseOut = (event: MouseEvent) => {
-      const target = controlFor(event.target);
-      if (target === null || hovered.current !== target) return;
+      const target = hintTargetFor(event.target);
+      if (target === null || hovered.current?.source !== target.source) return;
       const related = event.relatedTarget;
-      if (related instanceof Node && target.contains(related)) return;
+      if (related instanceof Node && target.source.contains(related)) return;
       hovered.current = null;
       showCurrent();
     };
     const onFocusIn = (event: FocusEvent) => {
-      const target = controlFor(event.target);
+      const target = hintTargetFor(event.target);
       if (target === null) return;
       focused.current = target;
       show(target);
     };
     const onFocusOut = (event: FocusEvent) => {
-      const target = controlFor(event.target);
-      if (target === null || focused.current !== target) return;
+      const target = hintTargetFor(event.target);
+      if (target === null || focused.current?.source !== target.source) return;
       const related = event.relatedTarget;
-      if (related instanceof Node && target.contains(related)) return;
+      if (related instanceof Node && target.source.contains(related)) return;
       focused.current = null;
       showCurrent();
     };
@@ -186,7 +234,7 @@ export function ControlHints({ t }: {
       restoreDescription();
       restoreTitle();
     };
-  }, [commonHints]);
+  }, [commonHints, fieldHints]);
 
   if (hint === null || typeof document === "undefined") return null;
   return createPortal(<div
