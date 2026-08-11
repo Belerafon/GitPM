@@ -23,7 +23,7 @@ import { PersonLinks } from "../../person-link.js";
 import { DraftReadOnlyAlert, draftReadOnlyReason } from "../../draft-read-only.js";
 import { SchedulingOverflowWarnings } from "../../scheduling-overflow-warnings.js";
 import { AdvancedViewControls } from "../../advanced-view-controls.js";
-import { applyAdvancedViewQuery, countViewConditions, emptyViewQuery, parseAdvancedViewQuery, serializeAdvancedViewQuery, type AdvancedViewQuery, type ViewField } from "../../advanced-view-query.js";
+import { applyAdvancedViewQuery, countViewConditions, emptyViewQuery, newViewNodeId, parseAdvancedViewQuery, serializeAdvancedViewQuery, type AdvancedViewQuery, type ViewField, type ViewFilterNode } from "../../advanced-view-query.js";
 
 type TaskInsertSpec = { readonly parentId?: string; readonly beforeId?: string; readonly afterId?: string };
 type PlanEditor = { readonly kind: "project" | "new-stage" }
@@ -39,6 +39,28 @@ const normalizeSummaryFilter = (value: string | undefined): SummaryFilter =>
   value === "completed" || value === "overdue" || value === "active" || value === "blocked" ? value
     : value === "in-progress" ? "active"
     : "all";
+
+const isQuickOverdueCondition = (node: ViewFilterNode): boolean =>
+  node.kind === "condition" && node.field === "overdue" && node.operator === "is-true";
+
+const hasQuickOverdueFilter = (query: AdvancedViewQuery): boolean =>
+  query.filter.combinator === "and" && query.filter.children.some(isQuickOverdueCondition);
+
+const withoutQuickOverdueFilter = (query: AdvancedViewQuery): AdvancedViewQuery => {
+  if (query.filter.combinator !== "and") return query;
+  const children = query.filter.children.filter((child) => !isQuickOverdueCondition(child));
+  if (children.length === query.filter.children.length) return query;
+  const onlyChild = children.length === 1 ? children[0] : undefined;
+  return { ...query, filter: onlyChild?.kind === "group" ? onlyChild : { ...query.filter, children } };
+};
+
+const withQuickOverdueFilter = (query: AdvancedViewQuery): AdvancedViewQuery => {
+  if (hasQuickOverdueFilter(query)) return query;
+  const condition = { kind: "condition" as const, id: newViewNodeId("condition"), field: "overdue", operator: "is-true" as const };
+  return query.filter.combinator === "and"
+    ? { ...query, filter: { ...query.filter, children: [...query.filter.children, condition] } }
+    : { ...query, filter: { kind: "group", id: newViewNodeId("group"), combinator: "and", children: [query.filter, condition] } };
+};
 
 const localCalendarDate = (date: Date = new Date()): string => {
   const year = date.getFullYear();
@@ -215,7 +237,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   }, [api, draft.draft_id, draft.fingerprint, loader.run, locale, projectId]);
 
   useEffect(() => { void load(); }, [load]);
-  useEffect(() => { setStatusFilter(initialStatusFilter); setMilestoneFilter(initialMilestoneFilter); setSummaryFilter(normalizeSummaryFilter(initialSummaryFilter)); setArchiveMode(initialArchiveMode); }, [initialArchiveMode, initialMilestoneFilter, initialStatusFilter, initialSummaryFilter]);
+  useEffect(() => { const summary = normalizeSummaryFilter(initialSummaryFilter); setStatusFilter(initialStatusFilter); setMilestoneFilter(initialMilestoneFilter); setSummaryFilter(summary === "overdue" ? "all" : summary); setArchiveMode(initialArchiveMode); }, [initialArchiveMode, initialMilestoneFilter, initialStatusFilter, initialSummaryFilter]);
   useEffect(() => { writeTaskFields(taskFields); }, [taskFields]);
   useEffect(() => { writeInspectorWidth(inspectorWidth); }, [inspectorWidth]);
 
@@ -341,8 +363,14 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     { id: "estimate", label: t("advancedView.field.estimate"), type: "number", read: (item) => effortOf(item.document) },
     { id: "overdue", label: t("advancedView.field.overdue"), type: "boolean", read: (item) => { const due = text(item.document, "due"); return /^\d{4}-\d{2}-\d{2}$/u.test(due) && due < today && !isCompletedStatus(statuses, text(item.document, "status")); } },
   ], [effortOf, locale, peopleOptions, statuses, text, today, types, workspace]);
-  useEffect(() => { setAdvancedQuery(parseAdvancedViewQuery(initialAdvancedQuery, taskAdvancedFields)); }, [initialAdvancedQuery, taskAdvancedFields]);
-  const advancedTasks = useMemo(() => applyAdvancedViewQuery(currentPlanTasks, taskAdvancedFields, advancedQuery, locale), [advancedQuery, currentPlanTasks, locale, taskAdvancedFields]);
+  useEffect(() => {
+    const parsed = parseAdvancedViewQuery(initialAdvancedQuery, taskAdvancedFields);
+    const next = normalizeSummaryFilter(initialSummaryFilter) === "overdue" ? withQuickOverdueFilter(parsed) : parsed;
+    setAdvancedQuery(next);
+    if (hasQuickOverdueFilter(next)) setSummaryFilter("all");
+  }, [initialAdvancedQuery, initialSummaryFilter, taskAdvancedFields]);
+  const advancedEvaluationQuery = useMemo(() => withoutQuickOverdueFilter(advancedQuery), [advancedQuery]);
+  const advancedTasks = useMemo(() => applyAdvancedViewQuery(currentPlanTasks, taskAdvancedFields, advancedEvaluationQuery, locale), [advancedEvaluationQuery, currentPlanTasks, locale, taskAdvancedFields]);
   const advancedOrder = useMemo(() => new Map(advancedTasks.map((task, index) => [task.document.id, index])), [advancedTasks]);
   const taskCompare = useMemo(() => {
     const canonical = canonicalTaskComparator(locale, text);
@@ -404,15 +432,16 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   const inProgressCount = summaryScopeTasks.filter((task) => isInProgressStatus(statuses, text(task.document, "status"))).length;
   const blockedCount = summaryScopeTasks.filter((task) => isBlockedStatus(statuses, text(task.document, "status"))).length;
   const overdueCount = overdueTaskIds.size;
+  const effectiveSummaryFilter: SummaryFilter = hasQuickOverdueFilter(advancedQuery) ? "overdue" : summaryFilter;
   const visibleTasks = useMemo(() => advancedTasks.filter((task) =>
     (statusFilter === "" || text(task.document, "status") === statusFilter)
     && (milestoneFilter === "" || (milestoneFilter === "none" ? isOutsideActiveMilestone(activeStageIds, text(task.document, "milestone")) : text(task.document, "milestone") === milestoneFilter))
-    && (summaryFilter === "all"
-      || (summaryFilter === "completed" && isCompletedStatus(statuses, text(task.document, "status")))
-      || (summaryFilter === "active" && isInProgressStatus(statuses, text(task.document, "status")))
-      || (summaryFilter === "blocked" && isBlockedStatus(statuses, text(task.document, "status")))
-      || (summaryFilter === "overdue" && overdueTaskIds.has(task.document.id)))), [advancedTasks, activeStageIds, milestoneFilter, overdueTaskIds, statusFilter, statuses, summaryFilter, text]);
-  const filterActive = summaryFilter !== "all" || statusFilter !== "" || countViewConditions(advancedQuery.filter) > 0;
+    && (effectiveSummaryFilter === "all"
+      || (effectiveSummaryFilter === "completed" && isCompletedStatus(statuses, text(task.document, "status")))
+      || (effectiveSummaryFilter === "active" && isInProgressStatus(statuses, text(task.document, "status")))
+      || (effectiveSummaryFilter === "blocked" && isBlockedStatus(statuses, text(task.document, "status")))
+      || (effectiveSummaryFilter === "overdue" && overdueTaskIds.has(task.document.id)))), [advancedTasks, activeStageIds, effectiveSummaryFilter, milestoneFilter, overdueTaskIds, statusFilter, statuses, text]);
+  const filterActive = effectiveSummaryFilter !== "all" || statusFilter !== "" || countViewConditions(advancedQuery.filter) > 0;
   const visibleStages = (milestoneFilter === "" ? activeStages : activeStages.filter((stage) => stage.document.id === milestoneFilter))
     .filter((stage) => !filterActive || visibleTasks.some((task) => task.document.milestone === stage.document.id));
   const visibleOutsideStages = visibleTasks.filter((task) => {
@@ -448,29 +477,38 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     onNavigate("projects", { projectId, ...(show ? { query: { archive: ["1"] } } : {}) });
   };
   const applyFilters = (status: string, milestone: string, summary: SummaryFilter) => {
+    const nextAdvancedQuery = summary === "overdue" ? withQuickOverdueFilter(advancedQuery) : withoutQuickOverdueFilter(advancedQuery);
     setStatusFilter(status);
     setMilestoneFilter(milestone);
-    setSummaryFilter(summary);
+    setSummaryFilter(summary === "overdue" ? "all" : summary);
+    setAdvancedQuery(nextAdvancedQuery);
     const query = {
       ...(status ? { status: [status] } : {}),
       ...(milestone ? { milestone: [milestone] } : {}),
-      ...(summary !== "all" ? { summary: [summary] } : {}),
-      ...(countViewConditions(advancedQuery.filter) > 0 || advancedQuery.sort.length > 0 ? { filters: [serializeAdvancedViewQuery(advancedQuery)] } : {}),
+      ...(summary !== "all" && summary !== "overdue" ? { summary: [summary] } : {}),
+      ...(countViewConditions(nextAdvancedQuery.filter) > 0 || nextAdvancedQuery.sort.length > 0 ? { filters: [serializeAdvancedViewQuery(nextAdvancedQuery)] } : {}),
     };
     onNavigate("projects", { projectId, ...(Object.keys(query).length > 0 ? { query } : {}) });
   };
-  const toggleSummary = (next: SummaryFilter) => applyFilters("", milestoneFilter, summaryFilter === next ? "all" : next);
+  const toggleSummary = (next: SummaryFilter) => applyFilters("", milestoneFilter, effectiveSummaryFilter === next ? "all" : next);
   const resetFilters = () => { setAdvancedQuery(emptyViewQuery()); setStatusFilter(""); setMilestoneFilter(""); setSummaryFilter("all"); onNavigate("projects", { projectId }); };
   const applyAdvancedQuery = (next: AdvancedViewQuery) => {
+    const nextSummaryFilter = hasQuickOverdueFilter(next) ? "all" : summaryFilter;
     setAdvancedQuery(next);
+    setSummaryFilter(nextSummaryFilter);
     const query = {
       ...(statusFilter ? { status: [statusFilter] } : {}),
       ...(milestoneFilter ? { milestone: [milestoneFilter] } : {}),
-      ...(summaryFilter !== "all" ? { summary: [summaryFilter] } : {}),
+      ...(nextSummaryFilter !== "all" ? { summary: [nextSummaryFilter] } : {}),
       ...(countViewConditions(next.filter) > 0 || next.sort.length > 0 ? { filters: [serializeAdvancedViewQuery(next)] } : {}),
     };
     onNavigate("projects", { projectId, ...(Object.keys(query).length > 0 ? { query } : {}) });
   };
+  const summaryMetricLabel = (value: SummaryFilter): string => value === "completed" ? t("projectPlan.summaryCompleted")
+    : value === "active" ? t("projectPlan.summaryActive")
+    : value === "blocked" ? t("projectPlan.summaryBlocked")
+    : value === "overdue" ? t("projectPlan.summaryOverdue")
+    : t("projectPlan.filterAll");
   const milestoneChipLabel = (value: string): string => {
     if (value === "none") return t("stages.withoutStage");
     const stage = activeStages.find((item) => item.document.id === value);
@@ -702,7 +740,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
 
           {!archiveMode && <><section className="project-plan-work" ref={animatedList}>
             <div className="project-plan-toolbar">
-              <div className="project-plan-toolbar-heading"><h2>{t("projectPlan.workHeading")}</h2><span>{t("projectPlan.workDescription")}</span><span className="project-plan-stage-count">{t("projectPlan.stages")}: {activeStages.length}</span>{outsideStages.length > 0 && <button aria-pressed={milestoneFilter === "none"} className={`project-plan-outside-warning${milestoneFilter === "none" ? " is-active" : ""}`} onClick={() => applyFilters(statusFilter, milestoneFilter === "none" ? "" : "none", summaryFilter)} type="button">{t("projectPlan.withoutStage")}: {outsideStages.length}</button>}</div>
+              <div className="project-plan-toolbar-heading"><h2>{t("projectPlan.workHeading")}</h2><span>{t("projectPlan.workDescription")}</span><span className="project-plan-stage-count">{t("projectPlan.stages")}: {activeStages.length}</span>{outsideStages.length > 0 && <button aria-pressed={milestoneFilter === "none"} className={`project-plan-outside-warning${milestoneFilter === "none" ? " is-active" : ""}`} onClick={() => applyFilters(statusFilter, milestoneFilter === "none" ? "" : "none", effectiveSummaryFilter)} type="button">{t("projectPlan.withoutStage")}: {outsideStages.length}</button>}</div>
               <details className="task-field-settings">
                 <summary>{t("projectPlan.configureFields")}</summary>
                 <div>
@@ -711,16 +749,16 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
                 </div>
               </details>
               <AdvancedViewControls
-                appliedControls={(statusFilter !== "" || milestoneFilter !== "") && <div className="project-plan-filter-chips">{statusFilter !== "" && <span className="filter-chip">{statusTitle(statusFilter)}<button aria-label={t("projectPlan.chipRemove", { filter: statusTitle(statusFilter) })} onClick={() => applyFilters("", milestoneFilter, summaryFilter)} type="button">×</button></span>}{milestoneFilter !== "" && <span className="filter-chip">{milestoneChipLabel(milestoneFilter)}<button aria-label={t("projectPlan.chipRemove", { filter: milestoneChipLabel(milestoneFilter) })} onClick={() => applyFilters(statusFilter, "", summaryFilter)} type="button">×</button></span>}</div>}
+                appliedControls={(summaryFilter !== "all" || statusFilter !== "" || milestoneFilter !== "") && <div className="project-plan-filter-chips">{summaryFilter !== "all" && <span className="filter-chip">{summaryMetricLabel(summaryFilter)}<button aria-label={t("projectPlan.chipRemove", { filter: summaryMetricLabel(summaryFilter) })} onClick={() => applyFilters(statusFilter, milestoneFilter, "all")} type="button">×</button></span>}{statusFilter !== "" && <span className="filter-chip">{statusTitle(statusFilter)}<button aria-label={t("projectPlan.chipRemove", { filter: statusTitle(statusFilter) })} onClick={() => applyFilters("", milestoneFilter, effectiveSummaryFilter)} type="button">×</button></span>}{milestoneFilter !== "" && <span className="filter-chip">{milestoneChipLabel(milestoneFilter)}<button aria-label={t("projectPlan.chipRemove", { filter: milestoneChipLabel(milestoneFilter) })} onClick={() => applyFilters(statusFilter, "", effectiveSummaryFilter)} type="button">×</button></span>}</div>}
+                externalFilterCount={Number(summaryFilter !== "all") + Number(statusFilter !== "") + Number(milestoneFilter !== "")}
                 fields={taskAdvancedFields}
                 groupLabel={t("projectPlan.summaryGroup")}
-                hasExternalFilters={summaryFilter !== "all" || statusFilter !== "" || milestoneFilter !== ""}
                 leadingControls={<div className="project-plan-summary">
-                  <button aria-label={`${t("projectPlan.summaryTotal")}: ${summaryScopeTasks.length}`} aria-pressed={summaryFilter === "all" && statusFilter === ""} className="project-plan-summary-metric" onClick={() => applyFilters("", milestoneFilter, "all")} type="button"><span>{t("projectPlan.summaryTotal")}</span><strong>{summaryScopeTasks.length}</strong></button>
-                  <button aria-label={`${t("projectPlan.summaryActive")}: ${inProgressCount}`} aria-pressed={summaryFilter === "active"} className="project-plan-summary-metric" onClick={() => toggleSummary("active")} type="button"><span>{t("projectPlan.summaryActive")}</span><strong>{inProgressCount}</strong></button>
-                  <button aria-label={`${t("projectPlan.summaryBlocked")}: ${blockedCount}`} aria-pressed={summaryFilter === "blocked"} className="project-plan-summary-metric project-plan-summary-blocked" onClick={() => toggleSummary("blocked")} type="button"><span>{t("projectPlan.summaryBlocked")}</span><strong>{blockedCount}</strong></button>
-                  <button aria-label={`${t("projectPlan.summaryOverdue")}: ${overdueCount}`} aria-pressed={summaryFilter === "overdue"} className="project-plan-summary-metric project-plan-summary-overdue" onClick={() => toggleSummary("overdue")} type="button"><span>{t("projectPlan.summaryOverdue")}</span><strong>{overdueCount}</strong></button>
-                  <button aria-label={`${t("projectPlan.summaryCompleted")}: ${completedCount}`} aria-pressed={summaryFilter === "completed"} className="project-plan-summary-metric" onClick={() => toggleSummary("completed")} type="button"><span>{t("projectPlan.summaryCompleted")}</span><strong>{completedCount}</strong></button>
+                  <button aria-label={`${t("projectPlan.summaryTotal")}: ${summaryScopeTasks.length}`} aria-pressed={effectiveSummaryFilter === "all" && statusFilter === ""} className="project-plan-summary-metric" onClick={() => applyFilters("", milestoneFilter, "all")} type="button"><span>{t("projectPlan.summaryTotal")}</span><strong>{summaryScopeTasks.length}</strong></button>
+                  <button aria-label={`${t("projectPlan.summaryActive")}: ${inProgressCount}`} aria-pressed={effectiveSummaryFilter === "active"} className="project-plan-summary-metric" onClick={() => toggleSummary("active")} type="button"><span>{t("projectPlan.summaryActive")}</span><strong>{inProgressCount}</strong></button>
+                  <button aria-label={`${t("projectPlan.summaryBlocked")}: ${blockedCount}`} aria-pressed={effectiveSummaryFilter === "blocked"} className="project-plan-summary-metric project-plan-summary-blocked" onClick={() => toggleSummary("blocked")} type="button"><span>{t("projectPlan.summaryBlocked")}</span><strong>{blockedCount}</strong></button>
+                  <button aria-label={`${t("projectPlan.summaryOverdue")}: ${overdueCount}`} aria-pressed={effectiveSummaryFilter === "overdue"} className="project-plan-summary-metric project-plan-summary-overdue" onClick={() => toggleSummary("overdue")} type="button"><span>{t("projectPlan.summaryOverdue")}</span><strong>{overdueCount}</strong></button>
+                  <button aria-label={`${t("projectPlan.summaryCompleted")}: ${completedCount}`} aria-pressed={effectiveSummaryFilter === "completed"} className="project-plan-summary-metric" onClick={() => toggleSummary("completed")} type="button"><span>{t("projectPlan.summaryCompleted")}</span><strong>{completedCount}</strong></button>
                 </div>}
                 locale={locale}
                 onChange={applyAdvancedQuery}
