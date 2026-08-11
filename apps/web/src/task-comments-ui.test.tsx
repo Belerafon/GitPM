@@ -57,7 +57,14 @@ describe("task comments", () => {
     } as unknown as GitPmApi;
 
     render(<TaskComments api={api} confirmDelete={() => true} draft={draft} fingerprint={draft.fingerprint} locale="en" onFingerprintChange={async () => undefined} onNavigate={() => undefined} people={[anna]} projectId="P-26-MGP84K" readOnly={false} taskId="T-26-P9G3P8" />);
-    const composer = await screen.findByLabelText("Add comment");
+    const toggle = await screen.findByRole("button", { name: "Discussion" });
+    await waitFor(() => expect(screen.getByRole("region", { name: "Discussion" }).getAttribute("aria-busy")).toBe("false"));
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.getByLabelText("Discussion: 0")).toBeTruthy();
+    expect(screen.queryByLabelText("Add comment")).toBeNull();
+    fireEvent.click(toggle);
+    const composer = screen.getByLabelText("Add comment");
+    expect(document.activeElement).not.toBe(composer);
     fireEvent.change(composer, { target: { value: "Please review @Ann", selectionStart: 18 } });
     fireEvent.click(await screen.findByRole("option", { name: /Anna Petrova/iu }));
     expect(composer).toHaveProperty("value", "Please review @[Anna Petrova](person:U-26-5EBAE3) ");
@@ -122,8 +129,9 @@ describe("task comments", () => {
     render(<TaskComments api={api} confirmDelete={() => true} draft={draft} fingerprint={draft.fingerprint} locale="en" onFingerprintChange={async () => undefined} onNavigate={() => undefined} people={[]} projectId="P-26-MGP84K" readOnly={false} taskId="T-26-P9G3P8" />);
 
     const toggle = await screen.findByRole("button", { name: /^Discussion$/iu });
-    expect(toggle.getAttribute("aria-expanded")).toBe("true");
     expect(await screen.findByText("Keep this visible")).toBeTruthy();
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByLabelText("Discussion: 1")).toBeTruthy();
     fireEvent.click(toggle);
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     expect(screen.queryByText("Keep this visible")).toBeNull();

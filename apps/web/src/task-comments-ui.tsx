@@ -74,7 +74,8 @@ export function TaskComments({ api, draft, projectId, taskId, people, fingerprin
   const [editing, setEditing] = useState<string | null>(null);
   const [editBody, setEditBody] = useState("");
   const [mentionQuery, setMentionQuery] = useState<{ start: number; query: string } | null>(null);
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
+  const loadedTaskId = useRef<string | null>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
   const activePeople = useMemo(() => people.filter((person) => person.document.lifecycle === "active"), [people]);
   const suggestions = mentionQuery === null ? [] : activePeople.filter((person) => {
@@ -90,6 +91,10 @@ export function TaskComments({ api, draft, projectId, taskId, people, fingerprin
       const next = await operation(draft.draft_id, projectId, taskId);
       setComments(next);
       setCurrentFingerprint(next[0]?.draft_fingerprint ?? fingerprint);
+      if (loadedTaskId.current !== taskId) {
+        loadedTaskId.current = taskId;
+        setOpen(next.some((comment) => comment.document.state === "active") || (focusCommentId !== undefined && next.some((comment) => comment.document.id === focusCommentId)));
+      }
     } catch (caught) { setError(caught instanceof Error ? caught.message : String(caught)); }
     finally { setLoading(false); }
   };
@@ -99,6 +104,7 @@ export function TaskComments({ api, draft, projectId, taskId, people, fingerprin
   useEffect(() => { window.sessionStorage.setItem(draftKey, body); }, [body, draftKey]);
   useEffect(() => {
     if (focusCommentId === undefined || !comments.some((comment) => comment.document.id === focusCommentId)) return;
+    setOpen(true);
     requestAnimationFrame(() => document.getElementById(`comment-${focusCommentId}`)?.scrollIntoView({ block: "center", behavior: "smooth" }));
   }, [comments, focusCommentId]);
 
@@ -145,7 +151,9 @@ export function TaskComments({ api, draft, projectId, taskId, people, fingerprin
     setBusy(true); setError(null);
     try {
       const result = await api.deleteComment(draft.draft_id, projectId, taskId, comment, currentFingerprint);
-      setComments((current) => current.map((item) => item.document.id === result.document.id ? result : item));
+      const next = comments.map((item) => item.document.id === result.document.id ? result : item);
+      setComments(next);
+      if (!next.some((item) => item.document.state === "active")) setOpen(false);
       setCurrentFingerprint(result.draft_fingerprint); await onFingerprintChange(result.draft_fingerprint);
     } catch (caught) { setError(caught instanceof Error ? caught.message : String(caught)); }
     finally { setBusy(false); }
@@ -158,8 +166,8 @@ export function TaskComments({ api, draft, projectId, taskId, people, fingerprin
   const showComposer = open && !readOnly && !loading;
   const activeCommentCount = comments.filter((comment) => comment.document.state === "active").length;
 
-  return <section className="task-comments" aria-labelledby="task-comments-heading">
-    <div className="task-comments-heading"><h3 id="task-comments-heading"><button aria-controls={`task-comments-body-${taskId}`} aria-expanded={open} className="section-toggle" onClick={() => setOpen((value) => !value)} type="button"><span aria-hidden="true" className="section-toggle-chevron">▾</span>{t("comments.heading")}</button></h3>{activeCommentCount > 0 && <span>{activeCommentCount}</span>}</div>
+  return <section aria-busy={loading} className="task-comments" aria-labelledby="task-comments-heading">
+    <div className="task-comments-heading"><h3 id="task-comments-heading"><button aria-controls={`task-comments-body-${taskId}`} aria-expanded={open} className="section-toggle" onClick={() => setOpen((value) => !value)} type="button"><span aria-hidden="true" className="section-toggle-chevron">▾</span>{t("comments.heading")}</button></h3><span aria-label={`${t("comments.heading")}: ${activeCommentCount}`}>{activeCommentCount}</span></div>
     {open && (<>
       {loading && <p className="empty-copy">{t("status.loading")}</p>}
       <div className="comment-list">{comments.map((comment) => <article className={`task-comment${comment.document.state === "deleted" ? " deleted" : ""}${comment.document.id === focusCommentId ? " focused" : ""}`} id={`comment-${comment.document.id}`} key={comment.document.id}>
@@ -172,7 +180,7 @@ export function TaskComments({ api, draft, projectId, taskId, people, fingerprin
       {error !== null && <div className="alert error">{error}<button onClick={() => { void load(); }}>{t("status.retry")}</button></div>}
       {showComposer && <div className="comment-composer" id={`comment-composer-${taskId}`}>
         <label htmlFor={`comment-body-${taskId}`}>{t("comments.add")}</label>
-        <textarea aria-describedby={`comment-help-${taskId}`} autoFocus={comments.length === 0} disabled={busy} id={`comment-body-${taskId}`} onChange={(event) => { setBody(event.target.value); detectMention(event.target.value, event.target.selectionStart); }} onClick={(event) => detectMention(event.currentTarget.value, event.currentTarget.selectionStart)} onKeyDown={composerKey} placeholder={t("comments.placeholder")} ref={textarea} rows={4} value={body} />
+        <textarea aria-describedby={`comment-help-${taskId}`} disabled={busy} id={`comment-body-${taskId}`} onChange={(event) => { setBody(event.target.value); detectMention(event.target.value, event.target.selectionStart); }} onClick={(event) => detectMention(event.currentTarget.value, event.currentTarget.selectionStart)} onKeyDown={composerKey} placeholder={t("comments.placeholder")} ref={textarea} rows={4} value={body} />
         {suggestions.length > 0 && <div className="mention-suggestions" role="listbox" aria-label={t("comments.mentionSuggestions")}>{suggestions.map((person) => <button key={person.document.id} onClick={() => chooseMention(person)} role="option" type="button"><strong>{text(person.document, "name")}</strong>{text(person.document, "email") !== "" && <span>{text(person.document, "email")}</span>}</button>)}</div>}
         <div className="comment-composer-actions"><span className="field-hint" id={`comment-help-${taskId}`}>{t("comments.draftHint", { draft: draft.draft_id })}</span><button className="primary" disabled={busy || body.trim() === ""} onClick={() => { void create(); }} type="button">{busy ? t("feedback.saving") : t("comments.submit")}</button></div>
       </div>}
