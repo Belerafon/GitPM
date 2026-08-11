@@ -972,10 +972,12 @@ describe("ProjectPlanWorkspace", () => {
     await screen.findByRole("heading", { name: "Summary project" });
     expect(screen.getByRole("button", { name: "Overdue: 1" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Overdue: 1" }));
-    expect(screen.getByText("Rollup parent")).toBeTruthy();
-    expect(screen.queryByText("Done past")).toBeNull();
-    expect(screen.queryByText("Undated task")).toBeNull();
-    expect(screen.queryByText("Rollup child")).toBeNull();
+    await waitFor(() => {
+      expect(screen.getByText("Rollup parent")).toBeTruthy();
+      expect(screen.queryByText("Done past")).toBeNull();
+      expect(screen.queryByText("Undated task")).toBeNull();
+      expect(screen.queryByText("Rollup child")).toBeNull();
+    });
   });
 
   it("clicking the Completed metric narrows the list and toggling back restores it", async () => {

@@ -41,6 +41,21 @@ describe("RepositoryConnectionSettings", () => {
     expect(screen.getByText(/Merge Requests are supported only for GitLab/)).toBeTruthy();
   });
 
+  it("accepts the SCP-style SSH remote documented by the form", async () => {
+    const api = mockApi(baseStatus());
+    const view = render(<RepositoryConnectionSettings api={api} locale="en" maintainer={true} />);
+    await screen.findByText("Local (no remote)");
+    const input = screen.getByRole("textbox", { name: "Origin URL" });
+    fireEvent.change(input, { target: { value: "git@gitlab.example:group/portfolio.git" } });
+
+    expect((input as HTMLInputElement).checkValidity()).toBe(true);
+    fireEvent.submit(view.container.querySelector("form") as HTMLFormElement);
+
+    await waitFor(() => expect(api.updateRepositoryConnection).toHaveBeenCalledWith(expect.objectContaining({
+      repository_url: "git@gitlab.example:group/portfolio.git",
+    })));
+  });
+
   it("shows a plain HTTP remote as the administrator-token provider", async () => {
     const api = mockApi(baseStatus({
       repository_url: "http://gitlab.local/group/portfolio.git",

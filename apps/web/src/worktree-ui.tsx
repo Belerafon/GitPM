@@ -539,7 +539,7 @@ export function WorktreeWorkspace({ api, draft, role, locale, onChanged, confirm
     {dialog !== null && dialog.kind !== "move" && <div className="modal-backdrop" role="presentation">
       <section className="fm-dialog" role="dialog" aria-modal="true" aria-labelledby="fm-name-heading">
         <h3 id="fm-name-heading">{dialog.kind === "newFolder" ? t("worktree.newFolderHeading") : message(locale, "worktree.renameHeading", { name: dialog.entry?.name ?? "" })}</h3>
-        <label className="fm-field">{t("worktree.nameLabel")}
+        <label className="fm-field" data-field-hint={t("fieldHint.fileName")}>{t("worktree.nameLabel")}
           <input autoFocus value={nameValue} onChange={(event) => setNameValue(event.target.value)} placeholder={t("worktree.namePlaceholder")} onKeyDown={(event) => { if (event.key === "Enter") submitName(); if (event.key === "Escape") setDialog(null); }} />
         </label>
         <div className="fm-dialog-actions">

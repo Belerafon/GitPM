@@ -742,7 +742,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
                 <summary>{t("projectPlan.configureFields")}</summary>
                 <div>
                   <p>{t("projectPlan.configureFieldsDescription")}</p>
-                  {(["assignees", "due", "estimate", "status"] as const).map((field) => <label key={field}><input checked={taskFields[field]} onChange={(event) => setTaskFields((current) => ({ ...current, [field]: event.target.checked }))} type="checkbox" />{t(`projectPlan.field.${field}` as MessageKey)}</label>)}
+                  {(["assignees", "due", "estimate", "status"] as const).map((field) => <label data-field-hint={t("fieldHint.visibleTaskFields")} key={field}><input checked={taskFields[field]} onChange={(event) => setTaskFields((current) => ({ ...current, [field]: event.target.checked }))} type="checkbox" />{t(`projectPlan.field.${field}` as MessageKey)}</label>)}
                 </div>
               </details>
               <AdvancedViewControls

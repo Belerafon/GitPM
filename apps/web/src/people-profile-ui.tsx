@@ -303,13 +303,13 @@ function PeopleTaskFilters({ projectOptions, projectSelection, statusOptions, st
     <summary>{t("people.taskFilters")}</summary>
     <div className="people-task-filters-body">
       {statusOptions.length > 0 && <fieldset className="people-task-filter-group">
-        <legend>{t("core.status")}</legend>
+        <legend data-field-hint={t("fieldHint.peopleTaskStatus")}>{t("core.status")}</legend>
         <div className="people-task-filter-options">
           {statusOptions.map((option) => <label key={option.slug}><input aria-label={option.title} checked={statusSelection.has(option.slug)} onChange={(event) => onToggleStatus(option.slug, event.target.checked)} type="checkbox" />{option.title}</label>)}
         </div>
       </fieldset>}
       {projectOptions.length > 1 && <fieldset className="people-task-filter-group">
-        <legend>{t("core.project")}</legend>
+        <legend data-field-hint={t("fieldHint.peopleTaskProject")}>{t("core.project")}</legend>
         <div className="people-task-filter-options">
           {projectOptions.map((option) => <label key={option.id}><input aria-label={option.name} checked={projectSelection.has(option.id)} onChange={(event) => onToggleProject(option.id, event.target.checked)} type="checkbox" />{option.name}</label>)}
         </div>

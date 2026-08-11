@@ -326,7 +326,7 @@ function ConfigEditor({ api, draft, entity, kind, listKey, title, showColor = tr
       <div className="config-list">{values.map((item, index) => <section className="config-row" data-flip-key={`config:${kind}:${item.slug}`} key={item.slug}>
         <header className="config-row-heading">
           <div className="config-identity"><ConfigBadge inactiveLabel={t("admin.inactive")} item={item} /><span className="config-technical-id"><span>{t("admin.technicalId")}</span><code>{item.slug}</code></span></div>
-          <label className="config-active-switch"><input aria-label={t("admin.activeLabel", { name: item.title })} checked={item.active} disabled={readOnly || busy} name={`active-${index}`} onChange={(event) => updateValue(index, { active: event.currentTarget.checked })} role="switch" type="checkbox" /><span aria-hidden="true" className="config-switch-track" /><span>{t("admin.active")}</span></label>
+          <label className="config-active-switch" data-field-hint={t("fieldHint.configActive")}><input aria-label={t("admin.activeLabel", { name: item.title })} checked={item.active} disabled={readOnly || busy} name={`active-${index}`} onChange={(event) => updateValue(index, { active: event.currentTarget.checked })} role="switch" type="checkbox" /><span aria-hidden="true" className="config-switch-track" /><span>{t("admin.active")}</span></label>
         </header>
         <div className="config-row-fields">
            <label className="config-field"><span>{t("core.name")}</span><input aria-label={`${title} ${item.slug}`} disabled={readOnly || busy} name={`title-${index}`} onChange={(event) => updateValue(index, { title: event.currentTarget.value })} required value={item.title} /></label>
