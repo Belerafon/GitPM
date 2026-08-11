@@ -1,13 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { MessageKey } from "../i18n.js";
 import { localizedFieldHints } from "./field-hints.js";
 
-const CONTROL_SELECTOR = 'button:not([aria-hidden="true"]), [role="button"]:not([aria-hidden="true"]), summary:not([aria-hidden="true"])';
+const CONTROL_SELECTOR = 'button:not([aria-hidden="true"]), [role="button"]:not([aria-hidden="true"]), [role="link"]:not([aria-hidden="true"]), [role="separator"][tabindex], a[href], summary:not([aria-hidden="true"]), [data-control-hint]';
 const FIELD_CONTROL_SELECTOR = "input:not([type=hidden]), select, textarea";
 const TOOLTIP_ID = "gitpm-control-hint";
+const HOVER_DELAY_MS = 1_000;
 
 interface HintState {
+  readonly anchorLeft: number;
+  readonly arrowLeft: string;
   readonly below: boolean;
   readonly left: number;
   readonly text: string;
@@ -61,13 +64,11 @@ function positionFor(target: HTMLElement, text: string): HintState {
   const rect = target.getBoundingClientRect();
   const viewportWidth = window.innerWidth || 1024;
   const tooltipWidth = Math.min(520, Math.max(0, viewportWidth - 32));
-  const horizontalMargin = Math.min(tooltipWidth / 2, Math.max(16, viewportWidth / 2));
   const center = rect.left + rect.width / 2;
-  const left = Math.min(Math.max(center, horizontalMargin), Math.max(horizontalMargin, viewportWidth - horizontalMargin));
   const charactersPerLine = Math.max(24, Math.floor(tooltipWidth / 7));
   const estimatedHeight = Math.ceil(text.length / charactersPerLine) * 20 + 28;
   const below = rect.top < Math.min(220, estimatedHeight + 16);
-  return { below, left, text, top: below ? rect.bottom : rect.top };
+  return { anchorLeft: center, arrowLeft: "50%", below, left: center, text, top: below ? rect.bottom : rect.top };
 }
 
 export function ControlHints({ t }: {
@@ -76,8 +77,10 @@ export function ControlHints({ t }: {
   const [hint, setHint] = useState<HintState | null>(null);
   const hovered = useRef<HintTarget | null>(null);
   const focused = useRef<HintTarget | null>(null);
+  const hoverReady = useRef(false);
   const described = useRef<{ readonly target: HTMLElement; readonly previous: string | null } | null>(null);
   const suspendedTitle = useRef<{ readonly target: HTMLElement; readonly title: string } | null>(null);
+  const tooltip = useRef<HTMLDivElement | null>(null);
 
   const commonHints = useMemo(() => new Map<string, string>([
     [t("auth.login"), t("controlHint.login")],
@@ -118,7 +121,29 @@ export function ControlHints({ t }: {
   ]), [t]);
   const fieldHints = useMemo(() => localizedFieldHints(t), [t]);
 
+  useLayoutEffect(() => {
+    const element = tooltip.current;
+    if (hint === null || element === null) return;
+    const width = element.getBoundingClientRect().width;
+    if (width <= 0) return;
+    const margin = 16;
+    const halfWidth = width / 2;
+    const minimumLeft = margin + halfWidth;
+    const maximumLeft = Math.max(minimumLeft, (window.innerWidth || 1024) - margin - halfWidth);
+    const left = Math.min(Math.max(hint.anchorLeft, minimumLeft), maximumLeft);
+    const arrowLeft = Math.min(Math.max(hint.anchorLeft - left + halfWidth, 12), Math.max(12, width - 12));
+    const arrowPosition = `${arrowLeft}px`;
+    if (left !== hint.left || arrowPosition !== hint.arrowLeft) {
+      setHint({ ...hint, arrowLeft: arrowPosition, left });
+    }
+  }, [hint]);
+
   useEffect(() => {
+    let hoverTimer: ReturnType<typeof setTimeout> | null = null;
+    const clearHoverTimer = () => {
+      if (hoverTimer !== null) clearTimeout(hoverTimer);
+      hoverTimer = null;
+    };
     const restoreDescription = () => {
       const current = described.current;
       if (current === null) return;
@@ -142,6 +167,9 @@ export function ControlHints({ t }: {
     const hintText = (target: HintTarget): string => {
       const explicit = normalized(target.source.dataset.controlHint ?? target.source.dataset.fieldHint);
       if (explicit !== "") return explicit;
+      if (target.source.matches(".person-link")) return t("controlHint.openPerson");
+      if (target.source.matches(".project-link")) return t("controlHint.openProject");
+      if (target.source.matches(".milestone-link")) return t("controlHint.openMilestone");
       const ariaLabel = normalized(target.source.getAttribute("aria-label"));
       const visibleLabel = normalized(target.source.textContent);
       const field = fieldHints.get(fieldCaption(target.source));
@@ -176,7 +204,7 @@ export function ControlHints({ t }: {
       setHint(positionFor(target.anchor, text));
     };
     const showCurrent = () => {
-      const target = hovered.current ?? focused.current;
+      const target = (hoverReady.current ? hovered.current : null) ?? focused.current;
       if (target === null) hide(); else show(target);
     };
     const onMouseOver = (event: MouseEvent) => {
@@ -184,21 +212,32 @@ export function ControlHints({ t }: {
       if (target === null) return;
       const related = event.relatedTarget;
       if (related instanceof Node && target.source.contains(related)) return;
+      clearHoverTimer();
       hovered.current = target;
-      show(target);
+      hoverReady.current = false;
+      hoverTimer = setTimeout(() => {
+        hoverTimer = null;
+        if (hovered.current?.source !== target.source) return;
+        hoverReady.current = true;
+        show(target);
+      }, HOVER_DELAY_MS);
     };
     const onMouseOut = (event: MouseEvent) => {
       const target = hintTargetFor(event.target);
       if (target === null || hovered.current?.source !== target.source) return;
       const related = event.relatedTarget;
       if (related instanceof Node && target.source.contains(related)) return;
+      clearHoverTimer();
       hovered.current = null;
+      hoverReady.current = false;
       showCurrent();
     };
     const onFocusIn = (event: FocusEvent) => {
       const target = hintTargetFor(event.target);
       if (target === null) return;
+      clearHoverTimer();
       focused.current = target;
+      if (hovered.current?.source === target.source) hoverReady.current = true;
       show(target);
     };
     const onFocusOut = (event: FocusEvent) => {
@@ -210,7 +249,9 @@ export function ControlHints({ t }: {
       showCurrent();
     };
     const dismiss = () => {
+      clearHoverTimer();
       hovered.current = null;
+      hoverReady.current = false;
       focused.current = null;
       hide();
     };
@@ -231,16 +272,18 @@ export function ControlHints({ t }: {
       document.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("resize", dismiss);
       window.removeEventListener("scroll", dismiss, true);
+      clearHoverTimer();
       restoreDescription();
       restoreTitle();
     };
-  }, [commonHints, fieldHints]);
+  }, [commonHints, fieldHints, t]);
 
   if (hint === null || typeof document === "undefined") return null;
   return createPortal(<div
     className={`control-hint${hint.below ? " below" : ""}`}
     id={TOOLTIP_ID}
+    ref={tooltip}
     role="tooltip"
     style={{ left: `${hint.left}px`, top: `${hint.top}px` }}
-  >{hint.text}</div>, document.body);
+  >{hint.text}<span aria-hidden="true" className="control-hint-arrow" style={{ left: hint.arrowLeft }} /></div>, document.body);
 }

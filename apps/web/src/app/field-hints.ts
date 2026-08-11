@@ -17,6 +17,7 @@ const FIELD_HINT_KEYS = [
   ["core.group", "fieldHint.projectGroup"],
   ["core.newGroupName", "fieldHint.newProjectGroup"],
   ["core.milestone", "fieldHint.milestone"],
+  ["taskHierarchy.parent", "fieldHint.parent"],
   ["core.assignees", "fieldHint.assignees"],
   ["core.assigneeSearch", "fieldHint.assigneeSearch"],
   ["core.lifecycleFilter", "fieldHint.lifecycle"],
