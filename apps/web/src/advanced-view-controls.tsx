@@ -8,6 +8,12 @@ import {
 
 type Translator = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string;
 
+interface QuickViewPreset {
+  readonly id: string;
+  readonly label: string;
+  readonly query: AdvancedViewQuery;
+}
+
 export function AdvancedViewControls<Row>({ fields, locale, query, onChange, resultCount, totalCount, t }: {
   readonly fields: readonly ViewField<Row>[];
   readonly locale: Locale;
@@ -21,24 +27,34 @@ export function AdvancedViewControls<Row>({ fields, locale, query, onChange, res
   const [draft, setDraft] = useState<AdvancedViewQuery>(query);
   const conditions = useMemo(() => flattenConditions(query.filter), [query.filter]);
   const fieldMap = new Map(fields.map((field) => [field.id, field]));
+  const presets = useMemo(() => quickViewPresets(fields, t), [fields, t]);
   const clear = () => onChange(emptyViewQuery());
   const openEditor = () => { setDraft(query); setOpen(true); };
+  const applyPreset = (preset: QuickViewPreset) => { onChange(preset.query); setDraft(preset.query); setOpen(false); };
   return <>
     <div className="advanced-view-bar">
-      <button aria-expanded={open} className="advanced-view-trigger" onClick={openEditor} type="button">{t("advancedView.open")} {countViewConditions(query.filter) + query.sort.length > 0 && <span>{countViewConditions(query.filter) + query.sort.length}</span>}</button>
-      <div className="advanced-view-chips" aria-live="polite">
-        {conditions.map((condition) => <span className="filter-chip" key={condition.id}>{conditionLabel(condition, fieldMap, locale, t)}<button aria-label={t("advancedView.removeFilter", { filter: conditionLabel(condition, fieldMap, locale, t) })} onClick={() => onChange({ ...query, filter: removeViewFilterNode(query.filter, condition.id) })} type="button">×</button></span>)}
-        {query.sort.map((rule) => <span className="filter-chip sort-chip" key={rule.id}>{fieldMap.get(rule.field)?.label ?? rule.field} · {t(rule.direction === "asc" ? "advancedView.ascendingShort" : "advancedView.descendingShort")}<button aria-label={t("advancedView.removeSort", { field: fieldMap.get(rule.field)?.label ?? rule.field })} onClick={() => onChange({ ...query, sort: query.sort.filter((candidate) => candidate.id !== rule.id) })} type="button">×</button></span>)}
-        {(conditions.length > 0 || query.sort.length > 0) && <button className="advanced-view-clear" onClick={clear} type="button">{t("advancedView.clear")}</button>}
+      <div className="advanced-view-main">
+        <button aria-expanded={open} className="advanced-view-trigger" onClick={openEditor} type="button">{t("advancedView.open")} {countViewConditions(query.filter) + query.sort.length > 0 && <span>{countViewConditions(query.filter) + query.sort.length}</span>}</button>
+        <div className="advanced-view-chips" aria-live="polite">
+          {conditions.map((condition) => <span className="filter-chip" key={condition.id}>{conditionLabel(condition, fieldMap, locale, t)}<button aria-label={t("advancedView.removeFilter", { filter: conditionLabel(condition, fieldMap, locale, t) })} onClick={() => onChange({ ...query, filter: removeViewFilterNode(query.filter, condition.id) })} type="button">×</button></span>)}
+          {query.sort.map((rule) => <span className="filter-chip sort-chip" key={rule.id}>{fieldMap.get(rule.field)?.label ?? rule.field} · {t(rule.direction === "asc" ? "advancedView.ascendingShort" : "advancedView.descendingShort")}<button aria-label={t("advancedView.removeSort", { field: fieldMap.get(rule.field)?.label ?? rule.field })} onClick={() => onChange({ ...query, sort: query.sort.filter((candidate) => candidate.id !== rule.id) })} type="button">×</button></span>)}
+          {(conditions.length > 0 || query.sort.length > 0) && <button className="advanced-view-clear" onClick={clear} type="button">{t("advancedView.clear")}</button>}
+        </div>
       </div>
       <small>{t("advancedView.resultCount", { visible: resultCount, total: totalCount })}</small>
     </div>
     <EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setOpen(false)} open={open} title={t("advancedView.title")}>
       <form className="editor-drawer-form advanced-view-form" onSubmit={(event) => { event.preventDefault(); onChange(draft); setOpen(false); }}>
-        <section><header><div><h3>{t("advancedView.sorting")}</h3><p>{t("advancedView.sortingHint")}</p></div><button onClick={() => { const field = fields.find((candidate) => candidate.sortable !== false); if (field !== undefined) setDraft((current) => ({ ...current, sort: [...current.sort, { id: newViewNodeId("sort"), field: field.id, direction: "asc" }] })); }} type="button">+ {t("advancedView.addSort")}</button></header>
-          <div className="advanced-sort-rules">{draft.sort.map((rule, index) => <div className="advanced-sort-rule" key={rule.id}><span>{index + 1}</span><select aria-label={t("advancedView.sortField", { number: index + 1 })} onChange={(event) => setDraft((current) => ({ ...current, sort: current.sort.map((candidate) => candidate.id === rule.id ? { ...candidate, field: event.target.value } : candidate) }))} value={rule.field}>{fields.filter((field) => field.sortable !== false).map((field) => <option key={field.id} value={field.id}>{field.label}</option>)}</select><select aria-label={t("advancedView.direction", { number: index + 1 })} onChange={(event) => setDraft((current) => ({ ...current, sort: current.sort.map((candidate) => candidate.id === rule.id ? { ...candidate, direction: event.target.value as "asc" | "desc" } : candidate) }))} value={rule.direction}><option value="asc">{t("advancedView.ascending")}</option><option value="desc">{t("advancedView.descending")}</option></select><button aria-label={t("advancedView.removeSort", { field: fieldMap.get(rule.field)?.label ?? rule.field })} onClick={() => setDraft((current) => ({ ...current, sort: current.sort.filter((candidate) => candidate.id !== rule.id) }))} type="button">×</button></div>)}</div>
-        </section>
-        <section><header><div><h3>{t("advancedView.filters")}</h3><p>{t("advancedView.filtersHint")}</p></div></header><FilterGroupEditor fields={fields} group={draft.filter} locale={locale} root onChange={(filter) => setDraft((current) => ({ ...current, filter }))} t={t} /></section>
+        <section className="advanced-view-presets"><h3>{t("advancedView.quickPresets")}</h3><div aria-label={t("advancedView.quickPresets")} role="group">{presets.map((preset) => <button key={preset.id} onClick={() => applyPreset(preset)} type="button">{preset.label}</button>)}</div></section>
+        <details className="advanced-view-custom">
+          <summary>{t("advancedView.customSetup")}</summary>
+          <div>
+            <section><header><h3>{t("advancedView.sorting")}</h3><button onClick={() => { const field = fields.find((candidate) => candidate.sortable !== false); if (field !== undefined) setDraft((current) => ({ ...current, sort: [...current.sort, { id: newViewNodeId("sort"), field: field.id, direction: "asc" }] })); }} type="button">+ {t("advancedView.addSort")}</button></header>
+              <div className="advanced-sort-rules">{draft.sort.map((rule, index) => <div className="advanced-sort-rule" key={rule.id}><span>{index + 1}</span><select aria-label={t("advancedView.sortField", { number: index + 1 })} onChange={(event) => setDraft((current) => ({ ...current, sort: current.sort.map((candidate) => candidate.id === rule.id ? { ...candidate, field: event.target.value } : candidate) }))} value={rule.field}>{fields.filter((field) => field.sortable !== false).map((field) => <option key={field.id} value={field.id}>{field.label}</option>)}</select><select aria-label={t("advancedView.direction", { number: index + 1 })} onChange={(event) => setDraft((current) => ({ ...current, sort: current.sort.map((candidate) => candidate.id === rule.id ? { ...candidate, direction: event.target.value as "asc" | "desc" } : candidate) }))} value={rule.direction}><option value="asc">{t("advancedView.ascending")}</option><option value="desc">{t("advancedView.descending")}</option></select><button aria-label={t("advancedView.removeSort", { field: fieldMap.get(rule.field)?.label ?? rule.field })} onClick={() => setDraft((current) => ({ ...current, sort: current.sort.filter((candidate) => candidate.id !== rule.id) }))} type="button">×</button></div>)}</div>
+            </section>
+            <section><header><h3>{t("advancedView.filters")}</h3></header><FilterGroupEditor fields={fields} group={draft.filter} locale={locale} root onChange={(filter) => setDraft((current) => ({ ...current, filter }))} t={t} /></section>
+          </div>
+        </details>
         <div className="editor-drawer-actions"><button onClick={() => { setDraft(emptyViewQuery()); }} type="button">{t("advancedView.clear")}</button><button onClick={() => setOpen(false)} type="button">{t("core.cancel")}</button><button className="primary" type="submit">{t("advancedView.apply")}</button></div>
       </form>
     </EditorDrawer>
@@ -68,6 +84,32 @@ function FilterConditionEditor<Row>({ condition, fields, locale, onChange, onRem
 }
 
 const flattenConditions = (node: ViewFilterNode): ViewFilterCondition[] => node.kind === "condition" ? [node] : node.children.flatMap(flattenConditions);
+const sortPreset = <Row,>(field: ViewField<Row>, direction: "asc" | "desc"): AdvancedViewQuery => ({
+  ...emptyViewQuery(),
+  sort: [{ id: newViewNodeId("sort"), field: field.id, direction }],
+});
+const filterPreset = <Row,>(field: ViewField<Row>, operator: ViewFilterOperator, value?: string, direction?: "asc" | "desc"): AdvancedViewQuery => ({
+  filter: { kind: "group", id: newViewNodeId("group"), combinator: "and", children: [{ kind: "condition", id: newViewNodeId("condition"), field: field.id, operator, ...(value === undefined ? {} : { value }) }] },
+  sort: direction === undefined ? [] : [{ id: newViewNodeId("sort"), field: field.id, direction }],
+});
+function quickViewPresets<Row>(fields: readonly ViewField<Row>[], t: Translator): readonly QuickViewPreset[] {
+  const primary = fields.find((field) => field.id === "name" || field.id === "title") ?? fields.find((field) => field.type === "text" && field.id !== "id");
+  const date = fields.find((field) => field.id === "due") ?? fields.find((field) => field.type === "date");
+  const boolean = fields.find((field) => field.id === "overdue") ?? fields.find((field) => field.type === "boolean");
+  const number = fields.find((field) => field.type === "number");
+  const lifecycle = fields.find((field) => field.id === "lifecycle" && field.options?.some((option) => option.value === "active"));
+  const presets: QuickViewPreset[] = [];
+  if (primary !== undefined) {
+    presets.push({ id: "primary-asc", label: t("advancedView.presetAlphabetical", { field: primary.label }), query: sortPreset(primary, "asc") });
+    presets.push({ id: "primary-desc", label: t("advancedView.presetReverseAlphabetical", { field: primary.label }), query: sortPreset(primary, "desc") });
+  }
+  if (date !== undefined) presets.push({ id: "date-asc", label: t("advancedView.presetEarliest", { field: date.label }), query: filterPreset(date, "is-not-empty", undefined, "asc") });
+  else if (number !== undefined) presets.push({ id: "number-desc", label: t("advancedView.presetLargest", { field: number.label }), query: sortPreset(number, "desc") });
+  if (boolean !== undefined) presets.push({ id: "boolean-true", label: boolean.label, query: filterPreset(boolean, "is-true") });
+  else if (lifecycle !== undefined) presets.push({ id: "lifecycle-active", label: t("advancedView.presetActive"), query: filterPreset(lifecycle, "equals", "active") });
+  else if (number !== undefined && !presets.some((preset) => preset.id === "number-desc")) presets.push({ id: "number-desc", label: t("advancedView.presetLargest", { field: number.label }), query: sortPreset(number, "desc") });
+  return presets.slice(0, 4);
+}
 const optionLabel = <Row,>(field: ViewField<Row> | undefined, value: string): string => field?.options?.find((option) => option.value === value)?.label ?? value;
 function conditionLabel<Row>(condition: ViewFilterCondition, fields: ReadonlyMap<string, ViewField<Row>>, locale: Locale, t: Translator): string {
   const field = fields.get(condition.field); const value = optionLabel(field, condition.value ?? ""); const second = optionLabel(field, condition.valueTo ?? "");

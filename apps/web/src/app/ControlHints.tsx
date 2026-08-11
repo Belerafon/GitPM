@@ -106,8 +106,10 @@ export function ControlHints({ t }: {
       const common = commonHints.get(ariaLabel) ?? commonHints.get(visibleLabel);
       if (common !== undefined) return common;
       const nativeTitle = normalized(target.getAttribute("title") ?? (suspendedTitle.current?.target === target ? suspendedTitle.current.title : null));
-      if (nativeTitle !== "") return nativeTitle;
-      const fallback = ariaLabel || visibleLabel;
+      if (nativeTitle !== "" && nativeTitle !== visibleLabel) return nativeTitle;
+      // Visible text already explains a text button. Repeating it in a tooltip adds noise and
+      // can cover adjacent controls. Keep the accessible-name fallback for icon-only controls.
+      const fallback = /[\p{L}\p{N}]/u.test(visibleLabel) ? "" : ariaLabel;
       return fallback.length > 180 ? `${fallback.slice(0, 177).trimEnd()}…` : fallback;
     };
     const show = (target: HTMLElement) => {
