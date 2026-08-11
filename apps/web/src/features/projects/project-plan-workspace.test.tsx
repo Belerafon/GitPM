@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError, type GitPmApi } from "../../api.js";
+import type { AdvancedViewQuery } from "../../advanced-view-query.js";
 import type { ConfigurationDocument, ConfigurationResult, DraftStatus, EntityDocument, EntityResult } from "../../types.js";
 import { ProjectPlanWorkspace } from "./project-plan-workspace.js";
 
@@ -777,9 +778,59 @@ describe("ProjectPlanWorkspace", () => {
 
     const filterGroup = screen.getByRole("group", { name: "Summary and quick task filters" });
     fireEvent.click(within(filterGroup).getByRole("button", { name: "Overdue: 1" }));
+    expect(within(filterGroup).getByRole("button", { name: "Overdue: 1" }).getAttribute("aria-pressed")).toBe("true");
+    expect(within(filterGroup).getByRole("button", { name: "Filters and sorting 1" })).toBeTruthy();
+    expect(within(filterGroup).getByRole("button", { name: "Remove filter: Overdue yes" })).toBeTruthy();
+    expect(screen.getByText("Overdue task")).toBeTruthy();
+    expect(screen.queryByText("Active task")).toBeNull();
     fireEvent.click(within(filterGroup).getByRole("button", { name: "Clear all" }));
     expect(within(filterGroup).getByRole("button", { name: "Total tasks: 3" }).getAttribute("aria-pressed")).toBe("true");
     expect(within(filterGroup).queryByRole("button", { name: "Clear all" })).toBeNull();
+  });
+
+  it("uses the same overdue filter state from the drawer preset and the quick metric", async () => {
+    vi.useFakeTimers({ now: new Date("2026-07-20T12:00:00Z"), toFake: ["Date"] });
+    const client = api(summaryTasksFixture(), [summaryStage], summaryProject);
+    useSummaryStatusConfig(client);
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={summaryProject.document.id} />);
+
+    await screen.findByRole("heading", { name: "Summary project" });
+    fireEvent.click(screen.getByRole("button", { name: "Filters and sorting" }));
+    const dialog = screen.getByRole("dialog", { name: "Filters and sorting" });
+    const presets = within(dialog).getByRole("group", { name: "Quick presets" });
+    fireEvent.click(within(presets).getByRole("button", { name: "Overdue" }));
+
+    const filterGroup = screen.getByRole("group", { name: "Summary and quick task filters" });
+    expect(within(filterGroup).getByRole("button", { name: "Overdue: 1" }).getAttribute("aria-pressed")).toBe("true");
+    expect(within(filterGroup).getByRole("button", { name: "Filters and sorting 1" })).toBeTruthy();
+    const overdueChip = within(filterGroup).getByRole("button", { name: "Remove filter: Overdue yes" });
+    expect(overdueChip).toBeTruthy();
+    expect(screen.getByText("Overdue task")).toBeTruthy();
+    expect(screen.queryByText("Active task")).toBeNull();
+
+    fireEvent.click(overdueChip);
+    expect(within(filterGroup).getByRole("button", { name: "Overdue: 1" }).getAttribute("aria-pressed")).toBe("false");
+    expect(within(filterGroup).getByRole("button", { name: "Filters and sorting" })).toBeTruthy();
+    expect(within(filterGroup).queryByRole("button", { name: "Remove filter: Overdue yes" })).toBeNull();
+  });
+
+  it("does not reinterpret overdue inside an OR expression as the quick overdue filter", async () => {
+    vi.useFakeTimers({ now: new Date("2026-07-20T12:00:00Z"), toFake: ["Date"] });
+    const client = api(summaryTasksFixture(), [summaryStage], summaryProject);
+    const query: AdvancedViewQuery = {
+      filter: { kind: "group", id: "group-or", combinator: "or", children: [
+        { kind: "condition", id: "condition-overdue", field: "overdue", operator: "is-true" },
+        { kind: "condition", id: "condition-done", field: "status", operator: "equals", value: "done" },
+      ] },
+      sort: [],
+    };
+    useSummaryStatusConfig(client);
+    render(<ProjectPlanWorkspace api={client} draft={draft} initialAdvancedQuery={JSON.stringify(query)} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={summaryProject.document.id} />);
+
+    await screen.findByRole("heading", { name: "Summary project" });
+    const filterGroup = screen.getByRole("group", { name: "Summary and quick task filters" });
+    expect(within(filterGroup).getByRole("button", { name: "Overdue: 1" }).getAttribute("aria-pressed")).toBe("false");
+    expect(within(filterGroup).getByRole("button", { name: "Filters and sorting 2" })).toBeTruthy();
   });
 
   it("orders the summary metrics Total, In progress, Blocked, Overdue, Completed", async () => {
@@ -881,6 +932,19 @@ describe("ProjectPlanWorkspace", () => {
 
     await screen.findByRole("heading", { name: "Summary project" });
     expect(screen.getByRole("button", { name: "In progress: 1" }).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("migrates the legacy overdue summary query into the unified filter state", async () => {
+    vi.useFakeTimers({ now: new Date("2026-07-20T12:00:00Z"), toFake: ["Date"] });
+    const client = api(summaryTasksFixture(), [summaryStage], summaryProject);
+    useSummaryStatusConfig(client);
+    render(<ProjectPlanWorkspace api={client} draft={draft} initialSummaryFilter="overdue" locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={summaryProject.document.id} />);
+
+    await screen.findByRole("heading", { name: "Summary project" });
+    const filterGroup = screen.getByRole("group", { name: "Summary and quick task filters" });
+    expect(within(filterGroup).getByRole("button", { name: "Overdue: 1" }).getAttribute("aria-pressed")).toBe("true");
+    expect(within(filterGroup).getByRole("button", { name: "Filters and sorting 1" })).toBeTruthy();
+    expect(within(filterGroup).getByRole("button", { name: "Remove filter: Overdue yes" })).toBeTruthy();
   });
 
   it("bases overdue on the effective finish roll-up and excludes done and undated tasks", async () => {
@@ -1080,6 +1144,8 @@ describe("ProjectPlanWorkspace", () => {
     await screen.findByRole("heading", { name: "Summary project" });
     fireEvent.click(screen.getByRole("button", { name: "Completed: 1" }));
     expect(screen.getByRole("button", { name: "Completed: 1" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Filters and sorting 1" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Remove filter: Completed" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /Filters and sorting/u }));
     const dialog = screen.getByRole("dialog", { name: "Filters and sorting" });
     fireEvent.click(within(dialog).getByRole("button", { name: /Add condition/u }));
@@ -1087,6 +1153,7 @@ describe("ProjectPlanWorkspace", () => {
     fireEvent.change(within(dialog).getByLabelText("Value"), { target: { value: "done" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Apply" }));
     expect(screen.getByRole("button", { name: "Completed: 1" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Filters and sorting 2" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Total tasks: 1" }).getAttribute("aria-pressed")).toBe("false");
   });
 
@@ -1129,5 +1196,23 @@ describe("ProjectPlanWorkspace", () => {
     expect(onNavigate).toHaveBeenLastCalledWith("projects", { projectId: project.document.id, query: { summary: ["completed"] } });
     fireEvent.click(screen.getByRole("button", { name: "Completed: 1" }));
     expect(onNavigate).toHaveBeenLastCalledWith("projects", { projectId: project.document.id });
+  });
+
+  it("stores the quick overdue filter in the shared advanced navigation query", async () => {
+    vi.useFakeTimers({ now: new Date("2026-07-20T12:00:00Z"), toFake: ["Date"] });
+    const client = api(summaryTasksFixture(), [summaryStage], summaryProject);
+    const onNavigate = vi.fn();
+    useSummaryStatusConfig(client);
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={onNavigate} projectId={summaryProject.document.id} />);
+
+    await screen.findByRole("heading", { name: "Summary project" });
+    fireEvent.click(screen.getByRole("button", { name: "Overdue: 1" }));
+
+    const navigation = onNavigate.mock.calls.at(-1)?.[1] as { readonly query?: Readonly<Record<string, readonly string[]>> };
+    expect(navigation.query).not.toHaveProperty("summary");
+    const stored = JSON.parse(navigation.query?.filters?.[0] ?? "{}") as AdvancedViewQuery;
+    expect(stored.filter.children).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "condition", field: "overdue", operator: "is-true" }),
+    ]));
   });
 });

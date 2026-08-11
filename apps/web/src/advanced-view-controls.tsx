@@ -14,7 +14,7 @@ interface QuickViewPreset {
   readonly query: AdvancedViewQuery;
 }
 
-export function AdvancedViewControls<Row>({ fields, locale, query, onChange, resultCount, totalCount, leadingControls, appliedControls, hasExternalFilters = false, groupLabel, onClear, t }: {
+export function AdvancedViewControls<Row>({ fields, locale, query, onChange, resultCount, totalCount, leadingControls, appliedControls, externalFilterCount = 0, groupLabel, onClear, t }: {
   readonly fields: readonly ViewField<Row>[];
   readonly locale: Locale;
   readonly query: AdvancedViewQuery;
@@ -23,7 +23,7 @@ export function AdvancedViewControls<Row>({ fields, locale, query, onChange, res
   readonly totalCount: number;
   readonly leadingControls?: ReactNode;
   readonly appliedControls?: ReactNode;
-  readonly hasExternalFilters?: boolean;
+  readonly externalFilterCount?: number;
   readonly groupLabel?: string;
   readonly onClear?: () => void;
   readonly t: Translator;
@@ -34,8 +34,8 @@ export function AdvancedViewControls<Row>({ fields, locale, query, onChange, res
   const fieldMap = new Map(fields.map((field) => [field.id, field]));
   const presets = useMemo(() => quickViewPresets(fields, t), [fields, t]);
   const clear = () => onClear === undefined ? onChange(emptyViewQuery()) : onClear();
-  const appliedCount = countViewConditions(query.filter) + query.sort.length;
-  const hasAppliedFilters = appliedCount > 0 || hasExternalFilters;
+  const appliedCount = countViewConditions(query.filter) + query.sort.length + externalFilterCount;
+  const hasAppliedFilters = appliedCount > 0;
   const openEditor = () => { setDraft(query); setOpen(true); };
   const applyPreset = (preset: QuickViewPreset) => { onChange(preset.query); setDraft(preset.query); setOpen(false); };
   return <>
