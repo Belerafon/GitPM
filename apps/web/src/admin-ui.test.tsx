@@ -192,17 +192,39 @@ describe("administration UI", () => {
 
   it("changes the repository default calendar and UI polling interval", async () => {
     const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
+    const onOpenCalendar = vi.fn();
     await admin.createEntity("DRF-ADMIN", "calendars", "", { schema: "gitpm/calendar@1", id: "C-26-111111", name: "Old default", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
-    await admin.createEntity("DRF-ADMIN", "calendars", "", { schema: "gitpm/calendar@1", id: "C-26-222222", name: "New default", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
-    render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="settings" onChanged={vi.fn(async () => undefined)} />);
+    await admin.createEntity("DRF-ADMIN", "calendars", "", { schema: "gitpm/calendar@1", id: "C-26-222222", name: "New default", working_weekdays: [1, 2, 3, 4, 5, 6, 7], holidays: ["2026-08-17"], lifecycle: "active" });
+    render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="settings" onOpenCalendar={onOpenCalendar} onChanged={vi.fn(async () => undefined)} />);
     const repositoryCard = (await screen.findByRole("heading", { name: "Repository settings" })).closest<HTMLElement>(".config-editor")!;
-    expect(within(repositoryCard).getByText("Old default")).toBeTruthy();
+    const calendarSummary = repositoryCard.querySelector<HTMLElement>(".repository-default-calendar")!;
+    expect(within(calendarSummary).getByText("C-26-111111")).toBeTruthy();
+    expect(within(calendarSummary).getByLabelText("Working week preview").querySelectorAll(".working")).toHaveLength(5);
+    expect(within(calendarSummary).getByText(/Used for new people/u)).toBeTruthy();
+    fireEvent.click(within(calendarSummary).getByRole("button", { name: "Old default" }));
+    expect(onOpenCalendar).toHaveBeenLastCalledWith("C-26-111111");
+    fireEvent.click(within(calendarSummary).getByRole("button", { name: "Open calendar" }));
+    expect(onOpenCalendar).toHaveBeenLastCalledWith("C-26-111111");
     fireEvent.click(within(repositoryCard).getByRole("button", { name: "Edit Repository settings" }));
     const dialog = screen.getByRole("dialog", { name: "Edit: Repository settings" });
     fireEvent.change(within(dialog).getByLabelText("Repository default calendar"), { target: { value: "C-26-222222" } });
+    const selectedPreview = dialog.querySelector<HTMLElement>(".repository-calendar-selection-preview")!;
+    expect(within(selectedPreview).getByLabelText("Working week preview").querySelectorAll(".working")).toHaveLength(7);
+    expect(within(selectedPreview).getByText("C-26-222222")).toBeTruthy();
+    expect(selectedPreview.querySelector("time")?.getAttribute("datetime")).toBe("2026-08-17");
+    fireEvent.click(within(selectedPreview).getByRole("button", { name: "Open selected calendar" }));
+    expect(onOpenCalendar).toHaveBeenLastCalledWith("C-26-222222");
     fireEvent.change(within(dialog).getByLabelText("UI polling interval"), { target: { value: "7" } });
     fireEvent.submit(within(dialog).getByRole("button", { name: "Save" }).closest("form")!);
     await waitFor(() => expect(admin.repository?.document).toMatchObject({ default_calendar: "C-26-222222", ui_poll_interval_seconds: 7 }));
+  });
+
+  it("opens the editor for a calendar selected by a deep link", async () => {
+    const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
+    await admin.createEntity("DRF-ADMIN", "calendars", "", { schema: "gitpm/calendar@1", id: "C-26-111111", name: "Deep linked", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
+    render(<AdminWorkspace api={api} draft={draft} initialCalendarId="C-26-111111" role="Maintainer" locale="en" surface="calendar" onChanged={vi.fn(async () => undefined)} />);
+
+    expect(await screen.findByRole("dialog", { name: "Edit calendar: Deep linked" })).toBeTruthy();
   });
 
   it("shows concrete reference blockers instead of submitting an unsafe configuration update", async () => {

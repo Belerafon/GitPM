@@ -120,6 +120,26 @@ test.describe("GitPM browser UI", () => {
     }
   });
 
+  test("explains the repository default calendar and opens its exact editor", async ({ page }) => {
+    await page.goto("/settings");
+    await page.locator(".interface-settings > summary").click();
+    await page.locator(".locale-picker select").selectOption("en");
+    await page.locator(".interface-settings > summary").click();
+
+    const repository = page.getByRole("heading", { name: "Repository settings", exact: true }).locator("xpath=ancestor::article[1]");
+    const calendar = repository.locator(".repository-default-calendar");
+    const calendarId = (await calendar.locator("code").textContent())?.trim();
+    const calendarName = (await calendar.locator(".repository-calendar-link").textContent())?.trim();
+    expect(calendarId).toMatch(/^C-/u);
+    expect(calendarName).not.toBe("");
+    await expect(calendar.getByText("Used for new people when no calendar is selected explicitly. Calendars already assigned to people are not changed.", { exact: true })).toBeVisible();
+    await expect(calendar.locator(".calendar-week-preview .working")).toHaveCount(5);
+
+    await calendar.getByRole("button", { name: "Open calendar", exact: true }).click();
+    await expect(page).toHaveURL(`/calendars/${calendarId}`);
+    await expect(page.getByRole("dialog", { name: `Edit calendar: ${calendarName}`, exact: true })).toBeVisible();
+  });
+
   test("keeps the configured repository open after reloading the page", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("button", { name: /^GitPM launch/u })).toBeVisible();
