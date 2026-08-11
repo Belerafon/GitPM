@@ -12,10 +12,10 @@ const fields: readonly ViewField<(typeof items)[number]>[] = [
   { id: "due", label: "Due", type: "date", read: (row) => row.due },
 ];
 
-function Harness() {
+function Harness({ allowSorting = true }: { readonly allowSorting?: boolean } = {}) {
   const [query, setQuery] = useState<AdvancedViewQuery>(() => emptyViewQuery());
   const result = applyAdvancedViewQuery(items, fields, query, "en");
-  return <><AdvancedViewControls fields={fields} locale="en" onChange={setQuery} query={query} resultCount={result.length} t={(key, values) => message("en", key, values)} totalCount={items.length} /><output>{result.map((row) => row.name).join(",")}</output></>;
+  return <><AdvancedViewControls allowSorting={allowSorting} fields={fields} locale="en" onChange={setQuery} query={query} resultCount={result.length} t={(key, values) => message("en", key, values)} totalCount={items.length} /><output>{result.map((row) => row.name).join(",")}</output></>;
 }
 
 afterEach(cleanup);
@@ -53,5 +53,16 @@ describe("AdvancedViewControls", () => {
 
     expect(screen.queryByRole("dialog", { name: "Filters and sorting" })).toBeNull();
     expect(screen.getByText("Beta,Alpha")).toBeTruthy();
+  });
+
+  it("exposes a filter-only variant without sorting controls", () => {
+    render(<Harness allowSorting={false} />);
+    fireEvent.click(screen.getByRole("button", { name: "Filters" }));
+    const dialog = screen.getByRole("dialog", { name: "Filters" });
+
+    fireEvent.click(within(dialog).getByText("Custom filters"));
+    expect(within(dialog).queryByRole("heading", { name: "Sorting" })).toBeNull();
+    expect(within(dialog).queryByRole("button", { name: /Add sorting/u })).toBeNull();
+    expect(within(dialog).getByRole("heading", { level: 3, name: "Filters" })).toBeTruthy();
   });
 });

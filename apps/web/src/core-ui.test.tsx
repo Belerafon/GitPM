@@ -347,11 +347,12 @@ describe("core UI", () => {
     await screen.findByRole("heading", { name: "Delivery" });
     const rows = () => Array.from(container.querySelectorAll(".project-register-row strong")).map((node) => node.textContent);
 
-    expect(screen.queryByRole("dialog", { name: "Filters and sorting" })).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "Filters" })).toBeNull();
     expect(rows()).toEqual(["Alpha", "Gamma", "Beta"]);
 
-    fireEvent.click(screen.getByRole("button", { name: /Filters and sorting/u }));
-    let dialog = screen.getByRole("dialog", { name: "Filters and sorting" });
+    fireEvent.click(screen.getByRole("button", { name: /^Filters/u }));
+    let dialog = screen.getByRole("dialog", { name: "Filters" });
+    expect(within(dialog).queryByRole("heading", { name: "Sorting" })).toBeNull();
     fireEvent.click(within(dialog).getByRole("button", { name: /Add condition/u }));
     fireEvent.change(within(dialog).getAllByLabelText("Field")[1]!, { target: { value: "group" } });
     fireEvent.change(within(dialog).getAllByLabelText("Value")[1]!, { target: { value: "Research" } });
@@ -360,8 +361,8 @@ describe("core UI", () => {
     fireEvent.click(screen.getByRole("button", { name: /Remove filter: Group/u }));
     expect(rows()).toEqual(["Alpha", "Gamma", "Beta"]);
 
-    fireEvent.click(screen.getByRole("button", { name: /Filters and sorting/u }));
-    dialog = screen.getByRole("dialog", { name: "Filters and sorting" });
+    fireEvent.click(screen.getByRole("button", { name: /^Filters/u }));
+    dialog = screen.getByRole("dialog", { name: "Filters" });
     fireEvent.click(within(dialog).getByRole("button", { name: /Add condition/u }));
     fireEvent.change(within(dialog).getAllByLabelText("Field")[1]!, { target: { value: "risk" } });
     fireEvent.change(within(dialog).getAllByLabelText("Value")[1]!, { target: { value: "overdue" } });
@@ -370,8 +371,8 @@ describe("core UI", () => {
     fireEvent.click(screen.getByRole("button", { name: "Clear all" }));
     expect(rows()).toEqual(["Alpha", "Delta", "Gamma", "Beta"]);
 
-    fireEvent.click(screen.getByRole("button", { name: /Filters and sorting/u }));
-    dialog = screen.getByRole("dialog", { name: "Filters and sorting" });
+    fireEvent.click(screen.getByRole("button", { name: /^Filters/u }));
+    dialog = screen.getByRole("dialog", { name: "Filters" });
     fireEvent.click(within(dialog).getByRole("button", { name: /Add condition/u }));
     fireEvent.change(within(dialog).getByLabelText("Field"), { target: { value: "lifecycle" } });
     fireEvent.change(within(dialog).getByLabelText("Value"), { target: { value: "archived" } });

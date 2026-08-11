@@ -58,6 +58,9 @@ export const emptyViewQuery = (): AdvancedViewQuery => ({
   filter: { kind: "group", id: newViewNodeId("group"), combinator: "and", children: [] },
   sort: [],
 });
+
+export const filterOnlyViewQuery = (query: AdvancedViewQuery): AdvancedViewQuery =>
+  query.sort.length === 0 ? query : { ...query, sort: [] };
 export const defaultLifecycleViewQuery = (): AdvancedViewQuery => ({
   filter: { kind: "group", id: newViewNodeId("group"), combinator: "and", children: [{ kind: "condition", id: newViewNodeId("condition"), field: "lifecycle", operator: "equals", value: "active" }] },
   sort: [],

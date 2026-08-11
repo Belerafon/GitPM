@@ -51,6 +51,8 @@ describe("administration UI", () => {
 
     const onOpenPerson = vi.fn();
     rendered.rerender(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" onOpenPerson={onOpenPerson} surface="people" onChanged={changed} />);
+    const peopleCard = document.querySelector<HTMLElement>(".people-directory-card")!;
+    expect(within(peopleCard).getByRole("button", { name: /Filters and sorting/u })).toBeTruthy();
     fireEvent.click(await screen.findByRole("button", { name: /Create person/u }));
     const personForm = within(screen.getByRole("dialog", { name: "Create person" })).getByRole("button", { name: "Create person" }).closest("form")!;
     fireEvent.change(within(personForm).getByLabelText("Name"), { target: { value: "Alice" } }); fireEvent.change(within(personForm).getByLabelText("Weekly capacity (hours)"), { target: { value: "32" } }); fireEvent.submit(personForm);
