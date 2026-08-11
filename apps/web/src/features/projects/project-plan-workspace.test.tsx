@@ -663,9 +663,15 @@ describe("ProjectPlanWorkspace", () => {
     render(<ProjectPlanWorkspace api={client} draft={draft} initialStatusFilter="done" locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} />);
 
     const stageCard = (await screen.findByRole("heading", { name: "Launch" })).closest<HTMLElement>("article")!;
-    expect(screen.getByText("Root task").closest(".project-plan-task-row")?.getAttribute("data-depth")).toBe("0");
-    expect(screen.getByText("Child task").closest(".project-plan-task-row")?.getAttribute("data-depth")).toBe("1");
-    expect(screen.getByText("Grandchild task").closest(".project-plan-task-row")?.getAttribute("data-depth")).toBe("2");
+    const rootRow = screen.getByText("Root task").closest<HTMLElement>(".project-plan-task-row")!;
+    const initialChildRow = screen.getByText("Child task").closest<HTMLElement>(".project-plan-task-row")!;
+    const grandchildRow = screen.getByText("Grandchild task").closest<HTMLElement>(".project-plan-task-row")!;
+    expect(rootRow.getAttribute("data-depth")).toBe("0");
+    expect(initialChildRow.getAttribute("data-depth")).toBe("1");
+    expect(grandchildRow.getAttribute("data-depth")).toBe("2");
+    expect(rootRow.style.getPropertyValue("--task-tree-width")).toBe("0rem");
+    expect(initialChildRow.style.getPropertyValue("--task-tree-width")).toBe("0.8rem");
+    expect(grandchildRow.style.getPropertyValue("--task-tree-width")).toBe("1.6rem");
     expect(screen.getByText("Root task").closest(".project-plan-task-row")?.querySelector(".project-plan-task-kind")?.textContent).toBe(`Task 1.1. ${root.document.id}.`);
     expect(screen.getByText("Child task").closest(".project-plan-task-row")?.querySelector(".project-plan-task-kind")?.textContent).toBe(`Task 1.1.1. ${child.document.id}.`);
     expect(screen.getByText("Grandchild task").closest(".project-plan-task-row")?.querySelector(".project-plan-task-kind")?.textContent).toBe(`Task 1.1.1.1. ${grandchild.document.id}.`);
