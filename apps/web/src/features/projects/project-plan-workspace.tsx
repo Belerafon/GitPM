@@ -1034,8 +1034,8 @@ function TaskRows({ roots, visibleIds, allTasks, projectId, query = {}, locale, 
     }
     const style = {
       "--task-depth": entry.depth,
-      "--task-tree-width": `${1.5 + entry.depth * 1.15}rem`,
-      "--task-tree-parent-offset": `${.75 + Math.max(0, entry.depth - 1) * 1.15}rem`,
+      "--task-tree-width": `${entry.depth * .8}rem`,
+      "--task-tree-parent-offset": `${-.4 + Math.max(0, entry.depth - 1) * .8}rem`,
     } as CSSProperties;
     const nextEntry = entries[index + 1];
     const nextTask = nextEntry === undefined ? undefined : taskById.get(nextEntry.node.id);
@@ -1043,7 +1043,7 @@ function TaskRows({ roots, visibleIds, allTasks, projectId, query = {}, locale, 
     const insertDepth = nextEntry === undefined ? entry.depth : nextEntry.depth;
     const rows = [<div className={`project-plan-task-row${selected ? " selected" : ""}${isContextOnly ? " filter-context" : ""}${changedTaskIds.has(node.id) ? " recently-changed" : ""}${savingTaskIds.has(node.id) ? " is-saving" : ""}`} data-depth={entry.depth} data-flip-key={`task:${node.id}`} key={node.id} style={style}>
       <span className={`project-plan-task-tree${hasVisibleChildren ? " has-visible-children" : ""}`}>
-        {ancestorRailLevels.map((level) => <span aria-hidden="true" className="project-plan-task-ancestor-rail" key={level} style={{ left: `${.75 + level * 1.15}rem` }} />)}
+        {ancestorRailLevels.map((level) => <span aria-hidden="true" className="project-plan-task-ancestor-rail" key={level} style={{ left: `${-.4 + level * .8}rem` }} />)}
         {entry.depth > 0 && <span aria-hidden="true" className={`project-plan-task-branch${isLastVisibleSibling ? " last" : ""}`} />}
         <span className="project-plan-task-tree-control">{entry.hasChildren ? <button aria-expanded={!collapsed.has(node.id)} aria-label={collapsed.has(node.id) ? t("taskHierarchy.expand", { title: node.title }) : t("taskHierarchy.collapse", { title: node.title })} onClick={() => setCollapsed((current) => { const next = new Set(current); if (next.has(node.id)) next.delete(node.id); else next.add(node.id); return next; })} title={collapsed.has(node.id) ? t("taskHierarchy.expand", { title: node.title }) : t("taskHierarchy.collapse", { title: node.title })} type="button"><svg aria-hidden="true" viewBox="0 0 12 12"><path d={collapsed.has(node.id) ? "M4 2.5 8 6 4 9.5" : "m2.5 4 3.5 4 3.5-4"} /></svg></button> : null}</span>
       </span>
@@ -1082,7 +1082,7 @@ function TaskInsertHandle({ anchorTask, anchorParentId, nextTask, nextParentId, 
   const anchorTitle = text(anchorTask.document, "title");
   const nextTitle = nextTask === undefined ? "" : text(nextTask.document, "title");
   const pick = (spec: TaskInsertSpec) => { onOpenChange(false); onCreate(spec); };
-  const insertLeft = `${1.35 + depth * 1.15}rem`;
+  const insertLeft = `${.35 + depth * .8}rem`;
   return <div className={`task-insert-handle${open ? " is-open" : ""}`} style={{ "--insert-left": insertLeft } as CSSProperties}>
     <span className="task-insert-zone" aria-hidden="true" />
     <button
