@@ -1049,8 +1049,19 @@ function TaskRows({ roots, visibleIds, allTasks, projectId, query = {}, locale, 
     for (const child of node.children) walk(child, node.id, depth + 1);
   };
   for (const root of roots) walk(root, undefined, 0);
+  const taskListStyle = {
+    "--project-plan-task-columns": [
+      "auto",
+      "minmax(0, 1fr)",
+      ...(taskFields.assignees ? ["minmax(8rem, 15rem)"] : []),
+      ...(taskFields.due ? ["7rem"] : []),
+      ...(taskFields.estimate ? ["4rem"] : []),
+      ...(taskFields.status ? ["max-content"] : []),
+      ...(onMoveTask === undefined ? [] : ["max-content"]),
+    ].join(" "),
+  } as CSSProperties;
   const visibleEntryIds = new Set(entries.map((entry) => entry.node.id));
-  return <div className="project-plan-task-list">{entries.map((entry, index) => {
+  return <div className="project-plan-task-list" style={taskListStyle}>{entries.map((entry, index) => {
     const { node } = entry;
     const task = taskById.get(node.id);
     const selected = selectedTaskId === node.id;
@@ -1089,7 +1100,13 @@ function TaskRows({ roots, visibleIds, allTasks, projectId, query = {}, locale, 
         <span className="project-plan-task-tree-control">{entry.hasChildren ? <button aria-expanded={!collapsed.has(node.id)} aria-label={collapsed.has(node.id) ? t("taskHierarchy.expand", { title: node.title }) : t("taskHierarchy.collapse", { title: node.title })} onClick={() => setCollapsed((current) => { const next = new Set(current); if (next.has(node.id)) next.delete(node.id); else next.add(node.id); return next; })} title={collapsed.has(node.id) ? t("taskHierarchy.expand", { title: node.title }) : t("taskHierarchy.collapse", { title: node.title })} type="button"><svg aria-hidden="true" viewBox="0 0 12 12"><path d={collapsed.has(node.id) ? "M4 2.5 8 6 4 9.5" : "m2.5 4 3.5 4 3.5-4"} /></svg></button> : null}</span>
       </span>
       <button aria-current={selected ? "true" : undefined} className="project-plan-task-selector" onClick={() => onNavigate("tasks", { projectId, taskId: node.id, ...(Object.keys(query).length > 0 ? { query } : {}) })} type="button"><span className="project-plan-task-kind">{t("projectPlan.taskLabel")} {taskNumber}. <code>{node.id}</code>.</span><strong>{node.title}</strong>{task?.document.lifecycle === "archived" && <small className="archived-reference">{t("core.archived")}</small>}{entry.hasChildren && <small>{t("taskHierarchy.directProgress", { completed: completedChildren, count: nodeChildren.length })}</small>}</button>
-      <span className="project-plan-task-meta">{taskFields.assignees && <span className="task-assignees" title={t("tooltip.taskAssignees")}><PersonLinks empty={t("core.unassigned")} onOpen={(personId) => onNavigate("people", { personId })} people={people} personIds={node.assignees} /></span>}{taskFields.due && node.due && <time dateTime={node.due} title={t("tooltip.taskDue")}>{formatDateOnly(locale, node.due)}</time>}{taskFields.estimate && node.estimate !== undefined && <span title={t("tooltip.taskEstimate")}>{formatDurationHours(locale, node.estimate)}</span>}{taskFields.status && (onStatusChange === undefined || readOnly || task === undefined ? <span className="state open" title={t("tooltip.taskStatus")}>{statusTitle(node.status)}</span> : <select aria-label={`${t("core.status")}: ${node.title}`} className="inline-status-select" disabled={statusBusy} onChange={(event) => onStatusChange(task, event.target.value)} title={t("tooltip.changeStatus")} value={node.status}>{statusOptions.map((status) => <option key={status.slug} value={status.slug}>{status.title}</option>)}</select>)}{onMoveTask !== undefined && <span className="plan-order-controls"><button aria-label={t("projectPlan.moveTaskUp", { number: taskNumber })} disabled={readOnly || orderBusy || siblingIndex === 0} onClick={() => onMoveTask(node.id, -1)} title={t("projectPlan.moveTaskUp", { number: taskNumber })} type="button">↑</button><button aria-label={t("projectPlan.moveTaskDown", { number: taskNumber })} disabled={readOnly || orderBusy || siblingIndex === siblings.length - 1} onClick={() => onMoveTask(node.id, 1)} title={t("projectPlan.moveTaskDown", { number: taskNumber })} type="button">↓</button></span>}</span>
+      <span className="project-plan-task-meta">
+        {taskFields.assignees && <span className="project-plan-task-meta-cell task-assignees" title={t("tooltip.taskAssignees")}><PersonLinks empty={t("core.unassigned")} onOpen={(personId) => onNavigate("people", { personId })} people={people} personIds={node.assignees} /></span>}
+        {taskFields.due && <span className="project-plan-task-meta-cell project-plan-task-due">{node.due && <time dateTime={node.due} title={t("tooltip.taskDue")}>{formatDateOnly(locale, node.due)}</time>}</span>}
+        {taskFields.estimate && <span className="project-plan-task-meta-cell project-plan-task-estimate">{node.estimate !== undefined && <span title={t("tooltip.taskEstimate")}>{formatDurationHours(locale, node.estimate)}</span>}</span>}
+        {taskFields.status && <span className="project-plan-task-meta-cell project-plan-task-status">{onStatusChange === undefined || readOnly || task === undefined ? <span className="state open" title={t("tooltip.taskStatus")}>{statusTitle(node.status)}</span> : <select aria-label={`${t("core.status")}: ${node.title}`} className="inline-status-select" disabled={statusBusy} onChange={(event) => onStatusChange(task, event.target.value)} title={t("tooltip.changeStatus")} value={node.status}>{statusOptions.map((status) => <option key={status.slug} value={status.slug}>{status.title}</option>)}</select>}</span>}
+        {onMoveTask !== undefined && <span className="project-plan-task-meta-cell plan-order-controls"><button aria-label={t("projectPlan.moveTaskUp", { number: taskNumber })} disabled={readOnly || orderBusy || siblingIndex === 0} onClick={() => onMoveTask(node.id, -1)} title={t("projectPlan.moveTaskUp", { number: taskNumber })} type="button">↑</button><button aria-label={t("projectPlan.moveTaskDown", { number: taskNumber })} disabled={readOnly || orderBusy || siblingIndex === siblings.length - 1} onClick={() => onMoveTask(node.id, 1)} title={t("projectPlan.moveTaskDown", { number: taskNumber })} type="button">↓</button></span>}
+      </span>
     </div>];
     if (onCreate !== undefined && !readOnly && task !== undefined) rows.push(<TaskInsertHandle
       key={`insert-${node.id}`}

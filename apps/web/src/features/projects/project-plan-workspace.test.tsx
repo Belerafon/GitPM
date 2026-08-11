@@ -532,7 +532,11 @@ describe("ProjectPlanWorkspace", () => {
     expect(screen.getByText("Linked task")).toBeTruthy();
     expect(screen.getByText("Without stage")).toBeTruthy();
     expect(stageCard.querySelector(".project-plan-stage-assignees")?.textContent).toContain("Ada");
-    expect(screen.getByText("Linked task").closest(".project-plan-task-row")?.querySelector(".task-assignees")?.textContent).toBe("Ada");
+    const linkedRow = screen.getByText("Linked task").closest(".project-plan-task-row")!;
+    expect(linkedRow.querySelector(".task-assignees")?.textContent).toBe("Ada");
+    expect(linkedRow.querySelector(".project-plan-task-due")).toBeTruthy();
+    expect(linkedRow.querySelector(".project-plan-task-due")?.textContent).toBe("");
+    expect(linkedRow.querySelector(".project-plan-task-estimate")?.textContent).toBe("20 hours");
     fireEvent.click(screen.getByText("Task row fields"));
     expect(screen.getByText("Choose which details appear in task rows. This setting applies to every project in this browser.")).toBeTruthy();
     fireEvent.click(screen.getByRole("checkbox", { name: "Assignees" }));
