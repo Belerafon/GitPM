@@ -190,6 +190,19 @@ describe("administration UI", () => {
     expect(changed).toHaveBeenCalled();
   });
 
+  it("explains schedule tracks and their roles in the Russian editor", async () => {
+    const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
+    render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="ru" surface="settings" onChanged={vi.fn(async () => undefined)} />);
+
+    const tracksCard = (await screen.findByRole("heading", { name: "Контуры расписания" })).closest<HTMLElement>(".config-editor")!;
+    fireEvent.click(within(tracksCard).getByRole("button", { name: "Редактировать: Контуры расписания" }));
+    const dialog = await screen.findByRole("dialog", { name: "Редактировать: Контуры расписания" });
+    const hint = dialog.querySelector<HTMLElement>(".schedule-tracks-hint")!;
+    expect(within(hint).getByText(/Контур — это отдельный вариант расписания/u)).toBeTruthy();
+    expect(within(hint).getByText(/Ручные контуры заполняются пользователями/u)).toBeTruthy();
+    expect(within(hint).getByText(/основной контур используется как рабочее расписание/u)).toBeTruthy();
+  });
+
   it("changes the repository default calendar and UI polling interval", async () => {
     const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
     await admin.createEntity("DRF-ADMIN", "calendars", "", { schema: "gitpm/calendar@1", id: "C-26-111111", name: "Old default", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
