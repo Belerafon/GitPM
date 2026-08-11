@@ -471,11 +471,6 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     };
     onNavigate("projects", { projectId, ...(Object.keys(query).length > 0 ? { query } : {}) });
   };
-  const summaryMetricLabel = (value: SummaryFilter): string => value === "completed" ? t("projectPlan.summaryCompleted")
-    : value === "active" ? t("projectPlan.summaryActive")
-    : value === "blocked" ? t("projectPlan.summaryBlocked")
-    : value === "overdue" ? t("projectPlan.summaryOverdue")
-    : t("projectPlan.filterAll");
   const milestoneChipLabel = (value: string): string => {
     if (value === "none") return t("stages.withoutStage");
     const stage = activeStages.find((item) => item.document.id === value);
@@ -705,15 +700,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
 
           {!archiveMode && <ProjectScheduleSummary project={workspace.project.document} locale={locale} milestones={activeStages} tasks={currentPlanTasks} scheduling={scheduling} projectId={projectId} onNavigate={onNavigate} />}
 
-          {!archiveMode && <><div className="project-plan-summary" role="group" aria-label={t("projectPlan.summaryGroup")}>
-            <button aria-label={`${t("projectPlan.summaryTotal")}: ${summaryScopeTasks.length}`} aria-pressed={summaryFilter === "all" && statusFilter === ""} className="project-plan-summary-metric" onClick={() => applyFilters("", milestoneFilter, "all")} type="button"><span>{t("projectPlan.summaryTotal")}</span><strong>{summaryScopeTasks.length}</strong></button>
-            <button aria-label={`${t("projectPlan.summaryActive")}: ${inProgressCount}`} aria-pressed={summaryFilter === "active"} className="project-plan-summary-metric" onClick={() => toggleSummary("active")} type="button"><span>{t("projectPlan.summaryActive")}</span><strong>{inProgressCount}</strong></button>
-            <button aria-label={`${t("projectPlan.summaryBlocked")}: ${blockedCount}`} aria-pressed={summaryFilter === "blocked"} className="project-plan-summary-metric project-plan-summary-blocked" onClick={() => toggleSummary("blocked")} type="button"><span>{t("projectPlan.summaryBlocked")}</span><strong>{blockedCount}</strong></button>
-            <button aria-label={`${t("projectPlan.summaryOverdue")}: ${overdueCount}`} aria-pressed={summaryFilter === "overdue"} className="project-plan-summary-metric project-plan-summary-overdue" onClick={() => toggleSummary("overdue")} type="button"><span>{t("projectPlan.summaryOverdue")}</span><strong>{overdueCount}</strong></button>
-            <button aria-label={`${t("projectPlan.summaryCompleted")}: ${completedCount}`} aria-pressed={summaryFilter === "completed"} className="project-plan-summary-metric" onClick={() => toggleSummary("completed")} type="button"><span>{t("projectPlan.summaryCompleted")}</span><strong>{completedCount}</strong></button>
-          </div>
-
-          <section className="project-plan-work" ref={animatedList}>
+          {!archiveMode && <><section className="project-plan-work" ref={animatedList}>
             <div className="project-plan-toolbar">
               <div className="project-plan-toolbar-heading"><h2>{t("projectPlan.workHeading")}</h2><span>{t("projectPlan.workDescription")}</span><span className="project-plan-stage-count">{t("projectPlan.stages")}: {activeStages.length}</span>{outsideStages.length > 0 && <button aria-pressed={milestoneFilter === "none"} className={`project-plan-outside-warning${milestoneFilter === "none" ? " is-active" : ""}`} onClick={() => applyFilters(statusFilter, milestoneFilter === "none" ? "" : "none", summaryFilter)} type="button">{t("projectPlan.withoutStage")}: {outsideStages.length}</button>}</div>
               <details className="task-field-settings">
@@ -723,8 +710,26 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
                   {(["assignees", "due", "estimate", "status"] as const).map((field) => <label key={field}><input checked={taskFields[field]} onChange={(event) => setTaskFields((current) => ({ ...current, [field]: event.target.checked }))} type="checkbox" />{t(`projectPlan.field.${field}` as MessageKey)}</label>)}
                 </div>
               </details>
-              <AdvancedViewControls fields={taskAdvancedFields} locale={locale} onChange={applyAdvancedQuery} query={advancedQuery} resultCount={visibleTasks.length} t={t} totalCount={currentPlanTasks.length} />
-              {(summaryFilter !== "all" || statusFilter !== "" || milestoneFilter !== "") && <div className="project-plan-filter-chips">{summaryFilter !== "all" && <span className="filter-chip">{summaryMetricLabel(summaryFilter)}<button aria-label={t("projectPlan.chipRemove", { filter: summaryMetricLabel(summaryFilter) })} onClick={() => applyFilters(statusFilter, milestoneFilter, "all")} type="button">×</button></span>}{statusFilter !== "" && <span className="filter-chip">{statusTitle(statusFilter)}<button aria-label={t("projectPlan.chipRemove", { filter: statusTitle(statusFilter) })} onClick={() => applyFilters("", milestoneFilter, summaryFilter)} type="button">×</button></span>}{milestoneFilter !== "" && <span className="filter-chip">{milestoneChipLabel(milestoneFilter)}<button aria-label={t("projectPlan.chipRemove", { filter: milestoneChipLabel(milestoneFilter) })} onClick={() => applyFilters(statusFilter, "", summaryFilter)} type="button">×</button></span>}<button className="filter-reset" onClick={resetFilters} type="button">{t("projectPlan.resetFilters")}</button></div>}
+              <AdvancedViewControls
+                appliedControls={(statusFilter !== "" || milestoneFilter !== "") && <div className="project-plan-filter-chips">{statusFilter !== "" && <span className="filter-chip">{statusTitle(statusFilter)}<button aria-label={t("projectPlan.chipRemove", { filter: statusTitle(statusFilter) })} onClick={() => applyFilters("", milestoneFilter, summaryFilter)} type="button">×</button></span>}{milestoneFilter !== "" && <span className="filter-chip">{milestoneChipLabel(milestoneFilter)}<button aria-label={t("projectPlan.chipRemove", { filter: milestoneChipLabel(milestoneFilter) })} onClick={() => applyFilters(statusFilter, "", summaryFilter)} type="button">×</button></span>}</div>}
+                fields={taskAdvancedFields}
+                groupLabel={t("projectPlan.summaryGroup")}
+                hasExternalFilters={summaryFilter !== "all" || statusFilter !== "" || milestoneFilter !== ""}
+                leadingControls={<div className="project-plan-summary">
+                  <button aria-label={`${t("projectPlan.summaryTotal")}: ${summaryScopeTasks.length}`} aria-pressed={summaryFilter === "all" && statusFilter === ""} className="project-plan-summary-metric" onClick={() => applyFilters("", milestoneFilter, "all")} type="button"><span>{t("projectPlan.summaryTotal")}</span><strong>{summaryScopeTasks.length}</strong></button>
+                  <button aria-label={`${t("projectPlan.summaryActive")}: ${inProgressCount}`} aria-pressed={summaryFilter === "active"} className="project-plan-summary-metric" onClick={() => toggleSummary("active")} type="button"><span>{t("projectPlan.summaryActive")}</span><strong>{inProgressCount}</strong></button>
+                  <button aria-label={`${t("projectPlan.summaryBlocked")}: ${blockedCount}`} aria-pressed={summaryFilter === "blocked"} className="project-plan-summary-metric project-plan-summary-blocked" onClick={() => toggleSummary("blocked")} type="button"><span>{t("projectPlan.summaryBlocked")}</span><strong>{blockedCount}</strong></button>
+                  <button aria-label={`${t("projectPlan.summaryOverdue")}: ${overdueCount}`} aria-pressed={summaryFilter === "overdue"} className="project-plan-summary-metric project-plan-summary-overdue" onClick={() => toggleSummary("overdue")} type="button"><span>{t("projectPlan.summaryOverdue")}</span><strong>{overdueCount}</strong></button>
+                  <button aria-label={`${t("projectPlan.summaryCompleted")}: ${completedCount}`} aria-pressed={summaryFilter === "completed"} className="project-plan-summary-metric" onClick={() => toggleSummary("completed")} type="button"><span>{t("projectPlan.summaryCompleted")}</span><strong>{completedCount}</strong></button>
+                </div>}
+                locale={locale}
+                onChange={applyAdvancedQuery}
+                onClear={resetFilters}
+                query={advancedQuery}
+                resultCount={visibleTasks.length}
+                t={t}
+                totalCount={currentPlanTasks.length}
+              />
             </div>
             {activeStages.length === 0 && <div className="card empty-workspace">{t("projectPlan.emptyStages")}</div>}
             {filterActive && visibleTasks.length === 0 && <div className="card empty-workspace">{t("projectPlan.noMatchingTasks")}</div>}
