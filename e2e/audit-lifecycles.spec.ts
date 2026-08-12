@@ -132,19 +132,19 @@ test.describe("audited vertical lifecycles", () => {
       fingerprint = (await response.json() as EntityResult).draft_fingerprint;
     }
 
-    await openDraft(page, draft.draft_id, "/settings");
+    await openDraft(page, draft.draft_id, "/calendars");
     const setDefault = async (calendarId: string) => {
-      const repository = page.getByRole("heading", { name: "Repository settings", exact: true }).locator("xpath=ancestor::article[1]");
-      await repository.getByRole("button", { name: "Edit Repository settings", exact: true }).click();
-      const dialog = page.getByRole("dialog", { name: "Edit: Repository settings", exact: true });
-      await dialog.getByLabel("Repository default calendar").selectOption(calendarId);
+      const defaultCalendar = page.getByRole("heading", { name: "Calendar for new people", exact: true }).locator("xpath=ancestor::article[1]");
+      await defaultCalendar.getByRole("button", { name: "Edit Calendar for new people", exact: true }).click();
+      const dialog = page.getByRole("dialog", { name: "Edit: Calendar for new people", exact: true });
+      await dialog.getByLabel("Default calendar").selectOption(calendarId);
       await dialog.getByRole("button", { name: "Save", exact: true }).click();
       await expect(dialog).toHaveCount(0);
     };
     await setDefault("C-26-E2E001");
 
     await page.goto("/calendars");
-    const temporary = page.getByText(/Temporary default \(Repository default calendar\)/u).locator("xpath=ancestor::article[1]");
+    const temporary = page.getByText(/Temporary default \(Default calendar\)/u).locator("xpath=ancestor::article[1]");
     await temporary.getByRole("button", { name: "Edit calendar", exact: true }).click();
     let calendarDialog = page.getByRole("dialog", { name: "Edit calendar: Temporary default", exact: true });
     await calendarDialog.getByText("More actions", { exact: true }).click();
@@ -152,7 +152,7 @@ test.describe("audited vertical lifecycles", () => {
     await expect(calendarDialog.getByRole("button", { name: "Delete", exact: true })).toBeDisabled();
     await calendarDialog.getByRole("button", { name: "Close editor", exact: true }).click();
 
-    await page.goto("/settings");
+    await page.goto("/calendars");
     await setDefault("C-26-E2E002");
     await page.goto("/calendars");
     const oldDefault = page.getByText("Temporary default", { exact: true }).locator("xpath=ancestor::article[1]");

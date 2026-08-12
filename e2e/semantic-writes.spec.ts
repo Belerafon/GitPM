@@ -254,16 +254,15 @@ test.describe("semantic scheduling writes", () => {
     const calendarsAfterResponse = await request.get(`/api/drafts/${draftId}/entities/calendars`);
     const calendarsAfter = await calendarsAfterResponse.json() as EntityResult[];
     const replacement = calendarsAfter.find((item) => item.document.name === "Replacement default E2E")!;
-    await page.goto("/settings");
-    const repositoryCard = page.locator(".repository-config-editor");
-    await repositoryCard.getByRole("button", { name: "Edit Repository settings", exact: true }).click();
-    const settingsDialog = page.getByRole("dialog", { name: "Edit: Repository settings", exact: true });
-    await settingsDialog.getByRole("combobox", { name: "Repository default calendar", exact: true }).selectOption(String(replacement.document.id));
-    await settingsDialog.getByRole("spinbutton", { name: "UI polling interval", exact: true }).fill("7");
+    const defaultCalendarCard = page.locator(".default-calendar-editor");
+    await defaultCalendarCard.getByRole("button", { name: "Edit Calendar for new people", exact: true }).click();
+    const settingsDialog = page.getByRole("dialog", { name: "Edit: Calendar for new people", exact: true });
+    await settingsDialog.getByRole("combobox", { name: "Default calendar", exact: true }).selectOption(String(replacement.document.id));
+    await expect(settingsDialog.getByRole("spinbutton")).toHaveCount(0);
     await settingsDialog.getByRole("button", { name: "Save", exact: true }).click();
     await expect(settingsDialog).toBeHidden();
     const repositoryAfterResponse = await request.get(`/api/drafts/${draftId}/config/repository`);
-    expect(await repositoryAfterResponse.json()).toMatchObject({ document: { default_calendar: replacement.document.id, ui_poll_interval_seconds: 7 } });
+    expect(await repositoryAfterResponse.json()).toMatchObject({ document: { default_calendar: replacement.document.id, ui_poll_interval_seconds: repositoryBefore.document.ui_poll_interval_seconds } });
 
     await page.goto("/calendars");
     const previousCard = page.locator(".admin-card").filter({ hasText: String(previousDefault.document.name) });

@@ -39,7 +39,7 @@ test.describe("GitPM browser UI", () => {
 
     await expect(page.getByRole("heading", { name: "Проекты", exact: true })).toBeVisible();
     await expect(page.getByText("Локальный режим · Роль: Maintainer", { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Репозиторий", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Git и публикация", exact: true })).toBeVisible();
     await expect(page.getByRole("combobox", { name: "Текущая рабочая копия", exact: true })).toHaveValue("DRF-APP-WORKSPACE");
     await expect(page.getByRole("heading", { name: "Проекты", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Выйти", exact: true })).toHaveCount(0);
@@ -67,7 +67,7 @@ test.describe("GitPM browser UI", () => {
 
     await expect(page.getByLabel("Language", { exact: true })).toHaveValue("en");
     await expect(page.getByRole("heading", { name: "Projects", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Repository", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Git and publishing", exact: true })).toBeVisible();
   });
 
   test("loads fixture projects and tasks through the real API", async ({ page }) => {
@@ -121,15 +121,15 @@ test.describe("GitPM browser UI", () => {
   });
 
   test("explains the repository default calendar and opens its exact editor", async ({ page }) => {
-    await page.goto("/settings");
+    await page.goto("/calendars");
     await page.locator(".interface-settings > summary").click();
     await page.locator(".locale-picker select").selectOption("en");
     await page.locator(".interface-settings > summary").click();
 
-    const repository = page.getByRole("heading", { name: "Repository settings", exact: true }).locator("xpath=ancestor::article[1]");
-    const calendar = repository.locator(".repository-default-calendar");
+    const defaultCalendar = page.getByRole("heading", { name: "Calendar for new people", exact: true }).locator("xpath=ancestor::article[1]");
+    const calendar = defaultCalendar.locator(".default-calendar-summary");
     const calendarId = (await calendar.locator("code").textContent())?.trim();
-    const calendarName = (await calendar.locator(".repository-calendar-link").textContent())?.trim();
+    const calendarName = (await calendar.locator(".default-calendar-link").textContent())?.trim();
     expect(calendarId).toMatch(/^C-/u);
     expect(calendarName).not.toBe("");
     await expect(calendar.getByText("Used for new people when no calendar is selected explicitly. Calendars already assigned to people are not changed.", { exact: true })).toBeVisible();
@@ -154,12 +154,12 @@ test.describe("GitPM browser UI", () => {
     await page.reload();
 
     await expect(page.getByRole("button", { name: /^GitPM launch/u })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Репозиторий", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Git и публикация", exact: true })).toBeVisible();
   });
 
   test("keeps every section reachable and restores focus without page overflow at UX00 viewports", async ({ page }) => {
     test.setTimeout(120_000);
-    const destinations = ["Repository", "Team", "Projects", "Statuses and task types"] as const;
+    const destinations = ["Git and publishing", "Team", "Projects", "Portfolio settings"] as const;
     await page.goto("/");
     await page.locator(".interface-settings > summary").click();
     await page.locator(".locale-picker select").selectOption("en");
@@ -183,7 +183,7 @@ test.describe("GitPM browser UI", () => {
       if (width === 1280) {
         for (const [section, tabs] of [
           ["Team", ["Team workload", "People and teams", "Working calendars"]],
-          ["Repository", ["Changes", "Files", "History"]],
+          ["Git and publishing", ["Changes", "Files", "History"]],
         ] as const) {
           await page.getByRole("button", { name: section, exact: true }).click();
           for (const tab of tabs) {
@@ -251,7 +251,7 @@ test.describe("GitPM browser UI", () => {
 
   test("creates, switches and remembers a working copy", async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("button", { name: "Репозиторий", exact: true }).click();
+    await page.getByRole("button", { name: "Git и публикация", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Рабочие копии", exact: true })).toBeVisible();
 
     await page.getByRole("textbox", { name: "ID рабочей копии", exact: true }).fill("DRF-APP-SECOND");
@@ -260,9 +260,9 @@ test.describe("GitPM browser UI", () => {
 
     await page.reload();
     await expect(page.getByRole("combobox", { name: "Текущая рабочая копия", exact: true })).toHaveValue("DRF-APP-SECOND");
-    await expect(page.getByRole("button", { name: "Репозиторий", exact: true })).toHaveClass(/active/u);
+    await expect(page.getByRole("button", { name: "Git и публикация", exact: true })).toHaveClass(/active/u);
 
-    await page.getByRole("button", { name: "Репозиторий", exact: true }).click();
+    await page.getByRole("button", { name: "Git и публикация", exact: true }).click();
     await page.getByRole("button", { name: /DRF-APP-WORKSPACE.*gitpm\/local-user\/DRF-APP-WORKSPACE/u }).click();
     await expect(page.getByRole("combobox", { name: "Текущая рабочая копия", exact: true })).toHaveValue("DRF-APP-WORKSPACE");
   });

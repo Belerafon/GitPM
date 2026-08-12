@@ -186,7 +186,7 @@ describe("control hints", () => {
 });
 
 describe("frontend draft lifecycle", () => {
-  it("keeps the compact change count with Repository instead of duplicating it in the header", async () => {
+  it("keeps the compact change count with Git and publishing instead of duplicating it in the header", async () => {
     const api = new FakeApi();
     api.currentSession = { ...session, mode: "repository", repository: { name: "portfolio", path: "D:\\portfolio", has_remote: true }, gitlab: { configured: false } };
     api.drafts = [draft({ draft_id: "DRF-LOCAL" })];
@@ -269,7 +269,7 @@ describe("frontend draft lifecycle", () => {
     await screen.findByRole("heading", { name: "Working copies" });
     expect(screen.queryByText("Work")).toBeNull();
     expect(screen.queryByText("Git")).toBeNull();
-    expect(screen.getAllByRole("button", { name: /^(Projects|Team|Repository|Statuses and task types)$/u })).toHaveLength(4);
+    expect(screen.getAllByRole("button", { name: /^(Projects|Team|Git and publishing|Portfolio settings)$/u })).toHaveLength(4);
     expect(screen.getByRole("button", { name: "Team" })).toBeTruthy();
     const menuButton = screen.getByRole("button", { name: "Open navigation" });
 
@@ -277,7 +277,7 @@ describe("frontend draft lifecycle", () => {
     expect(menuButton.getAttribute("aria-expanded")).toBe("true");
     expect(document.body.style.overflow).toBe("hidden");
     expect(screen.getAllByRole("button", { name: "Close navigation" }).some((button) => button.classList.contains("navigation-close"))).toBe(true);
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Repository" }));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Git and publishing" }));
     fireEvent.keyDown(document, { key: "Escape" });
     expect(menuButton.getAttribute("aria-expanded")).toBe("false");
     expect(document.body.style.overflow).toBe("");
@@ -410,30 +410,30 @@ describe("frontend draft lifecycle", () => {
     expect(screen.getByText("portfolio")).toBeTruthy();
     expect(screen.getByTestId("sidebar-version").textContent).toContain("Version —");
     expect(await screen.findByRole("heading", { name: "Projects" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Repository" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Git and publishing" })).toBeTruthy();
     expect((screen.getByRole("combobox", { name: "Current working copy" }) as HTMLSelectElement).value).toBe("DRF-LOCAL");
     expect(screen.getByRole("button", { name: "Projects" }).className).toContain("active");
     expect(screen.queryByRole("button", { name: "Sign out" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Sign in with GitLab" })).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Repository" }));
+    fireEvent.click(screen.getByRole("button", { name: "Git and publishing" }));
     expect(await screen.findByRole("heading", { name: "Working copies" })).toBeTruthy();
     expect(screen.getAllByText("Main local copy").length).toBeGreaterThan(0);
     expect(screen.getAllByText("DRF-LOCAL").length).toBeGreaterThan(0);
   });
 
-  it("moves repository connection into the Repository section, away from Statuses", async () => {
+  it("keeps repository connection under Git and publishing, away from portfolio settings", async () => {
     const api = new FakeApi();
     render(<App api={api} browserLanguages={["en"]} />);
     await screen.findByRole("heading", { name: "Working copies" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Repository" }));
+    fireEvent.click(screen.getByRole("button", { name: "Git and publishing" }));
     fireEvent.click(await screen.findByRole("button", { name: "Repository connection" }));
     expect(await screen.findByText("D:/portfolio")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Repository connection" }).getAttribute("aria-current")).toBe("page");
 
-    fireEvent.click(screen.getByRole("button", { name: "Statuses and task types" }));
-    await screen.findByRole("heading", { level: 1, name: "Statuses and task types" });
+    fireEvent.click(screen.getByRole("button", { name: "Portfolio settings" }));
+    await screen.findByRole("heading", { level: 1, name: "Portfolio settings" });
     expect(screen.queryByText("D:/portfolio")).toBeNull();
   });
 
@@ -515,8 +515,8 @@ describe("frontend draft lifecycle", () => {
     api.listChanges = async () => ({ changed_files_count: 0, affected_projects: [], files: [] });
     api.semanticChanges = async () => ({ created: [], updated: [], archived: [], deleted: [], counts: { created: 0, updated: 0, archived: 0, deleted: 0 }, affected_projects: [], unclassified_files: [] });
     render(<App api={api} browserLanguages={["en"]} />);
-    // The Repository nav lands on Changes in direct mode, never on the draft panel.
-    fireEvent.click(await screen.findByRole("button", { name: "Repository" }));
+    // Git and publishing lands on Changes in direct mode, never on the draft panel.
+    fireEvent.click(await screen.findByRole("button", { name: "Git and publishing" }));
     await screen.findByText(/Commit, push/i);
     expect(screen.queryByLabelText("Working copy ID")).toBeNull();
     expect(screen.queryByRole("button", { name: "Create working copy" })).toBeNull();

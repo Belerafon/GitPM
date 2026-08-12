@@ -271,6 +271,10 @@ Person ID и timestamp. Deleted comment удаляет body/mentions и сохр
   без path separators; standard `uploads/` хранит ignored пользовательские inputs;
 - `ui_poll_interval_seconds` — целое число в диапазоне 2-10.
 
+`ui_poll_interval_seconds` сохраняется как часть формата v1 для совместимости, но не
+редактируется и не отображается в browser UI. Частота обновления интерфейса является
+runtime-параметром, а не бизнес-настройкой портфеля.
+
 GitLab URL, project ID, repository URL и OAuth secret относятся к server configuration и не редактируются через UI.
 
 `.gitpm/statuses.yaml` содержит `schema: gitpm/statuses@2` и список `statuses`.
@@ -281,7 +285,8 @@ immutable `slug`, `title`, `color` token и `active`. Slug уникален вн
 У категорий работ `color` отсутствует. `.gitpm/schedule-tracks.yaml` содержит
 `schema: gitpm/schedule-tracks@1`, определения контуров и репозиторные defaults
 планирования. Эти записи не являются ID-сущностями. Maintainer может редактировать
-все четыре документа через repository settings UI.
+все четыре документа через UI «Настройки портфеля». Выбор `default_calendar`
+редактируется на странице рабочих календарей как «Календарь для новых сотрудников».
 
 ### 6.12. Archived behavior
 
@@ -565,7 +570,7 @@ v0.1 использует browser polling каждые 3 секунды, а не
 - Board без swimlanes;
 - People and Teams;
 - Calendar administration;
-- Repository settings для statuses, issue types, work categories и schedule tracks;
+- Portfolio settings для statuses, issue types, work categories и schedule tracks;
 - Workload;
 - read-only Gantt;
 - Changes;
