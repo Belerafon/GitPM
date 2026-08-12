@@ -64,6 +64,7 @@ describe("Changes workspace", () => {
     fireEvent.click(screen.getAllByText("Alpha project")[0]!);
     expect(screen.getByText("Status")).toBeTruthy();
     expect(screen.getByText("backlog")).toBeTruthy(); expect(screen.getByText("active")).toBeTruthy();
+    expect(screen.queryByText("Technical details")).toBeNull();
     fireEvent.click(screen.getAllByText("New task")[0]!);
     expect(screen.getByText("Old task (T-26-222222)")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Restore hunk" }));

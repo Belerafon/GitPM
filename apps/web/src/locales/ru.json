@@ -534,7 +534,6 @@
   ,"changes.projects": "Затронуто проектов: {count}"
   ,"changes.emptyValue": "не задано"
   ,"changes.fieldCount": "Изменено полей: {count}"
-  ,"changes.technicalDetails": "Технические сведения"
   ,"changes.fieldArchivedAt": "Дата архивации"
   ,"changes.fieldAssignees": "Исполнители"
   ,"changes.fieldCalendar": "Календарь"

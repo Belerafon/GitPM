@@ -305,6 +305,7 @@ export class ChangesService {
         if (!identity) return { path: change.path, fileEntity };
         const item: SemanticChange = { path: change.path, ...identity, fields: fieldChanges(before, after) };
         const group: keyof typeof result = change.kind === "Added" ? "created" : change.kind === "Deleted" ? "deleted" : before?.lifecycle !== "archived" && after?.lifecycle === "archived" ? "archived" : "updated";
+        if (group === "updated" && item.fields.length === 0) return { path: change.path, fileEntity };
         return { path: change.path, project: identity.project, fileEntity, item, group };
       } catch {
         return { path: change.path };

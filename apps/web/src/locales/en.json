@@ -534,7 +534,6 @@
   ,"changes.projects": "Affected projects: {count}"
   ,"changes.emptyValue": "not set"
   ,"changes.fieldCount": "Changed fields: {count}"
-  ,"changes.technicalDetails": "Technical details"
   ,"changes.fieldArchivedAt": "Archived at"
   ,"changes.fieldAssignees": "Assignees"
   ,"changes.fieldCalendar": "Calendar"

@@ -100,14 +100,13 @@ function ChangeFileButton({ file, entity, selected, select, t }: {
   </button>;
 }
 
-function SemanticGroup({ title, items, entitiesByPath, namesById, empty, fieldCount, technicalDetails, t }: {
+function SemanticGroup({ title, items, entitiesByPath, namesById, empty, fieldCount, t }: {
   readonly title: string;
   readonly items: readonly SemanticChange[];
   readonly entitiesByPath: ReadonlyMap<string, SemanticFileEntity>;
   readonly namesById: ReadonlyMap<string, string>;
   readonly empty: string;
   readonly fieldCount: (count: number) => string;
-  readonly technicalDetails: string;
   readonly t: (key: MessageKey) => string;
 }) {
   if (items.length === 0) return null;
@@ -120,7 +119,6 @@ function SemanticGroup({ title, items, entitiesByPath, namesById, empty, fieldCo
         <span className="semantic-field-count">{fieldCount(item.fields.length)}</span>
       </summary>
       {item.fields.length > 0 && <dl>{item.fields.map((field) => <div key={field.field}><dt>{fieldLabel(field.field, t)}</dt><dd><del>{valueText(field.before, empty, namesById)}</del><span aria-hidden="true">→</span><ins>{valueText(field.after, empty, namesById)}</ins></dd></div>)}</dl>}
-      <details className="semantic-technical"><summary>{technicalDetails}</summary><code>{item.path}</code></details>
     </details>;
   })}</div></section>;
 }
@@ -240,10 +238,10 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
     </div>
     <div className="card semantic-diff"><div className="semantic-heading"><div><span className="eyebrow">{t("changes.semanticEyebrow")}</span><h3>{t("changes.semanticHeading")}</h3><p>{t("changes.semanticHint")}</p></div><span>{t("changes.projects", { count: semantic.affected_projects.length })}</span></div>
       <div className="semantic-groups">
-        <SemanticGroup title={t("changes.created")} items={semantic.created} entitiesByPath={entitiesByPath} namesById={namesById} empty={t("changes.emptyValue")} fieldCount={(count) => t("changes.fieldCount", { count })} technicalDetails={t("changes.technicalDetails")} t={t} />
-        <SemanticGroup title={t("changes.updated")} items={semantic.updated} entitiesByPath={entitiesByPath} namesById={namesById} empty={t("changes.emptyValue")} fieldCount={(count) => t("changes.fieldCount", { count })} technicalDetails={t("changes.technicalDetails")} t={t} />
-        <SemanticGroup title={t("changes.archived")} items={semantic.archived} entitiesByPath={entitiesByPath} namesById={namesById} empty={t("changes.emptyValue")} fieldCount={(count) => t("changes.fieldCount", { count })} technicalDetails={t("changes.technicalDetails")} t={t} />
-        <SemanticGroup title={t("changes.deleted")} items={semantic.deleted} entitiesByPath={entitiesByPath} namesById={namesById} empty={t("changes.emptyValue")} fieldCount={(count) => t("changes.fieldCount", { count })} technicalDetails={t("changes.technicalDetails")} t={t} />
+        <SemanticGroup title={t("changes.created")} items={semantic.created} entitiesByPath={entitiesByPath} namesById={namesById} empty={t("changes.emptyValue")} fieldCount={(count) => t("changes.fieldCount", { count })} t={t} />
+        <SemanticGroup title={t("changes.updated")} items={semantic.updated} entitiesByPath={entitiesByPath} namesById={namesById} empty={t("changes.emptyValue")} fieldCount={(count) => t("changes.fieldCount", { count })} t={t} />
+        <SemanticGroup title={t("changes.archived")} items={semantic.archived} entitiesByPath={entitiesByPath} namesById={namesById} empty={t("changes.emptyValue")} fieldCount={(count) => t("changes.fieldCount", { count })} t={t} />
+        <SemanticGroup title={t("changes.deleted")} items={semantic.deleted} entitiesByPath={entitiesByPath} namesById={namesById} empty={t("changes.emptyValue")} fieldCount={(count) => t("changes.fieldCount", { count })} t={t} />
       </div>
       {semantic.unclassified_files.length > 0 && <p className="unclassified">{t("changes.unclassified", { count: semantic.unclassified_files.length })}</p>}
     </div>

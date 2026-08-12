@@ -1066,9 +1066,6 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
 .semantic-item dd { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: .4rem; margin: 0; overflow-wrap: anywhere; font-size: .74rem; }
 .semantic-item del { color: #8b4942; }
 .semantic-item ins { color: #28603a; text-decoration: none; }
-.semantic-technical { margin: 0 .75rem .75rem; color: #717772; font-size: .7rem; }
-.semantic-technical summary { cursor: pointer; }
-.semantic-technical code { display: block; overflow: auto; margin-top: .35rem; font-size: .68rem; }
 .technical-changes { overflow: hidden; border: 1px solid #cfd3cd; border-radius: 10px; background: #f7f9f6; }
 .technical-changes > summary { display: flex; align-items: center; gap: .75rem; cursor: pointer; padding: .85rem 1rem; list-style: none; }
 .technical-changes > summary > span:first-child { display: grid; flex: 1; gap: .15rem; }
