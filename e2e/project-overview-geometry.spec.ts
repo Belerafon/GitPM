@@ -61,6 +61,7 @@ test.describe("project overview geometry", () => {
 
       const completeTaskRow = page.locator(".project-plan-task-row").filter({ hasText: "Approve schema v1" });
       await expect(completeTaskRow).toBeVisible();
+      await expect(completeTaskRow.locator(".project-plan-task-meta")).toHaveCSS("display", "grid");
       const metadataGeometry = await completeTaskRow.evaluate((row) => {
         const meta = row.querySelector<HTMLElement>(".project-plan-task-meta")!;
         const box = (selector: string) => {
@@ -98,6 +99,30 @@ test.describe("project overview geometry", () => {
         expect(current.right <= next.left + 0.5 || current.bottom <= next.top + 0.5).toBe(true);
       }
 
+      const taskWithoutDue = page.locator(".project-plan-task-row").filter({ hasText: "Implement parser" });
+      await expect(taskWithoutDue).toBeVisible();
+      await expect(taskWithoutDue.locator(".project-plan-task-due")).toHaveText("");
+      const alignedColumns = async (row: typeof completeTaskRow) => await row.evaluate((element) => {
+        const selectors = [
+          ".task-assignees",
+          ".project-plan-task-due",
+          ".project-plan-task-estimate",
+          ".project-plan-task-status",
+          ".plan-order-controls",
+        ];
+        return selectors.map((selector) => {
+          const bounds = element.querySelector<HTMLElement>(selector)!.getBoundingClientRect();
+          return { selector, left: bounds.left, right: bounds.right };
+        });
+      });
+      const completeColumns = await alignedColumns(completeTaskRow);
+      const incompleteColumns = await alignedColumns(taskWithoutDue);
+      expect(incompleteColumns.map((column) => column.selector)).toEqual(completeColumns.map((column) => column.selector));
+      for (let index = 0; index < completeColumns.length; index++) {
+        expect(incompleteColumns[index]!.left).toBeCloseTo(completeColumns[index]!.left, 0);
+        expect(incompleteColumns[index]!.right).toBeCloseTo(completeColumns[index]!.right, 0);
+      }
+
       if (viewport.width >= 900) {
         const firstTaskRow = page.locator(".project-plan-task-row").first();
         await expect(firstTaskRow).toBeVisible();
@@ -108,10 +133,10 @@ test.describe("project overview geometry", () => {
         if (viewport.width === 1688) {
           expect(columns).toHaveLength(3);
           expect(columns[1]).toBeGreaterThan(columns[2]!);
-          await expect(firstTaskRow.locator(".project-plan-task-meta")).toHaveCSS("display", "flex");
+          await expect(firstTaskRow.locator(".project-plan-task-meta")).toHaveCSS("display", "grid");
         } else {
           expect(columns).toHaveLength(2);
-          await expect(firstTaskRow.locator(".project-plan-task-meta")).toHaveCSS("display", "flex");
+          await expect(firstTaskRow.locator(".project-plan-task-meta")).toHaveCSS("display", "grid");
         }
       }
 

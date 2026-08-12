@@ -1031,6 +1031,17 @@ function TaskRows({ roots, visibleIds, allTasks, projectId, query = {}, locale, 
   const nodeById = new Map<string, TaskViewModelNode>();
   const indexNodes = (node: TaskViewModelNode): void => { nodeById.set(node.id, node); for (const child of node.children) indexNodes(child); };
   for (const root of roots) indexNodes(root);
+  const reserveDue = taskFields.due && [...nodeById.values()].some((node) => node.due !== undefined);
+  const reserveEstimate = taskFields.estimate && [...nodeById.values()].some((node) => node.estimate !== undefined);
+  const taskListStyle = {
+    "--project-plan-task-meta-columns": [
+      ...(taskFields.assignees ? ["minmax(5rem, 10rem)"] : []),
+      ...(reserveDue ? ["6.5rem"] : []),
+      ...(reserveEstimate ? ["4.5rem"] : []),
+      ...(taskFields.status ? ["7.5rem"] : []),
+      ...(onMoveTask === undefined ? [] : ["max-content"]),
+    ].join(" ") || "none",
+  } as CSSProperties;
   const childrenOf = (parentId: string | undefined): readonly TaskViewModelNode[] => parentId === undefined ? roots : nodeById.get(parentId)?.children ?? [];
   if (visibleIds.size === 0) return <p className="project-plan-empty-tasks">{t("stages.emptyTasks")}</p>;
   const included = new Set<string>();
@@ -1050,7 +1061,7 @@ function TaskRows({ roots, visibleIds, allTasks, projectId, query = {}, locale, 
   };
   for (const root of roots) walk(root, undefined, 0);
   const visibleEntryIds = new Set(entries.map((entry) => entry.node.id));
-  return <div className="project-plan-task-list">{entries.map((entry, index) => {
+  return <div className="project-plan-task-list" style={taskListStyle}>{entries.map((entry, index) => {
     const { node } = entry;
     const task = taskById.get(node.id);
     const selected = selectedTaskId === node.id;
@@ -1091,8 +1102,8 @@ function TaskRows({ roots, visibleIds, allTasks, projectId, query = {}, locale, 
       <button aria-current={selected ? "true" : undefined} className="project-plan-task-selector" data-control-hint={t("controlHint.openTaskDetails")} onClick={() => onNavigate("tasks", { projectId, taskId: node.id, ...(Object.keys(query).length > 0 ? { query } : {}) })} type="button"><span className="project-plan-task-kind">{t("projectPlan.taskLabel")} {taskNumber}. <code>{node.id}</code>.</span><strong>{node.title}</strong>{task?.document.lifecycle === "archived" && <small className="archived-reference">{t("core.archived")}</small>}{entry.hasChildren && <small>{t("taskHierarchy.directProgress", { completed: completedChildren, count: nodeChildren.length })}</small>}</button>
       <span className="project-plan-task-meta">
         {taskFields.assignees && <span className="project-plan-task-meta-cell task-assignees" title={t("tooltip.taskAssignees")}><PersonLinks empty={t("core.unassigned")} onOpen={(personId) => onNavigate("people", { personId })} people={people} personIds={node.assignees} /></span>}
-        {taskFields.due && node.due && <span className="project-plan-task-meta-cell project-plan-task-due"><time dateTime={node.due} title={t("tooltip.taskDue")}>{formatDateOnly(locale, node.due)}</time></span>}
-        {taskFields.estimate && node.estimate !== undefined && <span className="project-plan-task-meta-cell project-plan-task-estimate"><span title={t("tooltip.taskEstimate")}>{formatDurationHours(locale, node.estimate)}</span></span>}
+        {reserveDue && <span className="project-plan-task-meta-cell project-plan-task-due">{node.due !== undefined && <time dateTime={node.due} title={t("tooltip.taskDue")}>{formatDateOnly(locale, node.due)}</time>}</span>}
+        {reserveEstimate && <span className="project-plan-task-meta-cell project-plan-task-estimate">{node.estimate !== undefined && <span title={t("tooltip.taskEstimate")}>{formatDurationHours(locale, node.estimate)}</span>}</span>}
         {taskFields.status && <span className="project-plan-task-meta-cell project-plan-task-status">{onStatusChange === undefined || readOnly || task === undefined ? <span className="state open" title={t("tooltip.taskStatus")}>{statusTitle(node.status)}</span> : <select aria-label={`${t("core.status")}: ${node.title}`} className="inline-status-select" disabled={statusBusy} onChange={(event) => onStatusChange(task, event.target.value)} title={t("tooltip.changeStatus")} value={node.status}>{statusOptions.map((status) => <option key={status.slug} value={status.slug}>{status.title}</option>)}</select>}</span>}
         {onMoveTask !== undefined && <span className="project-plan-task-meta-cell plan-order-controls"><button aria-label={t("projectPlan.moveTaskUp", { number: taskNumber })} disabled={readOnly || orderBusy || siblingIndex === 0} onClick={() => onMoveTask(node.id, -1)} title={t("projectPlan.moveTaskUp", { number: taskNumber })} type="button">↑</button><button aria-label={t("projectPlan.moveTaskDown", { number: taskNumber })} disabled={readOnly || orderBusy || siblingIndex === siblings.length - 1} onClick={() => onMoveTask(node.id, 1)} title={t("projectPlan.moveTaskDown", { number: taskNumber })} type="button">↓</button></span>}
       </span>

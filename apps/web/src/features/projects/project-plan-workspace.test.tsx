@@ -534,7 +534,7 @@ describe("ProjectPlanWorkspace", () => {
     expect(stageCard.querySelector(".project-plan-stage-assignees")?.textContent).toContain("Ada");
     const linkedRow = screen.getByText("Linked task").closest(".project-plan-task-row")!;
     expect(linkedRow.querySelector(".task-assignees")?.textContent).toBe("Ada");
-    expect(linkedRow.querySelector(".project-plan-task-due")).toBeNull();
+    expect(linkedRow.querySelector(".project-plan-task-due")?.textContent).toBe("");
     expect(linkedRow.querySelector(".project-plan-task-estimate")?.textContent).toBe("20 hours");
     const dueOnlyRow = screen.getByText("Without stage").closest(".project-plan-task-row")!;
     expect(dueOnlyRow.querySelector(".project-plan-task-due")?.textContent).toBe("Aug 15, 2026");
