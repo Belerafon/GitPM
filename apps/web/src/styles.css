@@ -662,9 +662,15 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .calendar-preset-summary p { margin: 0; font-size: .82rem; line-height: 1.45; }
 .calendar-preset-summary span { font-size: .78rem; font-weight: 650; color: #285936; }
 .calendar-preset-summary a { width: max-content; font-size: .78rem; }
+.calendar-preset-apply { display: grid; gap: .55rem; border: 1px solid #d8ded8; border-radius: 10px; padding: .75rem; }
+.calendar-preset-apply > p { margin: 0; color: #646b66; font-size: .78rem; line-height: 1.4; }
+.calendar-preset-apply > button { justify-self: start; }
 .calendar-date-list { display: grid; gap: .55rem; }
 .calendar-date-list > p { margin: 0; color: #646b66; font-size: .78rem; line-height: 1.4; }
 .calendar-date-list > div { display: grid; gap: .4rem; }
+.calendar-date-year { border: 1px solid #e0e5e0; border-radius: 8px; padding: .45rem .55rem; }
+.calendar-date-year > summary { cursor: pointer; color: #38423c; font-size: .82rem; font-weight: 700; }
+.calendar-date-year > div { display: grid; gap: .4rem; margin-top: .55rem; }
 .calendar-date-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .4rem; }
 .calendar-date-row button { min-width: 2.6rem; color: #7d2929; }
 .calendar-date-add { justify-self: start; }

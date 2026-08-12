@@ -282,6 +282,40 @@ describe("administration UI", () => {
     expect(admin.entities[0]?.document.holidays).toHaveLength(14);
   });
 
+  it("offers the published United States federal calendar through 2030", async () => {
+    const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
+    render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="calendar" onChanged={vi.fn(async () => undefined)} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Create calendar/u }));
+    const dialog = screen.getByRole("dialog", { name: "Create calendar" });
+    const form = within(dialog).getByRole("button", { name: "Create calendar" }).closest("form")!;
+    const presetSelect = within(form).getByLabelText("Calendar preset") as HTMLSelectElement;
+    expect(Array.from(presetSelect.querySelectorAll("optgroup")).map((group) => group.label)).toEqual(["Custom schedules", "Russia", "United States"]);
+    fireEvent.change(presetSelect, { target: { value: "united-states-federal-2026-2030-five-day" } });
+
+    expect((within(form).getByLabelText("Name") as HTMLInputElement).value).toBe("United States — federal holidays (2026–2030)");
+    expect(within(form).getByText("2026–2030: 1249 working days")).toBeTruthy();
+    expect(within(form).getByRole("link", { name: "Official source" }).getAttribute("href")).toBe("https://www.opm.gov/policy-data-oversight/pay-leave/federal-holidays/");
+    expect(within(form).getByText("2026 — 11 dates")).toBeTruthy();
+    expect(within(form).getByText("2030 — 11 dates")).toBeTruthy();
+    expect(within(form).getAllByLabelText(/Non-working date/u)).toHaveLength(55);
+  });
+
+  it("applies a preset inside the existing-calendar editor before saving", async () => {
+    const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
+    await admin.createEntity("DRF-ADMIN", "calendars", "", { schema: "gitpm/calendar@1", id: "C-26-111111", name: "Always on", working_weekdays: [1, 2, 3, 4, 5, 6, 7], holidays: ["2026-08-17"], lifecycle: "active" });
+    render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="calendar" onChanged={vi.fn(async () => undefined)} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Edit calendar" }));
+    const dialog = screen.getByRole("dialog", { name: "Edit calendar: Always on" });
+    expect(within(dialog).getAllByLabelText(/Non-working date/u)).toHaveLength(1);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Use preset schedule" }));
+    expect(within(dialog).queryByLabelText(/Non-working date/u)).toBeNull();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(admin.entities[0]?.document).toMatchObject({ working_weekdays: [1, 2, 3, 4, 5], holidays: [] }));
+  });
+
   it("renders Developer administration as read-only", async () => {
     const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
     render(<AdminWorkspace api={api} draft={draft} role="Developer" locale="en" surface="calendar" onChanged={vi.fn(async () => undefined)} />);

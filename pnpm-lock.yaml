@@ -41,6 +41,9 @@ importers:
       '@gitpm/agent':
         specifier: workspace:*
         version: link:../../packages/agent
+      '@gitpm/calendar':
+        specifier: workspace:*
+        version: link:../../packages/calendar
       '@gitpm/changes':
         specifier: workspace:*
         version: link:../../packages/changes

@@ -137,7 +137,14 @@ test.describe("GitPM browser UI", () => {
 
     await calendar.getByRole("button", { name: "Open calendar", exact: true }).click();
     await expect(page).toHaveURL(`/calendars/${calendarId}`);
-    await expect(page.getByRole("dialog", { name: `Edit calendar: ${calendarName}`, exact: true })).toBeVisible();
+    const editor = page.getByRole("dialog", { name: `Edit calendar: ${calendarName}`, exact: true });
+    await expect(editor).toBeVisible();
+    const presets = editor.getByLabel("Calendar preset");
+    await expect(presets.locator("optgroup")).toHaveCount(3);
+    await presets.selectOption("united-states-federal-2026-2030-five-day");
+    await expect(editor.getByText("2026–2030: 1249 working days", { exact: true })).toBeVisible();
+    await expect(editor.getByRole("link", { name: "Official source", exact: true })).toHaveAttribute("href", "https://www.opm.gov/policy-data-oversight/pay-leave/federal-holidays/");
+    await expect(editor.getByRole("button", { name: "Use preset schedule", exact: true })).toBeVisible();
   });
 
   test("keeps the configured repository open after reloading the page", async ({ page }) => {

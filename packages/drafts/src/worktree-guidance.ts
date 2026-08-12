@@ -303,6 +303,9 @@ non-repeatable options with \`CLI_USAGE\`; never retry a misspelled flag by drop
   lifecycle and writer ownership.
 - \`gitpm entity create --draft <id> --type <type> --file <file> [--project <id>] [--allow-delete]\` creates an
   entity from a YAML mapping, generating a missing ID and applying documented defaults.
+- \`gitpm calendar presets\` lists built-in editable schedules and their coverage;
+  \`gitpm calendar create --draft <id> --preset <preset-id>\` creates a Calendar and
+  \`gitpm calendar apply --draft <id> --preset <preset-id> --id <calendar-id>\` replaces its schedule.
 - \`gitpm entity update --draft <id> --type <type> --id <entity-id> [--file <yaml-patch>]
   [--set <field>=<yaml-value>]... [--unset <field>]... [--project <id>] [--allow-delete]\` transactionally patches
   any supported entity type. Inline values use YAML scalar/collection types; \`--unset\` removes
