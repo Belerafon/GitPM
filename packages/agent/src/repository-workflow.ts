@@ -78,6 +78,21 @@ export function assertAgentScope(
   };
 }
 
+function assertDeleteConfirmation(
+  files: readonly { readonly path: string; readonly kind: "Added" | "Modified" | "Deleted" }[],
+  scope: AgentScope,
+): void {
+  if (scope.allowDelete === true) return;
+  const deleted = files.find((file) => file.kind === "Deleted");
+  if (deleted !== undefined) {
+    throw new RepositoryWorkflowError("AGENT_DELETE_CONFIRMATION_REQUIRED", `Deletion requires --allow-delete: ${deleted.path}`);
+  }
+}
+
+function inOperationScope(relativePath: string, scope: AgentScope): boolean {
+  return scope.allowedProject === undefined || projectPath(relativePath) === scope.allowedProject;
+}
+
 /**
  * Mode-neutral CLI use cases. Direct and external-worktree runtimes provide only workspace
  * preparation, mutation mode, credentials and mode-specific lifecycle/publication behavior.
@@ -106,31 +121,60 @@ export class RepositoryWorkflow {
     await this.workspace(workspaceId);
     const report = await this.changes.list(workspaceId);
     try {
-      return assertAgentScope(report, scope);
+      assertDeleteConfirmation(report.files, scope);
     } catch (error) {
       if (error instanceof RepositoryWorkflowError) {
         throw this.createError(error.code, error.message, error.details);
       }
       throw error;
     }
+    const changedFiles = report.files.filter((file) => inOperationScope(file.path, scope));
+    return {
+      affected_projects: report.affected_projects.filter((project) => scope.allowedProject === undefined || project === scope.allowedProject),
+      changed_files: changedFiles.map(({ path: filePath, kind }) => ({ path: filePath, kind })),
+    };
   }
 
   async semanticDiff(workspaceId: string, scope: AgentScope = {}): Promise<SemanticDiff> {
     await this.assertScope(workspaceId, scope);
     const report = await this.changes.semantic(workspaceId);
+    const select = (changes: SemanticDiff["created"]): SemanticDiff["created"] =>
+      changes.filter((change) => inOperationScope(change.path, scope));
+    const created = select(report.created);
+    const updated = select(report.updated);
+    const archived = select(report.archived);
+    const deleted = select(report.deleted);
     return {
-      ...report,
-      unclassified_files: report.unclassified_files.filter((file) => !GITPM_GUIDANCE_FILES.has(file)),
+      created,
+      updated,
+      archived,
+      deleted,
+      counts: {
+        created: created.length,
+        updated: updated.length,
+        archived: archived.length,
+        deleted: deleted.length,
+      },
+      affected_projects: report.affected_projects.filter((project) => scope.allowedProject === undefined || project === scope.allowedProject),
+      file_entities: report.file_entities?.filter((file) => inOperationScope(file.path, scope)),
+      unclassified_files: report.unclassified_files.filter((file) => !GITPM_GUIDANCE_FILES.has(file) && inOperationScope(file, scope)),
     };
   }
 
   async listChanges(workspaceId: string, scope: AgentScope = {}) {
     await this.assertScope(workspaceId, scope);
-    return await this.changes.list(workspaceId);
+    const report = await this.changes.list(workspaceId);
+    const files = report.files.filter((file) => inOperationScope(file.path, scope));
+    return {
+      files,
+      changed_files_count: files.length,
+      affected_projects: report.affected_projects.filter((project) => scope.allowedProject === undefined || project === scope.allowedProject),
+    };
   }
 
   async restoreFile(workspaceId: string, relativePath: string, scope: AgentScope = {}) {
     const workspace = await this.beginMutation(workspaceId, scope);
+    this.assertPlannedPaths([{ path: relativePath, kind: "Modified" }], scope);
     return await this.changes.restoreFile(
       workspaceId,
       workspace.owner_id,
@@ -148,6 +192,7 @@ export class RepositoryWorkflow {
     scope: AgentScope = {},
   ) {
     const workspace = await this.beginMutation(workspaceId, scope);
+    this.assertPlannedPaths([{ path: relativePath, kind: "Modified" }], scope);
     return await this.changes.restoreHunk(
       workspaceId,
       workspace.owner_id,
@@ -160,7 +205,7 @@ export class RepositoryWorkflow {
   }
 
   async discardAll(workspaceId: string, scope: AgentScope = {}) {
-    const workspace = await this.beginMutation(workspaceId, scope);
+    const workspace = await this.beginWholeDraftMutation(workspaceId, scope);
     return await this.changes.discardAll(
       workspaceId,
       workspace.owner_id,
@@ -421,7 +466,7 @@ export class RepositoryWorkflow {
 
   async commitAll(workspaceId: string, message: string, scope: AgentScope = {}) {
     const workspace = await this.workspace(workspaceId);
-    await this.assertScope(workspaceId, scope);
+    await this.assertWholeChangeSetScope(workspaceId, scope);
     return await this.publication.commit({
       ownerId: workspace.owner_id,
       authorName: this.options.authorName,
@@ -483,10 +528,37 @@ export class RepositoryWorkflow {
   }
 
   private async beginMutation(workspaceId: string, scope: AgentScope): Promise<RepositoryWorkspace> {
-    await this.assertScope(workspaceId, scope);
+    await this.workspace(workspaceId);
+    const report = await this.changes.list(workspaceId);
+    try {
+      assertDeleteConfirmation(report.files, scope);
+    } catch (error) {
+      if (error instanceof RepositoryWorkflowError) {
+        throw this.createError(error.code, error.message, error.details);
+      }
+      throw error;
+    }
     // External and direct repository writers may both observe authorized filesystem edits before
     // a CLI operation. Capture that baseline, then let EntityStore reject any later race.
     return await this.drafts.refreshWorkspaceFingerprint(workspaceId);
+  }
+
+  private async beginWholeDraftMutation(workspaceId: string, scope: AgentScope): Promise<RepositoryWorkspace> {
+    await this.workspace(workspaceId);
+    await this.assertWholeChangeSetScope(workspaceId, scope);
+    return await this.drafts.refreshWorkspaceFingerprint(workspaceId);
+  }
+
+  private async assertWholeChangeSetScope(workspaceId: string, scope: AgentScope): Promise<void> {
+    const report = await this.changes.list(workspaceId);
+    try {
+      assertAgentScope(report, scope);
+    } catch (error) {
+      if (error instanceof RepositoryWorkflowError) {
+        throw this.createError(error.code, error.message, error.details);
+      }
+      throw error;
+    }
   }
 
   private assertPlannedPaths(

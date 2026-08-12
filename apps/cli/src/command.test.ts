@@ -708,6 +708,65 @@ describe.concurrent("CLI direct mode", () => {
     expect(await readFile(personPath, "utf8")).toBe(beforeInvalid);
   });
 
+  it("creates a global Person and then assigns it in a scoped Project mutation", async () => {
+    const { direct, checkout } = await directFixture();
+    const inputRoot = await mkdtemp(path.join(os.tmpdir(), "gitpm-cli-direct-mixed-scope-"));
+    removeAfterTest(inputRoot);
+    const personId = "U-26-KB9RXB";
+    const personInput = path.join(inputRoot, "person.yaml");
+    await writeFile(personInput, [
+      "schema: gitpm/person@1",
+      `id: ${personId}`,
+      "name: New project member",
+      "weekly_capacity_hours: 40",
+      "calendar: C-26-QD7FJ4",
+      "lifecycle: active",
+      "",
+    ].join("\n"), "utf8");
+
+    const created = await run(["entity", "create", "--type", "person", "--file", personInput, "--json"], process.cwd(), { direct });
+    expect(JSON.parse(created.output)).toMatchObject({ ok: true, path: `people/${personId}.yaml` });
+    const assigned = await run([
+      "entity", "update", "--type", "task", "--id", "T-26-P9G3P8",
+      "--set", `assignees=[${personId}]`, "--project", "P-26-MGP84K", "--json",
+    ], process.cwd(), { direct });
+    expect(JSON.parse(assigned.output)).toMatchObject({
+      ok: true,
+      path: "projects/P-26-MGP84K/tasks/T-26-P9G3P8.yaml",
+      document: { assignees: [personId] },
+    });
+
+    const projectChanges = JSON.parse((await run(["changes", "list", "--project", "P-26-MGP84K", "--json"], process.cwd(), { direct })).output);
+    expect(projectChanges).toMatchObject({
+      ok: true,
+      changed_files_count: 1,
+      files: [expect.objectContaining({ path: "projects/P-26-MGP84K/tasks/T-26-P9G3P8.yaml" })],
+    });
+    const blockedGlobalRestore = await run([
+      "changes", "restore-file", "--path", `people/${personId}.yaml`, "--project", "P-26-MGP84K", "--json",
+    ], process.cwd(), { direct });
+    expect(JSON.parse(blockedGlobalRestore.output)).toMatchObject({ ok: false, code: "AGENT_SCOPE_VIOLATION" });
+    await expect(readFile(path.join(checkout, "people", `${personId}.yaml`), "utf8")).resolves.toContain("New project member");
+    const projectDiff = JSON.parse((await run(["diff", "--semantic", "--project", "P-26-MGP84K", "--json"], process.cwd(), { direct })).output);
+    expect(projectDiff).toMatchObject({
+      ok: true,
+      counts: { created: 0, updated: 1, archived: 0, deleted: 0 },
+      updated: [expect.objectContaining({ id: "T-26-P9G3P8" })],
+    });
+    const completeDiff = JSON.parse((await run(["diff", "--semantic", "--json"], process.cwd(), { direct })).output);
+    expect(completeDiff).toMatchObject({
+      ok: true,
+      counts: { created: 1, updated: 1, archived: 0, deleted: 0 },
+      created: [expect.objectContaining({ id: personId })],
+    });
+
+    const scopedCommit = await run(["commit", "--all", "-m", "Must stay mixed", "--project", "P-26-MGP84K", "--json"], process.cwd(), { direct });
+    expect(JSON.parse(scopedCommit.output)).toMatchObject({ ok: false, code: "AGENT_SCOPE_VIOLATION" });
+    const completeCommit = await run(["commit", "--all", "-m", "Add and assign project member", "--json"], process.cwd(), { direct });
+    expect(JSON.parse(completeCommit.output)).toMatchObject({ ok: true });
+    expect(await git(checkout, "log", "-1", "--format=%s")).toBe("Add and assign project member");
+  });
+
   it("enforces Project scope and rolls back invalid direct entity creation", async () => {
     const { direct, checkout } = await directFixture();
     const inputRoot = await mkdtemp(path.join(os.tmpdir(), "gitpm-cli-direct-invalid-"));
@@ -744,14 +803,19 @@ describe.concurrent("CLI direct mode", () => {
       .rejects.toMatchObject({ code: "ENOENT" });
   });
 
-  it("blocks out-of-scope changes and requires explicit deletion confirmation", async () => {
+  it("scopes inspection without blocking mutations, but keeps scoped commit and deletion guards", async () => {
     const { direct, checkout } = await directFixture();
     await direct.prepare();
     const otherProject = path.join(checkout, "projects", "P-26-8S9HQQ", "project.yaml");
     const otherProjectOriginal = await readFile(otherProject, "utf8");
     await writeFile(otherProject, otherProjectOriginal.replace("name: Operations", "name: Outside scope"), "utf8");
     const scoped = await run(["diff", "--semantic", "--project", "P-26-MGP84K", "--json"], process.cwd(), { direct });
-    expect(JSON.parse(scoped.output)).toMatchObject({ ok: false, code: "AGENT_SCOPE_VIOLATION" });
+    expect(JSON.parse(scoped.output)).toMatchObject({ ok: true, counts: { created: 0, updated: 0, archived: 0, deleted: 0 } });
+    const currentProjectUpdate = await run([
+      "entity", "update", "--type", "project", "--id", "P-26-MGP84K",
+      "--set", "name=Updated in operation scope", "--project", "P-26-MGP84K", "--json",
+    ], process.cwd(), { direct });
+    expect(JSON.parse(currentProjectUpdate.output)).toMatchObject({ ok: true, document: { name: "Updated in operation scope" } });
     const commit = await run(["commit", "--all", "-m", "must not commit", "--project", "P-26-MGP84K", "--json"], process.cwd(), { direct });
     expect(JSON.parse(commit.output)).toMatchObject({ ok: false, code: "AGENT_SCOPE_VIOLATION" });
     expect(await git(checkout, "log", "-1", "--format=%s")).not.toBe("must not commit");

@@ -159,10 +159,22 @@ gitpm validate --changed --project P-26-MGP84K
 gitpm diff --semantic --project P-26-MGP84K
 ```
 
-`--project` требует, чтобы все business changes принадлежали указанному Project.
-Repository configuration, People, Teams, Calendars и другие Projects приводят к
-`AGENT_SCOPE_VIOLATION`. Пока physical deletion присутствует в checkout, каждая следующая
-mutation-команда, а также validation/diff/commit требуют `--allow-delete`; этот флаг
+На mutation-команде `--project` ограничивает только пути, которые собирается изменить эта
+команда. Уже существующая незакоммиченная Person или изменение другого Project не блокирует
+следующую корректную мутацию выбранного Project. `format`, `diff` и `changes list` с
+`--project` выбирают изменения этого Project; validation всё равно проверяет полный repository
+state. `commit --all --project` остаётся whole-change-set guard: Repository configuration,
+People, Teams, Calendars и другие Projects в фиксируемом наборе приводят к
+`AGENT_SCOPE_VIOLATION`.
+
+Если один запрос явно включает глобальную сущность и Project — например, создать Person и
+назначить её на Task — создайте Person без `--project`, выполните Project mutation с
+`--project`, а итоговые format/validation/diff и разрешённый пользователем commit запускайте
+без `--project`, чтобы проверить и зафиксировать составное изменение целиком. Промежуточный
+commit не требуется.
+
+Пока physical deletion присутствует в checkout, каждая следующая mutation-команда, а также
+validation/diff/commit требуют `--allow-delete`; этот флаг
 подтверждает текущий набор удалений и не разрешает обходить CLI mutation boundary.
 Удаление Person со ссылками требует
 `--unlink-references`, а удаление непустого Project — `--cascade-references`; перед обоими
