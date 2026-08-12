@@ -533,6 +533,7 @@ describe("ProjectPlanWorkspace", () => {
     expect(screen.getByText("Without stage")).toBeTruthy();
     expect(stageCard.querySelector(".project-plan-stage-assignees")?.textContent).toContain("Ada");
     const linkedRow = screen.getByText("Linked task").closest(".project-plan-task-row")!;
+    expect(linkedRow.closest<HTMLElement>(".project-plan-task-list")?.style.getPropertyValue("--project-plan-task-columns")).toBe("auto minmax(0, 1fr) minmax(5rem, min(12rem, 16%)) minmax(5.5rem, min(6.5rem, 10%)) minmax(3.5rem, 4rem) max-content max-content");
     expect(linkedRow.querySelector(".task-assignees")?.textContent).toBe("Ada");
     expect(linkedRow.querySelector(".project-plan-task-due")).toBeTruthy();
     expect(linkedRow.querySelector(".project-plan-task-due")?.textContent).toBe("");

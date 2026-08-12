@@ -58,6 +58,27 @@ test.describe("project overview geometry", () => {
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
       expect(overflow).toBeLessThanOrEqual(0);
 
+      if (viewport.width >= 900) {
+        const firstTaskRow = page.locator(".project-plan-task-row").first();
+        await expect(firstTaskRow).toBeVisible();
+        const { columns, rem } = await firstTaskRow.evaluate((row) => {
+          const list = row.closest<HTMLElement>(".project-plan-task-list")!;
+          return {
+            columns: getComputedStyle(list).gridTemplateColumns.split(" ").map((column) => Number.parseFloat(column)),
+            rem: Number.parseFloat(getComputedStyle(document.documentElement).fontSize),
+          };
+        });
+        if (viewport.width > 900) {
+          expect(columns).toHaveLength(7);
+          expect(columns[1]).toBeGreaterThan(columns[2]!);
+          expect(columns[2]).toBeLessThanOrEqual(12 * rem + 0.5);
+          expect(columns[3]).toBeLessThanOrEqual(6.5 * rem + 0.5);
+        } else {
+          expect(columns).toHaveLength(2);
+          await expect(firstTaskRow.locator(".project-plan-task-meta")).toHaveCSS("display", "flex");
+        }
+      }
+
       // The complete filter and sorting editor is available in a separate drawer without
       // introducing page-level overflow, including at the mobile viewport.
       await advancedFilterTrigger.click();
