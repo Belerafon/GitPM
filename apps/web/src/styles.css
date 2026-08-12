@@ -435,7 +435,7 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .plan-order-controls { display: inline-flex; gap: .2rem; align-items: center; }
 .plan-order-controls button { display: inline-grid; place-items: center; width: 30px; height: 30px; padding: 0; }
 .project-plan-stage-progress { display: grid; grid-template-columns: minmax(140px, 1fr) auto; gap: .75rem; align-items: center; margin: 0 .8rem; color: #68706b; font-size: .75rem; }
-.project-plan-task-list { display: grid; grid-template-columns: var(--project-plan-task-columns); column-gap: .65rem; margin: 0 .8rem .7rem; }
+.project-plan-task-list { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: .65rem; margin: 0 .8rem .7rem; }
 .project-plan-task-row { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; gap: .25rem; align-items: center; width: 100%; border: 0; border-top: 1px solid #e5e7e1; border-left: 3px solid transparent; border-radius: 0; background: transparent; padding: .48rem .4rem .48rem .2rem; text-align: left; }
 .project-plan-task-row.filter-context { opacity: .7; }
 .project-plan-task-tree { position: relative; align-self: stretch; width: var(--task-tree-width, 0); margin-block: -.48rem; }
@@ -469,9 +469,10 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .project-plan-task-kind { color: #617069; font-size: .66rem; font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
 .project-plan-task-row strong { font-size: .82rem; }
 .project-plan-task-row code { color: #777e79; font-size: .66rem; }
-.project-plan-task-meta { display: contents; color: #69716c; font-size: .72rem; }
+.project-plan-task-meta { display: flex; min-width: 0; gap: .65rem; align-items: center; color: #69716c; font-size: .72rem; }
 .project-plan-task-meta-cell { min-width: 0; color: #69716c; font-size: .72rem; }
 .project-plan-task-due, .project-plan-task-estimate, .project-plan-task-status { white-space: nowrap; }
+.project-plan-task-meta .task-assignees { flex: 0 1 12rem; max-width: 12rem; }
 .task-assignees { overflow: hidden; color: #315f50; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .project-plan-empty-tasks { margin: 0 .8rem .75rem; color: #747a76; font-size: .82rem; }
 .project-plan-unassigned { border-style: dashed; background: #fffdf8; box-shadow: none; }

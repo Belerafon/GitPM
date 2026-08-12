@@ -61,18 +61,14 @@ test.describe("project overview geometry", () => {
       if (viewport.width >= 900) {
         const firstTaskRow = page.locator(".project-plan-task-row").first();
         await expect(firstTaskRow).toBeVisible();
-        const { columns, rem } = await firstTaskRow.evaluate((row) => {
+        const columns = await firstTaskRow.evaluate((row) => {
           const list = row.closest<HTMLElement>(".project-plan-task-list")!;
-          return {
-            columns: getComputedStyle(list).gridTemplateColumns.split(" ").map((column) => Number.parseFloat(column)),
-            rem: Number.parseFloat(getComputedStyle(document.documentElement).fontSize),
-          };
+          return getComputedStyle(list).gridTemplateColumns.split(" ").map((column) => Number.parseFloat(column));
         });
         if (viewport.width > 900) {
-          expect(columns).toHaveLength(7);
+          expect(columns).toHaveLength(3);
           expect(columns[1]).toBeGreaterThan(columns[2]!);
-          expect(columns[2]).toBeLessThanOrEqual(12 * rem + 0.5);
-          expect(columns[3]).toBeLessThanOrEqual(6.5 * rem + 0.5);
+          await expect(firstTaskRow.locator(".project-plan-task-meta")).toHaveCSS("display", "flex");
         } else {
           expect(columns).toHaveLength(2);
           await expect(firstTaskRow.locator(".project-plan-task-meta")).toHaveCSS("display", "flex");
