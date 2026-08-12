@@ -16,7 +16,7 @@ class ChangesApi {
     { path: "projects/P-26-111111/tasks/T-26-222222.yaml", kind: "Deleted", diff_token: "three", diff: "@@ -1,1 +0,0 @@\n-old\n", hunks: [{ old_start: 1, old_count: 1, new_start: 0, new_count: 0, lines: ["-old"] }] },
   ] };
   semantic: SemanticDiff = {
-    created: [{ id: "T-26-111111", path: "projects/P-26-111111/tasks/T-26-111111.yaml", schema: "gitpm/task@2", project: "P-26-111111", fields: [{ field: "title", after: "New task" }] }],
+    created: [{ id: "T-26-111111", path: "projects/P-26-111111/tasks/T-26-111111.yaml", schema: "gitpm/task@2", project: "P-26-111111", fields: [{ field: "title", after: "New task" }, { field: "parent", after: "T-26-222222" }] }],
     updated: [{ id: "P-26-111111", path: "projects/P-26-111111/project.yaml", schema: "gitpm/project@2", project: "P-26-111111", fields: [{ field: "status", before: "backlog", after: "active" }] }],
     archived: [], deleted: [{ id: "T-26-222222", path: "projects/P-26-111111/tasks/T-26-222222.yaml", schema: "gitpm/task@2", project: "P-26-111111", fields: [{ field: "title", before: "Old task" }] }],
     counts: { created: 1, updated: 1, archived: 0, deleted: 1 }, affected_projects: ["P-26-111111"], unclassified_files: [],
@@ -48,15 +48,24 @@ describe("Changes workspace", () => {
     expect(safeExternalUrl("https://token@gitlab.example.test/mr/7")).toBeUndefined();
   });
 
-  it("shows only Git change categories, an exact diff, restore controls and semantic before/after values", async () => {
+  it("leads with named entities, hides empty groups and keeps the exact Git diff collapsed", async () => {
     const fixture = new ChangesApi();
     render(<ChangesWorkspace api={fixture as unknown as GitPmApi} draft={draft} role="Developer" locale="en" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} />);
-    expect((await screen.findAllByText("projects/P-26-111111/project.yaml")).length).toBeGreaterThan(0);
+    expect(await screen.findByRole("heading", { name: "What changed" })).toBeTruthy();
+    expect(screen.getAllByText("Alpha project").length).toBeGreaterThan(0);
+    expect(screen.getByText("T-26-111111")).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Archived" })).toBeNull();
+    const technicalChanges = screen.getByText("Technical file changes").closest("details");
+    expect(technicalChanges?.open).toBe(false);
+    fireEvent.click(screen.getByText("Technical file changes"));
+    expect(technicalChanges?.open).toBe(true);
     expect(screen.getByText("Added")).toBeTruthy(); expect(screen.getAllByText("Modified").length).toBeGreaterThan(0); expect(screen.getAllByText("Deleted").length).toBeGreaterThan(0);
-    expect(screen.getByText("Project")).toBeTruthy(); expect(screen.getByText("Alpha project")).toBeTruthy();
-    expect(screen.getAllByText("Task")).toHaveLength(2); expect(screen.getAllByText("New task").length).toBeGreaterThan(0); expect(screen.getAllByText("Old task").length).toBeGreaterThan(0);
     expect(screen.getByText("-old")).toBeTruthy(); expect(screen.getByText("+new")).toBeTruthy();
+    fireEvent.click(screen.getAllByText("Alpha project")[0]!);
+    expect(screen.getByText("Status")).toBeTruthy();
     expect(screen.getByText("backlog")).toBeTruthy(); expect(screen.getByText("active")).toBeTruthy();
+    fireEvent.click(screen.getAllByText("New task")[0]!);
+    expect(screen.getByText("Old task (T-26-222222)")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Restore hunk" }));
     await waitFor(() => expect(fixture.restoreHunk).toHaveBeenCalledWith("DRF-CHANGES", draft.fingerprint, "projects/P-26-111111/project.yaml", "one", 0));
   });
@@ -64,9 +73,12 @@ describe("Changes workspace", () => {
   it("localizes entity types on file cards", async () => {
     const fixture = new ChangesApi();
     render(<ChangesWorkspace api={fixture as unknown as GitPmApi} draft={draft} role="Developer" locale="ru" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} />);
-    expect(await screen.findByText("Проект")).toBeTruthy();
-    expect(screen.getByText("Alpha project")).toBeTruthy();
-    expect(screen.getAllByText("Задача")).toHaveLength(2);
+    expect(await screen.findByText("Что изменилось")).toBeTruthy();
+    expect(screen.getAllByText("Проект").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Alpha project").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Задача").length).toBeGreaterThanOrEqual(2);
+    fireEvent.click(screen.getAllByText("Alpha project")[0]!);
+    expect(screen.getByText("Статус")).toBeTruthy();
   });
 
   it("shows a localized notice instead of the diff for an oversized change", async () => {
@@ -75,7 +87,8 @@ describe("Changes workspace", () => {
       { path: "projects/P-26-111111/project.yaml", kind: "Modified", diff_token: "big", diff: "diff --git\n", hunks: [], oversized: true },
     ] };
     render(<ChangesWorkspace api={fixture as unknown as GitPmApi} draft={draft} role="Developer" locale="en" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} />);
-    await screen.findAllByText("projects/P-26-111111/project.yaml");
+    await screen.findByText("Technical file changes");
+    fireEvent.click(screen.getByText("Technical file changes"));
     expect(screen.getByText(/This change is too large to display/u)).toBeTruthy();
     expect(screen.queryByText("-old")).toBeNull();
   });

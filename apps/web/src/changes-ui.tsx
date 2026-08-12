@@ -25,6 +25,29 @@ const entityTypeKeys: Readonly<Record<string, MessageKey>> = {
   "gitpm/issue-types@1": "changes.entityIssueTypes",
 };
 
+const fieldKeys: Readonly<Record<string, MessageKey>> = {
+  archived_at: "changes.fieldArchivedAt",
+  assignees: "changes.fieldAssignees",
+  calendar: "changes.fieldCalendar",
+  dependencies: "changes.fieldDependencies",
+  description: "changes.fieldDescription",
+  due: "changes.fieldDue",
+  email: "changes.fieldEmail",
+  estimate_hours: "changes.fieldEstimate",
+  issue_type: "changes.fieldIssueType",
+  lifecycle: "changes.fieldLifecycle",
+  members: "changes.fieldMembers",
+  milestone: "changes.fieldMilestone",
+  name: "changes.fieldName",
+  owner: "changes.fieldOwner",
+  parent: "changes.fieldParent",
+  project: "changes.fieldProject",
+  start: "changes.fieldStart",
+  status: "changes.fieldStatus",
+  title: "changes.fieldTitle",
+  weekly_capacity_hours: "changes.fieldCapacity",
+};
+
 export function safeExternalUrl(value: string): string | undefined {
   try {
     const url = new URL(value);
@@ -36,10 +59,23 @@ export function safeExternalUrl(value: string): string | undefined {
   }
 }
 
-function valueText(value: unknown, empty: string): string {
+function valueText(value: unknown, empty: string, namesById: ReadonlyMap<string, string>): string {
   if (value === undefined) return empty;
-  if (typeof value === "string") return value;
+  if (typeof value === "string") {
+    const name = namesById.get(value);
+    return name === undefined ? value : `${name} (${value})`;
+  }
+  if (Array.isArray(value)) return value.map((item) => valueText(item, empty, namesById)).join(", ");
   return JSON.stringify(value);
+}
+
+function fieldLabel(field: string, t: (key: MessageKey) => string): string {
+  return field.split(".").map((segment) => {
+    const key = fieldKeys[segment];
+    if (key !== undefined) return t(key);
+    const words = segment.replaceAll("_", " ");
+    return `${words.charAt(0).toLocaleUpperCase()}${words.slice(1)}`;
+  }).join(" › ");
 }
 
 function entityType(schema: string, t: (key: MessageKey) => string): string {
@@ -64,13 +100,29 @@ function ChangeFileButton({ file, entity, selected, select, t }: {
   </button>;
 }
 
-function SemanticGroup({ title, items, empty }: { readonly title: string; readonly items: readonly SemanticChange[]; readonly empty: string }) {
-  return <section className="semantic-group"><h4>{title}<span>{items.length}</span></h4>{items.map((item) => (
-    <article className="semantic-item" key={`${title}-${item.path}`}>
-      <strong>{item.id}</strong><code>{item.path}</code>
-      {item.fields.length > 0 && <dl>{item.fields.map((field) => <div key={field.field}><dt>{field.field}</dt><dd><del>{valueText(field.before, empty)}</del><span aria-hidden="true">→</span><ins>{valueText(field.after, empty)}</ins></dd></div>)}</dl>}
-    </article>
-  ))}</section>;
+function SemanticGroup({ title, items, entitiesByPath, namesById, empty, fieldCount, technicalDetails, t }: {
+  readonly title: string;
+  readonly items: readonly SemanticChange[];
+  readonly entitiesByPath: ReadonlyMap<string, SemanticFileEntity>;
+  readonly namesById: ReadonlyMap<string, string>;
+  readonly empty: string;
+  readonly fieldCount: (count: number) => string;
+  readonly technicalDetails: string;
+  readonly t: (key: MessageKey) => string;
+}) {
+  if (items.length === 0) return null;
+  return <section className="semantic-group"><h4>{title}<span>{items.length}</span></h4><div className="semantic-items">{items.map((item) => {
+    const entity = entitiesByPath.get(item.path);
+    const name = entity?.display_name ?? entity?.id ?? item.id;
+    return <details className="semantic-item" key={`${title}-${item.path}`}>
+      <summary>
+        <span className="semantic-identity"><span>{entityType(item.schema, t)}</span><strong>{name}</strong><code>{item.id}</code></span>
+        <span className="semantic-field-count">{fieldCount(item.fields.length)}</span>
+      </summary>
+      {item.fields.length > 0 && <dl>{item.fields.map((field) => <div key={field.field}><dt>{fieldLabel(field.field, t)}</dt><dd><del>{valueText(field.before, empty, namesById)}</del><span aria-hidden="true">→</span><ins>{valueText(field.after, empty, namesById)}</ins></dd></div>)}</dl>}
+      <details className="semantic-technical"><summary>{technicalDetails}</summary><code>{item.path}</code></details>
+    </details>;
+  })}</div></section>;
 }
 
 function DiffViewer({ file, canRestore, busy, restoreFile, restoreHunk, labels }: {
@@ -129,6 +181,8 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
   const canMutate = role !== "Reporter" && draft.state === "open" && draft.writer_mode === "ui";
   const selected = useMemo(() => changes.files.find((file) => file.path === selectedPath) ?? changes.files[0], [changes, selectedPath]);
   const entitiesByPath = useMemo(() => new Map((semantic.file_entities ?? []).map((entity) => [entity.path, entity])), [semantic.file_entities]);
+  const namesById = useMemo(() => new Map((semantic.file_entities ?? []).flatMap((entity) => entity.id === undefined || entity.display_name === undefined ? [] : [[entity.id, entity.display_name] as const])), [semantic.file_entities]);
+  const changedEntitiesCount = semantic.counts.created + semantic.counts.updated + semantic.counts.archived + semantic.counts.deleted;
 
   const load = async (keepData = true) => {
     await loadRequest.run(async () => {
@@ -180,22 +234,27 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
     <AsyncBoundary state={loadRequest.state} loading={t("status.loading")} retry={() => { void load(); }} error={(loadError, retry) => <div className="alert error">{t("status.error", { message: loadError })}<button onClick={retry}>{t("status.retry")}</button></div>}>
     <>
     <div className="changes-summary">
+      <div><strong>{changedEntitiesCount}</strong><span>{t("changes.entities")}</span></div>
       <div><strong>{changes.changed_files_count}</strong><span>{t("changes.files")}</span></div>
-      <div><strong>{semantic.counts.created}</strong><span>{t("changes.created")}</span></div>
-      <div><strong>{semantic.counts.updated}</strong><span>{t("changes.updated")}</span></div>
-      <div><strong>{semantic.counts.archived}</strong><span>{t("changes.archived")}</span></div>
-      <div><strong>{semantic.counts.deleted}</strong><span>{t("changes.deleted")}</span></div>
+      <div><strong>{semantic.affected_projects.length}</strong><span>{t("changes.projectsShort")}</span></div>
     </div>
-    <div className={`changes-layout${changes.files.length === 0 ? " clean" : ""}`}>
-      <aside className="card change-files"><div className="change-files-heading"><h3>{t("changes.fileChanges")}</h3>{changes.files.length > 0 && canMutate && <button className="danger subtle" disabled={busy} onClick={() => { if (confirmAction(t("changes.discardConfirm"))) void run(() => api.discardAll(draft.draft_id, draft.fingerprint)); }}>{t("changes.discardAll")}</button>}</div>
-        {changes.files.length === 0 ? <p>{t("changes.clean")}</p> : changes.files.map((file) => <ChangeFileButton entity={entitiesByPath.get(file.path)} file={file} key={file.path} select={() => setSelectedPath(file.path)} selected={selected?.path === file.path} t={t} />)}
-      </aside>
-      <div className="card change-detail">{selected === undefined ? <div className="empty-change"><strong>{t("changes.clean")}</strong><span>{t("changes.cleanHint")}</span></div> : <DiffViewer file={selected} canRestore={canMutate} busy={busy} restoreFile={() => void run(() => api.restoreFile(draft.draft_id, draft.fingerprint, selected.path))} restoreHunk={(index) => void run(() => api.restoreHunk(draft.draft_id, draft.fingerprint, selected.path, selected.diff_token, index))} labels={{ restoreFile: t("changes.restoreFile"), restoreHunk: t("changes.restoreHunk"), kind: t(`changes.kind${selected.kind}`), tooLarge: t("changes.diffTooLarge") }} />}</div>
-    </div>
-    <div className="card semantic-diff"><div className="semantic-heading"><div><span className="eyebrow">{t("changes.semanticEyebrow")}</span><h3>{t("changes.semanticHeading")}</h3></div><span>{t("changes.projects", { count: semantic.affected_projects.length })}</span></div>
-      <div className="semantic-grid"><SemanticGroup title={t("changes.created")} items={semantic.created} empty={t("changes.emptyValue")} /><SemanticGroup title={t("changes.updated")} items={semantic.updated} empty={t("changes.emptyValue")} /><SemanticGroup title={t("changes.archived")} items={semantic.archived} empty={t("changes.emptyValue")} /><SemanticGroup title={t("changes.deleted")} items={semantic.deleted} empty={t("changes.emptyValue")} /></div>
+    <div className="card semantic-diff"><div className="semantic-heading"><div><span className="eyebrow">{t("changes.semanticEyebrow")}</span><h3>{t("changes.semanticHeading")}</h3><p>{t("changes.semanticHint")}</p></div><span>{t("changes.projects", { count: semantic.affected_projects.length })}</span></div>
+      <div className="semantic-groups">
+        <SemanticGroup title={t("changes.created")} items={semantic.created} entitiesByPath={entitiesByPath} namesById={namesById} empty={t("changes.emptyValue")} fieldCount={(count) => t("changes.fieldCount", { count })} technicalDetails={t("changes.technicalDetails")} t={t} />
+        <SemanticGroup title={t("changes.updated")} items={semantic.updated} entitiesByPath={entitiesByPath} namesById={namesById} empty={t("changes.emptyValue")} fieldCount={(count) => t("changes.fieldCount", { count })} technicalDetails={t("changes.technicalDetails")} t={t} />
+        <SemanticGroup title={t("changes.archived")} items={semantic.archived} entitiesByPath={entitiesByPath} namesById={namesById} empty={t("changes.emptyValue")} fieldCount={(count) => t("changes.fieldCount", { count })} technicalDetails={t("changes.technicalDetails")} t={t} />
+        <SemanticGroup title={t("changes.deleted")} items={semantic.deleted} entitiesByPath={entitiesByPath} namesById={namesById} empty={t("changes.emptyValue")} fieldCount={(count) => t("changes.fieldCount", { count })} technicalDetails={t("changes.technicalDetails")} t={t} />
+      </div>
       {semantic.unclassified_files.length > 0 && <p className="unclassified">{t("changes.unclassified", { count: semantic.unclassified_files.length })}</p>}
     </div>
+    <details className="technical-changes"><summary><span><strong>{t("changes.fileChanges")}</strong><small>{t("changes.fileChangesHint")}</small></span><span>{changes.changed_files_count}</span></summary>
+      <div className={`changes-layout${changes.files.length === 0 ? " clean" : ""}`}>
+        <aside className="card change-files"><div className="change-files-heading"><h3>{t("changes.changedFiles")}</h3>{changes.files.length > 0 && canMutate && <button className="danger subtle" disabled={busy} onClick={() => { if (confirmAction(t("changes.discardConfirm"))) void run(() => api.discardAll(draft.draft_id, draft.fingerprint)); }}>{t("changes.discardAll")}</button>}</div>
+          {changes.files.length === 0 ? <p>{t("changes.clean")}</p> : changes.files.map((file) => <ChangeFileButton entity={entitiesByPath.get(file.path)} file={file} key={file.path} select={() => setSelectedPath(file.path)} selected={selected?.path === file.path} t={t} />)}
+        </aside>
+        <div className="card change-detail">{selected === undefined ? <div className="empty-change"><strong>{t("changes.clean")}</strong><span>{t("changes.cleanHint")}</span></div> : <DiffViewer file={selected} canRestore={canMutate} busy={busy} restoreFile={() => void run(() => api.restoreFile(draft.draft_id, draft.fingerprint, selected.path))} restoreHunk={(index) => void run(() => api.restoreHunk(draft.draft_id, draft.fingerprint, selected.path, selected.diff_token, index))} labels={{ restoreFile: t("changes.restoreFile"), restoreHunk: t("changes.restoreHunk"), kind: t(`changes.kind${selected.kind}`), tooLarge: t("changes.diffTooLarge") }} />}</div>
+      </div>
+    </details>
     <div className="card publish-panel"><div><span className="eyebrow">{t("changes.publishEyebrow")}</span><h3>{t("changes.publishHeading")}</h3><p>{t("changes.commitAllHint")}</p></div>
       {commit === undefined ? <div className="publish-action"><button className="primary" disabled={!canMutate || busy || changes.changed_files_count === 0} onClick={() => setCommitOpen(true)}>{t("changes.openCommit")}</button>{changes.changed_files_count === 0 && <span>{t("changes.cleanHint")}</span>}</div> : <div className="publish-flow">
         <div className="publish-step complete"><span>1</span><div><strong>{t("changes.committed")}</strong><code>{commit.commit.slice(0, 12)}</code></div></div>
