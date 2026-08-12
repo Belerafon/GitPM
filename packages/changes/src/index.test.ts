@@ -145,6 +145,23 @@ describe("changes and restore service", () => {
     expect((await service.list("DRF-CHANGES")).files.find((file) => file.kind === "Added")?.diff).toContain("--- /dev/null");
   });
 
+  it("keeps display-comment-only edits in the file diff without reporting an empty semantic update", async () => {
+    const { draft, service } = await runtime();
+    const taskPath = "projects/P-26-MGP84K/tasks/T-26-P9G3P8.yaml";
+    const absolute = path.join(draft.worktree_path, ...taskPath.split("/"));
+    const updated = (await readFile(absolute, "utf8")).replace("# project: GitPM launch", "# project: Renamed display comment");
+    await writeFile(absolute, updated, "utf8");
+
+    const listed = await service.list("DRF-CHANGES");
+    expect(listed.files).toEqual(expect.arrayContaining([expect.objectContaining({ path: taskPath, kind: "Modified" })]));
+
+    const semantic = await service.semantic("DRF-CHANGES");
+    expect(semantic.counts).toEqual({ created: 0, updated: 0, archived: 0, deleted: 0 });
+    expect(semantic.updated).toEqual([]);
+    expect(semantic.file_entities).toContainEqual(expect.objectContaining({ path: taskPath, id: "T-26-P9G3P8", display_name: "Approve schema v1" }));
+    expect(semantic.unclassified_files).not.toContain(taskPath);
+  });
+
   it("classifies GitPM configuration files without entity IDs", async () => {
     const { draft, service } = await runtime();
     const repositoryPath = ".gitpm/repository.yaml";
