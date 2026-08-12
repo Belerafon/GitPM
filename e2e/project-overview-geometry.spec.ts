@@ -7,6 +7,7 @@ const geometryDraftId = "DRF-GEO-OVERVIEW";
 
 const viewports = [
   { name: "wide 1688x900", width: 1688, height: 900 },
+  { name: "compact 1032x900", width: 1032, height: 900 },
   { name: "tablet 900x900", width: 900, height: 900 },
   { name: "mobile 390x844", width: 390, height: 844 },
 ] as const;
@@ -58,6 +59,45 @@ test.describe("project overview geometry", () => {
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
       expect(overflow).toBeLessThanOrEqual(0);
 
+      const completeTaskRow = page.locator(".project-plan-task-row").filter({ hasText: "Approve schema v1" });
+      await expect(completeTaskRow).toBeVisible();
+      const metadataGeometry = await completeTaskRow.evaluate((row) => {
+        const meta = row.querySelector<HTMLElement>(".project-plan-task-meta")!;
+        const box = (selector: string) => {
+          const element = row.querySelector<HTMLElement>(selector)!;
+          const bounds = element.getBoundingClientRect();
+          return { selector, left: bounds.left, right: bounds.right, top: bounds.top, bottom: bounds.bottom };
+        };
+        const metaBounds = meta.getBoundingClientRect();
+        return {
+          meta: { left: metaBounds.left, right: metaBounds.right, scrollWidth: meta.scrollWidth, clientWidth: meta.clientWidth },
+          fields: [
+            box(".task-assignees"),
+            box(".project-plan-task-due time"),
+            box(".project-plan-task-estimate > span"),
+            box(".project-plan-task-status select"),
+            box(".plan-order-controls"),
+          ],
+        };
+      });
+      expect(metadataGeometry.fields.map((field) => field.selector)).toEqual([
+        ".task-assignees",
+        ".project-plan-task-due time",
+        ".project-plan-task-estimate > span",
+        ".project-plan-task-status select",
+        ".plan-order-controls",
+      ]);
+      expect(metadataGeometry.meta.scrollWidth).toBeLessThanOrEqual(metadataGeometry.meta.clientWidth);
+      for (const field of metadataGeometry.fields) {
+        expect(field.left).toBeGreaterThanOrEqual(metadataGeometry.meta.left - 0.5);
+        expect(field.right).toBeLessThanOrEqual(metadataGeometry.meta.right + 0.5);
+      }
+      for (let index = 0; index < metadataGeometry.fields.length - 1; index++) {
+        const current = metadataGeometry.fields[index]!;
+        const next = metadataGeometry.fields[index + 1]!;
+        expect(current.right <= next.left + 0.5 || current.bottom <= next.top + 0.5).toBe(true);
+      }
+
       if (viewport.width >= 900) {
         const firstTaskRow = page.locator(".project-plan-task-row").first();
         await expect(firstTaskRow).toBeVisible();
@@ -65,7 +105,7 @@ test.describe("project overview geometry", () => {
           const list = row.closest<HTMLElement>(".project-plan-task-list")!;
           return getComputedStyle(list).gridTemplateColumns.split(" ").map((column) => Number.parseFloat(column));
         });
-        if (viewport.width > 900) {
+        if (viewport.width === 1688) {
           expect(columns).toHaveLength(3);
           expect(columns[1]).toBeGreaterThan(columns[2]!);
           await expect(firstTaskRow.locator(".project-plan-task-meta")).toHaveCSS("display", "flex");
