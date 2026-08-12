@@ -162,7 +162,7 @@ stages:
   - QA
   milestone: alpha
 - id: P08B
-  title: 'Administration UI: Person, Team, Calendar и repository settings'
+  title: 'Administration UI: Person, Team, Calendar и portfolio settings'
   size: L
   estimate: 8-12
   dependencies:

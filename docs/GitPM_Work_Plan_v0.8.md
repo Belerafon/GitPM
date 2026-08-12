@@ -633,7 +633,7 @@
 - Evidence paths/URLs существуют и доступны reviewer.
 - `docs/PROGRESS.md` содержит outcome, limitations and next action.
 
-## P08B. Administration UI: Person, Team, Calendar и repository settings
+## P08B. Administration UI: Person, Team, Calendar и portfolio settings
 
 - Size: `L`
 - Estimate: `8-12 engineer-days`
@@ -663,7 +663,7 @@
 ### Artifacts
 
 - administration UI
-- repository settings UI
+- portfolio settings UI
 
 ### Automated verification
 

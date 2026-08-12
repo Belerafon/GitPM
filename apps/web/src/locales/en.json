@@ -52,7 +52,7 @@
   "nav.board": "Board",
   "nav.people": "People and teams",
   "nav.calendar": "Working calendars",
-  "nav.settings": "Statuses and task types",
+  "nav.settings": "Portfolio settings",
   "nav.workload": "Team workload",
   "nav.gantt": "Gantt",
   "nav.effort": "Effort",
@@ -60,7 +60,7 @@
   "nav.files": "Files",
   "nav.history": "History",
   "nav.team": "Team",
-  "nav.repository": "Repository",
+  "nav.repository": "Git and publishing",
   "nav.repositoryConnection": "Repository connection",
   "nav.label": "Main navigation",
   "nav.openMenu": "Open navigation",
@@ -332,19 +332,17 @@
   ,"admin.teamSearch": "Search teams or members"
   ,"admin.noMembers": "No members yet"
   ,"admin.calendars": "Calendars"
-  ,"admin.settings": "Repository settings"
+  ,"admin.settings": "Portfolio settings"
   ,"admin.email": "Email"
   ,"admin.capacity": "Weekly capacity (hours)"
   ,"admin.calendar": "Calendar"
-  ,"admin.defaultCalendar": "Repository default calendar"
+  ,"admin.defaultCalendar": "Default calendar"
+  ,"admin.defaultCalendarForNewPeople": "Calendar for new people"
   ,"admin.defaultCalendarHint": "Used for new people when no calendar is selected explicitly. Calendars already assigned to people are not changed."
-  ,"admin.defaultCalendarArchiveBlocked": "Choose another repository default calendar in Settings before archiving or deleting this calendar."
+  ,"admin.defaultCalendarArchiveBlocked": "Choose another calendar for new people before archiving or deleting this calendar."
   ,"admin.openCalendar": "Open calendar"
   ,"admin.openSelectedCalendar": "Open selected calendar"
   ,"admin.calendarNotFound": "Calendar {id} was not found. It may have been deleted."
-  ,"admin.repositoryConfiguration": "Repository settings"
-  ,"admin.pollInterval": "UI polling interval"
-  ,"admin.pollIntervalSeconds": "{count} seconds"
   ,"admin.configurationBlocked": "This change is blocked by existing repository data. Update the listed documents first."
   ,"admin.openBlockingView": "Open blocking view"
   ,"admin.members": "Members"
@@ -405,8 +403,11 @@
   ,"admin.editConfig": "Edit {name}"
   ,"admin.statuses": "Statuses"
   ,"admin.issueTypes": "Issue types"
-  ,"admin.workCategories": "Work categories"
-  ,"admin.scheduleTracks": "Schedule tracks"
+  ,"admin.workCategories": "Effort categories"
+  ,"admin.scheduleTracks": "Plans and actuals"
+  ,"admin.settingsTasks": "Tasks"
+  ,"admin.settingsPlanning": "Planning"
+  ,"admin.settingsTimeTracking": "Time tracking"
   ,"admin.scheduleTracksHint": "A track is a separate version of the schedule for the same projects, milestones, and tasks. Each track independently stores the data allowed for it: dates, planned effort, and dependencies."
   ,"admin.scheduleTracksKindsHint": "Manual tracks are filled in by users. For example, a Working plan reflects current expectations, while a Target plan or Baseline provides a reference for comparison. The actual track cannot be edited manually: it is built automatically from time entries."
   ,"admin.scheduleTracksUsageHint": "Create the tracks you need below and select their available data under Capabilities. Then set the project defaults: the primary track is the working schedule, the workload track drives capacity calculations, the comparison track shows variances, and dashboard tracks appear in summaries. Individual projects can override these settings. All changes are saved together."
@@ -1181,7 +1182,6 @@
   ,"fieldHint.calendarWeekdays": "Days of the week considered normally available for work. Capacity is distributed only across selected weekdays, except dates explicitly marked as holidays."
   ,"fieldHint.calendarHolidays": "Specific non-working calendar dates. Holidays remove capacity even when their weekday is normally working; enter each date once in ISO calendar form."
   ,"fieldHint.defaultCalendar": "Repository-wide fallback calendar. New people start with it, and people configured to inherit the default follow later changes; the current default cannot be archived."
-  ,"fieldHint.pollInterval": "Stored polling interval from 2 to 10 seconds. In the current version, the main working-copy poll still uses a fixed three-second timer, so this setting does not yet change its actual frequency."
   ,"fieldHint.configColor": "Presentation color for this status or task type in badges and views. It is a fixed safe palette token and has no effect on validation or workflow semantics."
   ,"fieldHint.configActive": "Active values are offered for new selections. Turning a value off preserves its technical ID and historical references, which is safer than deletion when old entities still use it."
   ,"fieldHint.visibleTaskFields": "Chooses which task columns are visible in this plan view. It is a browser display preference only and does not clear assignees, dates, estimates, or statuses from tasks."

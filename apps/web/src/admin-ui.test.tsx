@@ -46,8 +46,8 @@ describe("administration UI", () => {
     fireEvent.change(within(calendarForm).getByLabelText("Name"), { target: { value: "Default" } });
     fireEvent.click(within(calendarForm).getByRole("button", { name: /Add non-working date/u }));
     fireEvent.change(within(calendarForm).getByLabelText("Non-working date 1"), { target: { value: "2026-01-01" } }); fireEvent.submit(calendarForm);
-    expect(await screen.findByText(/Default \(Repository default calendar\)/u)).toBeTruthy();
-    expect(screen.getByLabelText("Working week preview").querySelectorAll(".working")).toHaveLength(5);
+    const defaultCalendarItem = (await screen.findByText(/Default \(Default calendar\)/u)).closest<HTMLElement>(".admin-card")!;
+    expect(within(defaultCalendarItem).getByLabelText("Working week preview").querySelectorAll(".working")).toHaveLength(5);
 
     const onOpenPerson = vi.fn();
     rendered.rerender(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" onOpenPerson={onOpenPerson} surface="people" onChanged={changed} />);
@@ -164,19 +164,24 @@ describe("administration UI", () => {
     const admin = new AdminApi(); const api = admin as unknown as GitPmApi; const changed = vi.fn(async () => undefined);
     render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="settings" onChanged={changed} />);
 
-    const tracksCard = (await screen.findByRole("heading", { name: "Schedule tracks" })).closest<HTMLElement>(".config-editor")!;
+    expect(await screen.findByRole("heading", { name: "Tasks" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Planning" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Time tracking" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Effort categories" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Calendar for new people" })).toBeNull();
+    const tracksCard = (await screen.findByRole("heading", { name: "Plans and actuals" })).closest<HTMLElement>(".config-editor")!;
     expect(admin.configurationReads).toContain("schedule-tracks");
     expect(within(tracksCard).getByText("Plan")).toBeTruthy();
     expect(within(tracksCard).getByText("Target")).toBeTruthy();
     expect(within(tracksCard).getAllByText("Actual")).toHaveLength(2);
 
-    fireEvent.click(within(tracksCard).getByRole("button", { name: "Edit Schedule tracks" }));
-    const dialog = await screen.findByRole("dialog", { name: "Edit: Schedule tracks" });
+    fireEvent.click(within(tracksCard).getByRole("button", { name: "Edit Plans and actuals" }));
+    const dialog = await screen.findByRole("dialog", { name: "Edit: Plans and actuals" });
     expect((within(dialog).getByLabelText("Track kind plan") as HTMLSelectElement).value).toBe("manual");
     expect(within(dialog).getByText("Time entries")).toBeTruthy();
-    const planTitle = within(dialog).getByLabelText("Schedule tracks plan");
+    const planTitle = within(dialog).getByLabelText("Plans and actuals plan");
     fireEvent.change(planTitle, { target: { value: "Working plan" } });
-    const targetRow = within(dialog).getByLabelText("Schedule tracks target").closest<HTMLElement>(".config-row")!;
+    const targetRow = within(dialog).getByLabelText("Plans and actuals target").closest<HTMLElement>(".config-row")!;
     fireEvent.click(within(targetRow).getByLabelText("Dependencies"));
     fireEvent.change(within(dialog).getByLabelText("New track technical ID"), { target: { value: "forecast" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Add manual track" }));
@@ -194,23 +199,23 @@ describe("administration UI", () => {
     const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
     render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="ru" surface="settings" onChanged={vi.fn(async () => undefined)} />);
 
-    const tracksCard = (await screen.findByRole("heading", { name: "Контуры расписания" })).closest<HTMLElement>(".config-editor")!;
-    fireEvent.click(within(tracksCard).getByRole("button", { name: "Редактировать: Контуры расписания" }));
-    const dialog = await screen.findByRole("dialog", { name: "Редактировать: Контуры расписания" });
+    const tracksCard = (await screen.findByRole("heading", { name: "Планы и факт" })).closest<HTMLElement>(".config-editor")!;
+    fireEvent.click(within(tracksCard).getByRole("button", { name: "Редактировать: Планы и факт" }));
+    const dialog = await screen.findByRole("dialog", { name: "Редактировать: Планы и факт" });
     const hint = dialog.querySelector<HTMLElement>(".schedule-tracks-hint")!;
     expect(within(hint).getByText(/Контур — это отдельный вариант расписания/u)).toBeTruthy();
     expect(within(hint).getByText(/Ручные контуры заполняются пользователями/u)).toBeTruthy();
     expect(within(hint).getByText(/основной контур используется как рабочее расписание/u)).toBeTruthy();
   });
 
-  it("changes the repository default calendar and UI polling interval", async () => {
+  it("changes the calendar for new people without exposing the repository polling interval", async () => {
     const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
     const onOpenCalendar = vi.fn();
     await admin.createEntity("DRF-ADMIN", "calendars", "", { schema: "gitpm/calendar@1", id: "C-26-111111", name: "Old default", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
     await admin.createEntity("DRF-ADMIN", "calendars", "", { schema: "gitpm/calendar@1", id: "C-26-222222", name: "New default", working_weekdays: [1, 2, 3, 4, 5, 6, 7], holidays: ["2026-08-17"], lifecycle: "active" });
-    render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="settings" onOpenCalendar={onOpenCalendar} onChanged={vi.fn(async () => undefined)} />);
-    const repositoryCard = (await screen.findByRole("heading", { name: "Repository settings" })).closest<HTMLElement>(".config-editor")!;
-    const calendarSummary = repositoryCard.querySelector<HTMLElement>(".repository-default-calendar")!;
+    render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="calendar" onOpenCalendar={onOpenCalendar} onChanged={vi.fn(async () => undefined)} />);
+    const defaultCalendarCard = (await screen.findByRole("heading", { name: "Calendar for new people" })).closest<HTMLElement>(".config-editor")!;
+    const calendarSummary = defaultCalendarCard.querySelector<HTMLElement>(".default-calendar-summary")!;
     expect(within(calendarSummary).getByText("C-26-111111")).toBeTruthy();
     expect(within(calendarSummary).getByLabelText("Working week preview").querySelectorAll(".working")).toHaveLength(5);
     expect(within(calendarSummary).getByText(/Used for new people/u)).toBeTruthy();
@@ -218,18 +223,19 @@ describe("administration UI", () => {
     expect(onOpenCalendar).toHaveBeenLastCalledWith("C-26-111111");
     fireEvent.click(within(calendarSummary).getByRole("button", { name: "Open calendar" }));
     expect(onOpenCalendar).toHaveBeenLastCalledWith("C-26-111111");
-    fireEvent.click(within(repositoryCard).getByRole("button", { name: "Edit Repository settings" }));
-    const dialog = screen.getByRole("dialog", { name: "Edit: Repository settings" });
-    fireEvent.change(within(dialog).getByLabelText("Repository default calendar"), { target: { value: "C-26-222222" } });
-    const selectedPreview = dialog.querySelector<HTMLElement>(".repository-calendar-selection-preview")!;
+    expect(within(defaultCalendarCard).queryByLabelText("UI polling interval")).toBeNull();
+    fireEvent.click(within(defaultCalendarCard).getByRole("button", { name: "Edit Calendar for new people" }));
+    const dialog = screen.getByRole("dialog", { name: "Edit: Calendar for new people" });
+    fireEvent.change(within(dialog).getByLabelText("Default calendar"), { target: { value: "C-26-222222" } });
+    const selectedPreview = dialog.querySelector<HTMLElement>(".default-calendar-selection-preview")!;
     expect(within(selectedPreview).getByLabelText("Working week preview").querySelectorAll(".working")).toHaveLength(7);
     expect(within(selectedPreview).getByText("C-26-222222")).toBeTruthy();
     expect(selectedPreview.querySelector("time")?.getAttribute("datetime")).toBe("2026-08-17");
     fireEvent.click(within(selectedPreview).getByRole("button", { name: "Open selected calendar" }));
     expect(onOpenCalendar).toHaveBeenLastCalledWith("C-26-222222");
-    fireEvent.change(within(dialog).getByLabelText("UI polling interval"), { target: { value: "7" } });
+    expect(within(dialog).queryByLabelText("UI polling interval")).toBeNull();
     fireEvent.submit(within(dialog).getByRole("button", { name: "Save" }).closest("form")!);
-    await waitFor(() => expect(admin.repository?.document).toMatchObject({ default_calendar: "C-26-222222", ui_poll_interval_seconds: 7 }));
+    await waitFor(() => expect(admin.repository?.document).toMatchObject({ default_calendar: "C-26-222222", ui_poll_interval_seconds: 5 }));
   });
 
   it("opens the editor for a calendar selected by a deep link", async () => {
@@ -330,22 +336,22 @@ describe("administration UI", () => {
     await admin.createEntity("DRF-ADMIN", "calendars", "", { schema: "gitpm/calendar@1", id: "C-26-222222", name: "Replacement", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
     const confirmAction = vi.fn(() => true);
     const rendered = render(<AdminWorkspace api={api} confirmAction={confirmAction} draft={draft} role="Maintainer" locale="en" surface="calendar" onChanged={vi.fn(async () => undefined)} />);
-    await screen.findByText(/Default \(Repository default calendar\)/u);
+    await screen.findByText(/Default \(Default calendar\)/u);
     fireEvent.click(screen.getAllByRole("button", { name: "Edit calendar" })[0]!);
 
     const deleteButton = screen.getByRole("button", { name: "Delete" });
     expect(deleteButton.className).toContain("danger");
     expect((screen.getByRole("button", { name: "Archive" }) as HTMLButtonElement).disabled).toBe(true);
     expect((deleteButton as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByText(/Choose another repository default calendar/u)).toBeTruthy();
+    expect(screen.getByText(/Choose another calendar for new people/u)).toBeTruthy();
     fireEvent.click(deleteButton);
     expect(confirmAction).not.toHaveBeenCalled();
     expect(admin.entities.some((item) => item.document.id === "C-26-111111")).toBe(true);
 
-    rendered.rerender(<AdminWorkspace api={api} confirmAction={confirmAction} draft={draft} role="Maintainer" locale="en" surface="settings" onChanged={vi.fn(async () => undefined)} />);
-    const repositoryCard = (await screen.findByRole("heading", { name: "Repository settings" })).closest<HTMLElement>(".config-editor")!;
-    fireEvent.click(within(repositoryCard).getByRole("button", { name: "Edit Repository settings" }));
-    fireEvent.change(screen.getByLabelText("Repository default calendar"), { target: { value: "C-26-222222" } });
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Edit calendar: Default" })).getByRole("button", { name: "Cancel" }));
+    const defaultCalendarCard = (await screen.findByRole("heading", { name: "Calendar for new people" })).closest<HTMLElement>(".config-editor")!;
+    fireEvent.click(within(defaultCalendarCard).getByRole("button", { name: "Edit Calendar for new people" }));
+    fireEvent.change(screen.getByLabelText("Default calendar"), { target: { value: "C-26-222222" } });
     fireEvent.submit(screen.getByRole("button", { name: "Save" }).closest("form")!);
     await waitFor(() => expect(admin.repository?.document.default_calendar).toBe("C-26-222222"));
 
@@ -356,7 +362,7 @@ describe("administration UI", () => {
     expect((enabledDelete as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(enabledDelete);
     expect(confirmAction).toHaveBeenCalledWith("Delete Default permanently? This action cannot be undone.");
-    await waitFor(() => expect(screen.queryByText(/Default \(Repository default calendar\)/u)).toBeNull());
+    await waitFor(() => expect(screen.queryByText(/Default \(Default calendar\)/u)).toBeNull());
     expect(admin.entities.some((item) => item.document.id === "C-26-111111")).toBe(false);
   });
 

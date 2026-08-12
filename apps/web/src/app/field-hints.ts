@@ -49,7 +49,6 @@ const FIELD_HINT_KEYS = [
   ["admin.weekdays", "fieldHint.calendarWeekdays"],
   ["admin.holidays", "fieldHint.calendarHolidays"],
   ["admin.defaultCalendar", "fieldHint.defaultCalendar"],
-  ["admin.pollInterval", "fieldHint.pollInterval"],
   ["admin.color", "fieldHint.configColor"],
   ["admin.statusCategory", "fieldHint.statusCategory"],
   ["admin.newTechnicalId", "fieldHint.configSlug"],

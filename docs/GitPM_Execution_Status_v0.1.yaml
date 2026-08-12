@@ -116,7 +116,7 @@ stages:
     - file:evidence/P08B/vfy-020-http-deny.json
     - file:evidence/P08B/vfy-020-git-diff.txt
     - file:evidence/P08B/acceptance.md
-    notes: Maintainer administration UI and backend role enforcement for Person, Team, Calendar and repository settings are
+    notes: Maintainer administration UI and backend role enforcement for Person, Team, Calendar and portfolio settings are
       accepted.
   P09:
     status: done
