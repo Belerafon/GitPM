@@ -4,6 +4,12 @@ import { cleanupDrafts, createDraft, FIXTURE_PROJECT_ID } from "./helpers.js";
 const activeDraftStorageKey = "gitpm.activeWorkingCopy";
 const e2eDraftInitializedKey = "gitpm.e2e.activeWorkingCopyInitialized";
 const geometryDraftId = "DRF-GEO-OVERVIEW";
+const wrappingTaskId = "T-26-WRP001";
+const wrappingTaskTitle = "Task with multiple long assignees";
+const wrappingAssignees = [
+  { id: "U-26-WRP001", name: "Александр Александрович Александров" },
+  { id: "U-26-WRP002", name: "Екатерина Константиновна Соколова" },
+] as const;
 
 const viewports = [
   { name: "wide 1688x900", width: 1688, height: 900 },
@@ -18,7 +24,44 @@ test.describe("project overview geometry", () => {
   test.beforeAll(async () => {
     sharedRequest = await createRequestContext.newContext({ baseURL: "http://127.0.0.1:5174" });
     await cleanupDrafts(sharedRequest, "DRF-GEO-");
-    await createDraft(sharedRequest, geometryDraftId);
+    let fingerprint = (await createDraft(sharedRequest, geometryDraftId)).fingerprint;
+    const repositoryResponse = await sharedRequest.get(`/api/drafts/${geometryDraftId}/config/repository`);
+    expect(repositoryResponse.status(), await repositoryResponse.text()).toBe(200);
+    const repository = await repositoryResponse.json() as { readonly document: { readonly default_calendar: string } };
+    for (const person of wrappingAssignees) {
+      const response = await sharedRequest.post(`/api/drafts/${geometryDraftId}/entities/people`, {
+        data: {
+          expected_fingerprint: fingerprint,
+          document: {
+            schema: "gitpm/person@1",
+            id: person.id,
+            name: person.name,
+            weekly_capacity_hours: 40,
+            calendar: repository.document.default_calendar,
+            lifecycle: "active",
+          },
+        },
+      });
+      expect(response.status(), await response.text()).toBe(201);
+      fingerprint = (await response.json() as { readonly draft_fingerprint: string }).draft_fingerprint;
+    }
+    const taskResponse = await sharedRequest.post(`/api/drafts/${geometryDraftId}/entities/tasks`, {
+      data: {
+        expected_fingerprint: fingerprint,
+        document: {
+          schema: "gitpm/task@2",
+          id: wrappingTaskId,
+          project: FIXTURE_PROJECT_ID,
+          milestone: "M-26-461GDJ",
+          title: wrappingTaskTitle,
+          type: "task",
+          status: "backlog",
+          lifecycle: "active",
+          assignees: wrappingAssignees.map((person) => person.id),
+        },
+      },
+    });
+    expect(taskResponse.status(), await taskResponse.text()).toBe(201);
   });
 
   test.beforeEach(async ({ page }, testInfo) => {
@@ -122,6 +165,42 @@ test.describe("project overview geometry", () => {
         expect(incompleteColumns[index]!.left).toBeCloseTo(completeColumns[index]!.left, 0);
         expect(incompleteColumns[index]!.right).toBeCloseTo(completeColumns[index]!.right, 0);
       }
+
+      const wrappingTaskRow = page.locator(".project-plan-task-row").filter({ hasText: wrappingTaskTitle });
+      await expect(wrappingTaskRow).toBeVisible();
+      const assigneeCell = wrappingTaskRow.locator(".task-assignees");
+      await Promise.all(wrappingAssignees.map(async (person) => await expect(assigneeCell.getByText(person.name, { exact: true })).toBeVisible()));
+      const assigneeGeometry = await assigneeCell.evaluate((cell) => {
+        const bounds = cell.getBoundingClientRect();
+        const computed = getComputedStyle(cell);
+        const lineHeight = Number.parseFloat(computed.lineHeight);
+        const linkRects = Array.from(cell.querySelectorAll<HTMLElement>(".person-link"), (link) =>
+          Array.from(link.getClientRects(), (rect) => ({ left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom })),
+        ).flat();
+        return {
+          bounds: { left: bounds.left, right: bounds.right, top: bounds.top, bottom: bounds.bottom },
+          clientHeight: cell.clientHeight,
+          clientWidth: cell.clientWidth,
+          lineHeight,
+          overflow: computed.overflow,
+          scrollHeight: cell.scrollHeight,
+          scrollWidth: cell.scrollWidth,
+          whiteSpace: computed.whiteSpace,
+          linkRects,
+        };
+      });
+      expect(assigneeGeometry.whiteSpace).toBe("normal");
+      expect(assigneeGeometry.overflow).toBe("visible");
+      expect(assigneeGeometry.scrollWidth).toBeLessThanOrEqual(assigneeGeometry.clientWidth + 1);
+      expect(assigneeGeometry.scrollHeight).toBeLessThanOrEqual(assigneeGeometry.clientHeight + 1);
+      expect(assigneeGeometry.clientHeight).toBeGreaterThan(assigneeGeometry.lineHeight * 1.5);
+      for (const rect of assigneeGeometry.linkRects) {
+        expect(rect.left).toBeGreaterThanOrEqual(assigneeGeometry.bounds.left - 1);
+        expect(rect.right).toBeLessThanOrEqual(assigneeGeometry.bounds.right + 1);
+        expect(rect.top).toBeGreaterThanOrEqual(assigneeGeometry.bounds.top - 1);
+        expect(rect.bottom).toBeLessThanOrEqual(assigneeGeometry.bounds.bottom + 1);
+      }
+      if (viewport.width === 1688) expect(assigneeGeometry.clientWidth).toBeGreaterThan(160);
 
       if (viewport.width >= 900) {
         const firstTaskRow = page.locator(".project-plan-task-row").first();

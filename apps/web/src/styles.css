@@ -474,8 +474,8 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .project-plan-task-due, .project-plan-task-estimate, .project-plan-task-status { width: 100%; white-space: nowrap; }
 .project-plan-task-meta .plan-order-controls { white-space: nowrap; }
 .project-plan-task-status > select.inline-status-select { width: 100%; }
-.project-plan-task-meta .task-assignees { width: 100%; }
 .task-assignees { overflow: hidden; color: #315f50; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.project-plan-task-meta .task-assignees { width: 100%; overflow: visible; line-height: 1.35; overflow-wrap: anywhere; text-overflow: clip; white-space: normal; }
 .project-plan-empty-tasks { margin: 0 .8rem .75rem; color: #747a76; font-size: .82rem; }
 .project-plan-unassigned { border-style: dashed; background: #fffdf8; box-shadow: none; }
 .project-plan-unassigned > header { grid-template-columns: minmax(0, 1fr) auto; background: #fbf7ed; }

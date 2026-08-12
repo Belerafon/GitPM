@@ -1035,7 +1035,7 @@ function TaskRows({ roots, visibleIds, allTasks, projectId, query = {}, locale, 
   const reserveEstimate = taskFields.estimate && [...nodeById.values()].some((node) => node.estimate !== undefined);
   const taskListStyle = {
     "--project-plan-task-meta-columns": [
-      ...(taskFields.assignees ? ["minmax(5rem, 10rem)"] : []),
+      ...(taskFields.assignees ? ["minmax(8rem, clamp(10rem, 16vw, 16rem))"] : []),
       ...(reserveDue ? ["6.5rem"] : []),
       ...(reserveEstimate ? ["4.5rem"] : []),
       ...(taskFields.status ? ["7.5rem"] : []),
