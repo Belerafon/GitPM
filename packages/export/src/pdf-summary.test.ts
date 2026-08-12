@@ -57,7 +57,7 @@ describe("PDF summary pages", () => {
     expect(rendered).toContain("GitPM launch");
     expect(rendered).toContain("Core team");
     expect(rendered).toContain("40 h/week");
-    expect(rendered).toContain("Standard work week");
+    expect(rendered).toContain("Standard five-day week");
     expect(rendered).not.toContain("anna@example.test");
   });
 

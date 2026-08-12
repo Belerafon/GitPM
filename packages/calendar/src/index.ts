@@ -22,10 +22,18 @@ export interface AvailabilityException {
   readonly availability_percent: number;
 }
 
-export type CalendarPresetId = "standard-five-day" | "russia-2026-five-day" | "every-day";
+export type CalendarPresetId =
+  | "standard-five-day"
+  | "russia-2026-five-day"
+  | "united-states-federal-2026-2030-five-day"
+  | "every-day";
+
+export type CalendarPresetGroup = "custom" | "russia" | "united-states";
 
 export interface CalendarPreset extends CalendarDefinition {
   readonly id: CalendarPresetId;
+  readonly group: CalendarPresetGroup;
+  readonly default_name: string;
   readonly coverage?: {
     readonly start: string;
     readonly due: string;
@@ -36,11 +44,15 @@ export interface CalendarPreset extends CalendarDefinition {
 const CALENDAR_PRESETS_BY_ID: Readonly<Record<CalendarPresetId, CalendarPreset>> = {
   "standard-five-day": {
     id: "standard-five-day",
+    group: "custom",
+    default_name: "Standard five-day week",
     working_weekdays: [1, 2, 3, 4, 5],
     holidays: [],
   },
   "russia-2026-five-day": {
     id: "russia-2026-five-day",
+    group: "russia",
+    default_name: "Russia — five-day week (2026)",
     working_weekdays: [1, 2, 3, 4, 5],
     holidays: [
       "2026-01-01",
@@ -64,8 +76,78 @@ const CALENDAR_PRESETS_BY_ID: Readonly<Record<CalendarPresetId, CalendarPreset>>
     },
     source_url: "https://government.ru/news/56309/",
   },
+  "united-states-federal-2026-2030-five-day": {
+    id: "united-states-federal-2026-2030-five-day",
+    group: "united-states",
+    default_name: "United States — federal holidays (2026–2030)",
+    working_weekdays: [1, 2, 3, 4, 5],
+    holidays: [
+      "2026-01-01",
+      "2026-01-19",
+      "2026-02-16",
+      "2026-05-25",
+      "2026-06-19",
+      "2026-07-03",
+      "2026-09-07",
+      "2026-10-12",
+      "2026-11-11",
+      "2026-11-26",
+      "2026-12-25",
+      "2027-01-01",
+      "2027-01-18",
+      "2027-02-15",
+      "2027-05-31",
+      "2027-06-18",
+      "2027-07-05",
+      "2027-09-06",
+      "2027-10-11",
+      "2027-11-11",
+      "2027-11-25",
+      "2027-12-24",
+      "2027-12-31",
+      "2028-01-17",
+      "2028-02-21",
+      "2028-05-29",
+      "2028-06-19",
+      "2028-07-04",
+      "2028-09-04",
+      "2028-10-09",
+      "2028-11-10",
+      "2028-11-23",
+      "2028-12-25",
+      "2029-01-01",
+      "2029-01-15",
+      "2029-02-19",
+      "2029-05-28",
+      "2029-06-19",
+      "2029-07-04",
+      "2029-09-03",
+      "2029-10-08",
+      "2029-11-12",
+      "2029-11-22",
+      "2029-12-25",
+      "2030-01-01",
+      "2030-01-21",
+      "2030-02-18",
+      "2030-05-27",
+      "2030-06-19",
+      "2030-07-04",
+      "2030-09-02",
+      "2030-10-14",
+      "2030-11-11",
+      "2030-11-28",
+      "2030-12-25",
+    ],
+    coverage: {
+      start: "2026-01-01",
+      due: "2030-12-31",
+    },
+    source_url: "https://www.opm.gov/policy-data-oversight/pay-leave/federal-holidays/",
+  },
   "every-day": {
     id: "every-day",
+    group: "custom",
+    default_name: "Every day",
     working_weekdays: [1, 2, 3, 4, 5, 6, 7],
     holidays: [],
   },
@@ -73,8 +155,10 @@ const CALENDAR_PRESETS_BY_ID: Readonly<Record<CalendarPresetId, CalendarPreset>>
 
 export const CALENDAR_PRESETS: readonly CalendarPreset[] = Object.values(CALENDAR_PRESETS_BY_ID);
 
-export function calendarPreset(id: CalendarPresetId): CalendarPreset {
-  return CALENDAR_PRESETS_BY_ID[id];
+export function calendarPreset(id: string): CalendarPreset {
+  const preset = CALENDAR_PRESETS_BY_ID[id as CalendarPresetId];
+  if (preset === undefined) throw new CalendarError("CALENDAR_PRESET_UNKNOWN", `Unknown calendar preset: ${id}`);
+  return preset;
 }
 
 export function parseDateOnly(value: string): Date {

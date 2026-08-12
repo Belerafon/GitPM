@@ -254,6 +254,9 @@ All commands accept \`--json\`; use it for automation. Direct-mode commands do n
   ahead/behind versus origin.
 - \`gitpm entity create --type <type> --file <file> [--project <id>] [--allow-delete]\` creates an entity from a
   YAML mapping, generating a missing ID and applying documented defaults.
+- \`gitpm calendar presets\` lists built-in editable schedules and their coverage;
+  \`gitpm calendar create --preset <id>\` creates a Calendar and
+  \`gitpm calendar apply --preset <id> --id <calendar-id>\` replaces an existing Calendar schedule.
 - \`gitpm entity update --type <type> --id <entity-id> [--file <yaml-patch>]
   [--set <field>=<yaml-value>]... [--unset <field>]... [--project <id>] [--allow-delete]\` transactionally patches
   any supported entity type. Inline values use YAML scalar/collection types; \`--unset\` removes

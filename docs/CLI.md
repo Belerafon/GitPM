@@ -6,7 +6,7 @@ CLI живёт в `apps/cli` и собирается в `apps/cli/dist/index.js`
 ## Команды
 
 ```
-gitpm init [path]                    Создать skeleton схемы v2 (schedules, schedule-tracks, work-categories) в path (по умолчанию cwd)
+gitpm init [path] [--calendar-preset <id>] Создать skeleton схемы v2 в path; по умолчанию используется нейтральная standard-five-day
 gitpm status [--draft <id>]
 gitpm draft list [--owner <id>]
 gitpm draft create|open|status|acknowledge|close|reopen --draft <id> [--owner <id>]
@@ -21,6 +21,9 @@ gitpm entity delete [--draft <id>] --type <type> --id <entity-id> [--unlink-refe
 gitpm entity archive [--draft <id>] --type <type> --id <entity-id> [--include-tasks] [--project <id>] [--allow-delete]
 gitpm entity restore [--draft <id>] --type <type> --id <entity-id> [--include-tasks|--restore-milestone] [--project <id>] [--allow-delete]
 gitpm entity move [--draft <id>] --type task --id <entity-id> --to-project <id> [--to-milestone <id>] [--to-parent <task-id>] [--allow-delete] [--project <id>]
+gitpm calendar presets [--preset <id>]
+gitpm calendar create [--draft <id>] --preset <id> [--name <name>] [--id <calendar-id>]
+gitpm calendar apply [--draft <id>] --preset <id> --id <calendar-id> [--name <name>]
 gitpm schedule set [--draft <id>] --type project|task|milestone --id <entity-id> --track <slug> [--start <yyyy-mm-dd>] [--finish <yyyy-mm-dd>] [--effort-hours <n>] [--depends-on <task-id>]... [--clear-start] [--clear-finish] [--clear-effort] [--clear-dependencies] [--project <id>] [--allow-delete]
 gitpm planning show [--draft <id>] --project <id>
 gitpm planning set [--draft <id>] --project <id> [--primary-track <slug>] [--workload-track <slug>] [--comparison-track <slug>|--clear-comparison-track] [--enabled-track <slug>]... [--dashboard-track <slug>]... [--allow-delete]
@@ -82,6 +85,14 @@ repository schema, repository ZIP — без `.git` по умолчанию ил
 материализуется из `.gitpm/repository.yaml/default_calendar`; `weekly_capacity_hours`
 остаётся обязательным явным значением. Сохранённый repository YAML всегда содержит полный
 канонический документ.
+
+`calendar presets` показывает встроенный каталог, границы покрытия, число рабочих дней и
+официальный источник. `calendar create --preset` материализует выбранную предустановку как
+обычную редактируемую Calendar entity. `calendar apply` заменяет у существующего Calendar
+`working_weekdays` и `holidays`; имя меняется только при явном `--name`. Обе мутации проходят
+через тот же optimistic fingerprint, scope и полную repository validation, что generic
+`entity create/update`. `gitpm init` без флага создаёт нейтральную пятидневку без праздников;
+`--calendar-preset` позволяет сразу выбрать официальный календарь из каталога.
 
 Availability Event создаётся тем же generic-контуром, например
 `gitpm entity create --type availability-event --file absence.yaml`. Коллекция

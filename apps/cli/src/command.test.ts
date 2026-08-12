@@ -158,7 +158,7 @@ describe("CLI P02 commands", () => {
 
     const root = await fixture();
     const calendar = path.join(root, "calendars", "C-26-QD7FJ4.yaml");
-    await writeFile(calendar, (await readFile(calendar, "utf8")).replace("2026-01-01", "2026-02-30"), "utf8");
+    await writeFile(calendar, (await readFile(calendar, "utf8")).replace("holidays: []", "holidays:\n  - 2026-02-30"), "utf8");
     const invalid = await run(["validate", "--json", "--root", root]);
     expect(invalid.exitCode).toBe(1);
     expect(JSON.parse(invalid.output).errors).toEqual(expect.arrayContaining([expect.objectContaining({ code: "DATE_INVALID" })]));
@@ -258,6 +258,16 @@ describe("CLI P12 agent commands", () => {
       path: "person/U-26-KB9RXB.yaml",
       document: { id: "U-26-KB9RXB", email: "new-elena@example.test", weekly_capacity_hours: 36, labels: ["backend", "urgent"] },
     });
+    expect(JSON.parse((await run(["calendar", "create", "--draft", "DRF-AGENT", "--preset", "russia-2026-five-day", "--json"], process.cwd(), { agent })).output)).toMatchObject({
+      ok: true,
+      preset: "russia-2026-five-day",
+      document: { schema: "gitpm/calendar@1", holidays: expect.arrayContaining(["2026-01-09", "2026-12-31"]) },
+    });
+    expect(JSON.parse((await run(["calendar", "apply", "--draft", "DRF-AGENT", "--preset", "standard-five-day", "--id", "C-26-QD7FJ4", "--json"], process.cwd(), { agent })).output)).toMatchObject({
+      ok: true,
+      preset: "standard-five-day",
+      document: { id: "C-26-QD7FJ4", working_weekdays: [1, 2, 3, 4, 5], holidays: [] },
+    });
     expect(JSON.parse((await run(["diff", "--semantic", "--draft", "DRF-AGENT", "--project", "P-26-111111", "--json"], process.cwd(), { agent })).output)).toMatchObject({ ok: true, counts: { updated: 1 } });
     expect(JSON.parse((await run(["commit", "--all", "-m", "Agent update", "--draft", "DRF-AGENT", "--project", "P-26-111111", "--json"], process.cwd(), { agent })).output)).toMatchObject({ ok: true, commit: "c".repeat(40) });
     expect(JSON.parse((await run(["push", "--draft", "DRF-AGENT", "--json"], process.cwd(), { agent })).output)).toMatchObject({ ok: true, branch: metadata.branch });
@@ -315,6 +325,43 @@ describe("CLI P12 agent commands", () => {
   });
 });
 
+describe("CLI calendar presets", () => {
+  it("lists official coverage without requiring a repository runtime", async () => {
+    const result = await run(["calendar", "presets", "--json"]);
+    expect(result.exitCode).toBe(0);
+    expect(JSON.parse(result.output)).toMatchObject({
+      ok: true,
+      items: expect.arrayContaining([
+        expect.objectContaining({ id: "standard-five-day", group: "custom", holidays: [] }),
+        expect.objectContaining({ id: "russia-2026-five-day", coverage: { start: "2026-01-01", due: "2026-12-31" }, working_days: 247 }),
+        expect.objectContaining({ id: "united-states-federal-2026-2030-five-day", coverage: { start: "2026-01-01", due: "2030-12-31" }, working_days: 1249 }),
+      ]),
+    });
+    const unknown = await run(["calendar", "presets", "--preset", "unknown", "--json"]);
+    expect(JSON.parse(unknown.output)).toMatchObject({ ok: false, code: "CALENDAR_PRESET_UNKNOWN" });
+  });
+
+  it("creates and reapplies presets through the regular entity mutation boundary", async () => {
+    const { direct } = await directFixture();
+    const created = await run(["calendar", "create", "--preset", "united-states-federal-2026-2030-five-day", "--id", "C-26-FDR930", "--name", "US operations", "--json"], process.cwd(), { direct });
+    expect(created.exitCode, created.output).toBe(0);
+    expect(JSON.parse(created.output)).toMatchObject({
+      ok: true,
+      preset: "united-states-federal-2026-2030-five-day",
+      document: { id: "C-26-FDR930", name: "US operations", holidays: expect.arrayContaining(["2026-07-03", "2030-12-25"]) },
+    });
+    expect(JSON.parse(created.output).document.holidays).toHaveLength(55);
+
+    const applied = await run(["calendar", "apply", "--preset", "russia-2026-five-day", "--id", "C-26-FDR930", "--json"], process.cwd(), { direct });
+    expect(JSON.parse(applied.output)).toMatchObject({
+      ok: true,
+      preset: "russia-2026-five-day",
+      document: { id: "C-26-FDR930", name: "US operations", holidays: expect.arrayContaining(["2026-01-09", "2026-12-31"]) },
+    });
+    expect(JSON.parse(applied.output).document.holidays).toHaveLength(14);
+  });
+});
+
 describe("CLI init command", () => {
   it("creates a valid schema v1 skeleton in an empty directory", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "gitpm-init-"));
@@ -346,8 +393,25 @@ describe("CLI init command", () => {
     expect(await git(target, "status", "--porcelain")).toBe("");
     expect(await readFile(path.join(target, ".gitpm", "repository.yaml"), "utf8")).toContain("- .ignore");
     expect(await readFile(path.join(target, ".gitpm", "repository.yaml"), "utf8")).toContain("default_calendar: C-27-KKKKKK");
-    expect(await readFile(path.join(target, "calendars", "C-27-KKKKKK.yaml"), "utf8")).toContain("id: C-27-KKKKKK");
+    const defaultCalendar = await readFile(path.join(target, "calendars", "C-27-KKKKKK.yaml"), "utf8");
+    expect(defaultCalendar).toContain("id: C-27-KKKKKK");
+    expect(defaultCalendar).toContain("name: Standard five-day week");
+    expect(defaultCalendar).toContain("holidays: []");
     await expect(readFile(path.join(target, "calendars", "C-26-WRKDAY.yaml"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("materializes a selected official calendar preset", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "gitpm-init-calendar-"));
+    removeAfterTest(root);
+    const target = path.join(root, "portfolio");
+    const result = await run(["init", target, "--calendar-preset", "united-states-federal-2026-2030-five-day", "--json"], root, {
+      init: { now: () => new Date("2027-01-02T03:04:05Z"), randomIndex: () => 19 },
+    });
+    expect(JSON.parse(result.output)).toMatchObject({ ok: true, calendar_preset: "united-states-federal-2026-2030-five-day" });
+    const calendar = await readFile(path.join(target, "calendars", "C-27-KKKKKK.yaml"), "utf8");
+    expect(calendar).toContain("name: United States — federal holidays (2026–2030)");
+    expect(calendar).toContain("- 2027-12-31");
+    expect(calendar).toContain("- 2030-12-25");
   });
 
   it("lets ripgrep discover uploads/ via .ignore when rg is available", async () => {

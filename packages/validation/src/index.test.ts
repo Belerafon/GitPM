@@ -199,7 +199,7 @@ describe("repository validation", () => {
 
   it("reports schema fields and rejects invalid or duplicate Person email", async () => {
     const missingCalendar = await fixture();
-    await replace(missingCalendar, "people/U-26-15QJP8.yaml", "calendar: C-26-QD7FJ4 # calendar: Standard work week\n", "");
+    await replace(missingCalendar, "people/U-26-15QJP8.yaml", "calendar: C-26-QD7FJ4 # calendar: Standard five-day week\n", "");
     let report = await validateRepository(missingCalendar);
     expect(report.errors).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: "SCHEMA_INVALID", field: "calendar", schema_keyword: "required", expected: expect.stringContaining("Calendar ID") }),
@@ -242,7 +242,7 @@ describe("repository validation", () => {
 
   it("rejects impossible calendar dates", async () => {
     const root = await fixture();
-    await replace(root, "calendars/C-26-QD7FJ4.yaml", "2026-01-01", "2026-02-30");
+    await replace(root, "calendars/C-26-QD7FJ4.yaml", "holidays: []", "holidays:\n  - 2026-02-30");
     const report = await validateRepository(root);
     expect(report.errors).toEqual(expect.arrayContaining([expect.objectContaining({ code: "DATE_INVALID" })]));
   });

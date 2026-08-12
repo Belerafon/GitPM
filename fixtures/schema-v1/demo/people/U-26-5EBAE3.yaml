@@ -2,6 +2,6 @@ schema: gitpm/person@1
 id: U-26-5EBAE3 # person: Anna Petrova
 name: Anna Petrova
 weekly_capacity_hours: 40
-calendar: C-26-QD7FJ4 # calendar: Standard work week
+calendar: C-26-QD7FJ4 # calendar: Standard five-day week
 lifecycle: active
 email: anna@example.test

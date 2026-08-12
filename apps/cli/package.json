@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@gitpm/agent": "workspace:*",
+    "@gitpm/calendar": "workspace:*",
     "@gitpm/contracts": "workspace:*",
     "@gitpm/changes": "workspace:*",
     "@gitpm/drafts": "workspace:*",

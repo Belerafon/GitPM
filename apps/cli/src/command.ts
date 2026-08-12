@@ -4,9 +4,10 @@ import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { DOCUMENT_SCHEMA_FILES, ENTITY_TYPE_SCHEMAS } from "@gitpm/contracts";
+import { CALENDAR_PRESETS, calendarPreset, workingDatesBetween } from "@gitpm/calendar";
+import { DOCUMENT_SCHEMA_FILES, ENTITY_TYPE_SCHEMAS, type GitPmDocument } from "@gitpm/contracts";
 import { ENTITY_ID_PREFIX, GITPM_VERSION, newEntityId } from "@gitpm/shared";
-import { formatYamlText, parseYamlDocument, parseYamlValue, referenceLabelsForDocuments, RepositoryFormatError } from "@gitpm/repository-format";
+import { formatYamlDocument, formatYamlText, parseYamlDocument, parseYamlValue, referenceLabelsForDocuments, RepositoryFormatError } from "@gitpm/repository-format";
 import { discoverRepositoryFiles, validateRepository } from "@gitpm/validation";
 import { atomicWriteDomainFile } from "@gitpm/security";
 import type { AgentScope, AgentScopeReport, AgentWorkflow } from "@gitpm/agent";
@@ -122,7 +123,7 @@ function render(json: boolean, payload: Record<string, unknown>, human: string):
 }
 
 const SCHEMA_DIRECTORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../schemas/v1");
-const ROOT_USAGE = "Usage: gitpm <init|status|draft|entity|schedule|planning|workload|comment|notification|time-entry|config|schema|format|validate|diff --semantic|changes|history|export|commit --all|push|mr|doctor> [options]";
+const ROOT_USAGE = "Usage: gitpm <init|status|draft|entity|calendar|schedule|planning|workload|comment|notification|time-entry|config|schema|format|validate|diff --semantic|changes|history|export|commit --all|push|mr|doctor> [options]";
 
 const commandHelp: Readonly<Record<string, string>> = {
   root: [
@@ -158,6 +159,23 @@ const commandHelp: Readonly<Record<string, string>> = {
     "restore sets an archived entity back to active after validating that its lifecycle references are active.",
     "move relocates a task (and its comments) to another project and optional milestone.",
   ].join("\n"),
+  calendar: [
+    "Usage:",
+    "  gitpm calendar presets [--preset <id>] [--json]",
+    "  gitpm calendar create [--draft <id>] --preset <id> [--name <name>] [--id <calendar-id>] [--json]",
+    "  gitpm calendar apply [--draft <id>] --preset <id> --id <calendar-id> [--name <name>] [--json]",
+    "",
+    "presets lists the built-in, editable schedules and their coverage.",
+    "create materializes a preset as a normal Calendar entity.",
+    "apply replaces an existing Calendar's working weekdays and non-working dates; --name also renames it.",
+  ].join("\n"),
+  init: [
+    "Usage:",
+    "  gitpm init [path] [--calendar-preset <id>] [--json]",
+    "",
+    "The default standard-five-day preset has no public holidays.",
+    "Run 'gitpm calendar presets' to inspect official built-in schedules and their coverage.",
+  ].join("\n"),
   schema: [
     "Usage:",
     "  gitpm schema list [--json]",
@@ -186,7 +204,6 @@ const commandHelp: Readonly<Record<string, string>> = {
   ].join("\n"),
   push: "Usage: gitpm push [--draft <id>] [--json]",
   mr: "Usage: gitpm mr create|status --draft <id> --owner <id> [--title <title>] [--description <text>] [--json]",
-  init: "Usage: gitpm init [path] [--json]",
   doctor: "Usage: gitpm doctor [--json]",
   comment: [
     "Usage:",
@@ -281,6 +298,12 @@ function commandArgumentSpec(command: string | undefined, args: readonly string[
     if (action === "move") return { values: [...common, "--id", "--to-project", "--to-milestone", "--to-parent", "--project"], booleans: ["--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
     return { booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
   }
+  if (command === "calendar") {
+    if (action === "presets") return { values: ["--preset"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
+    if (action === "create") return { values: ["--draft", "--preset", "--name", "--id"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
+    if (action === "apply") return { values: ["--draft", "--preset", "--name", "--id"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
+    return { booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
+  }
   if (command === "schema") return action === "show"
     ? { booleans: ["--example", "--json"], minPositionals: 2, maxPositionals: 2 }
     : { booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
@@ -305,7 +328,7 @@ function commandArgumentSpec(command: string | undefined, args: readonly string[
   if (command === "changes") return { values: ["--draft", "--project", "--path", "--diff-token", "--hunk", "--confirm"], booleans: ["--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
   if (command === "history") return { values: ["--draft", "--commit", "--path", "--limit", "--new-draft", "--owner", "--message"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
   if (command === "doctor") return { values: ["--root"], booleans: ["--json"], minPositionals: 0, maxPositionals: 0 };
-  if (command === "init") return { booleans: ["--json"], minPositionals: 0, maxPositionals: 1 };
+  if (command === "init") return { values: ["--calendar-preset"], booleans: ["--json"], minPositionals: 0, maxPositionals: 1 };
   return undefined;
 }
 
@@ -384,7 +407,7 @@ const schemaExamples: Readonly<Record<string, string>> = {
     "email: ada@example.test", "",
   ].join("\n"),
   calendar: [
-    "schema: gitpm/calendar@1", "id: C-26-QD7FJ4", "name: Standard work week",
+    "schema: gitpm/calendar@1", "id: C-26-QD7FJ4", "name: Standard five-day week",
     "working_weekdays: [1, 2, 3, 4, 5]", "holidays: []", "lifecycle: active", "",
   ].join("\n"),
 };
@@ -583,6 +606,71 @@ function entitySummary(document: Readonly<Record<string, unknown>>): Record<stri
   if (typeof document.name === "string") summary.name = document.name;
   if (typeof document.title === "string") summary.title = document.title;
   return summary;
+}
+
+function calendarPresetPayload(preset: (typeof CALENDAR_PRESETS)[number]): Record<string, unknown> {
+  const workingDays = preset.coverage === undefined
+    ? undefined
+    : workingDatesBetween(preset.coverage.start, preset.coverage.due, preset).length;
+  return {
+    id: preset.id,
+    group: preset.group,
+    default_name: preset.default_name,
+    working_weekdays: preset.working_weekdays,
+    holidays: preset.holidays,
+    ...(preset.coverage === undefined ? {} : { coverage: preset.coverage, working_days: workingDays }),
+    ...(preset.source_url === undefined ? {} : { source_url: preset.source_url }),
+  };
+}
+
+async function runCalendar(args: readonly string[], dependencies: CliDependencies): Promise<CliResult> {
+  const action = args[0];
+  const json = args.includes("--json");
+  if (action === "presets") {
+    const requested = flagValue(args, "--preset");
+    const presets = requested === undefined ? CALENDAR_PRESETS : [calendarPreset(requested)];
+    const items = presets.map(calendarPresetPayload);
+    const human = presets.map((preset) => {
+      const coverage = preset.coverage === undefined ? "custom coverage" : `${preset.coverage.start}..${preset.coverage.due}`;
+      return `${preset.id}\t${preset.default_name}\t${coverage}\t${preset.holidays.length} non-working date(s)`;
+    }).join("\n");
+    return { exitCode: 0, output: render(json, { ok: true, code: "OK", items }, human) };
+  }
+  if (action !== "create" && action !== "apply") {
+    throw new RepositoryFormatError("CLI_USAGE", "calendar requires presets, create or apply");
+  }
+  const preset = calendarPreset(required(flagValue(args, "--preset"), "--preset"));
+  const draftId = flagValue(args, "--draft");
+  const agent = draftId === undefined ? undefined : requireAgent(dependencies);
+  const direct = agent === undefined ? requireDirect(dependencies) : undefined;
+  const name = flagValue(args, "--name");
+  if (action === "create") {
+    if (agent !== undefined && agent.createEntity === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Calendar creation is unavailable");
+    const id = flagValue(args, "--id");
+    const document = {
+      schema: "gitpm/calendar@1",
+      ...(id === undefined ? {} : { id }),
+      name: name ?? preset.default_name,
+      working_weekdays: [...preset.working_weekdays],
+      holidays: [...preset.holidays],
+      lifecycle: "active",
+    } as GitPmDocument;
+    const created = agent?.createEntity === undefined
+      ? await direct!.createEntity(document, agentScope(args), "calendar")
+      : await agent.createEntity(required(draftId, "--draft"), document, agentScope(args), "calendar");
+    return { exitCode: 0, output: render(json, { ok: true, code: "OK", preset: preset.id, ...created }, `Created ${created.path} from ${preset.id}`) };
+  }
+  if (agent !== undefined && agent.updateEntity === undefined) throw new RepositoryFormatError("CLI_AGENT_CONFIGURATION_REQUIRED", "Calendar update is unavailable");
+  const id = required(flagValue(args, "--id"), "--id");
+  const patch = {
+    ...(name === undefined ? {} : { name }),
+    working_weekdays: [...preset.working_weekdays],
+    holidays: [...preset.holidays],
+  };
+  const updated = agent?.updateEntity === undefined
+    ? await direct!.updateEntity(patch, "calendar", id, agentScope(args))
+    : await agent.updateEntity(required(draftId, "--draft"), patch, "calendar", id, agentScope(args));
+  return { exitCode: 0, output: render(json, { ok: true, code: "OK", preset: preset.id, ...updated }, `Applied ${preset.id} to ${updated.path}`) };
 }
 
 async function runEntity(args: readonly string[], cwd: string, dependencies: CliDependencies): Promise<CliResult> {
@@ -1250,9 +1338,9 @@ async function runDoctor(args: readonly string[], cwd: string): Promise<CliResul
 
 const execFileAsync = promisify(execFile);
 
-const initRepositoryYaml = (calendarId: string) => `schema: gitpm/repository@1
+const initRepositoryYaml = (calendarId: string, calendarName: string) => `schema: gitpm/repository@1
 default_branch: main
-default_calendar: ${calendarId} # calendar: Standard work week
+default_calendar: ${calendarId} # calendar: ${calendarName}
 allowed_top_level_files:
   - README.md
   - .gitignore
@@ -1333,18 +1421,14 @@ issue_types:
     active: true
 `;
 
-const initCalendarYaml = (calendarId: string) => `schema: gitpm/calendar@1
-id: ${calendarId} # calendar: Standard work week
-name: Standard work week
-working_weekdays:
-  - 1
-  - 2
-  - 3
-  - 4
-  - 5
-holidays: []
-lifecycle: active
-`;
+const initCalendarYaml = (calendarId: string, preset: (typeof CALENDAR_PRESETS)[number]) => formatYamlDocument({
+  schema: "gitpm/calendar@1",
+  id: calendarId,
+  name: preset.default_name,
+  working_weekdays: [...preset.working_weekdays],
+  holidays: [...preset.holidays],
+  lifecycle: "active",
+} as GitPmDocument);
 
 const INIT_README_MD = `# Project portfolio managed by GitPM
 
@@ -1382,8 +1466,9 @@ async function directoryIsEmpty(directory: string): Promise<boolean> {
 }
 
 async function runInit(args: readonly string[], cwd: string, dependencies: NonNullable<CliDependencies["init"]> = {}): Promise<CliResult> {
-  const parsed = options(args, cwd);
-  const target = parsed.rest[0] !== undefined ? path.resolve(cwd, parsed.rest[0]) : path.resolve(cwd);
+  const preset = calendarPreset(flagValue(args, "--calendar-preset") ?? "standard-five-day");
+  const positionals = args.filter((argument, index) => !argument.startsWith("-") && args[index - 1] !== "--calendar-preset");
+  const target = positionals[0] !== undefined ? path.resolve(cwd, positionals[0]) : path.resolve(cwd);
   const calendarId = newEntityId(
     ENTITY_ID_PREFIX.calendar,
     dependencies.randomIndex,
@@ -1401,12 +1486,12 @@ async function runInit(args: readonly string[], cwd: string, dependencies: NonNu
     await mkdir(directory, { recursive: true });
     await writeFile(path.join(directory, ".gitkeep"), "", "utf8");
   }
-  await writeFile(path.join(target, ".gitpm", "repository.yaml"), initRepositoryYaml(calendarId), "utf8");
+  await writeFile(path.join(target, ".gitpm", "repository.yaml"), initRepositoryYaml(calendarId, preset.default_name), "utf8");
   await writeFile(path.join(target, ".gitpm", "statuses.yaml"), INIT_STATUSES_YAML, "utf8");
   await writeFile(path.join(target, ".gitpm", "issue-types.yaml"), INIT_ISSUE_TYPES_YAML, "utf8");
   await writeFile(path.join(target, ".gitpm", "schedule-tracks.yaml"), INIT_SCHEDULE_TRACKS_YAML, "utf8");
   await writeFile(path.join(target, ".gitpm", "work-categories.yaml"), INIT_WORK_CATEGORIES_YAML, "utf8");
-  await writeFile(path.join(target, "calendars", `${calendarId}.yaml`), initCalendarYaml(calendarId), "utf8");
+  await writeFile(path.join(target, "calendars", `${calendarId}.yaml`), initCalendarYaml(calendarId, preset), "utf8");
   await writeFile(path.join(target, "README.md"), INIT_README_MD, "utf8");
   await writeFile(path.join(target, ".gitignore"), INIT_GITIGNORE, "utf8");
   await writeFile(path.join(target, ".ignore"), INIT_IGNORE, "utf8");
@@ -1431,7 +1516,7 @@ async function runInit(args: readonly string[], cwd: string, dependencies: NonNu
   const { stdout: commit } = await execFileAsync("git", ["-C", target, "rev-parse", "HEAD"], { windowsHide: true });
   return {
     exitCode: 0,
-    output: render(parsed.json, { ok: true, code: "OK", path: target, commit: commit.trim() }, `Initialised GitPM repository at ${target} (${commit.trim()})`),
+    output: render(args.includes("--json"), { ok: true, code: "OK", path: target, commit: commit.trim(), calendar_preset: preset.id }, `Initialised GitPM repository at ${target} with ${preset.id} (${commit.trim()})`),
   };
 }
 
@@ -1522,6 +1607,7 @@ export async function run(args: readonly string[], cwd = process.cwd(), dependen
     }
     if (command === "draft") return await runDraft(commandArgs, dependencies);
     if (command === "entity") return await runEntity(commandArgs, cwd, dependencies);
+    if (command === "calendar") return await runCalendar(commandArgs, dependencies);
     if (command === "schema") return await runSchema(commandArgs);
     if (command === "format" && hasDraft) { const context = await draftRoot(commandArgs, dependencies); return await runFormat([...commandArgs, "--root", context.root], cwd, context.scope); }
     if (command === "format" && direct !== undefined) {

@@ -39,6 +39,7 @@ describe("date-only calendar", () => {
     expect(CALENDAR_PRESETS.map((preset) => preset.id)).toEqual([
       "standard-five-day",
       "russia-2026-five-day",
+      "united-states-federal-2026-2030-five-day",
       "every-day",
     ]);
     for (const preset of CALENDAR_PRESETS) {
@@ -53,5 +54,21 @@ describe("date-only calendar", () => {
     expect(isWorkingDate("2026-01-09", preset)).toBe(false);
     expect(isWorkingDate("2026-01-12", preset)).toBe(true);
     expect(isWorkingDate("2026-12-31", preset)).toBe(false);
+  });
+
+  it("matches the published United States federal calendars through 2030", () => {
+    const preset = calendarPreset("united-states-federal-2026-2030-five-day");
+    expect(preset.holidays).toHaveLength(55);
+    expect(workingDatesBetween("2026-01-01", "2030-12-31", preset)).toHaveLength(1249);
+    expect(isWorkingDate("2026-07-03", preset)).toBe(false);
+    expect(isWorkingDate("2027-12-31", preset)).toBe(false);
+    expect(isWorkingDate("2028-01-03", preset)).toBe(true);
+    expect(isWorkingDate("2030-11-28", preset)).toBe(false);
+  });
+
+  it("rejects unknown presets with a stable code", () => {
+    expect(() => calendarPreset("not-a-preset")).toThrowError(
+      expect.objectContaining<Partial<CalendarError>>({ code: "CALENDAR_PRESET_UNKNOWN" }),
+    );
   });
 });

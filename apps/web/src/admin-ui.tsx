@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type FormEvent } from "react";
-import { CALENDAR_PRESETS, calendarPreset, workingDatesBetween, type CalendarPresetId } from "@gitpm/calendar";
+import { CALENDAR_PRESETS, calendarPreset, workingDatesBetween, type CalendarPreset, type CalendarPresetGroup, type CalendarPresetId } from "@gitpm/calendar";
 import { resolvePlanning, type ScheduleTracksConfig, type TrackDefinition } from "@gitpm/scheduling";
 import { activeProjectIds, ENTITY_ID_PREFIX, isOperationalTask, newUniqueEntityId } from "@gitpm/shared";
 import { formatApiError, type GitPmApi } from "./api.js";
@@ -26,7 +26,13 @@ const calendarDates = (data: FormData) => data.getAll("holidays").map(String).fi
 const CALENDAR_PRESET_MESSAGES: Readonly<Record<CalendarPresetId, { readonly name: MessageKey; readonly description: MessageKey }>> = {
   "standard-five-day": { name: "admin.presetStandardName", description: "admin.presetStandardDescription" },
   "russia-2026-five-day": { name: "admin.presetRussia2026Name", description: "admin.presetRussia2026Description" },
+  "united-states-federal-2026-2030-five-day": { name: "admin.presetUnitedStatesFederalName", description: "admin.presetUnitedStatesFederalDescription" },
   "every-day": { name: "admin.presetEveryDayName", description: "admin.presetEveryDayDescription" },
+};
+const CALENDAR_PRESET_GROUP_MESSAGES: Readonly<Record<CalendarPresetGroup, MessageKey>> = {
+  custom: "admin.presetGroupCustom",
+  russia: "admin.presetGroupRussia",
+  "united-states": "admin.presetGroupUnitedStates",
 };
 
 export function AdminWorkspace({ api, draft, role, locale, surface, confirmAction = () => true, initialCalendarId, onOpenCalendar, onOpenPerson, onOpenProject, onOpenView, onChanged }: { readonly api: GitPmApi; readonly draft: DraftStatus; readonly role: GitPmRole; readonly locale: Locale; readonly surface: AdminSurface; readonly confirmAction?: (message: string) => boolean; readonly initialCalendarId?: string; readonly onOpenCalendar?: (calendarId: string) => void; readonly onOpenPerson?: (personId: string) => void; readonly onOpenProject?: (projectId: string) => void; readonly onOpenView?: (projectId: string, viewId: string) => void; readonly onChanged: () => Promise<void> }) {
@@ -156,22 +162,27 @@ function CalendarPreview({ className = "", entity, locale, t }: { readonly class
 function CalendarEditor(props: EditorProps & { readonly locale: Locale; readonly defaultCalendarId?: string; readonly initialOpen?: boolean }) {
   const { api, draft, entity, fingerprint, readOnly, t, locale, mutate, remove, confirmDelete, defaultCalendarId, initialOpen = false } = props;
   const [open, setOpen] = useState(false);
+  const [presetId, setPresetId] = useState<CalendarPresetId>("standard-five-day");
+  const [appliedPreset, setAppliedPreset] = useState<CalendarPreset | null>(null);
+  const [scheduleVersion, setScheduleVersion] = useState(0);
   const name = text(entity.document, "name");
   const weekdays = numbers(entity.document, "working_weekdays");
   useEffect(() => { if (initialOpen) setOpen(true); }, [initialOpen]);
   const submit = async (form: HTMLFormElement) => { const data = new FormData(form); return await mutate(async () => await api.updateEntity(draft.draft_id, "calendars", entity, fingerprint, { ...entity.document, name: String(data.get("name")), working_weekdays: data.getAll("weekdays").map(Number), holidays: calendarDates(data) })) !== null; };
   const isDefault = entity.document.id === defaultCalendarId;
-  return <article className="admin-card admin-card-summary"><strong>{name}{isDefault ? ` (${t("admin.defaultCalendar")})` : ""}</strong><CalendarPreview entity={entity} locale={locale} t={t} /><button className="editor-trigger" onClick={() => setOpen(true)} type="button">{t("admin.editCalendar")}</button><EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setOpen(false)} open={open} title={`${t("admin.editCalendar")}: ${name}`}><form className="editor-drawer-form" onSubmit={(event) => event.preventDefault()}><label>{t("core.name")}<input name="name" aria-label={`${t("core.name")} ${name}`} defaultValue={name} /></label><WeekdayChecks selected={weekdays} t={t} /><CalendarDateList selected={strings(entity.document, "holidays")} t={t} />{isDefault && <p className="config-hint">{t("admin.defaultCalendarArchiveBlocked")}</p>}<ActionButtons archiveDisabled={isDefault} archived={entity.document.lifecycle === "archived"} disabled={readOnly} t={t} close={() => setOpen(false)} save={submit} archive={async () => await mutate(async () => await api.archiveEntity(draft.draft_id, "calendars", entity, fingerprint)) !== null} restore={async () => await mutate(async () => await api.restoreEntity(draft.draft_id, "calendars", entity, fingerprint)) !== null} remove={async () => confirmDelete(name) && await remove(async () => await api.deleteEntity(draft.draft_id, "calendars", entity, fingerprint))} /></form></EditorDrawer></article>;
+  const close = () => { setAppliedPreset(null); setScheduleVersion((current) => current + 1); setOpen(false); };
+  const selectedPreset = calendarPreset(presetId);
+  const schedule = appliedPreset ?? { working_weekdays: weekdays, holidays: strings(entity.document, "holidays") };
+  return <article className="admin-card admin-card-summary"><strong>{name}{isDefault ? ` (${t("admin.defaultCalendar")})` : ""}</strong><CalendarPreview entity={entity} locale={locale} t={t} /><button className="editor-trigger" onClick={() => setOpen(true)} type="button">{t("admin.editCalendar")}</button><EditorDrawer closeLabel={t("core.closeEditor")} onClose={close} open={open} title={`${t("admin.editCalendar")}: ${name}`}><form className="editor-drawer-form" onSubmit={(event) => event.preventDefault()}><label>{t("core.name")}<input name="name" aria-label={`${t("core.name")} ${name}`} defaultValue={name} /></label><section className="calendar-preset-apply"><CalendarPresetSelect onChange={setPresetId} presetId={presetId} t={t} /><CalendarPresetSummary preset={selectedPreset} t={t} /><p>{t("admin.applyPresetHint")}</p><button disabled={readOnly} onClick={() => { setAppliedPreset(selectedPreset); setScheduleVersion((current) => current + 1); }} type="button">{t("admin.applyPreset")}</button></section><div key={`schedule:${scheduleVersion}`}><WeekdayChecks selected={schedule.working_weekdays} t={t} /><CalendarDateList selected={schedule.holidays} t={t} /></div>{isDefault && <p className="config-hint">{t("admin.defaultCalendarArchiveBlocked")}</p>}<ActionButtons archiveDisabled={isDefault} archived={entity.document.lifecycle === "archived"} disabled={readOnly} t={t} close={close} save={submit} archive={async () => await mutate(async () => await api.archiveEntity(draft.draft_id, "calendars", entity, fingerprint)) !== null} restore={async () => await mutate(async () => await api.restoreEntity(draft.draft_id, "calendars", entity, fingerprint)) !== null} remove={async () => confirmDelete(name) && await remove(async () => await api.deleteEntity(draft.draft_id, "calendars", entity, fingerprint))} /></form></EditorDrawer></article>;
 }
 
 function CalendarCreateForm({ disabled, onCancel, onSubmit, t }: { readonly disabled: boolean; readonly onCancel: () => void; readonly onSubmit: (event: FormEvent<HTMLFormElement>) => void; readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string }) {
   const [presetId, setPresetId] = useState<CalendarPresetId>("standard-five-day");
   const preset = calendarPreset(presetId);
   const messages = CALENDAR_PRESET_MESSAGES[presetId];
-  const workingDays = preset.coverage === undefined ? null : workingDatesBetween(preset.coverage.start, preset.coverage.due, preset).length;
   return <form className="editor-drawer-form" onSubmit={onSubmit}>
-    <label>{t("admin.calendarPreset")}<select name="preset" value={presetId} onChange={(event) => setPresetId(event.currentTarget.value as CalendarPresetId)}>{CALENDAR_PRESETS.map((item) => <option key={item.id} value={item.id}>{t(CALENDAR_PRESET_MESSAGES[item.id].name)}</option>)}</select></label>
-    <div className="calendar-preset-summary"><strong>{t(messages.name)}</strong><p>{t(messages.description)}</p>{workingDays !== null && preset.coverage !== undefined && <span>{t("admin.presetCoverage", { year: preset.coverage.start.slice(0, 4), count: workingDays })}</span>}{preset.source_url !== undefined && <a href={preset.source_url} rel="noreferrer" target="_blank">{t("admin.presetSource")}</a>}</div>
+    <CalendarPresetSelect name="preset" onChange={setPresetId} presetId={presetId} t={t} />
+    <CalendarPresetSummary preset={preset} t={t} />
     <label>{t("core.name")}<input key={`name:${presetId}`} name="name" defaultValue={t(messages.name)} required /></label>
     <WeekdayChecks key={`weekdays:${presetId}`} selected={preset.working_weekdays} t={t} />
     <CalendarDateList key={`holidays:${presetId}`} selected={preset.holidays} t={t} />
@@ -179,9 +190,30 @@ function CalendarCreateForm({ disabled, onCancel, onSubmit, t }: { readonly disa
   </form>;
 }
 
+function CalendarPresetSelect({ name, onChange, presetId, t }: { readonly name?: string; readonly onChange: (preset: CalendarPresetId) => void; readonly presetId: CalendarPresetId; readonly t: (key: MessageKey) => string }) {
+  const groups: readonly CalendarPresetGroup[] = ["custom", "russia", "united-states"];
+  return <label>{t("admin.calendarPreset")}<select name={name} value={presetId} onChange={(event) => onChange(event.currentTarget.value as CalendarPresetId)}>{groups.map((group) => <optgroup key={group} label={t(CALENDAR_PRESET_GROUP_MESSAGES[group])}>{CALENDAR_PRESETS.filter((preset) => preset.group === group).map((preset) => <option key={preset.id} value={preset.id}>{t(CALENDAR_PRESET_MESSAGES[preset.id].name)}</option>)}</optgroup>)}</select></label>;
+}
+
+function CalendarPresetSummary({ preset, t }: { readonly preset: CalendarPreset; readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string }) {
+  const messages = CALENDAR_PRESET_MESSAGES[preset.id];
+  const workingDays = preset.coverage === undefined ? null : workingDatesBetween(preset.coverage.start, preset.coverage.due, preset).length;
+  const startYear = preset.coverage?.start.slice(0, 4);
+  const dueYear = preset.coverage?.due.slice(0, 4);
+  return <div className="calendar-preset-summary"><strong>{t(messages.name)}</strong><p>{t(messages.description)}</p>{workingDays !== null && startYear !== undefined && dueYear !== undefined && <span>{startYear === dueYear ? t("admin.presetCoverage", { year: startYear, count: workingDays }) : t("admin.presetCoverageRange", { start: startYear, finish: dueYear, count: workingDays })}</span>}{preset.source_url !== undefined && <a href={preset.source_url} rel="noreferrer" target="_blank">{t("admin.presetSource")}</a>}</div>;
+}
+
 function CalendarDateList({ selected, t }: { readonly selected: readonly string[]; readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string }) {
   const [dates, setDates] = useState([...selected]);
-  return <fieldset className="calendar-date-list"><legend>{t("admin.holidays")}</legend><p>{t("admin.holidaysHint")}</p><div>{dates.map((date, index) => <div className="calendar-date-row" key={index}><input aria-label={t("admin.holidayDate", { index: index + 1 })} name="holidays" onChange={(event) => { const value = event.currentTarget.value; setDates((current) => current.map((item, itemIndex) => itemIndex === index ? value : item)); }} required type="date" value={date} /><button aria-label={t("admin.removeHoliday", { date: date || index + 1 })} onClick={() => setDates((current) => current.filter((_item, itemIndex) => itemIndex !== index))} title={t("admin.removeHoliday", { date: date || index + 1 })} type="button">×</button></div>)}</div>{dates.length === 0 && <small>{t("admin.noHolidays")}</small>}<button className="calendar-date-add" onClick={() => setDates((current) => [...current, ""])} type="button">+ {t("admin.addHoliday")}</button></fieldset>;
+  const rows = dates.map((date, index) => ({ date, index }));
+  const groups = rows.reduce<Map<string, typeof rows>>((result, row) => {
+    const group = /^\d{4}-/u.test(row.date) ? row.date.slice(0, 4) : "other";
+    result.set(group, [...(result.get(group) ?? []), row]);
+    return result;
+  }, new Map());
+  const dateRows = (items: typeof rows) => <div>{items.map(({ date, index }) => <div className="calendar-date-row" key={index}><input aria-label={t("admin.holidayDate", { index: index + 1 })} name="holidays" onChange={(event) => { const value = event.currentTarget.value; setDates((current) => current.map((item, itemIndex) => itemIndex === index ? value : item)); }} required type="date" value={date} /><button aria-label={t("admin.removeHoliday", { date: date || index + 1 })} onClick={() => setDates((current) => current.filter((_item, itemIndex) => itemIndex !== index))} title={t("admin.removeHoliday", { date: date || index + 1 })} type="button">×</button></div>)}</div>;
+  const grouped = groups.size > 1;
+  return <fieldset className="calendar-date-list"><legend>{t("admin.holidays")}</legend><p>{t("admin.holidaysHint")}</p><div>{grouped ? [...groups].map(([year, items], groupIndex) => <details className="calendar-date-year" key={year} open={groupIndex === 0 || year === "other"}><summary>{year === "other" ? t("admin.otherDates") : t("admin.dateGroupSummary", { year, count: items.length })}</summary>{dateRows(items)}</details>) : dateRows(rows)}</div>{dates.length === 0 && <small>{t("admin.noHolidays")}</small>}<button className="calendar-date-add" onClick={() => setDates((current) => [...current, ""])} type="button">+ {t("admin.addHoliday")}</button></fieldset>;
 }
 
 function MemberChecks({ people, selected, t }: { people: readonly EntityResult[]; selected: readonly string[]; t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string }) {

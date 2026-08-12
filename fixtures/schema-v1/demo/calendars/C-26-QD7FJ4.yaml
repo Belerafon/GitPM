@@ -1,12 +1,11 @@
 schema: gitpm/calendar@1
-id: C-26-QD7FJ4 # calendar: Standard work week
-name: Standard work week
+id: C-26-QD7FJ4 # calendar: Standard five-day week
+name: Standard five-day week
 working_weekdays:
   - 1
   - 2
   - 3
   - 4
   - 5
-holidays:
-  - 2026-01-01
+holidays: []
 lifecycle: active
