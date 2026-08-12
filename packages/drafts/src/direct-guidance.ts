@@ -325,10 +325,21 @@ larger YAML patch. Read the current entity first, and verify the resulting seman
 
 ## Scope the work
 
-Use \`--project <project-id>\` whenever the request concerns one Project. Under Project scope, changes
-to global configuration, People, Teams, Calendars, Availability Events, guidance files, or another Project must not be
-treated as permission to widen scope. Ask the user if the requested outcome truly requires global
-changes.
+Use \`--project <project-id>\` on a mutation whenever that mutation concerns one Project. The
+flag constrains only the paths planned by that command; unrelated uncommitted changes do not
+block it or authorize the command to change them. Scoped format, semantic diff, and changes
+inspection select that Project's changes, while validation still checks the complete repository.
+
+If one request explicitly combines a global entity with Project data, such as creating a Person
+and assigning it to a Task, create the global entity without \`--project\`, mutate the Task with
+\`--project\`, then run the final format, validation, semantic diff, and any user-authorized
+commit without \`--project\` so the complete combined change is reviewed together. Do not make
+an intermediate commit. A scoped \`commit --all --project <project-id>\` remains strict and fails
+if the checkout also contains global changes or changes to another Project.
+
+Existing changes to global configuration, People, Teams, Calendars, Availability Events,
+guidance files, or another Project must not be treated as permission to widen the current
+mutation. Ask the user if the requested outcome itself truly requires those changes.
 
 Physical deletion is distinct from archive. \`gitpm entity delete\` removes the entity file and
 requires \`--allow-delete\`; use \`--dry-run\` first to preview reference restrictions. Repeat
@@ -351,7 +362,8 @@ Run, in order:
 Check the process exit code, \`ok\`, stable \`code\`, affected Projects, entity counts, fields, and
 unclassified files. Stop on any unexpected path, scope, deletion, warning requiring user judgment, or
 semantic result that differs from the request. Do not hide failures by reformatting or retrying with
-broader scope.
+broader scope. For an explicitly combined global-and-Project request, omit \`--project\` from this
+final verification sequence and review the complete result.
 
 ## Commit and publish deliberately
 
@@ -365,7 +377,9 @@ user's intent:
 \`gitpm commit --all -m <message> [--project <project-id>] [--allow-delete] --json\`
 
 This intentionally stages all validated changes onto the active branch; partial staging is not
-supported. Do not substitute raw Git commands.
+supported. Do not substitute raw Git commands. Use \`--project\` on commit only when every change
+in the checkout belongs to that Project; otherwise review and commit the complete authorized
+change without it.
 
 Run \`gitpm push --json\` only when the user requested remote publication. GitPM fetches first and
 refuses non-fast-forward, force push, rebase, merge commit, hard reset, and stash. Never expose an

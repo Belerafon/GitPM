@@ -105,7 +105,8 @@ Availability Event создаётся тем же generic-контуром, на
 `--unset field`; для большого patch можно использовать YAML mapping через `--file`. Источники можно
 комбинировать, inline-поля имеют приоритет. `schema`, `id` и владеющий Project неизменяемы; `null`
 в YAML patch и `--unset` удаляют необязательное поле. После записи CLI проверяет весь репозиторий и
-откатывает все затронутые файлы при ошибке validation или Project scope.
+откатывает все затронутые файлы при ошибке validation или если пути самой мутации выходят за
+указанный Project scope. Другие уже накопленные изменения в checkout не блокируют команду.
 
 `schedule set` является обычной командой для изменения одного окна `schedules.<track>`.
 Она сохраняет окна остальных tracks и изменяет dependencies только выбранного track; полный
@@ -181,8 +182,10 @@ schedule track блокируется до записи кодом `CONFIGURATIO
 `changes list` возвращает тот же raw diff, токены и hunks, которые показывает GUI.
 `restore-file` и `restore-hunk` используют optimistic fingerprint и общий безопасный changes
 pipeline. `discard-all` требует буквального `--confirm discard-all`; это отдельное подтверждение
-массовой отмены незакоммиченных изменений. `--project` и `--allow-delete` сохраняют те же
-ограничения scope и физического удаления, что и `diff`/`commit`.
+массовой отмены незакоммиченных изменений. `--project` ограничивает `list`, `restore-file` и
+`restore-hunk` выбранным Project. Для `discard-all` он остаётся whole-draft guard, потому что
+сама команда отменяет весь незакоммиченный набор. `--allow-delete` сохраняет отдельное
+подтверждение физического удаления.
 
 `history list/show/file-diff/file-history` доступны в обоих repository modes. В worktree mode
 `history revert` создаёт отдельный draft в external writer mode; исходный draft не изменяется.
@@ -196,8 +199,12 @@ Restore не перезаписывает уже изменённый выбра
 `time-entry`, `config`, `format`, `validate`, `diff`, `changes`, `history`, `commit` и `push`
 работают с выбранным checkout без `--draft`.
 В `worktree` mode те же предметные и inspection-команды требуют `--draft <id>`; draft lifecycle,
-draft-form `history revert`, `mr create` и `mr status` доступны только в нём. `--project <id>` проверяет, что все текущие
-business changes принадлежат указанному Project, а физическое удаление требует явного
+draft-form `history revert`, `mr create` и `mr status` доступны только в нём. На mutation-командах
+`--project <id>` проверяет только планируемые этой командой пути; уже существующие глобальные
+изменения или изменения другого Project не блокируют новую мутацию. На `format`, `diff` и
+`changes list` флаг выбирает изменения указанного Project, а `validate` всегда проверяет полный
+repository state. Только `commit --all --project <id>` проверяет, что весь фиксируемый набор
+принадлежит указанному Project. Физическое удаление требует явного
 `--allow-delete` при каждой следующей мутации, а также при format/validation/diff и commit,
 пока удалённые пути остаются в checkout. Флаг подтверждает весь текущий набор физических
 удалений; он не создаёт новые удаления сам по себе.

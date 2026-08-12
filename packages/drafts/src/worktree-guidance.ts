@@ -92,9 +92,9 @@ Work conservatively:
 - Project milestones, tasks, saved views, and task comments live below the same Project.
 - Entity references use immutable IDs such as \`P-26-7K4M9Q\` and
   \`T-26-X8D2FW\`; paths and IDs are validated together.
-- Project-scoped work must not change global configuration, People, Teams, Calendars,
-  Availability Events, or
-  another Project.
+- A mutation invoked with \`--project\` must not itself change global configuration, People,
+  Teams, Calendars, Availability Events, or another Project. An explicitly combined user request
+  may accumulate separate global and Project mutations in one draft for final unscoped review.
 - Archive is a lifecycle state. Physical deletion is separate, restricted by references, and
   always requires explicit authorization.
 
@@ -373,10 +373,21 @@ larger YAML patch. Read the current entity first, and verify the resulting seman
 
 ## Scope the work
 
-Use \`--project <project-id>\` whenever the request concerns one Project. Under Project scope,
-changes to global configuration, People, Teams, Calendars, Availability Events, guidance files, or another Project
-must not be treated as permission to widen scope. Ask the user if the requested outcome truly
-requires global changes.
+Use \`--project <project-id>\` on a mutation whenever that mutation concerns one Project. The
+flag constrains only the paths planned by that command; unrelated uncommitted changes do not
+block it or authorize the command to change them. Scoped format, semantic diff, and changes
+inspection select that Project's changes, while validation still checks the complete repository.
+
+If one request explicitly combines a global entity with Project data, such as creating a Person
+and assigning it to a Task, create the global entity without \`--project\`, mutate the Task with
+\`--project\`, then run the final format, validation, semantic diff, and any user-authorized
+commit without \`--project\` so the complete combined change is reviewed together. Do not make
+an intermediate commit. A scoped \`commit --all --project <project-id>\` remains strict and fails
+if the draft also contains global changes or changes to another Project.
+
+Existing changes to global configuration, People, Teams, Calendars, Availability Events,
+guidance files, or another Project must not be treated as permission to widen the current
+mutation. Ask the user if the requested outcome itself truly requires those changes.
 
 Physical deletion is distinct from archive. \`gitpm entity delete\` removes the entity file and
 requires \`--allow-delete\`; use \`--dry-run\` first to preview reference restrictions. Repeat
@@ -399,7 +410,8 @@ Run, in order:
 Check the process exit code, \`ok\`, stable \`code\`, affected Projects, entity counts, fields,
 and unclassified files. Stop on any unexpected path, scope, deletion, warning requiring user
 judgment, or semantic result that differs from the request. Do not hide failures by reformatting
-or retrying with broader scope.
+or retrying with broader scope. For an explicitly combined global-and-Project request, omit
+\`--project\` from this final verification sequence and review the complete result.
 
 ## Commit and publish deliberately
 
@@ -413,7 +425,8 @@ user's intent:
 \`gitpm commit --all --draft <draft-id> -m <message> [--project <project-id>] [--allow-delete] --json\`
 
 This intentionally stages all validated draft changes; partial staging is not supported. Do not
-substitute raw Git commands.
+substitute raw Git commands. Use \`--project\` on commit only when every change in the draft belongs
+to that Project; otherwise review and commit the complete authorized change without it.
 
 Run \`gitpm push --draft <draft-id> --json\` and \`gitpm mr create ... --json\` only when the
 user requested remote publication. Never expose an access token in arguments, URLs, files, Git

@@ -77,7 +77,10 @@ describe("agent file and CLI workflow core", () => {
 
     const personOriginal = await readFile(path.join(draft.worktree_path, ...personFile.split("/")), "utf8");
     await atomicWriteDomainFile(draft.worktree_path, personFile, personOriginal.replace("name: Anna Petrova", "name: Out of scope"));
-    await expect(workflow.assertScope("DRF-AGENT", { allowedProject: projectId })).rejects.toMatchObject({ code: "AGENT_SCOPE_VIOLATION" });
+    expect(await workflow.assertScope("DRF-AGENT", { allowedProject: projectId })).toMatchObject({
+      affected_projects: [projectId],
+      changed_files: [expect.objectContaining({ path: projectFile, kind: "Modified" })],
+    });
     await atomicWriteDomainFile(draft.worktree_path, personFile, personOriginal);
 
     const taskOriginal = await readFile(path.join(draft.worktree_path, ...taskFile.split("/")), "utf8"); await rm(path.join(draft.worktree_path, ...taskFile.split("/")));
@@ -96,6 +99,44 @@ describe("agent file and CLI workflow core", () => {
     const mr = await workflow.createMergeRequest("DRF-AGENT", "42", "Agent updates project");
     expect(mr).toMatchObject({ source_branch: "gitpm/42/DRF-AGENT", target_branch: "main", state: "opened" });
     expect(JSON.stringify(gitlab.captures)).not.toContain("agent-memory-token");
+  }, 60_000);
+
+  it("composes an uncommitted global Person with a scoped Project mutation", async () => {
+    const { remote, data } = await workflowFixture("gitpm-agent-mixed-scope-");
+    const client = new GitClient({ dataDirectory: data, remoteUrl: remote, defaultBranch: "main", allowLocalTestRemote: true, askPassPath: path.join(process.cwd(), "scripts", "git-askpass.mjs") });
+    const drafts = new DraftManager(client, data); const changes = new ChangesService(drafts, client);
+    const workflow = new AgentWorkflow(drafts, client, changes, { authorName: "agent-42", authorEmail: "42@example.test", defaultBranch: "main" });
+    await workflow.createDraft("DRF-MIXED-SCOPE", "42");
+    const personId = "U-26-KB9RXB";
+
+    await workflow.createEntity("DRF-MIXED-SCOPE", {
+      schema: "gitpm/person@1",
+      id: personId,
+      name: "New project member",
+      weekly_capacity_hours: 40,
+      calendar: "C-26-QD7FJ4",
+      lifecycle: "active",
+    }, {}, "person");
+    const assigned = await workflow.updateEntity(
+      "DRF-MIXED-SCOPE",
+      { assignees: [personId] },
+      "task",
+      "T-26-P9G3P8",
+      { allowedProject: projectId },
+    );
+
+    expect(assigned.document).toMatchObject({ project: projectId, assignees: [personId] });
+    expect(await workflow.semanticDiff("DRF-MIXED-SCOPE", { allowedProject: projectId })).toMatchObject({
+      counts: { created: 0, updated: 1, archived: 0, deleted: 0 },
+      updated: [expect.objectContaining({ id: "T-26-P9G3P8" })],
+    });
+    expect(await workflow.semanticDiff("DRF-MIXED-SCOPE")).toMatchObject({
+      counts: { created: 1, updated: 1, archived: 0, deleted: 0 },
+      created: [expect.objectContaining({ id: personId })],
+    });
+    await expect(workflow.commitAll("DRF-MIXED-SCOPE", "Must stay mixed", { allowedProject: projectId }))
+      .rejects.toMatchObject({ code: "AGENT_SCOPE_VIOLATION" });
+    expect(await validateRepository((await workflow.status("DRF-MIXED-SCOPE")).worktree_path)).toMatchObject({ valid: true });
   }, 60_000);
 
   it("rejects agent mutations unless the draft is external", async () => {
