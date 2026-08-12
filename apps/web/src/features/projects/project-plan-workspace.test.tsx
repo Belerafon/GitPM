@@ -17,7 +17,7 @@ const person = result({ schema: "gitpm/person@1", id: "U-26-888888", name: "Ada"
 const stage = result({ schema: "gitpm/milestone@2", id: "M-26-222222", project: project.document.id, name: "Launch", lifecycle: "active", schedules: { plan: { finish: "2026-08-01" } } });
 const laterStage = result({ schema: "gitpm/milestone@2", id: "M-26-777777", project: project.document.id, name: "Follow-up", lifecycle: "active", schedules: { plan: { finish: "2026-09-01" } } });
 const linked = result({ schema: "gitpm/task@2", id: "T-26-333333", project: project.document.id, milestone: stage.document.id, title: "Linked task", type: "task", status: "done", lifecycle: "active", schedules: { plan: { effort_hours: 20 } }, assignees: [person.document.id] });
-const other = result({ schema: "gitpm/task@2", id: "T-26-444444", project: project.document.id, title: "Without stage", type: "task", status: "backlog", lifecycle: "active" });
+const other = result({ schema: "gitpm/task@2", id: "T-26-444444", project: project.document.id, title: "Without stage", type: "task", status: "backlog", lifecycle: "active", schedules: { plan: { finish: "2026-08-15" } } });
 const urgent = result({ schema: "gitpm/task@2", id: "T-26-555555", project: project.document.id, milestone: stage.document.id, title: "Zebra task", type: "task", status: "backlog", lifecycle: "active", schedules: { plan: { finish: "2026-07-20", effort_hours: 2 } } });
 const large = result({ schema: "gitpm/task@2", id: "T-26-666666", project: project.document.id, milestone: stage.document.id, title: "Alpha task", type: "task", status: "backlog", lifecycle: "active", schedules: { plan: { finish: "2026-09-01", effort_hours: 13 } } });
 const summaryProject = result({ schema: "gitpm/project@2", id: "P-26-SUM", name: "Summary project", status: "backlog", lifecycle: "active" });
@@ -533,11 +533,17 @@ describe("ProjectPlanWorkspace", () => {
     expect(screen.getByText("Without stage")).toBeTruthy();
     expect(stageCard.querySelector(".project-plan-stage-assignees")?.textContent).toContain("Ada");
     const linkedRow = screen.getByText("Linked task").closest(".project-plan-task-row")!;
-    expect(linkedRow.closest<HTMLElement>(".project-plan-task-list")?.style.getPropertyValue("--project-plan-task-columns")).toBe("auto minmax(0, 1fr) minmax(5rem, min(12rem, 16%)) minmax(5.5rem, min(6.5rem, 10%)) minmax(3.5rem, 4rem) max-content max-content");
     expect(linkedRow.querySelector(".task-assignees")?.textContent).toBe("Ada");
-    expect(linkedRow.querySelector(".project-plan-task-due")).toBeTruthy();
-    expect(linkedRow.querySelector(".project-plan-task-due")?.textContent).toBe("");
+    expect(linkedRow.querySelector(".project-plan-task-due")).toBeNull();
     expect(linkedRow.querySelector(".project-plan-task-estimate")?.textContent).toBe("20 hours");
+    const dueOnlyRow = screen.getByText("Without stage").closest(".project-plan-task-row")!;
+    expect(dueOnlyRow.querySelector(".project-plan-task-due")?.textContent).toBe("Aug 15, 2026");
+    expect(dueOnlyRow.querySelector(".project-plan-task-estimate")).toBeNull();
+    expect(Array.from(dueOnlyRow.querySelector(".project-plan-task-meta")!.children, (cell) => cell.className)).toEqual([
+      "project-plan-task-meta-cell task-assignees",
+      "project-plan-task-meta-cell project-plan-task-due",
+      "project-plan-task-meta-cell project-plan-task-status",
+    ]);
     fireEvent.click(screen.getByText("Task row fields"));
     expect(screen.getByText("Choose which details appear in task rows. This setting applies to every project in this browser.")).toBeTruthy();
     fireEvent.click(screen.getByRole("checkbox", { name: "Assignees" }));
