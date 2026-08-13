@@ -70,6 +70,15 @@ describe("HttpGitPmApi request bodies", () => {
     expect(fetchMock).toHaveBeenCalledWith("/api/drafts/DRF-1/search?q=%D0%90%D0%BD%D0%BD%D0%B0+%2B+QA&limit=8", expect.objectContaining({ credentials: "include" }));
   });
 
+  it("encodes Project file-list scope and decodes the shared response contract", async () => {
+    const payload = { project_id: "P-26-MGP84K", count: 1, total_size_bytes: 12, items: [{ name: "ТЗ <script>.docx", path: "projects/P-26-MGP84K/files/ТЗ <script>.docx", size_bytes: 12, media_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", disposition: "attachment", modified_at: "2026-08-13T10:00:00.000Z", modified_at_source: "working_copy_filesystem" }], draft_fingerprint: "b".repeat(64) };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(payload), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(await new HttpGitPmApi().listProjectFiles("DRF/1", "P-26-MGP84K")).toEqual(payload);
+    expect(fetchMock).toHaveBeenCalledWith("/api/drafts/DRF%2F1/projects/P-26-MGP84K/files", expect.objectContaining({ credentials: "include" }));
+  });
+
   it("decodes the project time-entry envelope and serializes filters", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({
       total: 1,

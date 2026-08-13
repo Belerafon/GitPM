@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError, type GitPmApi } from "../../api.js";
+import type { ProjectFileList } from "@gitpm/contracts";
 import type { AdvancedViewQuery } from "../../advanced-view-query.js";
 import type { ConfigurationDocument, ConfigurationResult, DraftStatus, EntityDocument, EntityResult } from "../../types.js";
 import { ProjectPlanWorkspace } from "./project-plan-workspace.js";
@@ -51,6 +52,7 @@ function api(
   const archiveEntity = vi.fn(async (_draftId: string, type: string, entity: EntityResult, _fingerprint: string, options: { readonly includeTasks?: boolean } = {}) => await transition(type, entity, "archived", options));
   const restoreEntity = vi.fn(async (_draftId: string, type: string, entity: EntityResult, _fingerprint: string, options: { readonly includeTasks?: boolean } = {}) => await transition(type, entity, "active", options));
   const deleteEntity = vi.fn(async () => undefined);
+  const listProjectFiles = vi.fn(async (): Promise<ProjectFileList> => ({ project_id: currentProject.document.id, count: 0, total_size_bytes: 0, items: [], draft_fingerprint: fingerprint }));
   return {
     projectWorkspace: vi.fn(async () => ({ project: currentProject, milestones: currentStages, tasks: currentTasks, draft_fingerprint: fingerprint })),
     getConfiguration: vi.fn(async (_draftId: string, kind: "statuses" | "issue-types" | "schedule-tracks") => configuration(kind === "statuses"
@@ -59,12 +61,13 @@ function api(
       ? { schema: "gitpm/schedule-tracks@1", tracks: [{ slug: "plan", title: "Plan", kind: "manual", capabilities: ["dates", "effort", "dependencies"] }], defaults: { enabled_tracks: ["plan"], primary_track: "plan", workload_track: "plan", dashboard_tracks: ["plan"] } }
       : { schema: "gitpm/issue-types@1", issue_types: [{ slug: "task", title: "Task", active: true }] })),
     listEntities: vi.fn(async (_draftId: string, type: string) => type === "people" ? [person] : type === "projects" ? [currentProject, archivedProject] : []),
+    listProjectFiles,
     createEntity,
     updateEntity,
     archiveEntity,
     restoreEntity,
     deleteEntity,
-  } as unknown as GitPmApi & { createEntity: typeof createEntity; updateEntity: typeof updateEntity; archiveEntity: typeof archiveEntity; restoreEntity: typeof restoreEntity; deleteEntity: typeof deleteEntity };
+  } as unknown as GitPmApi & { createEntity: typeof createEntity; updateEntity: typeof updateEntity; archiveEntity: typeof archiveEntity; restoreEntity: typeof restoreEntity; deleteEntity: typeof deleteEntity; listProjectFiles: typeof listProjectFiles };
 }
 
 afterEach(() => { cleanup(); localStorage.clear(); vi.useRealTimers(); });
@@ -134,6 +137,56 @@ const summaryTasksFixture = (): readonly EntityResult[] => [
 ];
 
 describe("ProjectPlanWorkspace", () => {
+  it("keeps Project and selected Task context while opening files and returns focus on Escape", async () => {
+    const client = api();
+    client.listProjectFiles
+      .mockResolvedValueOnce({ project_id: project.document.id, count: 1, total_size_bytes: 12, items: [{ name: "ТЗ.docx", path: `projects/${project.document.id}/files/ТЗ.docx`, size_bytes: 12, media_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", disposition: "attachment", modified_at: "2026-08-13T10:00:00.000Z", modified_at_source: "working_copy_filesystem" }], draft_fingerprint: fingerprint })
+      .mockResolvedValueOnce({ project_id: project.document.id, count: 2, total_size_bytes: 24, items: [{ name: "ТЗ.docx", path: `projects/${project.document.id}/files/ТЗ.docx`, size_bytes: 12, media_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", disposition: "attachment", modified_at: "2026-08-13T10:00:00.000Z", modified_at_source: "working_copy_filesystem" }, { name: "Смета.xlsx", path: `projects/${project.document.id}/files/Смета.xlsx`, size_bytes: 12, media_type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", disposition: "attachment", modified_at: "2026-08-13T10:00:00.000Z", modified_at_source: "working_copy_filesystem" }], draft_fingerprint: fingerprint });
+
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="ru" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} selectedTaskId={linked.document.id} />);
+
+    const trigger = await screen.findByRole("button", { name: /Файлы/u });
+    await waitFor(() => expect(within(trigger).getByText("1")).toBeTruthy());
+    expect(screen.getByRole("heading", { name: "Linked task" })).toBeTruthy();
+    trigger.focus();
+    fireEvent.click(trigger);
+    expect(await screen.findByRole("dialog", { name: "Файлы проекта · 2" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Linked task" })).toBeTruthy();
+    expect(within(trigger).getByText("2")).toBeTruthy();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: /Файлы проекта/u })).toBeNull());
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("shows the files entry point for archived Projects in a read-only draft", async () => {
+    const client = api([], [], archivedProject);
+    const closedDraft = { ...draft, state: "closed" as const };
+    render(<ProjectPlanWorkspace api={client} draft={closedDraft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={archivedProject.document.id} />);
+
+    expect(await screen.findByRole("button", { name: /Files/u })).not.toHaveProperty("disabled", true);
+  });
+
+  it("keeps the Project usable after an initial file-list failure and synchronizes count on retry", async () => {
+    const client = api();
+    client.listProjectFiles
+      .mockRejectedValueOnce(new Error("initial offline"))
+      .mockRejectedValueOnce(new Error("still offline"))
+      .mockResolvedValueOnce({ project_id: project.document.id, count: 3, total_size_bytes: 0, items: [], draft_fingerprint: fingerprint });
+
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} />);
+
+    expect(await screen.findByRole("heading", { name: "Alpha" })).toBeTruthy();
+    const trigger = screen.getByRole("button", { name: /Files/u });
+    fireEvent.click(trigger);
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("still offline");
+    fireEvent.click(within(alert).getByRole("button", { name: "Retry" }));
+
+    expect(await screen.findByRole("dialog", { name: "Project files · 3" })).toBeTruthy();
+    expect(within(trigger).getByText("3")).toBeTruthy();
+  });
+
   it("creates a Milestone from the live Project route with the simplified primary-track form", async () => {
     const client = api([], []);
     render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} />);

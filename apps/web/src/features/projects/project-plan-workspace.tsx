@@ -1,5 +1,5 @@
 import { activeProjectIds, ENTITY_ID_PREFIX, isOperationalTask, newUniqueEntityId } from "@gitpm/shared";
-import type { ProjectPlanning } from "@gitpm/contracts";
+import type { ProjectFileList, ProjectPlanning } from "@gitpm/contracts";
 import { resolveSchedulingHierarchy, validatePlanning, windowEffort, type PlanningSettings, type SchedulingHierarchyTask } from "@gitpm/scheduling";
 import { buildSchedule, ScheduleResolver, scheduleTracksConfig, scheduleTextReader, scheduleEffortReader, withSchedulesMap, type ScheduleMap } from "../../schedules.js";
 import { isBlockedStatus, isCompletedStatus, isInProgressStatus } from "../../status-categories.js";
@@ -24,6 +24,7 @@ import { DraftReadOnlyAlert, draftReadOnlyReason } from "../../draft-read-only.j
 import { SchedulingOverflowWarnings } from "../../scheduling-overflow-warnings.js";
 import { AdvancedViewControls } from "../../advanced-view-controls.js";
 import { applyAdvancedViewQuery, countViewConditions, emptyViewQuery, filterOnlyViewQuery, newViewNodeId, parseAdvancedViewQuery, serializeAdvancedViewQuery, type AdvancedViewQuery, type ViewField, type ViewFilterNode } from "../../advanced-view-query.js";
+import { ProjectFilesPanel, readProjectFilesView, type ProjectFilesView } from "./project-files-panel.js";
 
 type TaskInsertSpec = { readonly parentId?: string; readonly beforeId?: string; readonly afterId?: string };
 type PlanEditor = { readonly kind: "project" | "new-stage" }
@@ -160,7 +161,11 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
 }) {
   const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
   const loader = useAsyncLoad();
+  const { state: filesLoadState, run: runFilesLoad } = useAsyncLoad();
   const [workspace, setWorkspace] = useState<ProjectWorkspaceResult | null>(null);
+  const [projectFiles, setProjectFiles] = useState<ProjectFileList | null>(null);
+  const [filesOpen, setFilesOpen] = useState(false);
+  const [filesView, setFilesView] = useState<ProjectFilesView>(readProjectFilesView);
   const [projects, setProjects] = useState<readonly EntityResult[]>([]);
   const [availableProjectGroups, setAvailableProjectGroups] = useState<readonly string[]>([]);
   const [people, setPeople] = useState<readonly EntityResult[]>([]);
@@ -236,7 +241,17 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     });
   }, [api, draft.draft_id, draft.fingerprint, loader.run, locale, projectId]);
 
+  const loadProjectFiles = useCallback(async (keepData = true) => {
+    if (!keepData) setProjectFiles(null);
+    await runFilesLoad(
+      async () => await api.listProjectFiles(draft.draft_id, projectId),
+      setProjectFiles,
+      { keepData },
+    );
+  }, [api, draft.draft_id, projectId, runFilesLoad]);
+
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void loadProjectFiles(false); }, [loadProjectFiles]);
   useEffect(() => { const summary = normalizeSummaryFilter(initialSummaryFilter); setStatusFilter(initialStatusFilter); setMilestoneFilter(initialMilestoneFilter); setSummaryFilter(summary === "overdue" ? "all" : summary); setArchiveMode(initialArchiveMode); }, [initialArchiveMode, initialMilestoneFilter, initialStatusFilter, initialSummaryFilter]);
   useEffect(() => { writeTaskFields(taskFields); }, [taskFields]);
   useEffect(() => { writeInspectorWidth(inspectorWidth); }, [inspectorWidth]);
@@ -720,7 +735,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
         {workspace.project.document.lifecycle === "archived" && <div className="alert warning"><span>{t("core.archived")}</span><button className="primary" disabled={readOnly} onClick={() => { void mutate(async () => await api.restoreEntity(draft.draft_id, "projects", workspace.project, workspace.draft_fingerprint)); }} type="button">{t("core.restore")}</button></div>}
         <div className="project-plan-main">
           <header className={`project-plan-header${recentChanges[workspace.project.document.id] ? " recently-changed" : ""}`}>
-            <div className="project-plan-title"><span className="project-plan-project-kind">{t("core.project")} <code>{workspace.project.document.id}</code></span><h2>{text(workspace.project.document, "name")}</h2><p>{text(workspace.project.document, "description_markdown") || t("core.noDescription")}</p></div>
+            <div className="project-plan-title"><span className="project-plan-project-kind">{t("core.project")} <code>{workspace.project.document.id}</code></span><h2>{text(workspace.project.document, "name")}</h2><p>{text(workspace.project.document, "description_markdown") || t("core.noDescription")}</p><button aria-haspopup="dialog" className="project-files-trigger" onClick={() => { setFilesOpen(true); void loadProjectFiles(); }} type="button"><svg aria-hidden="true" viewBox="0 0 20 20"><path d="M7.4 10.8 12 6.2a2.5 2.5 0 0 1 3.5 3.6l-6.3 6.3a4 4 0 0 1-5.7-5.7l6.7-6.7a1.5 1.5 0 0 1 2.1 2.1l-6.7 6.7a1 1 0 0 0 1.5 1.4l5.4-5.4" /></svg><span>{t("projectFiles.button")}</span><span aria-label={t("projectFiles.count", { count: projectFiles?.count ?? 0 })} className="project-files-count">{projectFiles?.count ?? (filesLoadState.status === "loading" ? "…" : 0)}</span></button></div>
             <div className="project-plan-actions">{archiveMode
               ? <button className="primary" data-control-hint={t("controlHint.backToProjectPlan")} onClick={() => showArchive(false)}>{t("projectArchive.backToPlan")}</button>
               : <><button disabled={readOnly} onClick={() => { setProjectPlanningDraft(scheduling.planning(rawProjectPlanning)); setProjectPlanningDirty(false); setProjectSchedulesDraft(workspace.project.document.schedules as ScheduleMap | undefined); setEditor({ kind: "project" }); }}>{t("core.edit")}</button><button disabled={readOnly} onClick={() => setEditor({ kind: "new-stage" })}>+ {t("stages.new")}</button><button className="primary" disabled={readOnly} onClick={() => setEditor({ kind: "task" })}>+ {t("core.createTaskAction")}</button><button aria-pressed="false" className="project-archive-toggle" data-control-hint={t("controlHint.openProjectArchive")} onClick={() => showArchive(true)} type="button">{t("projectArchive.open", { stages: archiveViewModel.stages.length, tasks: archivedContentCount })}</button></>}</div>
@@ -854,6 +869,17 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
         </aside>}
       </div>}
     </AsyncBoundary>
+
+    <ProjectFilesPanel
+      list={projectFiles}
+      loadState={filesLoadState}
+      locale={locale}
+      onClose={() => setFilesOpen(false)}
+      onReload={() => { void loadProjectFiles(); }}
+      onViewChange={setFilesView}
+      open={filesOpen}
+      view={filesView}
+    />
 
     {workspace !== null && <EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setEditor(null)} open={editor?.kind === "project"} title={`${t("core.edit")}: ${text(workspace.project.document, "name")}`}>
       <form className="editor-drawer-form" onSubmit={updateProject}>
