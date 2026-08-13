@@ -23,6 +23,7 @@ const urgent = result({ schema: "gitpm/task@2", id: "T-26-555555", project: proj
 const large = result({ schema: "gitpm/task@2", id: "T-26-666666", project: project.document.id, milestone: stage.document.id, title: "Alpha task", type: "task", status: "backlog", lifecycle: "active", schedules: { plan: { finish: "2026-09-01", effort_hours: 13 } } });
 const summaryProject = result({ schema: "gitpm/project@2", id: "P-26-SUM", name: "Summary project", status: "backlog", lifecycle: "active" });
 const summaryStage = result({ schema: "gitpm/milestone@2", id: "M-26-SUM", project: summaryProject.document.id, name: "Summary stage", lifecycle: "active" });
+const projectFile = { name: "ТЗ [финал].pdf", path: `projects/${project.document.id}/files/ТЗ [финал].pdf`, size_bytes: 12, media_type: "application/pdf", disposition: "inline" as const, modified_at: "2026-08-13T10:00:00.000Z", modified_at_source: "working_copy_filesystem" as const };
 
 function api(
   initialTasks: readonly EntityResult[] = [linked, other, large, urgent],
@@ -143,6 +144,92 @@ const summaryTasksFixture = (): readonly EntityResult[] => [
 ];
 
 describe("ProjectPlanWorkspace", () => {
+  it("renders Project, Milestone, Task and acceptance file references from one refreshed exact list", async () => {
+    const linkedProject = result({ ...project.document, description_markdown: "Project [[file:ТЗ \\[финал\\].pdf]]" } as EntityDocument);
+    const linkedStage = result({ ...stage.document, description_markdown: "Stage [[file:ТЗ \\[финал\\].pdf]]" } as EntityDocument);
+    const linkedTask = result({ ...linked.document, description_markdown: "Task [[file:ТЗ \\[финал\\].pdf]]", acceptance_criteria_markdown: ["First\n[[file:ТЗ \\[финал\\].pdf]]", "", "Missing [[file:тз.pdf]]"] } as EntityDocument);
+    const client = api([linkedTask], [linkedStage], linkedProject);
+    client.listProjectFiles.mockResolvedValueOnce({ project_id: project.document.id, count: 0, total_size_bytes: 0, items: [], draft_fingerprint: fingerprint })
+      .mockResolvedValueOnce({ project_id: project.document.id, count: 1, total_size_bytes: 12, items: [projectFile], draft_fingerprint: fingerprint });
+    const rendered = render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} selectedTaskId={linkedTask.document.id} />);
+
+    expect((await screen.findAllByRole("note", { name: "Broken file reference: ТЗ [финал].pdf" })).length).toBeGreaterThanOrEqual(3);
+    fireEvent.click(screen.getByRole("button", { name: /Files/u }));
+    await waitFor(() => expect(screen.getAllByRole("link", { name: "Open ТЗ [финал].pdf in a new tab" }).length).toBeGreaterThanOrEqual(3));
+    expect(screen.getByRole("heading", { name: "Acceptance criteria" })).toBeTruthy();
+    expect(screen.getByText("Empty criterion")).toBeTruthy();
+    expect(screen.getByRole("note", { name: "Broken file reference: тз.pdf" })).toBeTruthy();
+    expect(client.listProjectFiles).toHaveBeenCalledTimes(2);
+
+    rendered.rerender(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} selectedStageId={linkedStage.document.id} />);
+    expect((await screen.findAllByRole("link", { name: "Open ТЗ [финал].pdf in a new tab" })).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("inserts canonical references in Project and Task fields while preserving acceptance criteria elements", async () => {
+    const taskWithCriteria = result({ ...linked.document, acceptance_criteria_markdown: ["Line one\nLine two", ""] } as EntityDocument);
+    const client = api([taskWithCriteria]);
+    client.listProjectFiles.mockResolvedValue({ project_id: project.document.id, count: 1, total_size_bytes: 12, items: [projectFile], draft_fingerprint: fingerprint });
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} selectedTaskId={taskWithCriteria.document.id} />);
+    await waitFor(() => expect(client.listProjectFiles).toHaveBeenCalled());
+    const editButtons = await screen.findAllByRole("button", { name: "Edit" });
+    fireEvent.click(editButtons.at(-1)!);
+    const dialog = screen.getByRole("dialog", { name: "Edit: Linked task" });
+    expect(within(dialog).getByLabelText("Acceptance criterion 1")).toHaveProperty("value", "Line one\nLine two");
+    expect(within(dialog).getByLabelText("Acceptance criterion 2")).toHaveProperty("value", "");
+    const criterion = within(dialog).getByLabelText("Acceptance criterion 1") as HTMLTextAreaElement;
+    criterion.focus(); criterion.setSelectionRange(8, 8);
+    const insertButtons = within(dialog).getAllByRole("button", { name: "Insert file" });
+    fireEvent.click(insertButtons[1]!);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Insert a link to ТЗ [финал].pdf" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(client.updateEntity).toHaveBeenCalled());
+    const saved = client.updateEntity.mock.calls.at(-1)?.[4] as EntityDocument;
+    expect(saved.acceptance_criteria_markdown).toEqual(["Line one[[file:ТЗ \\[финал\\].pdf]]\nLine two", ""]);
+  });
+
+  it("inserts references at the cursor in Project and Milestone descriptions without extra file requests", async () => {
+    const client = api([], [stage]);
+    client.listProjectFiles.mockResolvedValue({ project_id: project.document.id, count: 1, total_size_bytes: 12, items: [projectFile], draft_fingerprint: fingerprint });
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} selectedStageId={stage.document.id} />);
+    await waitFor(() => expect(client.listProjectFiles).toHaveBeenCalledOnce());
+
+    fireEvent.click((await screen.findAllByRole("button", { name: "Edit" }))[0]!);
+    let dialog = screen.getByRole("dialog", { name: "Edit: Alpha" });
+    const projectDescription = within(dialog).getByLabelText("Description (Markdown)") as HTMLTextAreaElement;
+    fireEvent.change(projectDescription, { target: { value: "Project end" } });
+    projectDescription.setSelectionRange(8, 8);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Insert file" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Insert a link to ТЗ [финал].pdf" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(client.updateEntity).toHaveBeenCalledTimes(1));
+    expect((client.updateEntity.mock.calls[0]?.[4] as EntityDocument).description_markdown).toBe("Project [[file:ТЗ \\[финал\\].pdf]]end");
+
+    fireEvent.click((await screen.findAllByRole("button", { name: "Edit" })).at(-1)!);
+    dialog = screen.getByRole("dialog", { name: "Edit milestone" });
+    const milestoneDescription = within(dialog).getByLabelText("Description (Markdown)") as HTMLTextAreaElement;
+    fireEvent.change(milestoneDescription, { target: { value: "Stage" } });
+    milestoneDescription.setSelectionRange(5, 5);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Insert file" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Insert a link to ТЗ [финал].pdf" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(client.updateEntity).toHaveBeenCalledTimes(2));
+    expect((client.updateEntity.mock.calls[1]?.[4] as EntityDocument).description_markdown).toBe("Stage[[file:ТЗ \\[финал\\].pdf]]");
+    expect(client.listProjectFiles).toHaveBeenCalledOnce();
+  });
+
+  it("round-trips untouched multiline and empty acceptance criteria exactly", async () => {
+    const criteria = ["First line\nSecond line", "", "  spaced  "];
+    const taskWithCriteria = result({ ...linked.document, acceptance_criteria_markdown: criteria } as EntityDocument);
+    const client = api([taskWithCriteria]);
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} selectedTaskId={taskWithCriteria.document.id} />);
+    fireEvent.click((await screen.findAllByRole("button", { name: "Edit" })).at(-1)!);
+    const dialog = screen.getByRole("dialog", { name: "Edit: Linked task" });
+    fireEvent.change(within(dialog).getByLabelText("Description (Markdown)"), { target: { value: "Changed description only" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(client.updateEntity).toHaveBeenCalledOnce());
+    expect((client.updateEntity.mock.calls[0]?.[4] as EntityDocument).acceptance_criteria_markdown).toEqual(criteria);
+  });
+
   it("keeps Project and selected Task context while opening files and returns focus on Escape", async () => {
     const client = api();
     client.listProjectFiles
@@ -717,6 +804,7 @@ describe("ProjectPlanWorkspace", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Create task" }));
     await waitFor(() => expect(client.createEntity).toHaveBeenCalled());
     expect(client.createEntity.mock.calls[0]?.[3]).toMatchObject({ project: project.document.id, milestone: stage.document.id, title: "Created from plan", assignees: [person.document.id], schedules: { plan: { start: "2026-07-20", finish: "2026-07-24", effort_hours: 20 } } });
+    expect(client.createEntity.mock.calls[0]?.[3]).not.toHaveProperty("acceptance_criteria_markdown");
   });
 
   it("renders a resizable task inspector and persists the chosen width", async () => {

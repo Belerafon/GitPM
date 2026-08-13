@@ -589,6 +589,23 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .task-panel .edit-disclosure { margin-top: .35rem; }
 .safe-markdown { border: 1px solid #e2e3de; border-radius: 8px; background: #fafbf8; padding: .75rem; overflow-wrap: anywhere; }
 .safe-markdown p { margin: .25rem 0; }
+.project-file-reference { display: inline-flex; align-items: baseline; gap: .2em; border-radius: 5px; background: #e6f0eb; color: #285b48; padding: .05rem .25rem; font-weight: 700; overflow-wrap: anywhere; text-decoration: underline; text-underline-offset: 2px; }
+.project-file-reference.missing { background: #fff0dc; color: #873f20; text-decoration: none; }
+.project-file-reference.unavailable { background: #eff1ee; color: #656c67; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-weight: 500; text-decoration: none; }
+.project-file-markdown-field { position: relative; display: grid; gap: .35rem; }
+.project-file-markdown-label { display: flex; align-items: center; justify-content: space-between; gap: .6rem; color: #4f5752; font-size: .78rem; font-weight: 700; }
+.project-file-markdown-label button { padding: .32rem .5rem; font-size: .72rem; }
+.project-file-markdown-field textarea { width: 100%; min-height: 86px; resize: vertical; }
+.project-file-reference-picker { display: grid; gap: .45rem; border: 1px solid #d4d9d3; border-radius: 8px; background: #fafbf9; padding: .55rem; }
+.project-file-reference-options { display: grid; max-height: 210px; overflow-y: auto; }
+.project-file-reference-options button { display: flex; min-width: 0; gap: .4rem; border: 0; padding: .45rem .5rem; text-align: left; }
+.project-file-reference-options button:hover, .project-file-reference-options button:focus-visible { background: #eaf1ed; }
+.project-file-reference-options button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acceptance-criteria-editor { display: grid; gap: .65rem; border: 1px solid #dde1dc; border-radius: 8px; padding: .7rem; }
+.acceptance-criterion-editor { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: .5rem; }
+.task-acceptance-criteria { margin-top: 1rem; }
+.task-acceptance-criteria ol { display: grid; gap: .55rem; padding-inline-start: 1.5rem; }
+.task-acceptance-criteria .safe-markdown { margin: 0; }
 .markdown-list-item { margin-left: .5rem; }
 .empty-workspace { margin-top: 1.5rem; }
 .save-feedback { display: flex; align-items: center; justify-content: space-between; gap: .75rem; width: fit-content; min-width: 220px; border: 1px solid #cfe0d5; border-radius: 9px; background: #edf6f1; color: #28533e; margin-top: .8rem; padding: .55rem .7rem; font-size: .82rem; }

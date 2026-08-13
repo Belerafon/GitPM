@@ -734,3 +734,68 @@ Git diff.
   относятся к Этапам 9–10;
 - rename/delete/replace по-прежнему возвращают `not_checked`: атомарное обновление и отвязывание
   найденных locations остаются Этапом 11.
+
+### Этап 9 — завершён
+
+Реализовано:
+
+- существующий безопасный React-renderer Markdown подключён к tokenizer/resolver из
+  `@gitpm/shared`. Файловый token защищён от разбора `**bold**`, поэтому имя с `**` остаётся
+  атомарным, а окружающие заголовки, списки и жирное начертание сохраняют прежнее поведение;
+- exact case-sensitive ссылка из фактического списка текущего Project становится доступной
+  ссылкой с пиктограммой и использует тот же project-scoped `/content` для server disposition
+  `inline` либо `/download` для `attachment`, что и файловая панель. Каждый динамический сегмент
+  кодируется, ссылка открывается отдельно с `noopener`; raw HTML остаётся текстом React;
+- missing, case-mismatch и похожие на путь корректные lexical tokens после успешной загрузки
+  списка явно показаны как сломанные ссылки без `href`. Malformed и escaped конструкции остаются
+  исходным обычным текстом по semantics общего parser. Пока список загружается или первоначально
+  недоступен, ссылка не объявляется сломанной: показывается нейтральный raw syntax без навигации;
+- Project, выбранный Milestone, Task description и каждый элемент
+  `acceptance_criteria_markdown` отрисовываются с Project file context. Критерии приёмки получили
+  отдельное отображение и lossless повторяемые многострочные редакторы: существующие пустые
+  элементы, пробелы и переносы сохраняются точно, а для новой Task единственное пустое поле не
+  создаёт массив `[""]`;
+- общий редактор Markdown-поля показывает кнопку-скрепку и обычный доступный список файлов,
+  вставляет `formatProjectFileReference` в selection/позицию курсора и возвращает фокус в поле.
+  Поддержаны Unicode, длинные имена, loading/error/retry/empty и read-only. Popup не имитирует
+  `listbox` без keyboard-модели: это группа обычных кнопок; Escape закрывает её и возвращает фокус
+  на кнопку вызова;
+- все формы ProjectPlanWorkspace используют уже загруженный `ProjectFileList`, включая его
+  refresh после файловой панели; дополнительных запросов для каждого редактора или поля нет.
+  Добавлены русские и английские строки и адаптивные стили ссылок, picker и критериев.
+
+Фактически выполненные проверки:
+
+- ранний production typecheck прошёл; первый component-прогон выявил три неточности тестовых
+  данных и доступных имён (неэкранированные brackets, отсутствующий label textarea и emoji в имени
+  кнопки), после исправления прошли 4, затем 5 component-тестов;
+- review precedence обнаружил, что первоначальный split по `**` мог разделить имя файла. После
+  защиты file tokens placeholder-механизмом и добавления переходов loading → ready → missing,
+  корректной popup semantics и Escape/focus итоговый ранний прогон прошёл: 1 файл, 6 тестов;
+- финальный узкий
+  `corepack pnpm exec vitest run apps/web/src/project-file-reference-ui.test.tsx apps/web/src/features/projects/project-plan-workspace.test.tsx apps/web/src/core-ui.test.tsx apps/web/src/hostile-content.test.tsx`
+  после тестов Project/Milestone/Task/criteria, refresh и точного round-trip — успешно: 4 файла,
+  83 теста;
+- первый вызов `corepack pnpm verify:web` был технически оборван ошибочным внешним timeout через
+  несколько секунд (`exit 124`/`EPIPE`) во время build и не является проверкой продукта;
+- полный `corepack pnpm verify:web` — успешно: frozen install, сборка dependency closure и
+  production bundle, ESLint без предупреждений, typecheck, 51 файл и 462 web-теста, diff
+  whitespace; итоговое время финального прогона 1 минута 45 секунд;
+- `verify:server` и повторный `verify:repository` не требовались: HTTP DTO/routes и общий parser
+  Этапа 8 не менялись, изменения ограничены web-потребителем, UI, локалями и тестами.
+
+Ограничения этапа:
+
+- автоматические подсказки непосредственно после ввода `[[` и отдельный поиск по picker не
+  добавлялись: доступная кнопка со списком даёт обычный пользовательский путь с меньшим риском для
+  текущего textarea-редактора;
+- компактные Milestone-карточки внутри плана сохраняют прежний текстовый summary, потому что вся
+  карточка является кнопкой навигации и не может безопасно содержать вложенную ссылку. Полный
+  Markdown со ссылками показан в выбранном Milestone inspector; Project header и Task detail
+  используют renderer непосредственно;
+- универсальный старый `CoreWorkspace` не загружает Project files и поэтому не получает неявный
+  file context: raw syntax там остаётся безопасным текстом, а кнопка вставки скрыта. Полная
+  поддержка реализована на канонической странице Project в `ProjectPlanWorkspace`, где уже есть
+  один authoritative список. Комментарии и заметки трудозатрат остаются Этапом 10;
+- rename/delete/replace всё ещё не переписывают ссылки и честно возвращают `not_checked`; это
+  граница Этапа 11.

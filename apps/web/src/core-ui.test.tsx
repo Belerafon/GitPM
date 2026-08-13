@@ -268,6 +268,7 @@ describe("core UI", () => {
       && item.document.parent === child.document.id
       && item.document.milestone === milestone.document.id
       && JSON.stringify(item.document.assignees) === JSON.stringify([person.document.id]))).toBe(true));
+    expect(entityApi.entities.find((item) => item.document.title === "Nested work")?.document).not.toHaveProperty("acceptance_criteria_markdown");
 
     fireEvent.click(screen.getByRole("button", { name: /New subtask/u }));
     const overrideDialog = screen.getByRole("dialog", { name: "New subtask" });
