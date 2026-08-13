@@ -314,3 +314,202 @@ describe("Project files upload API", () => {
     expect(response.json()).toMatchObject({ error: { code: "DRAFT_FORBIDDEN" } });
   });
 });
+
+describe("Project files rename and delete API", () => {
+  it("returns 404 for rename and delete when the optional files directory is absent", async () => {
+    const app = appFor("42", "42", "Developer");
+    const rename = await app.inject({
+      method: "POST",
+      url: `/api/drafts/DRF-FILES/projects/${projectId}/files/missing.txt/rename`,
+      payload: { expected_fingerprint: "f".repeat(64), new_name: "new.txt", reference_mode: "ignore_unchecked" },
+    });
+    const deletion = await app.inject({
+      method: "DELETE",
+      url: `/api/drafts/DRF-FILES/projects/${projectId}/files/missing.txt`,
+      payload: { expected_fingerprint: "f".repeat(64), confirmation_name: "missing.txt", reference_mode: "ignore_unchecked" },
+    });
+    await app.close();
+    expect(rename.statusCode).toBe(404);
+    expect(rename.json()).toMatchObject({ error: { code: "PROJECT_FILE_NOT_FOUND" } });
+    expect(deletion.statusCode).toBe(404);
+    expect(deletion.json()).toMatchObject({ error: { code: "PROJECT_FILE_NOT_FOUND" } });
+  });
+
+  it("renames and deletes Unicode files with explicit reference and erase semantics", async () => {
+    const files = path.join(root, "projects", projectId, "files");
+    await mkdir(files);
+    await writeFile(path.join(files, "ТЗ v3.docx"), "document", "utf8");
+    const app = appFor("42", "42", "Developer");
+
+    const renamed = await app.inject({
+      method: "POST",
+      url: `/api/drafts/DRF-FILES/projects/${projectId}/files/${encodeURIComponent("ТЗ v3.docx")}/rename`,
+      payload: {
+        expected_fingerprint: "f".repeat(64),
+        new_name: "ТЗ v4.docx",
+        reference_mode: "ignore_unchecked",
+      },
+    });
+    const deleted = await app.inject({
+      method: "DELETE",
+      url: `/api/drafts/DRF-FILES/projects/${projectId}/files/${encodeURIComponent("ТЗ v4.docx")}`,
+      payload: {
+        expected_fingerprint: "e".repeat(64),
+        confirmation_name: "ТЗ v4.docx",
+        reference_mode: "ignore_unchecked",
+      },
+    });
+    await app.close();
+
+    expect(renamed.statusCode).toBe(200);
+    expect(renamed.json()).toMatchObject({
+      operation: "renamed",
+      previous_name: "ТЗ v3.docx",
+      item: { name: "ТЗ v4.docx" },
+      references: { status: "not_checked" },
+    });
+    expect(deleted.statusCode).toBe(200);
+    expect(deleted.json()).toEqual({
+      project_id: projectId,
+      operation: "deleted",
+      name: "ТЗ v4.docx",
+      path: `projects/${projectId}/files/ТЗ v4.docx`,
+      size_bytes: 8,
+      references: { status: "not_checked" },
+      secure_erase: false,
+      draft_fingerprint: "e".repeat(64),
+    });
+    await expect(readFile(path.join(files, "ТЗ v4.docx"))).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it.each([
+    ["read-only role", "42", "42", "Reporter", "ui", "f".repeat(64), 403, "DRAFT_FORBIDDEN"],
+    ["another owner", "99", "42", "Developer", "ui", "f".repeat(64), 403, "DRAFT_FORBIDDEN"],
+    ["external writer mode", "42", "42", "Developer", "external", "f".repeat(64), 409, "DRAFT_READ_ONLY"],
+    ["stale fingerprint", "42", "42", "Maintainer", "ui", "a".repeat(64), 409, "DRAFT_CHANGED_EXTERNALLY"],
+  ] as const)("rejects rename for %s", async (_label, owner, actor, role, writerMode, fingerprint, status, code) => {
+    const files = path.join(root, "projects", projectId, "files");
+    await mkdir(files);
+    await writeFile(path.join(files, "blocked.txt"), "content", "utf8");
+    const app = appFor(owner, actor, role, writerMode);
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/drafts/DRF-FILES/projects/${projectId}/files/blocked.txt/rename`,
+      payload: { expected_fingerprint: fingerprint, new_name: "changed.txt", reference_mode: "ignore_unchecked" },
+    });
+    await app.close();
+    expect(response.statusCode).toBe(status);
+    expect(response.json()).toMatchObject({ error: { code } });
+    await expect(readFile(path.join(files, "blocked.txt"), "utf8")).resolves.toBe("content");
+  });
+
+  it("requires exact deletion confirmation and an explicitly unsupported reference mode", async () => {
+    const files = path.join(root, "projects", projectId, "files");
+    await mkdir(files);
+    await writeFile(path.join(files, "Contract.pdf"), "content", "utf8");
+    const app = appFor("42", "42", "Developer");
+    const wrongConfirmation = await app.inject({
+      method: "DELETE",
+      url: `/api/drafts/DRF-FILES/projects/${projectId}/files/Contract.pdf`,
+      payload: {
+        expected_fingerprint: "f".repeat(64),
+        confirmation_name: "contract.pdf",
+        reference_mode: "ignore_unchecked",
+      },
+    });
+    const unsupportedReferences = await app.inject({
+      method: "POST",
+      url: `/api/drafts/DRF-FILES/projects/${projectId}/files/Contract.pdf/rename`,
+      payload: { expected_fingerprint: "f".repeat(64), new_name: "renamed.pdf", reference_mode: "update" },
+    });
+    await app.close();
+
+    expect(wrongConfirmation.statusCode).toBe(409);
+    expect(wrongConfirmation.json()).toMatchObject({ error: { code: "PROJECT_FILE_DELETE_CONFIRMATION_REQUIRED" } });
+    expect(unsupportedReferences.statusCode).toBe(409);
+    expect(unsupportedReferences.json()).toMatchObject({ error: { code: "PROJECT_FILE_REFERENCES_UNSUPPORTED" } });
+    await expect(readFile(path.join(files, "Contract.pdf"), "utf8")).resolves.toBe("content");
+  });
+
+  it("does not expose the delete mutation to a read-only role", async () => {
+    const files = path.join(root, "projects", projectId, "files");
+    await mkdir(files);
+    await writeFile(path.join(files, "readonly.txt"), "content", "utf8");
+    const app = appFor("42", "42", "Reporter");
+    const response = await app.inject({
+      method: "DELETE",
+      url: `/api/drafts/DRF-FILES/projects/${projectId}/files/readonly.txt`,
+      payload: {
+        expected_fingerprint: "f".repeat(64),
+        confirmation_name: "readonly.txt",
+        reference_mode: "ignore_unchecked",
+      },
+    });
+    await app.close();
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toMatchObject({ error: { code: "DRAFT_FORBIDDEN" } });
+    await expect(readFile(path.join(files, "readonly.txt"), "utf8")).resolves.toBe("content");
+  });
+
+  it("requires reference_mode and rejects unknown mutation fields", async () => {
+    const files = path.join(root, "projects", projectId, "files");
+    await mkdir(files);
+    await writeFile(path.join(files, "schema.txt"), "content", "utf8");
+    const app = appFor("42", "42", "Developer");
+    const missingMode = await app.inject({
+      method: "POST",
+      url: `/api/drafts/DRF-FILES/projects/${projectId}/files/schema.txt/rename`,
+      payload: { expected_fingerprint: "f".repeat(64), new_name: "new.txt" },
+    });
+    const unknownField = await app.inject({
+      method: "DELETE",
+      url: `/api/drafts/DRF-FILES/projects/${projectId}/files/schema.txt`,
+      payload: {
+        expected_fingerprint: "f".repeat(64),
+        confirmation_name: "schema.txt",
+        reference_mode: "ignore_unchecked",
+        secure_erase: true,
+      },
+    });
+    await app.close();
+    expect(missingMode.statusCode).toBe(400);
+    expect(missingMode.json()).toMatchObject({ error: { code: "REQUEST_CONTRACT_INVALID" } });
+    expect(unknownField.statusCode).toBe(400);
+    expect(unknownField.json()).toMatchObject({ error: { code: "REQUEST_CONTRACT_INVALID" } });
+    await expect(readFile(path.join(files, "schema.txt"), "utf8")).resolves.toBe("content");
+  });
+
+  it("returns stable missing, conflict and hostile-name errors without widening Project scope", async () => {
+    const firstFiles = path.join(root, "projects", projectId, "files");
+    const secondFiles = path.join(await addProject(otherProjectId), "files");
+    await Promise.all([mkdir(firstFiles), mkdir(secondFiles)]);
+    await writeFile(path.join(firstFiles, "Contract.pdf"), "first", "utf8");
+    await writeFile(path.join(firstFiles, "spec.pdf"), "spec", "utf8");
+    await writeFile(path.join(secondFiles, "Contract.pdf"), "second", "utf8");
+    const app = appFor("42", "42", "Developer");
+    const missing = await app.inject({
+      method: "DELETE",
+      url: `/api/drafts/DRF-FILES/projects/${projectId}/files/missing.pdf`,
+      payload: { expected_fingerprint: "f".repeat(64), confirmation_name: "missing.pdf", reference_mode: "ignore_unchecked" },
+    });
+    const conflict = await app.inject({
+      method: "POST",
+      url: `/api/drafts/DRF-FILES/projects/${projectId}/files/Contract.pdf/rename`,
+      payload: { expected_fingerprint: "f".repeat(64), new_name: "SPEC.pdf", reference_mode: "ignore_unchecked" },
+    });
+    const hostile = await app.inject({
+      method: "POST",
+      url: `/api/drafts/DRF-FILES/projects/${projectId}/files/Contract.pdf/rename`,
+      payload: { expected_fingerprint: "f".repeat(64), new_name: "..\\escape.pdf", reference_mode: "ignore_unchecked" },
+    });
+    await app.close();
+
+    expect(missing.statusCode).toBe(404);
+    expect(missing.json()).toMatchObject({ error: { code: "PROJECT_FILE_NOT_FOUND" } });
+    expect(conflict.statusCode).toBe(409);
+    expect(conflict.json()).toMatchObject({ error: { code: "PROJECT_FILE_NAME_CONFLICT" } });
+    expect(hostile.statusCode).toBe(400);
+    expect(hostile.json()).toMatchObject({ error: { code: "PROJECT_FILE_NAME_INVALID" } });
+    await expect(readFile(path.join(secondFiles, "Contract.pdf"), "utf8")).resolves.toBe("second");
+  });
+});

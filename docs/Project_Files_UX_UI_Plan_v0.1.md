@@ -449,3 +449,65 @@ Git diff.
 - если внешний файловый менеджер одновременно подменяет target или внутреннее случайное
   staging-имя, операция безопасно прекращается и не удаляет чужой inode; такое внешне созданное
   состояние требует обычного обновления/исправления рабочей копии.
+
+### Этап 4 — завершён
+
+Реализовано:
+
+- добавлены авторизованные server/domain-операции переименования и удаления одного обычного файла
+  только из плоского каталога текущего Project; оба маршрута доступны Developer и Maintainer,
+  проходят через существующий `DraftManager.withUiMutation` и поэтому соблюдают владельца draft,
+  writer mode `ui` и ожидаемый fingerprint;
+- обе операции проверяют Project ID и owning `project.yaml`, точное исходное имя, Windows-совместимое
+  новое имя, отсутствие symlink и не-обычных entries, identity каталога и файла, а также
+  регистронезависимые конфликты; exact и case-only rename различаются, а case-only rename переносимо
+  работает на Windows через то же target-local transient-переименование;
+- rename и delete выполняют полную `validateRepository`; исходный файл временно перемещается в
+  уникальную обычную запись `.gitpm-project-file-<uuid>.rename|delete`, которая безопасно сохраняет
+  inode для отката, а rename публикует новое имя hard link без overwrite; штатный успех, обычная
+  ошибка и успешный rollback удаляют transient только при совпадении identity;
+- внешние гонки не перезаписывают и не удаляют чужой файл. Если внешний процесс занял исходное имя
+  и безопасный rollback невозможен, возвращается `PROJECT_FILE_ROLLBACK_FAILED`, чужой файл
+  сохраняется, а исходное содержимое остаётся в repository-relative transient-записи для ручного
+  восстановления; абсолютный путь не попадает в ответ;
+- публичные request/response DTO и runtime decoders содержат явный future-ready режим
+  `reference_mode: "ignore_unchecked"` и ответ `references.status: "not_checked"`: этап не выдаёт
+  ложный ноль и честно не ищет/не переписывает ссылки до этапа 11; неизвестный режим возвращает
+  `PROJECT_FILE_REFERENCES_UNSUPPORTED`;
+- удаление требует точного `confirmation_name`, возвращает `secure_erase: false` и удаляет файл
+  только из текущей версии Git; контракт не обещает физическое стирание носителя или истории;
+- `docs/Project_Files_HTTP.md` дополнен маршрутами, wire-примерами, стабильными кодами ошибок,
+  правилами transient recovery и границами текущей поддержки; manifest, sidecar, отдельный реестр,
+  YAML-сущность и база данных не добавлялись.
+
+Фактически выполненные проверки:
+
+- первый `corepack pnpm --filter @gitpm/domain build` прошёл; первый узкий contracts/domain-прогон
+  выявил шесть Windows-ошибок первоначального rollback через удерживаемый file handle и hard link:
+  открытый handle мешал rename/unlink и приводил к `EPERM`; механизм был упрощён до единственной
+  target-local transient-записи без удерживаемого handle;
+- после исправления узкий contracts/domain-прогон — успешно: 2 файла, 43 теста;
+- `corepack pnpm --filter @gitpm/server... build` и contracts/domain/server integration — успешно:
+  3 файла, 64 теста; отдельный schema-тест затем подтвердил обязательный `reference_mode` и отказ
+  неизвестного JSON-поля;
+- после окончательного покрытия аварийного recovery и отсутствующего опционального каталога
+  `corepack pnpm exec eslint` для затронутых contracts/domain/server-файлов, узкий Vitest и
+  `git diff --check` — успешно: 3 файла, 68 тестов; первый server-only запуск нового absent-directory
+  теста увидел старый собранный domain `dist`, после явной сборки domain тот же тест прошёл;
+- финальный `corepack pnpm verify:server` — успешно: frozen install, affected build, eslint,
+  12 файлов и 120 server-тестов, diff whitespace пройдены;
+- финальный `corepack pnpm verify:repository` — успешно: frozen install, affected build, eslint,
+  8 файлов и 147 repository-тестов пройдены, один платформенный тест пропущен; schema contracts и
+  diff whitespace пройдены;
+- `verify:workflow` не требовался: packages drafts/security и их публичные границы не менялись,
+  обе операции используют уже проверенный `DraftManager.withUiMutation`.
+
+Ограничения этапа:
+
+- поиск, подсчёт, атомарное обновление и отвязывание `[[file:...]]` намеренно не реализованы и
+  остаются этапом 11; до него клиент обязан явно выбрать `ignore_unchecked`;
+- удаление не является secure erase, а ранее закоммиченное содержимое может остаться в истории Git;
+- `PROJECT_FILE_ROLLBACK_FAILED` означает аварийное внешнее вмешательство: это единственный случай,
+  когда recoverable transient-запись намеренно остаётся в Project; рабочая копия требует ручного
+  восстановления и до него не считается прошедшей полную validation;
+- web UI, загрузочная очередь, действия панели, файловые ссылки и Changes не входят в этап 4.

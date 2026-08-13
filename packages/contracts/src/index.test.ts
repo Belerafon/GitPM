@@ -11,7 +11,9 @@ import {
   decodeEntityResult,
   decodeGlobalSearchResult,
   decodeNotifications,
+  decodeProjectFileDeleteResult,
   decodeProjectFileList,
+  decodeProjectFileRenameResult,
   decodeProjectFileUploadResult,
   describeAjvError,
   summarizeAjvErrors,
@@ -152,6 +154,40 @@ describe("@gitpm/contracts runtime contracts", () => {
     });
     expect(result.operation).toBe("created");
     expect(() => decodeProjectFileUploadResult({ ...result, operation: "overwritten" })).toThrow(ApiContractError);
+  });
+
+  it("decodes honest Project file rename and delete reference state", () => {
+    const item = {
+      name: "ТЗ v4.docx",
+      path: "projects/P-26-MGP84K/files/ТЗ v4.docx",
+      size_bytes: 7,
+      media_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      disposition: "attachment",
+      modified_at: "2026-08-13T10:00:00.000Z",
+      modified_at_source: "working_copy_filesystem",
+    };
+    const renamed = decodeProjectFileRenameResult({
+      project_id: "P-26-MGP84K",
+      operation: "renamed",
+      previous_name: "ТЗ v3.docx",
+      item,
+      references: { status: "not_checked" },
+      draft_fingerprint: "e".repeat(64),
+    });
+    const deleted = decodeProjectFileDeleteResult({
+      project_id: "P-26-MGP84K",
+      operation: "deleted",
+      name: item.name,
+      path: item.path,
+      size_bytes: item.size_bytes,
+      references: { status: "not_checked" },
+      secure_erase: false,
+      draft_fingerprint: "e".repeat(64),
+    });
+    expect(renamed.references.status).toBe("not_checked");
+    expect(deleted.secure_erase).toBe(false);
+    expect(() => decodeProjectFileDeleteResult({ ...deleted, secure_erase: true })).toThrow(ApiContractError);
+    expect(() => decodeProjectFileRenameResult({ ...renamed, references: { status: "checked" } })).toThrow(ApiContractError);
   });
 
   it("derives entity and CLI schema catalogs from the shared registry", () => {

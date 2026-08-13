@@ -2,7 +2,14 @@ import { randomUUID } from "node:crypto";
 import { constants, type Stats } from "node:fs";
 import { link, lstat, mkdir, open, readFile, readdir, realpath, rename, rm, rmdir, type FileHandle } from "node:fs/promises";
 import path from "node:path";
-import type { ProjectFileItem, ProjectFileList, ProjectFileUploadResult } from "@gitpm/contracts";
+import type {
+  ProjectFileDeleteResult,
+  ProjectFileItem,
+  ProjectFileList,
+  ProjectFileReferenceMode,
+  ProjectFileRenameResult,
+  ProjectFileUploadResult,
+} from "@gitpm/contracts";
 import type { DraftManager, DraftMetadata, RepositoryWorkspace } from "@gitpm/drafts";
 import { parseYamlDocument } from "@gitpm/repository-format";
 import { resolveDomainPath, SecurityBoundaryError } from "@gitpm/security";
@@ -35,6 +42,9 @@ export interface ProjectFileUploadInput {
 export interface ProjectFileStoreOptions {
   readonly maxUploadBytes?: number;
   readonly beforeFinalizeForTest?: () => Promise<void>;
+  readonly beforeRenameForTest?: () => Promise<void>;
+  readonly beforeDeleteForTest?: () => Promise<void>;
+  readonly beforeValidationForTest?: (operation: "rename" | "delete") => Promise<void>;
 }
 
 interface DirectorySnapshot {
@@ -187,6 +197,17 @@ async function assertDirectoryUnchanged(snapshot: DirectorySnapshot): Promise<vo
   }
 }
 
+async function existingFilesDirectorySnapshot(directory: string, name: string): Promise<DirectorySnapshot> {
+  try {
+    return await directorySnapshot(directory);
+  } catch (error) {
+    if (error instanceof ProjectFileOperationError && error.code === "PROJECT_FILES_NOT_FOUND") {
+      throw new ProjectFileOperationError("PROJECT_FILE_NOT_FOUND", `Project file ${name} does not exist`);
+    }
+    throw error;
+  }
+}
+
 async function existingRegularFile(target: string): Promise<Stats | undefined> {
   try {
     const stat = await lstat(target);
@@ -200,6 +221,35 @@ async function existingRegularFile(target: string): Promise<Stats | undefined> {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
     filesystemError(error, "PROJECT_FILE_NOT_FOUND", "Project file does not exist");
+  }
+}
+
+async function regularFileNames(directory: string): Promise<Map<string, string>> {
+  const namesByKey = new Map<string, string>();
+  for (const name of await readdir(directory)) {
+    assertFileName(name);
+    const entry = await lstat(path.join(directory, name));
+    if (entry.isSymbolicLink()) {
+      throw new ProjectFileOperationError("PROJECT_FILE_PATH_FORBIDDEN", "Project files directory contains a symbolic link");
+    }
+    if (!entry.isFile()) {
+      throw new ProjectFileOperationError("PROJECT_FILES_LAYOUT_INVALID", "Project files directory contains a non-regular file");
+    }
+    const key = projectFileNameComparisonKey(name);
+    if (namesByKey.has(key)) {
+      throw new ProjectFileOperationError("PROJECT_FILES_LAYOUT_INVALID", "Project files directory contains a case-insensitive name conflict");
+    }
+    namesByKey.set(key, name);
+  }
+  return namesByKey;
+}
+
+function assertReferenceMode(mode: ProjectFileReferenceMode): void {
+  if (mode !== "ignore_unchecked") {
+    throw new ProjectFileOperationError(
+      "PROJECT_FILE_REFERENCES_UNSUPPORTED",
+      "Project file references cannot be checked or changed by this server version",
+    );
   }
 }
 
@@ -374,6 +424,299 @@ export class ProjectFileStore {
     } catch (error) {
       await handle.close();
       filesystemError(error, "PROJECT_FILE_NOT_FOUND", `Project file ${name} does not exist`);
+    }
+  }
+
+  async rename(
+    draftId: string,
+    owner: string,
+    projectId: string,
+    name: string,
+    expectedFingerprint: string,
+    newName: string,
+    referenceMode: ProjectFileReferenceMode,
+  ): Promise<ProjectFileRenameResult> {
+    const mutation = await this.drafts.withUiMutation(draftId, owner, expectedFingerprint, async (metadata) => {
+      assertProjectId(projectId);
+      assertFileName(name);
+      assertFileName(newName);
+      assertReferenceMode(referenceMode);
+      if (name === newName) {
+        throw new ProjectFileOperationError("PROJECT_FILE_RENAME_NO_CHANGE", "New Project file name is unchanged");
+      }
+      await assertProject(metadata as unknown as RepositoryWorkspace, projectId);
+      try {
+        return await this.renameInWorkspace(metadata, projectId, name, newName);
+      } catch (error) {
+        filesystemError(error, "PROJECT_FILE_NOT_FOUND", `Project file ${name} does not exist`);
+      }
+    });
+    return {
+      project_id: projectId,
+      operation: "renamed",
+      previous_name: name,
+      item: mutation.result,
+      references: { status: "not_checked" },
+      draft_fingerprint: mutation.metadata.fingerprint,
+    };
+  }
+
+  async delete(
+    draftId: string,
+    owner: string,
+    projectId: string,
+    name: string,
+    expectedFingerprint: string,
+    confirmationName: string,
+    referenceMode: ProjectFileReferenceMode,
+  ): Promise<ProjectFileDeleteResult> {
+    const mutation = await this.drafts.withUiMutation(draftId, owner, expectedFingerprint, async (metadata) => {
+      assertProjectId(projectId);
+      assertFileName(name);
+      assertReferenceMode(referenceMode);
+      if (confirmationName !== name) {
+        throw new ProjectFileOperationError(
+          "PROJECT_FILE_DELETE_CONFIRMATION_REQUIRED",
+          "Project file deletion requires confirmation of the exact file name",
+        );
+      }
+      await assertProject(metadata as unknown as RepositoryWorkspace, projectId);
+      try {
+        return await this.deleteInWorkspace(metadata, projectId, name);
+      } catch (error) {
+        filesystemError(error, "PROJECT_FILE_NOT_FOUND", `Project file ${name} does not exist`);
+      }
+    });
+    return {
+      project_id: projectId,
+      operation: "deleted",
+      name,
+      path: normalize(path.join("projects", projectId, "files", name)),
+      size_bytes: mutation.result.size,
+      references: { status: "not_checked" },
+      secure_erase: false,
+      draft_fingerprint: mutation.metadata.fingerprint,
+    };
+  }
+
+  private async renameInWorkspace(
+    metadata: DraftMetadata,
+    projectId: string,
+    name: string,
+    newName: string,
+  ): Promise<ProjectFileItem> {
+    const filesDirectory = await resolveDomainPath(metadata.worktree_path, `projects/${projectId}/files`);
+    const filesSnapshot = await existingFilesDirectorySnapshot(filesDirectory, name);
+    const source = await resolveDomainPath(metadata.worktree_path, `projects/${projectId}/files/${name}`);
+    const destination = await resolveDomainPath(metadata.worktree_path, `projects/${projectId}/files/${newName}`);
+    const original = await existingRegularFile(source);
+    if (original === undefined) {
+      throw new ProjectFileOperationError("PROJECT_FILE_NOT_FOUND", `Project file ${name} does not exist`);
+    }
+    const names = await regularFileNames(filesDirectory);
+    if (names.get(projectFileNameComparisonKey(name)) !== name) {
+      throw new ProjectFileOperationError("PROJECT_FILE_NOT_FOUND", `Project file ${name} does not exist`);
+    }
+    const conflictingName = names.get(projectFileNameComparisonKey(newName));
+    if (conflictingName !== undefined && conflictingName !== name) {
+      throw new ProjectFileOperationError(
+        "PROJECT_FILE_NAME_CONFLICT",
+        "A Project file with the same case-insensitive name already exists",
+      );
+    }
+    const temporary = path.join(filesDirectory, `.gitpm-project-file-${randomUUID()}.rename`);
+    let temporaryIdentity: Stats | undefined;
+    let temporaryExists = false;
+    let sourceDetached = false;
+    let publishedIdentity: Stats | undefined;
+    let preserveTemporaryForRecovery = false;
+    try {
+      await this.options.beforeRenameForTest?.();
+      await assertDirectoryUnchanged(filesSnapshot);
+      const current = await existingRegularFile(source);
+      if (current === undefined || !sameIdentity(original, current)) {
+        throw new ProjectFileOperationError("PROJECT_FILE_CHANGED_EXTERNALLY", "Project file changed during rename");
+      }
+      const currentNames = await regularFileNames(filesDirectory);
+      if (currentNames.get(projectFileNameComparisonKey(name)) !== name) {
+        throw new ProjectFileOperationError("PROJECT_FILE_CHANGED_EXTERNALLY", "Project file name changed during rename");
+      }
+      const currentConflict = currentNames.get(projectFileNameComparisonKey(newName));
+      if (currentConflict !== undefined && currentConflict !== name) {
+        throw new ProjectFileOperationError("PROJECT_FILE_CHANGED_EXTERNALLY", "Project file rename target appeared during rename");
+      }
+
+      if (await existingRegularFile(temporary) !== undefined) {
+        throw new ProjectFileOperationError("PROJECT_FILE_CHANGED_EXTERNALLY", "Project file rename staging name already exists");
+      }
+      await rename(source, temporary);
+      temporaryExists = true;
+      sourceDetached = true;
+      temporaryIdentity = await lstat(temporary);
+      if (!sameIdentity(original, temporaryIdentity)) {
+        throw new ProjectFileOperationError("PROJECT_FILE_CHANGED_EXTERNALLY", "Project file changed while rename staging was created");
+      }
+      try {
+        await link(temporary, destination);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+          throw new ProjectFileOperationError("PROJECT_FILE_CHANGED_EXTERNALLY", "Project file rename target appeared during publication");
+        }
+        throw error;
+      }
+      publishedIdentity = await lstat(destination);
+      if (!sameIdentity(original, publishedIdentity)) {
+        throw new ProjectFileOperationError("PROJECT_FILE_CHANGED_EXTERNALLY", "Project file changed during rename publication");
+      }
+      await this.options.beforeValidationForTest?.("rename");
+      const report = await validateRepository(metadata.worktree_path);
+      if (!report.valid) {
+        throw new ProjectFileOperationError(
+          "PROJECT_FILE_VALIDATION_FAILED",
+          report.errors[0]?.message ?? "Repository validation failed",
+        );
+      }
+      const finalNames = await regularFileNames(filesDirectory);
+      if (finalNames.get(projectFileNameComparisonKey(newName)) !== newName
+        || (projectFileNameComparisonKey(name) !== projectFileNameComparisonKey(newName)
+          && finalNames.has(projectFileNameComparisonKey(name)))) {
+        throw new ProjectFileOperationError("PROJECT_FILE_CHANGED_EXTERNALLY", "Project file changed while rename was validated");
+      }
+      const final = await existingRegularFile(destination);
+      if (final === undefined || publishedIdentity === undefined || !sameIdentity(final, publishedIdentity)) {
+        throw new ProjectFileOperationError("PROJECT_FILE_CHANGED_EXTERNALLY", "Project file changed while rename was validated");
+      }
+      if (temporaryIdentity === undefined || !await removeIfSameIdentity(temporary, temporaryIdentity)) {
+        throw new ProjectFileOperationError("PROJECT_FILE_CHANGED_EXTERNALLY", "Project file rename staging changed during cleanup");
+      }
+      temporaryExists = false;
+      return itemFromStat(projectId, newName, final);
+    } catch (error) {
+      if (publishedIdentity !== undefined) {
+        try {
+          await removeIfSameIdentity(destination, publishedIdentity);
+        } catch {
+          throw new ProjectFileOperationError(
+            "PROJECT_FILE_ROLLBACK_FAILED",
+            "Project file rename failed and destination cleanup failed",
+          );
+        }
+      }
+      if (sourceDetached) {
+        let restoredFromTemporary = false;
+        if (temporaryExists && temporaryIdentity !== undefined) {
+          try {
+            if (sameIdentity(await lstat(temporary), temporaryIdentity)
+              && await existingRegularFile(source) === undefined) {
+              await rename(temporary, source);
+              temporaryExists = false;
+              restoredFromTemporary = true;
+              sourceDetached = false;
+            }
+          } catch {
+            restoredFromTemporary = false;
+          }
+        }
+        if (!restoredFromTemporary) {
+          preserveTemporaryForRecovery = true;
+          throw new ProjectFileOperationError(
+            "PROJECT_FILE_ROLLBACK_FAILED",
+            "Project file rename failed and the original name could not be restored safely",
+          );
+        }
+      }
+      throw error;
+    } finally {
+      if (!preserveTemporaryForRecovery && temporaryExists && temporaryIdentity !== undefined) {
+        await removeIfSameIdentity(temporary, temporaryIdentity);
+      }
+    }
+  }
+
+  private async deleteInWorkspace(metadata: DraftMetadata, projectId: string, name: string): Promise<Stats> {
+    const filesDirectory = await resolveDomainPath(metadata.worktree_path, `projects/${projectId}/files`);
+    const filesSnapshot = await existingFilesDirectorySnapshot(filesDirectory, name);
+    const target = await resolveDomainPath(metadata.worktree_path, `projects/${projectId}/files/${name}`);
+    const original = await existingRegularFile(target);
+    if (original === undefined) {
+      throw new ProjectFileOperationError("PROJECT_FILE_NOT_FOUND", `Project file ${name} does not exist`);
+    }
+    const names = await regularFileNames(filesDirectory);
+    if (names.get(projectFileNameComparisonKey(name)) !== name) {
+      throw new ProjectFileOperationError("PROJECT_FILE_NOT_FOUND", `Project file ${name} does not exist`);
+    }
+    const temporary = path.join(filesDirectory, `.gitpm-project-file-${randomUUID()}.delete`);
+    let temporaryIdentity: Stats | undefined;
+    let temporaryExists = false;
+    let deleted = false;
+    let preserveTemporaryForRecovery = false;
+    try {
+      await this.options.beforeDeleteForTest?.();
+      await assertDirectoryUnchanged(filesSnapshot);
+      const current = await existingRegularFile(target);
+      if (current === undefined || !sameIdentity(original, current)) {
+        throw new ProjectFileOperationError("PROJECT_FILE_CHANGED_EXTERNALLY", "Project file changed during deletion");
+      }
+      const currentNames = await regularFileNames(filesDirectory);
+      if (currentNames.get(projectFileNameComparisonKey(name)) !== name) {
+        throw new ProjectFileOperationError("PROJECT_FILE_CHANGED_EXTERNALLY", "Project file name changed during deletion");
+      }
+      if (await existingRegularFile(temporary) !== undefined) {
+        throw new ProjectFileOperationError("PROJECT_FILE_CHANGED_EXTERNALLY", "Project file delete staging name already exists");
+      }
+      await rename(target, temporary);
+      temporaryExists = true;
+      deleted = true;
+      temporaryIdentity = await lstat(temporary);
+      if (!sameIdentity(original, temporaryIdentity)) {
+        throw new ProjectFileOperationError("PROJECT_FILE_CHANGED_EXTERNALLY", "Project file changed while delete staging was created");
+      }
+      await this.options.beforeValidationForTest?.("delete");
+      const report = await validateRepository(metadata.worktree_path);
+      if (!report.valid) {
+        throw new ProjectFileOperationError(
+          "PROJECT_FILE_VALIDATION_FAILED",
+          report.errors[0]?.message ?? "Repository validation failed",
+        );
+      }
+      const finalNames = await regularFileNames(filesDirectory);
+      if (finalNames.has(projectFileNameComparisonKey(name))) {
+        throw new ProjectFileOperationError("PROJECT_FILE_CHANGED_EXTERNALLY", "Project file name reappeared during deletion");
+      }
+      if (temporaryIdentity === undefined || !await removeIfSameIdentity(temporary, temporaryIdentity)) {
+        throw new ProjectFileOperationError("PROJECT_FILE_CHANGED_EXTERNALLY", "Project file delete staging changed during cleanup");
+      }
+      temporaryExists = false;
+      return original;
+    } catch (error) {
+      if (deleted) {
+        let restoredFromTemporary = false;
+        if (temporaryExists && temporaryIdentity !== undefined) {
+          try {
+            if (sameIdentity(await lstat(temporary), temporaryIdentity)
+              && await existingRegularFile(target) === undefined) {
+              await rename(temporary, target);
+              temporaryExists = false;
+              restoredFromTemporary = true;
+              deleted = false;
+            }
+          } catch {
+            restoredFromTemporary = false;
+          }
+        }
+        if (!restoredFromTemporary) {
+          preserveTemporaryForRecovery = true;
+          throw new ProjectFileOperationError(
+            "PROJECT_FILE_ROLLBACK_FAILED",
+            "Project file deletion failed and the original file could not be restored safely",
+          );
+        }
+      }
+      throw error;
+    } finally {
+      if (!preserveTemporaryForRecovery && temporaryExists && temporaryIdentity !== undefined) {
+        await removeIfSameIdentity(temporary, temporaryIdentity);
+      }
     }
   }
 

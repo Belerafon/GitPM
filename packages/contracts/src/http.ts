@@ -167,6 +167,44 @@ export interface ProjectFileUploadResult {
   readonly draft_fingerprint: string;
 }
 
+export type ProjectFileReferenceMode = "ignore_unchecked";
+
+export interface ProjectFileReferencesNotChecked {
+  readonly status: "not_checked";
+}
+
+export interface ProjectFileRenameRequest {
+  readonly expected_fingerprint: string;
+  readonly new_name: string;
+  readonly reference_mode: ProjectFileReferenceMode;
+}
+
+export interface ProjectFileRenameResult {
+  readonly project_id: string;
+  readonly operation: "renamed";
+  readonly previous_name: string;
+  readonly item: ProjectFileItem;
+  readonly references: ProjectFileReferencesNotChecked;
+  readonly draft_fingerprint: string;
+}
+
+export interface ProjectFileDeleteRequest {
+  readonly expected_fingerprint: string;
+  readonly confirmation_name: string;
+  readonly reference_mode: ProjectFileReferenceMode;
+}
+
+export interface ProjectFileDeleteResult {
+  readonly project_id: string;
+  readonly operation: "deleted";
+  readonly name: string;
+  readonly path: string;
+  readonly size_bytes: number;
+  readonly references: ProjectFileReferencesNotChecked;
+  readonly secure_erase: false;
+  readonly draft_fingerprint: string;
+}
+
 export type ChangeKind = "Added" | "Modified" | "Deleted";
 
 export interface DiffHunk {
@@ -407,6 +445,15 @@ function objectSchema(
   additionalProperties = false,
 ): Readonly<Record<string, unknown>> {
   return { type: "object", additionalProperties, required, properties };
+}
+
+function rejectUnknownObjectSchema(
+  properties: Readonly<Record<string, unknown>>,
+): Readonly<Record<string, unknown>> {
+  // Fastify/Ajv normally removes properties only when additionalProperties is exactly false.
+  // An always-failing schema keeps unknown input visible to validation so mutation contracts
+  // reject it instead of silently accepting and stripping it.
+  return { type: "object", additionalProperties: { not: {} }, required: Object.keys(properties), properties };
 }
 
 function arraySchema(items: unknown): Readonly<Record<string, unknown>> {
@@ -666,6 +713,25 @@ const projectFileUploadResultSchema = objectSchema({
   item: projectFileItemSchema,
   draft_fingerprint: stringSchema,
 });
+const projectFileReferencesNotCheckedSchema = objectSchema({ status: { const: "not_checked" } });
+const projectFileRenameResultSchema = objectSchema({
+  project_id: stringSchema,
+  operation: { const: "renamed" },
+  previous_name: stringSchema,
+  item: projectFileItemSchema,
+  references: projectFileReferencesNotCheckedSchema,
+  draft_fingerprint: stringSchema,
+});
+const projectFileDeleteResultSchema = objectSchema({
+  project_id: stringSchema,
+  operation: { const: "deleted" },
+  name: stringSchema,
+  path: stringSchema,
+  size_bytes: integerSchema,
+  references: projectFileReferencesNotCheckedSchema,
+  secure_erase: { const: false },
+  draft_fingerprint: stringSchema,
+});
 
 const commentResultSchema = objectSchema({
   document: { $ref: "https://gitpm.dev/schemas/v1/comment.schema.json" },
@@ -775,6 +841,8 @@ export const HTTP_RESPONSE_SCHEMAS = {
   worktreeFile: worktreeFileSchema,
   projectFileList: projectFileListSchema,
   projectFileUploadResult: projectFileUploadResultSchema,
+  projectFileRenameResult: projectFileRenameResultSchema,
+  projectFileDeleteResult: projectFileDeleteResultSchema,
   worktreeEntryMutation: objectSchema({ path: stringSchema, draft_fingerprint: stringSchema }),
   worktreeFileMutation: objectSchema({ path: stringSchema, size: integerSchema, draft_fingerprint: stringSchema }),
   worktreeMoveMutation: objectSchema({ from: stringSchema, to: stringSchema, draft_fingerprint: stringSchema }),
@@ -834,6 +902,8 @@ export const decodeWorktreeDirectory = createDecoder<WorktreeDirectory>("Worktre
 export const decodeWorktreeFile = createDecoder<WorktreeFile>("WorktreeFile", HTTP_RESPONSE_SCHEMAS.worktreeFile);
 export const decodeProjectFileList = createDecoder<ProjectFileList>("ProjectFileList", HTTP_RESPONSE_SCHEMAS.projectFileList);
 export const decodeProjectFileUploadResult = createDecoder<ProjectFileUploadResult>("ProjectFileUploadResult", HTTP_RESPONSE_SCHEMAS.projectFileUploadResult);
+export const decodeProjectFileRenameResult = createDecoder<ProjectFileRenameResult>("ProjectFileRenameResult", HTTP_RESPONSE_SCHEMAS.projectFileRenameResult);
+export const decodeProjectFileDeleteResult = createDecoder<ProjectFileDeleteResult>("ProjectFileDeleteResult", HTTP_RESPONSE_SCHEMAS.projectFileDeleteResult);
 export const decodeWorktreeEntryMutation = createDecoder<{ readonly path: string; readonly draft_fingerprint: string }>("WorktreeEntryMutation", HTTP_RESPONSE_SCHEMAS.worktreeEntryMutation);
 export const decodeWorktreeFileMutation = createDecoder<{ readonly path: string; readonly size: number; readonly draft_fingerprint: string }>("WorktreeFileMutation", HTTP_RESPONSE_SCHEMAS.worktreeFileMutation);
 export const decodeWorktreeMoveMutation = createDecoder<{ readonly from: string; readonly to: string; readonly draft_fingerprint: string }>("WorktreeMoveMutation", HTTP_RESPONSE_SCHEMAS.worktreeMoveMutation);
@@ -854,6 +924,16 @@ export const HTTP_REQUEST_BODY_SCHEMAS = {
   cleanupDraft: objectSchema({ confirmation: stringSchema }),
   expectedFingerprint: objectSchema({ expected_fingerprint: stringSchema }),
   expectedFingerprintPath: objectSchema({ expected_fingerprint: stringSchema, path: stringSchema }),
+  renameProjectFile: rejectUnknownObjectSchema({
+    expected_fingerprint: stringSchema,
+    new_name: stringSchema,
+    reference_mode: stringSchema,
+  }),
+  deleteProjectFile: rejectUnknownObjectSchema({
+    expected_fingerprint: stringSchema,
+    confirmation_name: stringSchema,
+    reference_mode: stringSchema,
+  }),
   restoreHunk: objectSchema({
     expected_fingerprint: stringSchema,
     path: stringSchema,

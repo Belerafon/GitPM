@@ -305,6 +305,252 @@ describe("ProjectFileStore upload", () => {
   });
 });
 
+describe("ProjectFileStore rename and delete", () => {
+  it("renames Unicode files and performs a portable case-only rename", async () => {
+    const { root, store } = await uploadFixture();
+    const directory = path.join(root, "projects", firstProject, "files");
+    await mkdir(directory, { recursive: true });
+    await writeFile(path.join(directory, "ТЗ v3.docx"), "content", "utf8");
+
+    const renamed = await store.rename(
+      "DRF-FILES",
+      "42",
+      firstProject,
+      "ТЗ v3.docx",
+      "f".repeat(64),
+      "ТЗ v4.docx",
+      "ignore_unchecked",
+    );
+    expect(renamed).toMatchObject({
+      project_id: firstProject,
+      operation: "renamed",
+      previous_name: "ТЗ v3.docx",
+      item: { name: "ТЗ v4.docx", size_bytes: 7 },
+      references: { status: "not_checked" },
+      draft_fingerprint: "e".repeat(64),
+    });
+    await expect(readFile(path.join(directory, "ТЗ v3.docx"))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(readFile(path.join(directory, "ТЗ v4.docx"), "utf8")).resolves.toBe("content");
+
+    const caseOnly = await store.rename(
+      "DRF-FILES",
+      "42",
+      firstProject,
+      "ТЗ v4.docx",
+      "e".repeat(64),
+      "ТЗ V4.docx",
+      "ignore_unchecked",
+    );
+    expect(caseOnly.item.name).toBe("ТЗ V4.docx");
+    expect(await readdir(directory)).toContain("ТЗ V4.docx");
+    await expect(readFile(path.join(directory, "ТЗ V4.docx"), "utf8")).resolves.toBe("content");
+    expect((await readdir(directory)).some((entry) => entry.startsWith(".gitpm-project-file-"))).toBe(false);
+  });
+
+  it("deletes a Unicode file from the current Git version without promising secure erase", async () => {
+    const { root, store } = await uploadFixture();
+    const directory = path.join(root, "projects", firstProject, "files");
+    await mkdir(directory, { recursive: true });
+    await writeFile(path.join(directory, "Договор.pdf"), "contract", "utf8");
+
+    const deleted = await store.delete(
+      "DRF-FILES",
+      "42",
+      firstProject,
+      "Договор.pdf",
+      "f".repeat(64),
+      "Договор.pdf",
+      "ignore_unchecked",
+    );
+
+    expect(deleted).toEqual({
+      project_id: firstProject,
+      operation: "deleted",
+      name: "Договор.pdf",
+      path: `projects/${firstProject}/files/Договор.pdf`,
+      size_bytes: 8,
+      references: { status: "not_checked" },
+      secure_erase: false,
+      draft_fingerprint: "e".repeat(64),
+    });
+    await expect(readFile(path.join(directory, "Договор.pdf"))).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("rejects missing, unchanged, hostile, conflicting and unchecked-reference inputs", async () => {
+    const absent = await uploadFixture();
+    await expect(absent.store.rename(
+      "DRF-FILES", "42", firstProject, "missing.pdf", "f".repeat(64), "new.pdf", "ignore_unchecked",
+    )).rejects.toMatchObject({ code: "PROJECT_FILE_NOT_FOUND" });
+    await expect(absent.store.delete(
+      "DRF-FILES", "42", firstProject, "missing.pdf", "f".repeat(64), "missing.pdf", "ignore_unchecked",
+    )).rejects.toMatchObject({ code: "PROJECT_FILE_NOT_FOUND" });
+
+    const { root, store } = await uploadFixture();
+    const directory = path.join(root, "projects", firstProject, "files");
+    await mkdir(directory, { recursive: true });
+    await writeFile(path.join(directory, "Contract.pdf"), "one", "utf8");
+    await writeFile(path.join(directory, "spec.pdf"), "two", "utf8");
+
+    await expect(store.rename(
+      "DRF-FILES", "42", firstProject, "missing.pdf", "f".repeat(64), "new.pdf", "ignore_unchecked",
+    )).rejects.toMatchObject({ code: "PROJECT_FILE_NOT_FOUND" });
+    await expect(store.rename(
+      "DRF-FILES", "42", firstProject, "contract.pdf", "f".repeat(64), "new.pdf", "ignore_unchecked",
+    )).rejects.toMatchObject({ code: "PROJECT_FILE_NOT_FOUND" });
+    await expect(store.rename(
+      "DRF-FILES", "42", firstProject, "Contract.pdf", "f".repeat(64), "Contract.pdf", "ignore_unchecked",
+    )).rejects.toMatchObject({ code: "PROJECT_FILE_RENAME_NO_CHANGE" });
+    await expect(store.rename(
+      "DRF-FILES", "42", firstProject, "Contract.pdf", "f".repeat(64), "SPEC.pdf", "ignore_unchecked",
+    )).rejects.toMatchObject({ code: "PROJECT_FILE_NAME_CONFLICT" });
+    await expect(store.rename(
+      "DRF-FILES", "42", firstProject, "Contract.pdf", "f".repeat(64), "..\\escape.pdf", "ignore_unchecked",
+    )).rejects.toMatchObject({ code: "PROJECT_FILE_NAME_INVALID" });
+    await expect(store.rename(
+      "DRF-FILES", "42", firstProject, "Contract.pdf", "f".repeat(64), "new.pdf", "update" as "ignore_unchecked",
+    )).rejects.toMatchObject({ code: "PROJECT_FILE_REFERENCES_UNSUPPORTED" });
+    await expect(store.delete(
+      "DRF-FILES", "42", firstProject, "Contract.pdf", "f".repeat(64), "contract.pdf", "ignore_unchecked",
+    )).rejects.toMatchObject({ code: "PROJECT_FILE_DELETE_CONFIRMATION_REQUIRED" });
+    await expect(readFile(path.join(directory, "Contract.pdf"), "utf8")).resolves.toBe("one");
+  });
+
+  it("keeps Project scope and rejects symlinks and non-regular entries", async () => {
+    const { root, store } = await uploadFixture();
+    const firstFiles = path.join(root, "projects", firstProject, "files");
+    const secondFiles = path.join(root, "projects", secondProject, "files");
+    await Promise.all([mkdir(firstFiles, { recursive: true }), mkdir(secondFiles, { recursive: true })]);
+    await writeFile(path.join(firstFiles, "same.txt"), "first", "utf8");
+    await writeFile(path.join(secondFiles, "same.txt"), "second", "utf8");
+    await mkdir(path.join(firstFiles, "folder"));
+    await expect(store.delete(
+      "DRF-FILES", "42", firstProject, "folder", "f".repeat(64), "folder", "ignore_unchecked",
+    )).rejects.toMatchObject({ code: "PROJECT_FILE_NOT_REGULAR" });
+    await expect(store.delete(
+      "DRF-FILES", "42", firstProject, "same.txt", "f".repeat(64), "same.txt", "ignore_unchecked",
+    )).rejects.toMatchObject({ code: "PROJECT_FILES_LAYOUT_INVALID" });
+    await rm(firstFiles, { recursive: true });
+    await symlink(secondFiles, firstFiles, process.platform === "win32" ? "junction" : "dir");
+    await expect(store.rename(
+      "DRF-FILES", "42", firstProject, "same.txt", "f".repeat(64), "renamed.txt", "ignore_unchecked",
+    )).rejects.toMatchObject({ code: "PROJECT_FILE_PATH_FORBIDDEN" });
+    await expect(readFile(path.join(secondFiles, "same.txt"), "utf8")).resolves.toBe("second");
+  });
+
+  it("detects external source races without deleting the external replacement", async () => {
+    let renameTarget = "";
+    const renameRace = await uploadFixture({
+      beforeRenameForTest: async () => {
+        await rm(renameTarget);
+        await writeFile(renameTarget, "external rename", "utf8");
+      },
+    });
+    renameTarget = path.join(renameRace.root, "projects", firstProject, "files", "race.txt");
+    await mkdir(path.dirname(renameTarget), { recursive: true });
+    await writeFile(renameTarget, "original", "utf8");
+    await expect(renameRace.store.rename(
+      "DRF-FILES", "42", firstProject, "race.txt", "f".repeat(64), "renamed.txt", "ignore_unchecked",
+    )).rejects.toMatchObject({ code: "PROJECT_FILE_CHANGED_EXTERNALLY" });
+    await expect(readFile(renameTarget, "utf8")).resolves.toBe("external rename");
+
+    let deleteTarget = "";
+    const deleteRace = await uploadFixture({
+      beforeDeleteForTest: async () => {
+        await rm(deleteTarget);
+        await writeFile(deleteTarget, "external delete", "utf8");
+      },
+    });
+    deleteTarget = path.join(deleteRace.root, "projects", firstProject, "files", "race.txt");
+    await mkdir(path.dirname(deleteTarget), { recursive: true });
+    await writeFile(deleteTarget, "original", "utf8");
+    await expect(deleteRace.store.delete(
+      "DRF-FILES", "42", firstProject, "race.txt", "f".repeat(64), "race.txt", "ignore_unchecked",
+    )).rejects.toMatchObject({ code: "PROJECT_FILE_CHANGED_EXTERNALLY" });
+    await expect(readFile(deleteTarget, "utf8")).resolves.toBe("external delete");
+  });
+
+  it("rolls rename and delete back after full repository validation failure", async () => {
+    const renameFixture = await uploadFixture({
+      beforeValidationForTest: async (operation) => {
+        if (operation === "rename") {
+          await writeFile(path.join(renameFixture.root, ".gitpm", "statuses.yaml"), "invalid: [", "utf8");
+        }
+      },
+    });
+    const renameFiles = path.join(renameFixture.root, "projects", firstProject, "files");
+    await mkdir(renameFiles, { recursive: true });
+    await writeFile(path.join(renameFiles, "old.txt"), "original rename", "utf8");
+    await expect(renameFixture.store.rename(
+      "DRF-FILES", "42", firstProject, "old.txt", "f".repeat(64), "new.txt", "ignore_unchecked",
+    )).rejects.toMatchObject({ code: "PROJECT_FILE_VALIDATION_FAILED" });
+    await expect(readFile(path.join(renameFiles, "old.txt"), "utf8")).resolves.toBe("original rename");
+    await expect(readFile(path.join(renameFiles, "new.txt"))).rejects.toMatchObject({ code: "ENOENT" });
+    expect((await readdir(renameFiles)).some((entry) => entry.startsWith(".gitpm-project-file-"))).toBe(false);
+
+    const deleteFixture = await uploadFixture({
+      beforeValidationForTest: async (operation) => {
+        if (operation === "delete") {
+          await writeFile(
+            path.join(deleteFixture.root, "projects", firstProject, "files", "external-neighbor.txt"),
+            "external neighbor",
+            "utf8",
+          );
+          await writeFile(path.join(deleteFixture.root, ".gitpm", "statuses.yaml"), "invalid: [", "utf8");
+        }
+      },
+    });
+    const deleteFiles = path.join(deleteFixture.root, "projects", firstProject, "files");
+    await mkdir(deleteFiles, { recursive: true });
+    await writeFile(path.join(deleteFiles, "delete.txt"), "original delete", "utf8");
+    await expect(deleteFixture.store.delete(
+      "DRF-FILES", "42", firstProject, "delete.txt", "f".repeat(64), "delete.txt", "ignore_unchecked",
+    )).rejects.toMatchObject({ code: "PROJECT_FILE_VALIDATION_FAILED" });
+    await expect(readFile(path.join(deleteFiles, "delete.txt"), "utf8")).resolves.toBe("original delete");
+    await expect(readFile(path.join(deleteFiles, "external-neighbor.txt"), "utf8")).resolves.toBe("external neighbor");
+    expect((await readdir(deleteFiles)).some((entry) => entry.startsWith(".gitpm-project-file-"))).toBe(false);
+  });
+
+  it("reports rollback failure and preserves an external file that occupies a deleted name", async () => {
+    let target = "";
+    const raced = await uploadFixture({
+      beforeValidationForTest: async (operation) => {
+        if (operation === "delete") await writeFile(target, "external", "utf8");
+      },
+    });
+    target = path.join(raced.root, "projects", firstProject, "files", "occupied.txt");
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFile(target, "original", "utf8");
+    await expect(raced.store.delete(
+      "DRF-FILES", "42", firstProject, "occupied.txt", "f".repeat(64), "occupied.txt", "ignore_unchecked",
+    )).rejects.toMatchObject({ code: "PROJECT_FILE_ROLLBACK_FAILED" });
+    await expect(readFile(target, "utf8")).resolves.toBe("external");
+    const recovery = (await readdir(path.dirname(target))).find((entry) => entry.endsWith(".delete"));
+    expect(recovery).toBeDefined();
+    await expect(readFile(path.join(path.dirname(target), recovery!), "utf8")).resolves.toBe("original");
+  });
+
+  it("preserves rename recovery content when an external file occupies the original name", async () => {
+    let source = "";
+    const raced = await uploadFixture({
+      beforeValidationForTest: async (operation) => {
+        if (operation === "rename") await writeFile(source, "external", "utf8");
+      },
+    });
+    const files = path.join(raced.root, "projects", firstProject, "files");
+    source = path.join(files, "original.txt");
+    await mkdir(files, { recursive: true });
+    await writeFile(source, "original content", "utf8");
+    await expect(raced.store.rename(
+      "DRF-FILES", "42", firstProject, "original.txt", "f".repeat(64), "new.txt", "ignore_unchecked",
+    )).rejects.toMatchObject({ code: "PROJECT_FILE_ROLLBACK_FAILED" });
+    await expect(readFile(source, "utf8")).resolves.toBe("external");
+    await expect(readFile(path.join(files, "new.txt"))).rejects.toMatchObject({ code: "ENOENT" });
+    const recovery = (await readdir(files)).find((entry) => entry.endsWith(".rename"));
+    expect(recovery).toBeDefined();
+    await expect(readFile(path.join(files, recovery!), "utf8")).resolves.toBe("original content");
+  });
+});
+
 describe("projectFilePresentation", () => {
   it("allows inline only for passive browser-viewable formats", () => {
     expect(projectFilePresentation("scan.JPEG")).toEqual({ media_type: "image/jpeg", disposition: "inline" });

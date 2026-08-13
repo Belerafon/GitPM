@@ -1,5 +1,10 @@
 import type { Readable } from "node:stream";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import {
+  HTTP_REQUEST_BODY_SCHEMAS,
+  type ProjectFileDeleteRequest,
+  type ProjectFileRenameRequest,
+} from "@gitpm/contracts";
 import type { DraftManager } from "@gitpm/drafts";
 import { ProjectFileOperationError, type ProjectFileStore } from "@gitpm/domain";
 import type { Authenticate } from "./draft-api.js";
@@ -152,6 +157,48 @@ export function registerProjectFilesApi(
         drainContent(content);
         throw error;
       }
+    },
+  );
+
+  app.post<{
+    Params: { draftId: string; projectId: string; fileName: string };
+    Body: ProjectFileRenameRequest;
+  }>(
+    "/api/drafts/:draftId/projects/:projectId/files/:fileName/rename",
+    { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.renameProjectFile } },
+    async (request) => {
+      const actor = await authenticate(request);
+      requireMutationRole(actor.role);
+      return await files.rename(
+        request.params.draftId,
+        actor.userId,
+        request.params.projectId,
+        request.params.fileName,
+        request.body.expected_fingerprint,
+        request.body.new_name,
+        request.body.reference_mode,
+      );
+    },
+  );
+
+  app.delete<{
+    Params: { draftId: string; projectId: string; fileName: string };
+    Body: ProjectFileDeleteRequest;
+  }>(
+    "/api/drafts/:draftId/projects/:projectId/files/:fileName",
+    { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.deleteProjectFile } },
+    async (request) => {
+      const actor = await authenticate(request);
+      requireMutationRole(actor.role);
+      return await files.delete(
+        request.params.draftId,
+        actor.userId,
+        request.params.projectId,
+        request.params.fileName,
+        request.body.expected_fingerprint,
+        request.body.confirmation_name,
+        request.body.reference_mode,
+      );
     },
   );
 }
