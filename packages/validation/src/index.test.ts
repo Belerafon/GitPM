@@ -139,6 +139,49 @@ describe("repository validation", () => {
     ]));
   });
 
+  it("accepts opaque regular files of any extension in a flat Project files directory", async () => {
+    const root = await fixture();
+    const files = path.join(root, "projects", project, "files");
+    await mkdir(files);
+    await writeFile(path.join(files, "ТЗ v3.docx"), Buffer.from([0, 255, 1, 254]));
+    await writeFile(path.join(files, "not-domain.yaml"), "this is not: [valid domain YAML", "utf8");
+    await writeFile(path.join(files, "без расширения"), "opaque", "utf8");
+
+    expect(await validateRepository(root)).toMatchObject({ valid: true, documentCount: 18, errors: [] });
+  });
+
+  it("rejects nested directories and symlinks in Project file storage without following them", async () => {
+    const root = await fixture();
+    const files = path.join(root, "projects", project, "files");
+    await mkdir(path.join(files, "nested"), { recursive: true });
+    await writeFile(path.join(files, "nested", "hidden.pdf"), "opaque", "utf8");
+    const outside = await mkdtemp(path.join(os.tmpdir(), "gitpm-project-files-outside-"));
+    roots.push(outside);
+    await writeFile(path.join(outside, "external.pdf"), "external", "utf8");
+    await symlink(outside, path.join(files, "linked"), process.platform === "win32" ? "junction" : "dir");
+
+    const report = await validateRepository(root);
+    expect(report.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "PROJECT_FILES_NESTED_DIRECTORY", path: `projects/${project}/files/nested` }),
+      expect.objectContaining({ code: "FS_SYMLINK", path: `projects/${project}/files/linked` }),
+    ]));
+    expect(report.errors).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: `projects/${project}/files/linked/external.pdf` }),
+    ]));
+  });
+
+  it.runIf(process.platform !== "win32")("rejects Project file names that differ only by case", async () => {
+    const root = await fixture();
+    const files = path.join(root, "projects", project, "files");
+    await mkdir(files);
+    await writeFile(path.join(files, "Contract.PDF"), "first", "utf8");
+    await writeFile(path.join(files, "contract.pdf"), "second", "utf8");
+
+    expect((await validateRepository(root)).errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "PROJECT_FILE_NAME_CONFLICT" }),
+    ]));
+  });
+
   it("does not reuse a cached document when same-size content preserves mtime", async () => {
     const root = await fixture();
     const task = path.join(root, "projects", project, "tasks", taskOne + ".yaml");

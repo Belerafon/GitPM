@@ -8,6 +8,14 @@ import { parseYamlDocument, RepositoryFormatError } from "@gitpm/repository-form
 import type { GitPmDocument } from "@gitpm/repository-format";
 import { DOCUMENT_SCHEMA_DEFINITIONS, DOCUMENT_SCHEMA_IDS } from "@gitpm/contracts";
 import { resolvePlanning, validatePlanning, type PlanningIssue, type PlanningSettings, type ScheduleTracksConfig } from "@gitpm/scheduling";
+import { projectFileNameComparisonKey, projectFileNameInvalidReason } from "./project-files.js";
+
+export {
+  MAX_PROJECT_FILE_NAME_UTF16_LENGTH,
+  projectFileNameComparisonKey,
+  projectFileNameInvalidReason,
+  type ProjectFileNameInvalidReason,
+} from "./project-files.js";
 
 export interface ValidationIssue {
   readonly severity: "error" | "warning";
@@ -79,6 +87,11 @@ async function filesUnder(
   directory: string,
   issues: ValidationIssue[],
 ): Promise<string[]> {
+  const relativeDirectory = normalize(path.relative(root, directory));
+  if (isProjectFilesDirectory(relativeDirectory)) {
+    await validateProjectFilesDirectory(root, directory, issues);
+    return [];
+  }
   const entries = await readdir(directory, { withFileTypes: true });
   const nested = await Promise.all(entries.map(async (entry) => {
     const absolute = path.join(directory, entry.name);
@@ -111,9 +124,63 @@ async function filesUnder(
   return nested.flat();
 }
 
+function isProjectFilesDirectory(relative: string): boolean {
+  return /^projects\/P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}\/files$/u.test(relative);
+}
+
+async function validateProjectFilesDirectory(
+  root: string,
+  directory: string,
+  issues: ValidationIssue[],
+): Promise<void> {
+  const namesByComparisonKey = new Map<string, string>();
+  const entries = (await readdir(directory, { withFileTypes: true }))
+    .sort((left, right) => left.name.localeCompare(right.name, "en"));
+
+  for (const entry of entries) {
+    const relative = normalize(path.relative(root, path.join(directory, entry.name)));
+    if (entry.isSymbolicLink()) {
+      issues.push({ severity: "error", code: "FS_SYMLINK", path: relative, message: "Project files must not be symbolic links" });
+      continue;
+    }
+    if (entry.isDirectory()) {
+      issues.push({ severity: "error", code: "PROJECT_FILES_NESTED_DIRECTORY", path: relative, message: "Project file storage must be flat" });
+      continue;
+    }
+    if (!entry.isFile()) {
+      issues.push({ severity: "error", code: "REPOSITORY_UNKNOWN_PATH", path: relative, message: "Project file storage supports regular files only" });
+      continue;
+    }
+
+    const invalidReason = projectFileNameInvalidReason(entry.name);
+    if (invalidReason !== undefined) {
+      issues.push({
+        severity: "error",
+        code: "PROJECT_FILE_NAME_INVALID",
+        path: relative,
+        message: `Project file name is not Windows-compatible (${invalidReason})`,
+      });
+      continue;
+    }
+
+    const comparisonKey = projectFileNameComparisonKey(entry.name);
+    const existingName = namesByComparisonKey.get(comparisonKey);
+    if (existingName !== undefined) {
+      issues.push({
+        severity: "error",
+        code: "PROJECT_FILE_NAME_CONFLICT",
+        path: relative,
+        message: `Project file name conflicts with ${existingName} when compared without case`,
+      });
+    } else {
+      namesByComparisonKey.set(comparisonKey, entry.name);
+    }
+  }
+}
+
 function isAllowedDomainDirectory(relative: string): boolean {
   return /^projects\/P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}$/u.test(relative)
-    || /^projects\/P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}\/(?:milestones|tasks|views|comments|time-entries)$/u.test(relative)
+    || /^projects\/P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}\/(?:milestones|tasks|views|comments|time-entries|files)$/u.test(relative)
     || /^projects\/P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}\/comments\/T-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}$/u.test(relative)
     || /^projects\/P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}\/time-entries\/T-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}$/u.test(relative);
 }

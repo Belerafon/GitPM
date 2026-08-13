@@ -68,13 +68,34 @@ configuration через формы GitPM или CLI использует дом
 `schedules.<track>` (см. ниже); `gitpm/time-entry@1` хранит фактические
 трудозатраты в `projects/<project>/time-entries/<task>/<entry>.yaml`.
 
+У каждого Project может быть плоское пользовательское файловое хранилище
+`projects/<project-id>/files/`. В нём разрешены обычные файлы с любым расширением либо без
+расширения. Их содержимое непрозрачно для repository parser: в частности, файл с расширением
+`.yaml` в этом каталоге не является доменной сущностью и не разбирается как YAML. Файлы входят в
+Git-репозиторий, но отдельные manifest, sidecar-метаданные и YAML-сущности для их списка не
+создаются.
+
+Каталог `files/` не может содержать вложенные каталоги, symbolic link или другие специальные
+filesystem entries. Имя каждого файла является одним сегментом пути, должно быть не длиннее 255
+UTF-16 code units и быть допустимым обычным именем Windows: запрещены управляющие символы U+0000–
+U+001F, символы `< > : " / \\ | ? *`, завершающие пробел и точка, сегменты `.` и `..`, а также
+зарезервированные device names `CON`, `PRN`, `AUX`, `NUL`, `COM1`–`COM9` и `LPT1`–`LPT9`
+(Windows также считает цифрами суффикса `¹`, `²` и `³`; правило действует и перед расширением,
+варианты регистра равнозначны). Имена внутри одного Project уникальны без учёта регистра. Эти
+ограничения обеспечивают одинаковый checkout на Windows и case-sensitive системах; обход пути
+через имя либо symlink запрещён.
+
 Validation возвращает `REPOSITORY_DIRECTORY_REQUIRED`, если обязательный каталог
 отсутствует или не является каталогом, `REPOSITORY_DOCUMENT_REQUIRED`, если отсутствует
 фиксированный конфигурационный документ, `FS_SYMLINK` для symlink в repository/domain path
 и `REPOSITORY_UNKNOWN_PATH` для неизвестного файла, пустого каталога или другого элемента
 внутри domain layout. Пустые корневые collection-каталоги `people/`, `teams/`, `availability/` и `projects/`
 могут содержать созданный `gitpm init` файл `.gitkeep`; другие non-YAML файлы внутри domain
-layout запрещены.
+layout запрещены, кроме непрозрачных обычных файлов в каноническом каталоге Project `files/`.
+Для этого каталога validation возвращает `PROJECT_FILE_NAME_INVALID` для несовместимого имени,
+`PROJECT_FILE_NAME_CONFLICT` для совпадающих без учёта регистра имён и
+`PROJECT_FILES_NESTED_DIRECTORY` для вложенного каталога; symbolic link по-прежнему возвращает
+общий код `FS_SYMLINK`.
 
 Person, Team и Calendar хранятся соответственно в `people`, `teams` и
 `calendars`; имя файла равно ID плюс `.yaml`. Project является единственным
@@ -83,6 +104,8 @@ Person, Team и Calendar хранятся соответственно в `peopl
 и Saved View равны ID плюс `.yaml` в каталогах `milestones`, `tasks` и `views`.
 Comment хранится в `projects/<project-id>/comments/<task-id>/<comment-id>.yaml`;
 path фиксирует и owning Project, и Task.
+Обычный файл Project хранится непосредственно в `projects/<project-id>/files/<filename>`; его имя
+не является глобальным entity ID и идентифицирует файл только внутри owning Project.
 Availability Event хранится в `availability/<availability-event-id>.yaml` и ссылается
 на глобальный Person, поэтому отсутствие действует сразу во всех Project этого человека.
 
