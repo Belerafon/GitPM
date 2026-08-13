@@ -1,5 +1,5 @@
 import { activeProjectIds, ENTITY_ID_PREFIX, isOperationalTask, newUniqueEntityId } from "@gitpm/shared";
-import type { ProjectFileDeleteResult, ProjectFileList, ProjectFileRenameResult, ProjectFileUploadResult, ProjectPlanning } from "@gitpm/contracts";
+import type { ProjectFileDeleteResult, ProjectFileList, ProjectFileRenameResult, ProjectFileReplaceResult, ProjectFileUploadResult, ProjectPlanning } from "@gitpm/contracts";
 import { resolveSchedulingHierarchy, validatePlanning, windowEffort, type PlanningSettings, type SchedulingHierarchyTask } from "@gitpm/scheduling";
 import { buildSchedule, ScheduleResolver, scheduleTracksConfig, scheduleTextReader, scheduleEffortReader, withSchedulesMap, type ScheduleMap } from "../../schedules.js";
 import { isBlockedStatus, isCompletedStatus, isInProgressStatus } from "../../status-categories.js";
@@ -277,6 +277,17 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   }, [onChanged]);
 
   const handleProjectFileRenamed = useCallback((result: ProjectFileRenameResult) => {
+    setProjectFiles((current) => current === null ? current : {
+      ...current,
+      total_size_bytes: current.total_size_bytes - (current.items.find((item) => item.name === result.previous_name)?.size_bytes ?? 0) + result.item.size_bytes,
+      items: current.items.map((item) => item.name === result.previous_name ? result.item : item),
+      draft_fingerprint: result.draft_fingerprint,
+    });
+    setWorkspace((current) => current === null ? current : { ...current, draft_fingerprint: result.draft_fingerprint });
+    void onChanged();
+  }, [onChanged]);
+
+  const handleProjectFileReplaced = useCallback((result: ProjectFileReplaceResult) => {
     setProjectFiles((current) => current === null ? current : {
       ...current,
       total_size_bytes: current.total_size_bytes - (current.items.find((item) => item.name === result.previous_name)?.size_bytes ?? 0) + result.item.size_bytes,
@@ -930,6 +941,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
       onDeleted={handleProjectFileDeleted}
       onReload={() => { void loadProjectFiles(); }}
       onRenamed={handleProjectFileRenamed}
+      onReplaced={handleProjectFileReplaced}
       onUploaded={handleProjectFileUploaded}
       onViewChange={setFilesView}
       open={filesOpen}

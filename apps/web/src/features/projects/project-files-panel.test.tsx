@@ -2,12 +2,12 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ProjectFileItem, ProjectFileList } from "@gitpm/contracts";
 import { useState } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../../api.js";
 import { PROJECT_FILES_VIEW_COOKIE, ProjectFilesPanel, projectFileFamily, readProjectFilesView, type ProjectFilesView } from "./project-files-panel.js";
 
-const uploadApi = { deleteProjectFile: vi.fn(), renameProjectFile: vi.fn(), uploadProjectFile: vi.fn() };
-const uploadProps = { api: uploadApi, draftId: "DRF-1", fingerprint: "b".repeat(64), onDeleted: vi.fn(), onRenamed: vi.fn(), onUploaded: vi.fn(), projectId: "P-26-111111", readOnly: false };
+const uploadApi = { deleteProjectFile: vi.fn(), projectFileReferences: vi.fn(), renameProjectFile: vi.fn(), replaceProjectFile: vi.fn(), uploadProjectFile: vi.fn() };
+const uploadProps = { api: uploadApi, draftId: "DRF-1", fingerprint: "b".repeat(64), onDeleted: vi.fn(), onRenamed: vi.fn(), onReplaced: vi.fn(), onUploaded: vi.fn(), projectId: "P-26-111111", readOnly: false };
 
 const item = (name: string, size_bytes = 1234): ProjectFileItem => ({
   name,
@@ -31,6 +31,9 @@ afterEach(() => {
   cleanup();
   vi.resetAllMocks();
   document.cookie = `${encodeURIComponent(PROJECT_FILES_VIEW_COOKIE)}=; Path=/; Max-Age=0`;
+});
+beforeEach(() => {
+  uploadApi.projectFileReferences.mockResolvedValue({ project_id: "P-26-111111", file_name: "file", status: "checked", count: 0, locations: [], draft_fingerprint: "b".repeat(64) });
 });
 
 describe("ProjectFilesPanel", () => {
@@ -174,6 +177,9 @@ describe("ProjectFilesPanel", () => {
     fireEvent.change(input, { target: { files: [replacement] } });
     expect(uploadApi.uploadProjectFile).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Заменить текущий файл" }));
+    const replaceDialog = await screen.findByRole("dialog", { name: "Подтверждение замены файла" });
+    expect(replaceDialog.textContent).toContain("0 проверенных ссылок");
+    fireEvent.click(within(replaceDialog).getByRole("button", { name: "Заменить файл и сохранить ссылки" }));
     await waitFor(() => expect(uploadApi.uploadProjectFile).toHaveBeenCalledTimes(1));
     expect(uploadApi.uploadProjectFile.mock.calls[0]!.slice(4, 6)).toEqual([existing.name, "replace"]);
 
@@ -183,6 +189,34 @@ describe("ProjectFilesPanel", () => {
     fireEvent.click(within(rename.closest(".project-files-conflict") as HTMLElement).getByRole("button", { name: "Загрузить с этим именем" }));
     await waitFor(() => expect(uploadApi.uploadProjectFile).toHaveBeenCalledTimes(2));
     expect(uploadApi.uploadProjectFile.mock.calls[1]!.slice(4, 6)).toEqual(["ТЗ новая.docx", "create"]);
+  });
+
+  it("traps and restores replacement confirmation focus and closes it from Escape or its backdrop", async () => {
+    const existing = item("contract.docx", 10);
+    const inputFile = () => fileWithSize(existing.name, 11);
+    render(<ProjectFilesPanel {...uploadProps} locale="en" list={list([existing])} loadState={{ status: "ready" }} onClose={vi.fn()} onReload={vi.fn()} onViewChange={vi.fn()} open view="grid" />);
+    const input = screen.getByLabelText("Select project files to upload");
+
+    fireEvent.change(input, { target: { files: [inputFile()] } });
+    fireEvent.click(screen.getByRole("button", { name: "Replace current file" }));
+    let dialog = await screen.findByRole("dialog", { name: "Confirm file replacement" });
+    const cancel = within(dialog).getByRole("button", { name: "Cancel" });
+    const confirm = within(dialog).getByRole("button", { name: "Replace file and preserve references" });
+    expect(document.activeElement).toBe(cancel);
+    fireEvent.keyDown(cancel, { key: "Tab", shiftKey: true });
+    expect(document.activeElement).toBe(confirm);
+    fireEvent.keyDown(confirm, { key: "Tab" });
+    expect(document.activeElement).toBe(cancel);
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Confirm file replacement" })).toBeNull());
+    expect(document.activeElement?.classList.contains("project-files-upload-item")).toBe(true);
+
+    fireEvent.change(input, { target: { files: [inputFile()] } });
+    fireEvent.click(await screen.findByRole("button", { name: "Replace current file" }));
+    dialog = await screen.findByRole("dialog", { name: "Confirm file replacement" });
+    fireEvent.mouseDown(dialog);
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Confirm file replacement" })).toBeNull());
+    expect(uploadApi.uploadProjectFile).not.toHaveBeenCalled();
   });
 
   it("cancels an active upload and disables selection and drops in read-only mode", async () => {
@@ -250,9 +284,10 @@ describe("ProjectFilesPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Переименовать" }));
     const dialog = screen.getByRole("dialog", { name: "Переименование файла" });
     fireEvent.change(within(dialog).getByLabelText("Новое полное имя файла"), { target: { value: result.item.name } });
+    await waitFor(() => expect(within(dialog).getByRole("button", { name: "Переименовать" })).toHaveProperty("disabled", false));
     fireEvent.click(within(dialog).getByRole("button", { name: "Переименовать" }));
     await waitFor(() => expect(onRenamed).toHaveBeenCalledWith(result));
-    expect(uploadApi.renameProjectFile).toHaveBeenCalledWith("DRF-1", "P-26-111111", original.name, "b".repeat(64), result.item.name);
+    expect(uploadApi.renameProjectFile).toHaveBeenCalledWith("DRF-1", "P-26-111111", original.name, "b".repeat(64), result.item.name, "update");
 
     cleanup();
     uploadApi.renameProjectFile.mockRejectedValueOnce(new ApiError("PROJECT_FILE_NAME_CONFLICT", "name exists"));
@@ -261,6 +296,7 @@ describe("ProjectFilesPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Rename" }));
     const conflictDialog = screen.getByRole("dialog", { name: "Rename file" });
     fireEvent.change(within(conflictDialog).getByLabelText("New full file name"), { target: { value: "CONTRACT.docx" } });
+    await waitFor(() => expect(within(conflictDialog).getByRole("button", { name: "Rename" })).toHaveProperty("disabled", false));
     fireEvent.click(within(conflictDialog).getByRole("button", { name: "Rename" }));
     expect((await within(conflictDialog).findByRole("alert")).textContent).toContain("PROJECT_FILE_NAME_CONFLICT");
     expect(screen.getByRole("link", { name: `Download ${original.name}` })).toBeTruthy();
@@ -278,13 +314,96 @@ describe("ProjectFilesPanel", () => {
     const confirm = within(dialog).getByRole("button", { name: "Delete" });
     expect(confirm).toHaveProperty("disabled", true);
     expect(dialog.textContent).toContain("not secure erase");
-    expect(dialog.textContent).toContain("File links are not checked");
+    await waitFor(() => expect(dialog.textContent).toContain("Verified references in this Project: 0"));
     fireEvent.change(within(dialog).getByLabelText(`Type the exact full name “${doomed.name}” to delete`), { target: { value: doomed.name.toLocaleLowerCase() } });
     expect(confirm).toHaveProperty("disabled", true);
     fireEvent.change(within(dialog).getByLabelText(`Type the exact full name “${doomed.name}” to delete`), { target: { value: doomed.name } });
     fireEvent.click(confirm);
     await waitFor(() => expect(onDeleted).toHaveBeenCalledWith(result));
-    expect(uploadApi.deleteProjectFile).toHaveBeenCalledWith("DRF-1", "P-26-111111", doomed.name, "b".repeat(64), doomed.name);
+    expect(uploadApi.deleteProjectFile).toHaveBeenCalledWith("DRF-1", "P-26-111111", doomed.name, "b".repeat(64), doomed.name, "restrict");
+  });
+
+  it("requires separate explicit consent before unlinking referenced text on delete", async () => {
+    const doomed = item("referenced.txt", 8);
+    uploadApi.projectFileReferences.mockResolvedValueOnce({ project_id: "P-26-111111", file_name: doomed.name, status: "checked", count: 1, locations: [{ entity_type: "task", entity_id: "T-26-P9G3P8", path: "projects/P-26-111111/tasks/T-26-P9G3P8.yaml", field: "description_markdown", start: 0, end: 23 }], draft_fingerprint: "b".repeat(64) });
+    uploadApi.deleteProjectFile.mockResolvedValueOnce({ project_id: "P-26-111111", operation: "deleted", name: doomed.name, path: doomed.path, size_bytes: doomed.size_bytes, references: { status: "checked", action: "unlinked", before_count: 1, affected_count: 1, remaining_count: 0, locations: [] }, secure_erase: false, draft_fingerprint: "c".repeat(64) });
+    render(<ProjectFilesPanel {...uploadProps} locale="en" list={list([doomed])} loadState={{ status: "ready" }} onClose={vi.fn()} onReload={vi.fn()} onViewChange={vi.fn()} open view="grid" />);
+    fireEvent.click(screen.getByRole("button", { name: `Select ${doomed.name} for file actions` }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    const dialog = screen.getByRole("dialog", { name: "Delete file" });
+    await waitFor(() => expect(dialog.textContent).toContain("Verified references in this Project: 1"));
+    fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: doomed.name } });
+    const confirm = within(dialog).getByRole("button", { name: "Delete" });
+    expect(confirm).toHaveProperty("disabled", true);
+    expect(uploadApi.deleteProjectFile).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("checkbox"));
+    expect(confirm).toHaveProperty("disabled", false);
+    fireEvent.click(confirm);
+    await waitFor(() => expect(uploadApi.deleteProjectFile).toHaveBeenCalledWith("DRF-1", "P-26-111111", doomed.name, "b".repeat(64), doomed.name, "unlink"));
+  });
+
+  it("replaces the selected file with a differently named local file after checked preview", async () => {
+    const old = item("old.txt", 3);
+    const next = new File(["new bytes"], "new.txt", { type: "text/plain" });
+    const result = { project_id: "P-26-111111", operation: "replaced" as const, previous_name: old.name, item: item(next.name, next.size), references: { status: "checked" as const, action: "updated" as const, before_count: 1, affected_count: 1, remaining_count: 0, locations: [] }, draft_fingerprint: "c".repeat(64) };
+    uploadApi.projectFileReferences.mockResolvedValueOnce({ project_id: "P-26-111111", file_name: old.name, status: "checked", count: 1, locations: [], draft_fingerprint: "b".repeat(64) });
+    uploadApi.replaceProjectFile.mockResolvedValueOnce(result);
+    const onReplaced = vi.fn();
+    render(<ProjectFilesPanel {...uploadProps} onReplaced={onReplaced} locale="en" list={list([old])} loadState={{ status: "ready" }} onClose={vi.fn()} onReload={vi.fn()} onViewChange={vi.fn()} open view="grid" />);
+    fireEvent.click(screen.getByRole("button", { name: `Select ${old.name} for file actions` }));
+    fireEvent.click(screen.getByRole("button", { name: "Replace with new file" }));
+    const dialog = screen.getByRole("dialog", { name: "Confirm file replacement" });
+    await waitFor(() => expect(dialog.textContent).toContain("Verified references in this Project: 1"));
+    fireEvent.change(within(dialog).getByLabelText("Choose the new local file"), { target: { files: [next] } });
+    expect(dialog.textContent).toContain("old.txt");
+    expect(dialog.textContent).toContain("new.txt");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Replace file and preserve references" }));
+    await waitFor(() => expect(uploadApi.replaceProjectFile).toHaveBeenCalledWith("DRF-1", "P-26-111111", old.name, "b".repeat(64), next, next.name, expect.any(Object)));
+    expect(onReplaced).toHaveBeenCalledWith(result);
+  });
+
+  it("requires the exact new local name before replacing a selected file above 50 MiB", async () => {
+    const old = item("old.bin", 3);
+    const next = fileWithSize("new-large.bin", 50 * 1024 * 1024 + 1);
+    render(<ProjectFilesPanel {...uploadProps} locale="en" list={list([old])} loadState={{ status: "ready" }} onClose={vi.fn()} onReload={vi.fn()} onViewChange={vi.fn()} open view="grid" />);
+    fireEvent.click(screen.getByRole("button", { name: `Select ${old.name} for file actions` }));
+    fireEvent.click(screen.getByRole("button", { name: "Replace with new file" }));
+    const dialog = screen.getByRole("dialog", { name: "Confirm file replacement" });
+    await waitFor(() => expect(dialog.textContent).toContain("Verified references"));
+    fireEvent.change(within(dialog).getByLabelText("Choose the new local file"), { target: { files: [next] } });
+    const confirm = within(dialog).getByRole("button", { name: "Replace file and preserve references" });
+    expect(confirm).toHaveProperty("disabled", true);
+    const textboxes = within(dialog).getAllByRole("textbox");
+    fireEvent.change(textboxes.at(-1)!, { target: { value: next.name.toUpperCase() } });
+    expect(confirm).toHaveProperty("disabled", true);
+    fireEvent.change(textboxes.at(-1)!, { target: { value: next.name } });
+    expect(confirm).toHaveProperty("disabled", false);
+  });
+
+  it("blocks on preview failure, retries, and ignores a cancelled replacement preview", async () => {
+    const deferred: { resolve?: (value: unknown) => void } = {};
+    uploadApi.projectFileReferences.mockReset()
+      .mockRejectedValueOnce(new ApiError("NETWORK_ERROR", "offline"))
+      .mockResolvedValueOnce({ project_id: "P-26-111111", file_name: "ref.txt", status: "checked", count: 1, locations: [{ entity_type: "task", entity_id: "T-26-P9G3P8", path: "projects/P-26-111111/tasks/T-26-P9G3P8.yaml", field: "description_markdown", start: 0, end: 16 }], draft_fingerprint: "b".repeat(64) })
+      .mockImplementationOnce(async () => await new Promise((resolve) => { deferred.resolve = resolve; }));
+    const referenced = item("ref.txt");
+    render(<ProjectFilesPanel {...uploadProps} locale="en" list={list([referenced])} loadState={{ status: "ready" }} onClose={vi.fn()} onReload={vi.fn()} onViewChange={vi.fn()} open view="grid" />);
+    fireEvent.click(screen.getByRole("button", { name: `Select ${referenced.name} for file actions` }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    const dialog = screen.getByRole("dialog", { name: "Delete file" });
+    expect((await within(dialog).findByRole("alert")).textContent).toContain("action is blocked");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(dialog.textContent).toContain("Verified references in this Project: 1"));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+    const replacement = new File(["new"], referenced.name);
+    fireEvent.change(screen.getByLabelText("Select project files to upload"), { target: { files: [replacement] } });
+    fireEvent.click(await screen.findByRole("button", { name: "Replace current file" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    deferred.resolve?.({ project_id: "P-26-111111", file_name: referenced.name, status: "checked", count: 0, locations: [], draft_fingerprint: "b".repeat(64) });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.queryByRole("dialog", { name: "Confirm file replacement" })).toBeNull();
+    expect(uploadApi.uploadProjectFile).not.toHaveBeenCalled();
   });
 
   it("keeps open, download and properties available but disables mutations in read-only mode", () => {
@@ -296,6 +415,22 @@ describe("ProjectFilesPanel", () => {
     expect(screen.getByRole("button", { name: "Properties" })).toHaveProperty("disabled", false);
     expect(screen.getByRole("button", { name: "Rename" })).toHaveProperty("disabled", true);
     expect(screen.getByRole("button", { name: "Delete" })).toHaveProperty("disabled", true);
+  });
+
+  it("shows verified property references to a read-only viewer and retries an error", async () => {
+    uploadApi.projectFileReferences.mockReset()
+      .mockRejectedValueOnce(new ApiError("NETWORK_ERROR", "offline"))
+      .mockResolvedValueOnce({ project_id: "P-26-111111", file_name: "read only.txt", status: "checked", count: 2, locations: [{ entity_type: "task", entity_id: "T-26-P9G3P8", path: "projects/P-26-111111/tasks/T-26-P9G3P8.yaml", field: "description_markdown", start: 0, end: 22 }], draft_fingerprint: "b".repeat(64) });
+    const readonly = item("read only.txt");
+    render(<ProjectFilesPanel {...uploadProps} readOnly locale="en" list={list([readonly])} loadState={{ status: "ready" }} onClose={vi.fn()} onReload={vi.fn()} onViewChange={vi.fn()} open view="grid" />);
+    fireEvent.click(screen.getByRole("button", { name: `Select ${readonly.name} for file actions` }));
+    fireEvent.click(screen.getByRole("button", { name: "Properties" }));
+    const dialog = screen.getByRole("dialog", { name: "File properties" });
+    expect((await within(dialog).findByRole("alert")).textContent).toContain("action is blocked");
+    expect(dialog.textContent).toContain("Not verified");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(dialog.textContent).toContain("References in this Project2"));
+    expect(dialog.textContent).toContain("T-26-P9G3P8");
   });
 });
 

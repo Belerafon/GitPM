@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DraftRuntimeError, type DraftManager, type DraftMetadata, type RepositoryWorkspace } from "@gitpm/drafts";
 import { ProjectFileStore } from "@gitpm/domain";
+import { formatYamlDocument, parseYamlDocument } from "@gitpm/repository-format";
 import { buildApp } from "./app.js";
 
 const projectId = "P-26-MGP84K";
@@ -99,6 +100,20 @@ describe("Project files read API", () => {
       items: [],
       draft_fingerprint: "f".repeat(64),
     });
+  });
+
+  it("previews exact references for a read-only actor without exposing host paths", async () => {
+    const project = path.join(root, "projects", projectId);
+    const files = path.join(project, "files");
+    await mkdir(files);
+    await writeFile(path.join(files, "spec.txt"), "bytes", "utf8");
+    await writeFile(path.join(project, "project.yaml"), `schema: gitpm/project@2\nid: ${projectId}\ndescription_markdown: '[[file:spec.txt]]'\n`, "utf8");
+    const app = appFor("42", "42", "Reporter");
+    const response = await app.inject({ method: "GET", url: `/api/drafts/DRF-FILES/projects/${projectId}/files/spec.txt/references` });
+    await app.close();
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ project_id: projectId, file_name: "spec.txt", status: "checked", count: 1, draft_fingerprint: "f".repeat(64) });
+    expect(JSON.stringify(response.json())).not.toContain(root);
   });
 
   it("lists Unicode files and streams safe previews with RFC 5987 names", async () => {
@@ -235,6 +250,88 @@ describe("Project files upload API", () => {
     await expect(readFile(path.join(files, "contract.txt"), "utf8")).resolves.toBe("new");
   });
 
+  it("returns checked references only for explicit exact replacement", async () => {
+    const project = path.join(root, "projects", projectId);
+    const files = path.join(project, "files");
+    await mkdir(files);
+    await writeFile(path.join(files, "contract.txt"), "old", "utf8");
+    const projectFile = path.join(project, "project.yaml");
+    await writeFile(projectFile, formatYamlDocument({ ...parseYamlDocument(await readFile(projectFile, "utf8")), description_markdown: "[[file:contract.txt]]" }), "utf8");
+    let app = appFor("42", "42", "Developer");
+    const checked = await app.inject({ method: "POST", url: `/api/drafts/DRF-FILES/projects/${projectId}/files/upload`, headers: uploadHeaders("contract.txt", Buffer.from("new"), { "x-gitpm-upload-mode": "replace", "x-gitpm-reference-mode": "preserve_checked" }), payload: Buffer.from("new") });
+    await app.close();
+    expect(checked.json()).toMatchObject({ operation: "replaced", references: { status: "checked", action: "preserved", before_count: 1, remaining_count: 1 } });
+    app = appFor("42", "42", "Developer");
+    const legacy = await app.inject({ method: "POST", url: `/api/drafts/DRF-FILES/projects/${projectId}/files/upload`, headers: uploadHeaders("contract.txt", Buffer.from("new"), { "x-gitpm-upload-mode": "replace" }), payload: Buffer.from("new") });
+    expect(legacy.json()).toMatchObject({ references: { status: "not_checked" } });
+    const invalidCreate = await app.inject({ method: "POST", url: `/api/drafts/DRF-FILES/projects/${projectId}/files/upload`, headers: uploadHeaders("created.txt", Buffer.from("new"), { "x-gitpm-reference-mode": "preserve_checked", "x-gitpm-expected-fingerprint": "e".repeat(64) }), payload: Buffer.from("new") });
+    await app.close();
+    expect(invalidCreate.statusCode).toBe(409);
+    expect(invalidCreate.json()).toMatchObject({ error: { code: "PROJECT_FILE_REFERENCES_UNSUPPORTED" } });
+  });
+
+  it("atomically replaces a selected file with a differently named upload and updates references", async () => {
+    const project = path.join(root, "projects", projectId);
+    const files = path.join(project, "files");
+    await mkdir(files);
+    await writeFile(path.join(files, "old.txt"), "old", "utf8");
+    const projectFile = path.join(project, "project.yaml");
+    await writeFile(projectFile, formatYamlDocument({ ...parseYamlDocument(await readFile(projectFile, "utf8")), description_markdown: "[[file:old.txt]]" }), "utf8");
+    const app = appFor("42", "42", "Developer");
+    const bytes = Buffer.from("new bytes");
+    const response = await app.inject({
+      method: "POST", url: `/api/drafts/DRF-FILES/projects/${projectId}/files/old.txt/replace`,
+      headers: uploadHeaders("new.txt", bytes), payload: bytes,
+    });
+    await app.close();
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ operation: "replaced", previous_name: "old.txt", item: { name: "new.txt" }, references: { action: "updated", before_count: 1, affected_count: 1, remaining_count: 0 } });
+    await expect(readFile(path.join(files, "old.txt"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(readFile(path.join(files, "new.txt"), "utf8")).resolves.toBe("new bytes");
+    expect(await readFile(projectFile, "utf8")).toContain("[[file:new.txt]]");
+  });
+
+  it.each([
+    ["Reporter", "42", "42", "f".repeat(64), 403, "DRAFT_FORBIDDEN"],
+    ["Developer", "99", "42", "f".repeat(64), 403, "DRAFT_FORBIDDEN"],
+    ["Developer", "42", "42", "a".repeat(64), 409, "DRAFT_CHANGED_EXTERNALLY"],
+  ] as const)("rejects selected replacement for role/owner/fingerprint policy %#", async (role, owner, actor, fingerprint, status, code) => {
+    const files = path.join(root, "projects", projectId, "files");
+    await mkdir(files);
+    await writeFile(path.join(files, "old.txt"), "old", "utf8");
+    const bytes = Buffer.from("new");
+    const app = appFor(owner, actor, role);
+    const response = await app.inject({ method: "POST", url: `/api/drafts/DRF-FILES/projects/${projectId}/files/old.txt/replace`, headers: uploadHeaders("new.txt", bytes, { "x-gitpm-expected-fingerprint": fingerprint }), payload: bytes });
+    await app.close();
+    expect(response.statusCode).toBe(status);
+    expect(response.json()).toMatchObject({ error: { code } });
+    await expect(readFile(path.join(files, "old.txt"), "utf8")).resolves.toBe("old");
+  });
+
+  it("does not widen selected replacement to another Project", async () => {
+    const otherFiles = path.join(root, "projects", otherProjectId, "files");
+    await mkdir(otherFiles);
+    await writeFile(path.join(otherFiles, "old.txt"), "other", "utf8");
+    const bytes = Buffer.from("new");
+    const app = appFor("42", "42", "Developer");
+    const response = await app.inject({ method: "POST", url: `/api/drafts/DRF-FILES/projects/${projectId}/files/old.txt/replace`, headers: uploadHeaders("new.txt", bytes), payload: bytes });
+    await app.close();
+    expect(response.statusCode).toBe(404);
+    await expect(readFile(path.join(otherFiles, "old.txt"), "utf8")).resolves.toBe("other");
+  });
+
+  it("requires exact new-name confirmation for a selected replacement above 50 MiB", async () => {
+    const files = path.join(root, "projects", projectId, "files");
+    await mkdir(files);
+    await writeFile(path.join(files, "old.bin"), "old", "utf8");
+    const app = appFor("42", "42", "Developer");
+    const response = await app.inject({ method: "POST", url: `/api/drafts/DRF-FILES/projects/${projectId}/files/old.bin/replace`, headers: uploadHeaders("new.bin", Buffer.alloc(0), { "x-gitpm-upload-size": String(50 * 1024 * 1024 + 1) }), payload: Buffer.alloc(0) });
+    await app.close();
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ error: { code: "PROJECT_FILE_LARGE_CONFIRMATION_REQUIRED" } });
+    await expect(readFile(path.join(files, "old.bin"), "utf8")).resolves.toBe("old");
+  });
+
   it.each([
     ["read-only role", "42", "42", "Reporter", "ui", "f".repeat(64), 403, "DRAFT_FORBIDDEN"],
     ["another owner", "99", "42", "Developer", "ui", "f".repeat(64), 403, "DRAFT_FORBIDDEN"],
@@ -316,6 +413,34 @@ describe("Project files upload API", () => {
 });
 
 describe("Project files rename and delete API", () => {
+  it("updates, keeps, restricts and unlinks references through explicit wire policies", async () => {
+    const project = path.join(root, "projects", projectId);
+    const files = path.join(project, "files");
+    await mkdir(files, { recursive: true });
+    await writeFile(path.join(files, "old.txt"), "bytes", "utf8");
+    const projectFile = path.join(project, "project.yaml");
+    await writeFile(projectFile, formatYamlDocument({ ...parseYamlDocument(await readFile(projectFile, "utf8")), description_markdown: "[[file:old.txt]]" }), "utf8");
+    let app = appFor("42", "42", "Developer");
+    const updated = await app.inject({ method: "POST", url: `/api/drafts/DRF-FILES/projects/${projectId}/files/old.txt/rename`, payload: { expected_fingerprint: "f".repeat(64), new_name: "new.txt", reference_mode: "update" } });
+    await app.close();
+    expect(updated.statusCode).toBe(200);
+    expect(updated.json()).toMatchObject({ references: { status: "checked", action: "updated", before_count: 1, affected_count: 1, remaining_count: 0 } });
+    expect(await readFile(path.join(project, "project.yaml"), "utf8")).toContain("[[file:new.txt]]");
+
+    app = appFor("42", "42", "Developer");
+    const kept = await app.inject({ method: "POST", url: `/api/drafts/DRF-FILES/projects/${projectId}/files/new.txt/rename`, payload: { expected_fingerprint: "f".repeat(64), new_name: "kept.txt", reference_mode: "keep" } });
+    await app.close();
+    expect(kept.json()).toMatchObject({ references: { action: "kept", before_count: 1, affected_count: 0, remaining_count: 1 } });
+    await writeFile(projectFile, formatYamlDocument({ ...parseYamlDocument(await readFile(projectFile, "utf8")), description_markdown: "[[file:kept.txt]]" }), "utf8");
+    app = appFor("42", "42", "Developer");
+    const restricted = await app.inject({ method: "DELETE", url: `/api/drafts/DRF-FILES/projects/${projectId}/files/kept.txt`, payload: { expected_fingerprint: "f".repeat(64), confirmation_name: "kept.txt", reference_mode: "restrict" } });
+    expect(restricted.statusCode).toBe(409);
+    expect(restricted.json()).toMatchObject({ error: { code: "PROJECT_FILE_DELETE_REFERENCED" } });
+    const unlinked = await app.inject({ method: "DELETE", url: `/api/drafts/DRF-FILES/projects/${projectId}/files/kept.txt`, payload: { expected_fingerprint: "f".repeat(64), confirmation_name: "kept.txt", reference_mode: "unlink" } });
+    await app.close();
+    expect(unlinked.json()).toMatchObject({ references: { action: "unlinked", before_count: 1, affected_count: 1, remaining_count: 0 }, secure_erase: false });
+    expect(await readFile(path.join(project, "project.yaml"), "utf8")).toContain("kept.txt");
+  });
   it("returns 404 for rename and delete when the optional files directory is absent", async () => {
     const app = appFor("42", "42", "Developer");
     const rename = await app.inject({
@@ -420,14 +545,13 @@ describe("Project files rename and delete API", () => {
     const unsupportedReferences = await app.inject({
       method: "POST",
       url: `/api/drafts/DRF-FILES/projects/${projectId}/files/Contract.pdf/rename`,
-      payload: { expected_fingerprint: "f".repeat(64), new_name: "renamed.pdf", reference_mode: "update" },
+      payload: { expected_fingerprint: "f".repeat(64), new_name: "renamed.pdf", reference_mode: "future" },
     });
     await app.close();
 
     expect(wrongConfirmation.statusCode).toBe(409);
     expect(wrongConfirmation.json()).toMatchObject({ error: { code: "PROJECT_FILE_DELETE_CONFIRMATION_REQUIRED" } });
-    expect(unsupportedReferences.statusCode).toBe(409);
-    expect(unsupportedReferences.json()).toMatchObject({ error: { code: "PROJECT_FILE_REFERENCES_UNSUPPORTED" } });
+    expect(unsupportedReferences.statusCode).toBe(400);
     await expect(readFile(path.join(files, "Contract.pdf"), "utf8")).resolves.toBe("content");
   });
 

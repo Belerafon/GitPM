@@ -133,6 +133,12 @@ Git-содержимое и не разбираются как domain YAML; mani
 регистра. Полная repository validation отклоняет symbolic link, вложенные каталоги, специальные
 filesystem entries, недопустимые имена и попытки обхода пути.
 
+Ссылочно-осознанные rename/delete/replace используют общий parser `[[file:...]]`, строго
+Project-scoped preview и повторный поиск внутри `DraftManager.withUiMutation` после optimistic
+fingerprint check. Изменение имени файла и всех затронутых canonical YAML-документов выполняется
+атомарно с полной validation и byte-exact rollback; совместимый unchecked wire mode остаётся
+только как явно непроверенное поведение.
+
 ## 6. Schema v1 baseline
 
 P01 завершается не schema drafts, а утвержденным минимальным schema v1 baseline. P02 не продолжает проектирование модели, а реализует parser и validation по этому baseline.
@@ -777,6 +783,18 @@ Human-readable CLI принимает locale в следующем порядк�
 3. server default locale или `ru` для standalone CLI.
 
 `--format json` всегда использует стабильные codes, field names и values, не зависящие от locale. Это необходимо для агентов и автоматизации.
+
+### 27.4.1. Атомарная замена Project file с новым именем
+
+Отдельная streamed-операция замены выбранного Project file выполняется внутри одного
+`DraftManager.withUiMutation`. Она проверяет optimistic fingerprint и Project scope, сохраняет
+исходный файл в rollback storage, публикует новые байты под именем локального файла и при изменении
+имени переписывает exact `[[file:...]]` во всех поддерживаемых Markdown-полях Project. Полная
+repository validation и финальная проверка ссылок предшествуют удалению rollback storage.
+
+Содержимое исходного файла сравнивается потоковым digest до и после долгой передачи, без загрузки
+файла целиком в память. Rollback использует identity guards и точные byte journals; несовпавший
+внешний occupant не перезаписывается, но откат остальных файлов и YAML продолжается best-effort.
 
 ### 27.5. Проверки локализации
 

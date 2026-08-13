@@ -164,10 +164,55 @@ export interface ProjectFileUploadResult {
   readonly project_id: string;
   readonly operation: "created" | "replaced";
   readonly item: ProjectFileItem;
+  readonly references: ProjectFileReferencesNotChecked | ProjectFileReferencesChecked;
   readonly draft_fingerprint: string;
 }
 
-export type ProjectFileReferenceMode = "ignore_unchecked";
+export interface ProjectFileReplaceResult {
+  readonly project_id: string;
+  readonly operation: "replaced";
+  readonly previous_name: string;
+  readonly item: ProjectFileItem;
+  readonly references: ProjectFileReferencesChecked;
+  readonly draft_fingerprint: string;
+}
+
+export type ProjectFileRenameReferenceMode = "update" | "keep" | "ignore_unchecked";
+export type ProjectFileDeleteReferenceMode = "restrict" | "unlink" | "ignore_unchecked";
+export type ProjectFileReferenceMode = ProjectFileRenameReferenceMode | ProjectFileDeleteReferenceMode;
+
+export type ProjectFileReferenceEntityType = "project" | "milestone" | "task" | "comment" | "time_entry";
+export type ProjectFileReferenceField = "description_markdown" | "acceptance_criteria_markdown" | "body_markdown" | "note_markdown";
+
+export interface ProjectFileReferenceLocation {
+  readonly entity_type: ProjectFileReferenceEntityType;
+  readonly entity_id: string;
+  readonly path: string;
+  readonly field: ProjectFileReferenceField;
+  readonly value_index?: number;
+  readonly start: number;
+  readonly end: number;
+}
+
+export interface ProjectFileReferencePreview {
+  readonly project_id: string;
+  readonly file_name: string;
+  readonly status: "checked";
+  readonly count: number;
+  readonly locations: readonly ProjectFileReferenceLocation[];
+  readonly draft_fingerprint: string;
+}
+
+export type ProjectFileReferenceAction = "preserved" | "updated" | "kept" | "unlinked";
+
+export interface ProjectFileReferencesChecked {
+  readonly status: "checked";
+  readonly action: ProjectFileReferenceAction;
+  readonly before_count: number;
+  readonly affected_count: number;
+  readonly remaining_count: number;
+  readonly locations: readonly ProjectFileReferenceLocation[];
+}
 
 export interface ProjectFileReferencesNotChecked {
   readonly status: "not_checked";
@@ -176,7 +221,7 @@ export interface ProjectFileReferencesNotChecked {
 export interface ProjectFileRenameRequest {
   readonly expected_fingerprint: string;
   readonly new_name: string;
-  readonly reference_mode: ProjectFileReferenceMode;
+  readonly reference_mode: ProjectFileRenameReferenceMode;
 }
 
 export interface ProjectFileRenameResult {
@@ -184,14 +229,14 @@ export interface ProjectFileRenameResult {
   readonly operation: "renamed";
   readonly previous_name: string;
   readonly item: ProjectFileItem;
-  readonly references: ProjectFileReferencesNotChecked;
+  readonly references: ProjectFileReferencesNotChecked | ProjectFileReferencesChecked;
   readonly draft_fingerprint: string;
 }
 
 export interface ProjectFileDeleteRequest {
   readonly expected_fingerprint: string;
   readonly confirmation_name: string;
-  readonly reference_mode: ProjectFileReferenceMode;
+  readonly reference_mode: ProjectFileDeleteReferenceMode;
 }
 
 export interface ProjectFileDeleteResult {
@@ -200,7 +245,7 @@ export interface ProjectFileDeleteResult {
   readonly name: string;
   readonly path: string;
   readonly size_bytes: number;
-  readonly references: ProjectFileReferencesNotChecked;
+  readonly references: ProjectFileReferencesNotChecked | ProjectFileReferencesChecked;
   readonly secure_erase: false;
   readonly draft_fingerprint: string;
 }
@@ -432,6 +477,7 @@ export interface NotificationsResult {
 
 const stringSchema = { type: "string" } as const;
 const integerSchema = { type: "integer" } as const;
+const nonNegativeIntegerSchema = { type: "integer", minimum: 0 } as const;
 const numberSchema = { type: "number" } as const;
 const booleanSchema = { type: "boolean" } as const;
 const unknownSchema = {} as const;
@@ -707,19 +753,55 @@ const projectFileListSchema = objectSchema({
   draft_fingerprint: stringSchema,
 });
 
+const projectFileReferenceLocationSchema = objectSchema({
+  entity_type: { enum: ["project", "milestone", "task", "comment", "time_entry"] },
+  entity_id: stringSchema,
+  path: stringSchema,
+  field: { enum: ["description_markdown", "acceptance_criteria_markdown", "body_markdown", "note_markdown"] },
+  value_index: nonNegativeIntegerSchema,
+  start: nonNegativeIntegerSchema,
+  end: nonNegativeIntegerSchema,
+}, ["entity_type", "entity_id", "path", "field", "start", "end"]);
+const projectFileReferencesCheckedSchema = objectSchema({
+  status: { const: "checked" },
+  action: { enum: ["preserved", "updated", "kept", "unlinked"] },
+  before_count: nonNegativeIntegerSchema,
+  affected_count: nonNegativeIntegerSchema,
+  remaining_count: nonNegativeIntegerSchema,
+  locations: arraySchema(projectFileReferenceLocationSchema),
+});
+const projectFileReferencePreviewSchema = objectSchema({
+  project_id: stringSchema,
+  file_name: stringSchema,
+  status: { const: "checked" },
+  count: nonNegativeIntegerSchema,
+  locations: arraySchema(projectFileReferenceLocationSchema),
+  draft_fingerprint: stringSchema,
+});
+const projectFileReferencesNotCheckedSchema = objectSchema({ status: { const: "not_checked" } });
+const projectFileReferencesSchema = { oneOf: [projectFileReferencesNotCheckedSchema, projectFileReferencesCheckedSchema] } as const;
+
 const projectFileUploadResultSchema = objectSchema({
   project_id: stringSchema,
   operation: { enum: ["created", "replaced"] },
   item: projectFileItemSchema,
+  references: projectFileReferencesSchema,
   draft_fingerprint: stringSchema,
 });
-const projectFileReferencesNotCheckedSchema = objectSchema({ status: { const: "not_checked" } });
+const projectFileReplaceResultSchema = objectSchema({
+  project_id: stringSchema,
+  operation: { const: "replaced" },
+  previous_name: stringSchema,
+  item: projectFileItemSchema,
+  references: projectFileReferencesCheckedSchema,
+  draft_fingerprint: stringSchema,
+});
 const projectFileRenameResultSchema = objectSchema({
   project_id: stringSchema,
   operation: { const: "renamed" },
   previous_name: stringSchema,
   item: projectFileItemSchema,
-  references: projectFileReferencesNotCheckedSchema,
+  references: projectFileReferencesSchema,
   draft_fingerprint: stringSchema,
 });
 const projectFileDeleteResultSchema = objectSchema({
@@ -728,7 +810,7 @@ const projectFileDeleteResultSchema = objectSchema({
   name: stringSchema,
   path: stringSchema,
   size_bytes: integerSchema,
-  references: projectFileReferencesNotCheckedSchema,
+  references: projectFileReferencesSchema,
   secure_erase: { const: false },
   draft_fingerprint: stringSchema,
 });
@@ -840,7 +922,9 @@ export const HTTP_RESPONSE_SCHEMAS = {
   worktreeDirectory: worktreeDirectorySchema,
   worktreeFile: worktreeFileSchema,
   projectFileList: projectFileListSchema,
+  projectFileReferencePreview: projectFileReferencePreviewSchema,
   projectFileUploadResult: projectFileUploadResultSchema,
+  projectFileReplaceResult: projectFileReplaceResultSchema,
   projectFileRenameResult: projectFileRenameResultSchema,
   projectFileDeleteResult: projectFileDeleteResultSchema,
   worktreeEntryMutation: objectSchema({ path: stringSchema, draft_fingerprint: stringSchema }),
@@ -901,7 +985,9 @@ export const decodeDirectRevertResult = createDecoder<DirectRevertResult>("Direc
 export const decodeWorktreeDirectory = createDecoder<WorktreeDirectory>("WorktreeDirectory", HTTP_RESPONSE_SCHEMAS.worktreeDirectory);
 export const decodeWorktreeFile = createDecoder<WorktreeFile>("WorktreeFile", HTTP_RESPONSE_SCHEMAS.worktreeFile);
 export const decodeProjectFileList = createDecoder<ProjectFileList>("ProjectFileList", HTTP_RESPONSE_SCHEMAS.projectFileList);
+export const decodeProjectFileReferencePreview = createDecoder<ProjectFileReferencePreview>("ProjectFileReferencePreview", HTTP_RESPONSE_SCHEMAS.projectFileReferencePreview);
 export const decodeProjectFileUploadResult = createDecoder<ProjectFileUploadResult>("ProjectFileUploadResult", HTTP_RESPONSE_SCHEMAS.projectFileUploadResult);
+export const decodeProjectFileReplaceResult = createDecoder<ProjectFileReplaceResult>("ProjectFileReplaceResult", HTTP_RESPONSE_SCHEMAS.projectFileReplaceResult);
 export const decodeProjectFileRenameResult = createDecoder<ProjectFileRenameResult>("ProjectFileRenameResult", HTTP_RESPONSE_SCHEMAS.projectFileRenameResult);
 export const decodeProjectFileDeleteResult = createDecoder<ProjectFileDeleteResult>("ProjectFileDeleteResult", HTTP_RESPONSE_SCHEMAS.projectFileDeleteResult);
 export const decodeWorktreeEntryMutation = createDecoder<{ readonly path: string; readonly draft_fingerprint: string }>("WorktreeEntryMutation", HTTP_RESPONSE_SCHEMAS.worktreeEntryMutation);
@@ -927,12 +1013,12 @@ export const HTTP_REQUEST_BODY_SCHEMAS = {
   renameProjectFile: rejectUnknownObjectSchema({
     expected_fingerprint: stringSchema,
     new_name: stringSchema,
-    reference_mode: stringSchema,
+    reference_mode: { enum: ["update", "keep", "ignore_unchecked"] },
   }),
   deleteProjectFile: rejectUnknownObjectSchema({
     expected_fingerprint: stringSchema,
     confirmation_name: stringSchema,
-    reference_mode: stringSchema,
+    reference_mode: { enum: ["restrict", "unlink", "ignore_unchecked"] },
   }),
   restoreHunk: objectSchema({
     expected_fingerprint: stringSchema,

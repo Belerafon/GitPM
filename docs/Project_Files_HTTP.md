@@ -68,6 +68,7 @@ X-GitPM-File-Name: %D0%A2%D0%97%20v4.docx
 X-GitPM-Upload-Size: 1234
 X-GitPM-Expected-Fingerprint: <fingerprint>
 X-GitPM-Upload-Mode: create
+X-GitPM-Reference-Mode: preserve_checked
 
 <необработанные байты файла>
 ```
@@ -82,6 +83,12 @@ multipart-буферизации. `X-GitPM-File-Name` содержит резу�
 имени без учёта регистра операция отклоняется. Режим `replace` возвращает `200`, требует
 существующий обычный файл с точно таким же именем и заменяет только его содержимое. Успешный ответ:
 
+Для exact `replace` пользовательский flow передаёт `X-GitPM-Reference-Mode: preserve_checked`.
+Сервер повторно считает ссылки внутри mutation непосредственно перед успехом и возвращает
+`references.status: checked`, `action: preserved`, `before_count`, `affected_count: 0`,
+`remaining_count` и project-scoped `locations`. Для `create` этот режим отклоняется. Отсутствующий
+заголовок сохраняет совместимый честный ответ `{ "status": "not_checked" }`.
+
 ```json
 {
   "project_id": "P-26-MGP84K",
@@ -95,6 +102,7 @@ multipart-буферизации. `X-GitPM-File-Name` содержит резу�
     "modified_at": "2026-08-13T10:00:00.000Z",
     "modified_at_source": "working_copy_filesystem"
   },
+  "references": { "status": "not_checked" },
   "draft_fingerprint": "..."
 }
 ```
@@ -113,6 +121,45 @@ sidecar, реестр, backup или временный файл.
 его можно задать числом байтов через `GITPM_PROJECT_FILE_MAX_UPLOAD_BYTES` либо
 `projectFileMaxUploadBytes` в `config.json`. Превышение возвращает `PROJECT_FILE_TOO_LARGE`.
 
+## Атомарная замена выбранного файла
+
+```http
+POST /api/drafts/:draftId/projects/:projectId/files/:fileName/replace
+Content-Type: application/octet-stream
+X-GitPM-File-Name: <percent-encoded new local file name>
+X-GitPM-Upload-Size: <exact byte count>
+X-GitPM-Expected-Fingerprint: <fingerprint>
+X-GitPM-Large-File-Confirmation: <exact new name, only above 50 MiB>
+
+<raw replacement bytes>
+```
+
+Этот отдельный маршрут атомарно заменяет выбранный `fileName`. Новое имя может совпадать с
+прежним или отличаться от него. При совпадении содержимое заменяется, а финально пересчитанные
+ссылки получают `action: preserved`. При другом имени exact-ссылки текущего Project переписываются
+на новое имя и ответ получает `action: updated`; после полной repository validation старых ссылок
+не должно остаться. Имя, занятое другим файлом без учёта регистра, возвращает
+`PROJECT_FILE_NAME_CONFLICT` без изменения файлов.
+
+Операция целиком выполняется одной `withUiMutation`: проверяются текущий fingerprint, владелец,
+writer mode, роль Developer/Maintainer и Project scope. Исходное содержимое проверяется потоковым
+digest, поэтому in-place изменение во время передачи не затирается. До успеха сохраняются точные
+байты исходного файла и YAML; любая ошибка запускает best-effort rollback всех журналов. Чужой
+изменившийся recovery target не перезаписывается и приводит к `PROJECT_FILE_ROLLBACK_FAILED`.
+Успешный ответ имеет `operation: "replaced"`, `previous_name`, полный `item`, обязательный checked
+итог `references` и новый `draft_fingerprint`.
+
+## Предварительная проверка ссылок
+
+```http
+GET /api/drafts/:draftId/projects/:projectId/files/:fileName/references
+```
+
+Ответ содержит `status: checked`, точные `count` и `locations` (тип и ID сущности, канонический
+repository-relative path, поле, optional index критерия и UTF-16 offsets), а также текущий
+`draft_fingerprint`. Preview advisory: каждая мутация заново считает ссылки после проверки
+fingerprint внутри `withUiMutation`; неизвестное или ошибочное состояние нельзя считать нулём.
+
 ## Переименование
 
 ```http
@@ -122,7 +169,7 @@ Content-Type: application/json
 {
   "expected_fingerprint": "...",
   "new_name": "ТЗ v4.docx",
-  "reference_mode": "ignore_unchecked"
+  "reference_mode": "update"
 }
 ```
 
@@ -132,9 +179,9 @@ Content-Type: application/json
 регистра самого исходного файла поддерживается переносимо, в том числе на Windows. Одинаковые
 `fileName` и `new_name` отклоняются как отсутствие изменения.
 
-До этапа поддержки ссылок единственный допустимый `reference_mode` — `ignore_unchecked`. Он явно
-означает, что сервер не искал и не переписывал `[[file:...]]`; ответ не выдаёт неподтверждённое
-количество ссылок:
+`reference_mode: update` атомарно заменяет exact tokens на канонический `[[file:<new_name>]]` во
+всех поддерживаемых Markdown-полях текущего Project. `keep` осознанно оставляет старые, теперь
+сломанные ссылки. Совместимый `ignore_unchecked` сохраняет старое поведение и `not_checked`.
 
 ```json
 {
@@ -142,7 +189,7 @@ Content-Type: application/json
   "operation": "renamed",
   "previous_name": "ТЗ v3.docx",
   "item": { "name": "ТЗ v4.docx", "path": "projects/P-26-MGP84K/files/ТЗ v4.docx" },
-  "references": { "status": "not_checked" },
+  "references": { "status": "checked", "action": "updated", "before_count": 3, "affected_count": 3, "remaining_count": 0, "locations": [] },
   "draft_fingerprint": "..."
 }
 ```
@@ -159,13 +206,15 @@ Content-Type: application/json
 {
   "expected_fingerprint": "...",
   "confirmation_name": "ТЗ v4.docx",
-  "reference_mode": "ignore_unchecked"
+  "reference_mode": "restrict"
 }
 ```
 
 Права, owner, writer mode и fingerprint проверяются так же, как для переименования. Для удаления
-нужно точно повторить имя с учётом регистра в `confirmation_name`. До реализации поиска ссылок
-допустим только честный режим `ignore_unchecked`.
+нужно точно повторить имя с учётом регистра в `confirmation_name`. `restrict` блокирует удаление
+кодом `PROJECT_FILE_DELETE_REFERENCED`, если найдено хотя бы одно использование. `unlink` заменяет
+каждый exact token decoded видимым именем файла как plain text и затем удаляет файл. Совместимый
+`ignore_unchecked` ничего не утверждает о ссылках.
 
 ```json
 {
@@ -221,6 +270,8 @@ transient-записей. Ответ и серверный журнал не р�
 | 409 | `PROJECT_FILE_RENAME_NO_CHANGE` | Новое имя полностью совпадает с исходным. |
 | 409 | `PROJECT_FILE_DELETE_CONFIRMATION_REQUIRED` | Для удаления не повторено точное имя файла. |
 | 409 | `PROJECT_FILE_REFERENCES_UNSUPPORTED` | Запрошена проверка или правка ссылок, которой текущая версия ещё не поддерживает. |
+| 409 | `PROJECT_FILE_DELETE_REFERENCED` | `restrict` обнаружил ссылки; требуется явный `unlink` либо отмена. |
+| 409 | `PROJECT_FILE_REFERENCES_CHANGED` | YAML-документ или набор ссылок изменился во время атомарной операции. |
 | 409 | `PROJECT_FILE_LARGE_CONFIRMATION_REQUIRED` | Для файла больше 50 MiB не передано его точное имя-подтверждение. |
 | 409 | `PROJECT_FILE_CHANGED_EXTERNALLY` | Файл или защищаемый путь изменился во время мутации. |
 | 409 | `PROJECT_FILE_ROLLBACK_FAILED` | Исходный файл не удалось безопасно восстановить из-за внешнего изменения; чужой файл не перезаписывается. |

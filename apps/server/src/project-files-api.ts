@@ -15,6 +15,7 @@ const UPLOAD_SIZE_HEADER = "x-gitpm-upload-size";
 const EXPECTED_FINGERPRINT_HEADER = "x-gitpm-expected-fingerprint";
 const UPLOAD_MODE_HEADER = "x-gitpm-upload-mode";
 const LARGE_CONFIRMATION_HEADER = "x-gitpm-large-file-confirmation";
+const REFERENCE_MODE_HEADER = "x-gitpm-reference-mode";
 
 function contentDisposition(disposition: "inline" | "attachment", name: string): string {
   const withoutControls = name.replace(/[\u0000-\u001f\u007f]/gu, "_");
@@ -91,6 +92,14 @@ export function registerProjectFilesApi(
     },
   );
 
+  app.get<{ Params: { draftId: string; projectId: string; fileName: string } }>(
+    "/api/drafts/:draftId/projects/:projectId/files/:fileName/references",
+    async (request) => {
+      await authorize(manager, authenticate, request, request.params.draftId);
+      return await files.referencePreview(request.params.draftId, request.params.projectId, request.params.fileName);
+    },
+  );
+
   const sendFile = async (
     request: FastifyRequest<{ Params: { draftId: string; projectId: string; fileName: string } }>,
     reply: FastifyReply,
@@ -143,10 +152,15 @@ export function registerProjectFilesApi(
         if (mode !== "create" && mode !== "replace") {
           throw new ProjectFileOperationError("PROJECT_FILE_UPLOAD_METADATA_INVALID", "Upload mode must be create or replace");
         }
+        const referenceMode = singleHeader(request, REFERENCE_MODE_HEADER, false);
+        if (referenceMode !== undefined && referenceMode !== "preserve_checked" && referenceMode !== "ignore_unchecked") {
+          throw new ProjectFileOperationError("PROJECT_FILE_REFERENCES_UNSUPPORTED", "Project file upload reference mode is unsupported");
+        }
         const result = await files.upload(request.params.draftId, actor.userId, request.params.projectId, expectedFingerprint, {
           name,
           sizeBytes,
           mode,
+          ...(referenceMode === undefined ? {} : { referenceMode }),
           largeFileConfirmation: encodedName(request, LARGE_CONFIRMATION_HEADER, false),
           content: content as Readable,
         });
@@ -154,6 +168,41 @@ export function registerProjectFilesApi(
       } catch (error) {
         // Metadata, permission and optimistic-lock failures can happen before the stream is read.
         // Drain the request so clients receive the stable JSON error instead of a reset socket.
+        drainContent(content);
+        throw error;
+      }
+    },
+  );
+
+  app.post<{ Params: { draftId: string; projectId: string; fileName: string }; Body: unknown }>(
+    "/api/drafts/:draftId/projects/:projectId/files/:fileName/replace",
+    { bodyLimit: Number.MAX_SAFE_INTEGER },
+    async (request, reply) => {
+      const content = request.body;
+      try {
+        const actor = await authenticate(request);
+        requireMutationRole(actor.role);
+        if (request.headers["content-type"]?.split(";", 1)[0]?.trim().toLowerCase() !== "application/octet-stream") {
+          throw new ProjectFileOperationError("PROJECT_FILE_UPLOAD_CONTENT_TYPE_REQUIRED", "Project file replacement requires application/octet-stream");
+        }
+        if (request.headers["content-encoding"] !== undefined) {
+          throw new ProjectFileOperationError("PROJECT_FILE_UPLOAD_METADATA_INVALID", "Content-Encoding is not supported for Project file replacements");
+        }
+        const result = await files.replace(
+          request.params.draftId,
+          actor.userId,
+          request.params.projectId,
+          request.params.fileName,
+          singleHeader(request, EXPECTED_FINGERPRINT_HEADER)!,
+          {
+            name: encodedName(request, FILE_NAME_HEADER)!,
+            sizeBytes: uploadSize(request),
+            largeFileConfirmation: encodedName(request, LARGE_CONFIRMATION_HEADER, false),
+            content: content as Readable,
+          },
+        );
+        await reply.send(result);
+      } catch (error) {
         drainContent(content);
         throw error;
       }

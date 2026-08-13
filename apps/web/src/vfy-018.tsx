@@ -111,7 +111,9 @@ class BrowserAcceptanceApi implements GitPmApi {
   async getEntity(_draftId: string, _entityType: string, id: string) { const entity = this.entities.find((item) => item.document.id === id); if (entity === undefined) throw new Error("entity not found"); return entity; }
   async projectWorkspace(draftId: string, projectId: string) { const project = (await this.listEntities(draftId, "projects")).find((item) => item.document.id === projectId); if (project === undefined) throw new Error("project not found"); return { project, milestones: await this.listEntities(draftId, "milestones", projectId), tasks: await this.listEntities(draftId, "tasks", projectId), draft_fingerprint: project.draft_fingerprint }; }
   async listProjectFiles(_draftId: string, projectId: string) { return { project_id: projectId, count: 0, total_size_bytes: 0, items: [], draft_fingerprint: "b".repeat(64) }; }
+  async projectFileReferences(): Promise<never> { throw new Error("not used"); }
   async uploadProjectFile(): Promise<never> { throw new Error("not used"); }
+  async replaceProjectFile(): Promise<never> { throw new Error("not used"); }
   async renameProjectFile(): Promise<never> { throw new Error("not used"); }
   async deleteProjectFile(): Promise<never> { throw new Error("not used"); }
   async createEntity(_draftId: string, _entityType: string, _fingerprint: string, document: EntityDocument): Promise<EntityResult> { const result = this.entityResult(document); this.entities.push(result); this.capture(result.path); return result; }

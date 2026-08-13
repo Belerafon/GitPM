@@ -54,7 +54,9 @@ function api(
   const restoreEntity = vi.fn(async (_draftId: string, type: string, entity: EntityResult, _fingerprint: string, options: { readonly includeTasks?: boolean } = {}) => await transition(type, entity, "active", options));
   const deleteEntity = vi.fn(async () => undefined);
   const listProjectFiles = vi.fn(async (): Promise<ProjectFileList> => ({ project_id: currentProject.document.id, count: 0, total_size_bytes: 0, items: [], draft_fingerprint: fingerprint }));
+  const projectFileReferences = vi.fn(async (_draft: string, _project: string, fileName: string) => ({ project_id: currentProject.document.id, file_name: fileName, status: "checked" as const, count: 0, locations: [], draft_fingerprint: fingerprint }));
   const uploadProjectFile = vi.fn();
+  const replaceProjectFile = vi.fn();
   const renameProjectFile = vi.fn();
   const deleteProjectFile = vi.fn();
   return {
@@ -66,7 +68,9 @@ function api(
       : { schema: "gitpm/issue-types@1", issue_types: [{ slug: "task", title: "Task", active: true }] })),
     listEntities: vi.fn(async (_draftId: string, type: string) => type === "people" ? [person] : type === "projects" ? [currentProject, archivedProject] : []),
     listProjectFiles,
+    projectFileReferences,
     uploadProjectFile,
+    replaceProjectFile,
     renameProjectFile,
     deleteProjectFile,
     createEntity,
@@ -74,7 +78,7 @@ function api(
     archiveEntity,
     restoreEntity,
     deleteEntity,
-  } as unknown as GitPmApi & { createEntity: typeof createEntity; updateEntity: typeof updateEntity; archiveEntity: typeof archiveEntity; restoreEntity: typeof restoreEntity; deleteEntity: typeof deleteEntity; listProjectFiles: typeof listProjectFiles; uploadProjectFile: typeof uploadProjectFile; renameProjectFile: typeof renameProjectFile; deleteProjectFile: typeof deleteProjectFile };
+  } as unknown as GitPmApi & { createEntity: typeof createEntity; updateEntity: typeof updateEntity; archiveEntity: typeof archiveEntity; restoreEntity: typeof restoreEntity; deleteEntity: typeof deleteEntity; listProjectFiles: typeof listProjectFiles; projectFileReferences: typeof projectFileReferences; uploadProjectFile: typeof uploadProjectFile; replaceProjectFile: typeof replaceProjectFile; renameProjectFile: typeof renameProjectFile; deleteProjectFile: typeof deleteProjectFile };
 }
 
 afterEach(() => { cleanup(); localStorage.clear(); vi.useRealTimers(); });
@@ -344,6 +348,7 @@ describe("ProjectPlanWorkspace", () => {
     const client = api();
     const existing = { name: "ТЗ.docx", path: `projects/${project.document.id}/files/ТЗ.docx`, size_bytes: 10, media_type: "application/octet-stream", disposition: "attachment" as const, modified_at: "2026-08-13T10:00:00.000Z", modified_at_source: "working_copy_filesystem" as const };
     client.listProjectFiles.mockResolvedValue({ project_id: project.document.id, count: 1, total_size_bytes: 10, items: [existing], draft_fingerprint: fingerprint });
+    client.projectFileReferences.mockResolvedValue({ project_id: project.document.id, file_name: existing.name, status: "checked", count: 0, locations: [], draft_fingerprint: fingerprint });
     const replacement = new File([new Uint8Array(20)], existing.name);
     client.uploadProjectFile.mockResolvedValue({ project_id: project.document.id, operation: "replaced", item: { ...existing, size_bytes: 20 }, draft_fingerprint: "c".repeat(64) });
     render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} />);
@@ -352,8 +357,10 @@ describe("ProjectPlanWorkspace", () => {
     fireEvent.click(trigger);
     fireEvent.change(await screen.findByLabelText("Select project files to upload"), { target: { files: [replacement] } });
     fireEvent.click(await screen.findByRole("button", { name: "Replace current file" }));
+    const replaceDialog = await screen.findByRole("dialog", { name: "Confirm file replacement" });
+    fireEvent.click(within(replaceDialog).getByRole("button", { name: "Replace file and preserve references" }));
 
-    await waitFor(() => expect(client.uploadProjectFile).toHaveBeenCalledWith(draft.draft_id, project.document.id, fingerprint, replacement, replacement.name, "replace", expect.any(Object)));
+    await waitFor(() => expect(client.uploadProjectFile).toHaveBeenCalledWith(draft.draft_id, project.document.id, fingerprint, replacement, replacement.name, "replace", expect.objectContaining({ referenceMode: "preserve_checked" })));
     expect(within(trigger).getByText("1")).toBeTruthy();
     expect(screen.getAllByText(existing.name)).toHaveLength(2);
   });
@@ -363,6 +370,9 @@ describe("ProjectPlanWorkspace", () => {
     const onChanged = vi.fn(async () => undefined);
     const existing = { name: "ТЗ V3.docx", path: `projects/${project.document.id}/files/ТЗ V3.docx`, size_bytes: 10, media_type: "application/octet-stream", disposition: "attachment" as const, modified_at: "2026-08-13T10:00:00.000Z", modified_at_source: "working_copy_filesystem" as const };
     const renamed = { ...existing, name: "ТЗ v3.docx", path: `projects/${project.document.id}/files/ТЗ v3.docx` };
+    client.projectFileReferences
+      .mockResolvedValueOnce({ project_id: project.document.id, file_name: existing.name, status: "checked", count: 0, locations: [], draft_fingerprint: fingerprint })
+      .mockResolvedValueOnce({ project_id: project.document.id, file_name: renamed.name, status: "checked", count: 0, locations: [], draft_fingerprint: "c".repeat(64) });
     client.listProjectFiles.mockResolvedValue({ project_id: project.document.id, count: 1, total_size_bytes: 10, items: [existing], draft_fingerprint: fingerprint });
     client.renameProjectFile.mockResolvedValue({ project_id: project.document.id, operation: "renamed", previous_name: existing.name, item: renamed, references: { status: "not_checked" }, draft_fingerprint: "c".repeat(64) });
     client.deleteProjectFile.mockResolvedValue({ project_id: project.document.id, operation: "deleted", name: renamed.name, path: renamed.path, size_bytes: renamed.size_bytes, references: { status: "not_checked" }, secure_erase: false, draft_fingerprint: "d".repeat(64) });
@@ -374,17 +384,19 @@ describe("ProjectPlanWorkspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Rename" }));
     const renameDialog = screen.getByRole("dialog", { name: "Rename file" });
     fireEvent.change(within(renameDialog).getByLabelText("New full file name"), { target: { value: renamed.name } });
+    await waitFor(() => expect(within(renameDialog).getByRole("button", { name: "Rename" })).toHaveProperty("disabled", false));
     fireEvent.click(within(renameDialog).getByRole("button", { name: "Rename" }));
 
-    await waitFor(() => expect(client.renameProjectFile).toHaveBeenCalledWith(draft.draft_id, project.document.id, existing.name, fingerprint, renamed.name));
+    await waitFor(() => expect(client.renameProjectFile).toHaveBeenCalledWith(draft.draft_id, project.document.id, existing.name, fingerprint, renamed.name, "update"));
     expect(within(trigger).getByText("1")).toBeTruthy();
     expect((await screen.findAllByText(renamed.name)).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     const deleteDialog = screen.getByRole("dialog", { name: "Delete file" });
     fireEvent.change(within(deleteDialog).getByLabelText(`Type the exact full name “${renamed.name}” to delete`), { target: { value: renamed.name } });
+    await waitFor(() => expect(within(deleteDialog).getByRole("button", { name: "Delete" })).toHaveProperty("disabled", false));
     fireEvent.click(within(deleteDialog).getByRole("button", { name: "Delete" }));
 
-    await waitFor(() => expect(client.deleteProjectFile).toHaveBeenCalledWith(draft.draft_id, project.document.id, renamed.name, "c".repeat(64), renamed.name));
+    await waitFor(() => expect(client.deleteProjectFile).toHaveBeenCalledWith(draft.draft_id, project.document.id, renamed.name, "c".repeat(64), renamed.name, "restrict"));
     await waitFor(() => expect(within(trigger).getByText("0")).toBeTruthy());
     expect(await screen.findByText("No files yet")).toBeTruthy();
     expect(onChanged).toHaveBeenCalledTimes(2);

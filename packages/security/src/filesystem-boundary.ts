@@ -1,4 +1,4 @@
-import { constants } from "node:fs";
+import { constants, type Stats } from "node:fs";
 import { access, lstat, mkdir, open, realpath, rename, rm } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -54,7 +54,7 @@ export async function atomicWriteDomainFile(
   relativePath: string,
   content: string,
   options: AtomicWriteOptions = {},
-): Promise<void> {
+): Promise<Stats> {
   const target = await resolveDomainPath(root, relativePath);
   const parent = path.dirname(target);
   const canonicalParent = await realpath(parent);
@@ -66,22 +66,26 @@ export async function atomicWriteDomainFile(
     try {
       await handle.writeFile(content, "utf8");
       await handle.sync();
-    } finally {
+      const writtenIdentity = await handle.stat();
+      if (!writtenIdentity.isFile()) throw new SecurityBoundaryError("FS_TARGET_CHANGED", "staged target is not a regular file");
       await handle.close();
+      await options.beforeRenameForTest?.();
+      if (await realpath(parent) !== canonicalParent) {
+        throw new SecurityBoundaryError("FS_PARENT_CHANGED", "target parent changed before rename");
+      }
+      try {
+        const targetStat = await lstat(target);
+        if (targetStat.isSymbolicLink()) throw new SecurityBoundaryError("FS_SYMLINK", "target is a symlink");
+      } catch (error) {
+        if (error instanceof SecurityBoundaryError) throw error;
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      }
+      await rename(tempPath, target);
+      tempCreated = false;
+      return writtenIdentity;
+    } finally {
+      await handle.close().catch(() => undefined);
     }
-    await options.beforeRenameForTest?.();
-    if (await realpath(parent) !== canonicalParent) {
-      throw new SecurityBoundaryError("FS_PARENT_CHANGED", "target parent changed before rename");
-    }
-    try {
-      const targetStat = await lstat(target);
-      if (targetStat.isSymbolicLink()) throw new SecurityBoundaryError("FS_SYMLINK", "target is a symlink");
-    } catch (error) {
-      if (error instanceof SecurityBoundaryError) throw error;
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    }
-    await rename(tempPath, target);
-    tempCreated = false;
   } finally {
     if (tempCreated) {
       try {

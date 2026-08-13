@@ -13,6 +13,8 @@ import {
   decodeNotifications,
   decodeProjectFileDeleteResult,
   decodeProjectFileList,
+  decodeProjectFileReferencePreview,
+  decodeProjectFileReplaceResult,
   decodeProjectFileRenameResult,
   decodeProjectFileUploadResult,
   describeAjvError,
@@ -150,6 +152,7 @@ describe("@gitpm/contracts runtime contracts", () => {
         modified_at: "2026-08-13T10:00:00.000Z",
         modified_at_source: "working_copy_filesystem",
       },
+      references: { status: "not_checked" },
       draft_fingerprint: "e".repeat(64),
     });
     expect(result.operation).toBe("created");
@@ -188,6 +191,20 @@ describe("@gitpm/contracts runtime contracts", () => {
     expect(deleted.secure_erase).toBe(false);
     expect(() => decodeProjectFileDeleteResult({ ...deleted, secure_erase: true })).toThrow(ApiContractError);
     expect(() => decodeProjectFileRenameResult({ ...renamed, references: { status: "checked" } })).toThrow(ApiContractError);
+  });
+
+  it("decodes checked Project file reference previews and mutation consequences", () => {
+    const location = { entity_type: "task", entity_id: "T-26-P9G3P8", path: "projects/P-26-MGP84K/tasks/T-26-P9G3P8.yaml", field: "description_markdown", start: 7, end: 27 };
+    expect(decodeProjectFileReferencePreview({ project_id: "P-26-MGP84K", file_name: "ТЗ.docx", status: "checked", count: 1, locations: [location], draft_fingerprint: "f".repeat(64) }).count).toBe(1);
+    const checked = { status: "checked", action: "updated", before_count: 1, affected_count: 1, remaining_count: 0, locations: [location] };
+    const renamed = decodeProjectFileRenameResult({
+      project_id: "P-26-MGP84K", operation: "renamed", previous_name: "ТЗ.docx",
+      item: { name: "ТЗ v2.docx", path: "projects/P-26-MGP84K/files/ТЗ v2.docx", size_bytes: 1, media_type: "application/octet-stream", disposition: "attachment", modified_at: "2026-08-13T10:00:00.000Z", modified_at_source: "working_copy_filesystem" },
+      references: checked, draft_fingerprint: "e".repeat(64),
+    });
+    expect(renamed.references).toEqual(checked);
+    expect(decodeProjectFileReplaceResult({ ...renamed, operation: "replaced", previous_name: "РўР—.docx" })).toMatchObject({ operation: "replaced", references: checked });
+    expect(() => decodeProjectFileReferencePreview({ project_id: "P-26-MGP84K", file_name: "x", status: "checked", count: 0, locations: [], draft_fingerprint: "f".repeat(64), absolute_path: "C:\\secret" })).toThrow(ApiContractError);
   });
 
   it("derives entity and CLI schema catalogs from the shared registry", () => {

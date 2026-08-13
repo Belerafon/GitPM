@@ -20,6 +20,8 @@ import {
   decodeProjectWorkspace,
   decodeProjectFileDeleteResult,
   decodeProjectFileList,
+  decodeProjectFileReferencePreview,
+  decodeProjectFileReplaceResult,
   decodeProjectFileRenameResult,
   decodeProjectFileUploadResult,
   decodePublicSession,
@@ -42,6 +44,10 @@ import {
   type ConfigurationResult,
   type Decoder,
   type ProjectFileList,
+  type ProjectFileReferencePreview,
+  type ProjectFileReplaceResult,
+  type ProjectFileRenameReferenceMode,
+  type ProjectFileDeleteReferenceMode,
   type ProjectFileDeleteResult,
   type ProjectFileRenameResult,
   type ProjectFileUploadResult,
@@ -182,9 +188,11 @@ export interface GitPmApi {
   getEntity(draftId: string, entityType: string, id: string): Promise<EntityResult>;
   projectWorkspace(draftId: string, projectId: string): Promise<ProjectWorkspaceResult>;
   listProjectFiles(draftId: string, projectId: string): Promise<ProjectFileList>;
+  projectFileReferences(draftId: string, projectId: string, name: string): Promise<ProjectFileReferencePreview>;
+  replaceProjectFile(draftId: string, projectId: string, previousName: string, expectedFingerprint: string, file: Blob, newName: string, options?: Omit<ProjectFileUploadOptions, "referenceMode">): Promise<ProjectFileReplaceResult>;
   uploadProjectFile(draftId: string, projectId: string, expectedFingerprint: string, file: Blob, name: string, mode: "create" | "replace", options?: ProjectFileUploadOptions): Promise<ProjectFileUploadResult>;
-  renameProjectFile(draftId: string, projectId: string, name: string, expectedFingerprint: string, newName: string): Promise<ProjectFileRenameResult>;
-  deleteProjectFile(draftId: string, projectId: string, name: string, expectedFingerprint: string, confirmationName: string): Promise<ProjectFileDeleteResult>;
+  renameProjectFile(draftId: string, projectId: string, name: string, expectedFingerprint: string, newName: string, referenceMode?: ProjectFileRenameReferenceMode): Promise<ProjectFileRenameResult>;
+  deleteProjectFile(draftId: string, projectId: string, name: string, expectedFingerprint: string, confirmationName: string, referenceMode?: ProjectFileDeleteReferenceMode): Promise<ProjectFileDeleteResult>;
   createEntity(draftId: string, entityType: string, fingerprint: string, document: GitPmDocument): Promise<EntityResult>;
   updateEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string, document: GitPmDocument): Promise<EntityResult>;
   moveTask(draftId: string, entity: EntityResult, fingerprint: string, targetProject: string, targetMilestone?: string, targetParent?: string): Promise<EntityResult>;
@@ -236,6 +244,7 @@ export interface ProjectFileUploadOptions {
   readonly largeFileConfirmation?: string;
   readonly signal?: AbortSignal;
   readonly onProgress?: (loaded: number, total: number) => void;
+  readonly referenceMode?: "preserve_checked" | "ignore_unchecked";
 }
 
 function projectFilePath(draftId: string, projectId: string, name: string): string {
@@ -406,6 +415,40 @@ export class HttpGitPmApi implements GitPmApi {
   async listProjectFiles(draftId: string, projectId: string): Promise<ProjectFileList> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/projects/${encodeURIComponent(projectId)}/files`, decodeProjectFileList);
   }
+  async projectFileReferences(draftId: string, projectId: string, name: string): Promise<ProjectFileReferencePreview> {
+    return await this.request(`${projectFilePath(draftId, projectId, name)}/references`, decodeProjectFileReferencePreview);
+  }
+  async replaceProjectFile(draftId: string, projectId: string, previousName: string, expectedFingerprint: string, file: Blob, newName: string, options: Omit<ProjectFileUploadOptions, "referenceMode"> = {}): Promise<ProjectFileReplaceResult> {
+    const endpoint = `${this.baseUrl}${projectFilePath(draftId, projectId, previousName)}/replace`;
+    return await new Promise<ProjectFileReplaceResult>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      const abort = () => xhr.abort();
+      const finish = () => options.signal?.removeEventListener("abort", abort);
+      xhr.open("POST", endpoint);
+      xhr.withCredentials = true;
+      xhr.setRequestHeader("content-type", "application/octet-stream");
+      xhr.setRequestHeader("x-gitpm-file-name", encodeURIComponent(newName));
+      xhr.setRequestHeader("x-gitpm-upload-size", String(file.size));
+      xhr.setRequestHeader("x-gitpm-expected-fingerprint", expectedFingerprint);
+      if (options.largeFileConfirmation !== undefined) xhr.setRequestHeader("x-gitpm-large-file-confirmation", encodeURIComponent(options.largeFileConfirmation));
+      xhr.upload.addEventListener("progress", (event) => options.onProgress?.(event.loaded, event.lengthComputable ? event.total : file.size));
+      xhr.addEventListener("load", () => {
+        finish();
+        let body: unknown;
+        try { body = JSON.parse(xhr.responseText); } catch { body = undefined; }
+        if (xhr.status < 200 || xhr.status >= 300) {
+          const error = body !== null && typeof body === "object" ? (body as ErrorBody).error : undefined;
+          reject(new ApiError(error?.code ?? `HTTP_${xhr.status}`, error?.message ?? xhr.statusText, error?.details));
+          return;
+        }
+        try { resolve(decodeProjectFileReplaceResult(body)); } catch (error) { reject(error); }
+      });
+      xhr.addEventListener("error", () => { finish(); reject(new ApiError("NETWORK_ERROR", "Project file replacement failed")); });
+      xhr.addEventListener("abort", () => { finish(); reject(new DOMException("Project file replacement was cancelled", "AbortError")); });
+      options.signal?.addEventListener("abort", abort, { once: true });
+      if (options.signal?.aborted === true) abort(); else xhr.send(file);
+    });
+  }
   async uploadProjectFile(draftId: string, projectId: string, expectedFingerprint: string, file: Blob, name: string, mode: "create" | "replace", options: ProjectFileUploadOptions = {}): Promise<ProjectFileUploadResult> {
     const path = `${this.baseUrl}/api/drafts/${encodeURIComponent(draftId)}/projects/${encodeURIComponent(projectId)}/files/upload`;
     return await new Promise<ProjectFileUploadResult>((resolve, reject) => {
@@ -419,6 +462,7 @@ export class HttpGitPmApi implements GitPmApi {
       xhr.setRequestHeader("x-gitpm-upload-size", String(file.size));
       xhr.setRequestHeader("x-gitpm-expected-fingerprint", expectedFingerprint);
       xhr.setRequestHeader("x-gitpm-upload-mode", mode);
+      if (options.referenceMode !== undefined) xhr.setRequestHeader("x-gitpm-reference-mode", options.referenceMode);
       if (options.largeFileConfirmation !== undefined) xhr.setRequestHeader("x-gitpm-large-file-confirmation", encodeURIComponent(options.largeFileConfirmation));
       xhr.upload.addEventListener("progress", (event) => options.onProgress?.(event.loaded, event.lengthComputable ? event.total : file.size));
       xhr.addEventListener("load", () => {
@@ -438,16 +482,16 @@ export class HttpGitPmApi implements GitPmApi {
       if (options.signal?.aborted === true) abort(); else xhr.send(file);
     });
   }
-  async renameProjectFile(draftId: string, projectId: string, name: string, expected_fingerprint: string, new_name: string): Promise<ProjectFileRenameResult> {
+  async renameProjectFile(draftId: string, projectId: string, name: string, expected_fingerprint: string, new_name: string, reference_mode: ProjectFileRenameReferenceMode = "ignore_unchecked"): Promise<ProjectFileRenameResult> {
     return await this.request(`${projectFilePath(draftId, projectId, name)}/rename`, decodeProjectFileRenameResult, {
       method: "POST",
-      body: JSON.stringify({ expected_fingerprint, new_name, reference_mode: "ignore_unchecked" }),
+      body: JSON.stringify({ expected_fingerprint, new_name, reference_mode }),
     });
   }
-  async deleteProjectFile(draftId: string, projectId: string, name: string, expected_fingerprint: string, confirmation_name: string): Promise<ProjectFileDeleteResult> {
+  async deleteProjectFile(draftId: string, projectId: string, name: string, expected_fingerprint: string, confirmation_name: string, reference_mode: ProjectFileDeleteReferenceMode = "ignore_unchecked"): Promise<ProjectFileDeleteResult> {
     return await this.request(projectFilePath(draftId, projectId, name), decodeProjectFileDeleteResult, {
       method: "DELETE",
-      body: JSON.stringify({ expected_fingerprint, confirmation_name, reference_mode: "ignore_unchecked" }),
+      body: JSON.stringify({ expected_fingerprint, confirmation_name, reference_mode }),
     });
   }
   async createEntity(draftId: string, entityType: string, expected_fingerprint: string, document: GitPmDocument): Promise<EntityResult> {

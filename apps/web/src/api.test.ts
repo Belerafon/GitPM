@@ -84,6 +84,23 @@ describe("HttpGitPmApi request bodies", () => {
     expect(projectFileDownloadUrl("DRF/1", "P/26", "..\\secret.txt")).toBe(`/api/drafts/DRF%2F1/projects/P%2F26/files/${encodeURIComponent("..\\secret.txt")}/download`);
   });
 
+  it("loads checked reference consequences and sends explicit checked mutation modes", async () => {
+    const location = { entity_type: "task", entity_id: "T-26-P9G3P8", path: "projects/P-26-MGP84K/tasks/T-26-P9G3P8.yaml", field: "description_markdown", start: 0, end: 20 };
+    const preview = { project_id: "P-26-MGP84K", file_name: "ТЗ.docx", status: "checked", count: 1, locations: [location], draft_fingerprint: "b".repeat(64) };
+    const item = { name: "ТЗ v2.docx", path: "projects/P-26-MGP84K/files/ТЗ v2.docx", size_bytes: 1, media_type: "application/octet-stream", disposition: "attachment", modified_at: "2026-08-13T10:00:00.000Z", modified_at_source: "working_copy_filesystem" };
+    const references = { status: "checked", action: "updated", before_count: 1, affected_count: 1, remaining_count: 0, locations: [location] };
+    const renamed = { project_id: preview.project_id, operation: "renamed", previous_name: preview.file_name, item, references, draft_fingerprint: "c".repeat(64) };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(preview), { status: 200, headers: { "content-type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(renamed), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const api = new HttpGitPmApi();
+    await expect(api.projectFileReferences("DRF/1", preview.project_id, preview.file_name)).resolves.toEqual(preview);
+    await expect(api.renameProjectFile("DRF/1", preview.project_id, preview.file_name, preview.draft_fingerprint, item.name, "update")).resolves.toEqual(renamed);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(`/api/drafts/DRF%2F1/projects/${preview.project_id}/files/${encodeURIComponent(preview.file_name)}/references`);
+    expect(fetchMock.mock.calls[1]?.[1]).toEqual(expect.objectContaining({ body: JSON.stringify({ expected_fingerprint: preview.draft_fingerprint, new_name: item.name, reference_mode: "update" }) }));
+  });
+
   it("renames and deletes Project files with explicit unchecked-reference semantics", async () => {
     const renamed = { project_id: "P-26-MGP84K", operation: "renamed", previous_name: "ТЗ v3.docx", item: { name: "ТЗ V3.docx", path: "projects/P-26-MGP84K/files/ТЗ V3.docx", size_bytes: 12, media_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", disposition: "attachment", modified_at: "2026-08-13T10:00:00.000Z", modified_at_source: "working_copy_filesystem" }, references: { status: "not_checked" }, draft_fingerprint: "c".repeat(64) };
     const deleted = { project_id: "P-26-MGP84K", operation: "deleted", name: renamed.item.name, path: renamed.item.path, size_bytes: 12, references: { status: "not_checked" }, secure_erase: false, draft_fingerprint: "d".repeat(64) };
@@ -114,7 +131,7 @@ describe("HttpGitPmApi request bodies", () => {
   it("uploads exact binary bytes with Unicode metadata and optional large-file confirmation", async () => {
     const bytes = new Uint8Array([0, 255, 17, 128]);
     const file = Object.assign(new Blob([bytes]), { name: "ТЗ <final>.bin", lastModified: 0 }) as File;
-    const payload = { project_id: "P-26-MGP84K", operation: "created", item: { name: file.name, path: `projects/P-26-MGP84K/files/${file.name}`, size_bytes: bytes.length, media_type: "application/octet-stream", disposition: "attachment", modified_at: "2026-08-13T10:00:00.000Z", modified_at_source: "working_copy_filesystem" }, draft_fingerprint: "c".repeat(64) };
+    const payload = { project_id: "P-26-MGP84K", operation: "created", item: { name: file.name, path: `projects/P-26-MGP84K/files/${file.name}`, size_bytes: bytes.length, media_type: "application/octet-stream", disposition: "attachment", modified_at: "2026-08-13T10:00:00.000Z", modified_at_source: "working_copy_filesystem" }, references: { status: "not_checked" }, draft_fingerprint: "c".repeat(64) };
     const listeners = new Map<string, () => void>();
     const progressListeners: Array<(event: ProgressEvent) => void> = [];
     const xhr = {
@@ -146,9 +163,22 @@ describe("HttpGitPmApi request bodies", () => {
     expect(onProgress).toHaveBeenCalledWith(2, 4);
   });
 
+  it("streams a selected replacement to the project-scoped replace route", async () => {
+    const file = new Blob(["new"]);
+    const payload = { project_id: "P-26-MGP84K", operation: "replaced", previous_name: "old.txt", item: { name: "new.txt", path: "projects/P-26-MGP84K/files/new.txt", size_bytes: 3, media_type: "text/plain; charset=utf-8", disposition: "inline", modified_at: "2026-08-13T10:00:00.000Z", modified_at_source: "working_copy_filesystem" }, references: { status: "checked", action: "updated", before_count: 1, affected_count: 1, remaining_count: 0, locations: [] }, draft_fingerprint: "c".repeat(64) };
+    const listeners = new Map<string, () => void>();
+    const xhr = { status: 200, statusText: "OK", responseText: JSON.stringify(payload), path: "", body: undefined as Blob | undefined, withCredentials: false, headers: new Map<string, string>(), upload: { addEventListener: vi.fn() }, open(_method: string, path: string) { this.path = path; }, setRequestHeader(name: string, value: string) { this.headers.set(name, value); }, addEventListener(type: string, listener: EventListenerOrEventListenerObject) { listeners.set(type, listener as () => void); }, send(body: Blob) { this.body = body; listeners.get("load")?.(); }, abort: vi.fn() };
+    vi.stubGlobal("XMLHttpRequest", function XhrConstructor() { return xhr; } as unknown as typeof XMLHttpRequest);
+    await expect(new HttpGitPmApi().replaceProjectFile("DRF/1", payload.project_id, payload.previous_name, "b".repeat(64), file, payload.item.name)).resolves.toEqual(payload);
+    expect(xhr.path).toBe(`/api/drafts/DRF%2F1/projects/${payload.project_id}/files/${payload.previous_name}/replace`);
+    expect(xhr.headers.get("x-gitpm-file-name")).toBe(encodeURIComponent(payload.item.name));
+    expect(xhr.headers.get("x-gitpm-expected-fingerprint")).toBe("b".repeat(64));
+    expect(xhr.body).toBe(file);
+  });
+
   it("uploads a zero-byte file without adding large-file confirmation", async () => {
     const file = Object.assign(new Blob([]), { name: "пустой файл", lastModified: 0 }) as File;
-    const payload = { project_id: "P-26-MGP84K", operation: "created", item: { name: file.name, path: `projects/P-26-MGP84K/files/${file.name}`, size_bytes: 0, media_type: "application/octet-stream", disposition: "attachment", modified_at: "2026-08-13T10:00:00.000Z", modified_at_source: "working_copy_filesystem" }, draft_fingerprint: "c".repeat(64) };
+    const payload = { project_id: "P-26-MGP84K", operation: "created", item: { name: file.name, path: `projects/P-26-MGP84K/files/${file.name}`, size_bytes: 0, media_type: "application/octet-stream", disposition: "attachment", modified_at: "2026-08-13T10:00:00.000Z", modified_at_source: "working_copy_filesystem" }, references: { status: "not_checked" }, draft_fingerprint: "c".repeat(64) };
     const listeners = new Map<string, () => void>();
     const xhr = { status: 201, statusText: "Created", responseText: JSON.stringify(payload), withCredentials: false, headers: new Map<string, string>(), upload: { addEventListener: vi.fn() }, open: vi.fn(), setRequestHeader(name: string, value: string) { this.headers.set(name, value); }, addEventListener(type: string, listener: EventListenerOrEventListenerObject) { listeners.set(type, listener as () => void); }, send: vi.fn(() => listeners.get("load")?.()), abort: vi.fn() };
     const XhrConstructor = function XhrConstructor() { return xhr; } as unknown as typeof XMLHttpRequest;

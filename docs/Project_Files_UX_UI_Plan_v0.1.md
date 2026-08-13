@@ -861,3 +861,58 @@ Git diff.
   доступный picker Этапа 9 с loading/error/retry/empty и Escape/focus;
 - rename/delete/replace по-прежнему не ищут и не переписывают ссылки и возвращают `not_checked`;
   mutation-aware семантика остаётся границей Этапа 11.
+
+### Этап 11 — завершён
+
+Реализовано:
+
+- добавлен read-only preview exact-ссылок текущего Project с количеством и repository-relative
+  местами использования. Properties, rename, delete и replace блокируют действие до успешной
+  проверки; поздний ответ не открывает закрытый или уже другой диалог;
+- штатное переименование в режиме `update` атомарно переписывает все поддерживаемые Project,
+  Milestone, Task, acceptance criteria, active Comment и active/voided TimeEntry Markdown-поля.
+  Осознанный режим `keep` оставляет старые ссылки и честно возвращает их количество; legacy
+  `ignore_unchecked` сохранён как совместимый контракт;
+- удаление с `restrict` отклоняет файл со ссылками. Для `unlink` UI требует отдельный явный checkbox
+  помимо точного ввода имени: tokens заменяются decoded-именем как обычной подписью, окружающий
+  текст сохраняется. Без согласия мутация не вызывается;
+- добавлена отдельная потоковая операция `Заменить новым файлом` у выбранного файла. При прежнем
+  имени она атомарно заменяет содержимое и финально пересчитывает сохранённые ссылки; при другом
+  имени одновременно публикует новые байты, меняет имя и обновляет все exact-ссылки. Показаны
+  old → new, последствия и явное подтверждение; новое имя больше 50 MiB требуется ввести точно;
+- rename/delete/replace выполняются одной `DraftManager.withUiMutation` с текущим fingerprint,
+  Project scope, writer-mode/role checks и полной repository validation. Exact-byte YAML journal,
+  identity guards, потоковый digest исходного файла и best-effort rollback восстанавливают файл и
+  тексты, не перезаписывая независимо изменившийся внешний occupant. Recovery failures не
+  останавливают откат остальных документов и не раскрывают абсолютные host paths;
+- общие contracts/server/web API возвращают locale-neutral checked summary (`before_count`,
+  `affected_count`, `remaining_count`, `locations`), а документация фиксирует новый streamed route,
+  reference policies, коды конфликтов и транзакционные гарантии. Read-only Viewer может смотреть
+  количество ссылок в свойствах, но mutation controls остаются недоступны.
+
+Фактически выполненные проверки:
+
+- production builds `@gitpm/contracts`, `@gitpm/domain`, `@gitpm/server` и web typecheck — успешно;
+- итоговый targeted Vitest: 7 файлов, 226/226 тестов, 31,88 с;
+- `corepack pnpm verify:repository` — успешно: 10 файлов, 178 тестов прошли, 1 пропущен; schema,
+  build, lint и whitespace прошли; 2 мин 01 с;
+- `corepack pnpm verify:server` — успешно: 12 файлов, 129/129 тестов; build, lint и whitespace
+  прошли; 1 мин 47 с;
+- `corepack pnpm verify:workflow` — успешно: 11 файлов, 72/72 теста; security report, build, lint и
+  whitespace прошли; 2 мин 16 с;
+- `corepack pnpm verify:web` — успешно: 51 файл, 477/477 тестов; production build, lint, typecheck и
+  whitespace прошли; 2 мин 36 с. Все четыре профиля запускались строго последовательно без
+  изменений исходников между ними.
+
+Ограничения этапа:
+
+- семантическая группировка файлов в Changes, browser E2E, внешние изменения через технический
+  менеджер и сквозные direct/worktree сценарии остаются Этапом 12 и в этом этапе не выполнялись;
+- аварийная recovery-копия создаётся только при невозможности безопасно вернуть независимо
+  изменившийся YAML на место; это диагностический механизм, а не пользовательская версия файла;
+- автоматические подсказки после `[[` и поиск внутри picker остаются прежними UX-ограничениями
+  Этапов 9–10 и не расширялись в рамках ссылочных мутаций.
+
+### Этап 12 — ожидает реализации
+
+Этап 12 в рамках этой реализации не начинался.

@@ -4,7 +4,10 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { DraftRuntimeError, type DraftManager, type DraftMetadata, type RepositoryWorkspace } from "@gitpm/drafts";
+import { formatYamlDocument, parseYamlDocument, type GitPmDocument } from "@gitpm/repository-format";
 import { PROJECT_FILE_LARGE_THRESHOLD_BYTES, ProjectFileOperationError, ProjectFileStore, projectFilePresentation, type ProjectFileStoreOptions } from "./project-files.js";
+import { searchProjectFileReferences } from "./project-file-reference-search.js";
+import { discoverRepositoryFiles } from "@gitpm/validation";
 
 const roots: string[] = [];
 const firstProject = "P-26-MGP84K";
@@ -376,7 +379,7 @@ describe("ProjectFileStore rename and delete", () => {
     await expect(readFile(path.join(directory, "Договор.pdf"))).rejects.toMatchObject({ code: "ENOENT" });
   });
 
-  it("rejects missing, unchanged, hostile, conflicting and unchecked-reference inputs", async () => {
+  it("rejects missing, unchanged, hostile and conflicting inputs", async () => {
     const absent = await uploadFixture();
     await expect(absent.store.rename(
       "DRF-FILES", "42", firstProject, "missing.pdf", "f".repeat(64), "new.pdf", "ignore_unchecked",
@@ -406,13 +409,352 @@ describe("ProjectFileStore rename and delete", () => {
     await expect(store.rename(
       "DRF-FILES", "42", firstProject, "Contract.pdf", "f".repeat(64), "..\\escape.pdf", "ignore_unchecked",
     )).rejects.toMatchObject({ code: "PROJECT_FILE_NAME_INVALID" });
-    await expect(store.rename(
-      "DRF-FILES", "42", firstProject, "Contract.pdf", "f".repeat(64), "new.pdf", "update" as "ignore_unchecked",
-    )).rejects.toMatchObject({ code: "PROJECT_FILE_REFERENCES_UNSUPPORTED" });
     await expect(store.delete(
       "DRF-FILES", "42", firstProject, "Contract.pdf", "f".repeat(64), "contract.pdf", "ignore_unchecked",
     )).rejects.toMatchObject({ code: "PROJECT_FILE_DELETE_CONFIRMATION_REQUIRED" });
     await expect(readFile(path.join(directory, "Contract.pdf"), "utf8")).resolves.toBe("one");
+  });
+
+  it("previews, updates, keeps, restricts and unlinks exact Project references", async () => {
+    const { root, store } = await uploadFixture();
+    const files = path.join(root, "projects", firstProject, "files");
+    const projectPath = path.join(root, "projects", firstProject, "project.yaml");
+    await mkdir(files, { recursive: true });
+    await writeFile(path.join(files, "ТЗ [v1].docx"), "bytes", "utf8");
+    const originalProject = await readFile(projectPath, "utf8");
+    await writeFile(projectPath, formatYamlDocument({ ...parseYamlDocument(originalProject), description_markdown: "See [[file:ТЗ \\[v1\\].docx]] and [[file:ТЗ \\[v1\\].docx]]" }), "utf8");
+
+    const preview = await store.referencePreview("DRF-FILES", firstProject, "ТЗ [v1].docx");
+    expect(preview).toMatchObject({ status: "checked", count: 2, draft_fingerprint: "f".repeat(64) });
+    expect(preview.locations.every((item) => item.path === `projects/${firstProject}/project.yaml`)).toBe(true);
+
+    const renamed = await store.rename("DRF-FILES", "42", firstProject, "ТЗ [v1].docx", "f".repeat(64), "ТЗ v2.docx", "update");
+    expect(renamed.references).toMatchObject({ status: "checked", action: "updated", before_count: 2, affected_count: 2, remaining_count: 0 });
+    expect(await readFile(projectPath, "utf8")).toContain("[[file:ТЗ v2.docx]]");
+
+    const kept = await store.rename("DRF-FILES", "42", firstProject, "ТЗ v2.docx", "e".repeat(64), "ТЗ v3.docx", "keep");
+    expect(kept.references).toMatchObject({ status: "checked", action: "kept", before_count: 2, affected_count: 0, remaining_count: 2 });
+    await writeFile(projectPath, formatYamlDocument({ ...parseYamlDocument(await readFile(projectPath, "utf8")), description_markdown: "See [[file:ТЗ v3.docx]] twice [[file:ТЗ v3.docx]]" }), "utf8");
+    await expect(store.delete("DRF-FILES", "42", firstProject, "ТЗ v3.docx", "e".repeat(64), "ТЗ v3.docx", "restrict"))
+      .rejects.toMatchObject({ code: "PROJECT_FILE_DELETE_REFERENCED" });
+    const deleted = await store.delete("DRF-FILES", "42", firstProject, "ТЗ v3.docx", "e".repeat(64), "ТЗ v3.docx", "unlink");
+    expect(deleted.references).toMatchObject({ status: "checked", action: "unlinked", before_count: 2, affected_count: 2, remaining_count: 0 });
+    const unlinked = await readFile(projectPath, "utf8");
+    expect(unlinked).toContain("ТЗ v3.docx");
+    expect(unlinked).not.toContain("[[file:ТЗ v3.docx]]");
+  });
+
+  it("atomically updates every supported Project-scoped Markdown field", async () => {
+    const { root, store } = await uploadFixture();
+    const projectRoot = path.join(root, "projects", firstProject);
+    const files = path.join(projectRoot, "files");
+    await mkdir(files, { recursive: true });
+    await writeFile(path.join(files, "old.txt"), "bytes", "utf8");
+    const token = "[[file:old.txt]]";
+    const update = async (relative: string, change: (document: GitPmDocument) => GitPmDocument) => {
+      const absolute = path.join(projectRoot, ...relative.split("/"));
+      await mkdir(path.dirname(absolute), { recursive: true });
+      const document = parseYamlDocument(await readFile(absolute, "utf8"));
+      await writeFile(absolute, formatYamlDocument(change({ ...document })), "utf8");
+    };
+    await update("project.yaml", (document) => ({ ...document, description_markdown: token }));
+    await update("milestones/M-26-461GDJ.yaml", (document) => ({ ...document, lifecycle: "archived", description_markdown: `${token} ${token}` }));
+    await update("tasks/T-26-P9G3P8.yaml", (document) => ({ ...document, lifecycle: "archived", description_markdown: token, acceptance_criteria_markdown: [`${token} ${token}`, token] }));
+    const actor = { provider: "git", subject: "42", display_name: "Test" };
+    const commentDir = path.join(projectRoot, "comments", "T-26-P9G3P8");
+    await mkdir(commentDir, { recursive: true });
+    await writeFile(path.join(commentDir, "N-26-ABC123.yaml"), formatYamlDocument({ schema: "gitpm/comment@1", id: "N-26-ABC123", project: firstProject, task: "T-26-P9G3P8", author: actor, created_at: "2026-08-10T12:00:00Z", state: "active", body_markdown: token, mentions: [] }), "utf8");
+    await writeFile(path.join(commentDir, "N-26-ABC124.yaml"), formatYamlDocument({ schema: "gitpm/comment@1", id: "N-26-ABC124", project: firstProject, task: "T-26-P9G3P8", author: actor, created_at: "2026-08-10T12:00:00Z", state: "deleted", mentions: [], deleted_at: "2026-08-11T12:00:00Z", deleted_by: actor }), "utf8");
+    await update("time-entries/T-26-P9G3P8/E-26-AAAAAA.yaml", (document) => ({ ...document, note_markdown: token }));
+    const timeDir = path.join(projectRoot, "time-entries", "T-26-P9G3P8");
+    await writeFile(path.join(timeDir, "E-26-AAAABB.yaml"), formatYamlDocument({ schema: "gitpm/time-entry@1", id: "E-26-AAAABB", project: firstProject, task: "T-26-P9G3P8", person: "U-26-5EBAE3", performed_on: "2026-08-10", hours: 1, category: "warranty", note_markdown: token, created_at: "2026-08-10T12:00:00Z", state: "voided", voided_at: "2026-08-11T12:00:00Z", voided_by: actor }), "utf8");
+
+    const result = await store.rename("DRF-FILES", "42", firstProject, "old.txt", "f".repeat(64), "new.txt", "update");
+    expect(result.references).toMatchObject({ before_count: 10, affected_count: 10, remaining_count: 0 });
+    const discovery = await discoverRepositoryFiles(root);
+    const documents = await Promise.all(discovery.files.map(async (absolute) => parseYamlDocument(await readFile(absolute, "utf8"), path.relative(root, absolute))));
+    expect(searchProjectFileReferences({ projectId: firstProject, fileName: "old.txt", documents }).count).toBe(0);
+    expect(searchProjectFileReferences({ projectId: firstProject, fileName: "new.txt", documents }).count).toBe(10);
+    expect(parseYamlDocument(await readFile(path.join(commentDir, "N-26-ABC124.yaml"), "utf8")).body_markdown).toBeUndefined();
+  });
+
+  it("does not overwrite a repository document changed after reference discovery", async () => {
+    let projectPath = "";
+    const raced = await uploadFixture({ beforeReferenceWriteForTest: async () => { await writeFile(projectPath, "external", "utf8"); } });
+    projectPath = path.join(raced.root, "projects", firstProject, "project.yaml");
+    const files = path.join(raced.root, "projects", firstProject, "files");
+    await mkdir(files, { recursive: true });
+    await writeFile(path.join(files, "old.txt"), "bytes", "utf8");
+    await writeFile(projectPath, formatYamlDocument({ ...parseYamlDocument(await readFile(projectPath, "utf8")), description_markdown: "[[file:old.txt]]" }), "utf8");
+    await expect(raced.store.rename("DRF-FILES", "42", firstProject, "old.txt", "f".repeat(64), "new.txt", "update"))
+      .rejects.toMatchObject({ code: "PROJECT_FILE_REFERENCES_CHANGED" });
+    await expect(readFile(projectPath, "utf8")).resolves.toBe("external");
+    await expect(readFile(path.join(files, "old.txt"), "utf8")).resolves.toBe("bytes");
+  });
+
+  it("restores exact YAML bytes when a post-write failure is injected", async () => {
+    let injected = false;
+    const failed = await uploadFixture({ afterReferenceWriteForTest: async () => { if (!injected) { injected = true; throw new Error("injected after write"); } } });
+    const projectPath = path.join(failed.root, "projects", firstProject, "project.yaml");
+    const files = path.join(failed.root, "projects", firstProject, "files");
+    await mkdir(files, { recursive: true });
+    await writeFile(path.join(files, "old.txt"), "bytes", "utf8");
+    const original = `${formatYamlDocument({ ...parseYamlDocument(await readFile(projectPath, "utf8")), description_markdown: "[[file:old.txt]]" })}\n`;
+    await writeFile(projectPath, original, "utf8");
+    await expect(failed.store.rename("DRF-FILES", "42", firstProject, "old.txt", "f".repeat(64), "new.txt", "update"))
+      .rejects.toThrow("injected after write");
+    await expect(readFile(projectPath, "utf8")).resolves.toBe(original);
+    await expect(readFile(path.join(files, "old.txt"), "utf8")).resolves.toBe("bytes");
+  });
+
+  it("restores exact bytes for every affected YAML document after the second write fails", async () => {
+    let writes = 0;
+    const failed = await uploadFixture({ afterReferenceWriteForTest: async () => { writes += 1; if (writes === 2) throw new Error("second write failed"); } });
+    const projectRoot = path.join(failed.root, "projects", firstProject);
+    const projectPath = path.join(projectRoot, "project.yaml");
+    const taskPath = path.join(projectRoot, "tasks", "T-26-P9G3P8.yaml");
+    const files = path.join(projectRoot, "files");
+    await mkdir(files, { recursive: true });
+    await writeFile(path.join(files, "old.txt"), "bytes", "utf8");
+    const projectOriginal = `${formatYamlDocument({ ...parseYamlDocument(await readFile(projectPath, "utf8")), description_markdown: "[[file:old.txt]]" })}\n`;
+    const taskOriginal = `${formatYamlDocument({ ...parseYamlDocument(await readFile(taskPath, "utf8")), description_markdown: "[[file:old.txt]]" })}\n`;
+    await writeFile(projectPath, projectOriginal, "utf8");
+    await writeFile(taskPath, taskOriginal, "utf8");
+    await expect(failed.store.rename("DRF-FILES", "42", firstProject, "old.txt", "f".repeat(64), "new.txt", "update"))
+      .rejects.toThrow("second write failed");
+    await expect(readFile(projectPath, "utf8")).resolves.toBe(projectOriginal);
+    await expect(readFile(taskPath, "utf8")).resolves.toBe(taskOriginal);
+    await expect(readFile(path.join(files, "old.txt"), "utf8")).resolves.toBe("bytes");
+  });
+
+  it("continues rolling back other YAML documents when one changed document needs recovery", async () => {
+    let writes = 0;
+    let changedPath = "";
+    const failed = await uploadFixture({ afterReferenceWriteForTest: async () => {
+      writes += 1;
+      if (writes === 2) { await writeFile(changedPath, "external occupant", "utf8"); throw new Error("force rollback"); }
+    } });
+    const projectRoot = path.join(failed.root, "projects", firstProject);
+    const projectPath = path.join(projectRoot, "project.yaml");
+    const taskPath = path.join(projectRoot, "tasks", "T-26-P9G3P8.yaml");
+    changedPath = taskPath;
+    const files = path.join(projectRoot, "files");
+    await mkdir(files, { recursive: true });
+    await writeFile(path.join(files, "old.txt"), "bytes", "utf8");
+    const projectOriginal = formatYamlDocument({ ...parseYamlDocument(await readFile(projectPath, "utf8")), description_markdown: "[[file:old.txt]]" });
+    const taskOriginal = formatYamlDocument({ ...parseYamlDocument(await readFile(taskPath, "utf8")), description_markdown: "[[file:old.txt]]" });
+    await writeFile(projectPath, projectOriginal, "utf8");
+    await writeFile(taskPath, taskOriginal, "utf8");
+    let error: unknown;
+    try { await failed.store.rename("DRF-FILES", "42", firstProject, "old.txt", "f".repeat(64), "new.txt", "update"); }
+    catch (caught) { error = caught; }
+    expect(error).toMatchObject({ code: "PROJECT_FILE_ROLLBACK_FAILED" });
+    expect(String((error as Error).message)).not.toContain(failed.root);
+    expect(String((error as Error).message)).toContain(`projects/${firstProject}/files/`);
+    await expect(readFile(projectPath, "utf8")).resolves.toBe(projectOriginal);
+    await expect(readFile(taskPath, "utf8")).resolves.toBe("external occupant");
+    await expect(readFile(path.join(files, "old.txt"), "utf8")).resolves.toBe("bytes");
+    const recovery = (await readdir(files)).find((name) => name.endsWith(".references-recovery"));
+    expect(recovery).toBeDefined();
+    await expect(readFile(path.join(files, recovery!), "utf8")).resolves.toBe(taskOriginal);
+  });
+
+  it("continues rollback when creating a recovery copy also fails", async () => {
+    let writes = 0;
+    let changedPath = "";
+    const failed = await uploadFixture({
+      afterReferenceWriteForTest: async () => {
+        writes += 1;
+        if (writes === 2) { await writeFile(changedPath, "external occupant", "utf8"); throw new Error("force rollback"); }
+      },
+      beforeReferenceRecoveryWriteForTest: async () => { throw new Error("recovery storage unavailable"); },
+    });
+    const projectRoot = path.join(failed.root, "projects", firstProject);
+    const projectPath = path.join(projectRoot, "project.yaml");
+    const taskPath = path.join(projectRoot, "tasks", "T-26-P9G3P8.yaml");
+    changedPath = taskPath;
+    const files = path.join(projectRoot, "files");
+    await mkdir(files, { recursive: true });
+    await writeFile(path.join(files, "old.txt"), "bytes", "utf8");
+    const projectOriginal = formatYamlDocument({ ...parseYamlDocument(await readFile(projectPath, "utf8")), description_markdown: "[[file:old.txt]]" });
+    const taskOriginal = formatYamlDocument({ ...parseYamlDocument(await readFile(taskPath, "utf8")), description_markdown: "[[file:old.txt]]" });
+    await writeFile(projectPath, projectOriginal, "utf8");
+    await writeFile(taskPath, taskOriginal, "utf8");
+    let error: unknown;
+    try { await failed.store.rename("DRF-FILES", "42", firstProject, "old.txt", "f".repeat(64), "new.txt", "update"); }
+    catch (caught) { error = caught; }
+    expect(error).toMatchObject({ code: "PROJECT_FILE_ROLLBACK_FAILED" });
+    expect(String((error as Error).message)).toContain("could not be created");
+    expect(String((error as Error).message)).not.toContain(failed.root);
+    await expect(readFile(projectPath, "utf8")).resolves.toBe(projectOriginal);
+    await expect(readFile(taskPath, "utf8")).resolves.toBe("external occupant");
+    await expect(readFile(path.join(files, "old.txt"), "utf8")).resolves.toBe("bytes");
+    expect((await readdir(files)).some((name) => name.endsWith(".references-recovery"))).toBe(false);
+  });
+
+  it("keeps replacement references checked without rewriting YAML", async () => {
+    const { root, store } = await uploadFixture();
+    const files = path.join(root, "projects", firstProject, "files");
+    const projectPath = path.join(root, "projects", firstProject, "project.yaml");
+    await mkdir(files, { recursive: true });
+    await writeFile(path.join(files, "spec.txt"), "old", "utf8");
+    const source = formatYamlDocument({ ...parseYamlDocument(await readFile(projectPath, "utf8")), description_markdown: "[[file:spec.txt]]" });
+    await writeFile(projectPath, source, "utf8");
+    const result = await store.upload("DRF-FILES", "42", firstProject, "f".repeat(64), { name: "spec.txt", sizeBytes: 3, mode: "replace", referenceMode: "preserve_checked", content: Readable.from([Buffer.from("new")]) });
+    expect(result.references).toMatchObject({ status: "checked", action: "preserved", before_count: 1, affected_count: 0, remaining_count: 1 });
+    expect(await readFile(projectPath, "utf8")).toBe(source);
+  });
+
+  it("atomically replaces a selected file under a new name and updates exact references", async () => {
+    const { root, store } = await uploadFixture();
+    const projectRoot = path.join(root, "projects", firstProject);
+    const files = path.join(projectRoot, "files");
+    const projectPath = path.join(projectRoot, "project.yaml");
+    await mkdir(files, { recursive: true });
+    await writeFile(path.join(files, "old.txt"), "old bytes", "utf8");
+    await writeFile(projectPath, formatYamlDocument({ ...parseYamlDocument(await readFile(projectPath, "utf8")), description_markdown: "See [[file:old.txt]] twice [[file:old.txt]]" }), "utf8");
+    const result = await store.replace("DRF-FILES", "42", firstProject, "old.txt", "f".repeat(64), {
+      name: "new.txt", sizeBytes: 9, content: Readable.from([Buffer.from("new bytes")]),
+    });
+    expect(result).toMatchObject({ operation: "replaced", previous_name: "old.txt", item: { name: "new.txt" }, references: { status: "checked", action: "updated", before_count: 2, affected_count: 2, remaining_count: 0 } });
+    await expect(readFile(path.join(files, "new.txt"), "utf8")).resolves.toBe("new bytes");
+    await expect(readFile(path.join(files, "old.txt"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    expect(await readFile(projectPath, "utf8")).toContain("[[file:new.txt]] twice [[file:new.txt]]");
+  });
+
+  it("replaces a selected file with the same name while preserving checked references", async () => {
+    const { root, store } = await uploadFixture();
+    const projectRoot = path.join(root, "projects", firstProject);
+    const files = path.join(projectRoot, "files");
+    const projectPath = path.join(projectRoot, "project.yaml");
+    await mkdir(files, { recursive: true });
+    await writeFile(path.join(files, "same.txt"), "old", "utf8");
+    const yaml = formatYamlDocument({ ...parseYamlDocument(await readFile(projectPath, "utf8")), description_markdown: "[[file:same.txt]]" });
+    await writeFile(projectPath, yaml, "utf8");
+    const result = await store.replace("DRF-FILES", "42", firstProject, "same.txt", "f".repeat(64), {
+      name: "same.txt", sizeBytes: 3, content: Readable.from([Buffer.from("new")]),
+    });
+    expect(result.references).toMatchObject({ status: "checked", action: "preserved", before_count: 1, affected_count: 0, remaining_count: 1 });
+    await expect(readFile(path.join(files, "same.txt"), "utf8")).resolves.toBe("new");
+    await expect(readFile(projectPath, "utf8")).resolves.toBe(yaml);
+  });
+
+  it("rejects a selected replacement destination collision without changing either file", async () => {
+    const { root, store } = await uploadFixture();
+    const files = path.join(root, "projects", firstProject, "files");
+    await mkdir(files, { recursive: true });
+    await writeFile(path.join(files, "old.txt"), "old", "utf8");
+    await writeFile(path.join(files, "taken.txt"), "taken", "utf8");
+    await expect(store.replace("DRF-FILES", "42", firstProject, "old.txt", "f".repeat(64), {
+      name: "TAKEN.TXT", sizeBytes: 3, content: Readable.from([Buffer.from("new")]),
+    })).rejects.toMatchObject({ code: "PROJECT_FILE_NAME_CONFLICT" });
+    await expect(readFile(path.join(files, "old.txt"), "utf8")).resolves.toBe("old");
+    await expect(readFile(path.join(files, "taken.txt"), "utf8")).resolves.toBe("taken");
+  });
+
+  it("restores exact original file and YAML bytes when selected replacement validation fails", async () => {
+    const failed = await uploadFixture({ beforeValidationForTest: async (operation) => { if (operation === "replace") throw new Error("replace validation failed"); } });
+    const projectRoot = path.join(failed.root, "projects", firstProject);
+    const files = path.join(projectRoot, "files");
+    const projectPath = path.join(projectRoot, "project.yaml");
+    await mkdir(files, { recursive: true });
+    const originalBytes = Buffer.from([0, 1, 2, 255]);
+    await writeFile(path.join(files, "old.bin"), originalBytes);
+    const originalYaml = formatYamlDocument({ ...parseYamlDocument(await readFile(projectPath, "utf8")), description_markdown: "[[file:old.bin]]" });
+    await writeFile(projectPath, originalYaml, "utf8");
+    await expect(failed.store.replace("DRF-FILES", "42", firstProject, "old.bin", "f".repeat(64), {
+      name: "new.bin", sizeBytes: 3, content: Readable.from([Buffer.from("new")]),
+    })).rejects.toThrow("replace validation failed");
+    await expect(readFile(path.join(files, "old.bin"))).resolves.toEqual(originalBytes);
+    await expect(readFile(path.join(files, "new.bin"))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(readFile(projectPath, "utf8")).resolves.toBe(originalYaml);
+  });
+
+  it("preserves a concurrently changed destination and still restores source and YAML best-effort", async () => {
+    let destination = "";
+    const failed = await uploadFixture({ beforeValidationForTest: async (operation) => {
+      if (operation !== "replace") return;
+      await rm(destination);
+      await writeFile(destination, "external occupant", "utf8");
+      throw new Error("force rollback");
+    } });
+    const projectRoot = path.join(failed.root, "projects", firstProject);
+    const files = path.join(projectRoot, "files");
+    const projectPath = path.join(projectRoot, "project.yaml");
+    destination = path.join(files, "new.txt");
+    await mkdir(files, { recursive: true });
+    await writeFile(path.join(files, "old.txt"), "old", "utf8");
+    const yaml = formatYamlDocument({ ...parseYamlDocument(await readFile(projectPath, "utf8")), description_markdown: "[[file:old.txt]]" });
+    await writeFile(projectPath, yaml, "utf8");
+    await expect(failed.store.replace("DRF-FILES", "42", firstProject, "old.txt", "f".repeat(64), {
+      name: "new.txt", sizeBytes: 3, content: Readable.from([Buffer.from("new")]),
+    })).rejects.toMatchObject({ code: "PROJECT_FILE_ROLLBACK_FAILED" });
+    await expect(readFile(path.join(files, "old.txt"), "utf8")).resolves.toBe("old");
+    await expect(readFile(destination, "utf8")).resolves.toBe("external occupant");
+    await expect(readFile(projectPath, "utf8")).resolves.toBe(yaml);
+  });
+
+  it("returns fresh same-name reference counts after a valid concurrent YAML change", async () => {
+    let projectPath = "";
+    const raced = await uploadFixture({ beforeFinalizeForTest: async () => {
+      await writeFile(projectPath, formatYamlDocument({ ...parseYamlDocument(await readFile(projectPath, "utf8")), description_markdown: "[[file:same.txt]] and [[file:same.txt]]" }), "utf8");
+    } });
+    projectPath = path.join(raced.root, "projects", firstProject, "project.yaml");
+    const files = path.join(raced.root, "projects", firstProject, "files");
+    await mkdir(files, { recursive: true });
+    await writeFile(path.join(files, "same.txt"), "old", "utf8");
+    await writeFile(projectPath, formatYamlDocument({ ...parseYamlDocument(await readFile(projectPath, "utf8")), description_markdown: "[[file:same.txt]]" }), "utf8");
+    const result = await raced.store.replace("DRF-FILES", "42", firstProject, "same.txt", "f".repeat(64), {
+      name: "same.txt", sizeBytes: 3, content: Readable.from([Buffer.from("new")]),
+    });
+    expect(result.references).toMatchObject({ action: "preserved", before_count: 2, remaining_count: 2 });
+  });
+
+  it("detects an in-place source rewrite during streaming and restores those external bytes", async () => {
+    let source = "";
+    const raced = await uploadFixture({ beforeFinalizeForTest: async () => { await writeFile(source, "EXT", "utf8"); } });
+    const files = path.join(raced.root, "projects", firstProject, "files");
+    await mkdir(files, { recursive: true });
+    source = path.join(files, "old.txt");
+    await writeFile(source, "old", "utf8");
+    await expect(raced.store.replace("DRF-FILES", "42", firstProject, "old.txt", "f".repeat(64), {
+      name: "new.txt", sizeBytes: 3, content: Readable.from([Buffer.from("new")]),
+    })).rejects.toMatchObject({ code: "PROJECT_FILE_CHANGED_EXTERNALLY" });
+    await expect(readFile(source, "utf8")).resolves.toBe("EXT");
+    await expect(readFile(path.join(files, "new.txt"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("rejects a new old-name reference added after different-name rewriting and rolls back files", async () => {
+    let taskPath = "";
+    const raced = await uploadFixture({ beforeValidationForTest: async (operation) => {
+      if (operation !== "replace") return;
+      await writeFile(taskPath, formatYamlDocument({ ...parseYamlDocument(await readFile(taskPath, "utf8")), description_markdown: "late [[file:old.txt]]" }), "utf8");
+    } });
+    const projectRoot = path.join(raced.root, "projects", firstProject);
+    const files = path.join(projectRoot, "files");
+    taskPath = path.join(projectRoot, "tasks", "T-26-P9G3P8.yaml");
+    await mkdir(files, { recursive: true });
+    await writeFile(path.join(files, "old.txt"), "old", "utf8");
+    await expect(raced.store.replace("DRF-FILES", "42", firstProject, "old.txt", "f".repeat(64), {
+      name: "new.txt", sizeBytes: 3, content: Readable.from([Buffer.from("new")]),
+    })).rejects.toMatchObject({ code: "PROJECT_FILE_REFERENCES_CHANGED" });
+    await expect(readFile(path.join(files, "old.txt"), "utf8")).resolves.toBe("old");
+    await expect(readFile(path.join(files, "new.txt"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    expect(await readFile(taskPath, "utf8")).toContain("[[file:old.txt]]");
+  });
+
+  it("reports the final checked references when YAML changes during a replacement stream", async () => {
+    let projectPath = "";
+    const raced = await uploadFixture({ beforeFinalizeForTest: async () => {
+      await writeFile(projectPath, formatYamlDocument({ ...parseYamlDocument(await readFile(projectPath, "utf8")), description_markdown: "[[file:spec.txt]] and [[file:spec.txt]]" }), "utf8");
+    } });
+    projectPath = path.join(raced.root, "projects", firstProject, "project.yaml");
+    const files = path.join(raced.root, "projects", firstProject, "files");
+    await mkdir(files, { recursive: true });
+    await writeFile(path.join(files, "spec.txt"), "old", "utf8");
+    await writeFile(projectPath, formatYamlDocument({ ...parseYamlDocument(await readFile(projectPath, "utf8")), description_markdown: "[[file:spec.txt]]" }), "utf8");
+    const result = await raced.store.upload("DRF-FILES", "42", firstProject, "f".repeat(64), { name: "spec.txt", sizeBytes: 3, mode: "replace", referenceMode: "preserve_checked", content: Readable.from([Buffer.from("new")]) });
+    expect(result.references).toMatchObject({ status: "checked", action: "preserved", before_count: 2, remaining_count: 2 });
   });
 
   it("keeps Project scope and rejects symlinks and non-regular entries", async () => {
@@ -434,6 +776,9 @@ describe("ProjectFileStore rename and delete", () => {
     await expect(store.rename(
       "DRF-FILES", "42", firstProject, "same.txt", "f".repeat(64), "renamed.txt", "ignore_unchecked",
     )).rejects.toMatchObject({ code: "PROJECT_FILE_PATH_FORBIDDEN" });
+    await expect(store.replace("DRF-FILES", "42", firstProject, "same.txt", "f".repeat(64), {
+      name: "renamed.txt", sizeBytes: 3, content: Readable.from([Buffer.from("new")]),
+    })).rejects.toMatchObject({ code: "FS_SYMLINK" });
     await expect(readFile(path.join(secondFiles, "same.txt"), "utf8")).resolves.toBe("second");
   });
 
