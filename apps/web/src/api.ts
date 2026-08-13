@@ -18,7 +18,9 @@ import {
   decodeMergeRequestStatus,
   decodeNotifications,
   decodeProjectWorkspace,
+  decodeProjectFileDeleteResult,
   decodeProjectFileList,
+  decodeProjectFileRenameResult,
   decodeProjectFileUploadResult,
   decodePublicSession,
   decodePushResult,
@@ -40,6 +42,8 @@ import {
   type ConfigurationResult,
   type Decoder,
   type ProjectFileList,
+  type ProjectFileDeleteResult,
+  type ProjectFileRenameResult,
   type ProjectFileUploadResult,
 } from "@gitpm/contracts";
 import type { ChangesList, CommentResult, CommitFileDiff, CommitHistoryDetail, CommitHistoryItem, CommitResult, ConfigurationImpact, DirectRevertResult, DraftSnapshot, DraftStatus, EntityResult, GitPmDocument, GlobalSearchResult, MergeRequestStatus, NotificationsResult, ProjectWorkspaceResult, PublicSession, PushResult, RepositoryConnectionStatus, RepositoryConnectionTest, RepositoryConnectionUpdate, RepositoryDocument, RepositoryResult, RestoreCommitFilesResult, RevertDraftResult, SemanticDiff, TimeEntryDocument, WorkloadReport, WriterMode, WorktreeDirectory, WorktreeFile } from "./types.js";
@@ -179,6 +183,8 @@ export interface GitPmApi {
   projectWorkspace(draftId: string, projectId: string): Promise<ProjectWorkspaceResult>;
   listProjectFiles(draftId: string, projectId: string): Promise<ProjectFileList>;
   uploadProjectFile(draftId: string, projectId: string, expectedFingerprint: string, file: Blob, name: string, mode: "create" | "replace", options?: ProjectFileUploadOptions): Promise<ProjectFileUploadResult>;
+  renameProjectFile(draftId: string, projectId: string, name: string, expectedFingerprint: string, newName: string): Promise<ProjectFileRenameResult>;
+  deleteProjectFile(draftId: string, projectId: string, name: string, expectedFingerprint: string, confirmationName: string): Promise<ProjectFileDeleteResult>;
   createEntity(draftId: string, entityType: string, fingerprint: string, document: GitPmDocument): Promise<EntityResult>;
   updateEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string, document: GitPmDocument): Promise<EntityResult>;
   moveTask(draftId: string, entity: EntityResult, fingerprint: string, targetProject: string, targetMilestone?: string, targetParent?: string): Promise<EntityResult>;
@@ -230,6 +236,18 @@ export interface ProjectFileUploadOptions {
   readonly largeFileConfirmation?: string;
   readonly signal?: AbortSignal;
   readonly onProgress?: (loaded: number, total: number) => void;
+}
+
+function projectFilePath(draftId: string, projectId: string, name: string): string {
+  return `/api/drafts/${encodeURIComponent(draftId)}/projects/${encodeURIComponent(projectId)}/files/${encodeURIComponent(name)}`;
+}
+
+export function projectFileContentUrl(draftId: string, projectId: string, name: string): string {
+  return `${projectFilePath(draftId, projectId, name)}/content`;
+}
+
+export function projectFileDownloadUrl(draftId: string, projectId: string, name: string): string {
+  return `${projectFilePath(draftId, projectId, name)}/download`;
 }
 
 export interface LifecycleMutationOptions {
@@ -418,6 +436,18 @@ export class HttpGitPmApi implements GitPmApi {
       xhr.addEventListener("abort", () => { finish(); reject(new DOMException("Project file upload was cancelled", "AbortError")); });
       options.signal?.addEventListener("abort", abort, { once: true });
       if (options.signal?.aborted === true) abort(); else xhr.send(file);
+    });
+  }
+  async renameProjectFile(draftId: string, projectId: string, name: string, expected_fingerprint: string, new_name: string): Promise<ProjectFileRenameResult> {
+    return await this.request(`${projectFilePath(draftId, projectId, name)}/rename`, decodeProjectFileRenameResult, {
+      method: "POST",
+      body: JSON.stringify({ expected_fingerprint, new_name, reference_mode: "ignore_unchecked" }),
+    });
+  }
+  async deleteProjectFile(draftId: string, projectId: string, name: string, expected_fingerprint: string, confirmation_name: string): Promise<ProjectFileDeleteResult> {
+    return await this.request(projectFilePath(draftId, projectId, name), decodeProjectFileDeleteResult, {
+      method: "DELETE",
+      body: JSON.stringify({ expected_fingerprint, confirmation_name, reference_mode: "ignore_unchecked" }),
     });
   }
   async createEntity(draftId: string, entityType: string, expected_fingerprint: string, document: GitPmDocument): Promise<EntityResult> {

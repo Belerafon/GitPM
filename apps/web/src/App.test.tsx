@@ -64,6 +64,8 @@ class FakeApi implements GitPmApi {
   }
   async listProjectFiles(_draftId: string, projectId: string) { return { project_id: projectId, count: 0, total_size_bytes: 0, items: [], draft_fingerprint: "b".repeat(64) }; }
   async uploadProjectFile(): Promise<never> { throw new Error("not used"); }
+  async renameProjectFile(): Promise<never> { throw new Error("not used"); }
+  async deleteProjectFile(): Promise<never> { throw new Error("not used"); }
   async createEntity(): Promise<EntityResult> { throw new Error("not used"); }
   async updateEntity(): Promise<EntityResult> { throw new Error("not used"); }
   async moveTask(): Promise<EntityResult> { throw new Error("not used"); }

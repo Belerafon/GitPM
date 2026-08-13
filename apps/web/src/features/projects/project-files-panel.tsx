@@ -1,6 +1,6 @@
-import type { ProjectFileItem, ProjectFileList, ProjectFileUploadResult } from "@gitpm/contracts";
+import type { ProjectFileDeleteResult, ProjectFileItem, ProjectFileList, ProjectFileRenameResult, ProjectFileUploadResult } from "@gitpm/contracts";
 import { useEffect, useRef, useState, type DragEvent } from "react";
-import { ApiError, formatApiError, type GitPmApi } from "../../api.js";
+import { ApiError, formatApiError, projectFileContentUrl, projectFileDownloadUrl, type GitPmApi } from "../../api.js";
 import type { AsyncLoadState } from "../../async-data.js";
 import { EditorDrawer } from "../../editor-drawer.js";
 import { formatDateTime, message, type Locale, type MessageKey } from "../../i18n.js";
@@ -65,7 +65,7 @@ function FileIcon({ name }: { readonly name: string }) {
   </svg>;
 }
 
-function formatFileSize(locale: Locale, bytes: number): string {
+export function formatFileSize(locale: Locale, bytes: number): string {
   if (bytes < 1024) return `${new Intl.NumberFormat(locale).format(bytes)} B`;
   const units = ["KB", "MB", "GB", "TB"];
   let value = bytes / 1024;
@@ -77,25 +77,33 @@ function formatFileSize(locale: Locale, bytes: number): string {
   return `${new Intl.NumberFormat(locale, { maximumFractionDigits: value < 10 ? 1 : 0 }).format(value)} ${unit}`;
 }
 
-function FileGrid({ items, locale, t }: { readonly items: readonly ProjectFileItem[]; readonly locale: Locale; readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string }) {
+function fileOpenUrl(draftId: string, projectId: string, item: ProjectFileItem): string {
+  return item.disposition === "inline" ? projectFileContentUrl(draftId, projectId, item.name) : projectFileDownloadUrl(draftId, projectId, item.name);
+}
+
+function FileGrid({ draftId, items, locale, onSelect, projectId, selectedName, t }: { readonly draftId: string; readonly items: readonly ProjectFileItem[]; readonly locale: Locale; readonly onSelect: (name: string) => void; readonly projectId: string; readonly selectedName?: string; readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string }) {
   return <ul aria-label={t("projectFiles.listLabel")} className="project-files-grid">
-    {items.map((item) => <li aria-label={item.name} className="project-file-tile" key={item.name} title={item.name}>
-      <FileIcon name={item.name} />
-      <span className="project-file-name">{item.name}</span>
-      <span className="project-file-size">{formatFileSize(locale, item.size_bytes)}</span>
+    {items.map((item) => <li className={`project-file-tile${selectedName === item.name ? " is-selected" : ""}`} key={item.name} title={item.name}>
+      <a aria-label={t(item.disposition === "inline" ? "projectFiles.openNamed" : "projectFiles.downloadNamed", { name: item.name })} className="project-file-open" href={fileOpenUrl(draftId, projectId, item)} rel="noopener noreferrer" target="_blank">
+        <FileIcon name={item.name} />
+        <span className="project-file-name">{item.name}</span>
+        <span className="project-file-size">{formatFileSize(locale, item.size_bytes)}</span>
+      </a>
+      <button aria-label={t("projectFiles.selectActions", { name: item.name })} aria-pressed={selectedName === item.name} className="project-file-select" onClick={() => onSelect(item.name)} type="button">•••</button>
     </li>)}
   </ul>;
 }
 
-function FileTable({ items, locale, t }: { readonly items: readonly ProjectFileItem[]; readonly locale: Locale; readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string }) {
+function FileTable({ draftId, items, locale, onSelect, projectId, selectedName, t }: { readonly draftId: string; readonly items: readonly ProjectFileItem[]; readonly locale: Locale; readonly onSelect: (name: string) => void; readonly projectId: string; readonly selectedName?: string; readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string }) {
   return <div className="project-files-table-scroll"><table className="project-files-table">
     <caption className="sr-only">{t("projectFiles.listLabel")}</caption>
-    <thead><tr><th>{t("projectFiles.name")}</th><th>{t("projectFiles.type")}</th><th>{t("projectFiles.size")}</th><th>{t("projectFiles.modified")}</th></tr></thead>
-    <tbody>{items.map((item) => <tr key={item.name} title={item.name}>
-      <td><span className="project-file-table-name"><FileIcon name={item.name} /><span>{item.name}</span></span></td>
+    <thead><tr><th>{t("projectFiles.name")}</th><th>{t("projectFiles.type")}</th><th>{t("projectFiles.size")}</th><th>{t("projectFiles.modified")}</th><th><span className="sr-only">{t("projectFiles.actions")}</span></th></tr></thead>
+    <tbody>{items.map((item) => <tr className={selectedName === item.name ? "is-selected" : undefined} key={item.name} title={item.name}>
+      <td><a aria-label={t(item.disposition === "inline" ? "projectFiles.openNamed" : "projectFiles.downloadNamed", { name: item.name })} className="project-file-table-name" href={fileOpenUrl(draftId, projectId, item)} rel="noopener noreferrer" target="_blank"><FileIcon name={item.name} /><span>{item.name}</span></a></td>
       <td>{FAMILY_LABEL[projectFileFamily(item.name)]}</td>
       <td>{formatFileSize(locale, item.size_bytes)}</td>
       <td>{formatDateTime(locale, item.modified_at)}</td>
+      <td><button aria-label={t("projectFiles.selectActions", { name: item.name })} aria-pressed={selectedName === item.name} className="project-file-select" onClick={() => onSelect(item.name)} type="button">•••</button></td>
     </tr>)}</tbody>
   </table></div>;
 }
@@ -115,15 +123,17 @@ interface UploadQueueItem {
 
 const comparableName = (name: string) => name.normalize("NFC").toLocaleLowerCase("en-US");
 
-export function ProjectFilesPanel({ api, draftId, fingerprint, locale, list, loadState, onClose, onReload, onUploaded, onViewChange, open, projectId, readOnly, view }: {
-  readonly api: Pick<GitPmApi, "uploadProjectFile">;
+export function ProjectFilesPanel({ api, draftId, fingerprint, locale, list, loadState, onClose, onDeleted, onReload, onRenamed, onUploaded, onViewChange, open, projectId, readOnly, view }: {
+  readonly api: Pick<GitPmApi, "deleteProjectFile" | "renameProjectFile" | "uploadProjectFile">;
   readonly draftId: string;
   readonly fingerprint: string;
   readonly locale: Locale;
   readonly list: ProjectFileList | null;
   readonly loadState: AsyncLoadState;
   readonly onClose: () => void;
+  readonly onDeleted: (result: ProjectFileDeleteResult) => void;
   readonly onReload: () => void;
+  readonly onRenamed: (result: ProjectFileRenameResult) => void;
   readonly onUploaded: (result: ProjectFileUploadResult) => void;
   readonly onViewChange: (view: ProjectFilesView) => void;
   readonly open: boolean;
@@ -138,7 +148,15 @@ export function ProjectFilesPanel({ api, draftId, fingerprint, locale, list, loa
   const [busyId, setBusyId] = useState<number | null>(null);
   const [confirmation, setConfirmation] = useState("");
   const [dragActive, setDragActive] = useState(false);
+  const [selectedName, setSelectedName] = useState<string>();
+  const [fileAction, setFileAction] = useState<"properties" | "rename" | "delete">();
+  const [actionValue, setActionValue] = useState("");
+  const [actionError, setActionError] = useState<string>();
+  const [actionBusy, setActionBusy] = useState(false);
   const fileInput = useRef<HTMLInputElement | null>(null);
+  const actionTrigger = useRef<HTMLElement | null>(null);
+  const actionDialog = useRef<HTMLDivElement | null>(null);
+  const restoreActionFocus = useRef(false);
   const nextId = useRef(1);
   const fingerprintRef = useRef(fingerprint);
   const activeController = useRef<AbortController | null>(null);
@@ -147,7 +165,14 @@ export function ProjectFilesPanel({ api, draftId, fingerprint, locale, list, loa
   useEffect(() => { if (readOnly) activeController.current?.abort(); }, [readOnly]);
   useEffect(() => () => activeController.current?.abort(), []);
   const activeConfirmation = queue.find((item) => item.state === "confirmation");
+  const selected = list?.items.find((item) => item.name === selectedName);
   useEffect(() => { setConfirmation(""); }, [activeConfirmation?.id]);
+  useEffect(() => { if (selectedName !== undefined && list?.items.some((item) => item.name === selectedName) !== true) setSelectedName(undefined); }, [list, selectedName]);
+  useEffect(() => {
+    if (fileAction !== undefined || !restoreActionFocus.current) return;
+    restoreActionFocus.current = false;
+    actionTrigger.current?.focus();
+  }, [fileAction]);
 
   const existingName = (name: string, additional: readonly UploadQueueItem[] = queue): string | undefined => {
     const key = comparableName(name);
@@ -220,6 +245,56 @@ export function ProjectFilesPanel({ api, draftId, fingerprint, locale, list, loa
   };
   const retry = (item: UploadQueueItem) => updateQueue(item.id, (current) => ({ ...current, state: current.file.size > PROJECT_FILE_LARGE_WARNING_BYTES && !current.largeConfirmed ? "confirmation" : current.existingName === undefined ? "queued" : "conflict", loaded: 0, error: undefined }));
   const onDrop = (event: DragEvent<HTMLDivElement>) => { event.preventDefault(); setDragActive(false); addFiles(Array.from(event.dataTransfer.files)); };
+  const beginAction = (action: "properties" | "rename" | "delete", trigger: HTMLElement) => {
+    if (selected === undefined) return;
+    actionTrigger.current = trigger;
+    setActionError(undefined);
+    setActionValue(action === "rename" ? selected.name : "");
+    setFileAction(action);
+  };
+  const closeAction = () => {
+    restoreActionFocus.current = true;
+    setFileAction(undefined);
+    setActionError(undefined);
+  };
+  const renameSelected = async () => {
+    if (selected === undefined || actionValue === selected.name) return;
+    setActionBusy(true);
+    setActionError(undefined);
+    try {
+      const result = await api.renameProjectFile(draftId, projectId, selected.name, fingerprintRef.current, actionValue);
+      fingerprintRef.current = result.draft_fingerprint;
+      onRenamed(result);
+      setSelectedName(result.item.name);
+      closeAction();
+    } catch (error) { setActionError(formatApiError(error)); }
+    finally { setActionBusy(false); }
+  };
+  const deleteSelected = async () => {
+    if (selected === undefined || actionValue !== selected.name) return;
+    setActionBusy(true);
+    setActionError(undefined);
+    try {
+      const result = await api.deleteProjectFile(draftId, projectId, selected.name, fingerprintRef.current, actionValue);
+      fingerprintRef.current = result.draft_fingerprint;
+      onDeleted(result);
+      setSelectedName(undefined);
+      closeAction();
+    } catch (error) { setActionError(formatApiError(error)); }
+    finally { setActionBusy(false); }
+  };
+  const extensionChanged = selected !== undefined && fileExtension(actionValue) !== fileExtension(selected.name);
+  const onActionKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Escape" && !actionBusy) { event.stopPropagation(); closeAction(); return; }
+    if (event.key !== "Tab" || actionDialog.current === null) return;
+    event.stopPropagation();
+    const focusable = Array.from(actionDialog.current.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'));
+    if (focusable.length === 0) { event.preventDefault(); return; }
+    const first = focusable[0]!;
+    const last = focusable[focusable.length - 1]!;
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+  };
 
   return <EditorDrawer closeLabel={t("projectFiles.close")} onClose={onClose} open={open} title={t("projectFiles.heading", { count: list?.count ?? 0 })}>
     <div className="project-files-panel">
@@ -231,6 +306,14 @@ export function ProjectFilesPanel({ api, draftId, fingerprint, locale, list, loa
           <button aria-label={t("projectFiles.gridView")} aria-pressed={view === "grid"} onClick={() => setView("grid")} title={t("projectFiles.gridView")} type="button">▦</button>
           <button aria-label={t("projectFiles.tableView")} aria-pressed={view === "table"} onClick={() => setView("table")} title={t("projectFiles.tableView")} type="button">☷</button>
         </div>
+      </div>
+      <div aria-label={t("projectFiles.actions")} className="project-files-actions" role="toolbar">
+        {selected === undefined ? <span>{t("projectFiles.selectHint")}</span> : <strong title={selected.name}>{selected.name}</strong>}
+        <a aria-disabled={selected === undefined} className={selected === undefined ? "is-disabled" : undefined} href={selected === undefined ? undefined : fileOpenUrl(draftId, projectId, selected)} rel="noopener noreferrer" target="_blank">{t("projectFiles.open")}</a>
+        <a aria-disabled={selected === undefined} className={selected === undefined ? "is-disabled" : undefined} href={selected === undefined ? undefined : projectFileDownloadUrl(draftId, projectId, selected.name)} rel="noopener noreferrer" target="_blank">{t("projectFiles.download")}</a>
+        <button disabled={selected === undefined} onClick={(event) => beginAction("properties", event.currentTarget)} type="button">{t("projectFiles.properties")}</button>
+        <button disabled={readOnly || selected === undefined} onClick={(event) => beginAction("rename", event.currentTarget)} type="button">{t("projectFiles.rename")}</button>
+        <button className="danger" disabled={readOnly || selected === undefined} onClick={(event) => beginAction("delete", event.currentTarget)} type="button">{t("projectFiles.delete")}</button>
       </div>
       {readOnly && <p className="project-files-readonly">{t("projectFiles.readOnly")}</p>}
       <div className={`project-files-dropzone${dragActive ? " is-dragging" : ""}`} onDragEnter={(event) => { event.preventDefault(); if (!readOnly) setDragActive(true); }} onDragLeave={() => setDragActive(false)} onDragOver={(event) => event.preventDefault()} onDrop={onDrop}>
@@ -262,8 +345,34 @@ export function ProjectFilesPanel({ api, draftId, fingerprint, locale, list, loa
       {loadState.status === "ready" && loadState.refreshError !== undefined && <div className="alert error project-files-error" role="alert"><span>{t("projectFiles.loadError", { message: loadState.refreshError })}</span><button onClick={onReload} type="button">{t("status.retry")}</button></div>}
       {readyList !== null && readyList.items.length === 0 && <div className="project-files-state project-files-empty"><strong>{t("projectFiles.emptyHeading")}</strong><span>{t("projectFiles.emptyDescription")}</span></div>}
       {readyList !== null && readyList.items.length > 0 && (view === "grid"
-        ? <FileGrid items={readyList.items} locale={locale} t={t} />
-        : <FileTable items={readyList.items} locale={locale} t={t} />)}
+        ? <FileGrid draftId={draftId} items={readyList.items} locale={locale} onSelect={setSelectedName} projectId={projectId} selectedName={selectedName} t={t} />
+        : <FileTable draftId={draftId} items={readyList.items} locale={locale} onSelect={setSelectedName} projectId={projectId} selectedName={selectedName} t={t} />)}
+      {selected !== undefined && fileAction !== undefined && <div aria-labelledby="project-file-action-title" aria-modal="true" className="project-file-large-dialog" onKeyDown={onActionKeyDown} onMouseDown={(event) => { if (event.target === event.currentTarget && !actionBusy) closeAction(); }} ref={actionDialog} role="dialog">
+        <div className="project-file-large-card project-file-action-card">
+          <h3 id="project-file-action-title">{t(`projectFiles.${fileAction}Heading` as MessageKey)}</h3>
+          {fileAction === "properties" && <dl className="project-file-properties">
+            <div><dt>{t("projectFiles.name")}</dt><dd>{selected.name}</dd></div>
+            <div><dt>{t("projectFiles.type")}</dt><dd>{FAMILY_LABEL[projectFileFamily(selected.name)]} · {selected.media_type}</dd></div>
+            <div><dt>{t("projectFiles.size")}</dt><dd>{formatFileSize(locale, selected.size_bytes)} ({new Intl.NumberFormat(locale).format(selected.size_bytes)} B)</dd></div>
+            <div><dt>{t("projectFiles.repositoryPath")}</dt><dd><code>{selected.path}</code></dd></div>
+            <div><dt>{t("projectFiles.modified")}</dt><dd>{formatDateTime(locale, selected.modified_at)} · {t("projectFiles.workingCopySource")}</dd></div>
+            {selected.created_at !== undefined && <div><dt>{t("projectFiles.created")}</dt><dd>{formatDateTime(locale, selected.created_at)} · {t("projectFiles.workingCopySource")}</dd></div>}
+            <div><dt>{t("projectFiles.preview")}</dt><dd>{t(selected.disposition === "inline" ? "projectFiles.previewAvailable" : "projectFiles.downloadOnly")}</dd></div>
+          </dl>}
+          {fileAction === "rename" && <>
+            <label>{t("projectFiles.newName")}<input autoFocus disabled={actionBusy} onChange={(event) => setActionValue(event.target.value)} value={actionValue} /></label>
+            {extensionChanged && <p className="project-file-action-warning">{t("projectFiles.extensionWarning")}</p>}
+            <p>{t("projectFiles.referencesUnchecked")}</p>
+          </>}
+          {fileAction === "delete" && <>
+            <p>{t("projectFiles.deleteGitWarning", { name: selected.name })}</p>
+            <p>{t("projectFiles.referencesUnchecked")}</p>
+            <label>{t("projectFiles.deleteTypeName", { name: selected.name })}<input autoFocus disabled={actionBusy} onChange={(event) => setActionValue(event.target.value)} value={actionValue} /></label>
+          </>}
+          {actionError !== undefined && <div className="alert error" role="alert">{actionError}</div>}
+          <div className="project-file-large-actions"><button autoFocus={fileAction === "properties"} disabled={actionBusy} onClick={closeAction} type="button">{t(fileAction === "properties" ? "core.closeEditor" : "core.cancel")}</button>{fileAction === "rename" && <button className="primary" disabled={actionBusy || actionValue === selected.name || actionValue === ""} onClick={() => { void renameSelected(); }} type="button">{t("projectFiles.rename")}</button>}{fileAction === "delete" && <button className="danger" disabled={actionBusy || actionValue !== selected.name} onClick={() => { void deleteSelected(); }} type="button">{t("projectFiles.delete")}</button>}</div>
+        </div>
+      </div>}
       {activeConfirmation !== undefined && <div aria-labelledby="project-file-large-title" aria-modal="true" className="project-file-large-dialog" onKeyDown={(event) => { if (event.key === "Escape") cancelItem(activeConfirmation); }} role="dialog">
         <div className="project-file-large-card">
           <h3 id="project-file-large-title">{t("projectFiles.largeHeading")}</h3>

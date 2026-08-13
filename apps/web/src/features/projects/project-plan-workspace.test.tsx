@@ -54,6 +54,8 @@ function api(
   const deleteEntity = vi.fn(async () => undefined);
   const listProjectFiles = vi.fn(async (): Promise<ProjectFileList> => ({ project_id: currentProject.document.id, count: 0, total_size_bytes: 0, items: [], draft_fingerprint: fingerprint }));
   const uploadProjectFile = vi.fn();
+  const renameProjectFile = vi.fn();
+  const deleteProjectFile = vi.fn();
   return {
     projectWorkspace: vi.fn(async () => ({ project: currentProject, milestones: currentStages, tasks: currentTasks, draft_fingerprint: fingerprint })),
     getConfiguration: vi.fn(async (_draftId: string, kind: "statuses" | "issue-types" | "schedule-tracks") => configuration(kind === "statuses"
@@ -64,12 +66,14 @@ function api(
     listEntities: vi.fn(async (_draftId: string, type: string) => type === "people" ? [person] : type === "projects" ? [currentProject, archivedProject] : []),
     listProjectFiles,
     uploadProjectFile,
+    renameProjectFile,
+    deleteProjectFile,
     createEntity,
     updateEntity,
     archiveEntity,
     restoreEntity,
     deleteEntity,
-  } as unknown as GitPmApi & { createEntity: typeof createEntity; updateEntity: typeof updateEntity; archiveEntity: typeof archiveEntity; restoreEntity: typeof restoreEntity; deleteEntity: typeof deleteEntity; listProjectFiles: typeof listProjectFiles; uploadProjectFile: typeof uploadProjectFile };
+  } as unknown as GitPmApi & { createEntity: typeof createEntity; updateEntity: typeof updateEntity; archiveEntity: typeof archiveEntity; restoreEntity: typeof restoreEntity; deleteEntity: typeof deleteEntity; listProjectFiles: typeof listProjectFiles; uploadProjectFile: typeof uploadProjectFile; renameProjectFile: typeof renameProjectFile; deleteProjectFile: typeof deleteProjectFile };
 }
 
 afterEach(() => { cleanup(); localStorage.clear(); vi.useRealTimers(); });
@@ -239,6 +243,38 @@ describe("ProjectPlanWorkspace", () => {
     await waitFor(() => expect(client.uploadProjectFile).toHaveBeenCalledWith(draft.draft_id, project.document.id, fingerprint, replacement, replacement.name, "replace", expect.any(Object)));
     expect(within(trigger).getByText("1")).toBeTruthy();
     expect(screen.getAllByText(existing.name)).toHaveLength(2);
+  });
+
+  it("applies rename and delete to list, count, total size and the mutation fingerprint chain", async () => {
+    const client = api();
+    const onChanged = vi.fn(async () => undefined);
+    const existing = { name: "ТЗ V3.docx", path: `projects/${project.document.id}/files/ТЗ V3.docx`, size_bytes: 10, media_type: "application/octet-stream", disposition: "attachment" as const, modified_at: "2026-08-13T10:00:00.000Z", modified_at_source: "working_copy_filesystem" as const };
+    const renamed = { ...existing, name: "ТЗ v3.docx", path: `projects/${project.document.id}/files/ТЗ v3.docx` };
+    client.listProjectFiles.mockResolvedValue({ project_id: project.document.id, count: 1, total_size_bytes: 10, items: [existing], draft_fingerprint: fingerprint });
+    client.renameProjectFile.mockResolvedValue({ project_id: project.document.id, operation: "renamed", previous_name: existing.name, item: renamed, references: { status: "not_checked" }, draft_fingerprint: "c".repeat(64) });
+    client.deleteProjectFile.mockResolvedValue({ project_id: project.document.id, operation: "deleted", name: renamed.name, path: renamed.path, size_bytes: renamed.size_bytes, references: { status: "not_checked" }, secure_erase: false, draft_fingerprint: "d".repeat(64) });
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={onChanged} onNavigate={vi.fn()} projectId={project.document.id} />);
+    const trigger = await screen.findByRole("button", { name: /Files/u });
+    await waitFor(() => expect(within(trigger).getByText("1")).toBeTruthy());
+    fireEvent.click(trigger);
+    fireEvent.click(await screen.findByRole("button", { name: `Select ${existing.name} for file actions` }));
+    fireEvent.click(screen.getByRole("button", { name: "Rename" }));
+    const renameDialog = screen.getByRole("dialog", { name: "Rename file" });
+    fireEvent.change(within(renameDialog).getByLabelText("New full file name"), { target: { value: renamed.name } });
+    fireEvent.click(within(renameDialog).getByRole("button", { name: "Rename" }));
+
+    await waitFor(() => expect(client.renameProjectFile).toHaveBeenCalledWith(draft.draft_id, project.document.id, existing.name, fingerprint, renamed.name));
+    expect(within(trigger).getByText("1")).toBeTruthy();
+    expect((await screen.findAllByText(renamed.name)).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    const deleteDialog = screen.getByRole("dialog", { name: "Delete file" });
+    fireEvent.change(within(deleteDialog).getByLabelText(`Type the exact full name “${renamed.name}” to delete`), { target: { value: renamed.name } });
+    fireEvent.click(within(deleteDialog).getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => expect(client.deleteProjectFile).toHaveBeenCalledWith(draft.draft_id, project.document.id, renamed.name, "c".repeat(64), renamed.name));
+    await waitFor(() => expect(within(trigger).getByText("0")).toBeTruthy());
+    expect(await screen.findByText("No files yet")).toBeTruthy();
+    expect(onChanged).toHaveBeenCalledTimes(2);
   });
 
   it("creates a Milestone from the live Project route with the simplified primary-track form", async () => {

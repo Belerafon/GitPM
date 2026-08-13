@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, formatApiError, HttpGitPmApi, listAllProjectTimeEntries, type TimeEntryResult } from "./api.js";
+import { ApiError, formatApiError, HttpGitPmApi, listAllProjectTimeEntries, projectFileContentUrl, projectFileDownloadUrl, type TimeEntryResult } from "./api.js";
 import { ApiContractError } from "@gitpm/contracts";
 import type { EntityResult } from "./types.js";
 
@@ -77,6 +77,38 @@ describe("HttpGitPmApi request bodies", () => {
 
     expect(await new HttpGitPmApi().listProjectFiles("DRF/1", "P-26-MGP84K")).toEqual(payload);
     expect(fetchMock).toHaveBeenCalledWith("/api/drafts/DRF%2F1/projects/P-26-MGP84K/files", expect.objectContaining({ credentials: "include" }));
+  });
+
+  it("builds encoded Project file URLs without accepting path or target injection", () => {
+    expect(projectFileContentUrl("DRF/1", "P-26-MGP84K", "ТЗ </a> #1.pdf")).toBe(`/api/drafts/DRF%2F1/projects/P-26-MGP84K/files/${encodeURIComponent("ТЗ </a> #1.pdf")}/content`);
+    expect(projectFileDownloadUrl("DRF/1", "P/26", "..\\secret.txt")).toBe(`/api/drafts/DRF%2F1/projects/P%2F26/files/${encodeURIComponent("..\\secret.txt")}/download`);
+  });
+
+  it("renames and deletes Project files with explicit unchecked-reference semantics", async () => {
+    const renamed = { project_id: "P-26-MGP84K", operation: "renamed", previous_name: "ТЗ v3.docx", item: { name: "ТЗ V3.docx", path: "projects/P-26-MGP84K/files/ТЗ V3.docx", size_bytes: 12, media_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", disposition: "attachment", modified_at: "2026-08-13T10:00:00.000Z", modified_at_source: "working_copy_filesystem" }, references: { status: "not_checked" }, draft_fingerprint: "c".repeat(64) };
+    const deleted = { project_id: "P-26-MGP84K", operation: "deleted", name: renamed.item.name, path: renamed.item.path, size_bytes: 12, references: { status: "not_checked" }, secure_erase: false, draft_fingerprint: "d".repeat(64) };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(renamed), { status: 200, headers: { "content-type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(deleted), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const api = new HttpGitPmApi();
+
+    expect(await api.renameProjectFile("DRF/1", renamed.project_id, renamed.previous_name, "b".repeat(64), renamed.item.name)).toEqual(renamed);
+    expect(await api.deleteProjectFile("DRF/1", renamed.project_id, renamed.item.name, "c".repeat(64), renamed.item.name)).toEqual(deleted);
+    expect(fetchMock.mock.calls[0]).toEqual([`/api/drafts/DRF%2F1/projects/P-26-MGP84K/files/${encodeURIComponent(renamed.previous_name)}/rename`, expect.objectContaining({ method: "POST", body: JSON.stringify({ expected_fingerprint: "b".repeat(64), new_name: renamed.item.name, reference_mode: "ignore_unchecked" }) })]);
+    expect(fetchMock.mock.calls[1]).toEqual([`/api/drafts/DRF%2F1/projects/P-26-MGP84K/files/${encodeURIComponent(renamed.item.name)}`, expect.objectContaining({ method: "DELETE", body: JSON.stringify({ expected_fingerprint: "c".repeat(64), confirmation_name: renamed.item.name, reference_mode: "ignore_unchecked" }) })]);
+  });
+
+  it("rejects invalid file mutation responses and preserves structured server errors", async () => {
+    const invalid = { project_id: "P-26-MGP84K", operation: "renamed", previous_name: "a.txt", item: { name: "b.txt", path: "projects/P-26-MGP84K/files/b.txt", size_bytes: 1, media_type: "text/plain", disposition: "inline", modified_at: "2026-08-13T10:00:00.000Z", modified_at_source: "working_copy_filesystem" }, references: { status: "checked" }, draft_fingerprint: "c".repeat(64) };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(invalid), { status: 200, headers: { "content-type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: "PROJECT_FILE_NAME_CONFLICT", message: "Name conflicts", details: [{ field: "new_name" }] } }), { status: 409, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const api = new HttpGitPmApi();
+
+    await expect(api.renameProjectFile("DRF-1", invalid.project_id, "a.txt", "b".repeat(64), "b.txt")).rejects.toBeInstanceOf(ApiContractError);
+    await expect(api.deleteProjectFile("DRF-1", invalid.project_id, "a.txt", "b".repeat(64), "a.txt")).rejects.toEqual(expect.objectContaining({ code: "PROJECT_FILE_NAME_CONFLICT", details: [{ field: "new_name" }] }));
   });
 
   it("uploads exact binary bytes with Unicode metadata and optional large-file confirmation", async () => {

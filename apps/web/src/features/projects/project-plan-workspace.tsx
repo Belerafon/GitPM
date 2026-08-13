@@ -1,5 +1,5 @@
 import { activeProjectIds, ENTITY_ID_PREFIX, isOperationalTask, newUniqueEntityId } from "@gitpm/shared";
-import type { ProjectFileList, ProjectFileUploadResult, ProjectPlanning } from "@gitpm/contracts";
+import type { ProjectFileDeleteResult, ProjectFileList, ProjectFileRenameResult, ProjectFileUploadResult, ProjectPlanning } from "@gitpm/contracts";
 import { resolveSchedulingHierarchy, validatePlanning, windowEffort, type PlanningSettings, type SchedulingHierarchyTask } from "@gitpm/scheduling";
 import { buildSchedule, ScheduleResolver, scheduleTracksConfig, scheduleTextReader, scheduleEffortReader, withSchedulesMap, type ScheduleMap } from "../../schedules.js";
 import { isBlockedStatus, isCompletedStatus, isInProgressStatus } from "../../status-categories.js";
@@ -262,6 +262,27 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
         items,
         draft_fingerprint: result.draft_fingerprint,
       };
+    });
+    setWorkspace((current) => current === null ? current : { ...current, draft_fingerprint: result.draft_fingerprint });
+    void onChanged();
+  }, [onChanged]);
+
+  const handleProjectFileRenamed = useCallback((result: ProjectFileRenameResult) => {
+    setProjectFiles((current) => current === null ? current : {
+      ...current,
+      total_size_bytes: current.total_size_bytes - (current.items.find((item) => item.name === result.previous_name)?.size_bytes ?? 0) + result.item.size_bytes,
+      items: current.items.map((item) => item.name === result.previous_name ? result.item : item),
+      draft_fingerprint: result.draft_fingerprint,
+    });
+    setWorkspace((current) => current === null ? current : { ...current, draft_fingerprint: result.draft_fingerprint });
+    void onChanged();
+  }, [onChanged]);
+
+  const handleProjectFileDeleted = useCallback((result: ProjectFileDeleteResult) => {
+    setProjectFiles((current) => {
+      if (current === null) return current;
+      const items = current.items.filter((item) => item.name !== result.name);
+      return { ...current, count: items.length, total_size_bytes: Math.max(0, current.total_size_bytes - result.size_bytes), items, draft_fingerprint: result.draft_fingerprint };
     });
     setWorkspace((current) => current === null ? current : { ...current, draft_fingerprint: result.draft_fingerprint });
     void onChanged();
@@ -895,7 +916,9 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
       loadState={filesLoadState}
       locale={locale}
       onClose={() => setFilesOpen(false)}
+      onDeleted={handleProjectFileDeleted}
       onReload={() => { void loadProjectFiles(); }}
+      onRenamed={handleProjectFileRenamed}
       onUploaded={handleProjectFileUploaded}
       onViewChange={setFilesView}
       open={filesOpen}

@@ -6,8 +6,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../../api.js";
 import { PROJECT_FILES_VIEW_COOKIE, ProjectFilesPanel, projectFileFamily, readProjectFilesView, type ProjectFilesView } from "./project-files-panel.js";
 
-const uploadApi = { uploadProjectFile: vi.fn() };
-const uploadProps = { api: uploadApi, draftId: "DRF-1", fingerprint: "b".repeat(64), onUploaded: vi.fn(), projectId: "P-26-111111", readOnly: false };
+const uploadApi = { deleteProjectFile: vi.fn(), renameProjectFile: vi.fn(), uploadProjectFile: vi.fn() };
+const uploadProps = { api: uploadApi, draftId: "DRF-1", fingerprint: "b".repeat(64), onDeleted: vi.fn(), onRenamed: vi.fn(), onUploaded: vi.fn(), projectId: "P-26-111111", readOnly: false };
 
 const item = (name: string, size_bytes = 1234): ProjectFileItem => ({
   name,
@@ -66,7 +66,7 @@ describe("ProjectFilesPanel", () => {
 
     expect(screen.getByText(hostile)).toBeTruthy();
     expect(document.querySelector("img")).toBeNull();
-    const longTile = screen.getByLabelText(names[1]!);
+    const longTile = screen.getByRole("link", { name: `Download ${names[1]!}` }).closest("li") as HTMLElement;
     expect(longTile.title).toBe(names[1]);
     expect(Array.from(document.querySelectorAll(".project-file-icon-label")).map((node) => node.textContent)).toEqual(["PDF", "DOC", "XLS", "PPT", "IMG", "TXT", "ZIP", "FILE"]);
   });
@@ -198,6 +198,104 @@ describe("ProjectFilesPanel", () => {
     expect(screen.getByRole("button", { name: "Upload files" })).toHaveProperty("disabled", true);
     fireEvent.drop(screen.getByText("Uploads are unavailable while this draft is read-only."), { dataTransfer: { files: [fileWithSize("ignored.bin", 1)] } });
     expect(uploadApi.uploadProjectFile).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses encoded server open/download URLs and shows only repository-relative properties", () => {
+    const preview = { ...item("Схема </a>.pdf", 2048), media_type: "application/pdf", disposition: "inline" as const };
+    const attachment = item("ТЗ #1.docx", 4096);
+    render(<ProjectFilesPanel {...uploadProps} locale="en" list={list([preview, attachment])} loadState={{ status: "ready" }} onClose={vi.fn()} onReload={vi.fn()} onViewChange={vi.fn()} open view="grid" />);
+
+    const previewLink = screen.getByRole("link", { name: `Open ${preview.name} in a new tab` });
+    const downloadLink = screen.getByRole("link", { name: `Download ${attachment.name}` });
+    expect(previewLink.getAttribute("href")).toBe(`/api/drafts/DRF-1/projects/P-26-111111/files/${encodeURIComponent(preview.name)}/content`);
+    expect(downloadLink.getAttribute("href")).toBe(`/api/drafts/DRF-1/projects/P-26-111111/files/${encodeURIComponent(attachment.name)}/download`);
+    expect(previewLink).toHaveProperty("target", "_blank");
+    expect(previewLink.getAttribute("rel")).toBe("noopener noreferrer");
+
+    fireEvent.click(screen.getByRole("button", { name: `Select ${preview.name} for file actions` }));
+    const propertiesTrigger = screen.getByRole("button", { name: "Properties" });
+    fireEvent.click(propertiesTrigger);
+    const dialog = screen.getByRole("dialog", { name: "File properties" });
+    expect(dialog.textContent).toContain(preview.path);
+    expect(dialog.textContent).toContain("current working-copy filesystem");
+    expect(dialog.textContent).not.toMatch(/[A-Z]:\\|\/home\//u);
+    const close = within(dialog).getByRole("button", { name: "Close editor" });
+    expect(document.activeElement).toBe(close);
+    fireEvent.keyDown(close, { key: "Tab" });
+    expect(document.activeElement).toBe(close);
+    fireEvent.keyDown(close, { key: "Tab", shiftKey: true });
+    expect(document.activeElement).toBe(close);
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    return waitFor(() => {
+      expect(document.activeElement).toBe(propertiesTrigger);
+      expect(screen.getByRole("dialog", { name: "Project files · 2" })).toBeTruthy();
+    }).then(() => {
+      fireEvent.click(propertiesTrigger);
+      const reopened = screen.getByRole("dialog", { name: "File properties" });
+      fireEvent.mouseDown(reopened);
+      return waitFor(() => {
+        expect(screen.queryByRole("dialog", { name: "File properties" })).toBeNull();
+        expect(screen.getByRole("dialog", { name: "Project files · 2" })).toBeTruthy();
+      });
+    });
+  });
+
+  it("renames Unicode and case-only names with the current fingerprint and surfaces conflicts", async () => {
+    const original = { ...item("ТЗ v3.DOCX"), media_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" };
+    const result = { project_id: "P-26-111111", operation: "renamed" as const, previous_name: original.name, item: { ...original, name: "ТЗ V3.docx", path: "projects/P-26-111111/files/ТЗ V3.docx" }, references: { status: "not_checked" as const }, draft_fingerprint: "c".repeat(64) };
+    uploadApi.renameProjectFile.mockResolvedValueOnce(result);
+    const onRenamed = vi.fn();
+    render(<ProjectFilesPanel {...uploadProps} onRenamed={onRenamed} locale="ru" list={list([original])} loadState={{ status: "ready" }} onClose={vi.fn()} onReload={vi.fn()} onViewChange={vi.fn()} open view="grid" />);
+    fireEvent.click(screen.getByRole("button", { name: `Выбрать файл ${original.name} для действий` }));
+    fireEvent.click(screen.getByRole("button", { name: "Переименовать" }));
+    const dialog = screen.getByRole("dialog", { name: "Переименование файла" });
+    fireEvent.change(within(dialog).getByLabelText("Новое полное имя файла"), { target: { value: result.item.name } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Переименовать" }));
+    await waitFor(() => expect(onRenamed).toHaveBeenCalledWith(result));
+    expect(uploadApi.renameProjectFile).toHaveBeenCalledWith("DRF-1", "P-26-111111", original.name, "b".repeat(64), result.item.name);
+
+    cleanup();
+    uploadApi.renameProjectFile.mockRejectedValueOnce(new ApiError("PROJECT_FILE_NAME_CONFLICT", "name exists"));
+    render(<ProjectFilesPanel {...uploadProps} locale="en" list={list([original])} loadState={{ status: "ready" }} onClose={vi.fn()} onReload={vi.fn()} onViewChange={vi.fn()} open view="grid" />);
+    fireEvent.click(screen.getByRole("button", { name: `Select ${original.name} for file actions` }));
+    fireEvent.click(screen.getByRole("button", { name: "Rename" }));
+    const conflictDialog = screen.getByRole("dialog", { name: "Rename file" });
+    fireEvent.change(within(conflictDialog).getByLabelText("New full file name"), { target: { value: "CONTRACT.docx" } });
+    fireEvent.click(within(conflictDialog).getByRole("button", { name: "Rename" }));
+    expect((await within(conflictDialog).findByRole("alert")).textContent).toContain("PROJECT_FILE_NAME_CONFLICT");
+    expect(screen.getByRole("link", { name: `Download ${original.name}` })).toBeTruthy();
+  });
+
+  it("requires the exact full name for delete and updates through the decoded result", async () => {
+    const doomed = item("Договор final.pdf", 88);
+    const result = { project_id: "P-26-111111", operation: "deleted" as const, name: doomed.name, path: doomed.path, size_bytes: doomed.size_bytes, references: { status: "not_checked" as const }, secure_erase: false as const, draft_fingerprint: "d".repeat(64) };
+    uploadApi.deleteProjectFile.mockResolvedValueOnce(result);
+    const onDeleted = vi.fn();
+    render(<ProjectFilesPanel {...uploadProps} onDeleted={onDeleted} locale="en" list={list([doomed])} loadState={{ status: "ready" }} onClose={vi.fn()} onReload={vi.fn()} onViewChange={vi.fn()} open view="grid" />);
+    fireEvent.click(screen.getByRole("button", { name: `Select ${doomed.name} for file actions` }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    const dialog = screen.getByRole("dialog", { name: "Delete file" });
+    const confirm = within(dialog).getByRole("button", { name: "Delete" });
+    expect(confirm).toHaveProperty("disabled", true);
+    expect(dialog.textContent).toContain("not secure erase");
+    expect(dialog.textContent).toContain("File links are not checked");
+    fireEvent.change(within(dialog).getByLabelText(`Type the exact full name “${doomed.name}” to delete`), { target: { value: doomed.name.toLocaleLowerCase() } });
+    expect(confirm).toHaveProperty("disabled", true);
+    fireEvent.change(within(dialog).getByLabelText(`Type the exact full name “${doomed.name}” to delete`), { target: { value: doomed.name } });
+    fireEvent.click(confirm);
+    await waitFor(() => expect(onDeleted).toHaveBeenCalledWith(result));
+    expect(uploadApi.deleteProjectFile).toHaveBeenCalledWith("DRF-1", "P-26-111111", doomed.name, "b".repeat(64), doomed.name);
+  });
+
+  it("keeps open, download and properties available but disables mutations in read-only mode", () => {
+    const readonly = { ...item("read only.txt"), media_type: "text/plain", disposition: "inline" as const };
+    render(<ProjectFilesPanel {...uploadProps} readOnly locale="en" list={list([readonly])} loadState={{ status: "ready" }} onClose={vi.fn()} onReload={vi.fn()} onViewChange={vi.fn()} open view="table" />);
+    expect(screen.getByRole("link", { name: `Open ${readonly.name} in a new tab` })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: `Select ${readonly.name} for file actions` }));
+    expect(screen.getByRole("link", { name: "Download" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Properties" })).toHaveProperty("disabled", false);
+    expect(screen.getByRole("button", { name: "Rename" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Delete" })).toHaveProperty("disabled", true);
   });
 });
 
