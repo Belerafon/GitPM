@@ -679,3 +679,58 @@ Git diff.
   метаданные не добавлялись;
 - поиск, сортировка, миниатюры и сохранение позиции списка остаются отдельными UX-дополнениями;
   общий parser и renderer файловых ссылок, ссылочные мутации и Changes остаются Этапами 8–12.
+
+### Этап 8 — завершён
+
+Реализовано:
+
+- в `@gitpm/shared` добавлен единый чистый tokenizer и lexical formatter синтаксиса
+  `[[file:имя]]`, доступный будущему web renderer без зависимости от domain. Tokenizer сохраняет
+  исходный текст, raw spelling, exact decoded name и UTF-16 offsets и ничего не преобразует в
+  HTML, Markdown или URL;
+- каноническое экранирование поддерживает `\\`, `\[` и `\]`. Пустая, незакрытая, вложенная,
+  управляющая или содержащая неизвестный escape конструкция остаётся обычным текстом;
+  экранированный opener также не становится ссылкой. После закрытой ошибочной конструкции parser
+  продолжает поиск следующих корректных ссылок;
+- отдельный pure resolver различает `existing` и `missing` только через exact case-sensitive
+  совпадение с фактическим списком имён текущего Project, без Unicode normalization. Tokenizer и
+  formatter сами не подтверждают storage-validity и не дают права строить filesystem path;
+- в `@gitpm/domain` добавлен немутирующий поиск всех повторений одного exact имени. Он сканирует
+  только текущий Project: описания Project/Milestone/Task, каждый критерий приёмки Task,
+  `body_markdown` active Comment и `note_markdown` TimeEntry. Архивные Project, Milestone и Task,
+  active Comment и voided TimeEntry не скрываются; deleted Comment не имеет исходного body;
+- результат поиска имеет стабильную locale-neutral typed модель: Project, имя, aggregate count и
+  отдельные locations с entity type/ID, canonical path, field, optional array index и offsets.
+  Повторные ссылки не схлопываются, порядок не зависит от входного порядка документов;
+- Project document включается только по exact `document.id === projectId`; все остальные сущности
+  требуют exact `document.project === projectId` и корректные typed IDs. Глобальные Markdown-поля,
+  другой Project и hostile task/path values не расширяют область;
+- Repository Format документирует синтаксис, escaping, exact-name resolution, поддерживаемые поля
+  и trust boundary. Отдельные ID, manifest, sidecar, DTO, HTTP-маршрут и база данных не добавлялись.
+
+Фактически выполненные проверки:
+
+- три последовательных узких прогона после реализации и ревью успешно собрали
+  `@gitpm/shared`/`@gitpm/domain`; финальный
+  `corepack pnpm exec vitest run packages/shared/src/project-file-references.test.ts packages/domain/src/project-file-reference-search.test.ts`
+  — успешно: 2 файла, 13 тестов;
+- первый `corepack pnpm verify:repository` до двух последних regression-тестов — успешно: 10
+  файлов, 158 тестов пройдено, один платформенный тест пропущен;
+- финальный повторный `corepack pnpm verify:repository` — успешно: frozen install, сборка affected
+  packages, ESLint без предупреждений, 10 файлов и 160 repository-тестов пройдены, один
+  платформенный тест пропущен; schema contracts и diff whitespace пройдены; итоговое время 1
+  минута 56 секунд;
+- `verify:web` и `verify:server` не требовались: web renderer и формы, HTTP DTO/routes и server
+  behavior на этом этапе не менялись; `@gitpm/shared` покрыт repository-профилем, а web начнёт
+  потреблять parser в Этапах 9–10.
+
+Ограничения этапа:
+
+- lexical token, похожий на путь или недопустимое storage-имя, остаётся безопасными данными и
+  классифицируется как missing при фактическом списке валидных файлов; renderer будущего этапа
+  обязан использовать только exact-resolved item и существующий project-scoped content/download
+  route;
+- renderer, подсказки, кнопка вставки и кликабельная навигация намеренно не подключены к формам и
+  относятся к Этапам 9–10;
+- rename/delete/replace по-прежнему возвращают `not_checked`: атомарное обновление и отвязывание
+  найденных locations остаются Этапом 11.

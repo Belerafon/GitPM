@@ -1,5 +1,7 @@
 export const GITPM_VERSION = "0.1.0";
 
+export * from "./project-file-references.js";
+
 export const ENTITY_ID_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
 export const ENTITY_ID_PREFIX = {
