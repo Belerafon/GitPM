@@ -1,286 +1,296 @@
-# Project files UX/UI plan v0.1
+# UX/UI-план файлов проекта v0.1
 
-Status: proposal for product-owner review. This document describes the user experience only;
-the repository contract and implementation sequence will be designed after approval.
+Статус: предложение на согласование с владельцем продукта. Документ описывает только
+пользовательский опыт; контракт репозитория и пошаговый технический план будут подготовлены после
+одобрения.
 
-## 1. Product intent and scope
+## 1. Назначение и границы
 
-Each Project gets a simple user-facing file library for contracts, specifications, spreadsheets,
-presentations, scans, images and other working materials. The library is distinct from the
-existing technical worktree file manager:
+У каждого Project появляется простое пользовательское файлохранилище для договоров, технических
+заданий, таблиц, презентаций, сканов, изображений и других рабочих материалов. Оно не заменяет
+существующий технический файловый менеджер рабочей копии:
 
-- the Project library exposes only files owned by the current Project;
-- the technical manager remains the unrestricted low-level filesystem tool;
-- every stored original is part of the Git repository and therefore participates in the normal
-  draft, changes, commit and publication workflow;
-- file extensions are not used as an upload allowlist;
-- a format may be stored even when GitPM cannot render an inline preview for it.
+- пользовательское хранилище показывает только файлы текущего Project;
+- технический менеджер остаётся низкоуровневым инструментом для произвольной работы с файловой
+  системой;
+- оригиналы файлов входят в Git-репозиторий и участвуют в обычном процессе черновика, просмотра
+  изменений, коммита и публикации;
+- расширение файла не используется как список разрешённых типов;
+- файл можно хранить, даже если GitPM не умеет показать его содержимое в браузере.
 
-The first version uses a flat Project library without user-created folders. This keeps filenames
-and human-written references unambiguous. Files placed directly into the canonical Project file
-directory by the technical manager must appear in the user-facing library after refresh. Nested
-directories remain a technical-manager concern until a folder UX is designed separately.
+В первой версии хранилище плоское, без создания папок через пользовательский интерфейс. Это
+сохраняет однозначность имён и ссылок. Файлы, помещённые техническим менеджером непосредственно в
+канонический каталог файлов Project, появляются в пользовательском хранилище после обновления.
+Вложенные каталоги до появления отдельного UX остаются зоной технического менеджера.
 
-## 2. Entry point on the Project page
+## 2. Точка входа на странице проекта
 
-Place a secondary `Files` button immediately beside or below the Project description, before the
-Project metadata. It must remain visually associated with the description instead of joining the
-row of editing and task-creation actions.
+Рядом с описанием Project или сразу под ним, перед метаданными проекта, размещается вторичная
+кнопка `Файлы`. Она должна восприниматься как часть информационного блока проекта, а не смешиваться
+с кнопками редактирования, создания этапа и задачи.
 
-The button contains:
+Кнопка содержит:
 
-- a paperclip/file-library icon;
-- the localized label `Files` / `Файлы`;
-- a compact numeric badge with the current number of files, including `0` for an empty library.
+- пиктограмму скрепки или файловой библиотеки;
+- надпись `Файлы`;
+- компактный счётчик, включая `0` для пустого хранилища.
 
-The button is available for archived Projects and read-only users because viewing and downloading
-remain useful. Mutation controls inside the library follow the current draft state, writer mode and
-role rules.
+Кнопка доступна также в архивном Project и для пользователей только с правом чтения: просмотр и
+скачивание остаются полезными. Операции изменения внутри хранилища подчиняются текущему состоянию
+черновика, режима записи (writer mode) и роли пользователя.
 
 ```text
 Project P-26-ABC123
-Customer portal redesign
-Replace the legacy partner workspace.
+Редизайн личного кабинета заказчика
+Заменить устаревший кабинет партнёра.
 
-[ paperclip  Files  12 ]
+[ скрепка  Файлы  12 ]
 
-Status: Active   Owner: Anna   Start: 01.09.2026   Due: 15.12.2026
+Статус: Активен   Владелец: Анна   Начало: 01.09.2026   Срок: 15.12.2026
 ```
 
-The count updates optimistically after a successful upload or deletion and is reconciled on the
-next workspace refresh.
+После успешной загрузки или удаления счётчик обновляется сразу, а при следующем обновлении рабочей
+области сверяется с фактическим содержимым репозитория.
 
-## 3. Right-side file library
+## 3. Правая панель файлов
 
-Clicking `Files` opens a dedicated right-side drawer over the current Project context. It does not
-navigate away from the plan or discard the selected Task. Closing the drawer returns the user to
-the exact previous context.
+Нажатие `Файлы` открывает отдельную панель справа поверх текущего контекста Project. Перехода на
+другую страницу не происходит, выбранная Task не сбрасывается. После закрытия пользователь
+возвращается точно в прежний контекст.
 
-The existing 520 px editor drawer is too narrow for a useful file preview. The file drawer should
-be wider: approximately 760--960 px on a desktop, capped at about 70% of the viewport. It becomes
-full-screen on a narrow viewport.
+Существующая панель редактора шириной 520 px слишком узкая для просмотра документов. Файловая
+панель должна занимать примерно 760–960 px на настольном экране, но не более примерно 70% ширины
+окна. На узком экране она разворачивается на весь экран.
 
-Library state:
+Состояние библиотеки:
 
 ```text
-+---------------------------------------------------------------+
-| Project files                                      12      X   |
-| [Search files...]            Sort: Name       [Upload files]  |
-|                                                               |
-|  [PDF]       [DOCX]      [XLSX]      [IMG]      [FILE]        |
-|  Contract    Spec v3     Estimate    Scheme     Archive       |
-|  2026.pdf    .docx       .xlsx       .png       .zip          |
-|                                                               |
-| Drop files here to upload                                     |
-+---------------------------------------------------------------+
++----------------------------------------------------------------+
+| Файлы проекта                                      12       ×   |
+| [Поиск по имени...]          Сортировка: Имя    [Загрузить]    |
+|                                                                |
+|  [PDF]       [DOCX]      [XLSX]      [IMG]      [ФАЙЛ]        |
+|  Договор     ТЗ_v3       Смета       Схема      Архив          |
+|  2026.pdf    .docx       .xlsx       .png       .zip           |
+|                                                                |
+| Перетащите сюда файлы для загрузки                             |
++----------------------------------------------------------------+
 ```
 
-The default presentation is a Windows-like tile grid with the filename below each icon. Long names
-wrap to two lines and expose the full name in a tooltip and accessible label. The grid supports
-keyboard navigation and does not rely on icon colour alone.
+По умолчанию используется похожая на Проводник Windows сетка плиток: крупная пиктограмма, под ней
+имя файла. Длинное имя переносится максимум на две строки; полное имя доступно в подсказке и как
+доступное имя элемента. Сеткой можно пользоваться с клавиатуры, а тип файла различается не только
+цветом.
 
-Provide recognizable families rather than an icon for every extension:
+Достаточно узнаваемых семейств пиктограмм:
 
 - PDF;
-- Word and compatible text documents;
-- Excel and tabular files, including CSV;
-- PowerPoint and presentations;
-- images, with a safe thumbnail when available;
-- text, Markdown and source files;
-- archives;
-- audio and video;
-- a neutral generic icon for everything else.
+- Word и совместимые текстовые документы;
+- Excel и табличные форматы, включая CSV;
+- PowerPoint и презентации;
+- изображения с безопасной миниатюрой, если она доступна;
+- текст, Markdown и исходный код;
+- архивы;
+- аудио и видео;
+- нейтральная пиктограмма для остальных файлов.
 
-The toolbar contains search by filename, sorting by name/date/size, refresh and `Upload files`.
-Drag-and-drop into the drawer is an equivalent upload path. Selection and scroll position survive
-opening a file and returning to the library.
+В панели инструментов находятся поиск по имени, сортировка по имени, дате или размеру, обновление
+и кнопка `Загрузить файлы`. Перетаскивание файлов в панель выполняет ту же операцию. После открытия
+файла и возврата сохраняются запрос поиска, сортировка и позиция прокрутки.
 
-## 4. Viewer state
+## 4. Просмотр файла
 
-A single click on a tile opens the file inside the same drawer. The header becomes a breadcrumb
-`Files / <filename>` with a Back action. A shareable/deep-linkable Project URL identifies the
-selected file so browser Back and direct file references work predictably.
+Одинарный клик по плитке открывает файл в той же правой панели. Заголовок превращается в навигацию
+`Файлы / <имя файла>` с кнопкой `Назад`. URL проекта содержит выбранный файл, чтобы системная
+кнопка браузера `Назад`, прямые ссылки и ссылки из текста работали предсказуемо.
 
-The viewer header contains the file icon and name, size, and actions `Download`, `Rename`,
-`Properties` and a destructive `Delete` action under the overflow menu.
+В заголовке просмотрщика показываются пиктограмма, имя, размер и действия `Скачать`,
+`Переименовать`, `Свойства`. Разрушительное действие `Удалить` находится в меню дополнительных
+операций.
 
-Preview behavior:
+Поведение предпросмотра:
 
-- PDF: embedded paged PDF viewer;
-- images: fit-to-window preview with zoom and original-dimensions information;
-- plain text, Markdown, JSON, YAML and source: safe read-only text rendering;
-- audio/video: browser-native controls for formats supported by the browser;
-- DOCX, XLSX and PPTX: a generated read-only browser preview; the original file is never modified;
-- archives and unknown formats: a clear unsupported-preview card with properties and Download,
-  rather than attempting to execute or render arbitrary content.
+- PDF — встроенный постраничный просмотр;
+- изображения — вписывание в окно, масштабирование и исходные размеры;
+- обычный текст, Markdown, JSON, YAML и исходный код — безопасный режим только для чтения;
+- аудио и видео — штатные элементы управления браузера для поддерживаемых форматов;
+- DOCX, XLSX и PPTX — созданное GitPM представление только для чтения, оригинал не изменяется;
+- архивы и неизвестные форматы — честная плашка «Предпросмотр недоступен», свойства и скачивание
+  вместо попытки исполнить или отрисовать произвольное содержимое.
 
-Preview failures do not make the file inaccessible. The drawer keeps its name, properties and
-Download action, and explains whether the format is unsupported or preview generation failed.
-Potentially active HTML, SVG, scripts, macros and external document content must never execute in
-the GitPM application origin.
+Ошибка предпросмотра не делает файл недоступным. В панели остаются имя, свойства и скачивание, а
+сообщение различает неподдерживаемый формат и ошибку подготовки предпросмотра. Активное содержимое
+HTML и SVG, скрипты, макросы и внешнее содержимое документов не должны исполняться в контексте
+источника приложения GitPM.
 
-Generated thumbnails and previews are disposable application cache, not additional committed
-Project files.
+Сгенерированные миниатюры и представления являются удаляемым кэшем приложения и не коммитятся как
+дополнительные файлы Project.
 
-## 5. File operations
+## 5. Операции с файлами
 
-### Upload
+### Загрузка
 
-`Upload files` allows multi-selection. The drawer shows a queue with per-file progress, success and
-failure states. Uploading does not close the drawer.
+Кнопка `Загрузить файлы` поддерживает множественный выбор. Панель показывает очередь, прогресс и
+результат отдельно для каждого файла. По окончании загрузки панель не закрывается.
 
-If a filename already exists, GitPM does not overwrite silently. The conflict dialog offers:
+Если имя уже существует, GitPM ничего не перезаписывает молча. Диалог предлагает:
 
-- `Replace current file`, preserving the file identity and references while creating a new Git
-  version;
-- `Upload with another name`, with an editable proposed name;
-- `Cancel`.
+- `Заменить текущий файл` — сохранить идентификатор и ссылки, создав новую версию в Git;
+- `Загрузить под другим именем` — отредактировать предложенное имя;
+- `Отмена`.
 
-Filenames may contain Unicode and spaces. GitPM rejects path separators, reserved names and other
-filesystem-invalid names with a specific inline explanation. Names are unique within a Project
-library using a case-insensitive comparison so repositories behave consistently on Windows and
-case-sensitive systems.
+Разрешены Unicode и пробелы. Разделители пути, зарезервированные имена и другие недопустимые для
+файловой системы варианты отклоняются с конкретным пояснением рядом с полем. Внутри одного Project
+имена сравниваются без учёта регистра и должны быть уникальными, чтобы репозиторий одинаково
+работал в Windows и в системах с чувствительной к регистру файловой системой.
 
-### Files larger than 50 MB
+### Файлы больше 50 МБ
 
-The 50 MB threshold is a warning boundary, not a product rejection boundary. A file above the
-threshold enters a separate confirmation flow before bytes are uploaded:
+Порог 50 МБ является границей предупреждения, а не запретом. Для файла больше порога до начала
+передачи открывается отдельное подтверждение:
 
-1. Show the exact filename and formatted size.
-2. Explain that the original and later versions remain in Git history, increasing clone, fetch and
-   repository storage costs.
-3. Require the user to type the exact filename, case-sensitive, into a confirmation field.
-4. Enable `Upload large file anyway` only after an exact match.
+1. Показать точное имя и отформатированный размер.
+2. Объяснить, что оригинал и последующие версии остаются в истории Git, увеличивая время
+   клонирования, получения изменений и занимаемое репозиторием место.
+3. Потребовать ввести точное имя файла с учётом регистра.
+4. Активировать кнопку `Всё равно загрузить большой файл` только при полном совпадении.
 
-Several large files require separate confirmation so one typed name cannot authorize an unrelated
-batch. Upload progress must remain visible and cancellation must be possible while transfer is in
-progress. Repository-host or transport limits may still produce a specific error, but GitPM must
-not pretend that the 50 MB warning itself is a hard limit.
+Несколько больших файлов подтверждаются отдельно, чтобы одним введённым именем нельзя было
+разрешить посторонний пакет. Во время передачи видны прогресс и доступная отмена. Ограничения
+Git-сервера или транспорта могут привести к отдельной понятной ошибке, но GitPM не должен выдавать
+предупреждение на 50 МБ за жёсткий лимит.
 
-### Rename
+### Переименование
 
-Rename opens a small focused dialog with the current name selected while keeping the extension
-visible. Changing the extension displays a non-blocking warning that preview behavior may change.
-The operation refuses conflicts and invalid names before making a repository change.
+Открывается небольшой отдельный диалог. Текущее имя выделено, расширение остаётся видимым.
+Изменение расширения вызывает неблокирующее предупреждение о возможном изменении предпросмотра.
+Конфликт имени и недопустимое имя обнаруживаются до изменения репозитория.
 
-File references use a hidden immutable identity, so rename updates the displayed filename without
-breaking links in Project text. Manually typed name-only references are resolved and canonicalized
-when the field is saved.
+Ссылки используют скрытый неизменяемый идентификатор файла. Поэтому после переименования в тексте
+автоматически отображается новое имя и ссылка не ломается. Введённая вручную ссылка только по
+имени разрешается и приводится к каноническому виду при сохранении поля.
 
-### Delete
+### Удаление
 
-If a file has no references, deletion uses a standard confirmation naming the file. If references
-exist, the confirmation shows their count and a short list of Tasks/comments that use the file.
-The explicit action is `Delete file and unlink N references`; unlinking preserves the visible
-filename as plain text instead of silently deleting surrounding prose.
+Для файла без ссылок используется обычное подтверждение с его именем. Если ссылки существуют,
+диалог показывает их количество и короткий список Task и комментариев, где используется файл.
+Явное действие называется `Удалить файл и отвязать N ссылок`; при отвязке видимое имя сохраняется
+в тексте как обычный текст, окружающая фраза не удаляется.
 
-Deletion removes the file from the current repository version. The dialog explains that committed
-older content may remain in Git history. It must not claim secure erasure.
+Удаляется файл из текущей версии репозитория. Диалог объясняет, что ранее закоммиченное содержимое
+может сохраниться в истории Git. Интерфейс не должен обещать безопасное физическое уничтожение.
 
-### Properties
+### Свойства
 
-Properties are shown as a compact panel with copyable values:
+Свойства показываются компактной панелью с копируемыми значениями:
 
-- filename and detected format;
-- size in a human-readable form and exact bytes;
-- repository-relative canonical path, for example
-  `projects/P-26-ABC123/files/Specification_v3.docx`;
-- date added to GitPM;
-- date and author of the latest change when known;
-- current draft state: unchanged, added, modified or scheduled for deletion;
-- number of references inside the Project;
-- preview availability.
+- имя и определённый формат;
+- человекочитаемый размер и точное число байтов;
+- канонический путь относительно репозитория, например
+  `projects/P-26-ABC123/files/ТЗ_v3.docx`;
+- дата добавления в GitPM;
+- дата и автор последнего изменения, если известны;
+- состояние в черновике: без изменений, добавлен, изменён или подготовлен к удалению;
+- количество ссылок внутри Project;
+- доступность предпросмотра.
 
-GitPM should label dates according to their actual source. It must not present checkout filesystem
-birth time as a durable creation date. Uncommitted uploads may show `Added in this draft` until a
-commit timestamp exists.
+Название даты должно соответствовать её реальному источнику. Время создания файла в конкретной
+рабочей копии нельзя выдавать за устойчивую дату создания. Для незакоммиченного файла вместо даты
+коммита показывается `Добавлен в этом черновике`.
 
-## 6. File references in Project text
+## 6. Ссылки на файлы в тексте Project
 
-`@` remains reserved for people. File references use a wiki-style, locale-neutral token:
+Символ `@` остаётся за людьми. Для файлов используется wiki-синтаксис, не зависящий от языка
+интерфейса:
 
 ```text
-According to section 5.2 [[file:Specification_v3.docx]], the acceptance period is 10 days.
+Согласно пункту 5.2 [[file:ТЗ_v3.docx]], срок приёмки составляет 10 дней.
 ```
 
-Typing `[[` in a Project-scoped Markdown editor opens file suggestions with icon, filename and
-size. A paperclip action beside the editor opens the same picker for users who do not know the
-syntax. Selecting a file inserts the reference at the cursor. Search is tolerant of case and finds
-any substring of the filename.
+После ввода `[[` в Markdown-редакторе с контекстом Project появляется список файлов с
+пиктограммой, именем и размером. Кнопка со скрепкой рядом с редактором открывает тот же выбор для
+пользователей, которые не знают синтаксис. Выбранная ссылка вставляется в позицию курсора. Поиск
+не учитывает регистр и находит любую часть имени.
 
-Internally the selected reference is canonicalized to a stable file identity while retaining a
-human-readable label. Users may type the name-only form above; duplicate user-facing filenames are
-prohibited, so resolution is deterministic.
+Внутри выбранная ссылка приводится к стабильному идентификатору с человекочитаемой подписью.
+Пользователь может вручную написать форму только с именем из примера выше; одинаковые имена в
+пользовательском хранилище запрещены, поэтому разрешение ссылки однозначно.
 
-Rendered references appear as compact inline file links with a type icon and filename. Clicking a
-link opens the same right-side drawer directly in viewer state without losing the current Task or
-comment context. A missing reference renders as an explicit broken-link chip with an explanation,
-not as an inert link or silently changed text.
+В отрисованном тексте ссылка выглядит как компактная ссылка-файл с пиктограммой типа и именем.
+Клик открывает ту же правую панель сразу в режиме просмотра, не сбрасывая текущую Task или
+комментарий. Отсутствующая ссылка отображается явным предупреждающим элементом с объяснением, а не
+неработающей обычной ссылкой и не молча изменённым текстом.
 
-Reference support applies to every Markdown field with an unambiguous Project context, initially:
+Поддержка распространяется на Markdown-поля с однозначным контекстом Project, первоначально:
 
-- Project description;
-- Milestone description;
-- Task description and acceptance criteria;
-- Task comments;
-- Project-scoped time-entry notes.
+- описание Project;
+- описание Milestone;
+- описание и критерии приёмки Task;
+- комментарии Task;
+- заметки о трудозатратах, привязанные к Project и Task.
 
-Global entities and text without a Project context cannot use implicit Project-file references.
-Cross-Project references are outside the first version and must not silently widen scope.
+Глобальные сущности и текст без контекста Project не могут использовать неявные ссылки на файлы
+проекта. Межпроектные ссылки не входят в первую версию и не должны молча расширять область Project.
 
-## 7. Draft, Git and external-change feedback
+## 7. Черновик, Git и внешние изменения
 
-Upload, replace, rename and delete are normal draft mutations and follow optimistic fingerprint and
-writer-mode rules. Read-only roles can browse, preview, inspect properties and download, but do not
-see enabled mutation controls.
+Загрузка, замена, переименование и удаление являются обычными мутациями черновика и подчиняются
+оптимистичной версии (fingerprint) и режиму записи (writer mode). Пользователь только с правом
+чтения может просматривать, скачивать и открывать свойства, но операции изменения недоступны.
 
-The Changes UI groups file changes under the owning Project and gives them semantic labels such as
-`File added`, `File replaced`, `File renamed` and `File deleted`; they must not appear as unexplained
-unclassified paths. Commit and publication include the originals. Derived previews are excluded.
+Экран изменений группирует файлы под их Project и использует понятные подписи: `Файл добавлен`,
+`Файл заменён`, `Файл переименован`, `Файл удалён`. Они не должны выглядеть необъяснимыми
+неклассифицированными путями. В коммит и публикацию входят оригиналы, производные предпросмотры
+исключаются.
 
-The user-facing library reads the actual canonical Project file directory. A regular file added,
-renamed or replaced through the technical file manager becomes visible after refresh. If an
-external operation creates an ambiguous filename, unsupported nesting or inconsistent metadata,
-the library shows a repairable warning rather than guessing or hiding repository state.
+Пользовательское хранилище читает реальный канонический каталог Project. Обычный файл, добавленный,
+переименованный или заменённый через технический менеджер, появляется после обновления. Если
+внешняя операция создаёт неоднозначное имя, неподдерживаемую вложенность или несогласованные
+метаданные, интерфейс показывает исправимое предупреждение, а не угадывает и не скрывает состояние
+репозитория.
 
-## 8. Empty, loading and error states
+## 8. Пустое состояние, загрузка и ошибки
 
-- Empty: a short explanation, `Upload first file`, and a visible drop target.
-- Loading: stable drawer geometry with tile skeletons; no full-page spinner.
-- Uploading: per-file progress, cancel where possible, and continued access to completed items.
-- Read-only/external writer: a compact warning explaining why changes are disabled.
-- Offline/server error: preserve the current selection and offer Retry.
-- Stale fingerprint: explain that repository content changed and refresh the library before retrying.
-- Broken reference: keep surrounding text readable and offer `Find file` when the user can repair it.
+- Пусто: короткое объяснение, кнопка `Загрузить первый файл` и видимая зона перетаскивания.
+- Загрузка списка: геометрия панели сохраняется, вместо полноэкранного индикатора используются
+  заготовки плиток.
+- Передача файлов: прогресс каждого файла, отмена где это возможно и доступ к уже завершённым.
+- Только чтение или внешний режим записи: компактное объяснение причины недоступности изменений.
+- Ошибка сети или сервера: выбранный файл сохраняется, доступна кнопка `Повторить`.
+- Устаревший fingerprint: предложение обновить библиотеку перед повторной операцией.
+- Сломанная ссылка: окружающий текст остаётся читаемым, при возможности доступно `Найти файл`.
 
-Focus moves to the drawer heading when it opens and returns to the triggering control when it
-closes. Escape closes menus/dialogs first, then the drawer. Destructive confirmations trap focus
-and have explicit labels; tile actions are available without hover.
+При открытии фокус переходит на заголовок панели, при закрытии возвращается на вызвавшую кнопку.
+Escape сначала закрывает меню или диалог, затем саму панель. Разрушительные подтверждения
+удерживают фокус и имеют явные подписи. Действия с плитками доступны без наведения мыши.
 
-## 9. Proposed delivery slices after UX approval
+## 9. Предлагаемые продуктовые этапы после согласования UX
 
-This is not yet the technical implementation plan. It defines product slices so the later plan can
-be staged and verified without shipping misleading partial behavior:
+Это ещё не технический план. Этапы задают продуктовые границы, чтобы позднее разбить реализацию и
+проверки без выпуска вводящих в заблуждение частичных возможностей:
 
-1. Project library entry point, tile drawer, upload/download, properties and native safe previews.
-2. Rename/replace/delete with Git-aware change feedback and the over-50-MB confirmation flow.
-3. Stable file references in Project-scoped Markdown editors and renderers.
-4. Safe generated Office previews and preview-cache lifecycle.
-5. External technical-manager reconciliation, accessibility/responsive polish and end-to-end
-   workflows.
+1. Кнопка Project, сетка файлов, правая панель, загрузка, скачивание, свойства и безопасный
+   нативный предпросмотр.
+2. Переименование, замена и удаление с отображением изменений, учитывающим Git, и подтверждением
+   файлов больше 50 МБ.
+3. Стабильные ссылки на файлы во всех Markdown-редакторах и компонентах отображения с контекстом
+   Project.
+4. Безопасный предпросмотр Office и управление кэшем.
+5. Согласование с изменениями технического менеджера, адаптивность, доступность и сквозные
+   сценарии.
 
-Slice 1 should not claim DOCX/XLSX/PPTX inline preview until slice 4 is available; before then those
-formats use the honest unsupported-preview fallback.
+До реализации этапа 4 интерфейс не должен обещать встроенный просмотр DOCX, XLSX и PPTX: для них
+используется честная плашка о недоступности предпросмотра.
 
-## 10. Approval decisions
+## 10. Решения, которые подтверждаются согласованием
 
-Approval of this proposal confirms these product choices:
+Одобрение предложения означает согласие со следующими решениями:
 
-- a Project-scoped, flat user library at first, separate from the technical manager;
-- a wide right-side drawer with a tile grid and an in-drawer viewer;
-- unrestricted file extensions, with safe fallback for unsupported previews;
-- an explicit filename-typing warning above 50 MB, without treating 50 MB as a hard rejection;
-- `[[file:filename]]` instead of `@` for human-entered references;
-- hidden stable file identity so rename does not break links;
-- no implicit cross-Project references;
-- reference-aware delete and honest Git-history wording.
+- сначала плоское хранилище текущего Project, отдельное от технического файлового менеджера;
+- широкая правая панель с плитками и просмотром внутри неё;
+- отсутствие списка запрещённых расширений и безопасная заглушка для неподдерживаемого просмотра;
+- подтверждение вводом точного имени для файла больше 50 МБ без превращения порога в жёсткий лимит;
+- синтаксис `[[file:имя]]` вместо `@` для ручной ссылки;
+- скрытый стабильный идентификатор, чтобы переименование не ломало ссылки;
+- отсутствие неявных межпроектных ссылок;
+- удаление с учётом ссылок и честное описание сохранения старого содержимого в истории Git.
