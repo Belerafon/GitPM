@@ -11,6 +11,7 @@ import {
   decodeEntityResult,
   decodeGlobalSearchResult,
   decodeNotifications,
+  decodeProjectFileList,
   describeAjvError,
   summarizeAjvErrors,
 } from "./index.js";
@@ -111,6 +112,26 @@ describe("@gitpm/contracts runtime contracts", () => {
     });
     expect(result.items[0]).toMatchObject({ entity_type: "task", project_id: "P-26-MGP84K" });
     expect(() => decodeGlobalSearchResult({ query: "x", items: [{ entity_type: "view", id: "V-1", title: "View", lifecycle: "active" }], total: 1 })).toThrow(ApiContractError);
+  });
+
+  it("decodes Project file properties and rejects unsafe presentation values", () => {
+    const result = decodeProjectFileList({
+      project_id: "P-26-MGP84K",
+      count: 1,
+      total_size_bytes: 7,
+      items: [{
+        name: "ТЗ v3.pdf",
+        path: "projects/P-26-MGP84K/files/ТЗ v3.pdf",
+        size_bytes: 7,
+        media_type: "application/pdf",
+        disposition: "inline",
+        modified_at: "2026-08-13T10:00:00.000Z",
+        modified_at_source: "working_copy_filesystem",
+      }],
+      draft_fingerprint: "f".repeat(64),
+    });
+    expect(result.items[0]?.name).toBe("ТЗ v3.pdf");
+    expect(() => decodeProjectFileList({ ...result, items: [{ ...result.items[0], disposition: "execute" }] })).toThrow(ApiContractError);
   });
 
   it("derives entity and CLI schema catalogs from the shared registry", () => {

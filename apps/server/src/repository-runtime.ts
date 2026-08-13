@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { ChangesService } from "@gitpm/changes";
 import { DirectRepositoryBackend, directPushStrategy, DraftManager } from "@gitpm/drafts";
-import { CommentStore, EntityStore, TimeEntryStore } from "@gitpm/domain";
+import { CommentStore, EntityStore, ProjectFileStore, TimeEntryStore } from "@gitpm/domain";
 import { GitClient, type GitClientSshOptions } from "@gitpm/git-client";
 import type { GitLabAuthMode } from "@gitpm/gitlab";
 import { assertSafeRepositoryUrl } from "@gitpm/security";
@@ -317,6 +317,7 @@ export async function buildRepositoryApp() {
     entityStore: new EntityStore(draftManager),
     exportService: new ExportService(draftManager, gitClient),
     historyService: new HistoryService(draftManager, gitClient),
+    projectFileStore: new ProjectFileStore(draftManager),
     notificationReadStore: new FileNotificationReadStore(configuration.dataDirectory, configuration.repository),
   });
   const publishing = new PublicationService(draftManager, gitClient, {

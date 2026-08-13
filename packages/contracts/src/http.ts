@@ -137,6 +137,29 @@ export interface WorktreeFile {
   readonly content: string;
 }
 
+export type ProjectFileDisposition = "inline" | "attachment";
+export type ProjectFileTimestampSource = "working_copy_filesystem";
+
+export interface ProjectFileItem {
+  readonly name: string;
+  readonly path: string;
+  readonly size_bytes: number;
+  readonly media_type: string;
+  readonly disposition: ProjectFileDisposition;
+  readonly modified_at: string;
+  readonly modified_at_source: ProjectFileTimestampSource;
+  readonly created_at?: string;
+  readonly created_at_source?: ProjectFileTimestampSource;
+}
+
+export interface ProjectFileList {
+  readonly project_id: string;
+  readonly count: number;
+  readonly total_size_bytes: number;
+  readonly items: readonly ProjectFileItem[];
+  readonly draft_fingerprint: string;
+}
+
 export type ChangeKind = "Added" | "Modified" | "Deleted";
 
 export interface DiffHunk {
@@ -611,6 +634,24 @@ const worktreeEntrySchema = objectSchema({
 }, ["name", "path", "type"]);
 const worktreeDirectorySchema = objectSchema({ path: stringSchema, entries: arraySchema(worktreeEntrySchema) });
 const worktreeFileSchema = objectSchema({ path: stringSchema, size: integerSchema, content: stringSchema });
+const projectFileItemSchema = objectSchema({
+  name: stringSchema,
+  path: stringSchema,
+  size_bytes: integerSchema,
+  media_type: stringSchema,
+  disposition: { enum: ["inline", "attachment"] },
+  modified_at: stringSchema,
+  modified_at_source: { const: "working_copy_filesystem" },
+  created_at: stringSchema,
+  created_at_source: { const: "working_copy_filesystem" },
+}, ["name", "path", "size_bytes", "media_type", "disposition", "modified_at", "modified_at_source"]);
+const projectFileListSchema = objectSchema({
+  project_id: stringSchema,
+  count: integerSchema,
+  total_size_bytes: integerSchema,
+  items: arraySchema(projectFileItemSchema),
+  draft_fingerprint: stringSchema,
+});
 
 const commentResultSchema = objectSchema({
   document: { $ref: "https://gitpm.dev/schemas/v1/comment.schema.json" },
@@ -718,6 +759,7 @@ export const HTTP_RESPONSE_SCHEMAS = {
   }),
   worktreeDirectory: worktreeDirectorySchema,
   worktreeFile: worktreeFileSchema,
+  projectFileList: projectFileListSchema,
   worktreeEntryMutation: objectSchema({ path: stringSchema, draft_fingerprint: stringSchema }),
   worktreeFileMutation: objectSchema({ path: stringSchema, size: integerSchema, draft_fingerprint: stringSchema }),
   worktreeMoveMutation: objectSchema({ from: stringSchema, to: stringSchema, draft_fingerprint: stringSchema }),
@@ -775,6 +817,7 @@ export const decodeRestoreCommitFilesResult = createDecoder<RestoreCommitFilesRe
 export const decodeDirectRevertResult = createDecoder<DirectRevertResult>("DirectRevertResult", HTTP_RESPONSE_SCHEMAS.directRevertResult);
 export const decodeWorktreeDirectory = createDecoder<WorktreeDirectory>("WorktreeDirectory", HTTP_RESPONSE_SCHEMAS.worktreeDirectory);
 export const decodeWorktreeFile = createDecoder<WorktreeFile>("WorktreeFile", HTTP_RESPONSE_SCHEMAS.worktreeFile);
+export const decodeProjectFileList = createDecoder<ProjectFileList>("ProjectFileList", HTTP_RESPONSE_SCHEMAS.projectFileList);
 export const decodeWorktreeEntryMutation = createDecoder<{ readonly path: string; readonly draft_fingerprint: string }>("WorktreeEntryMutation", HTTP_RESPONSE_SCHEMAS.worktreeEntryMutation);
 export const decodeWorktreeFileMutation = createDecoder<{ readonly path: string; readonly size: number; readonly draft_fingerprint: string }>("WorktreeFileMutation", HTTP_RESPONSE_SCHEMAS.worktreeFileMutation);
 export const decodeWorktreeMoveMutation = createDecoder<{ readonly from: string; readonly to: string; readonly draft_fingerprint: string }>("WorktreeMoveMutation", HTTP_RESPONSE_SCHEMAS.worktreeMoveMutation);

@@ -3,7 +3,7 @@ import type { IncomingMessage } from "node:http";
 import { createLogger } from "@gitpm/logging";
 import type { HealthPayload } from "@gitpm/shared";
 import type { DraftManager } from "@gitpm/drafts";
-import type { CommentStore, EntityStore, TimeEntryStore } from "@gitpm/domain";
+import type { CommentStore, EntityStore, ProjectFileStore, TimeEntryStore } from "@gitpm/domain";
 import type { ChangesService } from "@gitpm/changes";
 import type { HistoryService } from "@gitpm/history";
 import type { ExportProvider } from "./export-api.js";
@@ -13,6 +13,7 @@ import { registerExportApi } from "./export-api.js";
 import type { Authenticate } from "./draft-api.js";
 import { registerWorktreeApi, type WorktreeApiOptions } from "./worktree-api.js";
 import type { NotificationReadStore } from "./notification-read-store.js";
+import { registerProjectFilesApi } from "./project-files-api.js";
 
 const MAX_CORRELATION_ID_LENGTH = 128;
 const REQUEST_BODY_LIMIT = 1_048_576;
@@ -41,6 +42,7 @@ export interface AppOptions {
   exportService?: ExportProvider;
   isReady?: () => boolean | Promise<boolean>;
   historyService?: HistoryService;
+  projectFileStore?: ProjectFileStore;
   timeEntryStore?: TimeEntryStore;
   logger?: FastifyBaseLogger;
   notificationReadStore?: NotificationReadStore;
@@ -185,6 +187,7 @@ export function buildApp(options: AppOptions = {}) {
     if (options.timeEntryStore) registerTimeEntryApi(app, options.draftManager, options.timeEntryStore, authenticate);
     if (options.changesService) registerChangesApi(app, options.draftManager, options.changesService, authenticate);
     if (options.historyService) registerHistoryApi(app, options.draftManager, options.historyService, authenticate);
+    if (options.projectFileStore) registerProjectFilesApi(app, options.draftManager, options.projectFileStore, authenticate);
   }
   return app;
 }

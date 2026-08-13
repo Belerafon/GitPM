@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { DraftRuntimeError } from "@gitpm/drafts";
 import type { DraftManager, DraftMetadata, WriterMode } from "@gitpm/drafts";
 import { GitCommandError } from "@gitpm/git-client";
-import { assertEntityType, CommentOperationError, DomainOperationError, TimeEntryOperationError } from "@gitpm/domain";
+import { assertEntityType, CommentOperationError, DomainOperationError, ProjectFileOperationError, TimeEntryOperationError } from "@gitpm/domain";
 import type { CommentActor, CommentStore, EntityStore, TimeEntryActor, TimeEntryStore } from "@gitpm/domain";
 import {
   HTTP_REQUEST_BODY_SCHEMAS,
@@ -180,6 +180,13 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
       if (["TIME_ENTRY_NOT_FOUND", "ENTITY_NOT_FOUND"].includes(error.code)) status = 404;
       else if (["ENTITY_ID_INVALID", "ENTITY_PROJECT_INVALID", "REF_MISSING", "REF_CROSS_PROJECT", "TIME_ENTRY_VOIDED", "TIME_ENTRY_FILTER_INVALID", "TIME_ENTRY_REPLACEMENT_INVALID", "TIME_ENTRY_REPLACEMENT_MISSING", "TIME_ENTRY_REPLACEMENT_SELF", "TIME_ENTRY_REPLACEMENT_TASK_MISMATCH"].includes(error.code)) status = 400;
       else if (error.code === "VALIDATION_FAILED") status = 422;
+      else status = 409;
+    } else if (error instanceof ProjectFileOperationError) {
+      code = error.code;
+      message = error.message;
+      if (["ENTITY_NOT_FOUND", "PROJECT_FILE_NOT_FOUND"].includes(error.code)) status = 404;
+      else if (error.code === "PROJECT_FILE_PATH_FORBIDDEN") status = 403;
+      else if (["ENTITY_PROJECT_INVALID", "PROJECT_FILE_NAME_INVALID"].includes(error.code)) status = 400;
       else status = 409;
     } else if (error instanceof AuthError) {
       code = error.code;

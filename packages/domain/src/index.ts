@@ -10,6 +10,7 @@ import { discoverRepositoryFiles, validateDelete, validateRepository } from "@gi
 import { ENTITY_TYPE_SCHEMAS, type GlobalSearchEntityType, type GlobalSearchItem, type GlobalSearchResult } from "@gitpm/contracts";
 
 export * from "./comments.js";
+export * from "./project-files.js";
 export * from "./time-entries.js";
 export { ENTITY_TYPE_SCHEMAS } from "@gitpm/contracts";
 

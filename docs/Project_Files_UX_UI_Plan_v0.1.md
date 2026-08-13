@@ -334,3 +334,56 @@ Git diff.
   общий регистронезависимый ключ отдельно покрыт и работает на Windows;
 - этап намеренно не предоставляет список, свойства, чтение или скачивание файлов — это граница
   этапа 2; текущий `discoverRepositoryFiles` сохраняет контракт списка только domain YAML.
+
+### Этап 2 — завершён
+
+Реализовано:
+
+- добавлен read-only domain-сервис файлов Project: проверяет существование owning Project,
+  возвращает пустой результат для отсутствующего опционального каталога `files/`, считает файлы и
+  общий размер и перечисляет только обычные файлы плоского хранилища;
+- список содержит имя, канонический repository-relative путь, точный размер, MIME,
+  `inline`/`attachment`, доступные даты текущей рабочей копии и явный источник этих дат; никаких
+  manifest, sidecar, YAML-сущностей, реестров или базы данных не создаётся;
+- безопасное открытие использует проверку имени одного сегмента, существующие filesystem boundary,
+  запрет symlink, `O_NOFOLLOW` где он поддерживается и сверку идентичности файла до и после
+  открытия; file handle закрывается после завершения, ошибки или прерывания потока;
+- добавлены авторизованные read-only HTTP-маршруты списка, открытия и принудительного скачивания;
+  ownership draft проверяется до обращения к domain-сервису, а имя и Project остаются частью
+  жёсткой области маршрута;
+- `inline` разрешён по консервативному allowlist только для PDF, пассивных растровых изображений и
+  текстовых форматов; SVG, HTML, Office, архивы и неизвестные форматы отдаются как `attachment`,
+  все ответы используют `nosniff`, `no-store` и безопасный UTF-8 `Content-Disposition`;
+- публичные DTO, runtime decoder и стабильные коды ошибок задокументированы в
+  `docs/Project_Files_HTTP.md`;
+- тестами покрыты MIME/disposition, Unicode, пустой каталог, размеры и свойства, отсутствующие
+  файл и Project, другой владелец draft, одинаковое имя в другом Project, symlink, невалидный
+  Project ID, hostile filename и percent-decoded разделитель пути.
+
+Фактически выполненные проверки:
+
+- первый `corepack pnpm --filter @gitpm/contracts build` прошёл, а следующий
+  `corepack pnpm --filter @gitpm/domain build` выявил локальную неоднозначность Node-типа
+  `Stats` (`number | bigint`); тип был уточнён без изменения поведения;
+- запущенный следом `corepack pnpm --filter @gitpm/server typecheck` не мог разрешить ещё не
+  собранные workspace-зависимости, поскольку предыдущая цепочка остановилась на domain build;
+- `corepack pnpm --filter @gitpm/server... build` после исправления — успешно;
+- `corepack pnpm exec vitest run packages/contracts/src/index.test.ts packages/domain/src/project-files.test.ts apps/server/src/project-files-api.integration.test.ts`
+  — успешно: 3 файла, 32 теста пройдено;
+- повторные `corepack pnpm --filter @gitpm/server build` и те же 32 узких теста после проверки
+  encoded path и закрытия потока — успешно;
+- `corepack pnpm verify:server` — успешно: frozen install, affected build, eslint, 12 файлов и 100
+  server-тестов, diff whitespace пройдены;
+- `corepack pnpm verify:repository` — успешно: frozen install, affected build, eslint, 8 файлов и
+  130 repository-тестов пройдены, один платформенный тест пропущен; schema contracts и diff
+  whitespace пройдены.
+
+Ограничения этапа:
+
+- даты помечены как свойства filesystem текущей рабочей копии и не обещают сохранение после
+  checkout; Git-даты и история версий будут добавляться только если дальнейший UX действительно
+  потребует их без отдельного реестра;
+- Office-документы и другие потенциально активные либо неизвестные форматы на этом этапе не
+  получают встроенный preview и всегда скачиваются;
+- этап намеренно не реализует загрузку, замену, переименование, удаление, web UI или файловые
+  ссылки — это границы последующих этапов.
