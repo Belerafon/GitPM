@@ -1,6 +1,6 @@
 import { formatProjectFileReference, resolveProjectFileReference, tokenizeProjectFileReferences } from "@gitpm/shared";
 import type { ProjectFileItem, ProjectFileList } from "@gitpm/contracts";
-import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { forwardRef, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { projectFileContentUrl, projectFileDownloadUrl } from "./api.js";
 import type { AsyncLoadState } from "./async-data.js";
 import { message, type Locale, type MessageKey } from "./i18n.js";
@@ -36,15 +36,21 @@ export function renderProjectFileReferenceText(source: string, context: ProjectF
   });
 }
 
-export function ProjectFileMarkdownField({ context, defaultValue, disabled, label, name, onValueChange, value }: {
+export const ProjectFileMarkdownField = forwardRef<HTMLTextAreaElement, {
   readonly context?: ProjectFileReferenceContext;
+  readonly ariaDescribedBy?: string;
+  readonly autoFocus?: boolean;
   readonly defaultValue?: string;
   readonly disabled: boolean;
   readonly label: string;
   readonly name?: string;
+  readonly onCursorActivity?: (value: string, cursor: number | null) => void;
+  readonly onKeyDown?: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
   readonly onValueChange?: (value: string) => void;
+  readonly placeholder?: string;
+  readonly rows?: number;
   readonly value?: string;
-}) {
+}>(({ ariaDescribedBy, autoFocus, context, defaultValue, disabled, label, name, onCursorActivity, onKeyDown, onValueChange, placeholder, rows, value }, forwardedRef) => {
   const textarea = useRef<HTMLTextAreaElement | null>(null);
   const trigger = useRef<HTMLButtonElement | null>(null);
   const labelId = useId();
@@ -78,7 +84,7 @@ export function ProjectFileMarkdownField({ context, defaultValue, disabled, labe
   };
   return <div className="project-file-markdown-field">
     <div className="project-file-markdown-label"><span id={labelId}>{label}</span>{context !== undefined && <button aria-controls={pickerOpen ? pickerId : undefined} aria-expanded={pickerOpen} aria-label={t("projectFileReferences.insert")} disabled={disabled} onClick={() => setPickerOpen((current) => !current)} ref={trigger} title={t("projectFileReferences.insertHint")} type="button">📎 {t("projectFileReferences.insert")}</button>}</div>
-    <textarea {...(value === undefined ? { defaultValue } : { value, onChange: (event) => onValueChange?.(event.target.value) })} aria-labelledby={labelId} disabled={disabled} name={name} ref={textarea} />
+    <textarea {...(value === undefined ? { defaultValue } : { value })} aria-describedby={ariaDescribedBy} aria-labelledby={labelId} autoFocus={autoFocus} disabled={disabled} name={name} onChange={(event) => { onValueChange?.(event.target.value); onCursorActivity?.(event.target.value, event.target.selectionStart); }} onClick={(event) => onCursorActivity?.(event.currentTarget.value, event.currentTarget.selectionStart)} onKeyDown={onKeyDown} placeholder={placeholder} ref={(node) => { textarea.current = node; if (typeof forwardedRef === "function") forwardedRef(node); else if (forwardedRef !== null) forwardedRef.current = node; }} rows={rows} />
     {pickerOpen && context !== undefined && <div className="project-file-reference-picker" id={pickerId} onKeyDown={handlePickerKeyDown}>
       {context.loadState.status === "loading" && <span role="status">{t("projectFileReferences.loading")}</span>}
       {context.loadState.status === "error" && <div className="alert error" role="alert">{t("projectFileReferences.loadError", { message: context.loadState.error })}<button onClick={context.onReload} type="button">{t("status.retry")}</button></div>}
@@ -87,4 +93,6 @@ export function ProjectFileMarkdownField({ context, defaultValue, disabled, labe
       {context.files !== null && context.files.items.length > 0 && <div aria-label={t("projectFileReferences.listLabel")} className="project-file-reference-options" role="group">{context.files.items.map((item) => <button aria-label={t("projectFileReferences.insertNamed", { name: item.name })} key={item.name} onClick={() => insert(item)} title={item.name} type="button">📎 <span>{item.name}</span></button>)}</div>}
     </div>}
   </div>;
-}
+});
+
+ProjectFileMarkdownField.displayName = "ProjectFileMarkdownField";

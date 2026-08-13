@@ -1463,7 +1463,7 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
 .comment-deleted { margin: .35rem 0 0; color: #777d78; font-size: .82rem; font-style: italic; }
 .comment-edit { display: grid; gap: .5rem; margin-top: .35rem; }
 .comment-edit textarea, .comment-composer textarea { width: 100%; resize: vertical; border: 1px solid #c9cbc5; border-radius: 8px; padding: .65rem; line-height: 1.45; }
-.comment-edit > div, .comment-composer-actions { display: flex; align-items: center; justify-content: flex-end; gap: .45rem; }
+.comment-edit-actions, .comment-composer-actions { display: flex; align-items: center; justify-content: flex-end; gap: .45rem; }
 .comment-composer { position: relative; display: grid; gap: .5rem; border: 1px solid #d9ddd6; border-radius: 10px; background: #fafbf9; padding: .8rem; }
 .comment-composer > label { color: #4f5752; font-size: .78rem; font-weight: 700; }
 .comment-composer-actions { justify-content: space-between; }
@@ -1494,10 +1494,13 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
 .time-entry-category { overflow: hidden; color: #686e69; font-size: .76rem; text-overflow: ellipsis; white-space: nowrap; }
 .time-entry-note { grid-column: 1 / -1; color: #5d625f; font-size: .8rem; font-style: italic; overflow-wrap: anywhere; }
 .time-entry-row.voided { opacity: .55; }
-.time-entry-row.voided > span { text-decoration: line-through; }
+.time-entry-row.voided > span, .time-entry-row.voided > .time-entry-note { text-decoration: line-through; }
+.time-entry-note .safe-markdown > :first-child { margin-top: 0; }
+.time-entry-note .safe-markdown > :last-child { margin-bottom: 0; }
 .time-entry-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .5rem .6rem; margin-top: .4rem; }
+.time-entry-form .project-file-markdown-field { flex: 1 1 240px; min-width: 180px; }
 .time-entry-form label { display: grid; gap: .25rem; flex: 1 1 150px; min-width: 120px; margin-bottom: 0; color: #5d625f; font-size: .78rem; }
-.time-entry-form input, .time-entry-form select { min-width: 0; width: 100%; border: 1px solid #c9cbc5; border-radius: 8px; background: #fff; padding: .5rem; }
+.time-entry-form input, .time-entry-form select, .time-entry-form textarea { min-width: 0; width: 100%; border: 1px solid #c9cbc5; border-radius: 8px; background: #fff; padding: .5rem; }
 .time-entry-form .primary { flex: 0 0 auto; }
 .notifications-menu { position: relative; align-self: end; }
 .notifications-menu > summary { position: relative; display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid #c9cbc5; border-radius: 8px; background: #fff; color: #455048; cursor: pointer; list-style: none; }

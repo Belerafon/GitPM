@@ -5,9 +5,16 @@ import type { GitPmApi } from "./api.js";
 import type { TimeEntryResult } from "./api.js";
 import { TaskTimeEntries } from "./task-time-entries.js";
 import type { DraftStatus, EntityResult } from "./types.js";
+import type { ProjectFileList } from "@gitpm/contracts";
+import type { ProjectFileReferenceContext } from "./project-file-reference-ui.js";
 
 const draft: DraftStatus = { draft_id: "DRF-TIME", owner_gitlab_user_id: "42", branch: "gitpm/42/DRF-TIME", base_commit: "a".repeat(40), writer_mode: "ui", state: "open", fingerprint: "b".repeat(64), created_at: "2026-07-10T00:00:00.000Z", updated_at: "2026-07-10T00:00:00.000Z" };
 const person = { document: { schema: "gitpm/person@1", id: "U-26-ADA", name: "Ada", lifecycle: "active" }, path: "p.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) } as EntityResult;
+const files: ProjectFileList = {
+  project_id: "P-26-1", count: 1, total_size_bytes: 2, draft_fingerprint: draft.fingerprint,
+  items: [{ name: "Отчёт [август].xlsx", path: "projects/P-26-1/files/Отчёт [август].xlsx", size_bytes: 2, media_type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", disposition: "attachment", modified_at: "2026-08-13T00:00:00Z", modified_at_source: "working_copy_filesystem" }],
+};
+const fileContext: ProjectFileReferenceContext = { draftId: draft.draft_id, projectId: files.project_id, files, loadState: { status: "ready" }, locale: "en", onReload: vi.fn() };
 
 function entry(id: string, overrides: Partial<TimeEntryResult["document"]> = {}): TimeEntryResult {
   return {
@@ -136,5 +143,73 @@ describe("TaskTimeEntries", () => {
     fireEvent.click(toggle);
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByLabelText("Date")).toBeTruthy();
+  });
+
+  it("renders exact, missing and hostile references in active and voided historical notes", async () => {
+    const api = {
+      listTimeEntries: vi.fn(async (): Promise<readonly TimeEntryResult[]> => [
+        entry("E-26-FILE01", { note_markdown: "See [[file:Отчёт \\[август\\].xlsx]] <script>x</script>" }),
+        entry("E-26-FILE02", { note_markdown: "Old [[file:missing.xlsx]]", state: "voided" }),
+      ]),
+      getConfiguration: vi.fn(async () => ({ document: { schema: "gitpm/work-categories@1", categories: [{ slug: "regular", title: "Regular", active: true }] }, path: "work-categories", blob_id: "a".repeat(40), draft_fingerprint: draft.fingerprint })),
+    } as unknown as GitPmApi;
+    const rendered = render(<TaskTimeEntries api={api} draft={draft} fileContext={fileContext} fingerprint={draft.fingerprint} projectId={files.project_id} taskId="T-26-1" people={[person]} readOnly={false} locale="en" onFingerprintChange={vi.fn(async () => undefined)} />);
+
+    expect(await screen.findByRole("link", { name: "Download Отчёт [август].xlsx" })).toBeTruthy();
+    const voidedReference = screen.getByRole("note", { name: "Broken file reference: missing.xlsx" });
+    expect(voidedReference.closest(".time-entry-note")?.parentElement?.classList.contains("voided")).toBe(true);
+    expect(rendered.container.textContent).toContain("<script>x</script>");
+    expect(rendered.container.querySelector("script,img,svg")).toBeNull();
+    expect(screen.getAllByRole("button", { name: "Correct" })).toHaveLength(1);
+  });
+
+  it("inserts canonical references in create and correction flows without breaking fingerprint callbacks", async () => {
+    const original = entry("E-26-FILE03", { note_markdown: "Before selected after" });
+    const created = entry("E-26-FILE04", { note_markdown: "" });
+    const createTimeEntry = vi.fn(async (_d: string, _p: string, _t: string, _fingerprint: string, input: { note_markdown?: string }) => ({ ...created, document: { ...created.document, note_markdown: input.note_markdown }, draft_fingerprint: "e".repeat(64) }));
+    const replaceTimeEntry = vi.fn(async (_d: string, _p: string, _t: string, _entry: TimeEntryResult, _fingerprint: string, input: { note_markdown?: string }) => ({
+      voided: entry(original.document.id, { ...original.document, state: "voided", replacement: "E-26-FILE05" }),
+      created: { ...entry("E-26-FILE05", { note_markdown: input.note_markdown }), draft_fingerprint: "f".repeat(64) },
+    }));
+    const onFingerprintChange = vi.fn(async () => undefined);
+    const api = {
+      listTimeEntries: vi.fn(async (): Promise<readonly TimeEntryResult[]> => [original]),
+      getConfiguration: vi.fn(async () => ({ document: { schema: "gitpm/work-categories@1", categories: [{ slug: "regular", title: "Regular", active: true }] }, path: "work-categories", blob_id: "a".repeat(40), draft_fingerprint: draft.fingerprint })),
+      createTimeEntry, replaceTimeEntry,
+    } as unknown as GitPmApi;
+    render(<TaskTimeEntries api={api} draft={draft} fileContext={fileContext} fingerprint={draft.fingerprint} projectId={files.project_id} taskId="T-26-1" people={[person]} readOnly={false} locale="en" onFingerprintChange={onFingerprintChange} />);
+
+    const note = await screen.findByLabelText("Note") as HTMLTextAreaElement;
+    note.focus(); note.setSelectionRange(0, 0);
+    fireEvent.click(screen.getAllByRole("button", { name: "Insert file" })[0]!);
+    fireEvent.click(screen.getByRole("button", { name: "Insert a link to Отчёт [август].xlsx" }));
+    fireEvent.change(screen.getByLabelText("Hours"), { target: { value: "1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add effort" }));
+    await waitFor(() => expect(createTimeEntry).toHaveBeenCalledWith(draft.draft_id, files.project_id, "T-26-1", draft.fingerprint, expect.objectContaining({ note_markdown: "[[file:Отчёт \\[август\\].xlsx]]" })));
+    await waitFor(() => expect(onFingerprintChange).toHaveBeenCalledWith("e".repeat(64)));
+
+    const correct = screen.getAllByRole("button", { name: "Correct" })[0] as HTMLButtonElement;
+    await waitFor(() => expect(correct.disabled).toBe(false));
+    fireEvent.click(correct);
+    const dialog = screen.getByRole("dialog", { name: "Correct effort entry" });
+    const editNote = within(dialog).getByLabelText("Note") as HTMLTextAreaElement;
+    editNote.setSelectionRange(7, 15);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Insert file" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Insert a link to Отчёт [август].xlsx" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(replaceTimeEntry).toHaveBeenCalledWith(draft.draft_id, files.project_id, "T-26-1", original, "e".repeat(64), expect.objectContaining({ note_markdown: "Before [[file:Отчёт \\[август\\].xlsx]] after" })));
+    expect(onFingerprintChange).toHaveBeenLastCalledWith("f".repeat(64));
+  });
+
+  it("keeps notes readable but hides all mutation and insertion controls in read-only mode", async () => {
+    const api = {
+      listTimeEntries: vi.fn(async (): Promise<readonly TimeEntryResult[]> => [entry("E-26-READ01", { note_markdown: "[[file:Отчёт \\[август\\].xlsx]]" })]),
+      getConfiguration: vi.fn(async () => ({ document: { schema: "gitpm/work-categories@1", categories: [] }, path: "work-categories", blob_id: "a".repeat(40), draft_fingerprint: draft.fingerprint })),
+    } as unknown as GitPmApi;
+    render(<TaskTimeEntries api={api} draft={draft} fileContext={fileContext} fingerprint={draft.fingerprint} projectId={files.project_id} taskId="T-26-1" people={[person]} readOnly locale="en" onFingerprintChange={vi.fn(async () => undefined)} />);
+    expect(await screen.findByRole("link", { name: "Download Отчёт [август].xlsx" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Correct" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Void entry" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Insert file" })).toBeNull();
   });
 });

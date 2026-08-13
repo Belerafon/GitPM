@@ -6,6 +6,8 @@ import type { DraftStatus, EntityResult } from "./types.js";
 import type { TimeEntryResult } from "./api.js";
 import { EditorDrawer } from "./editor-drawer.js";
 import { PersonLink } from "./person-link.js";
+import { ProjectFileMarkdownField, type ProjectFileReferenceContext } from "./project-file-reference-ui.js";
+import { SafeMarkdown } from "./safe-markdown.js";
 
 interface WorkCategory { readonly slug: string; readonly title: string; readonly active: boolean }
 interface TimeEntryCorrection { readonly person: string; readonly performed_on: string; readonly hours: number; readonly category: string; readonly note: string }
@@ -20,6 +22,7 @@ function todayISODate(): string {
 export function TaskTimeEntries(props: {
   readonly api: GitPmApi;
   readonly draft: DraftStatus;
+  readonly fileContext?: ProjectFileReferenceContext;
   readonly fingerprint: string;
   readonly projectId: string;
   readonly taskId: string;
@@ -30,7 +33,7 @@ export function TaskTimeEntries(props: {
   readonly onFingerprintChange: (fingerprint: string) => Promise<void>;
   readonly onOpenPerson?: (personId: string) => void;
 }) {
-  const { api, draft, projectId, taskId, people, readOnly, locale, onOpenPerson, assigneeIds = NO_ASSIGNEES } = props;
+  const { api, draft, fileContext, projectId, taskId, people, readOnly, locale, onOpenPerson, assigneeIds = NO_ASSIGNEES } = props;
   const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
   const [entries, setEntries] = useState<readonly TimeEntryResult[]>([]);
   const [categories, setCategories] = useState<readonly WorkCategory[]>([]);
@@ -209,7 +212,7 @@ export function TaskTimeEntries(props: {
                 <span className="time-entry-hours">{formatDurationHours(locale, entry.document.hours)}</span>
                 <span className="time-entry-person"><PersonLink name={personName(entry.document.person)} onOpen={onOpenPerson} personId={entry.document.person} /></span>
                 <span className="time-entry-category">{categories.find((category) => category.slug === entry.document.category)?.title ?? entry.document.category}</span>
-                {typeof entry.document.note_markdown === "string" && entry.document.note_markdown !== "" && <span className="time-entry-note">{entry.document.note_markdown}</span>}
+                {typeof entry.document.note_markdown === "string" && entry.document.note_markdown !== "" && <div className="time-entry-note"><SafeMarkdown fileContext={fileContext} source={entry.document.note_markdown} /></div>}
                 {entry.document.state === "active" && !readOnly && <><button className="text-link" data-control-hint={t("fieldHint.correctTime")} disabled={busy} onClick={() => beginCorrection(entry)} type="button">{t("timeEffort.correct")}</button><button className="text-link" data-control-hint={t("fieldHint.voidTime")} disabled={busy} onClick={() => void voidEntry(entry)} type="button">{t("timeEffort.void")}</button></>}
               </li>
             ))}
@@ -221,7 +224,7 @@ export function TaskTimeEntries(props: {
               <label>{t("timeEffort.date")}<input defaultValue={today} disabled={busy} name="performed_on" required type="date" /></label>
               <label>{t("timeEffort.hours")}<input disabled={busy} min="0.25" name="hours" required step="0.25" type="number" /></label>
               <label>{t("timeEffort.category")}<select disabled={busy} name="category" required>{activeCategories.map((category) => <option key={category.slug} value={category.slug}>{category.title}</option>)}</select></label>
-              <label>{t("timeEffort.note")}<input disabled={busy} name="note" type="text" /></label>
+              <ProjectFileMarkdownField context={fileContext} disabled={busy} label={t("timeEffort.note")} name="note" />
               <button className="primary" data-control-hint={t("controlHint.addTimeEntry")} disabled={busy} type="submit">{t("timeEffort.add")}</button>
             </form>
           )}
@@ -231,7 +234,7 @@ export function TaskTimeEntries(props: {
               <label>{t("timeEffort.date")}<input disabled={busy} name="performed_on" onChange={(event) => setCorrection({ ...correction, performed_on: event.currentTarget.value })} required type="date" value={correction.performed_on} /></label>
               <label>{t("timeEffort.hours")}<input disabled={busy} min="0.25" name="hours" onChange={(event) => setCorrection({ ...correction, hours: event.currentTarget.valueAsNumber })} required step="0.25" type="number" value={correction.hours} /></label>
               <label>{t("timeEffort.category")}<select disabled={busy} name="category" onChange={(event) => setCorrection({ ...correction, category: event.currentTarget.value })} required value={correction.category}>{correctionCategories.map((category) => <option key={category.slug} value={category.slug}>{category.title}{category.active ? "" : ` (${t("admin.inactive")})`}</option>)}</select></label>
-              <label>{t("timeEffort.note")}<input disabled={busy} name="note" onChange={(event) => setCorrection({ ...correction, note: event.currentTarget.value })} type="text" value={correction.note} /></label>
+              <ProjectFileMarkdownField context={fileContext} disabled={busy} label={t("timeEffort.note")} onValueChange={(note) => setCorrection({ ...correction, note })} value={correction.note} />
               <div className="editor-drawer-actions"><button disabled={busy} onClick={closeCorrection} type="button">{t("core.cancel")}</button><button className="primary" disabled={busy || !Number.isFinite(correction.hours)} type="submit">{t("core.save")}</button></div>
             </form>}
           </EditorDrawer>

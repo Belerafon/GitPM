@@ -3,6 +3,8 @@ import type { GitPmApi } from "./api.js";
 import { formatDateTime, message, type Locale, type MessageKey } from "./i18n.js";
 import type { CommentResult, DraftStatus, EntityResult } from "./types.js";
 import type { WorkspaceNavigate } from "./workspace-navigation.js";
+import { ProjectFileMarkdownField, type ProjectFileReferenceContext } from "./project-file-reference-ui.js";
+import { SafeMarkdown } from "./safe-markdown.js";
 
 const mentionPattern = /@\[([^\]\r\n]{1,200})\]\(person:(U-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6})\)/gu;
 
@@ -26,12 +28,8 @@ function inlineComment(value: string, people: readonly EntityResult[], onNavigat
   return result;
 }
 
-function CommentMarkdown({ source, people, onNavigate }: { readonly source: string; readonly people: readonly EntityResult[]; readonly onNavigate: WorkspaceNavigate }) {
-  return <div className="safe-markdown comment-markdown">{source.split(/\r?\n/u).map((line, index) => line === ""
-    ? <br key={index} />
-    : line.startsWith("- ")
-      ? <div className="markdown-list-item" key={index}>• {inlineComment(line.slice(2), people, onNavigate)}</div>
-      : <p key={index}>{inlineComment(line, people, onNavigate)}</p>)}</div>;
+function CommentMarkdown({ fileContext, source, people, onNavigate }: { readonly fileContext?: ProjectFileReferenceContext; readonly source: string; readonly people: readonly EntityResult[]; readonly onNavigate: WorkspaceNavigate }) {
+  return <div className="comment-markdown"><SafeMarkdown fileContext={fileContext} renderText={(value) => inlineComment(value, people, onNavigate)} source={source} /></div>;
 }
 
 function initials(name: string): string {
@@ -49,9 +47,10 @@ function relativeTime(locale: Locale, timestamp: string): string {
   return formatDateTime(locale, timestamp);
 }
 
-export function TaskComments({ api, draft, projectId, taskId, people, fingerprint, readOnly, locale, focusCommentId, onNavigate, onFingerprintChange, confirmDelete }: {
+export function TaskComments({ api, draft, fileContext, projectId, taskId, people, fingerprint, readOnly, locale, focusCommentId, onNavigate, onFingerprintChange, confirmDelete }: {
   readonly api: GitPmApi;
   readonly draft: DraftStatus;
+  readonly fileContext?: ProjectFileReferenceContext;
   readonly projectId: string;
   readonly taskId: string;
   readonly people: readonly EntityResult[];
@@ -174,13 +173,12 @@ export function TaskComments({ api, draft, projectId, taskId, people, fingerprin
         <div className="comment-avatar" aria-hidden="true">{initials(comment.document.author.display_name)}</div>
         <div className="comment-content">
           <header><div><strong>{comment.document.author.display_name}</strong><time dateTime={comment.document.updated_at ?? comment.document.created_at} title={formatDateTime(locale, comment.document.updated_at ?? comment.document.created_at)}>{relativeTime(locale, comment.document.updated_at ?? comment.document.created_at)}</time>{comment.document.updated_at !== undefined && <span>{t("comments.edited")}</span>}</div>{comment.document.state === "active" && (comment.can_edit || comment.can_delete) && <details className="comment-actions"><summary aria-label={t("comments.actions")} title={t("comments.actions")}>…</summary><div>{comment.can_edit && <button disabled={busy} onClick={() => { setEditing(comment.document.id); setEditBody(comment.document.body_markdown ?? ""); }} type="button">{t("comments.edit")}</button>}{comment.can_delete && <button className="danger" data-control-hint={t("controlHint.deleteComment")} disabled={busy} onClick={() => { void remove(comment); }} type="button">{t("comments.delete")}</button>}</div></details>}</header>
-          {comment.document.state === "deleted" ? <p className="comment-deleted">{t("comments.deleted")}</p> : editing === comment.document.id ? <div className="comment-edit"><textarea autoFocus disabled={busy} onChange={(event) => setEditBody(event.target.value)} onKeyDown={(event) => { if (event.key === "Escape") setEditing(null); else if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void saveEdit(comment); } }} value={editBody} /><div><button disabled={busy} onClick={() => setEditing(null)} type="button">{t("core.cancel")}</button><button className="primary" disabled={busy || editBody.trim() === ""} onClick={() => { void saveEdit(comment); }} type="button">{t("core.save")}</button></div></div> : <CommentMarkdown onNavigate={onNavigate} people={people} source={comment.document.body_markdown ?? ""} />}
+          {comment.document.state === "deleted" ? <p className="comment-deleted">{t("comments.deleted")}</p> : editing === comment.document.id ? <div className="comment-edit"><ProjectFileMarkdownField autoFocus context={fileContext} disabled={busy} label={t("comments.edit")} onKeyDown={(event) => { if (event.key === "Escape") setEditing(null); else if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void saveEdit(comment); } }} onValueChange={setEditBody} value={editBody} /><div className="comment-edit-actions"><button disabled={busy} onClick={() => setEditing(null)} type="button">{t("core.cancel")}</button><button className="primary" disabled={busy || editBody.trim() === ""} onClick={() => { void saveEdit(comment); }} type="button">{t("core.save")}</button></div></div> : <CommentMarkdown fileContext={fileContext} onNavigate={onNavigate} people={people} source={comment.document.body_markdown ?? ""} />}
         </div>
       </article>)}</div>
       {error !== null && <div className="alert error">{error}<button onClick={() => { void load(); }}>{t("status.retry")}</button></div>}
       {showComposer && <div className="comment-composer" id={`comment-composer-${taskId}`}>
-        <label htmlFor={`comment-body-${taskId}`}>{t("comments.add")}</label>
-        <textarea aria-describedby={`comment-help-${taskId}`} disabled={busy} id={`comment-body-${taskId}`} onChange={(event) => { setBody(event.target.value); detectMention(event.target.value, event.target.selectionStart); }} onClick={(event) => detectMention(event.currentTarget.value, event.currentTarget.selectionStart)} onKeyDown={composerKey} placeholder={t("comments.placeholder")} ref={textarea} rows={4} value={body} />
+        <ProjectFileMarkdownField ariaDescribedBy={`comment-help-${taskId}`} context={fileContext} disabled={busy} label={t("comments.add")} onCursorActivity={detectMention} onKeyDown={composerKey} onValueChange={(next) => { setBody(next); setMentionQuery(null); }} placeholder={t("comments.placeholder")} ref={textarea} rows={4} value={body} />
         {suggestions.length > 0 && <div className="mention-suggestions" role="listbox" aria-label={t("comments.mentionSuggestions")}>{suggestions.map((person) => <button key={person.document.id} onClick={() => chooseMention(person)} role="option" type="button"><strong>{text(person.document, "name")}</strong>{text(person.document, "email") !== "" && <span>{text(person.document, "email")}</span>}</button>)}</div>}
         <div className="comment-composer-actions"><span className="field-hint" id={`comment-help-${taskId}`}>{t("comments.draftHint", { draft: draft.draft_id })}</span><button className="primary" disabled={busy || body.trim() === ""} onClick={() => { void create(); }} type="button">{busy ? t("feedback.saving") : t("comments.submit")}</button></div>
       </div>}

@@ -799,3 +799,65 @@ Git diff.
   один authoritative список. Комментарии и заметки трудозатрат остаются Этапом 10;
 - rename/delete/replace всё ещё не переписывают ссылки и честно возвращают `not_checked`; это
   граница Этапа 11.
+
+### Этап 10 — завершён
+
+Реализовано:
+
+- единый `SafeMarkdown` Этапа 9 механически вынесен в отдельный web-модуль и переиспользуется в
+  описаниях, комментариях и заметках трудозатрат. Прежний экспорт из `core-ui` сохранён, второго
+  parser/renderer или нового синтаксиса не появилось; файловый tokenizer по-прежнему защищает
+  целый `[[file:...]]` token до обработки остального текста;
+- `TaskPanel` передаёт уже имеющийся Project file context в `TaskComments` и `TaskTimeEntries`.
+  Отдельных запросов списка для комментария, записи трудозатрат, редактора или picker нет:
+  первоначальная загрузка и обновление файловой панели одновременно обновляют все эти места;
+- active Task comments показывают exact ссылки через общий content/download route, missing — как
+  сломанные без `href`, loading/error — нейтральным raw syntax. Deleted comment остаётся только
+  tombstone и не показывает прежний `body_markdown` даже при враждебных данных;
+- create и существующий edit комментария используют общий `ProjectFileMarkdownField`: picker
+  вставляет канонический escaped token в selection/позицию курсора, возвращает фокус и сохраняет
+  Escape/read-only/loading/error/retry/empty semantics Этапа 9. Существующие person mentions через
+  `@` сохранены: они разбираются только в обычных text-сегментах после файлового tokenizer, поэтому
+  `@` внутри имени файла не превращается в mention;
+- заметки active и voided TimeEntry отрисовываются общим безопасным Markdown renderer. Создание и
+  существующая коррекция записи (атомарный void исходной + новая replacement-запись) используют тот
+  же picker; отдельного несуществующего in-place edit API не добавлено. Voided строки остаются
+  историческими и не получают кнопок коррекции/отмены;
+- существующие optimistic fingerprint-цепочки и callbacks комментариев/трудозатрат сохранены.
+  Read-only по-прежнему скрывает composer и mutation controls, но старые ссылки остаются доступны
+  для безопасного открытия или скачивания. Hostile HTML остаётся текстом React, DOM-вложенность
+  block Markdown исправна.
+
+Фактически выполненные проверки:
+
+- ранний regression-прогон сразу после чистого extraction общего renderer прошёл: 3 файла и 21
+  тест. Production `typecheck` после первичного wiring также прошёл;
+- первый расширенный component-прогон выявил четыре неточности новых тестов: два текстовых matcher
+  для безопасного hostile content не учитывали соседние React-узлы, а два сценария не ожидали
+  завершения fingerprint callback/busy lifecycle перед следующей мутацией. После перехода к
+  observable UI/fingerprint ожиданиям и точным scoped queries итоговый узкий
+  `corepack pnpm exec vitest run apps/web/src/project-file-reference-ui.test.tsx apps/web/src/task-comments-ui.test.tsx apps/web/src/task-time-entries.test.tsx apps/web/src/core-ui.test.tsx apps/web/src/hostile-content.test.tsx apps/web/src/features/projects/project-plan-workspace.test.tsx`
+  — успешно: 6 файлов, 100 тестов;
+- отдельный `corepack pnpm --filter @gitpm/web typecheck` перед итоговым узким прогоном — успешно;
+- первый вызов `corepack pnpm verify:web` был технически оборван ошибочным внешним timeout через
+  одну секунду (`exit 124`/`EPIPE`) во время build и не является проверкой продукта;
+- полный `corepack pnpm verify:web` после функциональных правок — успешно: 51 файл и 469
+  web-тестов. После review валидной block-вложенности time note был сохранён визуальный
+  strike-through voided строки и добавлена DOM-регрессия; финальный повтор профиля зафиксирован
+  после этой test-only проверки ниже;
+- targeted повтор `apps/web/src/task-time-entries.test.tsx` после DOM-регрессии — успешно: 1 файл,
+  8 тестов. Финальный `corepack pnpm verify:web` — успешно: frozen install, affected build и
+  production bundle, ESLint без предупреждений, typecheck, 51 файл и 469 web-тестов, diff
+  whitespace; итоговое время 1 минута 26 секунд;
+- `verify:server` и `verify:repository` не требовались: HTTP DTO/routes, shared parser и domain
+  search Этапа 8 не менялись; изменения ограничены web renderer/editor wiring, стилями и тестами.
+
+Ограничения этапа:
+
+- generic `CoreWorkspace` без authoritative Project file context сохраняет прежний безопасный raw
+  UI и не делает скрытых list-запросов. Полная поддержка comments/time notes относится к
+  канонической Project странице `ProjectPlanWorkspace`;
+- автоматические подсказки после `[[` и поиск внутри picker не добавлялись: используется тот же
+  доступный picker Этапа 9 с loading/error/retry/empty и Escape/focus;
+- rename/delete/replace по-прежнему не ищут и не переписывают ссылки и возвращают `not_checked`;
+  mutation-aware семантика остаётся границей Этапа 11.

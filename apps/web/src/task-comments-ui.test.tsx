@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GitPmApi } from "./api.js";
 import { NotificationsMenu } from "./notifications-ui.js";
 import { TaskComments } from "./task-comments-ui.js";
 import type { CommentResult, DraftStatus, EntityResult } from "./types.js";
+import type { ProjectFileList } from "@gitpm/contracts";
+import type { ProjectFileReferenceContext } from "./project-file-reference-ui.js";
 
 const draft: DraftStatus = {
   draft_id: "DRF-COMMENTS",
@@ -24,6 +26,25 @@ const anna: EntityResult = {
   blob_id: "c".repeat(40),
   draft_fingerprint: draft.fingerprint,
 };
+
+const files: ProjectFileList = {
+  project_id: "P-26-MGP84K", count: 2, total_size_bytes: 3, draft_fingerprint: draft.fingerprint,
+  items: [
+    { name: "ТЗ @team [финал].pdf", path: "projects/P-26-MGP84K/files/ТЗ @team [финал].pdf", size_bytes: 1, media_type: "application/pdf", disposition: "inline", modified_at: "2026-08-13T00:00:00Z", modified_at_source: "working_copy_filesystem" },
+    { name: "Документ.docx", path: "projects/P-26-MGP84K/files/Документ.docx", size_bytes: 2, media_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", disposition: "attachment", modified_at: "2026-08-13T00:00:00Z", modified_at_source: "working_copy_filesystem" },
+  ],
+};
+const fileContext: ProjectFileReferenceContext = { draftId: draft.draft_id, projectId: files.project_id, files, loadState: { status: "ready" }, locale: "en", onReload: vi.fn() };
+
+function comment(id: string, body: string | undefined, state: "active" | "deleted" = "active"): CommentResult {
+  const document: CommentResult["document"] = state === "deleted"
+    ? { schema: "gitpm/comment@1", id, project: files.project_id, task: "T-26-P9G3P8", author: { provider: "git", subject: "boris@example.test", display_name: "Boris" }, created_at: "2026-07-20T10:05:00.000Z", state, deleted_at: "2026-07-20T10:06:00.000Z", deleted_by: { provider: "git", subject: "boris@example.test", display_name: "Boris" }, mentions: [] }
+    : { schema: "gitpm/comment@1", id, project: files.project_id, task: "T-26-P9G3P8", author: { provider: "git", subject: "boris@example.test", display_name: "Boris" }, created_at: "2026-07-20T10:05:00.000Z", state, body_markdown: body ?? "", mentions: [] };
+  return {
+    document,
+    path: `projects/${files.project_id}/comments/T-26-P9G3P8/${id}.yaml`, blob_id: "d".repeat(40), draft_fingerprint: "e".repeat(64), can_edit: state === "active", can_delete: state === "active",
+  };
+}
 
 afterEach(() => { cleanup(); sessionStorage.clear(); localStorage.clear(); });
 
@@ -137,6 +158,66 @@ describe("task comments", () => {
     expect(screen.queryByText("Keep this visible")).toBeNull();
     fireEvent.click(toggle);
     expect(await screen.findByText("Keep this visible")).toBeTruthy();
+  });
+
+  it("renders file references and person mentions together without interpreting @ inside a filename", async () => {
+    const active = comment("N-26-FILES1", "@[Anna Petrova](person:U-26-5EBAE3) см. [[file:ТЗ @team \\[финал\\].pdf]] и [[file:missing.txt]] <img src=x>");
+    const deleted = comment("N-26-FILES2", "[[file:Документ.docx]] secret", "deleted");
+    const api = { listComments: vi.fn(async () => [active, deleted]), listProjectFiles: vi.fn() } as unknown as GitPmApi;
+
+    const rendered = render(<TaskComments api={api} confirmDelete={() => true} draft={draft} fileContext={fileContext} fingerprint={draft.fingerprint} locale="en" onFingerprintChange={async () => undefined} onNavigate={() => undefined} people={[anna]} projectId={files.project_id} readOnly={false} taskId="T-26-P9G3P8" />);
+
+    expect(await screen.findByRole("button", { name: "@Anna Petrova" })).toBeTruthy();
+    const fileLink = screen.getByRole("link", { name: "Open ТЗ @team [финал].pdf in a new tab" });
+    expect(fileLink.textContent).toContain("@team");
+    expect(screen.queryByRole("button", { name: /@team/iu })).toBeNull();
+    expect(screen.getByRole("note", { name: "Broken file reference: missing.txt" })).toBeTruthy();
+    expect(rendered.container.textContent).toContain("<img src=x>");
+    expect(rendered.container.querySelector("img,script,svg")).toBeNull();
+    expect(screen.getByText("Comment deleted.")).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Download Документ.docx" })).toBeNull();
+    expect(api.listProjectFiles).not.toHaveBeenCalled();
+  });
+
+  it("inserts canonical Unicode file references into create and edit flows and preserves fingerprints", async () => {
+    const existing = comment("N-26-EDIT1", "Before selected after");
+    const created = comment("N-26-NEWFILE", "");
+    const createComment = vi.fn(async (_d: string, _p: string, _t: string, _fingerprint: string, body: string) => ({ ...created, document: { ...created.document, body_markdown: body }, draft_fingerprint: "f".repeat(64) }));
+    const updateComment = vi.fn(async (_d: string, _p: string, _t: string, original: CommentResult, _fingerprint: string, body: string) => ({ ...original, document: { ...original.document, body_markdown: body }, draft_fingerprint: "9".repeat(64) }));
+    const onFingerprintChange = vi.fn(async () => undefined);
+    const api = { listComments: vi.fn(async () => [existing]), createComment, updateComment } as unknown as GitPmApi;
+
+    render(<TaskComments api={api} confirmDelete={() => true} draft={draft} fileContext={fileContext} fingerprint={draft.fingerprint} locale="en" onFingerprintChange={onFingerprintChange} onNavigate={() => undefined} people={[anna]} projectId={files.project_id} readOnly={false} taskId="T-26-P9G3P8" />);
+    const composer = await screen.findByLabelText("Add comment") as HTMLTextAreaElement;
+    fireEvent.change(composer, { target: { value: "Согласно  и @Ann", selectionStart: 10 } });
+    composer.setSelectionRange(9, 9);
+    fireEvent.click(screen.getAllByRole("button", { name: "Insert file" })[0]!);
+    fireEvent.click(screen.getByRole("button", { name: "Insert a link to ТЗ @team [финал].pdf" }));
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(composer.value).toContain("[[file:ТЗ @team \\[финал\\].pdf]]");
+    fireEvent.click(screen.getByRole("button", { name: /^Comment/iu }));
+    await waitFor(() => expect(createComment).toHaveBeenCalledWith(draft.draft_id, files.project_id, "T-26-P9G3P8", existing.draft_fingerprint, expect.stringContaining("[[file:ТЗ @team \\[финал\\].pdf]]")));
+    await waitFor(() => expect(onFingerprintChange).toHaveBeenCalledWith("f".repeat(64)));
+
+    const existingArticle = document.getElementById(`comment-${existing.document.id}`)!;
+    fireEvent.click(within(existingArticle).getByLabelText("Comment actions"));
+    fireEvent.click(within(existingArticle).getByRole("button", { name: "Edit" }));
+    const editor = screen.getByLabelText("Edit") as HTMLTextAreaElement;
+    editor.setSelectionRange(7, 15);
+    fireEvent.click(within(existingArticle).getByRole("button", { name: "Insert file" }));
+    fireEvent.click(within(existingArticle).getByRole("button", { name: "Insert a link to Документ.docx" }));
+    fireEvent.click(within(existingArticle).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(updateComment).toHaveBeenCalledWith(draft.draft_id, files.project_id, "T-26-P9G3P8", existing, "f".repeat(64), "Before [[file:Документ.docx]] after"));
+    expect(onFingerprintChange).toHaveBeenLastCalledWith("9".repeat(64));
+  });
+
+  it("keeps file references neutral during loading and disables picker in read-only comments", async () => {
+    const existing = comment("N-26-READ01", "[[file:Документ.docx]]");
+    const api = { listComments: vi.fn(async () => [existing]) } as unknown as GitPmApi;
+    render(<TaskComments api={api} confirmDelete={() => true} draft={draft} fileContext={{ ...fileContext, files: null, loadState: { status: "loading" } }} fingerprint={draft.fingerprint} locale="en" onFingerprintChange={async () => undefined} onNavigate={() => undefined} people={[]} projectId={files.project_id} readOnly taskId="T-26-P9G3P8" />);
+    expect(await screen.findByLabelText("File reference not checked: Документ.docx")).toBeTruthy();
+    expect(screen.queryByLabelText("Add comment")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Insert file" })).toBeNull();
   });
 });
 

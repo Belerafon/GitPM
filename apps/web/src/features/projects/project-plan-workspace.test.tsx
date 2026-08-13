@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, type GitPmApi } from "../../api.js";
+import { ApiError, type GitPmApi, type TimeEntryResult } from "../../api.js";
 import type { ProjectFileList } from "@gitpm/contracts";
 import type { AdvancedViewQuery } from "../../advanced-view-query.js";
-import type { ConfigurationDocument, ConfigurationResult, DraftStatus, EntityDocument, EntityResult } from "../../types.js";
+import type { CommentResult, ConfigurationDocument, ConfigurationResult, DraftStatus, EntityDocument, EntityResult } from "../../types.js";
 import { ProjectPlanWorkspace } from "./project-plan-workspace.js";
 
 const fingerprint = "b".repeat(64);
@@ -163,6 +163,32 @@ describe("ProjectPlanWorkspace", () => {
 
     rendered.rerender(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} selectedStageId={linkedStage.document.id} />);
     expect((await screen.findAllByRole("link", { name: "Open ТЗ [финал].pdf in a new tab" })).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("shares the one Project file list and its refresh with Task comments and time notes", async () => {
+    const client = api([linked]);
+    const comment: CommentResult = {
+      document: { schema: "gitpm/comment@1", id: "N-26-FILEREF", project: project.document.id, task: linked.document.id, author: { provider: "git", subject: "ada@example.test", display_name: "Ada" }, created_at: "2026-08-13T10:00:00.000Z", state: "active", body_markdown: "Comment [[file:ТЗ \\[финал\\].pdf]]", mentions: [] },
+      path: `projects/${project.document.id}/comments/${linked.document.id}/N-26-FILEREF.yaml`, blob_id: "c".repeat(40), draft_fingerprint: fingerprint, can_edit: false, can_delete: false,
+    };
+    const timeEntry: TimeEntryResult = {
+      document: { schema: "gitpm/time-entry@1", id: "E-26-FILEREF", project: project.document.id, task: linked.document.id, person: person.document.id, performed_on: "2026-08-13", hours: 1, category: "regular", created_at: "2026-08-13T10:00:00.000Z", state: "active", note_markdown: "Time [[file:ТЗ \\[финал\\].pdf]]" },
+      path: `projects/${project.document.id}/time-entries/${linked.document.id}/E-26-FILEREF.yaml`, blob_id: "d".repeat(40), draft_fingerprint: fingerprint,
+    };
+    const listComments = vi.fn(async () => [comment]);
+    const listTimeEntries = vi.fn(async () => [timeEntry]);
+    Object.assign(client, { listComments, listTimeEntries });
+    client.listProjectFiles.mockResolvedValueOnce({ project_id: project.document.id, count: 0, total_size_bytes: 0, items: [], draft_fingerprint: fingerprint })
+      .mockResolvedValueOnce({ project_id: project.document.id, count: 1, total_size_bytes: 12, items: [projectFile], draft_fingerprint: fingerprint });
+
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} selectedTaskId={linked.document.id} />);
+    await waitFor(() => expect(screen.getAllByRole("note", { name: "Broken file reference: ТЗ [финал].pdf" })).toHaveLength(2));
+    fireEvent.click(screen.getByRole("button", { name: /Files/u }));
+    await waitFor(() => expect(within(document.querySelector(".task-comments")!).getByRole("link", { name: "Open ТЗ [финал].pdf in a new tab" })).toBeTruthy());
+    expect(within(document.querySelector(".task-time-entries")!).getByRole("link", { name: "Open ТЗ [финал].pdf in a new tab" })).toBeTruthy();
+    expect(client.listProjectFiles).toHaveBeenCalledTimes(2);
+    expect(listComments).toHaveBeenCalledOnce();
+    expect(listTimeEntries).toHaveBeenCalledOnce();
   });
 
   it("inserts canonical references in Project and Task fields while preserving acceptance criteria elements", async () => {
