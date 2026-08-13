@@ -250,6 +250,30 @@ textarea { min-height: 76px; resize: vertical; border: 1px solid #c9cbc5; border
 .project-files-state { display: grid; min-height: 220px; place-content: center; justify-items: center; gap: .65rem; color: #68706b; text-align: center; }
 .project-files-empty strong { color: #315f50; font-size: 1rem; }
 .project-files-error { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+.project-files-readonly { margin: 0; border-radius: 8px; background: #f4f1e5; padding: .65rem .75rem; color: #665b32; font-size: .76rem; }
+.project-files-dropzone { display: grid; min-height: 64px; place-items: center; border: 2px dashed #c6cec8; border-radius: 10px; background: #fafbf9; padding: .75rem; color: #68716b; font-size: .78rem; text-align: center; transition: border-color .12s ease, background .12s ease; }
+.project-files-dropzone.is-dragging { border-color: #4f876c; background: #eaf4ed; color: #285c43; }
+.project-files-upload-queue { display: grid; gap: .55rem; border: 1px solid #dfe4df; border-radius: 10px; background: #f8faf8; padding: .7rem; }
+.project-files-queue-heading { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+.project-files-queue-heading button { padding: .34rem .5rem; font-size: .7rem; }
+.project-files-upload-queue ul { display: grid; gap: .45rem; margin: 0; padding: 0; list-style: none; }
+.project-files-upload-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .35rem .75rem; border: 1px solid #e0e4df; border-radius: 8px; background: #fff; padding: .6rem; }
+.project-files-upload-item > div:first-child { display: grid; min-width: 0; gap: .12rem; }
+.project-files-upload-item > div:first-child strong { overflow: hidden; font-size: .78rem; text-overflow: ellipsis; white-space: nowrap; }
+.project-files-upload-item > div:first-child span { color: #717873; font-size: .68rem; }
+.project-files-upload-item progress { grid-column: 1 / -1; width: 100%; accent-color: #397457; }
+.project-files-upload-actions { display: flex; align-items: start; gap: .35rem; }
+.project-files-upload-actions button, .project-files-conflict button { padding: .35rem .5rem; font-size: .7rem; }
+.project-files-upload-error { grid-column: 1 / -1; color: #9b302c; font-size: .7rem; overflow-wrap: anywhere; }
+.project-files-conflict { display: flex; grid-column: 1 / -1; flex-wrap: wrap; align-items: end; gap: .45rem; border-top: 1px solid #eceeea; padding-top: .5rem; }
+.project-files-conflict > span { flex-basis: 100%; color: #755f24; font-size: .72rem; }
+.project-files-conflict label { display: grid; flex: 1 1 220px; gap: .2rem; color: #59645d; font-size: .68rem; }
+.project-file-large-dialog { position: fixed; z-index: 45; inset: 0; display: grid; place-items: center; background: rgba(17, 30, 24, .48); padding: 1rem; }
+.project-file-large-card { display: grid; width: min(520px, 100%); gap: .8rem; border-radius: 12px; background: #fff; box-shadow: 0 20px 55px rgba(12, 28, 20, .28); padding: 1.25rem; }
+.project-file-large-card h3, .project-file-large-card p { margin: 0; }
+.project-file-large-card p { color: #59645d; font-size: .8rem; line-height: 1.5; overflow-wrap: anywhere; }
+.project-file-large-card label { display: grid; gap: .35rem; font-size: .76rem; font-weight: 650; }
+.project-file-large-actions { display: flex; justify-content: end; gap: .55rem; }
 .project-files-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: .75rem; margin: 0; padding: 0; list-style: none; }
 .project-file-tile { display: grid; min-width: 0; min-height: 142px; justify-items: center; align-content: start; gap: .34rem; border: 1px solid #dce1db; border-radius: 10px; background: #fbfcfa; padding: .8rem .55rem .65rem; text-align: center; }
 .project-file-icon { width: 52px; height: 64px; overflow: visible; }

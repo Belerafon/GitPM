@@ -79,6 +79,87 @@ describe("HttpGitPmApi request bodies", () => {
     expect(fetchMock).toHaveBeenCalledWith("/api/drafts/DRF%2F1/projects/P-26-MGP84K/files", expect.objectContaining({ credentials: "include" }));
   });
 
+  it("uploads exact binary bytes with Unicode metadata and optional large-file confirmation", async () => {
+    const bytes = new Uint8Array([0, 255, 17, 128]);
+    const file = Object.assign(new Blob([bytes]), { name: "ТЗ <final>.bin", lastModified: 0 }) as File;
+    const payload = { project_id: "P-26-MGP84K", operation: "created", item: { name: file.name, path: `projects/P-26-MGP84K/files/${file.name}`, size_bytes: bytes.length, media_type: "application/octet-stream", disposition: "attachment", modified_at: "2026-08-13T10:00:00.000Z", modified_at_source: "working_copy_filesystem" }, draft_fingerprint: "c".repeat(64) };
+    const listeners = new Map<string, () => void>();
+    const progressListeners: Array<(event: ProgressEvent) => void> = [];
+    const xhr = {
+      status: 201, statusText: "Created", responseText: JSON.stringify(payload), withCredentials: false, body: undefined as Document | XMLHttpRequestBodyInit | null | undefined,
+      headers: new Map<string, string>(), method: "", path: "",
+      upload: { addEventListener: (_type: string, listener: EventListenerOrEventListenerObject) => progressListeners.push(listener as (event: ProgressEvent) => void) },
+      open(method: string, path: string) { this.method = method; this.path = path; },
+      setRequestHeader(name: string, value: string) { this.headers.set(name, value); },
+      addEventListener(type: string, listener: EventListenerOrEventListenerObject) { listeners.set(type, listener as () => void); },
+      send(body: Document | XMLHttpRequestBodyInit | null) { this.body = body; progressListeners.forEach((listener) => listener({ loaded: 2, total: 4, lengthComputable: true } as ProgressEvent)); listeners.get("load")?.(); },
+      abort() { listeners.get("abort")?.(); },
+    };
+    const XhrConstructor = function XhrConstructor() { return xhr; } as unknown as typeof XMLHttpRequest;
+    vi.stubGlobal("XMLHttpRequest", XhrConstructor);
+    const onProgress = vi.fn();
+
+    expect(await new HttpGitPmApi().uploadProjectFile("DRF/1", "P-26-MGP84K", "b".repeat(64), file, file.name, "create", { largeFileConfirmation: file.name, onProgress })).toEqual(payload);
+
+    expect(xhr.path).toBe("/api/drafts/DRF%2F1/projects/P-26-MGP84K/files/upload");
+    expect(xhr.body).toBe(file);
+    expect(xhr.withCredentials).toBe(true);
+    expect(xhr.headers.get("content-type")).toBe("application/octet-stream");
+    expect(xhr.headers.get("x-gitpm-file-name")).toBe(encodeURIComponent(file.name));
+    expect(xhr.headers.get("x-gitpm-upload-size")).toBe("4");
+    expect(xhr.headers.get("x-gitpm-expected-fingerprint")).toBe("b".repeat(64));
+    expect(xhr.headers.get("x-gitpm-upload-mode")).toBe("create");
+    expect(xhr.headers.get("x-gitpm-large-file-confirmation")).toBe(encodeURIComponent(file.name));
+    expect(new Uint8Array(await (xhr.body as Blob).arrayBuffer())).toEqual(bytes);
+    expect(onProgress).toHaveBeenCalledWith(2, 4);
+  });
+
+  it("uploads a zero-byte file without adding large-file confirmation", async () => {
+    const file = Object.assign(new Blob([]), { name: "пустой файл", lastModified: 0 }) as File;
+    const payload = { project_id: "P-26-MGP84K", operation: "created", item: { name: file.name, path: `projects/P-26-MGP84K/files/${file.name}`, size_bytes: 0, media_type: "application/octet-stream", disposition: "attachment", modified_at: "2026-08-13T10:00:00.000Z", modified_at_source: "working_copy_filesystem" }, draft_fingerprint: "c".repeat(64) };
+    const listeners = new Map<string, () => void>();
+    const xhr = { status: 201, statusText: "Created", responseText: JSON.stringify(payload), withCredentials: false, headers: new Map<string, string>(), upload: { addEventListener: vi.fn() }, open: vi.fn(), setRequestHeader(name: string, value: string) { this.headers.set(name, value); }, addEventListener(type: string, listener: EventListenerOrEventListenerObject) { listeners.set(type, listener as () => void); }, send: vi.fn(() => listeners.get("load")?.()), abort: vi.fn() };
+    const XhrConstructor = function XhrConstructor() { return xhr; } as unknown as typeof XMLHttpRequest;
+    vi.stubGlobal("XMLHttpRequest", XhrConstructor);
+
+    await new HttpGitPmApi().uploadProjectFile("DRF-1", "P-26-MGP84K", "b".repeat(64), file, file.name, "create");
+
+    expect(xhr.headers.has("x-gitpm-large-file-confirmation")).toBe(false);
+  });
+
+  it("decodes structured upload errors returned by the raw XHR route", async () => {
+    const listeners = new Map<string, () => void>();
+    const xhr = {
+      status: 403, statusText: "Forbidden", responseText: JSON.stringify({ error: { code: "FORBIDDEN", message: "Reporter cannot upload", details: [{ field: "role" }] } }), withCredentials: false,
+      upload: { addEventListener: vi.fn() }, open: vi.fn(), setRequestHeader: vi.fn(),
+      addEventListener(type: string, listener: EventListenerOrEventListenerObject) { listeners.set(type, listener as () => void); },
+      send: vi.fn(() => listeners.get("load")?.()), abort: vi.fn(),
+    };
+    const XhrConstructor = function XhrConstructor() { return xhr; } as unknown as typeof XMLHttpRequest;
+    vi.stubGlobal("XMLHttpRequest", XhrConstructor);
+
+    await expect(new HttpGitPmApi().uploadProjectFile("DRF-1", "P-26-MGP84K", "b".repeat(64), new Blob([]), "report.bin", "create")).rejects.toEqual(expect.objectContaining({ code: "FORBIDDEN", message: "Reporter cannot upload", details: [{ field: "role" }] }));
+  });
+
+  it("aborts the raw XHR upload through AbortSignal", async () => {
+    const listeners = new Map<string, () => void>();
+    const xhr = {
+      status: 0, statusText: "", responseText: "", withCredentials: false,
+      upload: { addEventListener: vi.fn() }, open: vi.fn(), setRequestHeader: vi.fn(),
+      addEventListener(type: string, listener: EventListenerOrEventListenerObject) { listeners.set(type, listener as () => void); },
+      send: vi.fn(), abort: vi.fn(() => listeners.get("abort")?.()),
+    };
+    const XhrConstructor = function XhrConstructor() { return xhr; } as unknown as typeof XMLHttpRequest;
+    vi.stubGlobal("XMLHttpRequest", XhrConstructor);
+    const controller = new AbortController();
+    const promise = new HttpGitPmApi().uploadProjectFile("DRF-1", "P-26-MGP84K", "b".repeat(64), new Blob(["data"]), "cancel.bin", "create", { signal: controller.signal });
+
+    controller.abort();
+
+    await expect(promise).rejects.toEqual(expect.objectContaining({ name: "AbortError" }));
+    expect(xhr.abort).toHaveBeenCalledOnce();
+  });
+
   it("decodes the project time-entry envelope and serializes filters", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({
       total: 1,

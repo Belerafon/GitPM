@@ -1,5 +1,5 @@
 import { activeProjectIds, ENTITY_ID_PREFIX, isOperationalTask, newUniqueEntityId } from "@gitpm/shared";
-import type { ProjectFileList, ProjectPlanning } from "@gitpm/contracts";
+import type { ProjectFileList, ProjectFileUploadResult, ProjectPlanning } from "@gitpm/contracts";
 import { resolveSchedulingHierarchy, validatePlanning, windowEffort, type PlanningSettings, type SchedulingHierarchyTask } from "@gitpm/scheduling";
 import { buildSchedule, ScheduleResolver, scheduleTracksConfig, scheduleTextReader, scheduleEffortReader, withSchedulesMap, type ScheduleMap } from "../../schedules.js";
 import { isBlockedStatus, isCompletedStatus, isInProgressStatus } from "../../status-categories.js";
@@ -249,6 +249,23 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
       { keepData },
     );
   }, [api, draft.draft_id, projectId, runFilesLoad]);
+
+  const handleProjectFileUploaded = useCallback((result: ProjectFileUploadResult) => {
+    setProjectFiles((current) => {
+      if (current === null) return { project_id: result.project_id, count: 1, total_size_bytes: result.item.size_bytes, items: [result.item], draft_fingerprint: result.draft_fingerprint };
+      const previous = current.items.find((item) => item.name === result.item.name);
+      const items = previous === undefined ? [...current.items, result.item] : current.items.map((item) => item.name === result.item.name ? result.item : item);
+      return {
+        ...current,
+        count: items.length,
+        total_size_bytes: current.total_size_bytes - (previous?.size_bytes ?? 0) + result.item.size_bytes,
+        items,
+        draft_fingerprint: result.draft_fingerprint,
+      };
+    });
+    setWorkspace((current) => current === null ? current : { ...current, draft_fingerprint: result.draft_fingerprint });
+    void onChanged();
+  }, [onChanged]);
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { void loadProjectFiles(false); }, [loadProjectFiles]);
@@ -871,13 +888,19 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     </AsyncBoundary>
 
     <ProjectFilesPanel
+      api={api}
+      draftId={draft.draft_id}
+      fingerprint={projectFiles?.draft_fingerprint ?? workspace?.draft_fingerprint ?? draft.fingerprint}
       list={projectFiles}
       loadState={filesLoadState}
       locale={locale}
       onClose={() => setFilesOpen(false)}
       onReload={() => { void loadProjectFiles(); }}
+      onUploaded={handleProjectFileUploaded}
       onViewChange={setFilesView}
       open={filesOpen}
+      projectId={projectId}
+      readOnly={readOnly}
       view={filesView}
     />
 

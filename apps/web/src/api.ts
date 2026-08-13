@@ -19,6 +19,7 @@ import {
   decodeNotifications,
   decodeProjectWorkspace,
   decodeProjectFileList,
+  decodeProjectFileUploadResult,
   decodePublicSession,
   decodePushResult,
   decodeRepositoryConnectionStatus,
@@ -39,6 +40,7 @@ import {
   type ConfigurationResult,
   type Decoder,
   type ProjectFileList,
+  type ProjectFileUploadResult,
 } from "@gitpm/contracts";
 import type { ChangesList, CommentResult, CommitFileDiff, CommitHistoryDetail, CommitHistoryItem, CommitResult, ConfigurationImpact, DirectRevertResult, DraftSnapshot, DraftStatus, EntityResult, GitPmDocument, GlobalSearchResult, MergeRequestStatus, NotificationsResult, ProjectWorkspaceResult, PublicSession, PushResult, RepositoryConnectionStatus, RepositoryConnectionTest, RepositoryConnectionUpdate, RepositoryDocument, RepositoryResult, RestoreCommitFilesResult, RevertDraftResult, SemanticDiff, TimeEntryDocument, WorkloadReport, WriterMode, WorktreeDirectory, WorktreeFile } from "./types.js";
 
@@ -176,6 +178,7 @@ export interface GitPmApi {
   getEntity(draftId: string, entityType: string, id: string): Promise<EntityResult>;
   projectWorkspace(draftId: string, projectId: string): Promise<ProjectWorkspaceResult>;
   listProjectFiles(draftId: string, projectId: string): Promise<ProjectFileList>;
+  uploadProjectFile(draftId: string, projectId: string, expectedFingerprint: string, file: Blob, name: string, mode: "create" | "replace", options?: ProjectFileUploadOptions): Promise<ProjectFileUploadResult>;
   createEntity(draftId: string, entityType: string, fingerprint: string, document: GitPmDocument): Promise<EntityResult>;
   updateEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string, document: GitPmDocument): Promise<EntityResult>;
   moveTask(draftId: string, entity: EntityResult, fingerprint: string, targetProject: string, targetMilestone?: string, targetParent?: string): Promise<EntityResult>;
@@ -221,6 +224,12 @@ export interface GitPmApi {
   createTimeEntry(draftId: string, projectId: string, taskId: string, fingerprint: string, input: { readonly person: string; readonly performed_on: string; readonly hours: number; readonly category: string; readonly note_markdown?: string }): Promise<TimeEntryResult>;
   voidTimeEntry(draftId: string, projectId: string, taskId: string, entry: TimeEntryResult, fingerprint: string): Promise<TimeEntryResult>;
   replaceTimeEntry(draftId: string, projectId: string, taskId: string, entry: TimeEntryResult, fingerprint: string, input: { readonly person: string; readonly performed_on: string; readonly hours: number; readonly category: string; readonly note_markdown?: string }): Promise<TimeEntryReplacementResult>;
+}
+
+export interface ProjectFileUploadOptions {
+  readonly largeFileConfirmation?: string;
+  readonly signal?: AbortSignal;
+  readonly onProgress?: (loaded: number, total: number) => void;
 }
 
 export interface LifecycleMutationOptions {
@@ -378,6 +387,38 @@ export class HttpGitPmApi implements GitPmApi {
   }
   async listProjectFiles(draftId: string, projectId: string): Promise<ProjectFileList> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/projects/${encodeURIComponent(projectId)}/files`, decodeProjectFileList);
+  }
+  async uploadProjectFile(draftId: string, projectId: string, expectedFingerprint: string, file: Blob, name: string, mode: "create" | "replace", options: ProjectFileUploadOptions = {}): Promise<ProjectFileUploadResult> {
+    const path = `${this.baseUrl}/api/drafts/${encodeURIComponent(draftId)}/projects/${encodeURIComponent(projectId)}/files/upload`;
+    return await new Promise<ProjectFileUploadResult>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      const abort = () => xhr.abort();
+      const finish = () => options.signal?.removeEventListener("abort", abort);
+      xhr.open("POST", path);
+      xhr.withCredentials = true;
+      xhr.setRequestHeader("content-type", "application/octet-stream");
+      xhr.setRequestHeader("x-gitpm-file-name", encodeURIComponent(name));
+      xhr.setRequestHeader("x-gitpm-upload-size", String(file.size));
+      xhr.setRequestHeader("x-gitpm-expected-fingerprint", expectedFingerprint);
+      xhr.setRequestHeader("x-gitpm-upload-mode", mode);
+      if (options.largeFileConfirmation !== undefined) xhr.setRequestHeader("x-gitpm-large-file-confirmation", encodeURIComponent(options.largeFileConfirmation));
+      xhr.upload.addEventListener("progress", (event) => options.onProgress?.(event.loaded, event.lengthComputable ? event.total : file.size));
+      xhr.addEventListener("load", () => {
+        finish();
+        let body: unknown;
+        try { body = JSON.parse(xhr.responseText); } catch { body = undefined; }
+        if (xhr.status < 200 || xhr.status >= 300) {
+          const error = body !== null && typeof body === "object" ? (body as ErrorBody).error : undefined;
+          reject(new ApiError(error?.code ?? `HTTP_${xhr.status}`, error?.message ?? xhr.statusText, error?.details));
+          return;
+        }
+        try { resolve(decodeProjectFileUploadResult(body)); } catch (error) { reject(error); }
+      });
+      xhr.addEventListener("error", () => { finish(); reject(new ApiError("NETWORK_ERROR", "Project file upload failed")); });
+      xhr.addEventListener("abort", () => { finish(); reject(new DOMException("Project file upload was cancelled", "AbortError")); });
+      options.signal?.addEventListener("abort", abort, { once: true });
+      if (options.signal?.aborted === true) abort(); else xhr.send(file);
+    });
   }
   async createEntity(draftId: string, entityType: string, expected_fingerprint: string, document: GitPmDocument): Promise<EntityResult> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/entities/${encodeURIComponent(entityType)}`, decodeEntityResult, { method: "POST", body: JSON.stringify({ expected_fingerprint, document }) });

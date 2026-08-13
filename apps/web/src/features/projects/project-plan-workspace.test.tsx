@@ -53,6 +53,7 @@ function api(
   const restoreEntity = vi.fn(async (_draftId: string, type: string, entity: EntityResult, _fingerprint: string, options: { readonly includeTasks?: boolean } = {}) => await transition(type, entity, "active", options));
   const deleteEntity = vi.fn(async () => undefined);
   const listProjectFiles = vi.fn(async (): Promise<ProjectFileList> => ({ project_id: currentProject.document.id, count: 0, total_size_bytes: 0, items: [], draft_fingerprint: fingerprint }));
+  const uploadProjectFile = vi.fn();
   return {
     projectWorkspace: vi.fn(async () => ({ project: currentProject, milestones: currentStages, tasks: currentTasks, draft_fingerprint: fingerprint })),
     getConfiguration: vi.fn(async (_draftId: string, kind: "statuses" | "issue-types" | "schedule-tracks") => configuration(kind === "statuses"
@@ -62,12 +63,13 @@ function api(
       : { schema: "gitpm/issue-types@1", issue_types: [{ slug: "task", title: "Task", active: true }] })),
     listEntities: vi.fn(async (_draftId: string, type: string) => type === "people" ? [person] : type === "projects" ? [currentProject, archivedProject] : []),
     listProjectFiles,
+    uploadProjectFile,
     createEntity,
     updateEntity,
     archiveEntity,
     restoreEntity,
     deleteEntity,
-  } as unknown as GitPmApi & { createEntity: typeof createEntity; updateEntity: typeof updateEntity; archiveEntity: typeof archiveEntity; restoreEntity: typeof restoreEntity; deleteEntity: typeof deleteEntity; listProjectFiles: typeof listProjectFiles };
+  } as unknown as GitPmApi & { createEntity: typeof createEntity; updateEntity: typeof updateEntity; archiveEntity: typeof archiveEntity; restoreEntity: typeof restoreEntity; deleteEntity: typeof deleteEntity; listProjectFiles: typeof listProjectFiles; uploadProjectFile: typeof uploadProjectFile };
 }
 
 afterEach(() => { cleanup(); localStorage.clear(); vi.useRealTimers(); });
@@ -164,7 +166,19 @@ describe("ProjectPlanWorkspace", () => {
     const closedDraft = { ...draft, state: "closed" as const };
     render(<ProjectPlanWorkspace api={client} draft={closedDraft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={archivedProject.document.id} />);
 
-    expect(await screen.findByRole("button", { name: /Files/u })).not.toHaveProperty("disabled", true);
+    const trigger = await screen.findByRole("button", { name: /Files/u });
+    expect(trigger).not.toHaveProperty("disabled", true);
+    fireEvent.click(trigger);
+    expect(await screen.findByRole("button", { name: "Upload files" })).toHaveProperty("disabled", true);
+  });
+
+  it("disables uploads in external writer mode while keeping the file list available", async () => {
+    const client = api();
+    render(<ProjectPlanWorkspace api={client} draft={{ ...draft, writer_mode: "external" }} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Files/u }));
+    expect(await screen.findByRole("button", { name: "Upload files" })).toHaveProperty("disabled", true);
+    expect(screen.getByText("Uploads are unavailable while this draft is read-only.")).toBeTruthy();
   });
 
   it("keeps the Project usable after an initial file-list failure and synchronizes count on retry", async () => {
@@ -185,6 +199,46 @@ describe("ProjectPlanWorkspace", () => {
 
     expect(await screen.findByRole("dialog", { name: "Project files · 3" })).toBeTruthy();
     expect(within(trigger).getByText("3")).toBeTruthy();
+  });
+
+  it("updates the Project file count and mutation fingerprint immediately after upload", async () => {
+    const client = api();
+    const onChanged = vi.fn(async () => undefined);
+    const uploadedFile = new File([new Uint8Array([0, 1, 255])], "новое ТЗ.bin");
+    client.uploadProjectFile.mockResolvedValue({
+      project_id: project.document.id,
+      operation: "created",
+      item: { name: uploadedFile.name, path: `projects/${project.document.id}/files/${uploadedFile.name}`, size_bytes: 3, media_type: "application/octet-stream", disposition: "attachment", modified_at: "2026-08-13T10:00:00.000Z", modified_at_source: "working_copy_filesystem" },
+      draft_fingerprint: "c".repeat(64),
+    });
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="ru" onChanged={onChanged} onNavigate={vi.fn()} projectId={project.document.id} />);
+    const trigger = await screen.findByRole("button", { name: /Файлы/u });
+    await waitFor(() => expect(within(trigger).getByText("0")).toBeTruthy());
+    fireEvent.click(trigger);
+    fireEvent.change(await screen.findByLabelText("Выбрать файлы проекта для загрузки"), { target: { files: [uploadedFile] } });
+
+    await waitFor(() => expect(client.uploadProjectFile).toHaveBeenCalledWith(draft.draft_id, project.document.id, fingerprint, uploadedFile, uploadedFile.name, "create", expect.any(Object)));
+    await waitFor(() => expect(within(trigger).getByText("1")).toBeTruthy());
+    expect(screen.getAllByText(uploadedFile.name)).toHaveLength(2);
+    expect(onChanged).toHaveBeenCalledOnce();
+  });
+
+  it("upserts a replaced file without increasing the Project file count", async () => {
+    const client = api();
+    const existing = { name: "ТЗ.docx", path: `projects/${project.document.id}/files/ТЗ.docx`, size_bytes: 10, media_type: "application/octet-stream", disposition: "attachment" as const, modified_at: "2026-08-13T10:00:00.000Z", modified_at_source: "working_copy_filesystem" as const };
+    client.listProjectFiles.mockResolvedValue({ project_id: project.document.id, count: 1, total_size_bytes: 10, items: [existing], draft_fingerprint: fingerprint });
+    const replacement = new File([new Uint8Array(20)], existing.name);
+    client.uploadProjectFile.mockResolvedValue({ project_id: project.document.id, operation: "replaced", item: { ...existing, size_bytes: 20 }, draft_fingerprint: "c".repeat(64) });
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} />);
+    const trigger = await screen.findByRole("button", { name: /Files/u });
+    await waitFor(() => expect(within(trigger).getByText("1")).toBeTruthy());
+    fireEvent.click(trigger);
+    fireEvent.change(await screen.findByLabelText("Select project files to upload"), { target: { files: [replacement] } });
+    fireEvent.click(await screen.findByRole("button", { name: "Replace current file" }));
+
+    await waitFor(() => expect(client.uploadProjectFile).toHaveBeenCalledWith(draft.draft_id, project.document.id, fingerprint, replacement, replacement.name, "replace", expect.any(Object)));
+    expect(within(trigger).getByText("1")).toBeTruthy();
+    expect(screen.getAllByText(existing.name)).toHaveLength(2);
   });
 
   it("creates a Milestone from the live Project route with the simplified primary-track form", async () => {
