@@ -160,6 +160,13 @@ export interface ProjectFileList {
   readonly draft_fingerprint: string;
 }
 
+export interface ProjectFileUploadResult {
+  readonly project_id: string;
+  readonly operation: "created" | "replaced";
+  readonly item: ProjectFileItem;
+  readonly draft_fingerprint: string;
+}
+
 export type ChangeKind = "Added" | "Modified" | "Deleted";
 
 export interface DiffHunk {
@@ -653,6 +660,13 @@ const projectFileListSchema = objectSchema({
   draft_fingerprint: stringSchema,
 });
 
+const projectFileUploadResultSchema = objectSchema({
+  project_id: stringSchema,
+  operation: { enum: ["created", "replaced"] },
+  item: projectFileItemSchema,
+  draft_fingerprint: stringSchema,
+});
+
 const commentResultSchema = objectSchema({
   document: { $ref: "https://gitpm.dev/schemas/v1/comment.schema.json" },
   path: stringSchema,
@@ -760,6 +774,7 @@ export const HTTP_RESPONSE_SCHEMAS = {
   worktreeDirectory: worktreeDirectorySchema,
   worktreeFile: worktreeFileSchema,
   projectFileList: projectFileListSchema,
+  projectFileUploadResult: projectFileUploadResultSchema,
   worktreeEntryMutation: objectSchema({ path: stringSchema, draft_fingerprint: stringSchema }),
   worktreeFileMutation: objectSchema({ path: stringSchema, size: integerSchema, draft_fingerprint: stringSchema }),
   worktreeMoveMutation: objectSchema({ from: stringSchema, to: stringSchema, draft_fingerprint: stringSchema }),
@@ -818,6 +833,7 @@ export const decodeDirectRevertResult = createDecoder<DirectRevertResult>("Direc
 export const decodeWorktreeDirectory = createDecoder<WorktreeDirectory>("WorktreeDirectory", HTTP_RESPONSE_SCHEMAS.worktreeDirectory);
 export const decodeWorktreeFile = createDecoder<WorktreeFile>("WorktreeFile", HTTP_RESPONSE_SCHEMAS.worktreeFile);
 export const decodeProjectFileList = createDecoder<ProjectFileList>("ProjectFileList", HTTP_RESPONSE_SCHEMAS.projectFileList);
+export const decodeProjectFileUploadResult = createDecoder<ProjectFileUploadResult>("ProjectFileUploadResult", HTTP_RESPONSE_SCHEMAS.projectFileUploadResult);
 export const decodeWorktreeEntryMutation = createDecoder<{ readonly path: string; readonly draft_fingerprint: string }>("WorktreeEntryMutation", HTTP_RESPONSE_SCHEMAS.worktreeEntryMutation);
 export const decodeWorktreeFileMutation = createDecoder<{ readonly path: string; readonly size: number; readonly draft_fingerprint: string }>("WorktreeFileMutation", HTTP_RESPONSE_SCHEMAS.worktreeFileMutation);
 export const decodeWorktreeMoveMutation = createDecoder<{ readonly from: string; readonly to: string; readonly draft_fingerprint: string }>("WorktreeMoveMutation", HTTP_RESPONSE_SCHEMAS.worktreeMoveMutation);

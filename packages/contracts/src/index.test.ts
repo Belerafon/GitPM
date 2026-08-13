@@ -12,6 +12,7 @@ import {
   decodeGlobalSearchResult,
   decodeNotifications,
   decodeProjectFileList,
+  decodeProjectFileUploadResult,
   describeAjvError,
   summarizeAjvErrors,
 } from "./index.js";
@@ -132,6 +133,25 @@ describe("@gitpm/contracts runtime contracts", () => {
     });
     expect(result.items[0]?.name).toBe("ТЗ v3.pdf");
     expect(() => decodeProjectFileList({ ...result, items: [{ ...result.items[0], disposition: "execute" }] })).toThrow(ApiContractError);
+  });
+
+  it("decodes Project file upload results with an explicit operation", () => {
+    const result = decodeProjectFileUploadResult({
+      project_id: "P-26-MGP84K",
+      operation: "created",
+      item: {
+        name: "ТЗ v4.docx",
+        path: "projects/P-26-MGP84K/files/ТЗ v4.docx",
+        size_bytes: 0,
+        media_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        disposition: "attachment",
+        modified_at: "2026-08-13T10:00:00.000Z",
+        modified_at_source: "working_copy_filesystem",
+      },
+      draft_fingerprint: "e".repeat(64),
+    });
+    expect(result.operation).toBe("created");
+    expect(() => decodeProjectFileUploadResult({ ...result, operation: "overwritten" })).toThrow(ApiContractError);
   });
 
   it("derives entity and CLI schema catalogs from the shared registry", () => {

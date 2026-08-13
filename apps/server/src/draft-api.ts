@@ -185,8 +185,11 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
       code = error.code;
       message = error.message;
       if (["ENTITY_NOT_FOUND", "PROJECT_FILE_NOT_FOUND"].includes(error.code)) status = 404;
-      else if (error.code === "PROJECT_FILE_PATH_FORBIDDEN") status = 403;
-      else if (["ENTITY_PROJECT_INVALID", "PROJECT_FILE_NAME_INVALID"].includes(error.code)) status = 400;
+      else if (["DRAFT_FORBIDDEN", "PROJECT_FILE_PATH_FORBIDDEN"].includes(error.code)) status = 403;
+      else if (["ENTITY_PROJECT_INVALID", "PROJECT_FILE_NAME_INVALID", "PROJECT_FILE_UPLOAD_METADATA_INVALID", "PROJECT_FILE_UPLOAD_SIZE_MISMATCH"].includes(error.code)) status = 400;
+      else if (error.code === "PROJECT_FILE_TOO_LARGE") status = 413;
+      else if (error.code === "PROJECT_FILE_UPLOAD_CONTENT_TYPE_REQUIRED") status = 415;
+      else if (error.code === "PROJECT_FILE_VALIDATION_FAILED") status = 422;
       else status = 409;
     } else if (error instanceof AuthError) {
       code = error.code;
@@ -231,6 +234,11 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
       code = "REQUEST_CONTRACT_INVALID";
       message = "Request body does not match the shared HTTP contract";
       details = error instanceof ApiContractError ? error.details : (error as { validation?: unknown }).validation;
+    } else if ((error as { code?: string }).code === "FST_ERR_CTP_INVALID_MEDIA_TYPE"
+      && /\/api\/drafts\/[^/]+\/projects\/[^/]+\/files\/upload$/u.test(request.url.split("?", 1)[0] ?? "")) {
+      status = 415;
+      code = "PROJECT_FILE_UPLOAD_CONTENT_TYPE_REQUIRED";
+      message = "Project file upload requires application/octet-stream";
     } else if ((error as { code?: string }).code === "FST_ERR_CTP_BODY_TOO_LARGE") {
       status = 413;
       code = "REQUEST_TOO_LARGE";

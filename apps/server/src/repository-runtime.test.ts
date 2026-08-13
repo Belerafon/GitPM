@@ -57,6 +57,16 @@ describe("normal repository runtime", () => {
     await expect(loadRepositoryRuntimeConfiguration()).rejects.toThrow(/GITPM_REPOSITORY_PATH/u);
   });
 
+  it("loads a positive Project file hard limit independently from the 50 MiB confirmation threshold", async () => {
+    const fixture = await fixtureRepository();
+    vi.stubEnv("GITPM_REPOSITORY_PATH", fixture.repository);
+    vi.stubEnv("GITPM_CONFIG_PATH", path.join(fixture.root, "missing-config.json"));
+    vi.stubEnv("GITPM_PROJECT_FILE_MAX_UPLOAD_BYTES", "73400320");
+    await expect(loadRepositoryRuntimeConfiguration()).resolves.toMatchObject({ projectFileMaxUploadBytes: 73_400_320 });
+    vi.stubEnv("GITPM_PROJECT_FILE_MAX_UPLOAD_BYTES", "not-a-size");
+    await expect(loadRepositoryRuntimeConfiguration()).rejects.toThrow(/positive integer number of bytes/u);
+  });
+
   it("opens the selected repository without login and keeps test fixtures out of runtime data", async () => {
     const fixture = await fixtureRepository();
     vi.stubEnv("GITPM_REPOSITORY_PATH", fixture.repository);

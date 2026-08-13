@@ -19,6 +19,7 @@ const MAX_CORRELATION_ID_LENGTH = 128;
 const REQUEST_BODY_LIMIT = 1_048_576;
 const UPLOAD_BODY_LIMIT = 15 * 1024 * 1024;
 const UPLOAD_PATH = /\/api\/drafts\/[^/]+\/worktree\/file$/u;
+const PROJECT_FILE_UPLOAD_PATH = /\/api\/drafts\/[^/]+\/projects\/[^/]+\/files\/upload$/u;
 const SAFE_CORRELATION_ID = /^[A-Za-z0-9._:-]+$/u;
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 const CONTENT_SECURITY_POLICY = [
@@ -97,6 +98,10 @@ export function buildApp(options: AppOptions = {}) {
   });
   const isReady = options.isReady ?? (() => true);
 
+  if (options.projectFileStore) {
+    app.addContentTypeParser("application/octet-stream", (_request, payload, done) => done(null, payload));
+  }
+
   app.addHook("onRequest", async (request, reply) => {
     reply.header("x-correlation-id", request.id);
     reply.header("content-security-policy", CONTENT_SECURITY_POLICY);
@@ -104,8 +109,23 @@ export function buildApp(options: AppOptions = {}) {
     reply.header("referrer-policy", "no-referrer");
     reply.header("x-content-type-options", "nosniff");
     reply.header("x-frame-options", "DENY");
+    const pathOnly = requestPath(request.url);
+    const projectFileUpload = PROJECT_FILE_UPLOAD_PATH.test(pathOnly);
+    if (projectFileUpload && request.headers["content-type"]?.split(";", 1)[0]?.trim().toLowerCase() !== "application/octet-stream") {
+      request.raw.resume();
+      await reply.code(415).send({
+        error: {
+          code: "PROJECT_FILE_UPLOAD_CONTENT_TYPE_REQUIRED",
+          message: "Project file upload requires application/octet-stream",
+          correlation_id: request.id,
+        },
+      });
+      return;
+    }
     const contentLength = Number(request.headers["content-length"]);
-    const bodyLimit = UPLOAD_PATH.test(requestPath(request.url)) ? UPLOAD_BODY_LIMIT : REQUEST_BODY_LIMIT;
+    const bodyLimit = projectFileUpload
+      ? Number.MAX_SAFE_INTEGER
+      : UPLOAD_PATH.test(pathOnly) ? UPLOAD_BODY_LIMIT : REQUEST_BODY_LIMIT;
     if (Number.isFinite(contentLength) && contentLength > bodyLimit) {
       // Keep draining the socket so clients receive a stable 413 instead of ECONNRESET
       // while they are still transmitting the rejected body.

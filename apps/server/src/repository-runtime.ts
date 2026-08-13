@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { ChangesService } from "@gitpm/changes";
 import { DirectRepositoryBackend, directPushStrategy, DraftManager } from "@gitpm/drafts";
-import { CommentStore, EntityStore, ProjectFileStore, TimeEntryStore } from "@gitpm/domain";
+import { CommentStore, DEFAULT_PROJECT_FILE_MAX_UPLOAD_BYTES, EntityStore, ProjectFileStore, TimeEntryStore } from "@gitpm/domain";
 import { GitClient, type GitClientSshOptions } from "@gitpm/git-client";
 import type { GitLabAuthMode } from "@gitpm/gitlab";
 import { assertSafeRepositoryUrl } from "@gitpm/security";
@@ -111,6 +111,18 @@ export interface RepositoryRuntimeConfiguration {
   readonly gitlab?: GitLabConnectionConfiguration;
   readonly gitlabAuthMode?: GitLabAuthMode;
   readonly gitlabProjectToken?: string;
+  readonly projectFileMaxUploadBytes?: number;
+}
+
+function projectFileMaxUploadBytes(config: Record<string, unknown>): number {
+  const raw = process.env.GITPM_PROJECT_FILE_MAX_UPLOAD_BYTES?.trim()
+    || config.projectFileMaxUploadBytes
+    || DEFAULT_PROJECT_FILE_MAX_UPLOAD_BYTES;
+  const value = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new Error("GITPM_PROJECT_FILE_MAX_UPLOAD_BYTES must be a positive integer number of bytes");
+  }
+  return value;
 }
 
 export async function loadRepositoryRuntimeConfiguration(): Promise<RepositoryRuntimeConfiguration> {
@@ -223,6 +235,7 @@ export async function loadRepositoryRuntimeConfiguration(): Promise<RepositoryRu
     ...(gitlab === undefined ? {} : { gitlab }),
     ...(gitlabAuthMode === undefined ? {} : { gitlabAuthMode }),
     ...(gitlabProjectToken === undefined ? {} : { gitlabProjectToken }),
+    projectFileMaxUploadBytes: projectFileMaxUploadBytes(config),
   };
 }
 
@@ -317,7 +330,9 @@ export async function buildRepositoryApp() {
     entityStore: new EntityStore(draftManager),
     exportService: new ExportService(draftManager, gitClient),
     historyService: new HistoryService(draftManager, gitClient),
-    projectFileStore: new ProjectFileStore(draftManager),
+    projectFileStore: new ProjectFileStore(draftManager, configuration.projectFileMaxUploadBytes === undefined
+      ? {}
+      : { maxUploadBytes: configuration.projectFileMaxUploadBytes }),
     notificationReadStore: new FileNotificationReadStore(configuration.dataDirectory, configuration.repository),
   });
   const publishing = new PublicationService(draftManager, gitClient, {
