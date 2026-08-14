@@ -169,6 +169,7 @@ export class RepositoryWorkflow {
       files,
       changed_files_count: files.length,
       affected_projects: report.affected_projects.filter((project) => scope.allowedProject === undefined || project === scope.allowedProject),
+      project_files: report.project_files.filter((file) => inOperationScope(file.path, scope)),
     };
   }
 

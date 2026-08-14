@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import type { GitPmApi } from "./api.js";
 import { message, type Locale, type MessageKey } from "./i18n.js";
-import type { ChangesList, CommitResult, DraftStatus, FileChange, GitPmRole, MergeRequestStatus, SemanticChange, SemanticDiff, SemanticFileEntity } from "./types.js";
+import type { ChangesList, CommitResult, DraftStatus, FileChange, GitPmRole, MergeRequestStatus, ProjectFileChange, SemanticChange, SemanticDiff, SemanticFileEntity } from "./types.js";
 import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
 
-const emptyChanges: ChangesList = { files: [], changed_files_count: 0, affected_projects: [] };
+const emptyChanges: ChangesList = { files: [], changed_files_count: 0, affected_projects: [], project_files: [] };
 const emptySemantic: SemanticDiff = {
   created: [], updated: [], archived: [], deleted: [],
   counts: { created: 0, updated: 0, archived: 0, deleted: 0 }, affected_projects: [], file_entities: [], unclassified_files: [],
@@ -46,6 +46,14 @@ const fieldKeys: Readonly<Record<string, MessageKey>> = {
   status: "changes.fieldStatus",
   title: "changes.fieldTitle",
   weekly_capacity_hours: "changes.fieldCapacity",
+};
+
+const projectFileOperationKeys: Readonly<Record<ProjectFileChange["operation"], MessageKey>> = {
+  Added: "changes.projectFileAdded",
+  Modified: "changes.projectFileModified",
+  Replaced: "changes.projectFileReplaced",
+  Renamed: "changes.projectFileRenamed",
+  Deleted: "changes.projectFileDeleted",
 };
 
 export function safeExternalUrl(value: string): string | undefined {
@@ -123,6 +131,29 @@ function SemanticGroup({ title, items, entitiesByPath, namesById, empty, fieldCo
   })}</div></section>;
 }
 
+function ProjectFileGroups({ items, select, t }: {
+  readonly items: readonly ProjectFileChange[];
+  readonly select: (path: string) => void;
+  readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string;
+}) {
+  const groups = new Map<string, ProjectFileChange[]>();
+  for (const item of items) groups.set(item.project_id, [...(groups.get(item.project_id) ?? []), item]);
+  if (groups.size === 0) return null;
+  return <section className="card project-file-changes" aria-labelledby="project-file-changes-heading">
+    <div className="semantic-heading"><div><span className="eyebrow">{t("changes.projectFilesEyebrow")}</span><h3 id="project-file-changes-heading">{t("changes.projectFilesHeading")}</h3><p>{t("changes.projectFilesHint")}</p></div><span>{items.length}</span></div>
+    <div className="project-file-change-groups">{[...groups].map(([projectId, projectItems]) => <section key={projectId}>
+      <h4><span>{t("changes.entityProject")}</span><code>{projectId}</code></h4>
+      <ul>{projectItems.map((item) => <li key={`${item.operation}:${item.path}`}>
+        <button type="button" onClick={() => select(item.path)}>
+          <span className={`project-file-operation operation-${item.operation.toLowerCase()}`}>{t(projectFileOperationKeys[item.operation])}</span>
+          <strong>{item.previous_name === undefined ? item.name : `${item.previous_name} → ${item.name}`}</strong>
+          <small>{item.content_kind === "text" ? t("changes.projectFileTextDiff") : item.content_kind === "binary" ? t("changes.projectFileBinary") : t("changes.projectFileUnknown")}</small>
+        </button>
+      </li>)}</ul>
+    </section>)}</div>
+  </section>;
+}
+
 function DiffViewer({ file, canRestore, busy, restoreFile, restoreHunk, labels }: {
   readonly file: FileChange;
   readonly canRestore: boolean;
@@ -175,6 +206,7 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
   const [mrTitle, setMrTitle] = useState("");
   const [mrDescription, setMrDescription] = useState("");
   const [mergeRequest, setMergeRequest] = useState<MergeRequestStatus>();
+  const [technicalOpen, setTechnicalOpen] = useState(false);
   const loadRequest = useAsyncLoad();
   const canMutate = role !== "Reporter" && draft.state === "open" && draft.writer_mode === "ui";
   const selected = useMemo(() => changes.files.find((file) => file.path === selectedPath) ?? changes.files[0], [changes, selectedPath]);
@@ -245,7 +277,8 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
       </div>
       {semantic.unclassified_files.length > 0 && <p className="unclassified">{t("changes.unclassified", { count: semantic.unclassified_files.length })}</p>}
     </div>
-    <details className="technical-changes"><summary><span><strong>{t("changes.fileChanges")}</strong><small>{t("changes.fileChangesHint")}</small></span><span>{changes.changed_files_count}</span></summary>
+    <ProjectFileGroups items={changes.project_files} select={(path) => { setSelectedPath(path); setTechnicalOpen(true); }} t={t} />
+    <details className="technical-changes" open={technicalOpen} onToggle={(event) => setTechnicalOpen(event.currentTarget.open)}><summary><span><strong>{t("changes.fileChanges")}</strong><small>{t("changes.fileChangesHint")}</small></span><span>{changes.changed_files_count}</span></summary>
       <div className={`changes-layout${changes.files.length === 0 ? " clean" : ""}`}>
         <aside className="card change-files"><div className="change-files-heading"><h3>{t("changes.changedFiles")}</h3>{changes.files.length > 0 && canMutate && <button className="danger subtle" disabled={busy} onClick={() => { if (confirmAction(t("changes.discardConfirm"))) void run(() => api.discardAll(draft.draft_id, draft.fingerprint)); }}>{t("changes.discardAll")}</button>}</div>
           {changes.files.length === 0 ? <p>{t("changes.clean")}</p> : changes.files.map((file) => <ChangeFileButton entity={entitiesByPath.get(file.path)} file={file} key={file.path} select={() => setSelectedPath(file.path)} selected={selected?.path === file.path} t={t} />)}

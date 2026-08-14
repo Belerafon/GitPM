@@ -518,7 +518,7 @@ describe("frontend draft lifecycle", () => {
       repository: { name: "portfolio", path: "/data/repository", has_remote: false, branch: "main" },
     };
     api.drafts = [draft({ draft_id: "DRF-LOCAL", branch: "main" })];
-    api.listChanges = async () => ({ changed_files_count: 0, affected_projects: [], files: [] });
+    api.listChanges = async () => ({ changed_files_count: 0, affected_projects: [], files: [], project_files: [] });
     api.semanticChanges = async () => ({ created: [], updated: [], archived: [], deleted: [], counts: { created: 0, updated: 0, archived: 0, deleted: 0 }, affected_projects: [], unclassified_files: [] });
     render(<App api={api} browserLanguages={["en"]} />);
     // Git and publishing lands on Changes in direct mode, never on the draft panel.

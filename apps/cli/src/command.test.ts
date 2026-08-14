@@ -301,7 +301,7 @@ describe("CLI P12 agent commands", () => {
       listComments: async () => [], createComment: async () => ({ document: { id: "N-26-AAAAAA", state: "active" }, path: "comment.yaml" }), updateComment: async () => ({ document: { id: "N-26-AAAAAA", state: "active" }, path: "comment.yaml" }), deleteComment: async () => ({ document: { id: "N-26-AAAAAA", state: "deleted" }, path: "comment.yaml" }),
       notifications: async () => ({ recipient_person_id: "U-26-5EBAE3", items: [] }),
       listProjectTimeEntries: async () => ({ items: [], total: 0, offset: 0, limit: 100 }), createTimeEntry: async () => ({ document: { id: "E-26-AAAAAA", state: "active" }, path: "entry.yaml" }), voidTimeEntry: async () => ({ document: { id: "E-26-AAAAAA", state: "voided" }, path: "entry.yaml" }),
-      listChanges: async () => ({ files: [], changed_files_count: 0, affected_projects: [] }),
+      listChanges: async () => ({ files: [], changed_files_count: 0, affected_projects: [], project_files: [] }),
       historyList: async () => [historyItem], historyDetail: async () => ({ ...historyItem, body: "", files: [], semantic_summary: { created: 0, updated: 0, deleted: 0, affected_projects: [] } }), historyFileDiff: async () => ({ diff: "diff", oversized: false }), fileHistory: async () => [historyItem],
       createRevertDraft: async () => ({ draft: { ...metadata, draft_id: "DRF-REVERT" }, reverted_commit: historyItem.commit, conflicted: false, conflicted_files: [] }),
       mergeRequestStatus: async () => ({ iid: 9, state: "merged" as const, source_branch: metadata.branch, target_branch: "main", web_url: "https://gitlab.example.test/mr/9" }),

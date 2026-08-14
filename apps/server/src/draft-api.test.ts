@@ -387,7 +387,7 @@ describe("comment API contract", () => {
 describe("changes API contract", () => {
   it("returns change summaries and maps stale hunk tokens", async () => {
     const changesService = {
-      list: vi.fn(async () => ({ files: [], changed_files_count: 0, affected_projects: [] })),
+      list: vi.fn(async () => ({ files: [], changed_files_count: 0, affected_projects: [], project_files: [] })),
       semantic: vi.fn(async () => ({ created: [], updated: [], archived: [], deleted: [], counts: { created: 0, updated: 0, archived: 0, deleted: 0 }, affected_projects: [], unclassified_files: [] })),
       restoreHunk: vi.fn(async () => { throw new ChangesError("STALE_DIFF", "stale"); }),
     } as unknown as ChangesService;
@@ -399,7 +399,7 @@ describe("changes API contract", () => {
     apps.push(app);
     const listed = await app.inject({ method: "GET", url: "/api/drafts/DRF-API/changes" });
     expect(listed.statusCode).toBe(200);
-    expect(listed.json()).toMatchObject({ changed_files_count: 0 });
+    expect(listed.json()).toMatchObject({ changed_files_count: 0, project_files: [] });
     const semantic = await app.inject({ method: "GET", url: "/api/drafts/DRF-API/changes/semantic" });
     expect(semantic.statusCode).toBe(200);
     expect(semantic.json()).toMatchObject({ counts: { created: 0, updated: 0, archived: 0, deleted: 0 } });

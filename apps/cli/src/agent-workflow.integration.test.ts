@@ -37,8 +37,8 @@ describe("scripted agent CLI", () => {
       document: { schema: "gitpm/task@2", title: "Проверить создание задачи через CLI" },
     });
     expect(await invoke(["entity", "update", "--draft", "DRF-CLI", "--type", "project", "--id", project, "--set", "name=Agent CLI delivery", "--project", project])).toMatchObject({ ok: true, document: { id: project, name: "Agent CLI delivery" } });
-    expect(await invoke(["format", "--draft", "DRF-CLI", "--project", project])).toMatchObject({ ok: true }); expect(await invoke(["validate", "--changed", "--draft", "DRF-CLI", "--project", project])).toMatchObject({ ok: true }); expect(await invoke(["diff", "--semantic", "--draft", "DRF-CLI", "--project", project])).toMatchObject({ ok: true, counts: { created: 1, updated: 6 } });
-    const personOriginal = await readFile(path.join(draft.worktree_path, ...personFile.split("/")), "utf8"); await atomicWriteDomainFile(draft.worktree_path, personFile, personOriginal.replace("name: Anna Petrova", "name: Global companion change")); expect(await invoke(["validate", "--changed", "--draft", "DRF-CLI", "--project", project])).toMatchObject({ ok: true }); expect(await invoke(["diff", "--semantic", "--draft", "DRF-CLI", "--project", project])).toMatchObject({ ok: true, counts: { created: 1, updated: 6 } }); await atomicWriteDomainFile(draft.worktree_path, personFile, personOriginal);
+    expect(await invoke(["format", "--draft", "DRF-CLI", "--project", project])).toMatchObject({ ok: true }); expect(await invoke(["validate", "--changed", "--draft", "DRF-CLI", "--project", project])).toMatchObject({ ok: true }); expect(await invoke(["diff", "--semantic", "--draft", "DRF-CLI", "--project", project])).toMatchObject({ ok: true, counts: { created: 1, updated: 1 } });
+    const personOriginal = await readFile(path.join(draft.worktree_path, ...personFile.split("/")), "utf8"); await atomicWriteDomainFile(draft.worktree_path, personFile, personOriginal.replace("name: Anna Petrova", "name: Global companion change")); expect(await invoke(["validate", "--changed", "--draft", "DRF-CLI", "--project", project])).toMatchObject({ ok: true }); expect(await invoke(["diff", "--semantic", "--draft", "DRF-CLI", "--project", project])).toMatchObject({ ok: true, counts: { created: 1, updated: 1 } }); await atomicWriteDomainFile(draft.worktree_path, personFile, personOriginal);
     const viewOriginal = await readFile(path.join(draft.worktree_path, ...viewFile.split("/")), "utf8"); await rm(path.join(draft.worktree_path, ...viewFile.split("/"))); expect(await invoke(["validate", "--changed", "--draft", "DRF-CLI", "--project", project])).toMatchObject({ ok: false, code: "AGENT_DELETE_CONFIRMATION_REQUIRED" }); expect(await invoke(["validate", "--changed", "--draft", "DRF-CLI", "--project", project, "--allow-delete"])).toMatchObject({ ok: true }); await atomicWriteDomainFile(draft.worktree_path, viewFile, viewOriginal);
     const committed = await invoke(["commit", "--all", "-m", "Agent CLI delivery", "--draft", "DRF-CLI", "--project", project]); expect(committed.commit).toMatch(/^[0-9a-f]{40}$/u); const pushed = await invoke(["push", "--draft", "DRF-CLI"]); expect(await git(root, "--git-dir", remote, "rev-parse", "refs/heads/gitpm/42/DRF-CLI")).toBe(pushed.commit); const mr = await invoke(["mr", "create", "--draft", "DRF-CLI", "--owner", "42", "--title", "Agent CLI delivery"]); expect(mr).toMatchObject({ merge_request: { iid: 1, state: "opened" } }); expect(await invoke(["mr", "status", "--draft", "DRF-CLI", "--owner", "42"])).toMatchObject({ merge_request: { iid: 1, state: "opened" } }); expect(JSON.stringify(gitlab.captures)).not.toContain("agent-cli-token");
   }, 60_000);
@@ -55,15 +55,20 @@ describe("scripted agent CLI", () => {
     const invoke = async (args: string[]) => JSON.parse((await run([...args, "--json"], root, { agent })).output) as Record<string, unknown>;
     expect(await invoke(["draft", "create", "--draft", "DRF-PARITY", "--owner", "42"])).toMatchObject({ ok: true });
     expect(await invoke(["draft", "list", "--owner", "42"])).toMatchObject({ items: [expect.objectContaining({ draft_id: "DRF-PARITY" })] });
+    const parityDraft = await agent.status("DRF-PARITY");
+    const projectFiles = path.join(parityDraft.worktree_path, "projects", project, "files");
+    await mkdir(projectFiles);
+    await writeFile(path.join(projectFiles, "ТЗ CLI.txt"), "CLI file semantics\n", "utf8");
 
     expect(await invoke(["config", "show", "--draft", "DRF-PARITY", "--kind", "schedule-tracks"])).toMatchObject({ ok: true, document: { schema: "gitpm/schedule-tracks@1" } });
     expect(await invoke(["config", "update", "--draft", "DRF-PARITY", "--kind", "schedule-tracks", "--set", "schema=gitpm/schedule-tracks@1"])).toMatchObject({ ok: true });
 
     const updatedProject = await invoke(["entity", "update", "--draft", "DRF-PARITY", "--type", "project", "--id", project, "--set", "name=Temporary parity name", "--project", project]);
     expect(updatedProject).toMatchObject({ ok: true, document: { name: "Temporary parity name" } });
-    const changes = await invoke(["changes", "list", "--draft", "DRF-PARITY", "--project", project]) as unknown as { files: Array<{ path: string; kind: string; diff_token: string; hunks: readonly unknown[] }> };
+    const changes = await invoke(["changes", "list", "--draft", "DRF-PARITY", "--project", project]) as unknown as { files: Array<{ path: string; kind: string; diff_token: string; hunks: readonly unknown[] }>; project_files: Array<{ project_id: string; name: string; operation: string; content_kind: string }> };
     const projectChange = changes.files.find((file) => file.path === `projects/${project}/project.yaml`)!;
     expect(projectChange).toMatchObject({ kind: "Modified", hunks: [expect.any(Object)] });
+    expect(changes.project_files).toContainEqual(expect.objectContaining({ project_id: project, name: "ТЗ CLI.txt", operation: "Added", content_kind: "text" }));
     expect(await invoke(["changes", "restore-hunk", "--draft", "DRF-PARITY", "--path", projectChange.path, "--diff-token", projectChange.diff_token, "--hunk", "0", "--project", project])).toMatchObject({ ok: true, path: projectChange.path });
     expect(await invoke(["entity", "show", "--draft", "DRF-PARITY", "--type", "project", "--id", project])).toMatchObject({ document: { name: "GitPM launch" } });
 

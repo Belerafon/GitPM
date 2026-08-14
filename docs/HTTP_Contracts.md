@@ -40,6 +40,12 @@ does not mutate repository YAML, change the draft fingerprint, or require a writ
 web client imports matching legacy `localStorage` keys once and removes them only after successful
 server persistence.
 
+The changes list includes a required `project_files` read model derived directly from canonical
+`projects/<project-id>/files/<flat-name>` paths. It groups Project storage changes without a
+manifest or sidecar. Its operation and content-kind values are locale-neutral; text/binary
+classification inspects bounded bytes rather than trusting an extension, and uncertain external
+rename pairs remain separate delete/add records.
+
 Direct-mode history writes use two explicit routes rather than overloading draft lifecycle:
 `POST /api/drafts/:draftId/history/:commit/restore-files` accepts an optimistic fingerprint and
 1–200 changed paths, while `POST /api/drafts/:draftId/history/:commit/revert-direct` accepts the

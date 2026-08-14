@@ -269,9 +269,23 @@ export interface FileChange {
   readonly oversized?: boolean;
 }
 
+export type ProjectFileChangeOperation = "Added" | "Modified" | "Replaced" | "Renamed" | "Deleted";
+export type ProjectFileContentKind = "text" | "binary" | "unknown";
+
+export interface ProjectFileChange {
+  readonly project_id: string;
+  readonly path: string;
+  readonly name: string;
+  readonly operation: ProjectFileChangeOperation;
+  readonly content_kind: ProjectFileContentKind;
+  readonly previous_path?: string;
+  readonly previous_name?: string;
+}
+
 export interface ChangesList extends ChangesSummary {
   readonly files: readonly FileChange[];
   readonly affected_projects: readonly string[];
+  readonly project_files: readonly ProjectFileChange[];
 }
 
 export interface SemanticFieldChange {
@@ -636,11 +650,21 @@ const fileChangeSchema = objectSchema({
   hunks: arraySchema(diffHunkSchema),
   oversized: booleanSchema,
 }, ["path", "kind", "diff", "diff_token", "hunks"]);
+const projectFileChangeSchema = objectSchema({
+  project_id: stringSchema,
+  path: stringSchema,
+  name: stringSchema,
+  operation: { enum: ["Added", "Modified", "Replaced", "Renamed", "Deleted"] },
+  content_kind: { enum: ["text", "binary", "unknown"] },
+  previous_path: stringSchema,
+  previous_name: stringSchema,
+}, ["project_id", "path", "name", "operation", "content_kind"]);
 const changesListSchema = objectSchema({
   changed_files_count: integerSchema,
   files: arraySchema(fileChangeSchema),
   affected_projects: stringArraySchema,
-});
+  project_files: arraySchema(projectFileChangeSchema),
+}, ["changed_files_count", "files", "affected_projects", "project_files"]);
 
 const semanticFieldChangeSchema = objectSchema({
   field: stringSchema,

@@ -179,7 +179,9 @@ state и диапазон фактической даты соответству
 schedule track блокируется до записи кодом `CONFIGURATION_UPDATE_BLOCKED`; JSON details содержит
 конкретные пути и поля, которые сначала нужно мигрировать.
 
-`changes list` возвращает тот же raw diff, токены и hunks, которые показывает GUI.
+`changes list` возвращает тот же raw diff, токены и hunks, которые показывает GUI, а также
+locale-neutral `project_files` с Project-scoped семантикой файлов хранилища. При `--project`
+фильтруются и обычные `files`, и `project_files`; scope не расширяется на другой Project.
 `restore-file` и `restore-hunk` используют optimistic fingerprint и общий безопасный changes
 pipeline. `discard-all` требует буквального `--confirm discard-all`; это отдельное подтверждение
 массовой отмены незакоммиченных изменений. `--project` ограничивает `list`, `restore-file` и

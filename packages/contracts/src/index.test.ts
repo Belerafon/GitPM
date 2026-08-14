@@ -6,6 +6,7 @@ import {
   ENTITY_DOCUMENT_SCHEMAS,
   ENTITY_TYPE_SCHEMAS,
   decodeConfigurationResult,
+  decodeChangesList,
   decodeDraftStatus,
   decodeEntityDocument,
   decodeEntityResult,
@@ -239,6 +240,26 @@ describe("@gitpm/contracts runtime contracts", () => {
       path: ".gitpm/statuses.yaml",
       draft_fingerprint: "f".repeat(64),
     })).toThrow(/is missing required property 'blob_id'/u);
+  });
+
+  it("decodes Project file change semantics and rejects an unverified operation", () => {
+    const response = {
+      changed_files_count: 2,
+      affected_projects: ["P-26-MGP84K"],
+      files: [],
+      project_files: [{
+        project_id: "P-26-MGP84K",
+        path: "projects/P-26-MGP84K/files/ТЗ_v2.docx",
+        name: "ТЗ_v2.docx",
+        operation: "Renamed",
+        content_kind: "binary",
+        previous_path: "projects/P-26-MGP84K/files/ТЗ_v1.docx",
+        previous_name: "ТЗ_v1.docx",
+      }],
+    };
+    expect(decodeChangesList(response).project_files[0]).toMatchObject({ operation: "Renamed", name: "ТЗ_v2.docx" });
+    expect(() => decodeChangesList({ ...response, project_files: [{ ...response.project_files[0], operation: "MaybeRenamed" }] }))
+      .toThrow(/project_files\[0\]\.operation must be one of/u);
   });
 
   it("points at unexpected properties inside a document body", () => {

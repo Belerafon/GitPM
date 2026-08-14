@@ -10,7 +10,7 @@ const draft: DraftStatus = { draft_id: "DRF-CHANGES", owner_gitlab_user_id: "42"
 class ChangesApi {
   committed = false;
   restored: string[] = [];
-  changes: ChangesList = { changed_files_count: 3, affected_projects: ["P-26-111111"], files: [
+  changes: ChangesList = { changed_files_count: 3, affected_projects: ["P-26-111111"], project_files: [], files: [
     { path: "projects/P-26-111111/project.yaml", kind: "Modified", diff_token: "one", diff: "@@ -1,1 +1,1 @@\n-old\n+new\n", hunks: [{ old_start: 1, old_count: 1, new_start: 1, new_count: 1, lines: ["-old", "+new"] }] },
     { path: "projects/P-26-111111/tasks/T-26-111111.yaml", kind: "Added", diff_token: "two", diff: "@@ -0,0 +1,1 @@\n+new\n", hunks: [{ old_start: 0, old_count: 0, new_start: 1, new_count: 1, lines: ["+new"] }] },
     { path: "projects/P-26-111111/tasks/T-26-222222.yaml", kind: "Deleted", diff_token: "three", diff: "@@ -1,1 +0,0 @@\n-old\n", hunks: [{ old_start: 1, old_count: 1, new_start: 0, new_count: 0, lines: ["-old"] }] },
@@ -26,7 +26,7 @@ class ChangesApi {
       { path: "projects/P-26-111111/tasks/T-26-222222.yaml", schema: "gitpm/task@2", id: "T-26-222222", display_name: "Old task" },
     ],
   };
-  listChanges = vi.fn(async () => this.committed ? { changed_files_count: 0, affected_projects: [], files: [] } : this.changes);
+  listChanges = vi.fn(async () => this.committed ? { changed_files_count: 0, affected_projects: [], files: [], project_files: [] } : this.changes);
   semanticChanges = vi.fn(async () => this.committed ? { created: [], updated: [], archived: [], deleted: [], counts: { created: 0, updated: 0, archived: 0, deleted: 0 }, affected_projects: [], file_entities: [], unclassified_files: [] } : this.semantic);
   restoreFile = vi.fn(async (_draftId: string, _fingerprint: string, path: string) => { this.restored.push(path); });
   restoreHunk = vi.fn(async (_draftId: string, _fingerprint: string, path: string) => { this.restored.push(path); });
@@ -82,9 +82,42 @@ describe("Changes workspace", () => {
     expect(screen.getByText("Статус")).toBeTruthy();
   });
 
+  it("groups Project file semantics and keeps Reporter controls read-only", async () => {
+    const fixture = new ChangesApi();
+    fixture.changes = {
+      changed_files_count: 4,
+      affected_projects: ["P-26-111111", "P-26-222222"],
+      files: [
+        { path: "projects/P-26-111111/files/ТЗ_v2.docx", kind: "Added", diff_token: "new", diff: "Binary files", hunks: [] },
+        { path: "projects/P-26-111111/files/ТЗ_v1.docx", kind: "Deleted", diff_token: "old", diff: "Binary files", hunks: [] },
+        { path: "projects/P-26-111111/files/notes.md", kind: "Modified", diff_token: "text", diff: "@@ -1 +1 @@\n-old\n+новый\n", hunks: [{ old_start: 1, old_count: 1, new_start: 1, new_count: 1, lines: ["-old", "+новый"] }] },
+        { path: "projects/P-26-222222/files/scan.pdf", kind: "Modified", diff_token: "binary", diff: "Binary files", hunks: [] },
+      ],
+      project_files: [
+        { project_id: "P-26-111111", path: "projects/P-26-111111/files/ТЗ_v2.docx", name: "ТЗ_v2.docx", operation: "Renamed", content_kind: "binary", previous_path: "projects/P-26-111111/files/ТЗ_v1.docx", previous_name: "ТЗ_v1.docx" },
+        { project_id: "P-26-111111", path: "projects/P-26-111111/files/notes.md", name: "notes.md", operation: "Modified", content_kind: "text" },
+        { project_id: "P-26-222222", path: "projects/P-26-222222/files/scan.pdf", name: "scan.pdf", operation: "Replaced", content_kind: "binary" },
+      ],
+    };
+    render(<ChangesWorkspace api={fixture as unknown as GitPmApi} draft={draft} role="Reporter" locale="ru" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} />);
+
+    expect(await screen.findByRole("heading", { name: "Файлы проектов" })).toBeTruthy();
+    expect(screen.getByText("ТЗ_v1.docx → ТЗ_v2.docx")).toBeTruthy();
+    expect(screen.getByText("Файл переименован")).toBeTruthy();
+    expect(screen.getByText("Файл заменён")).toBeTruthy();
+    expect(screen.getByText("Текст · доступен Git diff")).toBeTruthy();
+    expect(screen.getAllByText("P-26-111111").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("P-26-222222").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: /Файл изменён.*notes\.md/u }));
+    expect(screen.getByText("+новый")).toBeTruthy();
+    expect(screen.getByText("Для этой рабочей копии или роли изменения доступны только для чтения.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Отменить всё" })).toBeNull();
+    expect((screen.getByRole("button", { name: "Подготовить коммит" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it("shows a localized notice instead of the diff for an oversized change", async () => {
     const fixture = new ChangesApi();
-    fixture.changes = { changed_files_count: 1, affected_projects: [], files: [
+    fixture.changes = { changed_files_count: 1, affected_projects: [], project_files: [], files: [
       { path: "projects/P-26-111111/project.yaml", kind: "Modified", diff_token: "big", diff: "diff --git\n", hunks: [], oversized: true },
     ] };
     render(<ChangesWorkspace api={fixture as unknown as GitPmApi} draft={draft} role="Developer" locale="en" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} />);

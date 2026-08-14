@@ -1144,6 +1144,20 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
 .semantic-heading > span { color: #6f746f; font-size: .78rem; }
 .semantic-heading p { max-width: 680px; margin: .3rem 0 0; color: #6e736f; font-size: .8rem; }
 .semantic-groups { display: grid; gap: 1rem; margin-top: 1rem; }
+.project-file-change-groups { display: grid; gap: 1rem; margin-top: 1rem; }
+.project-file-change-groups > section { min-width: 0; }
+.project-file-change-groups h4 { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin: 0 0 .5rem; }
+.project-file-change-groups h4 span { color: #69716b; font-size: .75rem; font-weight: 600; text-transform: uppercase; }
+.project-file-change-groups h4 code { overflow-wrap: anywhere; }
+.project-file-change-groups ul { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: .55rem; margin: 0; padding: 0; list-style: none; }
+.project-file-change-groups button { display: grid; width: 100%; min-width: 0; gap: .25rem; border: 1px solid #d6dad4; border-radius: 8px; background: #fff; padding: .7rem; text-align: left; }
+.project-file-change-groups button:hover { border-color: #80948a; background: #f6faf7; }
+.project-file-change-groups button strong { overflow-wrap: anywhere; }
+.project-file-change-groups button small { color: #6d746f; }
+.project-file-operation { justify-self: start; border-radius: 999px; background: #e8ece8; color: #4f5b54; padding: .18rem .48rem; font-size: .7rem; font-weight: 700; }
+.project-file-operation.operation-added { background: #dff3e6; color: #28623f; }
+.project-file-operation.operation-deleted { background: #f8e1df; color: #8d332e; }
+.project-file-operation.operation-renamed { background: #e3e9f6; color: #3e5480; }
 .semantic-group { min-width: 0; }
 .semantic-group h4 { display: flex; justify-content: space-between; margin: 0 0 .5rem; }
 .semantic-group h4 span { color: #777c77; font-weight: 400; }

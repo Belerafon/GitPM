@@ -1,7 +1,8 @@
 import { spawn } from "node:child_process";
+import { once } from "node:events";
 import { mkdir, realpath, stat } from "node:fs/promises";
 import path from "node:path";
-import { assertSafeBranchName, assertSafeRepositoryUrl, classifyRepositoryUrl, createGitProcessEnvironment, createSshGitProcessEnvironment, type RepositoryTransport } from "@gitpm/security";
+import { assertSafeBranchName, assertSafeRepositoryUrl, classifyRepositoryUrl, createGitProcessEnvironment, createSshGitProcessEnvironment, resolveDomainPath, type RepositoryTransport } from "@gitpm/security";
 
 const MAX_OUTPUT_BYTES = 1_048_576;
 
@@ -54,6 +55,11 @@ export interface GitClientSshOptions {
 interface CommandResult {
   readonly stdout: string;
   readonly stderr: string;
+}
+
+interface StreamingGitOptions {
+  readonly input?: AsyncIterable<Uint8Array>;
+  readonly onStdout?: (chunk: Buffer) => Promise<void>;
 }
 
 function gitCommandLabel(args: readonly string[]): string {
@@ -187,6 +193,68 @@ async function executeGit(
     });
     if (input !== undefined) child.stdin.end(input, "utf8");
   });
+}
+
+async function executeStreamingGit(
+  args: readonly string[],
+  environment: NodeJS.ProcessEnv,
+  timeoutMs: number,
+  options: StreamingGitOptions,
+  onCommand?: (record: GitCommandRecord) => void,
+): Promise<CommandResult> {
+  const started = performance.now();
+  const child = spawn("git", [...args], { env: environment, shell: false, windowsHide: true });
+  const stdout: Buffer[] = [];
+  const stderr: Buffer[] = [];
+  let capturedBytes = 0;
+  let timedOut = false;
+  let outputLimited = false;
+  const timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, timeoutMs);
+  const capture = (target: Buffer[], chunk: Buffer): void => {
+    capturedBytes += chunk.length;
+    if (capturedBytes > MAX_OUTPUT_BYTES) { outputLimited = true; child.kill("SIGKILL"); }
+    else target.push(chunk);
+  };
+  const stdoutTask = (async () => {
+    for await (const value of child.stdout) {
+      const chunk = Buffer.from(value);
+      if (options.onStdout === undefined) capture(stdout, chunk);
+      else await options.onStdout(chunk);
+    }
+  })();
+  const stderrTask = (async () => {
+    for await (const value of child.stderr) capture(stderr, Buffer.from(value));
+  })();
+  const inputTask = (async () => {
+    try {
+      if (options.input !== undefined) {
+        for await (const value of options.input) {
+          if (!child.stdin.write(value)) await once(child.stdin, "drain");
+        }
+      }
+      child.stdin.end();
+    } catch (error) {
+      child.stdin.destroy();
+      child.kill("SIGKILL");
+      throw error;
+    }
+  })();
+  const exitTask = new Promise<number>((resolve, reject) => {
+    child.once("error", (error) => reject(new GitCommandError("GIT_SPAWN_FAILED", error.message)));
+    child.once("close", (exitCode) => resolve(exitCode ?? -1));
+  });
+  try {
+    const [, , , code] = await Promise.all([stdoutTask, stderrTask, inputTask, exitTask]);
+    onCommand?.({ args, durationMs: performance.now() - started, exitCode: code });
+    if (timedOut) throw new GitCommandError("GIT_TIMEOUT", "Git command timed out", code);
+    if (outputLimited) throw new GitCommandError("GIT_OUTPUT_LIMIT", `Git "${gitCommandLabel(args)}" output exceeded the ${MAX_OUTPUT_BYTES}-byte limit`, code);
+    const result = { stdout: Buffer.concat(stdout).toString("utf8"), stderr: Buffer.concat(stderr).toString("utf8") };
+    if (code !== 0) throw new GitCommandError("GIT_FAILED", result.stderr.trim() || "Git command failed", code);
+    return result;
+  } finally {
+    clearTimeout(timer);
+    if (child.exitCode === null) child.kill("SIGKILL");
+  }
 }
 
 export class GitClient {
@@ -986,10 +1054,11 @@ export class GitClient {
   async hashFiles(worktree: string, relativePaths: readonly string[]): Promise<ReadonlyMap<string, string>> {
     if (relativePaths.length === 0) return new Map();
     if (relativePaths.some((value) => path.isAbsolute(value)
-      || !/^[A-Za-z0-9._/-]+$/u.test(value)
+      || /[\r\n\0]/u.test(value)
       || value.split("/").some((part) => part === "" || part === "." || part === ".."))) {
-      throw new GitCommandError("GIT_PATH_INVALID", "Batched Git paths must use the repository path allowlist");
+      throw new GitCommandError("GIT_PATH_INVALID", "Batched Git paths must be safe repository-relative paths");
     }
+    await Promise.all(relativePaths.map(async (relativePath) => await resolveDomainPath(worktree, relativePath)));
     const result = await this.git(
       ["-C", await realpath(worktree), "hash-object", "--no-filters", "--stdin-paths"],
       `${relativePaths.join("\n")}\n`,
@@ -999,5 +1068,31 @@ export class GitClient {
       throw new GitCommandError("GIT_OUTPUT_INVALID", "git hash-object returned an invalid batch");
     }
     return new Map(relativePaths.map((relativePath, index) => [relativePath, hashes[index]!]));
+  }
+
+  /** Store an already safely opened byte stream as a dangling Git blob for transactional rollback. */
+  async storeBlob(worktree: string, content: AsyncIterable<Uint8Array>): Promise<string> {
+    const result = await executeStreamingGit(
+      ["-C", await realpath(worktree), "hash-object", "-w", "--stdin"],
+      safeEnvironment(this.homeDirectory),
+      this.timeoutMs,
+      { input: content },
+      this.onCommand,
+    );
+    const objectId = result.stdout.trim();
+    if (!/^[0-9a-f]{40,64}$/u.test(objectId)) throw new GitCommandError("GIT_OUTPUT_INVALID", "git hash-object returned an invalid blob ID");
+    return objectId;
+  }
+
+  /** Stream one verified blob without decoding or buffering its bytes as text. */
+  async streamBlob(worktree: string, objectId: string, onChunk: (chunk: Buffer) => Promise<void>): Promise<void> {
+    if (!/^[0-9a-f]{40,64}$/u.test(objectId)) throw new GitCommandError("GIT_OBJECT_INVALID", "Git blob ID is invalid");
+    await executeStreamingGit(
+      ["-C", await realpath(worktree), "cat-file", "blob", objectId],
+      safeEnvironment(this.homeDirectory),
+      this.timeoutMs,
+      { onStdout: onChunk },
+      this.onCommand,
+    );
   }
 }

@@ -164,13 +164,15 @@ describe("controlled Git client", () => {
     });
     await client.initialize();
     await writeFile(path.join(fixture.source, "second.txt"), "second\n", "utf8");
+    await writeFile(path.join(fixture.source, "ТЗ версия 2.txt"), "unicode path\n", "utf8");
     commands.length = 0;
 
-    const actual = await client.hashFiles(fixture.source, ["README.md", "second.txt"]);
+    const actual = await client.hashFiles(fixture.source, ["README.md", "second.txt", "ТЗ версия 2.txt"]);
     const batchCommands = [...commands];
 
     expect(actual.get("README.md")).toBe(await client.hashObject(await readFile(path.join(fixture.source, "README.md"), "utf8")));
     expect(actual.get("second.txt")).toBe(await client.hashObject(await readFile(path.join(fixture.source, "second.txt"), "utf8")));
+    expect(actual.get("ТЗ версия 2.txt")).toBe(await client.hashObject(await readFile(path.join(fixture.source, "ТЗ версия 2.txt"), "utf8")));
     expect(batchCommands).toEqual([expect.arrayContaining(["hash-object", "--stdin-paths"])]);
   });
 
@@ -383,5 +385,24 @@ describe("direct-mode checkout", () => {
 
     const diffs = await client.diffFiles(worktree, ["huge.txt"], 1);
     expect(diffs.size).toBe(0);
+  });
+
+  it("stores and streams binary rollback blobs without UTF-8 decoding or output truncation", async () => {
+    const fixture = await remoteFixture();
+    const client = new GitClient({
+      dataDirectory: path.join(fixture.root, "data"),
+      remoteUrl: fixture.remote,
+      defaultBranch: "main",
+      allowLocalTestRemote: true,
+    });
+    const expected = Buffer.concat([Buffer.from([0, 255, 128, 1]), Buffer.alloc(1_100_000, 173), Buffer.from([255, 0])]);
+    async function* content(): AsyncGenerator<Uint8Array> {
+      yield expected.subarray(0, 17);
+      yield expected.subarray(17);
+    }
+    const objectId = await client.storeBlob(fixture.source, content());
+    const chunks: Buffer[] = [];
+    await client.streamBlob(fixture.source, objectId, async (chunk) => { chunks.push(Buffer.from(chunk)); });
+    expect(Buffer.concat(chunks)).toEqual(expected);
   });
 });

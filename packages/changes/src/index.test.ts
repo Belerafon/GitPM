@@ -1,13 +1,13 @@
 import { execFile } from "node:child_process";
-import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, lstat, mkdtemp, mkdir, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { DraftManager } from "@gitpm/drafts";
 import { GitClient } from "@gitpm/git-client";
 import { atomicWriteDomainFile } from "@gitpm/security";
-import { ChangesService, parseUnifiedDiff } from "./index.js";
+import { ChangesService, parseUnifiedDiff, type ChangesServiceOptions } from "./index.js";
 
 const execFileAsync = promisify(execFile);
 const roots: string[] = [];
@@ -27,6 +27,12 @@ beforeAll(async () => {
   templateRemote = path.join(templateRoot, "remote.git");
   await mkdir(source);
   await cp(demo, source, { recursive: true });
+  const files = path.join(source, "projects", "P-26-MGP84K", "files");
+  await mkdir(files);
+  await writeFile(path.join(files, "ТЗ старое.txt"), "Первая строка\nВторая строка\n", "utf8");
+  await writeFile(path.join(files, "scan.bin"), Buffer.from([0, 1, 2, 255, 128, 64]));
+  await writeFile(path.join(files, "delete.bin"), Buffer.from([0, 7, 6, 5]));
+  await writeFile(path.join(files, "rename-with-edit.txt"), "Исходный текст\n", "utf8");
   await git(source, "init", "-b", "main");
   await git(source, "add", ".");
   await git(source, "-c", "user.name=GitPM Test", "-c", "user.email=gitpm@example.test", "commit", "-m", "fixture");
@@ -37,7 +43,7 @@ beforeAll(async () => {
 
 afterAll(async () => rm(templateRoot, { recursive: true, force: true }));
 
-async function runtime() {
+async function runtime(options: ChangesServiceOptions = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "gitpm-changes-"));
   roots.push(root);
   const remote = path.join(root, "remote.git");
@@ -46,7 +52,7 @@ async function runtime() {
   const client = new GitClient({ dataDirectory: data, remoteUrl: remote, defaultBranch: "main", allowLocalTestRemote: true });
   const manager = new DraftManager(client, data);
   const draft = await manager.createDraft("DRF-CHANGES", "42");
-  return { client, draft, manager, service: new ChangesService(manager, client) };
+  return { client, draft, manager, service: new ChangesService(manager, client, options) };
 }
 
 afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))));
@@ -115,6 +121,113 @@ describe("changes and restore service", () => {
     expect(change).toMatchObject({ kind: "Modified", oversized: true });
     expect(change.hunks).toEqual([]);
     expect(listed.changed_files_count).toBeGreaterThanOrEqual(1);
+  });
+
+  it("classifies text and binary Project file changes from bounded content inspection", async () => {
+    const { draft, service } = await runtime();
+    const directory = path.join(draft.worktree_path, "projects", "P-26-MGP84K", "files");
+    await writeFile(path.join(directory, "ТЗ старое.txt"), "Первая строка\nОбновлённая строка\n", "utf8");
+    await writeFile(path.join(directory, "scan.bin"), Buffer.from([0, 9, 8, 255, 128, 64]));
+    await rm(path.join(directory, "delete.bin"));
+    await writeFile(path.join(directory, "новый документ.md"), "# Новый документ\nТочный текст\n", "utf8");
+    await writeFile(path.join(directory, "large opaque.dat"), Buffer.alloc(2 * 1024 * 1024, 0));
+    await writeFile(path.join(directory, "late binary.dat"), Buffer.concat([Buffer.alloc(9000, 65), Buffer.from([0]), Buffer.alloc(2 * 1024 * 1024, 66)]));
+
+    const listed = await service.list("DRF-CHANGES");
+    expect(listed.project_files).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "ТЗ старое.txt", operation: "Modified", content_kind: "text" }),
+      expect.objectContaining({ name: "scan.bin", operation: "Replaced", content_kind: "binary" }),
+      expect.objectContaining({ name: "delete.bin", operation: "Deleted", content_kind: "binary" }),
+      expect.objectContaining({ name: "новый документ.md", operation: "Added", content_kind: "text" }),
+      expect.objectContaining({ name: "large opaque.dat", operation: "Added", content_kind: "binary" }),
+      expect.objectContaining({ name: "late binary.dat", operation: "Added", content_kind: "unknown" }),
+    ]));
+    expect(listed.files.find((file) => file.path.endsWith("новый документ.md"))?.diff).toContain("+# Новый документ");
+    const opaque = listed.files.find((file) => file.path.endsWith("large opaque.dat"))!;
+    expect(opaque.diff).toContain("Binary files");
+    expect(opaque.diff).not.toContain("�");
+    expect(listed.files.find((file) => file.path.endsWith("late binary.dat"))).toMatchObject({ oversized: true, hunks: [] });
+    const semantic = await service.semantic("DRF-CHANGES");
+    expect(semantic.unclassified_files).not.toEqual(expect.arrayContaining([
+      expect.stringContaining("/files/ТЗ старое.txt"),
+      expect.stringContaining("/files/scan.bin"),
+      expect.stringContaining("/files/новый документ.md"),
+    ]));
+  });
+
+  it("reports an exact-byte external rename once and preserves Unicode names", async () => {
+    const { draft, service } = await runtime();
+    const directory = path.join(draft.worktree_path, "projects", "P-26-MGP84K", "files");
+    await rename(path.join(directory, "ТЗ старое.txt"), path.join(directory, "ТЗ новая версия.txt"));
+
+    const listed = await service.list("DRF-CHANGES");
+    expect(listed.project_files).toEqual([
+      expect.objectContaining({
+        project_id: "P-26-MGP84K",
+        operation: "Renamed",
+        previous_name: "ТЗ старое.txt",
+        name: "ТЗ новая версия.txt",
+        content_kind: "text",
+      }),
+    ]);
+    expect(listed.files.filter((file) => file.path.includes("ТЗ "))).toHaveLength(2);
+    const semantic = await service.semantic("DRF-CHANGES");
+    expect(semantic.unclassified_files).not.toEqual(expect.arrayContaining([expect.stringContaining("/files/")]));
+  });
+
+  it("falls back to honest delete and add when a technical rename changes content", async () => {
+    const { draft, service } = await runtime();
+    const directory = path.join(draft.worktree_path, "projects", "P-26-MGP84K", "files");
+    await rename(path.join(directory, "rename-with-edit.txt"), path.join(directory, "edited-and-renamed.txt"));
+    await writeFile(path.join(directory, "edited-and-renamed.txt"), "Совершенно другое содержимое\n", "utf8");
+
+    const listed = await service.list("DRF-CHANGES");
+    expect(listed.project_files).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "rename-with-edit.txt", operation: "Deleted" }),
+      expect.objectContaining({ name: "edited-and-renamed.txt", operation: "Added" }),
+    ]));
+    expect(listed.project_files).not.toEqual(expect.arrayContaining([expect.objectContaining({ operation: "Renamed" })]));
+  });
+
+  it("does not infer a rename when exact blob pairing is ambiguous", async () => {
+    const { draft, service } = await runtime();
+    const directory = path.join(draft.worktree_path, "projects", "P-26-MGP84K", "files");
+    const content = "same exact bytes\n";
+    await writeFile(path.join(directory, "copy-a.txt"), content, "utf8");
+    await writeFile(path.join(directory, "copy-b.txt"), content, "utf8");
+    await git(draft.worktree_path, "add", ".");
+    await git(draft.worktree_path, "-c", "user.name=GitPM Test", "-c", "user.email=gitpm@example.test", "commit", "-m", "duplicates");
+    await rename(path.join(directory, "copy-a.txt"), path.join(directory, "copy-c.txt"));
+    await rename(path.join(directory, "copy-b.txt"), path.join(directory, "copy-d.txt"));
+
+    const listed = await service.list("DRF-CHANGES");
+    expect(listed.project_files.filter((item) => item.name.startsWith("copy-"))).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "copy-a.txt", operation: "Deleted" }),
+      expect.objectContaining({ name: "copy-b.txt", operation: "Deleted" }),
+      expect.objectContaining({ name: "copy-c.txt", operation: "Added" }),
+      expect.objectContaining({ name: "copy-d.txt", operation: "Added" }),
+    ]));
+    expect(listed.project_files).not.toEqual(expect.arrayContaining([expect.objectContaining({ operation: "Renamed", name: expect.stringMatching(/^copy-/u) })]));
+  });
+
+  it("does not infer a cross-Project rename or classify nested technical-manager content", async () => {
+    const { draft, service } = await runtime();
+    const source = path.join(draft.worktree_path, "projects", "P-26-MGP84K", "files", "ТЗ старое.txt");
+    const targetDirectory = path.join(draft.worktree_path, "projects", "P-26-8S9HQQ", "files");
+    await mkdir(targetDirectory);
+    await rename(source, path.join(targetDirectory, "ТЗ старое.txt"));
+    const nested = path.join(draft.worktree_path, "projects", "P-26-MGP84K", "files", "nested");
+    await mkdir(nested);
+    await writeFile(path.join(nested, "hidden.txt"), "technical", "utf8");
+
+    const listed = await service.list("DRF-CHANGES");
+    expect(listed.project_files).toEqual(expect.arrayContaining([
+      expect.objectContaining({ project_id: "P-26-MGP84K", operation: "Deleted" }),
+      expect.objectContaining({ project_id: "P-26-8S9HQQ", operation: "Added" }),
+    ]));
+    expect(listed.project_files).not.toEqual(expect.arrayContaining([expect.objectContaining({ operation: "Renamed" })]));
+    const semantic = await service.semantic("DRF-CHANGES");
+    expect(semantic.unclassified_files).toContain("projects/P-26-MGP84K/files/nested/hidden.txt");
   });
 
   it("describes created, updated, archived and deleted domain documents", async () => {
@@ -202,5 +315,114 @@ describe("changes and restore service", () => {
 
     const semantic = await service.semantic("DRF-CHANGES");
     expect(semantic.updated[0]).toMatchObject({ id: "T-26-P9G3P8", fields: expect.arrayContaining([expect.objectContaining({ field: "schedules.plan.finish", before: "2026-07-02", after: "2026-07-09" })]) });
+  });
+
+  it("restores modified and deleted binary Project files with exact bytes", async () => {
+    const { draft, manager, service } = await runtime();
+    const scanPath = "projects/P-26-MGP84K/files/scan.bin";
+    const deletedPath = "projects/P-26-MGP84K/files/delete.bin";
+    const scanAbsolute = path.join(draft.worktree_path, ...scanPath.split("/"));
+    const deletedAbsolute = path.join(draft.worktree_path, ...deletedPath.split("/"));
+    const scanOriginal = await readFile(scanAbsolute);
+    const deletedOriginal = await readFile(deletedAbsolute);
+    await writeFile(scanAbsolute, Buffer.from([255, 0, 254, 1, 128]));
+    await rm(deletedAbsolute);
+    const accepted = await manager.setWriterMode("DRF-CHANGES", "42", "ui");
+
+    const restoredScan = await service.restoreFile("DRF-CHANGES", "42", accepted.fingerprint, scanPath);
+    expect(await readFile(scanAbsolute)).toEqual(scanOriginal);
+    expect(restoredScan.result.validation.valid).toBe(true);
+    const restoredDeleted = await service.restoreFile("DRF-CHANGES", "42", restoredScan.metadata.fingerprint, deletedPath);
+    expect(await readFile(deletedAbsolute)).toEqual(deletedOriginal);
+    expect(restoredDeleted.result.validation.valid).toBe(true);
+  });
+
+  it("discards a mixed change set in one repository mutation", async () => {
+    const { draft, manager, service } = await runtime();
+    const scanPath = "projects/P-26-MGP84K/files/scan.bin";
+    const deletedPath = "projects/P-26-MGP84K/files/delete.bin";
+    const addedPath = "projects/P-26-MGP84K/files/new.bin";
+    const tracked = [projectFile, scanPath, deletedPath];
+    const originals = new Map(await Promise.all(tracked.map(async (relative) => [relative, await readFile(path.join(draft.worktree_path, ...relative.split("/")))] as const)));
+    await writeFile(path.join(draft.worktree_path, ...projectFile.split("/")), (originals.get(projectFile)!.toString("utf8")).replace("name: GitPM launch", "name: Mixed discard"));
+    await writeFile(path.join(draft.worktree_path, ...scanPath.split("/")), Buffer.from([255, 0, 1]));
+    await rm(path.join(draft.worktree_path, ...deletedPath.split("/")));
+    await writeFile(path.join(draft.worktree_path, ...addedPath.split("/")), Buffer.from([0, 255, 7]));
+    const accepted = await manager.setWriterMode("DRF-CHANGES", "42", "ui");
+    const mutationSpy = vi.spyOn(manager, "withRepositoryMutation");
+
+    const result = await service.discardAll("DRF-CHANGES", "42", accepted.fingerprint);
+
+    expect(mutationSpy).toHaveBeenCalledTimes(1);
+    expect(result.discarded).toBe(4);
+    for (const relative of tracked) expect(await readFile(path.join(draft.worktree_path, ...relative.split("/")))).toEqual(originals.get(relative));
+    await expect(readFile(path.join(draft.worktree_path, ...addedPath.split("/")))).rejects.toMatchObject({ code: "ENOENT" });
+    expect((await service.list("DRF-CHANGES")).changed_files_count).toBe(0);
+  });
+
+  it("rolls an exact binary restore back when repository validation fails", async () => {
+    const { draft, manager, service } = await runtime();
+    const scanPath = "projects/P-26-MGP84K/files/scan.bin";
+    const scanAbsolute = path.join(draft.worktree_path, ...scanPath.split("/"));
+    const changed = Buffer.from([255, 0, 19, 128, 7]);
+    await writeFile(scanAbsolute, changed);
+    await writeFile(path.join(draft.worktree_path, ...projectFile.split("/")), "not: a valid GitPM project\n");
+    const accepted = await manager.setWriterMode("DRF-CHANGES", "42", "ui");
+
+    await expect(service.restoreFile("DRF-CHANGES", "42", accepted.fingerprint, scanPath))
+      .rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+    expect(await readFile(scanAbsolute)).toEqual(changed);
+  });
+
+  it("rolls back already applied entries and preserves a racing external edit", async () => {
+    let worktree = "";
+    let racedPath = "";
+    const external = Buffer.from([255, 0, 42, 128]);
+    const { draft, manager, service } = await runtime({
+      beforeApplyEntryForTest: async (relative, index) => {
+        if (index !== 1) return;
+        racedPath = relative;
+        await writeFile(path.join(worktree, ...relative.split("/")), external);
+      },
+    });
+    worktree = draft.worktree_path;
+    const paths = [projectFile, "projects/P-26-MGP84K/files/scan.bin"];
+    await writeFile(path.join(worktree, ...projectFile.split("/")), (await readFile(path.join(worktree, ...projectFile.split("/")), "utf8")).replace("name: GitPM launch", "name: Race prestate"));
+    await writeFile(path.join(worktree, ...paths[1]!.split("/")), Buffer.from([0, 255, 8, 9]));
+    const before = new Map(await Promise.all(paths.map(async (relative) => [relative, await readFile(path.join(worktree, ...relative.split("/")))] as const)));
+    const accepted = await manager.setWriterMode("DRF-CHANGES", "42", "ui");
+
+    await expect(service.discardAll("DRF-CHANGES", "42", accepted.fingerprint))
+      .rejects.toMatchObject({ code: "CHANGE_CHANGED_EXTERNALLY" });
+    expect(racedPath).not.toBe("");
+    for (const relative of paths) {
+      expect(await readFile(path.join(worktree, ...relative.split("/"))))
+        .toEqual(relative === racedPath ? external : before.get(relative));
+    }
+  });
+
+  it("rejects a symlink target without discarding another change", async (context) => {
+    const { draft, manager, service } = await runtime();
+    const scanPath = "projects/P-26-MGP84K/files/scan.bin";
+    const scanAbsolute = path.join(draft.worktree_path, ...scanPath.split("/"));
+    const projectAbsolute = path.join(draft.worktree_path, ...projectFile.split("/"));
+    const projectChanged = (await readFile(projectAbsolute, "utf8")).replace("name: GitPM launch", "name: Symlink prestate");
+    await writeFile(projectAbsolute, projectChanged);
+    await rm(scanAbsolute);
+    try {
+      await symlink("delete.bin", scanAbsolute, "file");
+    } catch (error) {
+      if (["EPERM", "EACCES", "ENOSYS"].includes((error as NodeJS.ErrnoException).code ?? "")) {
+        context.skip();
+        return;
+      }
+      throw error;
+    }
+    const accepted = await manager.setWriterMode("DRF-CHANGES", "42", "ui");
+
+    await expect(service.discardAll("DRF-CHANGES", "42", accepted.fingerprint))
+      .rejects.toMatchObject({ code: expect.stringMatching(/FS_SYMLINK|CHANGE_TARGET_UNSAFE/u) });
+    expect(await readFile(projectAbsolute, "utf8")).toBe(projectChanged);
+    expect((await lstat(scanAbsolute)).isSymbolicLink()).toBe(true);
   });
 });
