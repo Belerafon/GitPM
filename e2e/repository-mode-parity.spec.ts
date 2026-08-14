@@ -53,6 +53,9 @@ test("@parity creates, edits, commits and reads history through the browser", as
   const commitDialog = page.getByRole("dialog", { name: "Commit all changes", exact: true });
   await commitDialog.getByLabel("Commit message", { exact: true }).fill(`Verify ${testInfo.project.name} parity`);
   await commitDialog.getByRole("button", { name: "Commit all", exact: true }).click();
+  await expect(page.locator(".publish-step.complete").getByText("Committed", { exact: true })).toBeVisible();
+  // Clean-state text lives inside the collapsed technical-changes block; expand it before reading.
+  await page.getByText("Technical file changes", { exact: true }).click();
   await expect(page.getByText("No uncommitted changes", { exact: true }).first()).toBeVisible();
 
   await page.goto("/history");

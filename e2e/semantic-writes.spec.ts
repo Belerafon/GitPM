@@ -190,8 +190,10 @@ test.describe("semantic scheduling writes", () => {
     await page.goto(`/projects/${targetProjectId}`);
     await page.getByRole("button", { name: "Edit", exact: true }).click();
     const targetProjectEditor = page.getByRole("dialog", { name: "Edit: Operations", exact: true });
-    const enabledTracks = targetProjectEditor.getByText("Enabled tracks", { exact: true }).locator("xpath=..");
-    await expect(enabledTracks.getByRole("checkbox", { name: "Target", exact: true })).toBeChecked();
+    // Track checkboxes carry their full description in the accessible name and sit in the
+    // "Enabled tracks" region rather than next to the heading text.
+    const enabledTracks = targetProjectEditor.getByRole("region", { name: "Enabled tracks", exact: true });
+    await expect(enabledTracks.getByRole("checkbox", { name: /^Target\b/u })).toBeChecked();
     await targetProjectEditor.getByRole("button", { name: "Cancel", exact: true }).click();
     await expect(targetProjectEditor).toBeHidden();
     await page.goto(`/projects/${FIXTURE_PROJECT_ID}/tasks/${taskId}`);
