@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GitPmApi } from "./api.js";
 import { ChangesWorkspace, safeExternalUrl } from "./changes-ui.js";
-import type { ChangesList, DraftStatus, SemanticDiff } from "./types.js";
+import type { ChangesList, DraftStatus, EntityResult, SemanticDiff } from "./types.js";
 
 const draft: DraftStatus = { draft_id: "DRF-CHANGES", owner_gitlab_user_id: "42", branch: "gitpm/42/DRF-CHANGES", base_commit: "a".repeat(40), writer_mode: "ui", state: "open", fingerprint: "b".repeat(64), created_at: "2026-07-10T10:00:00Z", updated_at: "2026-07-10T10:00:00Z" };
 
@@ -26,8 +26,13 @@ class ChangesApi {
       { path: "projects/P-26-111111/tasks/T-26-222222.yaml", schema: "gitpm/task@2", id: "T-26-222222", display_name: "Old task" },
     ],
   };
+  projects: EntityResult[] = [
+    { document: { schema: "gitpm/project@2", id: "P-26-111111", name: "Alpha project", lifecycle: "active" }, path: "projects/P-26-111111/project.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) },
+    { document: { schema: "gitpm/project@2", id: "P-26-222222", name: "Бета", lifecycle: "active" }, path: "projects/P-26-222222/project.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) },
+  ];
   listChanges = vi.fn(async () => this.committed ? { changed_files_count: 0, affected_projects: [], files: [], project_files: [] } : this.changes);
   semanticChanges = vi.fn(async () => this.committed ? { created: [], updated: [], archived: [], deleted: [], counts: { created: 0, updated: 0, archived: 0, deleted: 0 }, affected_projects: [], file_entities: [], unclassified_files: [] } : this.semantic);
+  listEntities = vi.fn(async (_draftId: string, type: string) => type === "projects" ? this.projects : []);
   restoreFile = vi.fn(async (_draftId: string, _fingerprint: string, path: string) => { this.restored.push(path); });
   restoreHunk = vi.fn(async (_draftId: string, _fingerprint: string, path: string) => { this.restored.push(path); });
   discardAll = vi.fn(async () => undefined);
@@ -99,15 +104,20 @@ describe("Changes workspace", () => {
         { project_id: "P-26-222222", path: "projects/P-26-222222/files/scan.pdf", name: "scan.pdf", operation: "Replaced", content_kind: "binary" },
       ],
     };
-    render(<ChangesWorkspace api={fixture as unknown as GitPmApi} draft={draft} role="Reporter" locale="ru" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} />);
+    const onNavigate = vi.fn();
+    render(<ChangesWorkspace api={fixture as unknown as GitPmApi} draft={draft} role="Reporter" locale="ru" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} onNavigate={onNavigate} />);
 
     expect(await screen.findByRole("heading", { name: "Файлы проектов" })).toBeTruthy();
     expect(screen.getByText("ТЗ_v1.docx → ТЗ_v2.docx")).toBeTruthy();
     expect(screen.getByText("Файл переименован")).toBeTruthy();
     expect(screen.getByText("Файл заменён")).toBeTruthy();
     expect(screen.getByText("Текст · доступен Git diff")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Alpha project" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Бета" })).toBeTruthy();
     expect(screen.getAllByText("P-26-111111").length).toBeGreaterThan(0);
     expect(screen.getAllByText("P-26-222222").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("link", { name: "Бета" }));
+    expect(onNavigate).toHaveBeenCalledWith("projects", { projectId: "P-26-222222" });
     fireEvent.click(screen.getByRole("button", { name: /Файл изменён.*notes\.md/u }));
     expect(screen.getByText("+новый")).toBeTruthy();
     expect(screen.getByText("Для этой рабочей копии или роли изменения доступны только для чтения.")).toBeTruthy();
