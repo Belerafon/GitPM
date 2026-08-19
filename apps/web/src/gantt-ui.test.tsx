@@ -178,13 +178,14 @@ describe("read-only Gantt", () => {
       { slug: "effort", title: "Effort only", kind: "manual", capabilities: ["effort"] },
       { slug: "actual", title: "Actual", kind: "actual", source: "time_entries" },
     ];
+    const onNavigate = vi.fn();
     const api = {
       listEntities: vi.fn(async (_draftId: string, type: string) => type === "projects" ? [project] : type === "tasks" ? [scheduled] : []),
       getConfiguration: vi.fn(async () => ({ document: { schema: "gitpm/schedule-tracks@1", tracks, defaults: { enabled_tracks: ["plan"], primary_track: "plan", workload_track: "plan", dashboard_tracks: ["plan"] } }, path: "schedule-tracks", blob_id: "a", draft_fingerprint: "b" })),
       listProjectTimeEntries,
     } as unknown as GitPmApi;
 
-    const { container } = render(<GanttWorkspace api={api} draft={draft} locale="en" />);
+    const { container } = render(<GanttWorkspace api={api} draft={draft} locale="en" onNavigate={onNavigate} />);
     await waitFor(() => expect(container.querySelector(".gantt-scroll")?.getAttribute("data-due")).toBe("2026-12-31"));
     expect(container.querySelector('[data-date="2026-12-31"]')).not.toBeNull();
     expect(container.querySelector<HTMLElement>('[data-date="2026-07-02"]')?.title).toContain("200 h");
@@ -192,6 +193,9 @@ describe("read-only Gantt", () => {
     expect(within(screen.getByRole("combobox", { name: "Primary track" })).getAllByRole("option").map((option) => option.textContent)).toEqual(["Plan", "Target"]);
     expect(within(screen.getByRole("combobox", { name: "Dependency track" })).getAllByRole("option").map((option) => option.textContent)).toEqual(["Links"]);
     expect(screen.queryByText("Effort only")).toBeNull();
+    expect(screen.getByText(/Track titles come from repository settings/u)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Edit names in Plans and actuals" }));
+    expect(onNavigate).toHaveBeenCalledWith("settings", { query: { section: ["planning"] } });
   });
 
   it("hides actual activity and its API read when no enabled time-entry actual track exists", async () => {
@@ -209,6 +213,22 @@ describe("read-only Gantt", () => {
     expect(container.querySelector(".gantt-actual-marker")).toBeNull();
     expect(listProjectTimeEntries).not.toHaveBeenCalled();
     expect(screen.queryByRole("combobox", { name: "Dependency track" })).toBeNull();
+  });
+
+  it("explains custom track titles and opens settings from the Russian Gantt", async () => {
+    const scheduled = task("R", "Контур", "2026-07-01", "2026-07-10");
+    const project = result({ schema: "gitpm/project@2", id: projectId, name: "Планы", status: "backlog", lifecycle: "active", planning: { enabled_tracks: ["plan", "commitment"], primary_track: "plan", workload_track: "plan", dashboard_tracks: ["plan", "commitment"] } });
+    const onNavigate = vi.fn();
+    const api = {
+      listEntities: vi.fn(async (_draftId: string, type: string) => type === "projects" ? [project] : type === "tasks" ? [scheduled] : []),
+      getConfiguration: vi.fn(async () => ({ document: { schema: "gitpm/schedule-tracks@1", tracks: [{ slug: "plan", title: "Working plan", kind: "manual", capabilities: ["dates", "effort"] }, { slug: "commitment", title: "Commitment", kind: "manual", capabilities: ["dates"] }], defaults: { enabled_tracks: ["plan", "commitment"], primary_track: "plan", workload_track: "plan", dashboard_tracks: ["plan", "commitment"] } }, path: "schedule-tracks", blob_id: "a", draft_fingerprint: "b" })),
+    } as unknown as GitPmApi;
+    render(<GanttWorkspace api={api} draft={draft} locale="ru" onNavigate={onNavigate} />);
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Основной контур" })).toBeTruthy());
+    expect(screen.getByText("Working plan", { selector: "option" })).toBeTruthy();
+    expect(screen.getByText(/Названия контуров берутся из настроек репозитория/u)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Изменить названия в разделе «Планы и факт»" }));
+    expect(onNavigate).toHaveBeenCalledWith("settings", { query: { section: ["planning"] } });
   });
 });
 

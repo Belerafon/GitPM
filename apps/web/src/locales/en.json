@@ -667,6 +667,8 @@
   ,"gantt.primaryTrack": "Primary track"
   ,"gantt.additionalTracks": "Additional tracks"
   ,"gantt.dependencyTrack": "Dependency track"
+  ,"gantt.trackNamesHint": "Track titles come from repository settings, not from the interface language."
+  ,"gantt.openScheduleTracks": "Edit names in Plans and actuals"
   ,"gantt.zoomOut": "Zoom out"
   ,"gantt.zoomIn": "Zoom in"
   ,"gantt.scale": "Scale"

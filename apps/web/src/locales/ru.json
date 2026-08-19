@@ -667,6 +667,8 @@
   ,"gantt.primaryTrack": "Основной контур"
   ,"gantt.additionalTracks": "Дополнительные контуры"
   ,"gantt.dependencyTrack": "Контур зависимостей"
+  ,"gantt.trackNamesHint": "Названия контуров берутся из настроек репозитория, а не из языка интерфейса."
+  ,"gantt.openScheduleTracks": "Изменить названия в разделе «Планы и факт»"
   ,"gantt.zoomOut": "Уменьшить масштаб"
   ,"gantt.zoomIn": "Увеличить масштаб"
   ,"gantt.scale": "Масштаб"

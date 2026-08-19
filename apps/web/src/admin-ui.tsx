@@ -35,7 +35,7 @@ const CALENDAR_PRESET_GROUP_MESSAGES: Readonly<Record<CalendarPresetGroup, Messa
   "united-states": "admin.presetGroupUnitedStates",
 };
 
-export function AdminWorkspace({ api, draft, role, locale, surface, confirmAction = () => true, initialCalendarId, onOpenCalendar, onOpenPerson, onOpenProject, onOpenView, onChanged }: { readonly api: GitPmApi; readonly draft: DraftStatus; readonly role: GitPmRole; readonly locale: Locale; readonly surface: AdminSurface; readonly confirmAction?: (message: string) => boolean; readonly initialCalendarId?: string; readonly onOpenCalendar?: (calendarId: string) => void; readonly onOpenPerson?: (personId: string) => void; readonly onOpenProject?: (projectId: string) => void; readonly onOpenView?: (projectId: string, viewId: string) => void; readonly onChanged: () => Promise<void> }) {
+export function AdminWorkspace({ api, draft, role, locale, surface, confirmAction = () => true, initialCalendarId, initialSection, onOpenCalendar, onOpenPerson, onOpenProject, onOpenView, onChanged }: { readonly api: GitPmApi; readonly draft: DraftStatus; readonly role: GitPmRole; readonly locale: Locale; readonly surface: AdminSurface; readonly confirmAction?: (message: string) => boolean; readonly initialCalendarId?: string; readonly initialSection?: string; readonly onOpenCalendar?: (calendarId: string) => void; readonly onOpenPerson?: (personId: string) => void; readonly onOpenProject?: (projectId: string) => void; readonly onOpenView?: (projectId: string, viewId: string) => void; readonly onChanged: () => Promise<void> }) {
   const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
   const [calendars, setCalendars] = useState<readonly EntityResult[]>([]);
   const [people, setPeople] = useState<readonly EntityResult[]>([]);
@@ -129,6 +129,10 @@ export function AdminWorkspace({ api, draft, role, locale, surface, confirmActio
   const visibleCalendars = useMemo(() => applyAdvancedViewQuery(calendars, calendarFields, calendarQuery, locale), [calendarFields, calendarQuery, calendars, locale]);
   const confirmDelete = (name: string) => confirmAction(t("core.deleteConfirm", { name }));
   const surfaceHeading: MessageKey = surface === "people" ? "nav.people" : surface === "calendar" ? "nav.calendar" : "nav.settings";
+  useEffect(() => {
+    if (surface !== "settings" || initialSection !== "planning" || scheduleTracks === null) return;
+    document.getElementById("settings-planning-heading")?.scrollIntoView({ block: "start" });
+  }, [surface, initialSection, scheduleTracks]);
 
   const createCalendar = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); const data = new FormData(event.currentTarget); const document = { schema: "gitpm/calendar@1", id: newUniqueEntityId(ENTITY_ID_PREFIX.calendar, new Set(calendars.map((item) => item.document.id))), name: String(data.get("name")), working_weekdays: data.getAll("weekdays").map(Number), holidays: calendarDates(data), lifecycle: "active" } as GitPmDocument; void mutate(async () => await api.createEntity(draft.draft_id, "calendars", fingerprint, document)).then((result) => { if (result !== null) setCreateEditor(null); }); };
   const createPerson = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); const data = new FormData(event.currentTarget); const email = String(data.get("email") ?? ""); const calendar = String(data.get("calendar") ?? ""); const document = { schema: "gitpm/person@1", id: newUniqueEntityId(ENTITY_ID_PREFIX.person, new Set(people.map((item) => item.document.id))), name: String(data.get("name")), weekly_capacity_hours: Number(data.get("capacity")), calendar, lifecycle: "active", ...(email ? { email } : {}) } as GitPmDocument; void mutate(async () => await api.createEntity(draft.draft_id, "people", fingerprint, document)).then((result) => { if (result !== null) setCreateEditor(null); }); };

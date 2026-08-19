@@ -208,6 +208,19 @@ describe("administration UI", () => {
     expect(within(hint).getByText(/основной контур используется как рабочее расписание/u)).toBeTruthy();
   });
 
+  it("scrolls to planning when opened from a Gantt settings link", async () => {
+    const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: scrollIntoView, writable: true });
+    try {
+      render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="settings" initialSection="planning" onChanged={vi.fn(async () => undefined)} />);
+      await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+      expect(document.getElementById("settings-planning-heading")).not.toBeNull();
+    } finally {
+      Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
+    }
+  });
+
   it("changes the calendar for new people without exposing the repository polling interval", async () => {
     const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
     const onOpenCalendar = vi.fn();

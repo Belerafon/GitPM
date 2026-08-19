@@ -26,5 +26,12 @@ describe("Gantt overflow containment", () => {
     expect(rule(".gantt-milestone::before")).toContain("transform: rotate(45deg)");
     expect(rule(".gantt-milestone span")).not.toContain("transform:");
     expect(rule(".gantt-milestone span")).toContain("text-overflow: ellipsis");
+    expect(rule(".gantt-milestone span")).not.toContain("top: -");
+  });
+
+  it("stacks track selectors so a native dropdown does not sit on sibling labels", () => {
+    expect(rule(".gantt-track-fields")).toContain("display: flex");
+    expect(rule(".gantt-track-fields > label")).toContain("display: grid");
+    expect(rule(".gantt-additional-tracks")).toContain("border: 0");
   });
 });

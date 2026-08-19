@@ -1346,6 +1346,14 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
 .gantt-toolbar > span:nth-of-type(1) { color: #5d625f; font-size: .8rem; }
 .gantt-range { color: #5d625f; font-size: .78rem; }
 .gantt-scale { display: grid; min-width: 150px !important; margin-left: auto; }
+.gantt-track-controls { display: grid; gap: .75rem; }
+.gantt-track-names-hint { margin: 0; color: #5d625f; font-size: .78rem; line-height: 1.45; }
+.gantt-track-fields { display: flex; flex-wrap: wrap; align-items: start; gap: 1rem 1.5rem; }
+.gantt-track-fields > label { display: grid; gap: .3rem; min-width: 220px; color: #5d625f; font-size: .78rem; }
+.gantt-track-fields select { border: 1px solid #c9cbc5; border-radius: 8px; background: #fff; padding: .62rem; }
+.gantt-additional-tracks { display: grid; gap: .4rem; min-width: 220px; margin: 0; border: 0; padding: 0; }
+.gantt-additional-tracks legend { padding: 0; color: #5d625f; font-size: .78rem; }
+.gantt-additional-tracks label { display: inline-flex; align-items: center; gap: .35rem; color: #3f4943; font-size: .82rem; }
 .gantt-legend { display: flex; flex-wrap: wrap; gap: .5rem 1rem; color: #626a65; font-size: .72rem; }
 .gantt-legend span { display: flex; align-items: center; gap: .4rem; }
 .gantt-legend span::before { display: inline-block; width: 18px; height: 8px; border-radius: 3px; background: #68a18e; content: ""; }
@@ -1370,9 +1378,9 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
 .gantt-track-toggle { display: flex; flex-wrap: wrap; gap: .75rem; margin: 0 0 .5rem; font-size: .72rem; color: #46504a; }
 .gantt-track-toggle label { display: inline-flex; align-items: center; gap: .25rem; }
 .gantt-actual-marker { position: absolute; z-index: 2; width: 6px; height: 6px; border-radius: 50%; background: #b24c63; opacity: .9; pointer-events: none; }
-.gantt-milestone { position: absolute; z-index: 3; top: 30px; width: 18px; height: 18px; overflow: visible; border: 0; background: transparent; padding: 0; cursor: pointer; }
+.gantt-milestone { position: absolute; z-index: 3; top: 24px; width: 18px; height: 18px; overflow: visible; border: 0; background: transparent; padding: 0; cursor: pointer; }
 .gantt-milestone::before { position: absolute; inset: 0; transform: rotate(45deg); border: 2px solid #8a5b22; background: #f1b966; content: ""; }
-.gantt-milestone span { position: absolute; top: -18px; left: 12px; overflow: hidden; width: max-content; max-width: 320px; color: #79542b; font-size: .62rem; text-overflow: ellipsis; white-space: nowrap; }
+.gantt-milestone span { position: absolute; top: 2px; left: 20px; overflow: hidden; width: max-content; max-width: 180px; color: #79542b; font-size: .62rem; text-overflow: ellipsis; white-space: nowrap; }
 .gantt-dependencies { position: absolute; z-index: 1; top: 42px; left: 0; overflow: visible; pointer-events: none; }
 .gantt-dependencies path { fill: none; stroke: #6c5c91; stroke-width: 2; }
 .gantt-dependencies marker path { stroke: none; }
