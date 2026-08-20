@@ -71,8 +71,8 @@ describe("schedule track preservation", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     const editDialog = screen.getByRole("dialog", { name: "Edit: Multi-track task" });
-    expect((within(editDialog).getByLabelText("Due date") as HTMLInputElement).value).toBe("2026-08-20");
-    fireEvent.change(within(editDialog).getByLabelText("Due date"), { target: { value: "2026-08-25" } });
+    expect((within(editDialog).getByLabelText("Finish") as HTMLInputElement).value).toBe("2026-08-20");
+    fireEvent.change(within(editDialog).getByLabelText("Finish"), { target: { value: "2026-08-25" } });
     fireEvent.click(within(editDialog).getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(entityApi.entities.find((item) => item.document.id === "T-26-WORKING")?.document).toBeDefined());
@@ -106,9 +106,9 @@ describe("schedule track preservation", () => {
     await screen.findByRole("heading", { name: "Clear window task" });
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     const editDialog = screen.getByRole("dialog", { name: "Edit: Clear window task" });
-    fireEvent.change(within(editDialog).getByLabelText("Start date"), { target: { value: "" } });
-    fireEvent.change(within(editDialog).getByLabelText("Due date"), { target: { value: "" } });
-    fireEvent.change(within(editDialog).getByLabelText("Estimate (hours)"), { target: { value: "" } });
+    fireEvent.change(within(editDialog).getByLabelText("Start"), { target: { value: "" } });
+    fireEvent.change(within(editDialog).getByLabelText("Finish"), { target: { value: "" } });
+    fireEvent.change(within(editDialog).getByLabelText("Planned effort"), { target: { value: "" } });
     fireEvent.click(within(editDialog).getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(entityApi.entities.find((item) => item.document.id === "T-26-CLEAR")?.document).toBeDefined());

@@ -99,7 +99,7 @@ test.describe("semantic scheduling writes", () => {
     await page.getByRole("complementary", { name: "Task details", exact: true }).getByRole("button", { name: "Edit", exact: true }).click();
     const renamedEditor = page.getByRole("dialog", { name: "Edit: Semantic write task renamed", exact: true });
     await renamedEditor.getByRole("tab", { name: /Target.*primary/iu }).click();
-    const targetDue = renamedEditor.locator(".schedule-track-fields[data-track='target']").getByLabel("Due date", { exact: true });
+    const targetDue = renamedEditor.locator(".schedule-track-fields[data-track='target']").getByLabel("Finish", { exact: true });
     await targetDue.fill("2026-08-29");
     await targetDue.press("Tab");
     await expect(targetDue).toHaveValue("2026-08-29");

@@ -237,6 +237,7 @@ textarea { min-height: 76px; resize: vertical; border: 1px solid #c9cbc5; border
 .editor-drawer-layer { position: fixed; z-index: 70; inset: 0; display: flex; justify-content: flex-end; }
 .editor-drawer-backdrop { position: absolute; inset: 0; width: 100%; border: 0; border-radius: 0; background: rgba(13, 29, 22, .42); padding: 0; }
 .editor-drawer { position: relative; display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; width: min(520px, calc(100vw - 48px)); height: 100%; background: #fff; box-shadow: -18px 0 44px rgba(13, 29, 22, .2); }
+.editor-drawer.wide { width: min(640px, calc(100vw - 48px)); }
 .editor-drawer-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; border-bottom: 1px solid #dedfd9; padding: 1rem 1.25rem; }
 .editor-drawer-header h2 { margin: 0; font-size: 1.2rem; }
 .editor-drawer-close { display: inline-grid; flex: 0 0 auto; place-items: center; width: 40px; height: 40px; padding: 0; font-size: 1.45rem; line-height: 1; }
@@ -326,7 +327,64 @@ textarea { min-height: 76px; resize: vertical; border: 1px solid #c9cbc5; border
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); clip-path: inset(50%); white-space: nowrap; }
 .editor-drawer-form { display: grid; min-width: 0; min-height: 100%; gap: .8rem; align-content: start; }
 .editor-drawer-form > label { display: grid; min-width: 0; gap: .3rem; }
-.editor-drawer-form select, .editor-drawer-form textarea { min-width: 0; width: 100%; max-width: 100%; }
+.editor-drawer-form select, .editor-drawer-form textarea { min-width: 0; width: 100%; max-width: 100%; border: 1px solid #c9cbc5; border-radius: 8px; background: #fff; padding: .62rem; }
+.task-editor-form { gap: 1.15rem; }
+.task-editor-section { display: grid; min-width: 0; gap: .8rem; border-top: 1px solid #e1e4df; padding-top: 1rem; }
+.task-editor-section:first-child { border-top: 0; padding-top: 0; }
+.task-editor-section > header { display: grid; gap: .2rem; }
+.task-editor-section > header h3 { margin: 0; color: #2f3933; font-size: .92rem; }
+.task-editor-section > header p { margin: 0; color: #69716c; font-size: .74rem; line-height: 1.4; }
+.task-editor-section-fields { display: grid; min-width: 0; gap: .8rem; }
+.task-editor-section-fields > label { display: grid; min-width: 0; gap: .3rem; }
+.task-editor-basic-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; }
+.task-editor-basic-grid > label { display: grid; min-width: 0; gap: .3rem; }
+.task-editor-basic-grid > label:first-child { grid-column: 1 / -1; }
+.schedule-tracks-editor { display: grid; min-width: 0; gap: .8rem; }
+.schedule-tracks-heading { display: grid; gap: .2rem; }
+.schedule-tracks-heading h3 { margin: 0; color: #37423c; font-size: .82rem; }
+.schedule-tracks-heading p { margin: 0; color: #6b746e; font-size: .72rem; line-height: 1.45; }
+.schedule-tracks-tabs { display: flex; min-width: 0; flex-wrap: wrap; gap: .4rem; }
+.schedule-tracks-tabs button { display: inline-flex; min-height: 40px; align-items: center; gap: .42rem; border-color: #cfd5d0; background: #f8f9f7; padding: .48rem .65rem; color: #445049; }
+.schedule-tracks-tabs button:hover:not(:disabled) { background: #f1f5f2; }
+.schedule-tracks-tabs button.is-active { border-color: #739d89; background: #e7f1eb; box-shadow: inset 0 0 0 1px #a9c4b6; color: #1f4e3a; font-weight: 700; }
+.schedule-tracks-tabs button small, .schedule-track-single-title small { border-radius: 999px; background: #d8e9df; color: #28573f; padding: .16rem .36rem; font-size: .62rem; font-weight: 750; line-height: 1.2; text-transform: none; }
+.schedule-track-single-title { display: flex; min-height: 40px; align-items: center; gap: .45rem; border-radius: 8px; background: #f2f6f3; padding: .52rem .65rem; color: #2d4036; font-weight: 700; }
+.schedule-track-fields { display: grid; min-width: 0; gap: 1rem; }
+.schedule-track-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; }
+.schedule-track-field { display: grid; min-width: 0; gap: .3rem; align-items: stretch; }
+.schedule-track-field > span:first-child { color: #3f4943; font-size: .78rem; font-weight: 650; }
+.schedule-track-field input { min-height: 42px; }
+.schedule-track-effort { grid-column: 1 / -1; max-width: calc(50% - .4rem); }
+.schedule-effort-control { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; overflow: hidden; border: 1px solid #c9cbc5; border-radius: 8px; background: #fff; }
+.schedule-effort-control:focus-within { outline: 3px solid #8bb8a4; outline-offset: 2px; }
+.schedule-effort-control input { border: 0; border-radius: 0; outline: 0; }
+.schedule-effort-control > span { border-left: 1px solid #e0e3df; background: #f5f6f4; padding: .66rem .7rem; color: #68716b; font-size: .78rem; }
+.schedule-dependencies-field { display: grid; min-width: 0; gap: .65rem; border-top: 1px solid #e0e4df; padding-top: .85rem; }
+.schedule-dependencies-heading { display: flex; min-width: 0; align-items: start; justify-content: space-between; gap: .75rem; }
+.schedule-dependencies-heading > div { display: grid; min-width: 0; gap: .16rem; }
+.schedule-dependencies-heading h4 { width: fit-content; margin: 0; color: #39443e; font-size: .8rem; }
+.schedule-dependencies-heading p { max-width: 54ch; margin: 0; color: #707873; font-size: .7rem; line-height: 1.4; }
+.schedule-dependency-open { flex: 0 0 auto; padding: .45rem .6rem; color: #315f50; font-size: .72rem; font-weight: 650; }
+.schedule-dependencies-current { display: grid; gap: .4rem; }
+.schedule-dependency-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .65rem; border: 1px solid #dfe3de; border-radius: 8px; background: #fafbfa; padding: .48rem .55rem; }
+.schedule-dependency-row > span { display: grid; min-width: 0; gap: .1rem; }
+.schedule-dependency-row strong { overflow: hidden; font-size: .76rem; text-overflow: ellipsis; white-space: nowrap; }
+.schedule-dependency-row code { color: #707873; font-size: .64rem; }
+.schedule-dependency-row button { padding: .35rem .48rem; color: #824039; font-size: .68rem; }
+.schedule-dependencies-picker { display: grid; min-width: 0; gap: .55rem; border: 1px solid #d8dfda; border-radius: 9px; background: #f4f7f5; padding: .7rem; }
+.schedule-dependencies-picker > label { display: grid; gap: .28rem; }
+.schedule-dependencies-picker > label > span { color: #435049; font-size: .74rem; font-weight: 650; }
+.schedule-dependency-results { display: grid; max-height: 210px; overflow-y: auto; border: 1px solid #d9ded9; border-radius: 7px; background: #fff; }
+.schedule-dependency-results > button { display: grid; gap: .12rem; border: 0; border-bottom: 1px solid #e6e9e5; border-radius: 0; padding: .55rem .65rem; text-align: left; }
+.schedule-dependency-results > button:last-child { border-bottom: 0; }
+.schedule-dependency-results > button:hover { background: #edf4ef; }
+.schedule-dependency-results strong { font-size: .75rem; }
+.schedule-dependency-results code { color: #707873; font-size: .64rem; }
+.schedule-dependency-results > .empty-copy { padding: .65rem; }
+.schedule-dependency-cancel { justify-self: start; padding: .4rem .55rem; font-size: .72rem; }
+.schedule-tracks-actual-note { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: .5rem; margin: 0; border-radius: 8px; background: #edf3f8; padding: .62rem .7rem; color: #50616e; font-size: .72rem; line-height: 1.45; }
+.schedule-tracks-actual-note > span { display: inline-grid; width: 18px; height: 18px; place-items: center; border: 1px solid #9bb0bf; border-radius: 999px; color: #496476; font-size: .65rem; font-weight: 800; font-style: normal; }
+.schedule-tracks-empty { margin: 0; color: #6b746e; font-size: .78rem; }
 .task-reference-control { position: relative; display: block; min-width: 0; max-width: 100%; }
 .task-reference-select { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-reference-tooltip { position: absolute; z-index: 20; top: calc(100% + .3rem); inset-inline-start: 0; visibility: hidden; width: max-content; max-width: 100%; border-radius: 6px; background: #18352a; box-shadow: 0 5px 16px rgba(13, 29, 22, .2); color: #fff; opacity: 0; padding: .4rem .55rem; font-size: .76rem; line-height: 1.35; overflow-wrap: anywhere; pointer-events: none; transform: translateY(-2px); transition: opacity .12s ease, transform .12s ease, visibility .12s ease; }
@@ -1068,12 +1126,18 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
 @media (max-width: 560px) { .admin-create, .config-row-fields { grid-template-columns: 1fr; } .config-row-heading, .config-row-footer, .config-add-row { align-items: stretch; flex-direction: column; } .config-order { justify-content: end; } .card-heading { align-items: stretch; flex-direction: column; } }
 
 @media (max-width: 560px) {
-  .editor-drawer { width: 100vw; }
+  .editor-drawer, .editor-drawer.wide { width: 100vw; }
   .editor-drawer:has(.project-files-panel) { width: 100vw; }
   .editor-drawer-header, .editor-drawer-body { padding-inline: 1rem; }
-  .editor-drawer-actions { bottom: -1.25rem; margin-inline: -1rem; padding-inline: 1rem; }
+  .editor-drawer-actions { bottom: -1.25rem; flex-wrap: wrap; margin-inline: -1rem; padding-inline: 1rem; }
+  .editor-drawer-actions .more-actions { flex: 1 0 100%; margin-right: 0; }
+  .editor-drawer-actions .more-actions > summary { width: 100%; }
   .project-files-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .project-files-error { align-items: stretch; flex-direction: column; }
+  .task-editor-basic-grid, .schedule-track-grid { grid-template-columns: 1fr; }
+  .schedule-track-effort { grid-column: auto; max-width: none; }
+  .schedule-dependencies-heading { align-items: stretch; flex-direction: column; }
+  .schedule-dependency-open { align-self: start; }
 }
 
 @media (max-width: 880px) {

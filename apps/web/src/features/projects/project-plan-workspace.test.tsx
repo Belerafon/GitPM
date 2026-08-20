@@ -444,8 +444,8 @@ describe("ProjectPlanWorkspace", () => {
     await screen.findByRole("heading", { name: "Alpha" });
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     let dialog = screen.getByRole("dialog", { name: "Edit: Alpha" });
-    expect(within(dialog).getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Working · primary", "Target"]);
-    expect(within(dialog).getByText(/Actual activity is recorded from time entries/u)).toBeTruthy();
+    expect(within(dialog).getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Working Primary", "Target"]);
+    expect(within(dialog).getByText(/Actual activity: actual dates and hours are calculated automatically/u)).toBeTruthy();
     expect(within(dialog).queryByText("Dependencies")).toBeNull();
 
     const enabledTracks = within(dialog).getByText("Enabled tracks").closest<HTMLElement>(".planning-field")!;
@@ -455,7 +455,7 @@ describe("ProjectPlanWorkspace", () => {
     fireEvent.click(targetToggle);
     expect(within(dialog).getByRole("tab", { name: "Target" })).toBeTruthy();
 
-    fireEvent.change(within(dialog).getByLabelText("Due date"), { target: { value: "2026-08-25" } });
+    fireEvent.change(within(dialog).getByLabelText("Finish"), { target: { value: "2026-08-25" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(client.updateEntity.mock.calls.at(-1)?.[4]).toMatchObject({
       schedules: { working: { finish: "2026-08-25" }, target: { finish: "2026-08-30" } },
@@ -468,7 +468,7 @@ describe("ProjectPlanWorkspace", () => {
     dialog = screen.getByRole("dialog", { name: "Edit milestone" });
     fireEvent.click(within(dialog).getByRole("tab", { name: "Target" }));
     expect(within(dialog).queryByText("Dependencies")).toBeNull();
-    fireEvent.change(within(dialog).getByLabelText("Due date"), { target: { value: "2026-10-05" } });
+    fireEvent.change(within(dialog).getByLabelText("Finish"), { target: { value: "2026-10-05" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(client.updateEntity.mock.calls.at(-1)?.[4]).toMatchObject({
       schedules: { working: { finish: "2026-09-20" }, target: { finish: "2026-10-05" } },
@@ -511,7 +511,7 @@ describe("ProjectPlanWorkspace", () => {
     expect(checkbox.disabled).toBe(true);
 
     fireEvent.click(within(dialog).getByRole("tab", { name: "Target" }));
-    fireEvent.change(within(dialog).getByLabelText("Due date"), { target: { value: "" } });
+    fireEvent.change(within(dialog).getByLabelText("Finish"), { target: { value: "" } });
 
     expect(checkbox.disabled).toBe(false);
     expect(target.textContent).not.toContain("This project already has schedule data in the track.");
@@ -836,9 +836,9 @@ describe("ProjectPlanWorkspace", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /Add assignee/u }));
     fireEvent.change(within(dialog).getByLabelText("Search people"), { target: { value: "Ada" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Ada" }));
-    fireEvent.change(within(dialog).getByLabelText("Start date"), { target: { value: "2026-07-20" } });
-    fireEvent.change(within(dialog).getByLabelText("Due date"), { target: { value: "2026-07-24" } });
-    fireEvent.change(within(dialog).getByLabelText("Estimate (hours)"), { target: { value: "20" } });
+    fireEvent.change(within(dialog).getByLabelText("Start"), { target: { value: "2026-07-20" } });
+    fireEvent.change(within(dialog).getByLabelText("Finish"), { target: { value: "2026-07-24" } });
+    fireEvent.change(within(dialog).getByLabelText("Planned effort"), { target: { value: "20" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Create task" }));
     await waitFor(() => expect(client.createEntity).toHaveBeenCalled());
     expect(client.createEntity.mock.calls[0]?.[3]).toMatchObject({ project: project.document.id, milestone: stage.document.id, title: "Created from plan", assignees: [person.document.id], schedules: { plan: { start: "2026-07-20", finish: "2026-07-24", effort_hours: 20 } } });

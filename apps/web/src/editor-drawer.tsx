@@ -1,12 +1,13 @@
 import { useEffect, useId, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-export function EditorDrawer({ open, title, closeLabel, onClose, children }: {
+export function EditorDrawer({ open, title, closeLabel, onClose, children, size = "default" }: {
   readonly open: boolean;
   readonly title: string;
   readonly closeLabel: string;
   readonly onClose: () => void;
   readonly children: ReactNode;
+  readonly size?: "default" | "wide";
 }) {
   const titleId = useId();
   const closeButton = useRef<HTMLButtonElement>(null);
@@ -43,7 +44,7 @@ export function EditorDrawer({ open, title, closeLabel, onClose, children }: {
   if (!open) return null;
   return createPortal(<div className="editor-drawer-layer">
     <button aria-label={closeLabel} className="editor-drawer-backdrop" onClick={onClose} type="button" />
-    <aside aria-labelledby={titleId} aria-modal="true" className="editor-drawer" ref={drawer} role="dialog">
+    <aside aria-labelledby={titleId} aria-modal="true" className={`editor-drawer${size === "wide" ? " wide" : ""}`} ref={drawer} role="dialog">
       <header className="editor-drawer-header">
         <h2 id={titleId}>{title}</h2>
         <button aria-label={closeLabel} className="editor-drawer-close" onClick={onClose} ref={closeButton} title={closeLabel} type="button">×</button>

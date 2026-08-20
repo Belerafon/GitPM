@@ -75,7 +75,34 @@ test.describe("schedule track preservation", () => {
     const taskDetails = page.getByRole("complementary", { name: "Task details", exact: true });
     await taskDetails.getByRole("button", { name: "Edit", exact: true }).click();
     const editDialog = page.getByRole("dialog", { name: "Edit: Schedule preservation E2E", exact: true });
-    const dueDate = editDialog.getByLabel("Due date", { exact: true });
+    const scheduleEditor = editDialog.getByRole("region", { name: "Schedule variant", exact: true });
+    for (const width of [1280, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      const geometry = await scheduleEditor.evaluate((element) => {
+        const drawerBody = element.closest(".editor-drawer-body");
+        const fields = [...element.querySelectorAll<HTMLElement>(".schedule-track-field")].map((field) => {
+          const bounds = field.getBoundingClientRect();
+          return { left: bounds.left, top: bounds.top, width: bounds.width };
+        });
+        return {
+          drawerFits: drawerBody !== null && drawerBody.scrollWidth <= drawerBody.clientWidth,
+          scheduleFits: element.scrollWidth <= element.clientWidth,
+          fields,
+        };
+      });
+      expect(geometry.drawerFits).toBe(true);
+      expect(geometry.scheduleFits).toBe(true);
+      expect(geometry.fields).toHaveLength(3);
+      if (width === 1280) {
+        expect(Math.abs(geometry.fields[0]!.top - geometry.fields[1]!.top)).toBeLessThan(2);
+      } else {
+        expect(geometry.fields.every((field) => Math.abs(field.left - geometry.fields[0]!.left) < 2)).toBe(true);
+        expect(geometry.fields[0]!.top).toBeLessThan(geometry.fields[1]!.top);
+        expect(geometry.fields[1]!.top).toBeLessThan(geometry.fields[2]!.top);
+      }
+    }
+
+    const dueDate = editDialog.getByLabel("Finish", { exact: true });
     await expect(dueDate).toHaveValue("2026-08-20");
     await dueDate.fill("2026-08-25");
     await editDialog.getByRole("button", { name: "Save", exact: true }).click();

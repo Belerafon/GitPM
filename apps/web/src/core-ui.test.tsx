@@ -173,9 +173,9 @@ describe("core UI", () => {
     fireEvent.click(within(taskForm).getByRole("button", { name: /Add assignee/u }));
     fireEvent.change(within(taskForm).getByLabelText("Search people"), { target: { value: "Ada" } });
     fireEvent.click(within(taskForm).getByRole("button", { name: "Ada" }));
-    fireEvent.change(within(taskForm).getByLabelText("Start date"), { target: { value: "2026-07-20" } });
-    fireEvent.change(within(taskForm).getByLabelText("Due date"), { target: { value: "2026-07-24" } });
-    fireEvent.change(within(taskForm).getByLabelText("Estimate (hours)"), { target: { value: "20" } });
+    fireEvent.change(within(taskForm).getByLabelText("Start"), { target: { value: "2026-07-20" } });
+    fireEvent.change(within(taskForm).getByLabelText("Finish"), { target: { value: "2026-07-24" } });
+    fireEvent.change(within(taskForm).getByLabelText("Planned effort"), { target: { value: "20" } });
     fireEvent.change(within(taskForm).getByLabelText("Description (Markdown)"), { target: { value: "**important**" } });
     fireEvent.submit(taskForm);
     expect(await screen.findByText("First task")).toBeTruthy();
@@ -193,7 +193,7 @@ describe("core UI", () => {
     const editDialog = screen.getByRole("dialog", { name: "Edit: First task" });
     fireEvent.change(within(editDialog).getByLabelText("Status"), { target: { value: "done" } });
     fireEvent.click(within(editDialog).getByRole("button", { name: "Remove Ada" }));
-    fireEvent.change(within(editDialog).getByLabelText("Estimate (hours)"), { target: { value: "24" } });
+    fireEvent.change(within(editDialog).getByLabelText("Planned effort"), { target: { value: "24" } });
     fireEvent.click(within(editDialog).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(entityApi.entities.find((item) => item.document.schema === "gitpm/task@2")?.document.status).toBe("done"));
     expect(entityApi.entities.find((item) => item.document.schema === "gitpm/task@2")?.document.assignees).toEqual([]);

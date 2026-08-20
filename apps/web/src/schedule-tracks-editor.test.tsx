@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { useState } from "react";
 import { ScheduleTracksEditor } from "./schedule-tracks-editor.js";
@@ -25,30 +25,30 @@ describe("ScheduleTracksEditor", () => {
   it("renders a simple form without tabs for a single manual track", () => {
     const { container } = render(<StatefulEditor initial={{ plan: { start: "2026-08-01", finish: "2026-08-10", effort_hours: 8 } }} tracks={[{ slug: "plan", title: "Plan", kind: "manual", capabilities: ["dates", "effort"] }]} primaryTrack="plan" dependencies={[]} />);
     expect(container.querySelector(".schedule-tracks-tabs")).toBeNull();
-    expect((screen.getByLabelText("Start date") as HTMLInputElement).value).toBe("2026-08-01");
-    expect((screen.getByLabelText("Due date") as HTMLInputElement).value).toBe("2026-08-10");
-    expect((screen.getByLabelText("Estimate (hours)") as HTMLInputElement).value).toBe("8");
+    expect((screen.getByLabelText("Start") as HTMLInputElement).value).toBe("2026-08-01");
+    expect((screen.getByLabelText("Finish") as HTMLInputElement).value).toBe("2026-08-10");
+    expect((screen.getByLabelText("Planned effort") as HTMLInputElement).value).toBe("8");
   });
 
   it("shows titled tabs for several manual tracks and a read-only note for the actual track", () => {
     render(<StatefulEditor initial={{ working: { start: "2026-08-05", finish: "2026-08-20" } }} tracks={[targetTrack, workingTrack, forecastTrack]} primaryTrack="working" actual={actualTrack} dependencies={[]} />);
     const tabs = screen.getByRole("tablist");
-    expect(Array.from(tabs.querySelectorAll("button")).map((button) => button.textContent)).toEqual(["Target", "Working · primary", "Forecast"]);
-    expect(screen.getByText(/Actual activity is recorded from time entries/u)).toBeTruthy();
-    expect((screen.getByLabelText("Due date") as HTMLInputElement).value).toBe("2026-08-20");
+    expect(Array.from(tabs.querySelectorAll("button")).map((button) => button.textContent)).toEqual(["Target", "Working Primary", "Forecast"]);
+    expect(screen.getByText(/Actual activity: actual dates and hours are calculated automatically/u)).toBeTruthy();
+    expect((screen.getByLabelText("Finish") as HTMLInputElement).value).toBe("2026-08-20");
   });
 
   it("hides the estimate field for a track without the effort capability", () => {
     render(<StatefulEditor initial={{ forecast: { start: "2026-09-01", finish: "2026-09-10" } }} tracks={[forecastTrack, workingTrack]} primaryTrack="forecast" dependencies={[]} />);
-    expect((screen.getByLabelText("Due date") as HTMLInputElement).value).toBe("2026-09-10");
-    expect(screen.queryByLabelText("Estimate (hours)")).toBeNull();
+    expect((screen.getByLabelText("Finish") as HTMLInputElement).value).toBe("2026-09-10");
+    expect(screen.queryByLabelText("Planned effort")).toBeNull();
   });
 
   it("creates a window for a track the task was absent from while keeping the others", () => {
     render(<StatefulEditor initial={{ working: { start: "2026-08-05", finish: "2026-08-20", effort_hours: 40 } }} tracks={[targetTrack, workingTrack]} primaryTrack="working" dependencies={[]} />);
     fireEvent.click(screen.getByRole("tab", { name: "Target" }));
-    fireEvent.change(screen.getByLabelText("Due date"), { target: { value: "2026-08-30" } });
-    const targetInput = screen.getByLabelText("Due date") as HTMLInputElement;
+    fireEvent.change(screen.getByLabelText("Finish"), { target: { value: "2026-08-30" } });
+    const targetInput = screen.getByLabelText("Finish") as HTMLInputElement;
     expect(targetInput.value).toBe("2026-08-30");
   });
 
@@ -68,23 +68,35 @@ describe("ScheduleTracksEditor", () => {
   it("adds and removes a dependency on the active track", () => {
     const dep = task("T-26-AAAAAA", "Parser");
     render(<StatefulEditor initial={{ working: { start: "2026-08-05", finish: "2026-08-20" } }} tracks={[workingTrack]} primaryTrack="working" dependencies={[dep]} />);
-    fireEvent.change(screen.getByLabelText("Add dependency"), { target: { value: dep.document.id } });
-    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    fireEvent.click(screen.getByRole("button", { name: /Add dependency/u }));
+    fireEvent.change(screen.getByLabelText("Search for a task"), { target: { value: "Parser" } });
+    fireEvent.click(screen.getByRole("button", { name: /Parser/u }));
     expect(screen.getByText("Parser")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /Remove dependency Parser/u }));
-    expect(screen.getByText("No dependencies")).toBeTruthy();
+    expect(screen.getByText("No dependencies added")).toBeTruthy();
   });
 
   it("creates and removes a dependency-only window without changing its neighboring track", () => {
     const dep = task("T-26-AAAAAA", "Parser");
     render(<StatefulEditor initial={{ target: { finish: "2026-08-30" } }} tracks={[workingTrack]} primaryTrack="working" dependencies={[dep]} />);
-    fireEvent.change(screen.getByLabelText("Add dependency"), { target: { value: dep.document.id } });
-    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    fireEvent.click(screen.getByRole("button", { name: /Add dependency/u }));
+    fireEvent.click(screen.getByRole("button", { name: /Parser/u }));
     expect(JSON.parse(screen.getByTestId("schedules-state").textContent ?? "null")).toEqual({
       target: { finish: "2026-08-30" },
       working: { depends_on: [dep.document.id] },
     });
     fireEvent.click(screen.getByRole("button", { name: /Remove dependency Parser/u }));
     expect(JSON.parse(screen.getByTestId("schedules-state").textContent ?? "null")).toEqual({ target: { finish: "2026-08-30" } });
+  });
+
+  it("supports the keyboard tab pattern and exposes a labelled tab panel", () => {
+    render(<StatefulEditor initial={{ working: { finish: "2026-08-20" } }} tracks={[targetTrack, workingTrack, forecastTrack]} primaryTrack="working" dependencies={[]} />);
+    const working = screen.getByRole("tab", { name: "Working Primary" });
+    working.focus();
+    fireEvent.keyDown(working, { key: "ArrowRight" });
+    const forecast = screen.getByRole("tab", { name: "Forecast" });
+    expect(forecast.getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(forecast);
+    expect(screen.getByRole("tabpanel").getAttribute("aria-labelledby")).toBe(forecast.id);
   });
 });

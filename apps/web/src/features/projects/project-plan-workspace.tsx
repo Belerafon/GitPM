@@ -9,7 +9,7 @@ import { buildProjectArchiveViewModel, buildProjectTaskViewModel, canonicalTaskC
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { ApiError, deleteRestrictionLabels, formatApiError, type GitPmApi } from "../../api.js";
 import { AsyncBoundary, useAsyncLoad } from "../../async-data.js";
-import { AssigneeChecks, existingProjectGroups, projectGroupFromForm, ProjectGroupField, SafeMarkdown, TaskPanel, type ConfigValue } from "../../core-ui.js";
+import { AssigneeChecks, existingProjectGroups, projectGroupFromForm, ProjectGroupField, SafeMarkdown, TaskEditorSection, TaskPanel, type ConfigValue } from "../../core-ui.js";
 import { ProjectPlanningEditor } from "../../project-planning-editor.js";
 import { ScheduleTracksEditor } from "../../schedule-tracks-editor.js";
 import { EditorDrawer } from "../../editor-drawer.js";
@@ -178,6 +178,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   const [projectPlanningDirty, setProjectPlanningDirty] = useState(false);
   const [projectSchedulesDraft, setProjectSchedulesDraft] = useState<ScheduleMap | undefined>(undefined);
   const [stageSchedulesDraft, setStageSchedulesDraft] = useState<ScheduleMap | undefined>(undefined);
+  const [newTaskSchedules, setNewTaskSchedules] = useState<ScheduleMap | undefined>(undefined);
   const [statusFilter, setStatusFilter] = useState(initialStatusFilter);
   const [milestoneFilter, setMilestoneFilter] = useState(initialMilestoneFilter);
   const [summaryFilter, setSummaryFilter] = useState<SummaryFilter>(normalizeSummaryFilter(initialSummaryFilter));
@@ -203,6 +204,8 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   const projectEditorActualTrack = scheduling.actualTrack(projectEditorPlanning);
   const stageManualTracks = scheduling.manualTracks(workspace?.project.document.planning);
   const stageActualTrack = scheduling.actualTrack(workspace?.project.document.planning);
+  const taskDependencyOptions = (workspace?.tasks ?? []).filter((task) => task.document.lifecycle === "active");
+  useEffect(() => { if (editor?.kind === "task") setNewTaskSchedules(undefined); }, [editor?.kind]);
   const text = useMemo(() => scheduleTextReader(primaryTrack), [primaryTrack]);
   const effortOf = useMemo(() => scheduleEffortReader(primaryTrack), [primaryTrack]);
   const number = useMemo(() => (document: Readonly<Record<string, unknown>>, key: string): number | undefined => key === "estimate_hours" ? effortOf(document) : typeof document[key] === "number" ? document[key] as number : undefined, [effortOf]);
@@ -708,17 +711,15 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     const data = new FormData(event.currentTarget);
     const acceptanceCriteria = data.getAll("acceptanceCriteria").map(String).filter((criterion) => criterion !== "");
     const id = newUniqueEntityId(ENTITY_ID_PREFIX.task, new Set(workspace.tasks.map((item) => item.document.id)));
-    const start = String(data.get("start")); const due = String(data.get("due")); const estimate = String(data.get("estimate"));
     const priorWorkspace = workspace;
-    const document = {
+    const document = withSchedulesMap({
       schema: "gitpm/task@2", id, project: projectId, title: String(data.get("title")).trim(), type: String(data.get("type")), status: String(data.get("status")), lifecycle: "active",
       description_markdown: String(data.get("description")),
       ...(acceptanceCriteria.length === 0 ? {} : { acceptance_criteria_markdown: acceptanceCriteria }),
       assignees: data.getAll("assignees").map(String),
       ...(editor.parentId === undefined ? {} : { parent: editor.parentId }),
       ...(editor.stageId === undefined ? {} : { milestone: editor.stageId }),
-      ...(buildSchedule(primaryTrack, start, due, estimate) ? { schedules: buildSchedule(primaryTrack, start, due, estimate) } : {}),
-    } as EntityDocument;
+    } as EntityDocument, newTaskSchedules);
     const reorder = editor.stageId !== undefined && (editor.beforeId !== undefined || editor.afterId !== undefined)
       ? { stageId: editor.stageId, beforeId: editor.beforeId, afterId: editor.afterId }
       : null;
@@ -994,18 +995,13 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
       </EditorDrawer>;
     })()}
 
-    <EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setEditor(null)} open={editor?.kind === "task"} title={editor?.kind === "task" && editor.parentId !== undefined && editor.beforeId === undefined && editor.afterId === undefined ? t("taskHierarchy.newSubtask") : t("core.createTaskAction")}>
-      <form className="editor-drawer-form" onSubmit={createTask}>
+    <EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setEditor(null)} open={editor?.kind === "task"} size="wide" title={editor?.kind === "task" && editor.parentId !== undefined && editor.beforeId === undefined && editor.afterId === undefined ? t("taskHierarchy.newSubtask") : t("core.createTaskAction")}>
+      <form className="editor-drawer-form task-editor-form" onSubmit={createTask}>
         {editor?.kind === "task" && editor.parentId !== undefined && <p className="task-parent-context">{t("taskHierarchy.parent")}: <strong>{text(workspace?.tasks.find((task) => task.document.id === editor.parentId)?.document ?? { schema: "", id: "", lifecycle: "active" }, "title")}</strong></p>}
-        <label>{t("core.title")}<input disabled={readOnly} name="title" required /></label>
-        <label>{t("core.status")}<select disabled={readOnly} name="status">{statuses.map((item) => <option key={item.slug} value={item.slug}>{item.title}</option>)}</select></label>
-        <label>{t("core.type")}<select disabled={readOnly} name="type">{types.map((item) => <option key={item.slug} value={item.slug}>{item.title}</option>)}</select></label>
-        <AssigneeChecks disabled={readOnly} people={people} selected={newTaskAssignees} t={t} />
-        <label>{t("projectPlan.start")}<input disabled={readOnly} name="start" type="date" /></label>
-        <label>{t("core.due")}<input disabled={readOnly} name="due" type="date" /></label>
-        <label>{t("projectPlan.estimate")}<input disabled={readOnly} min="0" name="estimate" step="0.25" type="number" /></label>
-        <ProjectFileMarkdownField context={fileReferenceContext} disabled={readOnly} label={t("core.description")} name="description" />
-        <ProjectFileMarkdownField context={fileReferenceContext} disabled={readOnly} label={t("projectFileReferences.acceptanceCriterion")} name="acceptanceCriteria" />
+        <TaskEditorSection title={t("taskEditor.basic")}><div className="task-editor-basic-grid"><label>{t("core.title")}<input disabled={readOnly} name="title" required /></label><label>{t("core.status")}<select disabled={readOnly} name="status">{statuses.map((item) => <option key={item.slug} value={item.slug}>{item.title}</option>)}</select></label><label>{t("core.type")}<select disabled={readOnly} name="type">{types.map((item) => <option key={item.slug} value={item.slug}>{item.title}</option>)}</select></label></div></TaskEditorSection>
+        <TaskEditorSection title={t("taskEditor.people")}><AssigneeChecks disabled={readOnly} people={people} selected={newTaskAssignees} t={t} /></TaskEditorSection>
+        <TaskEditorSection title={t("taskEditor.planning")}><ScheduleTracksEditor actualTrack={stageActualTrack} dependencies={taskDependencyOptions} disabled={readOnly} locale={locale} onChange={setNewTaskSchedules} primaryTrack={primaryTrack} schedules={newTaskSchedules} tracks={stageManualTracks} /></TaskEditorSection>
+        <TaskEditorSection title={t("taskEditor.description")}><ProjectFileMarkdownField context={fileReferenceContext} disabled={readOnly} label={t("core.description")} name="description" /><ProjectFileMarkdownField context={fileReferenceContext} disabled={readOnly} label={t("projectFileReferences.acceptanceCriterion")} name="acceptanceCriteria" /></TaskEditorSection>
         <div className="editor-drawer-actions"><button onClick={() => setEditor(null)} type="button">{t("core.cancel")}</button><button className="primary" disabled={readOnly}>{t("core.createTask")}</button></div>
       </form>
     </EditorDrawer>
