@@ -432,6 +432,16 @@ function ScheduleTracksConfigEditor({ api, draft, entity, locale, readOnly, t, m
     setDefaultsTouched(true);
   };
   const canAddTrack = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u.test(newTrackSlug) && !tracks.some((track) => track.slug === newTrackSlug);
+  const capabilityTitle = (capability: "dates" | "effort" | "dependencies") => t(`admin.capability${capability[0]!.toUpperCase()}${capability.slice(1)}` as MessageKey);
+  const capabilityDescription = (capability: "dates" | "effort" | "dependencies") => t(`admin.capability${capability[0]!.toUpperCase()}${capability.slice(1)}Description` as MessageKey);
+  const usageSummary = (track: TrackDefinition) => {
+    if (track.kind === "actual") return t("admin.actualTrackUsage");
+    const hasDates = track.capabilities?.includes("dates") ?? false;
+    const hasEffort = track.capabilities?.includes("effort") ?? false;
+    if (hasDates && hasEffort) return t("admin.manualTrackUsageDatesEffort");
+    if (hasDates) return t("admin.manualTrackUsageDates");
+    return t("admin.manualTrackUsageNoDates");
+  };
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setBusy(true);
     const document = { ...entity.document, tracks, defaults: defaultsTouched ? defaults : entityDefaults } as ConfigurationDocument;
@@ -455,17 +465,31 @@ function ScheduleTracksConfigEditor({ api, draft, entity, locale, readOnly, t, m
         <p>{t("admin.scheduleTracksHint")}</p>
       </div>
       <ConfigurationImpactNotice issues={impactIssues} t={t} />
-      <div className="config-list">{tracks.map((track, index) => <section className="config-row schedule-track-row" data-flip-key={`config:schedule-tracks:${track.slug}`} key={track.slug}>
-        <header className="config-row-heading"><div className="config-identity"><strong>{track.title}</strong><span className="config-technical-id"><span>{t("admin.technicalId")}</span><code>{track.slug}</code></span></div><span className={`schedule-track-kind ${track.kind}`}>{track.kind === "manual" ? t("admin.manualTrack") : t("admin.actualTrack")}</span></header>
-        <div className="config-row-fields"><label className="config-field"><span>{t("core.name")}</span><input aria-label={`${title} ${track.slug}`} disabled={readOnly || busy} onChange={(event) => updateTitle(index, event.currentTarget.value)} required value={track.title} /></label><label className="config-field"><span>{t("admin.trackKind")}</span><select aria-label={`${t("admin.trackKind")} ${track.slug}`} disabled={readOnly || busy} onChange={(event) => changeKind(index, event.currentTarget.value as "manual" | "actual")} value={track.kind}><option value="manual">{t("admin.manualTrack")}</option><option value="actual">{t("admin.actualTrack")}</option></select></label><fieldset className="config-field schedule-track-capabilities"><legend>{track.kind === "manual" ? t("admin.capabilities") : t("admin.trackSource")}</legend><div>{track.kind === "manual" ? (["dates", "effort", "dependencies"] as const).map((capability) => <label key={capability}><input checked={track.capabilities?.includes(capability) ?? false} disabled={readOnly || busy || (track.capabilities?.length === 1 && track.capabilities[0] === capability)} onChange={() => toggleCapability(index, capability)} type="checkbox" />{t(`admin.capability${capability[0]!.toUpperCase()}${capability.slice(1)}` as MessageKey)}</label>) : <span>{t("admin.timeEntriesSource")}</span>}</div></fieldset></div>
+      <section className="schedule-tracks-step">
+        <header className="schedule-tracks-step-heading"><span aria-hidden="true">1</span><div><h3>{t("admin.scheduleTracksDefinitionsTitle")}</h3><p>{t("admin.scheduleTracksDefinitionsHint")}</p></div></header>
+        <div className="config-list">{tracks.map((track, index) => {
+          const anotherActualExists = tracks.some((candidate, candidateIndex) => candidateIndex !== index && candidate.kind === "actual");
+          return <section className="config-row schedule-track-row" data-flip-key={`config:schedule-tracks:${track.slug}`} key={track.slug}>
+        <header className="config-row-heading"><div className="config-identity"><strong>{track.title}</strong></div><span className={`schedule-track-kind ${track.kind}`}>{track.kind === "manual" ? t("admin.manualTrack") : t("admin.actualTrack")}</span></header>
+        <div className="schedule-track-editor-fields">
+          <label className="config-field schedule-track-name"><span>{t("admin.trackDisplayName")}</span><input aria-label={`${title} ${track.slug}`} disabled={readOnly || busy} onChange={(event) => updateTitle(index, event.currentTarget.value)} required value={track.title} /><small>{t("admin.trackDisplayNameHint")}</small></label>
+          <fieldset className="config-field schedule-track-kind-options"><legend>{t("admin.trackDataEntry")}</legend><div>
+            <label><input aria-label={t("admin.manualTrackChoice")} checked={track.kind === "manual"} disabled={readOnly || busy} name={`track-kind-${track.slug}`} onChange={() => changeKind(index, "manual")} type="radio" /><span><strong>{t("admin.manualTrackChoice")}</strong><small>{t("admin.manualTrackChoiceHint")}</small></span></label>
+            <label><input aria-label={t("admin.actualTrackChoice")} checked={track.kind === "actual"} disabled={readOnly || busy || (track.kind !== "actual" && anotherActualExists)} name={`track-kind-${track.slug}`} onChange={() => changeKind(index, "actual")} type="radio" /><span><strong>{t("admin.actualTrackChoice")}</strong><small>{t("admin.actualTrackChoiceHint")}</small></span></label>
+          </div>{track.kind !== "actual" && anotherActualExists && <small className="schedule-track-single-actual">{t("admin.singleActualTrackHint")}</small>}</fieldset>
+          {track.kind === "manual" ? <fieldset className="config-field schedule-track-capabilities"><legend>{t("admin.trackDataFields")}</legend><p>{t("admin.trackDataFieldsHint")}</p><div>{(["dates", "effort", "dependencies"] as const).map((capability) => <label key={capability}><input aria-label={capabilityTitle(capability)} checked={track.capabilities?.includes(capability) ?? false} disabled={readOnly || busy || (track.capabilities?.length === 1 && track.capabilities[0] === capability)} onChange={() => toggleCapability(index, capability)} type="checkbox" /><span><strong>{capabilityTitle(capability)}</strong><small>{capabilityDescription(capability)}</small></span></label>)}</div></fieldset> : <section className="schedule-track-actual-source"><strong>{t("admin.actualTrackCalculationTitle")}</strong><p>{t("admin.actualTrackCalculationHint")}</p></section>}
+          <p className="schedule-track-usage-summary">{usageSummary(track)}</p>
+          <details className="schedule-track-technical"><summary>{t("admin.technicalDetails")}</summary><p>{t("admin.trackTechnicalIdHint")}</p><code>{track.slug}</code></details>
+        </div>
         <footer className="config-row-footer"><span>{t("admin.orderPosition", { position: index + 1, count: tracks.length })}</span><div className="config-order"><button aria-label={t("admin.moveUp", { name: track.title })} disabled={readOnly || busy || index === 0} onClick={() => move(index, -1)} type="button"><span aria-hidden="true">↑</span>{t("admin.higher")}</button><button aria-label={t("admin.moveDown", { name: track.title })} disabled={readOnly || busy || index === tracks.length - 1} onClick={() => move(index, 1)} type="button"><span aria-hidden="true">↓</span>{t("admin.lower")}</button><button aria-label={t("admin.removeConfigValue", { name: track.title })} className="danger" disabled={readOnly || busy || tracks.length === 1} onClick={() => removeTrack(index)} type="button">{t("core.delete")}</button></div></footer>
-      </section>)}</div>
-      <div className="config-add-row"><label className="config-field"><span>{t("admin.newTrackTechnicalId")}</span><input aria-label={t("admin.newTrackTechnicalId")} disabled={readOnly || busy} onChange={(event) => setNewTrackSlug(event.currentTarget.value)} pattern="[a-z][a-z0-9]*(?:-[a-z0-9]+)*" value={newTrackSlug} /></label><button disabled={readOnly || busy || !canAddTrack} onClick={addTrack} type="button">{t("admin.addTrack")}</button></div>
-      <details className="editor-advanced-section">
-        <summary>{t("admin.defaultProjectPlanning")}</summary>
-        <p>{t("admin.defaultProjectPlanningHint")}</p>
-        <ProjectPlanningEditor disabled={readOnly || busy} locale={locale} onChange={(next) => { setDefaults(next); setDefaultsTouched(true); }} planning={defaults} showIntroduction={false} tracks={tracks} />
-      </details>
+      </section>;
+        })}</div>
+        <section className="schedule-track-add"><h4>{t("admin.addTrackTitle")}</h4><p>{t("admin.addTrackHint")}</p><div className="config-add-row"><label className="config-field"><span>{t("admin.newTrackTechnicalId")}</span><input aria-label={t("admin.newTrackTechnicalId")} disabled={readOnly || busy} onChange={(event) => setNewTrackSlug(event.currentTarget.value)} pattern="[a-z][a-z0-9]*(?:-[a-z0-9]+)*" value={newTrackSlug} /><small>{t("admin.newTrackTechnicalIdHint")}</small></label><button disabled={readOnly || busy || !canAddTrack} onClick={addTrack} type="button">{t("admin.addTrack")}</button></div></section>
+      </section>
+      <section className="schedule-tracks-step schedule-tracks-defaults">
+        <header className="schedule-tracks-step-heading"><span aria-hidden="true">2</span><div><h3>{t("admin.defaultProjectPlanning")}</h3><p>{t("admin.defaultProjectPlanningHint")}</p></div></header>
+        <ProjectPlanningEditor disabled={readOnly || busy} legend={t("admin.defaultProjectPlanningRoles")} locale={locale} onChange={(next) => { setDefaults(next); setDefaultsTouched(true); }} planning={defaults} showHelpButtons={false} showIntroduction={false} tracks={tracks} />
+      </section>
       <div className="editor-drawer-actions"><button onClick={close} type="button">{t("core.cancel")}</button><button className="primary" disabled={readOnly || busy}>{t("core.save")}</button></div>
     </form></EditorDrawer>
   </article>;

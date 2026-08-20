@@ -58,7 +58,6 @@ const FIELD_HINT_KEYS = [
   ["admin.newTechnicalId", "fieldHint.configSlug"],
   ["admin.trackKind", "fieldHint.trackKind"],
   ["admin.capabilities", "fieldHint.trackCapabilities"],
-  ["admin.newTrackTechnicalId", "fieldHint.trackSlug"],
   ["board.project", "fieldHint.boardProject"],
   ["board.statusFilter", "fieldHint.boardStatus"],
   ["board.typeFilter", "fieldHint.boardType"],

@@ -1047,6 +1047,13 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
 .config-hint { border-radius: 8px; background: #f2f5f2; margin: 0; padding: .7rem .8rem; color: #626b65; font-size: .78rem; line-height: 1.45; }
 .schedule-tracks-hint { display: grid; gap: .45rem; }
 .schedule-tracks-hint p { margin: 0; }
+.schedule-tracks-step { display: grid; gap: .85rem; }
+.schedule-tracks-step + .schedule-tracks-step { border-top: 1px solid #dfe4df; padding-top: 1.1rem; }
+.schedule-tracks-step-heading { display: flex; align-items: flex-start; gap: .7rem; }
+.schedule-tracks-step-heading > span { display: grid; flex: 0 0 auto; place-items: center; width: 25px; height: 25px; border-radius: 999px; background: #2f684f; color: #fff; font-size: .75rem; font-weight: 800; }
+.schedule-tracks-step-heading > div { display: grid; gap: .22rem; }
+.schedule-tracks-step-heading h3, .schedule-track-add h4 { margin: 0; color: #2d3832; font-size: .88rem; }
+.schedule-tracks-step-heading p, .schedule-track-add > p { max-width: 72ch; margin: 0; color: #68716b; font-size: .74rem; line-height: 1.45; }
 .config-list { display: grid; gap: .7rem; }
 .config-editor-form .config-row { display: grid; gap: .75rem; border: 1px solid #dfe3dd; border-radius: 10px; background: #fff; padding: .8rem; }
 .config-row-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; }
@@ -1085,12 +1092,33 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
 .schedule-track-kind { flex: 0 0 auto; border-radius: 999px; padding: .24rem .48rem; font-size: .68rem; font-weight: 700; }
 .schedule-track-kind.manual { background: #e5f4e9; color: #25613a; }
 .schedule-track-kind.actual { background: #e9f0ff; color: #244a99; }
-.schedule-track-capabilities { min-width: 0; margin: 0; border: 0; padding: 0; }
-.schedule-track-capabilities legend { margin: 0 0 .3rem; padding: 0; color: #5d625f; font-size: .76rem; }
-.schedule-track-capabilities > div { display: flex; flex-wrap: wrap; gap: .3rem; min-height: 39px; align-items: center; }
-.schedule-track-capabilities > div > label { display: inline-flex; align-items: center; gap: .25rem; margin: 0; border-radius: 999px; background: #eef1ee; padding: .22rem .45rem; color: #4f5953; font-size: .7rem; font-weight: 650; }
-.schedule-track-capabilities > div > span { border-radius: 999px; background: #eef1ee; padding: .22rem .45rem; color: #4f5953; font-size: .7rem; font-weight: 650; }
-.schedule-tracks-config-editor .project-planning-editor { margin: .25rem 0 0; }
+.schedule-track-editor-fields { display: grid; gap: .85rem; }
+.schedule-track-name { max-width: 560px; }
+.schedule-track-name small, .config-add-row .config-field small { color: #6a726d; font-size: .69rem; line-height: 1.4; }
+.schedule-track-kind-options, .schedule-track-capabilities { min-width: 0; margin: 0; border: 0; padding: 0; }
+.schedule-track-kind-options legend, .schedule-track-capabilities legend { margin: 0 0 .3rem; padding: 0; color: #4b5550; font-size: .76rem; font-weight: 720; }
+.schedule-track-kind-options > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
+.schedule-track-kind-options > div > label, .schedule-track-capabilities > div > label { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .55rem; align-items: start; margin: 0; border: 1px solid #dce2dc; border-radius: 9px; background: #fff; padding: .65rem; color: #46514b; cursor: pointer; }
+.schedule-track-kind-options > div > label:has(input:checked), .schedule-track-capabilities > div > label:has(input:checked) { border-color: #9dbca9; background: #edf5ef; }
+.schedule-track-kind-options > div > label:has(input:focus-visible), .schedule-track-capabilities > div > label:has(input:focus-visible) { outline: 3px solid #8bb8a4; outline-offset: 1px; }
+.schedule-track-kind-options input, .schedule-track-capabilities input { margin: .15rem 0 0; }
+.schedule-track-kind-options label > span, .schedule-track-capabilities label > span { display: grid; gap: .15rem; }
+.schedule-track-kind-options strong, .schedule-track-capabilities strong { color: #344039; font-size: .74rem; }
+.schedule-track-kind-options small, .schedule-track-capabilities small, .schedule-track-capabilities > p, .schedule-track-single-actual { color: #68716b; font-size: .68rem; font-weight: 400; line-height: 1.4; }
+.schedule-track-single-actual { display: block; margin-top: .4rem; }
+.schedule-track-capabilities > p { margin: 0 0 .45rem; }
+.schedule-track-capabilities > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; }
+.schedule-track-actual-source { display: grid; gap: .25rem; border-left: 3px solid #7797d1; border-radius: 0 8px 8px 0; background: #f0f4fc; padding: .7rem .8rem; }
+.schedule-track-actual-source strong { color: #294a81; font-size: .75rem; }
+.schedule-track-actual-source p { margin: 0; color: #5c687b; font-size: .7rem; line-height: 1.45; }
+.schedule-track-usage-summary { margin: 0; border-radius: 8px; background: #f2f5f2; padding: .6rem .7rem; color: #4d5b53; font-size: .71rem; line-height: 1.45; }
+.schedule-track-technical { width: fit-content; color: #68716b; font-size: .69rem; }
+.schedule-track-technical summary { color: #59645e; cursor: pointer; }
+.schedule-track-technical p { max-width: 66ch; margin: .45rem 0 .3rem; line-height: 1.4; }
+.schedule-track-technical code { color: #47534c; font-size: .68rem; }
+.schedule-track-add { display: grid; gap: .28rem; border: 1px dashed #c8cfca; border-radius: 10px; background: #fafbfa; padding: .75rem; }
+.schedule-track-add .config-add-row { border: 0; border-radius: 0; padding: .35rem 0 0; }
+.schedule-tracks-config-editor .project-planning-editor { margin: .1rem 0 0; }
 .project-planning-editor { display: grid; min-width: 0; gap: 1rem; margin: .4rem 0 0; border: 1px solid #d8ded8; border-radius: 12px; background: #fbfcfa; padding: 0 1rem 1rem; }
 .project-planning-editor > legend { margin-inline-start: -.15rem; padding: 0 .4rem; color: #263d33; font-size: .92rem; font-weight: 750; }
 .planning-introduction { display: grid; gap: .35rem; margin-top: .15rem; border-left: 3px solid #78a18f; border-radius: 0 8px 8px 0; background: #edf4ef; padding: .75rem .85rem; color: #4d5c54; }
@@ -1127,7 +1155,7 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
 .planning-dashboard-options input { margin: 0; }
 @media (max-width: 560px) {
   .project-planning-editor { padding-inline: .75rem; }
-  .planning-track-options, .planning-role-grid { grid-template-columns: 1fr; }
+  .planning-track-options, .planning-role-grid, .schedule-track-kind-options > div, .schedule-track-capabilities > div { grid-template-columns: 1fr; }
 }
 @media (min-width: 881px) and (max-width: 1180px) {
   .topbar { flex-wrap: wrap; padding-block: .75rem; }

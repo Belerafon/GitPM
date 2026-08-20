@@ -169,22 +169,27 @@ describe("administration UI", () => {
     expect(screen.getByRole("heading", { name: "Time tracking" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Effort categories" })).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "Calendar for new people" })).toBeNull();
-    const tracksCard = (await screen.findByRole("heading", { name: "Plans and actuals" })).closest<HTMLElement>(".config-editor")!;
+    const tracksCard = (await screen.findByRole("heading", { name: "Plans and actual work" })).closest<HTMLElement>(".config-editor")!;
     expect(admin.configurationReads).toContain("schedule-tracks");
     expect(within(tracksCard).getByText("Plan")).toBeTruthy();
     expect(within(tracksCard).getByText("Target")).toBeTruthy();
     expect(within(tracksCard).getAllByText("Actual")).toHaveLength(2);
 
-    fireEvent.click(within(tracksCard).getByRole("button", { name: "Edit Plans and actuals" }));
-    const dialog = await screen.findByRole("dialog", { name: "Edit: Plans and actuals" });
-    expect((within(dialog).getByLabelText("Track kind plan") as HTMLSelectElement).value).toBe("manual");
-    expect(within(dialog).getByText("Time entries")).toBeTruthy();
-    const planTitle = within(dialog).getByLabelText("Plans and actuals plan");
+    fireEvent.click(within(tracksCard).getByRole("button", { name: "Edit Plans and actual work" }));
+    const dialog = await screen.findByRole("dialog", { name: "Edit: Plans and actual work" });
+    const planRow = within(dialog).getByLabelText("Plans and actual work plan").closest<HTMLElement>(".config-row")!;
+    expect((within(planRow).getByLabelText("Users enter it") as HTMLInputElement).checked).toBe(true);
+    expect((within(planRow).getByLabelText("Calculated from time tracking") as HTMLInputElement).disabled).toBe(true);
+    expect(within(planRow).getByText(/Can be used as the main schedule, for workload calculations/u)).toBeTruthy();
+    expect(within(dialog).getByText("Calculated from active time entries")).toBeTruthy();
+    expect(within(dialog).getByRole("heading", { name: "Schedule variants" })).toBeTruthy();
+    expect(within(dialog).getByRole("heading", { name: "Use by default in projects" })).toBeTruthy();
+    const planTitle = within(dialog).getByLabelText("Plans and actual work plan");
     fireEvent.change(planTitle, { target: { value: "Working plan" } });
-    const targetRow = within(dialog).getByLabelText("Plans and actuals target").closest<HTMLElement>(".config-row")!;
+    const targetRow = within(dialog).getByLabelText("Plans and actual work target").closest<HTMLElement>(".config-row")!;
     fireEvent.click(within(targetRow).getByLabelText("Dependencies"));
-    fireEvent.change(within(dialog).getByLabelText("New track technical ID"), { target: { value: "forecast" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Add manual track" }));
+    fireEvent.change(within(dialog).getByLabelText("Technical ID"), { target: { value: "forecast" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add variant" }));
     fireEvent.change(within(dialog).getByLabelText("Primary track"), { target: { value: "target" } });
     fireEvent.submit(planTitle.closest("form")!);
 
@@ -199,17 +204,19 @@ describe("administration UI", () => {
     const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
     render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="ru" surface="settings" onChanged={vi.fn(async () => undefined)} />);
 
-    const tracksCard = (await screen.findByRole("heading", { name: "Планы и факт" })).closest<HTMLElement>(".config-editor")!;
-    fireEvent.click(within(tracksCard).getByRole("button", { name: "Редактировать: Планы и факт" }));
-    const dialog = await screen.findByRole("dialog", { name: "Редактировать: Планы и факт" });
+    const tracksCard = (await screen.findByRole("heading", { name: "Планы и фактическая работа" })).closest<HTMLElement>(".config-editor")!;
+    fireEvent.click(within(tracksCard).getByRole("button", { name: "Редактировать: Планы и фактическая работа" }));
+    const dialog = await screen.findByRole("dialog", { name: "Редактировать: Планы и фактическая работа" });
     const hint = dialog.querySelector<HTMLElement>(".schedule-tracks-hint")!;
-    expect(within(hint).getByText(/Настройте варианты расписания/u)).toBeTruthy();
+    expect(within(hint).getByText(/Храните договорные или базовые сроки/u)).toBeTruthy();
     expect(within(hint).queryAllByRole("paragraph")).toHaveLength(1);
-    const defaults = within(dialog).getByText("Настройки проектов по умолчанию").closest("details")!;
-    expect(defaults.open).toBe(false);
-    fireEvent.click(within(defaults).getByText("Настройки проектов по умолчанию"));
-    expect(defaults.open).toBe(true);
+    expect(within(dialog).getByRole("heading", { name: "Варианты расписания" })).toBeTruthy();
+    expect(within(dialog).getAllByText("Как появляются данные?", { selector: "legend" })).toHaveLength(3);
+    expect(within(dialog).getAllByText("Что могут заполнять пользователи?", { selector: "legend" })).toHaveLength(2);
+    const defaults = within(dialog).getByRole("heading", { name: "Использование в проектах по умолчанию" }).closest(".schedule-tracks-defaults")!;
+    expect(defaults.querySelector("details")).toBeNull();
     expect(defaults.querySelector(".planning-introduction")).toBeNull();
+    expect(defaults.querySelector(".planning-help")).toBeNull();
   });
 
   it("scrolls to planning when opened from a Gantt settings link", async () => {
