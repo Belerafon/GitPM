@@ -1087,6 +1087,8 @@
   ,"advancedView.presetEarliest": "{field}: earliest first"
   ,"advancedView.presetLargest": "{field}: highest first"
   ,"advancedView.presetActive": "Active only"
+  ,"advancedView.lifecycleArchivedHidden": "Archived hidden"
+  ,"advancedView.lifecycleArchivedOnly": "Archived only"
   ,"advancedView.presetUnassigned": "Unassigned"
   ,"advancedView.presetWithoutOwner": "Without an owner"
   ,"advancedView.presetWithoutMilestone": "Without a milestone"

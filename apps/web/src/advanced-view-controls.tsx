@@ -46,7 +46,7 @@ export function AdvancedViewControls<Row>({ fields, locale, query, onChange, res
         {leadingControls}
         <button aria-expanded={open} className="advanced-view-trigger" onClick={openEditor} type="button">{t(allowSorting ? "advancedView.open" : "advancedView.openFilters")} {appliedCount > 0 && <span>{appliedCount}</span>}</button>
         <div className="advanced-view-chips" aria-live="polite">
-          {conditions.map((condition) => <span className="filter-chip" key={condition.id}>{conditionLabel(condition, fieldMap, locale, t)}<button aria-label={t("advancedView.removeFilter", { filter: conditionLabel(condition, fieldMap, locale, t) })} onClick={() => onChange({ ...viewQuery, filter: removeViewFilterNode(viewQuery.filter, condition.id) })} type="button">×</button></span>)}
+          {conditions.map((condition) => <span className="filter-chip" key={condition.id}><span className="filter-chip-label">{conditionChipContent(condition, fieldMap, locale, t)}</span><button aria-label={t("advancedView.removeFilter", { filter: conditionLabel(condition, fieldMap, locale, t) })} onClick={() => onChange({ ...viewQuery, filter: removeViewFilterNode(viewQuery.filter, condition.id) })} type="button">×</button></span>)}
           {viewQuery.sort.map((rule) => <span className="filter-chip sort-chip" key={rule.id}>{fieldMap.get(rule.field)?.label ?? rule.field} · {t(rule.direction === "asc" ? "advancedView.ascendingShort" : "advancedView.descendingShort")}<button aria-label={t("advancedView.removeSort", { field: fieldMap.get(rule.field)?.label ?? rule.field })} onClick={() => onChange({ ...viewQuery, sort: viewQuery.sort.filter((candidate) => candidate.id !== rule.id) })} type="button">×</button></span>)}
           {appliedControls}
           {hasAppliedFilters && <button className="advanced-view-clear" onClick={clear} type="button">{t("advancedView.clear")}</button>}
@@ -135,8 +135,29 @@ function quickViewPresets<Row>(fields: readonly ViewField<Row>[], t: Translator,
   return presets.slice(0, 4);
 }
 const optionLabel = <Row,>(field: ViewField<Row> | undefined, value: string): string => field?.options?.find((option) => option.value === value)?.label ?? value;
+function lifecycleFilterLabel<Row>(condition: ViewFilterCondition, field: ViewField<Row> | undefined, t: Translator): string | undefined {
+  if (field?.id !== "lifecycle") return undefined;
+  if ((condition.operator === "equals" && condition.value === "active") || (condition.operator === "not-equals" && condition.value === "archived")) return t("advancedView.lifecycleArchivedHidden");
+  if ((condition.operator === "equals" && condition.value === "archived") || (condition.operator === "not-equals" && condition.value === "active")) return t("advancedView.lifecycleArchivedOnly");
+  return undefined;
+}
+function conditionChipContent<Row>(condition: ViewFilterCondition, fields: ReadonlyMap<string, ViewField<Row>>, locale: Locale, t: Translator): ReactNode {
+  const field = fields.get(condition.field);
+  const lifecycleLabel = lifecycleFilterLabel(condition, field, t);
+  if (lifecycleLabel !== undefined) return <span className="filter-chip-semantic">{lifecycleLabel}</span>;
+  const noValue = ["is-empty", "is-not-empty", "is-true", "is-false"].includes(condition.operator);
+  const value = optionLabel(field, condition.value ?? "");
+  const second = optionLabel(field, condition.valueTo ?? "");
+  return <>
+    <span className="filter-chip-field">{field?.label ?? condition.field}</span>
+    <span className="filter-chip-operator">{condition.operator === "equals" ? ":" : operatorLabel(condition.operator, t).toLocaleLowerCase(locale)}</span>
+    {!noValue && <span className="filter-chip-value">{value}</span>}
+    {condition.operator === "between" && <><span className="filter-chip-operator">—</span><span className="filter-chip-value">{second}</span></>}
+  </>;
+}
 function conditionLabel<Row>(condition: ViewFilterCondition, fields: ReadonlyMap<string, ViewField<Row>>, locale: Locale, t: Translator): string {
-  const field = fields.get(condition.field); const value = optionLabel(field, condition.value ?? ""); const second = optionLabel(field, condition.valueTo ?? "");
-  return `${field?.label ?? condition.field} ${operatorLabel(condition.operator, t).toLocaleLowerCase(locale)}${["is-empty", "is-not-empty", "is-true", "is-false"].includes(condition.operator) ? "" : ` ${value}${condition.operator === "between" ? ` — ${second}` : ""}`}`;
+  const field = fields.get(condition.field); const lifecycleLabel = lifecycleFilterLabel(condition, field, t); const value = optionLabel(field, condition.value ?? ""); const second = optionLabel(field, condition.valueTo ?? "");
+  if (lifecycleLabel !== undefined) return lifecycleLabel;
+  return `${field?.label ?? condition.field}${condition.operator === "equals" ? ":" : ` ${operatorLabel(condition.operator, t).toLocaleLowerCase(locale)}`}${["is-empty", "is-not-empty", "is-true", "is-false"].includes(condition.operator) ? "" : ` ${value}${condition.operator === "between" ? ` — ${second}` : ""}`}`;
 }
 function operatorLabel(operator: ViewFilterOperator, t: Translator): string { return t(`advancedView.operator.${operator}` as MessageKey); }
