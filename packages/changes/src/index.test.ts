@@ -275,15 +275,44 @@ describe("changes and restore service", () => {
     expect(semantic.unclassified_files).not.toContain(taskPath);
   });
 
-  it("classifies GitPM configuration files without entity IDs", async () => {
+  it("includes GitPM configuration changes without inventing entity IDs", async () => {
     const { draft, service } = await runtime();
     const repositoryPath = ".gitpm/repository.yaml";
     const absolute = path.join(draft.worktree_path, ...repositoryPath.split("/"));
     await writeFile(absolute, (await readFile(absolute, "utf8")).replace("ui_poll_interval_seconds: 5", "ui_poll_interval_seconds: 6"), "utf8");
 
     const semantic = await service.semantic("DRF-CHANGES");
+    expect(semantic.counts).toEqual({ created: 0, updated: 1, archived: 0, deleted: 0 });
+    expect(semantic.updated).toContainEqual(expect.objectContaining({
+      path: repositoryPath,
+      schema: "gitpm/repository@1",
+      fields: [expect.objectContaining({ field: "ui_poll_interval_seconds", before: 5, after: 6 })],
+    }));
+    expect(semantic.updated[0]).not.toHaveProperty("id");
     expect(semantic.file_entities).toContainEqual({ path: repositoryPath, schema: "gitpm/repository@1" });
     expect(semantic.unclassified_files).not.toContain(repositoryPath);
+  });
+
+  it("reports schedule-track title changes by stable slug", async () => {
+    const { draft, service } = await runtime();
+    const tracksPath = ".gitpm/schedule-tracks.yaml";
+    const absolute = path.join(draft.worktree_path, ...tracksPath.split("/"));
+    const updated = (await readFile(absolute, "utf8"))
+      .replace("title: Working plan", "title: Internal work plan")
+      .replace("title: Target", "title: Contract commitment");
+    await writeFile(absolute, updated, "utf8");
+
+    const semantic = await service.semantic("DRF-CHANGES");
+    expect(semantic.counts).toEqual({ created: 0, updated: 1, archived: 0, deleted: 0 });
+    expect(semantic.updated).toContainEqual(expect.objectContaining({
+      path: tracksPath,
+      schema: "gitpm/schedule-tracks@1",
+      fields: expect.arrayContaining([
+        { field: "tracks.plan.title", before: "Working plan", after: "Internal work plan" },
+        { field: "tracks.target.title", before: "Target", after: "Contract commitment" },
+      ]),
+    }));
+    expect(semantic.updated[0]).not.toHaveProperty("id");
   });
 
   it("describes a task relocation as one semantic update", async () => {

@@ -18,6 +18,7 @@ import {
   decodeProjectFileReplaceResult,
   decodeProjectFileRenameResult,
   decodeProjectFileUploadResult,
+  decodeSemanticDiff,
   describeAjvError,
   summarizeAjvErrors,
 } from "./index.js";
@@ -260,6 +261,20 @@ describe("@gitpm/contracts runtime contracts", () => {
     expect(decodeChangesList(response).project_files[0]).toMatchObject({ operation: "Renamed", name: "ТЗ_v2.docx" });
     expect(() => decodeChangesList({ ...response, project_files: [{ ...response.project_files[0], operation: "MaybeRenamed" }] }))
       .toThrow(/project_files\[0\]\.operation must be one of/u);
+  });
+
+  it("decodes semantic configuration changes without an entity ID", () => {
+    const response = {
+      created: [], archived: [], deleted: [],
+      updated: [{
+        path: ".gitpm/schedule-tracks.yaml",
+        schema: "gitpm/schedule-tracks@1",
+        fields: [{ field: "tracks.plan.title", before: "Plan", after: "Working plan" }],
+      }],
+      counts: { created: 0, updated: 1, archived: 0, deleted: 0 },
+      affected_projects: [], file_entities: [], unclassified_files: [],
+    };
+    expect(decodeSemanticDiff(response).updated[0]).toMatchObject({ schema: "gitpm/schedule-tracks@1" });
   });
 
   it("points at unexpected properties inside a document body", () => {

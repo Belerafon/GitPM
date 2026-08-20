@@ -605,6 +605,7 @@ Repository selector и server configuration UI отсутствуют. Выбр�
 Semantic diff сообщает:
 
 - created, updated, archived и deleted entities;
+- created, updated и deleted repository configuration documents, даже если формат не задаёт им `id`;
 - измененные поля before/after;
 - changed files count;
 - затронутые projects;
