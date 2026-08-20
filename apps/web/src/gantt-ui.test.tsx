@@ -194,7 +194,7 @@ describe("read-only Gantt", () => {
     expect(within(screen.getByRole("combobox", { name: "Dependency track" })).getAllByRole("option").map((option) => option.textContent)).toEqual(["Links"]);
     expect(screen.queryByText("Effort only")).toBeNull();
     expect(screen.getByText(/Track titles come from repository settings/u)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Edit names in Plans and actuals" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open plan and actual-work settings" }));
     expect(onNavigate).toHaveBeenCalledWith("settings", { query: { section: ["planning"] } });
   });
 
@@ -227,7 +227,7 @@ describe("read-only Gantt", () => {
     await waitFor(() => expect(screen.getByRole("combobox", { name: "Основной вариант расписания" })).toBeTruthy());
     expect(screen.getByText("Working plan", { selector: "option" })).toBeTruthy();
     expect(screen.getByText(/Названия вариантов расписания берутся из настроек репозитория/u)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Изменить названия в разделе «Планы и факт»" }));
+    fireEvent.click(screen.getByRole("button", { name: "Открыть настройки планов и фактической работы" }));
     expect(onNavigate).toHaveBeenCalledWith("settings", { query: { section: ["planning"] } });
   });
 });

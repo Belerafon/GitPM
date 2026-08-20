@@ -16,11 +16,13 @@ export interface ProjectPlanningEditorProps {
   readonly usedTracks?: ReadonlySet<string>;
   readonly disabled: boolean;
   readonly locale: Locale;
+  readonly legend?: string;
+  readonly showHelpButtons?: boolean;
   readonly showIntroduction?: boolean;
   readonly onChange: (next: ProjectPlanning) => void;
 }
 
-export function ProjectPlanningEditor({ planning, tracks, usedTracks = new Set(), disabled, locale, showIntroduction = true, onChange }: ProjectPlanningEditorProps) {
+export function ProjectPlanningEditor({ planning, tracks, usedTracks = new Set(), disabled, locale, legend, showHelpButtons = true, showIntroduction = true, onChange }: ProjectPlanningEditorProps) {
   const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>): string => message(locale, key, values);
   const editorId = useId();
   const enabled = planning.enabled_tracks ?? [];
@@ -65,15 +67,15 @@ export function ProjectPlanningEditor({ planning, tracks, usedTracks = new Set()
     update({ enabled_tracks: nextEnabled, primary_track: primary, workload_track: workload, comparison_track: comparison, dashboard_tracks: dashboard.filter((slug) => nextSet.has(slug)) });
   };
 
-  const help = (field: MessageKey, hint: MessageKey) => <button
+  const help = (field: MessageKey, hint: MessageKey) => showHelpButtons ? <button
     aria-label={t("planning.helpFor", { field: t(field) })}
     className="planning-help"
     data-control-hint={t(hint)}
     type="button"
-  ><span aria-hidden="true">?</span></button>;
+  ><span aria-hidden="true">?</span></button> : null;
 
   return <fieldset className="project-planning-editor">
-    <legend>{t("planning.heading")}</legend>
+    <legend>{legend ?? t("planning.heading")}</legend>
     {showIntroduction && <div className="planning-introduction">
       <strong>{t("planning.introductionTitle")}</strong>
       <p>{t("planning.introduction")}</p>
