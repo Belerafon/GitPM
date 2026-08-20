@@ -951,15 +951,21 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
       view={filesView}
     />
 
-    {workspace !== null && <EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setEditor(null)} open={editor?.kind === "project"} title={`${t("core.edit")}: ${text(workspace.project.document, "name")}`}>
-      <form className="editor-drawer-form" onSubmit={updateProject}>
-        <label>{t("core.name")}<input defaultValue={text(workspace.project.document, "name")} disabled={readOnly} name="name" required /></label>
-        <label>{t("core.status")}<select defaultValue={text(workspace.project.document, "status")} disabled={readOnly} name="status">{statuses.map((item) => <option key={item.slug} value={item.slug}>{item.title}</option>)}</select></label>
-        <ProjectGroupField currentGroup={text(workspace.project.document, "group")} disabled={readOnly} groups={availableProjectGroups} key={editor?.kind === "project" ? "open" : "closed"} t={t} />
-        <label>{t("core.owner")}<select defaultValue={text(workspace.project.document, "owner")} disabled={readOnly} name="owner"><option value="">{t("core.unassigned")}</option>{people.map((person) => <option key={person.document.id} value={person.document.id}>{text(person.document, "name")}</option>)}</select></label>
-        <ScheduleTracksEditor schedules={projectSchedulesDraft} tracks={projectEditorManualTracks} actualTrack={projectEditorActualTrack} primaryTrack={projectEditorPlanning.primary_track ?? ""} dependencies={[]} showDependencies={false} disabled={readOnly} locale={locale} onChange={setProjectSchedulesDraft} />
-        <ProjectFileMarkdownField context={fileReferenceContext} defaultValue={text(workspace.project.document, "description_markdown")} disabled={readOnly} label={t("core.description")} name="description" />
-        <ProjectPlanningEditor planning={projectEditorPlanning} tracks={scheduling.raw?.tracks ?? []} usedTracks={usedProjectScheduleTracks} disabled={readOnly} locale={locale} onChange={(next) => { setProjectPlanningDraft(next); setProjectPlanningDirty(true); }} />
+    {workspace !== null && <EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setEditor(null)} open={editor?.kind === "project"} size="wide" title={`${t("core.edit")}: ${text(workspace.project.document, "name")}`}>
+      <form className="editor-drawer-form project-editor-form" onSubmit={updateProject}>
+        <TaskEditorSection title={t("taskEditor.basic")}><div className="project-editor-basic-grid">
+          <label>{t("core.name")}<input defaultValue={text(workspace.project.document, "name")} disabled={readOnly} name="name" required /></label>
+          <label>{t("core.status")}<select defaultValue={text(workspace.project.document, "status")} disabled={readOnly} name="status">{statuses.map((item) => <option key={item.slug} value={item.slug}>{item.title}</option>)}</select></label>
+          <ProjectGroupField currentGroup={text(workspace.project.document, "group")} disabled={readOnly} groups={availableProjectGroups} key={editor?.kind === "project" ? "open" : "closed"} t={t} />
+          <label>{t("core.owner")}<select defaultValue={text(workspace.project.document, "owner")} disabled={readOnly} name="owner"><option value="">{t("core.unassigned")}</option>{people.map((person) => <option key={person.document.id} value={person.document.id}>{text(person.document, "name")}</option>)}</select></label>
+        </div></TaskEditorSection>
+        <TaskEditorSection title={t("taskEditor.planning")}><ScheduleTracksEditor schedules={projectSchedulesDraft} tracks={projectEditorManualTracks} actualTrack={projectEditorActualTrack} primaryTrack={projectEditorPlanning.primary_track ?? ""} dependencies={[]} showDependencies={false} disabled={readOnly} locale={locale} onChange={setProjectSchedulesDraft} /></TaskEditorSection>
+        <TaskEditorSection title={t("taskEditor.description")}><ProjectFileMarkdownField context={fileReferenceContext} defaultValue={text(workspace.project.document, "description_markdown")} disabled={readOnly} label={t("core.description")} name="description" /></TaskEditorSection>
+        <details className="editor-advanced-section">
+          <summary>{t("planning.advancedProjectSettings")}</summary>
+          <p>{t("planning.advancedProjectSettingsHint")}</p>
+          <ProjectPlanningEditor planning={projectEditorPlanning} tracks={scheduling.raw?.tracks ?? []} usedTracks={usedProjectScheduleTracks} disabled={readOnly} locale={locale} onChange={(next) => { setProjectPlanningDraft(next); setProjectPlanningDirty(true); }} />
+        </details>
         <div className="editor-drawer-actions"><details className="more-actions"><summary>{t("core.moreActions")}</summary><div><button disabled={readOnly} onClick={archiveProject} type="button">{t("core.archive")}</button><button className="danger" data-control-hint={t("controlHint.deleteEntity")} disabled={readOnly} onClick={() => { void deleteProject(); }} type="button">{t("core.delete")}</button></div></details><button onClick={() => setEditor(null)} type="button">{t("core.cancel")}</button><button className="primary" disabled={readOnly}>{t("core.save")}</button></div>
       </form>
     </EditorDrawer>}
@@ -969,13 +975,13 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
         <label>{t("core.name")}<input disabled={readOnly} name="name" required /></label>
         <label>{t("core.due")}<input disabled={readOnly} name="due" type="date" /></label>
         <ProjectFileMarkdownField context={fileReferenceContext} disabled={readOnly} label={t("core.description")} name="description" />
-        <div className="editor-drawer-actions"><button onClick={() => setEditor(null)} type="button">{t("core.cancel")}</button><button className="primary" disabled={readOnly}>{t("core.save")}</button></div>
+        <div className="editor-drawer-actions"><button onClick={() => setEditor(null)} type="button">{t("core.cancel")}</button><button className="primary" disabled={readOnly}>{t("core.createMilestone")}</button></div>
       </form>
     </EditorDrawer>
 
     {workspace !== null && editor?.kind === "edit-stage" && (() => {
       const stage = workspace.milestones.find((item) => item.document.id === editor.stageId);
-      return stage === undefined ? null : <EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setEditor(null)} open title={t("stages.edit")}>
+      return stage === undefined ? null : <EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setEditor(null)} open title={`${t("stages.edit")}: ${text(stage.document, "name")}`}>
         <form className="editor-drawer-form" onSubmit={updateStage}>
           <label>{t("core.name")}<input defaultValue={text(stage.document, "name")} disabled={readOnly} name="name" required /></label>
           <ScheduleTracksEditor schedules={stageSchedulesDraft} tracks={stageManualTracks} actualTrack={stageActualTrack} primaryTrack={primaryTrack} dependencies={[]} showDependencies={false} disabled={readOnly} locale={locale} onChange={setStageSchedulesDraft} />

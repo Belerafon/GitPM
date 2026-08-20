@@ -55,7 +55,7 @@ describe("administration UI", () => {
     expect(within(peopleCard).getByRole("button", { name: /Filters and sorting/u })).toBeTruthy();
     fireEvent.click(await screen.findByRole("button", { name: /Create person/u }));
     const personForm = within(screen.getByRole("dialog", { name: "Create person" })).getByRole("button", { name: "Create person" }).closest("form")!;
-    fireEvent.change(within(personForm).getByLabelText("Name"), { target: { value: "Alice" } }); fireEvent.change(within(personForm).getByLabelText("Weekly capacity (hours)"), { target: { value: "32" } }); fireEvent.submit(personForm);
+    fireEvent.change(within(personForm).getByLabelText("Name"), { target: { value: "Alice" } }); fireEvent.change(within(personForm).getByLabelText("Weekly capacity"), { target: { value: "32" } }); fireEvent.submit(personForm);
     expect(await screen.findByText("Alice")).toBeTruthy();
     expect(admin.entities.find((item) => item.document.schema === "gitpm/person@1")?.document.calendar).toBe(admin.entities.find((item) => item.document.schema === "gitpm/calendar@1")?.document.id);
     expect(document.querySelectorAll(".people-directory-table tbody tr")).toHaveLength(1);
@@ -67,7 +67,7 @@ describe("administration UI", () => {
     const memberTable = within(teamForm).getByRole("table", { name: "Members" });
     expect(memberTable.closest(".member-picker-scroll")).toBeTruthy();
     expect(within(memberTable).getByRole("columnheader", { name: "Person" })).toBeTruthy();
-    expect(within(memberTable).getByRole("columnheader", { name: "Weekly capacity (hours)" })).toBeTruthy();
+    expect(within(memberTable).getByRole("columnheader", { name: "Weekly capacity" })).toBeTruthy();
     fireEvent.change(within(teamForm).getByLabelText("Name"), { target: { value: "Core" } }); fireEvent.click(within(teamForm).getByLabelText("Alice")); fireEvent.submit(teamForm);
     const teamTable = document.querySelector<HTMLElement>(".team-directory-table")!;
     expect(await within(teamTable).findByText("Core")).toBeTruthy();
@@ -203,9 +203,13 @@ describe("administration UI", () => {
     fireEvent.click(within(tracksCard).getByRole("button", { name: "Редактировать: Планы и факт" }));
     const dialog = await screen.findByRole("dialog", { name: "Редактировать: Планы и факт" });
     const hint = dialog.querySelector<HTMLElement>(".schedule-tracks-hint")!;
-    expect(within(hint).getByText(/Вариант расписания — это отдельный набор дат/u)).toBeTruthy();
-    expect(within(hint).getByText(/Ручные варианты расписания заполняются пользователями/u)).toBeTruthy();
-    expect(within(hint).getByText(/основной вариант используется как рабочее расписание/u)).toBeTruthy();
+    expect(within(hint).getByText(/Настройте варианты расписания/u)).toBeTruthy();
+    expect(within(hint).queryAllByRole("paragraph")).toHaveLength(1);
+    const defaults = within(dialog).getByText("Настройки проектов по умолчанию").closest("details")!;
+    expect(defaults.open).toBe(false);
+    fireEvent.click(within(defaults).getByText("Настройки проектов по умолчанию"));
+    expect(defaults.open).toBe(true);
+    expect(defaults.querySelector(".planning-introduction")).toBeNull();
   });
 
   it("scrolls to planning when opened from a Gantt settings link", async () => {

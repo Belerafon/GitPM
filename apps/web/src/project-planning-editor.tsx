@@ -16,10 +16,11 @@ export interface ProjectPlanningEditorProps {
   readonly usedTracks?: ReadonlySet<string>;
   readonly disabled: boolean;
   readonly locale: Locale;
+  readonly showIntroduction?: boolean;
   readonly onChange: (next: ProjectPlanning) => void;
 }
 
-export function ProjectPlanningEditor({ planning, tracks, usedTracks = new Set(), disabled, locale, onChange }: ProjectPlanningEditorProps) {
+export function ProjectPlanningEditor({ planning, tracks, usedTracks = new Set(), disabled, locale, showIntroduction = true, onChange }: ProjectPlanningEditorProps) {
   const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>): string => message(locale, key, values);
   const editorId = useId();
   const enabled = planning.enabled_tracks ?? [];
@@ -73,11 +74,11 @@ export function ProjectPlanningEditor({ planning, tracks, usedTracks = new Set()
 
   return <fieldset className="project-planning-editor">
     <legend>{t("planning.heading")}</legend>
-    <div className="planning-introduction">
+    {showIntroduction && <div className="planning-introduction">
       <strong>{t("planning.introductionTitle")}</strong>
       <p>{t("planning.introduction")}</p>
       <p>{t("planning.customNamesHint")}</p>
-    </div>
+    </div>}
     <section aria-describedby={`${editorId}-enabled-hint`} aria-labelledby={`${editorId}-enabled-label`} className="planning-field planning-section">
       <div className="planning-label-row"><h3 id={`${editorId}-enabled-label`}>{t("planning.enabledTracks")}</h3>{help("planning.enabledTracks", "planning.enabledTracksHint")}</div>
       <p className="planning-field-help" id={`${editorId}-enabled-hint`}>{t("planning.enabledTracksHint")}</p>

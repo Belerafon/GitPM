@@ -339,6 +339,16 @@ textarea { min-height: 76px; resize: vertical; border: 1px solid #c9cbc5; border
 .task-editor-basic-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; }
 .task-editor-basic-grid > label { display: grid; min-width: 0; gap: .3rem; }
 .task-editor-basic-grid > label:first-child { grid-column: 1 / -1; }
+.project-editor-form { gap: 1.15rem; }
+.project-editor-basic-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; }
+.project-editor-basic-grid > label { display: grid; min-width: 0; gap: .3rem; }
+.editor-advanced-section { border-top: 1px solid #e1e4df; padding-top: 1rem; }
+.editor-advanced-section > summary { cursor: pointer; color: #315f50; font-size: .88rem; font-weight: 750; }
+.editor-advanced-section > p { max-width: 68ch; margin: .45rem 0 .8rem; color: #68716b; font-size: .74rem; line-height: 1.45; }
+.editor-advanced-section > .project-planning-editor { margin-top: .8rem; }
+.input-with-suffix { display: grid; grid-template-columns: minmax(0, 1fr) auto; min-width: 0; align-items: stretch; }
+.input-with-suffix > input { min-width: 0; border-radius: 8px 0 0 8px; }
+.input-with-suffix > span { display: inline-flex; align-items: center; border: 1px solid #c9cbc5; border-left: 0; border-radius: 0 8px 8px 0; background: #f3f5f2; padding: 0 .7rem; color: #5e6862; font-size: .76rem; white-space: nowrap; }
 .schedule-tracks-editor { display: grid; min-width: 0; gap: .8rem; }
 .schedule-tracks-heading { display: grid; gap: .2rem; }
 .schedule-tracks-heading h3 { margin: 0; color: #37423c; font-size: .82rem; }
@@ -394,6 +404,7 @@ textarea { min-height: 76px; resize: vertical; border: 1px solid #c9cbc5; border
 .field-help code { font-size: .8rem; }
 .editor-drawer-actions { position: sticky; bottom: -1.25rem; display: flex; align-items: center; justify-content: flex-end; gap: .5rem; border-top: 1px solid #dedfd9; background: #fff; margin: auto -1.25rem -1.25rem; padding: 1rem 1.25rem; }
 .editor-drawer-actions .more-actions { margin-right: auto; }
+.repository-connection-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .5rem; border-top: 1px solid #dedfd9; padding-top: 1rem; }
 .more-actions { position: relative; }
 .more-actions > summary { cursor: pointer; list-style: none; border: 1px solid #c9cbc5; border-radius: 8px; background: #fff; padding: .62rem .8rem; }
 .more-actions > div { display: flex; gap: .35rem; margin-top: .4rem; }
@@ -1134,7 +1145,7 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
   .editor-drawer-actions .more-actions > summary { width: 100%; }
   .project-files-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .project-files-error { align-items: stretch; flex-direction: column; }
-  .task-editor-basic-grid, .schedule-track-grid { grid-template-columns: 1fr; }
+  .task-editor-basic-grid, .project-editor-basic-grid, .schedule-track-grid { grid-template-columns: 1fr; }
   .schedule-track-effort { grid-column: auto; max-width: none; }
   .schedule-dependencies-heading { align-items: stretch; flex-direction: column; }
   .schedule-dependency-open { align-self: start; }

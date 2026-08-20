@@ -206,7 +206,7 @@ describe("person profile", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Edit person" }));
     const dialog = screen.getByRole("dialog", { name: "Edit person: Ada" });
     fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "Ada Byron" } });
-    fireEvent.change(within(dialog).getByLabelText("Weekly capacity (hours)"), { target: { value: "36" } });
+    fireEvent.change(within(dialog).getByLabelText("Weekly capacity"), { target: { value: "36" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
 
     expect(await screen.findByRole("heading", { name: "Ada Byron" })).toBeTruthy();
@@ -215,7 +215,7 @@ describe("person profile", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Edit person" }));
     const updatedDialog = screen.getByRole("dialog", { name: "Edit person: Ada Byron" });
-    fireEvent.change(within(updatedDialog).getByLabelText("Weekly capacity (hours)"), { target: { value: "38" } });
+    fireEvent.change(within(updatedDialog).getByLabelText("Weekly capacity"), { target: { value: "38" } });
     fireEvent.click(within(updatedDialog).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(updateEntity).toHaveBeenCalledTimes(2));
     expect(updateEntity.mock.calls[1]?.[3]).toBe("c".repeat(64));

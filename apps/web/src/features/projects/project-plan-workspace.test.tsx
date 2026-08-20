@@ -235,7 +235,7 @@ describe("ProjectPlanWorkspace", () => {
     expect((client.updateEntity.mock.calls[0]?.[4] as EntityDocument).description_markdown).toBe("Project [[file:ТЗ \\[финал\\].pdf]]end");
 
     fireEvent.click((await screen.findAllByRole("button", { name: "Edit" })).at(-1)!);
-    dialog = screen.getByRole("dialog", { name: "Edit milestone" });
+    dialog = screen.getByRole("dialog", { name: "Edit milestone: Launch" });
     const milestoneDescription = within(dialog).getByLabelText("Description (Markdown)") as HTMLTextAreaElement;
     fireEvent.change(milestoneDescription, { target: { value: "Stage" } });
     milestoneDescription.setSelectionRange(5, 5);
@@ -411,7 +411,7 @@ describe("ProjectPlanWorkspace", () => {
     const dialog = screen.getByRole("dialog", { name: "New milestone" });
     fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "Created milestone" } });
     fireEvent.change(within(dialog).getByLabelText("Due date"), { target: { value: "2026-08-31" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create milestone" }));
 
     await waitFor(() => expect(client.createEntity).toHaveBeenCalledWith(draft.draft_id, "milestones", fingerprint, expect.objectContaining({
       name: "Created milestone",
@@ -444,10 +444,15 @@ describe("ProjectPlanWorkspace", () => {
     await screen.findByRole("heading", { name: "Alpha" });
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     let dialog = screen.getByRole("dialog", { name: "Edit: Alpha" });
+    expect(dialog.classList.contains("wide")).toBe(true);
     expect(within(dialog).getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Working Primary", "Target"]);
     expect(within(dialog).getByText(/Actual activity: actual dates and hours are calculated automatically/u)).toBeTruthy();
     expect(within(dialog).queryByText("Dependencies")).toBeNull();
 
+    const advancedSettings = within(dialog).getByText("Additional planning settings").closest<HTMLDetailsElement>("details")!;
+    expect(advancedSettings.open).toBe(false);
+    fireEvent.click(within(advancedSettings).getByText("Additional planning settings"));
+    expect(advancedSettings.open).toBe(true);
     const enabledTracks = within(dialog).getByText("Enabled tracks").closest<HTMLElement>(".planning-field")!;
     const targetToggle = within(enabledTracks).getByText("Target").closest("label")!.querySelector("input")!;
     fireEvent.click(targetToggle);
@@ -465,7 +470,7 @@ describe("ProjectPlanWorkspace", () => {
     render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={multitrackProject.document.id} selectedStageId={multitrackStage.document.id} />);
     const inspector = await screen.findByRole("complementary", { name: "Milestone" });
     fireEvent.click(within(inspector).getByRole("button", { name: "Edit" }));
-    dialog = screen.getByRole("dialog", { name: "Edit milestone" });
+    dialog = screen.getByRole("dialog", { name: "Edit milestone: Launch" });
     fireEvent.click(within(dialog).getByRole("tab", { name: "Target" }));
     expect(within(dialog).queryByText("Dependencies")).toBeNull();
     fireEvent.change(within(dialog).getByLabelText("Finish"), { target: { value: "2026-10-05" } });

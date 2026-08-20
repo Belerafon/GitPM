@@ -141,7 +141,7 @@ export function RepositoryConnectionSettings({ api, locale, maintainer, confirmA
       {provider !== "gitlab" && hasRemote && <div className="alert info">{t("repositoryConnection.mrNote")}</div>}
 
       <p className="field-help">{t("repositoryConnection.securityHint")}</p>
-      <div className="editor-drawer-actions">
+      <div className="repository-connection-actions">
         <button type="button" disabled={busy || !connection.gitlab.configured} onClick={() => { void login(); }}>{t("repositoryConnection.login")}</button>
         <button type="button" disabled={busy || !hasRemote} onClick={() => { void test(); }}>{t("repositoryConnection.test")}</button>
         <button className="primary" disabled={!editable || busy}>{t("core.save")}</button>

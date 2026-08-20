@@ -78,7 +78,7 @@ describe("AdvancedViewControls", () => {
     expect(within(dialog).getByText("Custom filters").closest("details")?.open).toBe(true);
     expect(within(dialog).queryByRole("heading", { name: "Sorting" })).toBeNull();
     expect(within(dialog).queryByRole("button", { name: /Add sorting/u })).toBeNull();
-    expect(within(dialog).getByRole("heading", { level: 3, name: "Filters" })).toBeTruthy();
+    expect(within(dialog).getByRole("heading", { level: 3, name: "Conditions" })).toBeTruthy();
     expect(within(dialog).getByRole("button", { name: "Without a finish date" })).toBeTruthy();
   });
 
