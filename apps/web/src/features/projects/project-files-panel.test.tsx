@@ -74,6 +74,30 @@ describe("ProjectFilesPanel", () => {
     expect(Array.from(document.querySelectorAll(".project-file-icon-label")).map((node) => node.textContent)).toEqual(["PDF", "DOC", "XLS", "PPT", "IMG", "TXT", "ZIP", "FILE"]);
   });
 
+  it.each(["grid", "table"] as const)("opens contextual file actions from the ellipsis in %s view", async (view) => {
+    const file = item("contract.pdf");
+    render(<ProjectFilesPanel {...uploadProps} locale="en" list={list([file])} loadState={{ status: "ready" }} onClose={vi.fn()} onReload={vi.fn()} onViewChange={vi.fn()} open view={view} />);
+
+    const trigger = screen.getByRole("button", { name: `Select ${file.name} for file actions` });
+    fireEvent.click(trigger);
+    const actions = screen.getByRole("group", { name: `Actions for ${file.name}` });
+    expect(within(actions).getByRole("link", { name: `Open ${file.name} in a new tab` })).toBeTruthy();
+    expect(within(actions).getByRole("link", { name: `Download ${file.name}` })).toBeTruthy();
+    expect(within(actions).getByRole("button", { name: `Rename ${file.name}` })).toBeTruthy();
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+
+    fireEvent.click(within(actions).getByRole("button", { name: `Show properties for ${file.name}` }));
+    const dialog = screen.getByRole("dialog", { name: "File properties" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close editor" }));
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
+
+    fireEvent.click(trigger);
+    expect(screen.getByRole("group", { name: `Actions for ${file.name}` })).toBeTruthy();
+    fireEvent.keyDown(trigger, { key: "Escape" });
+    expect(screen.queryByRole("group", { name: `Actions for ${file.name}` })).toBeNull();
+    expect(screen.getByRole("dialog", { name: "Project files · 1" })).toBeTruthy();
+  });
+
   it("switches every Project panel view through a resilient shared cookie", () => {
     function Harness() {
       const [view, setView] = useState<ProjectFilesView>(readProjectFilesView);
