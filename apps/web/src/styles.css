@@ -457,6 +457,10 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 @media (max-width: 900px) { .task-field-settings[open] > div { right: 0; left: auto; } }
 .project-plan-filter-chips { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
 .filter-chip { display: inline-flex; gap: .3rem; align-items: center; border: 1px solid #cdd1c9; border-radius: 999px; background: #f3f6f2; padding: .2rem .35rem .2rem .6rem; font-size: .72rem; color: #333b36; }
+.filter-chip-label { display: inline-flex; align-items: baseline; gap: .25rem; }
+.filter-chip-field { color: #626b66; font-weight: 500; }
+.filter-chip-operator { color: #7a827d; font-size: .68rem; }
+.filter-chip-value, .filter-chip-semantic { color: #25342c; font-weight: 700; }
 .filter-chip button { border: 0; background: transparent; color: #68706b; font-size: .8rem; line-height: 1; cursor: pointer; padding: 0 .15rem; }
 .filter-chip button:hover { color: #333b36; }
 .advanced-view-bar { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .45rem 1rem; margin: .5rem 0 .75rem; }

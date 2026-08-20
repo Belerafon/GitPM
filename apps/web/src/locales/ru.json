@@ -1087,6 +1087,8 @@
   ,"advancedView.presetEarliest": "{field}: ближайшие сначала"
   ,"advancedView.presetLargest": "{field}: сначала больше"
   ,"advancedView.presetActive": "Только активные"
+  ,"advancedView.lifecycleArchivedHidden": "Архивные скрыты"
+  ,"advancedView.lifecycleArchivedOnly": "Только архивные"
   ,"advancedView.presetUnassigned": "Без исполнителя"
   ,"advancedView.presetWithoutOwner": "Без ответственного"
   ,"advancedView.presetWithoutMilestone": "Без этапа"
