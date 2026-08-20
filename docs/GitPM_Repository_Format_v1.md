@@ -202,7 +202,7 @@ Project может содержать необязательную строку 
 
 ## Schedule tracks и фактические трудозатраты
 
-`.gitpm/schedule-tracks.yaml` описывает именованные контуры (`manual` с
+`.gitpm/schedule-tracks.yaml` описывает именованные варианты расписания (`manual` с
 `capabilities`: `dates`, `effort`, `dependencies`; либо `actual` с
 `source: time_entries`) и репозиторные defaults (`primary_track`,
 `workload_track`, `comparison_track`, `enabled_tracks`, `dashboard_tracks`).
@@ -210,16 +210,17 @@ Project переопределяет их полем `planning` и хранит 
 отображение `track -> { start, finish, effort_hours, depends_on }`.
 Отсутствующее поле `planning` наследует соответствующий repository default, а явно заданные
 `enabled_tracks: []` и `dashboard_tracks: []` остаются пустыми списками. После разрешения defaults
-`primary_track` обязан быть включённым manual-контуром с capability `dates`, `workload_track` —
-включённым manual-контуром с capabilities `dates` и `effort`, а `comparison_track`, если задан, —
-включённым manual-контуром с capability `dates`. Actual- и dependency-only-контуры не могут быть
-primary, workload или comparison, если не удовлетворяют этим требованиям.
+`primary_track` обязан быть включённым ручным вариантом расписания с capability `dates`,
+`workload_track` — включённым ручным вариантом с capabilities `dates` и `effort`, а
+`comparison_track`, если задан, — включённым ручным вариантом с capability `dates`. Варианты
+`actual` и `dependency-only` не могут быть primary, workload или comparison, если не удовлетворяют
+этим требованиям.
 `.gitpm/work-categories.yaml` задаёт категории фактической работы.
 `gitpm/time-entry@1` (`projects/<project>/time-entries/<task>/<entry>.yaml`)
 фиксирует: `person`, `performed_on`, `hours` (положителен, кратен 0.25),
-`category`, `state` (`active`/`voided`); actual-контур вычисляется по
+`category`, `state` (`active`/`voided`); фактический вариант расписания вычисляется по
 активным записям, а не хранится явно. Циклы зависимостей проверяются
-отдельно по каждому контуру.
+отдельно по каждому варианту расписания.
 Voided entry обязательно хранит `voided_at` и `voided_by`; active entry не
 содержит voiding-полей. Если указан `replacement`, это существующая другая
 TimeEntry той же Task. Неактивная work category остаётся валидной для

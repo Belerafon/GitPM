@@ -298,7 +298,7 @@ GitLab URL, project ID, repository URL и OAuth secret относятся к ser
 и список `categories`. Эти три файла хранят упорядоченные конфигурационные значения с
 immutable `slug`, `title`, `color` token и `active`. Slug уникален внутри файла.
 У категорий работ `color` отсутствует. `.gitpm/schedule-tracks.yaml` содержит
-`schema: gitpm/schedule-tracks@1`, определения контуров и репозиторные defaults
+`schema: gitpm/schedule-tracks@1`, определения вариантов расписания и репозиторные defaults
 планирования. Эти записи не являются ID-сущностями. Maintainer может редактировать
 все четыре документа через UI «Настройки портфеля». Выбор `default_calendar`
 редактируется на странице рабочих календарей как «Календарь для новых сотрудников».

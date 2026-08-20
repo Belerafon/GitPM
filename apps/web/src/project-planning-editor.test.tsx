@@ -37,13 +37,13 @@ describe("ProjectPlanningEditor", () => {
     ];
     render(<ProjectPlanningEditor planning={{ enabled_tracks: ["commitment", "actual"], primary_track: "commitment", workload_track: "commitment", dashboard_tracks: ["commitment", "actual"] }} tracks={namedTracks} disabled={false} locale="ru" onChange={vi.fn()} />);
 
-    expect(screen.getByText("Что такое контур?")).toBeTruthy();
+    expect(screen.getByText("Что такое вариант расписания?")).toBeTruthy();
     expect(screen.getByText(/Названия вроде Commitment или Working plan задаёт администратор/u)).toBeTruthy();
     expect(screen.getByText(/Пользователи заполняют данные проекта/u)).toBeTruthy();
     expect(screen.getByText(/GitPM рассчитывает его автоматически по записям времени/u)).toBeTruthy();
-    const comparisonHelp = screen.getByRole("button", { name: "Справка: Контур сравнения" });
+    const comparisonHelp = screen.getByRole("button", { name: "Справка: Вариант расписания для сравнения" });
     expect(comparisonHelp.getAttribute("data-control-hint")).toContain("базовый план или зафиксированные обязательства");
-    expect(screen.getByText("Как GitPM использует контуры")).toBeTruthy();
+    expect(screen.getByText("Как GitPM использует варианты расписания")).toBeTruthy();
   });
 
   it("disables workload tracks that lack the effort capability", () => {

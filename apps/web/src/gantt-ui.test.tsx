@@ -216,7 +216,7 @@ describe("read-only Gantt", () => {
   });
 
   it("explains custom track titles and opens settings from the Russian Gantt", async () => {
-    const scheduled = task("R", "Контур", "2026-07-01", "2026-07-10");
+    const scheduled = task("R", "Расписание", "2026-07-01", "2026-07-10");
     const project = result({ schema: "gitpm/project@2", id: projectId, name: "Планы", status: "backlog", lifecycle: "active", planning: { enabled_tracks: ["plan", "commitment"], primary_track: "plan", workload_track: "plan", dashboard_tracks: ["plan", "commitment"] } });
     const onNavigate = vi.fn();
     const api = {
@@ -224,9 +224,9 @@ describe("read-only Gantt", () => {
       getConfiguration: vi.fn(async () => ({ document: { schema: "gitpm/schedule-tracks@1", tracks: [{ slug: "plan", title: "Working plan", kind: "manual", capabilities: ["dates", "effort"] }, { slug: "commitment", title: "Commitment", kind: "manual", capabilities: ["dates"] }], defaults: { enabled_tracks: ["plan", "commitment"], primary_track: "plan", workload_track: "plan", dashboard_tracks: ["plan", "commitment"] } }, path: "schedule-tracks", blob_id: "a", draft_fingerprint: "b" })),
     } as unknown as GitPmApi;
     render(<GanttWorkspace api={api} draft={draft} locale="ru" onNavigate={onNavigate} />);
-    await waitFor(() => expect(screen.getByRole("combobox", { name: "Основной контур" })).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Основной вариант расписания" })).toBeTruthy());
     expect(screen.getByText("Working plan", { selector: "option" })).toBeTruthy();
-    expect(screen.getByText(/Названия контуров берутся из настроек репозитория/u)).toBeTruthy();
+    expect(screen.getByText(/Названия вариантов расписания берутся из настроек репозитория/u)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Изменить названия в разделе «Планы и факт»" }));
     expect(onNavigate).toHaveBeenCalledWith("settings", { query: { section: ["planning"] } });
   });

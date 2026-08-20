@@ -203,9 +203,9 @@ describe("administration UI", () => {
     fireEvent.click(within(tracksCard).getByRole("button", { name: "Редактировать: Планы и факт" }));
     const dialog = await screen.findByRole("dialog", { name: "Редактировать: Планы и факт" });
     const hint = dialog.querySelector<HTMLElement>(".schedule-tracks-hint")!;
-    expect(within(hint).getByText(/Контур — это отдельный вариант расписания/u)).toBeTruthy();
-    expect(within(hint).getByText(/Ручные контуры заполняются пользователями/u)).toBeTruthy();
-    expect(within(hint).getByText(/основной контур используется как рабочее расписание/u)).toBeTruthy();
+    expect(within(hint).getByText(/Вариант расписания — это отдельный набор дат/u)).toBeTruthy();
+    expect(within(hint).getByText(/Ручные варианты расписания заполняются пользователями/u)).toBeTruthy();
+    expect(within(hint).getByText(/основной вариант используется как рабочее расписание/u)).toBeTruthy();
   });
 
   it("scrolls to planning when opened from a Gantt settings link", async () => {
