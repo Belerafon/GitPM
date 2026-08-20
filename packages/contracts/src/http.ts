@@ -296,7 +296,7 @@ export interface SemanticFieldChange {
 
 export interface SemanticChange {
   readonly path: string;
-  readonly id: string;
+  readonly id?: string;
   readonly schema: string;
   readonly project?: string;
   readonly fields: readonly SemanticFieldChange[];
@@ -677,7 +677,7 @@ const semanticChangeSchema = objectSchema({
   schema: stringSchema,
   project: stringSchema,
   fields: arraySchema(semanticFieldChangeSchema),
-}, ["path", "id", "schema", "fields"]);
+}, ["path", "schema", "fields"]);
 const semanticFileEntitySchema = objectSchema({
   path: stringSchema,
   schema: stringSchema,

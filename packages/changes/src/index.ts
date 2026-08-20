@@ -49,7 +49,7 @@ export interface SemanticFieldChange {
 
 export interface SemanticChange {
   readonly path: string;
-  readonly id: string;
+  readonly id?: string;
   readonly schema: string;
   readonly project?: string;
   readonly fields: readonly SemanticFieldChange[];
@@ -290,13 +290,12 @@ function oversizedAddedDiffPlaceholder(relativePath: string): string {
   return `diff --git a/${relativePath} b/${relativePath}\nnew file mode 100644\n--- /dev/null\n+++ b/${relativePath}\n`;
 }
 
-function documentIdentity(document: GitPmDocument): { id: string; schema: string; project?: string } | undefined {
-  const id = document.id;
-  if (typeof id !== "string") return undefined;
+function documentIdentity(document: GitPmDocument): { id?: string; schema: string; project?: string } {
+  const id = typeof document.id === "string" ? document.id : undefined;
   const project = typeof document.project === "string"
     ? document.project
     : document.schema === "gitpm/project@2" ? id : undefined;
-  return { id, schema: document.schema, ...(project === undefined ? {} : { project }) };
+  return { ...(id === undefined ? {} : { id }), schema: document.schema, ...(project === undefined ? {} : { project }) };
 }
 
 function documentDisplayName(document: GitPmDocument): string | undefined {
@@ -310,6 +309,33 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+function objectsBySlug(value: unknown): Map<string, Record<string, unknown>> | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const result = new Map<string, Record<string, unknown>>();
+  for (const item of value) {
+    if (!isPlainObject(item) || typeof item.slug !== "string" || result.has(item.slug)) return undefined;
+    result.set(item.slug, item);
+  }
+  return result;
+}
+
+function sluggedArrayChanges(path: string, before: unknown, after: unknown): SemanticFieldChange[] | undefined {
+  const beforeItems = objectsBySlug(before);
+  const afterItems = objectsBySlug(after);
+  if (beforeItems === undefined || afterItems === undefined) return undefined;
+  const changes: SemanticFieldChange[] = [];
+  const slugs = new Set([...beforeItems.keys(), ...afterItems.keys()]);
+  for (const slug of [...slugs].sort()) {
+    changes.push(...nestedLeafChanges(`${path}.${slug}`, beforeItems.get(slug), afterItems.get(slug)));
+  }
+  const beforeOrder = [...beforeItems.keys()];
+  const afterOrder = [...afterItems.keys()];
+  if (JSON.stringify(beforeOrder) !== JSON.stringify(afterOrder)) {
+    changes.push({ field: `${path}.order`, before: beforeOrder, after: afterOrder });
+  }
+  return changes;
+}
+
 function nestedLeafChanges(path: string, before: Record<string, unknown> | undefined, after: Record<string, unknown> | undefined): SemanticFieldChange[] {
   const keys = new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})]);
   const changes: SemanticFieldChange[] = [];
@@ -318,10 +344,11 @@ function nestedLeafChanges(path: string, before: Record<string, unknown> | undef
     const afterValue = after?.[key];
     if (JSON.stringify(beforeValue) === JSON.stringify(afterValue)) continue;
     const fieldPath = `${path}.${key}`;
-    if (isPlainObject(beforeValue) && isPlainObject(afterValue)) {
+    if ((isPlainObject(beforeValue) || beforeValue === undefined) && (isPlainObject(afterValue) || afterValue === undefined)) {
       changes.push(...nestedLeafChanges(fieldPath, beforeValue, afterValue));
     } else {
-      changes.push({ field: fieldPath, ...(beforeValue === undefined ? {} : { before: beforeValue }), ...(afterValue === undefined ? {} : { after: afterValue }) });
+      const slugged = sluggedArrayChanges(fieldPath, beforeValue, afterValue);
+      changes.push(...(slugged ?? [{ field: fieldPath, ...(beforeValue === undefined ? {} : { before: beforeValue }), ...(afterValue === undefined ? {} : { after: afterValue }) }]));
     }
   }
   return changes;
@@ -339,7 +366,8 @@ function fieldChanges(before: GitPmDocument | undefined, after: GitPmDocument | 
     if (isPlainObject(beforeValue) && isPlainObject(afterValue)) {
       changes.push(...nestedLeafChanges(field, beforeValue, afterValue));
     } else {
-      changes.push({ field, ...(beforeValue === undefined ? {} : { before: beforeValue }), ...(afterValue === undefined ? {} : { after: afterValue }) });
+      const slugged = sluggedArrayChanges(field, beforeValue, afterValue);
+      changes.push(...(slugged ?? [{ field, ...(beforeValue === undefined ? {} : { before: beforeValue }), ...(afterValue === undefined ? {} : { after: afterValue }) }]));
     }
   }
   return changes;
@@ -704,7 +732,6 @@ export class ChangesService {
           ...(displayName === undefined ? {} : { display_name: displayName }),
         };
         const identity = documentIdentity(document);
-        if (!identity) return { path: change.path, fileEntity };
         const item: SemanticChange = { path: change.path, ...identity, fields: fieldChanges(before, after) };
         const group: keyof typeof result = change.kind === "Added" ? "created" : change.kind === "Deleted" ? "deleted" : before?.lifecycle !== "archived" && after?.lifecycle === "archived" ? "archived" : "updated";
         if (group === "updated" && item.fields.length === 0) return { path: change.path, fileEntity };
@@ -723,7 +750,7 @@ export class ChangesService {
     }
     for (let createdIndex = result.created.length - 1; createdIndex >= 0; createdIndex -= 1) {
       const created = result.created[createdIndex]!;
-      const deletedIndex = result.deleted.findIndex((deleted) => deleted.id === created.id && deleted.schema === created.schema);
+      const deletedIndex = result.deleted.findIndex((deleted) => created.id !== undefined && deleted.id === created.id && deleted.schema === created.schema);
       if (deletedIndex === -1) continue;
       const deleted = result.deleted[deletedIndex]!;
       result.created.splice(createdIndex, 1);

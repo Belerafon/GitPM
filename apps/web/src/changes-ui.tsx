@@ -25,6 +25,8 @@ const entityTypeKeys: Readonly<Record<string, MessageKey>> = {
   "gitpm/repository@1": "changes.entityRepository",
   "gitpm/statuses@2": "changes.entityStatuses",
   "gitpm/issue-types@1": "changes.entityIssueTypes",
+  "gitpm/work-categories@1": "changes.entityWorkCategories",
+  "gitpm/schedule-tracks@1": "changes.entityScheduleTracks",
 };
 
 const fieldKeys: Readonly<Record<string, MessageKey>> = {
@@ -47,6 +49,12 @@ const fieldKeys: Readonly<Record<string, MessageKey>> = {
   start: "changes.fieldStart",
   status: "changes.fieldStatus",
   title: "changes.fieldTitle",
+  tracks: "changes.fieldTracks",
+  statuses: "changes.fieldStatuses",
+  issue_types: "changes.fieldIssueTypes",
+  categories: "changes.fieldWorkCategories",
+  defaults: "changes.fieldDefaults",
+  order: "changes.fieldOrder",
   weekly_capacity_hours: "changes.fieldCapacity",
 };
 
@@ -125,7 +133,7 @@ function SemanticGroup({ title, items, entitiesByPath, namesById, empty, fieldCo
     const name = entity?.display_name ?? entity?.id ?? item.id;
     return <details className="semantic-item" key={`${title}-${item.path}`}>
       <summary>
-        <span className="semantic-identity"><span>{entityType(item.schema, t)}</span><strong>{name}</strong><code>{item.id}</code></span>
+        <span className="semantic-identity"><span>{entityType(item.schema, t)}</span>{name !== undefined && <strong>{name}</strong>}{item.id !== undefined && <code>{item.id}</code>}</span>
         <span className="semantic-field-count">{fieldCount(item.fields.length)}</span>
       </summary>
       {item.fields.length > 0 && <dl>{item.fields.map((field) => <div key={field.field}><dt>{fieldLabel(field.field, t)}</dt><dd><del>{valueText(field.before, empty, namesById)}</del><span aria-hidden="true">→</span><ins>{valueText(field.after, empty, namesById)}</ins></dd></div>)}</dl>}

@@ -87,6 +87,27 @@ describe("Changes workspace", () => {
     expect(screen.getByText("Статус")).toBeTruthy();
   });
 
+  it("shows localized field-level changes for configuration documents without IDs", async () => {
+    const fixture = new ChangesApi();
+    fixture.changes = { changed_files_count: 1, affected_projects: [], project_files: [], files: [
+      { path: ".gitpm/schedule-tracks.yaml", kind: "Modified", diff_token: "tracks", diff: "@@ -1 +1 @@\n-old\n+new\n", hunks: [{ old_start: 1, old_count: 1, new_start: 1, new_count: 1, lines: ["-old", "+new"] }] },
+    ] };
+    fixture.semantic = {
+      created: [], archived: [], deleted: [],
+      updated: [{ path: ".gitpm/schedule-tracks.yaml", schema: "gitpm/schedule-tracks@1", fields: [{ field: "tracks.plan.title", before: "Working plan", after: "Внутренний план работ" }] }],
+      counts: { created: 0, updated: 1, archived: 0, deleted: 0 }, affected_projects: [], unclassified_files: [],
+      file_entities: [{ path: ".gitpm/schedule-tracks.yaml", schema: "gitpm/schedule-tracks@1" }],
+    };
+
+    render(<ChangesWorkspace api={fixture as unknown as GitPmApi} draft={draft} role="Maintainer" locale="ru" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} />);
+    const scheduleVariants = await screen.findAllByText("Варианты расписания");
+    expect(scheduleVariants.length).toBeGreaterThan(0);
+    fireEvent.click(scheduleVariants[0]!);
+    expect(screen.getByText("Working plan")).toBeTruthy();
+    expect(screen.getByText("Внутренний план работ")).toBeTruthy();
+    expect(screen.getByText(/Варианты расписания.*Plan.*Заголовок/u)).toBeTruthy();
+  });
+
   it("groups Project file semantics and keeps Reporter controls read-only", async () => {
     const fixture = new ChangesApi();
     fixture.changes = {
