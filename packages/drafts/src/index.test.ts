@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { cp, mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -138,6 +138,43 @@ describe("draft manager", () => {
     await expect(manager.assertFileBlobId("DRF-003", projectFile, beforeBlob))
       .rejects.toMatchObject({ code: "FILE_VERSION_MISMATCH" });
     expect((await manager.poll("DRF-003")).changedExternally).toBe(false);
+  });
+
+  it("does not report in-flight UI mutation staging as an external change", async () => {
+    const test = await fixture();
+    const { manager } = runtime(test.remote, test.data);
+    const draft = await manager.createDraft("DRF-POLL-RACE", "42");
+    let signalStaged = (): void => undefined;
+    let releaseMutation = (): void => undefined;
+    const staged = new Promise<void>((resolve) => { signalStaged = resolve; });
+    const continueMutation = new Promise<void>((resolve) => { releaseMutation = resolve; });
+    const filesDirectory = path.join(draft.worktree_path, "projects", "P-26-MGP84K", "files");
+    const temporary = path.join(filesDirectory, ".gitpm-project-file-upload.tmp");
+    const uploaded = path.join(filesDirectory, "upload-result.bin");
+
+    const mutation = manager.withUiMutation("DRF-POLL-RACE", "42", draft.fingerprint, async () => {
+      await mkdir(filesDirectory);
+      await writeFile(temporary, "partial upload", "utf8");
+      signalStaged();
+      await continueMutation;
+      await rename(temporary, uploaded);
+    });
+    await staged;
+
+    const pollWhileStaged = await manager.poll("DRF-POLL-RACE");
+    expect(pollWhileStaged).toEqual({
+      metadata: draft,
+      currentFingerprint: draft.fingerprint,
+      changedExternally: false,
+    });
+    releaseMutation();
+
+    const completedMutation = await mutation;
+    expect(await manager.poll("DRF-POLL-RACE")).toEqual({
+      metadata: completedMutation.metadata,
+      currentFingerprint: completedMutation.metadata.fingerprint,
+      changedExternally: false,
+    });
   });
 
   it("computes file revisions as one batch", async () => {

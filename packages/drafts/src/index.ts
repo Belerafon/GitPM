@@ -108,6 +108,7 @@ export class DraftManager {
   private readonly metadataRelativeDirectory: string;
   private readonly repositoryLock = new AsyncMutex();
   private readonly draftLocks = new Map<string, AsyncMutex>();
+  private readonly activeMutations = new Map<string, DraftMetadata>();
   private readonly backend: DraftBackend;
   private readonly pushStrategy: DraftPushStrategy;
 
@@ -313,9 +314,20 @@ export class DraftManager {
   }
 
   async poll(draftId: string): Promise<{ metadata: DraftMetadata; currentFingerprint: string; changedExternally: boolean }> {
-    const metadata = await this.getDraft(draftId);
-    const currentFingerprint = await this.fingerprint(metadata.worktree_path);
-    return { metadata, currentFingerprint, changedExternally: currentFingerprint !== metadata.fingerprint };
+    const safeDraftId = safeComponent(draftId, "draft ID");
+    const active = this.activeMutations.get(safeDraftId);
+    if (active !== undefined) {
+      return { metadata: active, currentFingerprint: active.fingerprint, changedExternally: false };
+    }
+    return await this.lock(safeDraftId).run(async () => {
+      const queuedActive = this.activeMutations.get(safeDraftId);
+      if (queuedActive !== undefined) {
+        return { metadata: queuedActive, currentFingerprint: queuedActive.fingerprint, changedExternally: false };
+      }
+      const metadata = await this.getDraft(safeDraftId);
+      const currentFingerprint = await this.fingerprint(metadata.worktree_path);
+      return { metadata, currentFingerprint, changedExternally: currentFingerprint !== metadata.fingerprint };
+    });
   }
 
   async setWriterMode(draftId: string, owner: string, mode: WriterMode): Promise<DraftMetadata> {
@@ -405,8 +417,9 @@ export class DraftManager {
     mode: RepositoryMutationMode,
     mutation: (metadata: DraftMetadata) => Promise<T>,
   ): Promise<{ result: T; metadata: DraftMetadata }> {
-    return await this.lock(safeComponent(draftId, "draft ID")).run(async () => {
-      const metadata = await this.getDraft(draftId);
+    const safeDraftId = safeComponent(draftId, "draft ID");
+    return await this.lock(safeDraftId).run(async () => {
+      const metadata = await this.getDraft(safeDraftId);
       if (mode === "repository") {
         if (this.backend.mode !== "direct") throw new DraftRuntimeError("DIRECT_WORKSPACE_REQUIRED", "Repository mutation mode requires direct repository mode");
         if (metadata.owner_gitlab_user_id !== owner) throw new DraftRuntimeError("DRAFT_FORBIDDEN", "Repository workspace owner mismatch");
@@ -423,25 +436,30 @@ export class DraftManager {
       if (current !== metadata.fingerprint || current !== expectedFingerprint) {
         throw new DraftRuntimeError("DRAFT_CHANGED_EXTERNALLY", "Draft worktree changed outside the UI runtime");
       }
-      let result: T;
+      this.activeMutations.set(safeDraftId, metadata);
       try {
-        result = await mutation(metadata);
-      } catch (error) {
-        const refreshed: DraftMetadata = {
+        let result: T;
+        try {
+          result = await mutation(metadata);
+        } catch (error) {
+          const refreshed: DraftMetadata = {
+            ...metadata,
+            fingerprint: await this.fingerprint(metadata.worktree_path),
+            updated_at: new Date().toISOString(),
+          };
+          await this.persist(refreshed);
+          throw error;
+        }
+        const next: DraftMetadata = {
           ...metadata,
           fingerprint: await this.fingerprint(metadata.worktree_path),
           updated_at: new Date().toISOString(),
         };
-        await this.persist(refreshed);
-        throw error;
+        await this.persist(next);
+        return { result, metadata: next };
+      } finally {
+        this.activeMutations.delete(safeDraftId);
       }
-      const next: DraftMetadata = {
-        ...metadata,
-        fingerprint: await this.fingerprint(metadata.worktree_path),
-        updated_at: new Date().toISOString(),
-      };
-      await this.persist(next);
-      return { result, metadata: next };
     });
   }
 
