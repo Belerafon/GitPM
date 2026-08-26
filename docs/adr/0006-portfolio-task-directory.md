@@ -17,9 +17,9 @@ same usability failure.
    beside **Projects**.
 2. The directory renders Tasks as `Project -> milestone -> Task -> subtask`. Tasks without an active
    milestone remain visible in a separate group inside their Project.
-3. Filtering operates over the full portfolio. It supports the Project-Task fields from ADR 0005 and
-   portfolio context fields for Project, Project group, Project owner, Project status, milestone
-   lifecycle, parent Task and nesting depth.
+3. Filtering operates over the full portfolio and targets Task properties. Project and milestone
+   selectors are not persistent controls: the directory already exposes those relationships through
+   its hierarchy, while the Projects workspace is the primary structural directory.
 4. A matching descendant retains its ancestors as context-only rows. Filtering must not flatten the
    hierarchy or make a Task appear detached from its Project and milestone.
 5. Project, milestone and Task links open their existing Project-scoped canonical routes. Project
@@ -27,6 +27,13 @@ same usability failure.
    mutation model.
 6. Filter state is locale-neutral and addressable in the URL. A legacy or malformed filter payload
    falls back through the existing query parser rules.
+7. The filter drawer starts with four attention-oriented presets: overdue Tasks, the next Task per
+   active Project, unassigned Tasks and Tasks without a due date. The next Task is the unfinished Task
+   with the earliest due date in that Project; start date, title and immutable ID break ties, and an
+   undated Task is selected only when the Project has no dated unfinished Task.
+8. Task rows expose explicit column headings and hover descriptions for Task navigation, assignees,
+   due date, estimate and status. Missing values explain what is absent instead of leaving an
+   unexplained dash.
 
 ## Consequences
 

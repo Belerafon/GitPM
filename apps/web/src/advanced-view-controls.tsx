@@ -8,13 +8,14 @@ import {
 
 type Translator = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string;
 
-interface QuickViewPreset {
+export interface QuickViewPreset {
   readonly id: string;
   readonly label: string;
+  readonly hint?: string;
   readonly query: AdvancedViewQuery;
 }
 
-export function AdvancedViewControls<Row>({ fields, locale, query, onChange, resultCount, totalCount, leadingControls, appliedControls, externalFilterCount = 0, groupLabel, onClear, allowSorting = true, t }: {
+export function AdvancedViewControls<Row>({ fields, locale, query, onChange, resultCount, totalCount, leadingControls, appliedControls, externalFilterCount = 0, groupLabel, onClear, quickPresets, allowSorting = true, t }: {
   readonly fields: readonly ViewField<Row>[];
   readonly locale: Locale;
   readonly query: AdvancedViewQuery;
@@ -26,6 +27,7 @@ export function AdvancedViewControls<Row>({ fields, locale, query, onChange, res
   readonly externalFilterCount?: number;
   readonly groupLabel?: string;
   readonly onClear?: () => void;
+  readonly quickPresets?: readonly QuickViewPreset[];
   readonly allowSorting?: boolean;
   readonly t: Translator;
 }) {
@@ -34,7 +36,7 @@ export function AdvancedViewControls<Row>({ fields, locale, query, onChange, res
   const [draft, setDraft] = useState<AdvancedViewQuery>(viewQuery);
   const conditions = useMemo(() => flattenConditions(viewQuery.filter), [viewQuery.filter]);
   const fieldMap = new Map(fields.map((field) => [field.id, field]));
-  const presets = useMemo(() => quickViewPresets(fields, t, allowSorting), [allowSorting, fields, t]);
+  const presets = useMemo(() => quickPresets ?? quickViewPresets(fields, t, allowSorting), [allowSorting, fields, quickPresets, t]);
   const clear = () => onClear === undefined ? onChange(emptyViewQuery()) : onClear();
   const appliedCount = countViewConditions(viewQuery.filter) + viewQuery.sort.length + externalFilterCount;
   const hasAppliedFilters = appliedCount > 0;
@@ -56,7 +58,7 @@ export function AdvancedViewControls<Row>({ fields, locale, query, onChange, res
     </div>
     <EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setOpen(false)} open={open} title={t(allowSorting ? "advancedView.title" : "advancedView.titleFilters")}>
       <form className="editor-drawer-form advanced-view-form" onSubmit={(event) => { event.preventDefault(); onChange(draft); setOpen(false); }}>
-        <section className="advanced-view-presets"><h3>{t("advancedView.quickPresets")}</h3><div aria-label={t("advancedView.quickPresets")} role="group">{presets.map((preset) => <button key={preset.id} onClick={() => applyPreset(preset)} type="button">{preset.label}</button>)}</div></section>
+        <section className="advanced-view-presets"><h3>{t("advancedView.quickPresets")}</h3><div aria-label={t("advancedView.quickPresets")} role="group">{presets.map((preset) => <button data-control-hint={preset.hint} key={preset.id} onClick={() => applyPreset(preset)} title={preset.hint} type="button">{preset.label}</button>)}</div></section>
         <details className="advanced-view-custom" open>
           <summary>{t(allowSorting ? "advancedView.customSetup" : "advancedView.customFilters")}</summary>
           <div>

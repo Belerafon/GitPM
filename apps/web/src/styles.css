@@ -417,8 +417,6 @@ textarea { min-height: 76px; resize: vertical; border: 1px solid #c9cbc5; border
 .task-toolbar label { display: grid; gap: .25rem; font-size: .78rem; }
 .task-toolbar select, .task-create select, .task-row select, .task-panel select { border: 1px solid #c9cbc5; border-radius: 8px; background: #fff; padding: .55rem; }
 .portfolio-task-area { container-type: inline-size; }
-.portfolio-task-quick-filters { flex-wrap: wrap; }
-.portfolio-task-quick-filters label { min-width: 10rem; }
 .portfolio-task-summary { margin: .9rem 0 1rem; }
 .portfolio-task-projects { display: grid; gap: 1rem; }
 .portfolio-task-project { overflow: hidden; border: 1px solid #dfe4dd; border-radius: 12px; background: #fff; }
@@ -436,6 +434,7 @@ textarea { min-height: 76px; resize: vertical; border: 1px solid #c9cbc5; border
 .portfolio-task-stage > header small { color: #866641; }
 .portfolio-task-no-stage > header > div { display: grid; }
 .portfolio-task-tree { display: grid; }
+.portfolio-task-column-head { display: grid; grid-template-columns: 0 1.2rem minmax(12rem, 1fr) minmax(8rem, 14rem) 6.5rem 4.5rem minmax(7.5rem, 10rem); gap: .35rem; align-items: end; padding: 0 .55rem 0 .25rem; color: #68706b; font-size: .68rem; font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
 .portfolio-task-row { display: grid; grid-template-columns: calc(var(--portfolio-task-depth) * .85rem) 1.2rem minmax(12rem, 1fr) minmax(8rem, 14rem) 6.5rem 4.5rem minmax(7.5rem, 10rem); gap: .35rem; align-items: center; border-top: 1px solid #eceee9; border-left: 3px solid transparent; padding: .48rem .55rem .48rem .25rem; }
 .portfolio-task-row.filter-context { opacity: .68; }
 .portfolio-task-row:hover { background: #f4f8f5; }
@@ -1758,6 +1757,7 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
   .comment-composer-actions button { align-self: end; }
 }
 @container (max-width: 900px) {
+  .portfolio-task-column-head { display: none; }
   .portfolio-task-row { grid-template-columns: calc(var(--portfolio-task-depth) * .75rem) 1.2rem minmax(10rem, 1fr) minmax(7.5rem, 10rem); }
   .portfolio-task-assignees { grid-column: 3; }
   .portfolio-task-date, .portfolio-task-estimate { display: none; }
