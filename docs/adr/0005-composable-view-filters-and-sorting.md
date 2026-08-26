@@ -25,10 +25,10 @@ not required to make interactive directories queryable.
    Equal rows retain their input order, so sorting is deterministic and stable.
 4. The initial directory query is `lifecycle = active`. This is an ordinary removable condition;
    clearing it exposes archived rows rather than creating an implicit second filter system.
-5. Project and Project-Task filter queries are serialized into the route `filters` value. The parser
-   accepts only fields and operators declared by the current surface, with limits of 20,000
-   serialized characters, eight group levels and 100 filter nodes. Legacy sort rules in these routes
-   are discarded. Unknown or malformed URL input falls back to an empty query.
+5. Project, portfolio-Task and Project-Task filter queries are serialized into the route `filters`
+   value. The parser accepts only fields and operators declared by the current surface, with limits
+   of 20,000 serialized characters, eight group levels and 100 filter nodes. Legacy sort rules in
+   these routes are discarded. Unknown or malformed URL input falls back to an empty query.
 6. Projects, milestones and Tasks keep their durable manual order. Project and Project-Task surfaces
    do not offer view sorting that could conflict with that order. Task hierarchy remains intact after
    filtering, and matching descendants retain their ancestors as context-only rows.
@@ -37,6 +37,8 @@ not required to make interactive directories queryable.
 
 - Projects (filters only): ID, name, group, owner, status, lifecycle, dates, overdue/risk, Task count
   and milestone count.
+- Portfolio Tasks (filters only): all Project-Task fields plus Project, Project group, Project owner,
+  Project status, milestone lifecycle, parent Task and nesting depth.
 - Project Tasks (filters only): ID, title, status, type, milestone, assignees, dates, effort and
   overdue state.
 - People: ID, name, email, weekly capacity, calendar, Project count, teams and lifecycle.
@@ -52,8 +54,8 @@ explicit versioned repository-format change.
 
 - New entity directories add field descriptors instead of implementing new query logic.
 - Filters remain locale-neutral in the URL while labels and values remain localized in the UI.
-- The browser performs the query over the already-loaded, scope-constrained entity set; it cannot
-  widen a Project Task view to another Project.
+- The browser performs the query over the already-loaded entity set. A Project Task view cannot
+  widen to another Project; the explicitly portfolio-scoped Task directory loads all Projects.
 - Complex filters are shareable for the Project directory and Project Task workspace, but they are
   not yet durable repository Saved Views. Sorting remains available on directories such as People
   that do not have a durable manual order.

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEventHandler, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEventHandler, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { activeProjectIds, ENTITY_ID_PREFIX, isOperationalTask, newUniqueEntityId } from "@gitpm/shared";
 import { buildTaskHierarchy } from "@gitpm/task-hierarchy";
 import { formatApiError, type GitPmApi } from "./api.js";
@@ -126,12 +126,13 @@ export type CoreSurface = "projects" | "tasks";
 
 type ProjectRiskLevel = "onTrack" | "near" | "overdue" | "unknown";
 
-export function CoreWorkspace({ api, draft, locale, surface = "projects", initialProjectId = "", initialTaskId = "", initialCommentId = "", initialStatusFilter = "", initialMilestoneFilter = "", initialAdvancedQuery, onNavigate = () => undefined, confirmAction = () => true, onChanged }: {
+export function CoreWorkspace({ api, draft, locale, surface = "projects", initialProjectId = "", initialProjectFilter = "", initialTaskId = "", initialCommentId = "", initialStatusFilter = "", initialMilestoneFilter = "", initialAdvancedQuery, onNavigate = () => undefined, confirmAction = () => true, onChanged }: {
   readonly api: GitPmApi;
   readonly draft: DraftStatus;
   readonly locale: Locale;
   readonly surface?: CoreSurface;
   readonly initialProjectId?: string;
+  readonly initialProjectFilter?: string;
   readonly initialTaskId?: string;
   readonly initialCommentId?: string;
   readonly initialStatusFilter?: string;
@@ -147,10 +148,12 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
   const [tasks, setTasks] = useState<readonly EntityResult[]>([]);
   const [people, setPeople] = useState<readonly EntityResult[]>([]);
   const [projectId, setProjectId] = useState<string>(initialProjectId);
+  const [projectFilter, setProjectFilter] = useState(initialProjectFilter);
   const [selectedTask, setSelectedTask] = useState<string>(initialTaskId);
   const [filter, setFilter] = useState(initialStatusFilter);
   const [milestoneFilter, setMilestoneFilter] = useState(initialMilestoneFilter);
   const [advancedQuery, setAdvancedQuery] = useState<AdvancedViewQuery>(() => defaultLifecycleViewQuery());
+  const [hasExplicitAdvancedQuery, setHasExplicitAdvancedQuery] = useState(initialAdvancedQuery !== undefined);
   const [fingerprint, setFingerprint] = useState(draft.fingerprint);
   const [error, setError] = useState<string | null>(null);
   const [statusOptions, setStatusOptions] = useState<readonly ConfigValue[]>([]);
@@ -179,10 +182,10 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
     await loadRequest.run(async () => {
       const [nextProjects, nextPeople, statusConfig, typeConfig, tracksDocument] = await Promise.all([api.listEntities(draft.draft_id, "projects"), api.listEntities(draft.draft_id, "people"), api.getConfiguration(draft.draft_id, "statuses"), api.getConfiguration(draft.draft_id, "issue-types"), api.getConfiguration(draft.draft_id, "schedule-tracks")]);
       const nextProject = surface === "projects" ? "" : nextProjects.some((item) => item.document.id === preferredProject && item.document.lifecycle === "active") ? preferredProject : "";
-      const [nextMilestones, nextTasks] = surface === "projects"
-        ? await Promise.all([api.listEntities(draft.draft_id, "milestones"), api.listEntities(draft.draft_id, "tasks")])
-        : nextProject === "" ? [[], []]
-          : await Promise.all([api.listEntities(draft.draft_id, "milestones"), api.listEntities(draft.draft_id, "tasks", nextProject)]);
+      const [nextMilestones, nextTasks] = await Promise.all([
+        api.listEntities(draft.draft_id, "milestones"),
+        api.listEntities(draft.draft_id, "tasks", surface === "tasks" && nextProject !== "" ? nextProject : undefined),
+      ]);
       return { nextProjects, nextPeople, nextProject, nextMilestones, nextTasks, statusConfig, typeConfig, tracksDocument };
     }, ({ nextProjects, nextPeople, nextProject, nextMilestones, nextTasks, statusConfig, typeConfig, tracksDocument }) => {
       const nextEntities = [...nextProjects, ...nextPeople, ...nextMilestones, ...nextTasks];
@@ -196,7 +199,7 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
   }, [api, draft.draft_id, draft.fingerprint, loadRequest.run, markExternal, projectId, surface]);
 
   useEffect(() => { setSelectedTask(initialTaskId); void load(initialProjectId); }, [draft.draft_id, surface]);
-  useEffect(() => { setFilter(initialStatusFilter); setMilestoneFilter(initialMilestoneFilter); }, [initialMilestoneFilter, initialStatusFilter]);
+  useEffect(() => { setProjectFilter(initialProjectFilter); setFilter(initialStatusFilter); setMilestoneFilter(initialMilestoneFilter); }, [initialMilestoneFilter, initialProjectFilter, initialStatusFilter]);
   useEffect(() => {
     if (draft.writer_mode !== "external" || draft.external_fingerprint === undefined || draft.external_fingerprint === lastExternalFingerprint.current) return;
     lastExternalFingerprint.current = draft.external_fingerprint;
@@ -294,38 +297,66 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
   const statuses = useMemo(() => [...new Set([...statusOptions.map((item) => item.slug), ...activeTasks.map((item) => value(item.document, "status"))])], [activeTasks, statusOptions]);
   const statusTitle = (slug: string) => statusOptions.find((item) => item.slug === slug)?.title ?? slug;
   const confirmDelete = (name: string) => confirmAction(t("core.deleteConfirm", { name }));
+  const projectOptions = useMemo(() => projects.map((project) => ({ value: project.document.id, label: value(project.document, "name") })).sort((left, right) => left.label.localeCompare(right.label, locale)), [locale, projects, value]);
+  const milestoneOptions = useMemo(() => milestones.map((milestone) => {
+    const project = projects.find((item) => item.document.id === milestone.document.project);
+    const projectName = project === undefined ? String(milestone.document.project ?? "") : value(project.document, "name");
+    return { value: milestone.document.id, label: `${projectName} · ${value(milestone.document, "name")}` };
+  }).sort((left, right) => left.label.localeCompare(right.label, locale)), [locale, milestones, projects, value]);
+  const taskDepthById = useMemo(() => {
+    const hierarchy = buildTaskHierarchy(tasks.map((item) => ({ id: item.document.id, ...(value(item.document, "parent") === "" ? {} : { parent: value(item.document, "parent") }) })));
+    return new Map(tasks.map((item) => [item.document.id, hierarchy.depthOf(item.document.id)] as const));
+  }, [tasks, value]);
   const taskFields = useMemo<readonly ViewField<EntityResult>[]>(() => [
     { id: "id", label: t("advancedView.field.id"), type: "text", read: (item) => item.document.id },
     { id: "title", label: t("advancedView.field.title"), type: "text", read: (item) => value(item.document, "title") },
+    { id: "project", label: t("advancedView.field.project"), type: "select", options: projectOptions, read: (item) => value(item.document, "project") },
+    { id: "projectGroup", label: t("advancedView.field.projectGroup"), type: "text", read: (item) => value(projects.find((project) => project.document.id === item.document.project)?.document ?? {}, "group") },
+    { id: "projectOwner", label: t("advancedView.field.projectOwner"), type: "select", options: peopleOptions, read: (item) => value(projects.find((project) => project.document.id === item.document.project)?.document ?? {}, "owner") },
+    { id: "projectStatus", label: t("advancedView.field.projectStatus"), type: "select", options: statusOptions.map((status) => ({ value: status.slug, label: status.title })), read: (item) => value(projects.find((project) => project.document.id === item.document.project)?.document ?? {}, "status") },
     { id: "status", label: t("advancedView.field.status"), type: "select", options: statusOptions.map((status) => ({ value: status.slug, label: status.title })), read: (item) => value(item.document, "status") },
     { id: "type", label: t("advancedView.field.type"), type: "select", options: typeOptions.map((type) => ({ value: type.slug, label: type.title })), read: (item) => value(item.document, "type") },
-    { id: "milestone", label: t("advancedView.field.milestone"), type: "select", options: milestones.map((milestone) => ({ value: milestone.document.id, label: value(milestone.document, "name") })), read: (item) => value(item.document, "milestone") },
+    { id: "milestone", label: t("advancedView.field.milestone"), type: "select", options: milestoneOptions, read: (item) => value(item.document, "milestone") },
+    { id: "milestoneLifecycle", label: t("advancedView.field.milestoneLifecycle"), type: "select", options: lifecycleOptions, read: (item) => milestones.find((milestone) => milestone.document.id === item.document.milestone)?.document.lifecycle ?? "" },
+    { id: "parent", label: t("advancedView.field.parent"), type: "text", read: (item) => value(item.document, "parent") },
+    { id: "depth", label: t("advancedView.field.depth"), type: "number", read: (item) => taskDepthById.get(item.document.id) ?? 0 },
     { id: "assignees", label: t("advancedView.field.assignees"), type: "multi-select", options: peopleOptions, read: (item) => values(item.document, "assignees") },
     { id: "lifecycle", label: t("advancedView.field.lifecycle"), type: "select", options: lifecycleOptions, read: (item) => isOperationalTask(item.document, operationalProjectIds) ? "active" : "archived" },
     { id: "start", label: t("advancedView.field.start"), type: "date", read: (item) => value(item.document, "start") },
     { id: "due", label: t("advancedView.field.due"), type: "date", read: (item) => value(item.document, "due") },
     { id: "estimate", label: t("advancedView.field.estimate"), type: "number", read: (item) => effortOf(item.document) },
     { id: "overdue", label: t("advancedView.field.overdue"), type: "boolean", read: (item) => { const due = value(item.document, "due"); return /^\d{4}-\d{2}-\d{2}$/u.test(due) && due < new Date().toISOString().slice(0, 10) && !isCompletedStatus(statusOptions, value(item.document, "status")); } },
-  ], [effortOf, lifecycleOptions, locale, milestones, operationalProjectIds, peopleOptions, statusOptions, typeOptions, value]);
+  ], [effortOf, lifecycleOptions, locale, milestoneOptions, milestones, operationalProjectIds, peopleOptions, projectOptions, projects, statusOptions, taskDepthById, typeOptions, value]);
   useEffect(() => {
+    setHasExplicitAdvancedQuery(initialAdvancedQuery !== undefined);
     if (initialAdvancedQuery !== undefined) setAdvancedQuery(filterOnlyViewQuery(parseAdvancedViewQuery(initialAdvancedQuery, surface === "projects" ? projectFields : taskFields)));
   }, [initialAdvancedQuery, projectFields, surface, taskFields]);
-  const filteredTasks = useMemo(() => applyAdvancedViewQuery(tasks, taskFields, advancedQuery, locale).filter((item) => (filter === "" || value(item.document, "status") === filter) && (milestoneFilter === "" || (milestoneFilter === "none" ? value(item.document, "milestone") === "" : value(item.document, "milestone") === milestoneFilter))), [advancedQuery, filter, locale, milestoneFilter, taskFields, tasks, value]);
+  const filteredTasks = useMemo(() => applyAdvancedViewQuery(tasks, taskFields, advancedQuery, locale).filter((item) =>
+    (projectId === "" || value(item.document, "project") === projectId)
+    && (projectFilter === "" || value(item.document, "project") === projectFilter)
+    && (filter === "" || value(item.document, "status") === filter)
+    && (milestoneFilter === "" || (milestoneFilter === "none" ? value(item.document, "milestone") === "" : value(item.document, "milestone") === milestoneFilter))), [advancedQuery, filter, locale, milestoneFilter, projectFilter, projectId, taskFields, tasks, value]);
   const task = tasks.find((item) => item.document.id === selectedTask);
   const selectedProject = projects.find((item) => item.document.id === projectId);
   const selectedProjectName = selectedProject === undefined ? "" : value(selectedProject.document, "name");
   const catalog = useMemo(() => new EntityCatalog({ projects, milestones, tasks }), [projects, milestones, tasks]);
-  const filterMilestones = activeMilestones.filter((item) => projectId === "" || item.document.project === projectId);
+  const filterMilestones = activeMilestones.filter((item) => (projectId === "" || item.document.project === projectId) && (projectFilter === "" || item.document.project === projectFilter));
   const completedTasks = activeTasks.filter((item) => isCompletedStatus(statusOptions, value(item.document, "status"))).length;
   const openPerson = (personId: string) => onNavigate("people", { personId });
-  const taskQuery = (status = filter, milestone = milestoneFilter) => ({ ...(status === "" ? {} : { status: [status] }), ...(milestone === "" ? {} : { milestone: [milestone] }) });
+  const taskQuery = (status = filter, milestone = milestoneFilter, project = projectFilter) => ({
+    ...(project === "" ? {} : { project: [project] }),
+    ...(status === "" ? {} : { status: [status] }),
+    ...(milestone === "" ? {} : { milestone: [milestone] }),
+    ...(!hasExplicitAdvancedQuery || countViewConditions(advancedQuery.filter) === 0 ? {} : { filters: [serializeAdvancedViewQuery(advancedQuery)] }),
+  });
   const applyAdvancedQuery = (next: AdvancedViewQuery) => {
     const filterQuery = filterOnlyViewQuery(next);
     setAdvancedQuery(filterQuery);
+    setHasExplicitAdvancedQuery(countViewConditions(filterQuery.filter) > 0);
     const selection = surface === "tasks" && projectId !== "" ? { projectId } : {};
     onNavigate(surface, countViewConditions(filterQuery.filter) > 0
-      ? { ...selection, query: { filters: [serializeAdvancedViewQuery(filterQuery)] } }
-      : selection);
+      ? { ...selection, query: { ...taskQuery(), filters: [serializeAdvancedViewQuery(filterQuery)] } }
+      : { ...selection, query: taskQuery() });
   };
   const renderProjectRegisterHeader = () => <div className="project-register-head"><span>{t("core.projects")}</span><span>{t("core.status")}</span><span>{t("core.owner")}</span><span>{t("core.tasks")}</span><span>{t("core.milestones")}</span><span>{t("core.due")}</span><span>{t("core.risk")}</span></div>;
   const renderProjectRow = (project: EntityResult) => {
@@ -367,7 +398,15 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
       <dl className="project-register-summary"><div><dt>{t("core.projectsTotal")}</dt><dd>{activeProjects.length}</dd></div><div><dt>{t("core.tasksTotal")}</dt><dd>{activeTasks.length}</dd></div><div><dt>{t("core.milestonesTotal")}</dt><dd>{activeMilestones.length}</dd></div><div><dt>{t("core.completedTasks")}</dt><dd>{completedTasks}</dd></div></dl>
       {filteredProjects.length === 0 ? <p>{t("core.empty")}</p> : <div className="project-groups">{projectGroupSections.map((group) => <section className="project-group" data-ungrouped={group.isUngrouped || undefined} key={group.key}><header className="project-group-heading"><h4>{group.title}</h4><span>{t("core.projectsCount", { count: group.projects.length })}</span></header><div className="project-register" aria-label={group.title}>{renderProjectRegisterHeader()}{group.projects.map(renderProjectRow)}</div></section>)}</div>}
     </section>}
-    {surface === "tasks" && (task !== undefined ? <div className="task-detail-page"><button className="text-link back-link" onClick={() => onNavigate("tasks", { projectId, query: taskQuery() })}>← {t("core.backToTasks")}</button><TaskPanel api={api} catalog={catalog} confirmCommentDelete={() => confirmAction(t("comments.deleteConfirm"))} confirmDelete={confirmDelete} draft={draft} entity={task} fingerprint={fingerprint} focusedCommentId={initialCommentId || undefined} milestones={milestones} people={people} projects={activeProjects} readOnly={readOnly} externalFields={highlights[task.document.id]} locale={locale} statusOptions={statusOptions} tasks={tasks} typeOptions={typeOptions} value={value} effortString={effortStringOf} track={projectTrack(String(task.document.project))} scheduling={scheduling} planning={projectPlanningById.get(String(task.document.project))} onCommentChanged={async (nextFingerprint) => { setFingerprint(nextFingerprint); await onChanged(); }} onNavigate={onNavigate} onDeleted={() => onNavigate("tasks", { projectId })} onStatusChange={(status) => changeTaskStatus(task, status)} save={mutate} remove={remove} statusBusy={statusPending !== null} /></div> : selectedTask !== "" ? <div className="card empty-workspace"><p>{t("core.taskNotFound")}</p><button onClick={() => onNavigate("tasks", { projectId, query: taskQuery() })}>{t("core.backToTasks")}</button></div> : <section className="card task-area"><div className="task-toolbar"><div><h3>{projectId === "" ? t("core.allTasks") : t("core.tasksFor", { project: selectedProjectName })}</h3><p>{t(projectId === "" ? "core.allTasksHint" : "core.projectTasksHint")}</p></div><div className="task-toolbar-controls"><label>{t("core.project")}<select aria-label={t("core.project")} value={projectId} onChange={(event) => onNavigate("tasks", { projectId: event.target.value, query: taskQuery(filter, "") })}><option value="">{t("core.chooseProjectOption")}</option>{activeProjects.map((project) => <option key={project.document.id} value={project.document.id}>{value(project.document, "name")}</option>)}</select></label></div></div><AdvancedViewControls allowSorting={false} fields={taskFields} locale={locale} onChange={applyAdvancedQuery} query={advancedQuery} resultCount={filteredTasks.length} t={t} totalCount={tasks.length} />
+    {surface === "tasks" && projectId === "" && selectedTask === "" && <section className="card portfolio-task-area"><div className="task-toolbar"><div><h3>{t("core.allTasks")}</h3><p>{t("core.allTasksHint")}</p></div></div><AdvancedViewControls allowSorting={false} fields={taskFields} locale={locale} onChange={applyAdvancedQuery} query={advancedQuery} resultCount={filteredTasks.length} totalCount={tasks.length} t={t} leadingControls={<div className="task-toolbar-controls portfolio-task-quick-filters">
+      <label>{t("core.project")}<select aria-label={t("core.project")} value={projectFilter} onChange={(event) => { const nextProject = event.target.value; setProjectFilter(nextProject); setMilestoneFilter(""); onNavigate("tasks", { query: taskQuery(filter, "", nextProject) }); }}><option value="">{t("workload.allProjects")}</option>{activeProjects.map((project) => <option key={project.document.id} value={project.document.id}>{value(project.document, "name")}</option>)}</select></label>
+      <label>{t("core.filter")}<select aria-label={t("core.filter")} value={filter} onChange={(event) => { const nextStatus = event.target.value; setFilter(nextStatus); onNavigate("tasks", { query: taskQuery(nextStatus) }); }}><option value="">{t("core.allStatuses")}</option>{statuses.map((status) => <option key={status} value={status}>{statusTitle(status)}</option>)}</select></label>
+      <label>{t("core.milestone")}<select aria-label={t("core.milestone")} value={milestoneFilter} onChange={(event) => { const nextMilestone = event.target.value; setMilestoneFilter(nextMilestone); onNavigate("tasks", { query: taskQuery(filter, nextMilestone) }); }}><option value="">{t("core.allMilestones")}</option><option value="none">{t("stages.withoutStage")}</option>{filterMilestones.map((milestone) => <option key={milestone.document.id} value={milestone.document.id}>{projectFilter === "" ? `${catalog.project(milestone.document.project).name} · ` : ""}{value(milestone.document, "name")}</option>)}</select></label>
+    </div>} />
+      <dl className="project-register-summary portfolio-task-summary"><div><dt>{t("core.projectsTotal")}</dt><dd>{new Set(filteredTasks.map((item) => item.document.project)).size}</dd></div><div><dt>{t("core.tasksTotal")}</dt><dd>{filteredTasks.length}</dd></div><div><dt>{t("core.milestonesTotal")}</dt><dd>{new Set(filteredTasks.map((item) => value(item.document, "milestone")).filter(Boolean)).size}</dd></div><div><dt>{t("core.completedTasks")}</dt><dd>{filteredTasks.filter((item) => isCompletedStatus(statusOptions, value(item.document, "status"))).length}</dd></div></dl>
+      <PortfolioTaskHierarchy filteredTasks={filteredTasks} highlights={highlights} locale={locale} milestones={milestones} onNavigate={onNavigate} onStatusChange={changeTaskStatus} people={people} projects={projects} query={taskQuery()} readOnly={readOnly} statusBusy={statusPending !== null} statusOptions={statusOptions} statusPending={statusPending} statusTitle={statusTitle} tasks={tasks} t={t} value={value} effortOf={effortOf} />
+    </section>}
+    {surface === "tasks" && projectId !== "" && (task !== undefined ? <div className="task-detail-page"><button className="text-link back-link" onClick={() => onNavigate("tasks", { projectId, query: taskQuery() })}>← {t("core.backToTasks")}</button><TaskPanel api={api} catalog={catalog} confirmCommentDelete={() => confirmAction(t("comments.deleteConfirm"))} confirmDelete={confirmDelete} draft={draft} entity={task} fingerprint={fingerprint} focusedCommentId={initialCommentId || undefined} milestones={milestones} people={people} projects={activeProjects} readOnly={readOnly} externalFields={highlights[task.document.id]} locale={locale} statusOptions={statusOptions} tasks={tasks} typeOptions={typeOptions} value={value} effortString={effortStringOf} track={projectTrack(String(task.document.project))} scheduling={scheduling} planning={projectPlanningById.get(String(task.document.project))} onCommentChanged={async (nextFingerprint) => { setFingerprint(nextFingerprint); await onChanged(); }} onNavigate={onNavigate} onDeleted={() => onNavigate("tasks", { projectId })} onStatusChange={(status) => changeTaskStatus(task, status)} save={mutate} remove={remove} statusBusy={statusPending !== null} /></div> : selectedTask !== "" ? <div className="card empty-workspace"><p>{t("core.taskNotFound")}</p><button onClick={() => onNavigate("tasks", { projectId, query: taskQuery() })}>{t("core.backToTasks")}</button></div> : <section className="card task-area"><div className="task-toolbar"><div><h3>{t("core.tasksFor", { project: selectedProjectName })}</h3><p>{t("core.projectTasksHint")}</p></div><div className="task-toolbar-controls"><label>{t("core.project")}<select aria-label={t("core.project")} value={projectId} onChange={(event) => onNavigate("tasks", { projectId: event.target.value, query: taskQuery(filter, "") })}><option value="">{t("core.chooseProjectOption")}</option>{activeProjects.map((project) => <option key={project.document.id} value={project.document.id}>{value(project.document, "name")}</option>)}</select></label></div></div><AdvancedViewControls allowSorting={false} fields={taskFields} locale={locale} onChange={applyAdvancedQuery} query={advancedQuery} resultCount={filteredTasks.length} t={t} totalCount={tasks.length} />
       {projectId === "" ? <div className="scope-hint">{t("core.selectProjectToCreate")}</div> : <><button className="primary editor-trigger" disabled={readOnly} onClick={() => setCreateEditor("task")} type="button">+ {t("core.createTaskAction")}</button><EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setCreateEditor(null)} open={createEditor === "task"} size="wide" title={t("core.createTaskAction")}><form className="editor-drawer-form task-editor-form" onSubmit={createTask}>
         <TaskEditorSection className="task-editor-basic" title={t("taskEditor.basic")}><div className="task-editor-basic-grid"><label>{t("core.title")}<input disabled={readOnly} name="title" required /></label><label>{t("core.status")}<select disabled={readOnly} name="status">{statusOptions.map((status) => <option key={status.slug} value={status.slug}>{status.title}</option>)}</select></label><label>{t("core.type")}<select disabled={readOnly} name="type">{typeOptions.map((item) => <option key={item.slug} value={item.slug}>{item.title}</option>)}</select></label><label>{t("core.milestone")}<select disabled={readOnly} name="milestone"><option value="">{t("core.noMilestone")}</option>{filterMilestones.map((milestone) => <option key={milestone.document.id} value={milestone.document.id}>{value(milestone.document, "name")}</option>)}</select></label></div></TaskEditorSection>
         <TaskEditorSection title={t("taskEditor.people")}><AssigneeChecks disabled={readOnly} people={people.filter((person) => person.document.lifecycle === "active")} selected={[]} t={t} /></TaskEditorSection>
@@ -380,6 +419,111 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
     </>
     </AsyncBoundary>
   </section>;
+}
+
+interface PortfolioHierarchyTask {
+  readonly id: string;
+  readonly parent?: string;
+  readonly entity: EntityResult;
+}
+
+function PortfolioTaskHierarchy({ projects, milestones, tasks, filteredTasks, people, locale, query, readOnly, statusOptions, statusBusy, statusPending, highlights, value, effortOf, statusTitle, onStatusChange, onNavigate, t }: {
+  readonly projects: readonly EntityResult[];
+  readonly milestones: readonly EntityResult[];
+  readonly tasks: readonly EntityResult[];
+  readonly filteredTasks: readonly EntityResult[];
+  readonly people: readonly EntityResult[];
+  readonly locale: Locale;
+  readonly query: Readonly<Record<string, readonly string[]>>;
+  readonly readOnly: boolean;
+  readonly statusOptions: readonly ConfigValue[];
+  readonly statusBusy: boolean;
+  readonly statusPending: string | null;
+  readonly highlights: Readonly<Record<string, readonly string[]>>;
+  readonly value: ScheduleTextReader;
+  readonly effortOf: (document: Readonly<Record<string, unknown>>) => number | undefined;
+  readonly statusTitle: (slug: string) => string;
+  readonly onStatusChange: (task: EntityResult, status: string) => void;
+  readonly onNavigate: WorkspaceNavigate;
+  readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string;
+}) {
+  if (filteredTasks.length === 0) return <p className="portfolio-task-empty">{t("core.empty")}</p>;
+  const taskCount = (count: number) => t(count === 1 ? "portfolioTasks.oneTask" : "portfolioTasks.taskCount", { count });
+  const visibleProjectIds = new Set(filteredTasks.map((task) => value(task.document, "project")));
+  const visibleProjects = projects.filter((project) => visibleProjectIds.has(project.document.id)).slice().sort((left, right) => value(left.document, "name").localeCompare(value(right.document, "name"), locale));
+  return <div className="portfolio-task-projects">{visibleProjects.map((project) => {
+    const projectTasks = tasks.filter((task) => value(task.document, "project") === project.document.id);
+    const visibleProjectTasks = filteredTasks.filter((task) => value(task.document, "project") === project.document.id);
+    const projectMilestones = milestones.filter((milestone) => milestone.document.project === project.document.id);
+    const milestoneById = new Map(projectMilestones.map((milestone) => [milestone.document.id, milestone] as const));
+    const visibleMilestoneIds = new Set(visibleProjectTasks.map((task) => value(task.document, "milestone")).filter((id) => milestoneById.has(id)));
+    const milestoneOrder = values(project.document, "milestone_order");
+    const visibleMilestones = projectMilestones.filter((milestone) => visibleMilestoneIds.has(milestone.document.id)).slice().sort((left, right) => {
+      const leftOrder = milestoneOrder.indexOf(left.document.id); const rightOrder = milestoneOrder.indexOf(right.document.id);
+      if (leftOrder >= 0 || rightOrder >= 0) { if (leftOrder < 0) return 1; if (rightOrder < 0) return -1; if (leftOrder !== rightOrder) return leftOrder - rightOrder; }
+      return value(left.document, "name").localeCompare(value(right.document, "name"), locale) || left.document.id.localeCompare(right.document.id);
+    });
+    const withoutStage = (task: EntityResult) => !milestoneById.has(value(task.document, "milestone"));
+    const visibleWithoutStage = visibleProjectTasks.filter(withoutStage);
+    const allWithoutStage = projectTasks.filter(withoutStage);
+    return <article className="portfolio-task-project" data-project-id={project.document.id} key={project.document.id}>
+      <header className="portfolio-task-project-heading"><button onClick={() => onNavigate("projects", { projectId: project.document.id })} type="button"><span>{t("core.project")} <code>{project.document.id}</code></span><strong>{value(project.document, "name")}</strong>{value(project.document, "group") !== "" && <small>{value(project.document, "group")}</small>}</button><span>{taskCount(visibleProjectTasks.length)}</span></header>
+      <div className="portfolio-task-stages">{visibleMilestones.map((milestone, index) => <section className="portfolio-task-stage" data-milestone-id={milestone.document.id} key={milestone.document.id}>
+        <header><button onClick={() => onNavigate("stages", { projectId: project.document.id, stageId: milestone.document.id, query })} type="button"><span>{t("core.milestone")} {index + 1} <code>{milestone.document.id}</code></span><strong>{value(milestone.document, "name")}</strong>{milestone.document.lifecycle === "archived" && <small>{t("core.archived")}</small>}</button><span>{taskCount(visibleProjectTasks.filter((task) => value(task.document, "milestone") === milestone.document.id).length)}</span></header>
+        <PortfolioTaskGroup allTasks={projectTasks.filter((task) => value(task.document, "milestone") === milestone.document.id)} effortOf={effortOf} highlights={highlights} locale={locale} onNavigate={onNavigate} onStatusChange={onStatusChange} order={values(milestone.document, "task_order")} people={people} projectId={project.document.id} query={query} readOnly={readOnly} statusBusy={statusBusy} statusOptions={statusOptions} statusPending={statusPending} statusTitle={statusTitle} t={t} value={value} visibleTasks={visibleProjectTasks.filter((task) => value(task.document, "milestone") === milestone.document.id)} />
+      </section>)}
+      {visibleWithoutStage.length > 0 && <section className="portfolio-task-stage portfolio-task-no-stage"><header><div><span>{t("portfolioTasks.systemGroup")}</span><strong>{t("stages.withoutStage")}</strong></div><span>{taskCount(visibleWithoutStage.length)}</span></header><PortfolioTaskGroup allTasks={allWithoutStage} effortOf={effortOf} highlights={highlights} locale={locale} onNavigate={onNavigate} onStatusChange={onStatusChange} people={people} projectId={project.document.id} query={query} readOnly={readOnly} statusBusy={statusBusy} statusOptions={statusOptions} statusPending={statusPending} statusTitle={statusTitle} t={t} value={value} visibleTasks={visibleWithoutStage} /></section>}
+      </div>
+    </article>;
+  })}</div>;
+}
+
+function PortfolioTaskGroup({ allTasks, visibleTasks, projectId, order = [], people, locale, query, readOnly, statusOptions, statusBusy, statusPending, highlights, value, effortOf, statusTitle, onStatusChange, onNavigate, t }: {
+  readonly allTasks: readonly EntityResult[];
+  readonly visibleTasks: readonly EntityResult[];
+  readonly projectId: string;
+  readonly order?: readonly string[];
+  readonly people: readonly EntityResult[];
+  readonly locale: Locale;
+  readonly query: Readonly<Record<string, readonly string[]>>;
+  readonly readOnly: boolean;
+  readonly statusOptions: readonly ConfigValue[];
+  readonly statusBusy: boolean;
+  readonly statusPending: string | null;
+  readonly highlights: Readonly<Record<string, readonly string[]>>;
+  readonly value: ScheduleTextReader;
+  readonly effortOf: (document: Readonly<Record<string, unknown>>) => number | undefined;
+  readonly statusTitle: (slug: string) => string;
+  readonly onStatusChange: (task: EntityResult, status: string) => void;
+  readonly onNavigate: WorkspaceNavigate;
+  readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string;
+}) {
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+  const hierarchy = useMemo(() => buildTaskHierarchy<PortfolioHierarchyTask>(allTasks.map((entity) => ({ id: entity.document.id, entity, ...(value(entity.document, "parent") === "" ? {} : { parent: value(entity.document, "parent") }) })), {
+    order,
+    compare: (left, right) => value(left.entity.document, "title").localeCompare(value(right.entity.document, "title"), locale) || left.id.localeCompare(right.id),
+  }), [allTasks, locale, order, value]);
+  const visibleIds = new Set(visibleTasks.map((task) => task.document.id));
+  const includedIds = new Set<string>();
+  for (const id of visibleIds) { includedIds.add(id); for (const ancestor of hierarchy.ancestorsOf(id)) includedIds.add(ancestor.id); }
+  const entries = hierarchy.flatten().filter((entry) => includedIds.has(entry.task.id) && !hierarchy.ancestorsOf(entry.task.id).some((ancestor) => collapsed.has(ancestor.id)));
+  return <div className="portfolio-task-tree">{entries.map((entry) => {
+    const task = entry.task.entity;
+    const due = value(task.document, "due");
+    const estimate = effortOf(task.document);
+    const visibleChildren = hierarchy.childrenOf(task.document.id).filter((child) => includedIds.has(child.id));
+    const contextOnly = !visibleIds.has(task.document.id);
+    const rowStyle = { "--portfolio-task-depth": entry.depth } as CSSProperties;
+    return <div className={`portfolio-task-row${contextOnly ? " filter-context" : ""}${statusPending === task.document.id ? " is-saving" : ""}${highlights[task.document.id]?.includes("$local") ? " recently-changed" : highlights[task.document.id] ? " external-update" : ""}`} data-depth={entry.depth} data-task-id={task.document.id} key={task.document.id} style={rowStyle}>
+      <span className="portfolio-task-indent" aria-hidden="true" />
+      <span className="portfolio-task-collapse">{entry.hasChildren && visibleChildren.length > 0 && <button aria-expanded={!collapsed.has(task.document.id)} aria-label={collapsed.has(task.document.id) ? t("taskHierarchy.expand", { title: value(task.document, "title") }) : t("taskHierarchy.collapse", { title: value(task.document, "title") })} onClick={() => setCollapsed((current) => { const next = new Set(current); if (next.has(task.document.id)) next.delete(task.document.id); else next.add(task.document.id); return next; })} type="button"><svg aria-hidden="true" viewBox="0 0 12 12"><path d={collapsed.has(task.document.id) ? "M4 2.5 8 6 4 9.5" : "m2.5 4 3.5 4 3.5-4"} /></svg></button>}</span>
+      <button className="portfolio-task-selector" onClick={() => onNavigate("tasks", { projectId, taskId: task.document.id, query })} type="button"><strong>{value(task.document, "title")}</strong><span><code>{task.document.id}</code>{contextOnly && <small>{t("portfolioTasks.filterContext")}</small>}{task.document.lifecycle === "archived" && <small>{t("core.archived")}</small>}</span></button>
+      <span className="portfolio-task-assignees"><PersonLinks empty={t("core.unassigned")} onOpen={(personId) => onNavigate("people", { personId })} people={people} personIds={values(task.document, "assignees")} /></span>
+      <span className="portfolio-task-date">{due === "" ? "—" : <time dateTime={due}>{formatDateOnly(locale, due)}</time>}</span>
+      <span className="portfolio-task-estimate">{estimate === undefined ? "—" : formatDurationHours(locale, estimate)}</span>
+      {readOnly ? <span className="state open">{statusTitle(value(task.document, "status"))}</span> : <select aria-label={`${t("core.status")}: ${value(task.document, "title")}`} className="inline-status-select" disabled={statusBusy} onChange={(event) => onStatusChange(task, event.target.value)} value={value(task.document, "status")}>{statusOptions.map((status) => <option key={status.slug} value={status.slug}>{status.title}</option>)}</select>}
+    </div>;
+  })}</div>;
 }
 
 export function TaskEditorSection({ title, children, className = "" }: { readonly title: string; readonly children: ReactNode; readonly className?: string }) {

@@ -20,6 +20,7 @@ function writeSidebarCollapsed(collapsed: boolean) {
 
 const NAVIGATION_ICON: Partial<Record<MessageKey, ReactNode>> = {
   "nav.projects": <svg aria-hidden="true" viewBox="0 0 16 16"><path d="M1.5 4.5h4l1.4 1.4h7.6v8h-13z" /></svg>,
+  "nav.tasks": <svg aria-hidden="true" viewBox="0 0 16 16"><path d="M6.5 3h7M6.5 8h7M6.5 13h7" /><path d="m1.8 3 1.3 1.3L5.2 2M1.8 8l1.3 1.3L5.2 7M1.8 13l1.3 1.3 2.1-2.3" /></svg>,
   "nav.team": <svg aria-hidden="true" viewBox="0 0 16 16"><circle cx="6" cy="5.2" r="2.3" /><path d="M1.6 13.4c0-2.4 2-3.9 4.4-3.9s4.4 1.5 4.4 3.9" /><path d="M10.8 5.3a2.2 2.2 0 0 1 0 4.2" /><path d="M12.4 13.4c0-1.6-.9-2.9-2.3-3.5" /></svg>,
   "nav.repository": <svg aria-hidden="true" viewBox="0 0 16 16"><circle cx="4" cy="3.5" r="1.3" /><circle cx="4" cy="12.5" r="1.3" /><circle cx="12" cy="3.5" r="1.3" /><path d="M4 4.8v6.4" /><path d="M12 4.8c0 3.8-8 1.8-8 5.7" /></svg>,
   "nav.settings": <svg aria-hidden="true" viewBox="0 0 16 16"><path d="M2 4h12M2 8h12M2 12h12" /><circle cx="6" cy="4" r="1.5" /><circle cx="10.5" cy="8" r="1.5" /><circle cx="5" cy="12" r="1.5" /></svg>,

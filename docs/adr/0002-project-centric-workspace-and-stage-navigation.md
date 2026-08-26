@@ -1,6 +1,6 @@
 # ADR 0002: Project-centric workspace and first-class stage navigation
 
-- Status: accepted
+- Status: accepted; decision 5 superseded by ADR 0006
 - Date: 2026-07-15
 
 ## Context
