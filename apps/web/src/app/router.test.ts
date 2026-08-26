@@ -5,7 +5,7 @@ const roundTrip = (path: string) => serializeAppRoute(parseAppRoute(path)!);
 
 describe("app route model", () => {
   it.each([
-    "/workspaces", "/projects", "/board", "/people", "/calendars", "/settings", "/workload", "/gantt", "/changes", "/files", "/history",
+    "/workspaces", "/projects", "/board", "/people", "/calendars", "/settings", "/workload", "/vacations", "/gantt", "/changes", "/files", "/history",
     "/projects/P-26-ALPHA", "/projects/P-26-ALPHA/stages/M-26-FIRST", "/projects/P-26-ALPHA/tasks/T-26-FIRST", "/projects/P-26-ALPHA/board", "/projects/P-26-ALPHA/timeline", "/projects/P-26-ALPHA/effort", "/people/U-26-ADA", "/calendars/C-26-DEFAULT", "/history/abcdef123456",
   ])("round-trips %s", (path) => expect(roundTrip(path)).toBe(path));
 
@@ -28,6 +28,7 @@ describe("app route model", () => {
     expect(serializeAppRoute(routeForDestination("calendar"))).toBe("/calendars");
     expect(serializeAppRoute(routeForDestination("calendar", { calendarId: "C-1" }))).toBe("/calendars/C-1");
     expect(serializeAppRoute(routeForDestination("people", { personId: "U-1" }))).toBe("/people/U-1");
+    expect(serializeAppRoute(routeForDestination("vacations"))).toBe("/vacations");
   });
 
   it("canonicalizes legacy project routes into the project workspace", () => {

@@ -182,7 +182,7 @@ test.describe("GitPM browser UI", () => {
       }
       if (width === 1280) {
         for (const [section, tabs] of [
-          ["Team", ["Team workload", "People and teams", "Working calendars"]],
+          ["Team", ["Team workload", "People and teams", "Vacation calendar", "Working calendars"]],
           ["Git and publishing", ["Changes", "Files", "History"]],
         ] as const) {
           await page.getByRole("button", { name: section, exact: true }).click();

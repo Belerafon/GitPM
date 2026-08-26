@@ -1,6 +1,6 @@
 import type { WorkspaceDestination, WorkspaceSelection } from "../workspace-navigation.js";
 
-export type AppRouteName = "workspaces" | "projects" | "stages" | "tasks" | "board" | "effort" | "people" | "calendars" | "settings" | "workload" | "gantt" | "changes" | "files" | "history" | "connection";
+export type AppRouteName = "workspaces" | "projects" | "stages" | "tasks" | "board" | "effort" | "people" | "calendars" | "settings" | "workload" | "vacations" | "gantt" | "changes" | "files" | "history" | "connection";
 export type RouteQuery = Readonly<Record<string, readonly string[]>>;
 
 export interface AppRoute {
@@ -43,7 +43,7 @@ export function parseAppRoute(input: string | URL): AppRoute | null {
     if (segments[0] === "tasks" || segments[0] === "portfolio") return route("projects");
     const staticRoutes: Readonly<Record<string, AppRouteName>> = {
       workspaces: "workspaces", projects: "projects", board: "board", people: "people",
-      calendars: "calendars", settings: "settings", workload: "workload", gantt: "gantt", changes: "changes", files: "files", history: "history", connection: "connection",
+      calendars: "calendars", settings: "settings", workload: "workload", vacations: "vacations", gantt: "gantt", changes: "changes", files: "files", history: "history", connection: "connection",
     };
     const name = staticRoutes[segments[0]!];
     if (name === undefined) return null;
@@ -81,6 +81,7 @@ export function serializeAppRoute(value: AppRoute): string {
     case "calendars": pathname = value.calendarId === undefined ? "/calendars" : `/calendars/${segment(value.calendarId)}`; break;
     case "settings": pathname = "/settings"; break;
     case "workload": pathname = "/workload"; break;
+    case "vacations": pathname = "/vacations"; break;
     case "gantt": pathname = value.projectId === undefined ? "/gantt" : `/projects/${segment(value.projectId)}/timeline`; break;
     case "changes": pathname = "/changes"; break;
     case "files": pathname = "/files"; break;
