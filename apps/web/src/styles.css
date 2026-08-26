@@ -1572,24 +1572,30 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
 .vacation-calendar-legend .kind-training::before { background: #d4a24a; }
 .vacation-calendar-legend .kind-other::before { background: #8a908c; }
 .vacation-calendar-legend .today::before { width: 2px; height: 12px; border-radius: 0; background: #d94d43; }
-.vacation-calendar-legend .weekend::before { width: 18px; height: 12px; border-radius: 0; background: #e4e7e1; }
+.vacation-calendar-legend .weekend::before { width: 18px; height: 12px; border-radius: 0; background: #f3c5d4; }
 .vacation-calendar-legend .away::before { background: #d66b5f; }
-.vacation-calendar-scroll { display: grid; grid-template-columns: 240px minmax(0, 1fr); overflow-x: auto; overflow-y: hidden; padding: 0; }
+.vacation-calendar-scroll { display: grid; grid-template-columns: 240px minmax(0, 1fr); max-height: min(72vh, 780px); overflow: auto; padding: 0; }
 .vacation-calendar-labels { position: sticky; z-index: 4; left: 0; border-right: 1px solid #daddd6; background: #fff; box-shadow: 6px 0 12px rgba(31,45,37,.04); }
-.vacation-calendar-label-head { height: 42px; border-bottom: 1px solid #daddd6; padding: .8rem; color: #5d625f; font-size: .75rem; font-weight: 700; text-transform: uppercase; }
+.vacation-calendar-label-head { position: sticky; top: 0; z-index: 6; display: grid; align-content: center; height: 60px; border-bottom: 1px solid #daddd6; background: #f4f5f2; padding: .8rem; color: #5d625f; font-size: .75rem; font-weight: 700; text-transform: uppercase; }
 .vacation-calendar-label { display: grid; align-content: center; height: 58px; border-bottom: 1px solid #dfe3dc; padding: .35rem .75rem; }
 .vacation-calendar-label.even, .vacation-calendar-row.even { background: #eef1ec; }
 .vacation-calendar-label.odd, .vacation-calendar-row.odd { background: #fff; }
 .vacation-calendar-label.away, .vacation-calendar-row.away { background: #f8e4e0; }
 .vacation-calendar-label .text-link { overflow: hidden; font-size: .82rem; text-overflow: ellipsis; white-space: nowrap; }
 .vacation-calendar-label small { overflow: hidden; color: #6a514c; font-size: .62rem; text-overflow: ellipsis; white-space: nowrap; }
-.vacation-calendar-timeline { position: relative; overflow: hidden; min-height: 120px; }
-.vacation-calendar-months-row { display: grid; height: 42px; border-bottom: 1px solid #daddd6; }
+.vacation-calendar-timeline { position: relative; min-height: 120px; }
+.vacation-calendar-header { position: sticky; top: 0; z-index: 3; background: #f7f8f5; }
+.vacation-calendar-months-row { display: grid; height: 36px; border-bottom: 1px solid #daddd6; }
 .vacation-calendar-months-row time { display: grid; align-items: center; border-right: 1px solid #eceee9; padding: 0 .55rem; color: #3f4943; font-size: .72rem; font-weight: 700; text-transform: capitalize; white-space: nowrap; }
+.vacation-calendar-days-row { display: grid; height: 24px; border-bottom: 1px solid #daddd6; }
+.vacation-calendar-days-row time { display: grid; place-items: center; overflow: hidden; color: #5d625f; font-size: .55rem; line-height: 1; }
+.vacation-calendar-days-row time.weekend { background: #f8d5e0; color: #a54038; }
 .vacation-calendar-row { position: absolute; z-index: 0; left: 0; right: 0; border-bottom: 1px solid #dfe3dc; pointer-events: none; }
-.vacation-calendar-weekend { position: absolute; z-index: 1; top: 42px; bottom: 0; background: rgba(88, 96, 90, .14); pointer-events: none; }
-.vacation-calendar-grid { position: absolute; z-index: 1; inset: 42px 0 0; background-image: linear-gradient(to right, #eceee9 1px, transparent 1px); }
-.vacation-calendar-today { position: absolute; z-index: 2; top: 42px; bottom: 0; width: 2px; background: #d94d43; pointer-events: none; }
+.vacation-calendar-weekend { position: absolute; z-index: 1; top: 60px; bottom: 0; background: #f8d5e0; pointer-events: none; }
+.vacation-calendar-hover { position: absolute; z-index: 2; top: 0; bottom: 0; background: rgba(49, 95, 80, .1); pointer-events: none; }
+.vacation-calendar-hover span { position: absolute; top: 6px; left: 50%; z-index: 4; border-radius: 6px; background: #123c2f; color: #fff; padding: .12rem .4rem; font-size: .65rem; white-space: nowrap; transform: translateX(-50%); }
+.vacation-calendar-grid { position: absolute; z-index: 1; inset: 60px 0 0; background-image: linear-gradient(to right, #eceee9 1px, transparent 1px); }
+.vacation-calendar-today { position: absolute; z-index: 2; top: 60px; bottom: 0; width: 2px; background: #d94d43; pointer-events: none; }
 .vacation-calendar-bar { position: absolute; z-index: 3; display: flex; align-items: center; overflow: visible; box-sizing: border-box; height: 28px; border: 1px solid #3f7967; border-radius: 7px; background: #68a18e; color: #fff; padding: 0 .45rem; font-size: .68rem; white-space: nowrap; pointer-events: auto; }
 .vacation-calendar-bar span { overflow: visible; color: #1d2a24; text-shadow: 0 0 4px #fff, 0 0 4px #fff; }
 .vacation-calendar-bar.kind-vacation { border-color: #3f7967; background: #68a18e; }

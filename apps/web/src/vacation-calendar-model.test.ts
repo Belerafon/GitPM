@@ -11,6 +11,7 @@ import {
   visiblePeople,
   isWeekend,
   weekendBands,
+  hoverDayIndex,
   type VacationEvent,
   type VacationPerson,
   type VacationTeam,
@@ -82,6 +83,13 @@ describe("vacation calendar geometry", () => {
     expect(window.months.at(-1)?.key).toBe("2026-12");
     expect(window.dayWidth).toBe(VACATION_CALENDAR_DAY_WIDTH.year);
     expect(window.days).toHaveLength(365);
+  });
+
+  it("maps a pointer offset to a day index inside the timeline", () => {
+    expect(hoverDayIndex(0, 10, 5)).toBe(0);
+    expect(hoverDayIndex(25, 10, 5)).toBe(2);
+    expect(hoverDayIndex(-1, 10, 5)).toBeUndefined();
+    expect(hoverDayIndex(50, 10, 5)).toBeUndefined();
   });
 
   it("marks Saturday and Sunday as weekend bands", () => {
