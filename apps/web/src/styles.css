@@ -1588,7 +1588,8 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
 .vacation-calendar-months-row { display: grid; height: 36px; border-bottom: 1px solid #daddd6; }
 .vacation-calendar-months-row time { display: grid; align-items: center; border-right: 1px solid #eceee9; padding: 0 .55rem; color: #3f4943; font-size: .72rem; font-weight: 700; text-transform: capitalize; white-space: nowrap; }
 .vacation-calendar-days-row { display: grid; height: 24px; border-bottom: 1px solid #daddd6; }
-.vacation-calendar-days-row time { display: grid; place-items: center; overflow: hidden; color: #5d625f; font-size: .55rem; line-height: 1; }
+.vacation-calendar-days-row time { display: grid; place-items: center; overflow: hidden; box-sizing: border-box; border-right: 1px solid #d5d9d2; color: #5d625f; font-size: .55rem; line-height: 1; }
+.vacation-calendar-days-row time:nth-child(odd):not(.weekend) { background: #eef0ec; }
 .vacation-calendar-days-row time.weekend { background: #f6e6e7; color: #9a6a6d; }
 .vacation-calendar-row { position: absolute; z-index: 0; left: 0; right: 0; border-bottom: 1px solid #dfe3dc; pointer-events: none; }
 .vacation-calendar-weekend { position: absolute; z-index: 1; top: 60px; bottom: 0; background: #f6e6e7; pointer-events: none; }

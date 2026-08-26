@@ -13,7 +13,15 @@ export interface VacationPerson {
   readonly id: string;
   readonly name: string;
   readonly lifecycle: string;
+  readonly calendarId: string;
 }
+
+export interface WorkingCalendar {
+  readonly workingWeekdays: readonly number[];
+  readonly holidays: readonly string[];
+}
+
+export const DEFAULT_WORKING_CALENDAR: WorkingCalendar = { workingWeekdays: [1, 2, 3, 4, 5], holidays: [] };
 
 export interface VacationTeam {
   readonly id: string;
@@ -139,16 +147,33 @@ export function barGeometry(start: string, finish: string, windowStart: string, 
   return { offset, duration, left: offset * dayWidth, width: duration * dayWidth };
 }
 
-export function isWeekend(value: string): boolean {
+export function isoWeekday(value: string): number {
   const weekday = new Date(`${value}T00:00:00Z`).getUTCDay();
-  return weekday === 0 || weekday === 6;
+  return weekday === 0 ? 7 : weekday;
 }
 
-export function weekendBands(days: readonly string[], dayWidth: number): readonly { readonly start: string; readonly finish: string; readonly left: number; readonly width: number }[] {
+export function isWorkingDay(value: string, calendar: WorkingCalendar = DEFAULT_WORKING_CALENDAR): boolean {
+  return calendar.workingWeekdays.includes(isoWeekday(value)) && !calendar.holidays.includes(value);
+}
+
+export function isWeekend(value: string, calendar: WorkingCalendar = DEFAULT_WORKING_CALENDAR): boolean {
+  return !isWorkingDay(value, calendar);
+}
+
+export function workingDayCount(start: string, finish: string, calendar: WorkingCalendar = DEFAULT_WORKING_CALENDAR): number {
+  if (start > finish) return 0;
+  let count = 0;
+  for (let day = dayNumber(start); day <= dayNumber(finish); day += 1) {
+    if (isWorkingDay(isoDate(day), calendar)) count += 1;
+  }
+  return count;
+}
+
+export function weekendBands(days: readonly string[], dayWidth: number, calendar: WorkingCalendar = DEFAULT_WORKING_CALENDAR): readonly { readonly start: string; readonly finish: string; readonly left: number; readonly width: number }[] {
   const bands: { start: string; finish: string; left: number; width: number }[] = [];
   for (let index = 0; index < days.length; index += 1) {
     const day = days[index]!;
-    if (!isWeekend(day)) continue;
+    if (isWorkingDay(day, calendar)) continue;
     const last = bands.at(-1);
     if (last !== undefined && dayNumber(day) === dayNumber(last.finish) + 1) {
       last.finish = day;
@@ -210,10 +235,11 @@ export function visiblePeople(people: readonly VacationPerson[], teams: readonly
     .sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
 }
 
-export function vacationBars(events: readonly VacationEvent[], people: readonly VacationPerson[], window: VacationCalendarWindow, filters: VacationCalendarFilters): readonly VacationCalendarBar[] {
-  const visible = new Set(people.map((person) => person.id));
+export function vacationBars(events: readonly VacationEvent[], people: readonly VacationPerson[], window: VacationCalendarWindow, filters: VacationCalendarFilters, calendars: ReadonlyMap<string, WorkingCalendar> = new Map()): readonly VacationCalendarBar[] {
+  const visible = new Map(people.map((person) => [person.id, person]));
   return events.flatMap((event) => {
-    if (!visible.has(event.personId) || !isCountableEvent(event, filters)) return [];
+    const person = visible.get(event.personId);
+    if (person === undefined || !isCountableEvent(event, filters)) return [];
     const clipped = clipToWindow(event.start, event.finish, window.start, window.finish);
     if (clipped === undefined) return [];
     const geometry = barGeometry(clipped.start, clipped.finish, window.start, window.dayWidth);
@@ -225,7 +251,7 @@ export function vacationBars(events: readonly VacationEvent[], people: readonly 
       start: event.start,
       finish: event.finish,
       note: event.note,
-      days: inclusiveDayCount(event.start, event.finish),
+      days: workingDayCount(event.start, event.finish, calendars.get(person.calendarId) ?? DEFAULT_WORKING_CALENDAR),
       ...geometry,
     }];
   });

@@ -12,6 +12,7 @@ import type { WorkspaceNavigate } from "./workspace-navigation.js";
 import { draftReadOnlyReason } from "./draft-read-only.js";
 import { isCompletedStatus } from "./status-categories.js";
 import { availabilityKindLabel, PeopleAvailability } from "./people-availability-ui.js";
+import { DEFAULT_WORKING_CALENDAR } from "./vacation-calendar-model.js";
 
 const strings = (document: GitPmDocument, key: string) => Array.isArray(document[key]) ? (document[key] as unknown[]).filter((item): item is string => typeof item === "string") : [];
 const numbers = (document: GitPmDocument, key: string) => Array.isArray(document[key]) ? (document[key] as unknown[]).filter((item): item is number => typeof item === "number") : [];
@@ -268,7 +269,7 @@ function PeopleProfile({ archivePerson, createAvailability, data, deletePerson, 
 
     <div className="people-profile-layout">
       <main className="people-profile-main">
-        <PeopleAvailability events={availabilityEvents} locale={locale} onCreate={createAvailability} onUpdate={updateAvailability} personId={personId} readOnly={readOnly} t={t} />
+        <PeopleAvailability calendar={calendar === undefined ? DEFAULT_WORKING_CALENDAR : { workingWeekdays: numbers(calendar.document, "working_weekdays").length === 0 ? DEFAULT_WORKING_CALENDAR.workingWeekdays : numbers(calendar.document, "working_weekdays"), holidays: strings(calendar.document, "holidays") }} events={availabilityEvents} locale={locale} onCreate={createAvailability} onUpdate={updateAvailability} personId={personId} readOnly={readOnly} t={t} />
         <section className="card people-profile-section"><div className="card-heading"><div><h3>{t("people.tasksByProject")}</h3><p>{t("people.tasksDescription")}</p></div>{assignedTasks.length > 0 && <span className="people-profile-count">{t("people.visibleTasksOfTotal", { count: visibleAssignedTasks.length, total: assignedTasks.length })}</span>}</div>
           {assignedTasks.length > 0 && <PeopleTaskFilters projectOptions={projectOptions} projectSelection={projectSelection} statusOptions={statusOptions} statusSelection={statusSelection} t={t} onReset={resetFilters} onToggleProject={toggleProject} onToggleStatus={toggleStatus} />}
           {assignedTasks.length === 0 ? <p className="people-empty">{t("people.noTasks")}</p>
