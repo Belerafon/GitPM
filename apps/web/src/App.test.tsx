@@ -381,9 +381,9 @@ describe("frontend draft lifecycle", () => {
     fireEvent.click(screen.getByRole("button", { name: "Tasks" }));
     expect(await screen.findByRole("heading", { name: "All tasks" })).toBeTruthy();
     expect(`${window.location.pathname}${window.location.search}`).toBe("/tasks");
-    expect(screen.getAllByText("Alpha")).toHaveLength(2);
+    expect(screen.getByText("Alpha")).toBeTruthy();
     expect(screen.getByText("First task")).toBeTruthy();
-    expect(screen.getAllByText("Without active milestone")).toHaveLength(2);
+    expect(screen.getByText("Without active milestone")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Projects" }));
     expect(await screen.findByRole("heading", { name: "Projects" })).toBeTruthy();
 

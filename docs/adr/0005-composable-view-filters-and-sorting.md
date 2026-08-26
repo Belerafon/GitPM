@@ -19,8 +19,9 @@ not required to make interactive directories queryable.
    - an ordered list of ascending or descending sort rules.
 2. The main workspace stays compact. Surfaces without a durable manual order show one **Filters and
    sorting** button, applied condition and sort chips, a per-chip remove action, **Clear all**, and
-   the visible/total count. Project and Project-Task surfaces show the filter-only **Filters**
-   variant. The full builder is an accessible modal drawer with draft, Apply and Cancel behavior.
+   the visible/total count. Project, portfolio-Task and Project-Task surfaces show the filter-only
+   **Filters** variant. The full builder is an accessible modal drawer with draft, Apply and Cancel
+   behavior.
 3. Empty filter groups match all rows. Empty sort values are always placed last, in either direction.
    Equal rows retain their input order, so sorting is deterministic and stable.
 4. The initial directory query is `lifecycle = active`. This is an ordinary removable condition;
@@ -37,8 +38,9 @@ not required to make interactive directories queryable.
 
 - Projects (filters only): ID, name, group, owner, status, lifecycle, dates, overdue/risk, Task count
   and milestone count.
-- Portfolio Tasks (filters only): all Project-Task fields plus Project, Project group, Project owner,
-  Project status, milestone lifecycle, parent Task and nesting depth.
+- Portfolio Tasks (filters only): ID, title, status, type, assignees, lifecycle, dates, effort,
+  overdue state, parent Task, nesting depth and the derived next-Task-per-Project flag. Project and
+  milestone remain structural context rather than filter fields on this surface.
 - Project Tasks (filters only): ID, title, status, type, milestone, assignees, dates, effort and
   overdue state.
 - People: ID, name, email, weekly capacity, calendar, Project count, teams and lifecycle.

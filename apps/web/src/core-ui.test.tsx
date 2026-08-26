@@ -50,8 +50,8 @@ describe("core UI", () => {
     const alpha = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-111111", name: "Alpha", group: "Delivery", status: "backlog", lifecycle: "active" });
     const beta = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-222222", name: "Beta", status: "backlog", lifecycle: "active" });
     const milestone = await entityApi.createEntity("DRF-CORE", "milestones", "", { schema: "gitpm/milestone@2", id: "M-26-111111", project: alpha.document.id, name: "Launch", lifecycle: "active" });
-    const parent = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-111111", project: alpha.document.id, milestone: milestone.document.id, title: "Parent delivery", type: "task", status: "backlog", lifecycle: "active" });
-    const child = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-222222", project: alpha.document.id, milestone: milestone.document.id, parent: parent.document.id, title: "Nested API", type: "task", status: "done", lifecycle: "active" });
+    const parent = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-111111", project: alpha.document.id, milestone: milestone.document.id, title: "Parent delivery", type: "task", status: "backlog", lifecycle: "active", schedules: { plan: { finish: "2099-09-15" } } });
+    const child = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-222222", project: alpha.document.id, milestone: milestone.document.id, parent: parent.document.id, title: "Nested API", type: "task", status: "done", lifecycle: "active", schedules: { plan: { finish: "2099-08-30", effort_hours: 4 } } });
     await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-333333", project: beta.document.id, title: "Unstaged research", type: "task", status: "backlog", lifecycle: "active" });
     const onNavigate = vi.fn();
 
@@ -61,16 +61,45 @@ describe("core UI", () => {
     expect(screen.getByText("Nested API")).toBeTruthy();
     expect(screen.getByText("Unstaged research")).toBeTruthy();
     expect(container.querySelector(`[data-task-id="${child.document.id}"]`)?.getAttribute("data-depth")).toBe("1");
-    expect(screen.getAllByText("Without active milestone")).toHaveLength(2);
+    expect(screen.getByText("Without active milestone")).toBeTruthy();
+    expect(screen.queryByLabelText("Project")).toBeNull();
+    expect(screen.queryByLabelText("Milestone")).toBeNull();
+    expect(screen.queryByLabelText("Filter tasks")).toBeNull();
+    const columnHead = container.querySelector(".portfolio-task-column-head") as HTMLElement;
+    for (const heading of ["Task", "Assignees", "Due date", "Estimate (hours)", "Status"]) expect(within(columnHead).getByText(heading)).toBeTruthy();
+    const unstagedRow = screen.getByText("Unstaged research").closest(".portfolio-task-row")!;
+    expect(unstagedRow.querySelector(".portfolio-task-assignees")?.getAttribute("title")).toBe("No assignees are assigned to this task");
+    expect(unstagedRow.querySelector(".portfolio-task-date")?.getAttribute("title")).toBe("No due date is set for this task");
+    expect(unstagedRow.querySelector(".portfolio-task-estimate")?.getAttribute("title")).toBe("No estimate is set for this task");
 
-    fireEvent.change(screen.getByLabelText("Filter tasks"), { target: { value: "done" } });
+    fireEvent.click(screen.getByRole("button", { name: /Filters/u }));
+    let dialog = screen.getByRole("dialog", { name: "Filters" });
+    const presets = within(dialog).getByRole("group", { name: "Quick presets" });
+    expect(within(presets).getByRole("button", { name: "Overdue" }).getAttribute("title")).toContain("due date has passed");
+    expect(within(presets).getByRole("button", { name: "Next per project" })).toBeTruthy();
+    expect(within(presets).getByRole("button", { name: "Unassigned" })).toBeTruthy();
+    expect(within(presets).getByRole("button", { name: "Without a due date" })).toBeTruthy();
+    fireEvent.click(within(presets).getByRole("button", { name: "Next per project" }));
+    expect(screen.getByText("Parent delivery")).toBeTruthy();
+    expect(screen.getByText("Unstaged research")).toBeTruthy();
+    expect(screen.queryByText("Nested API")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /Filters/u }));
+    dialog = screen.getByRole("dialog", { name: "Filters" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Clear all" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: /Add condition/u }));
+    const field = within(dialog).getByLabelText("Field") as HTMLSelectElement;
+    expect(Array.from(field.options, (option) => option.text)).not.toContain("Project");
+    expect(Array.from(field.options, (option) => option.text)).not.toContain("Milestone");
+    fireEvent.change(field, { target: { value: "status" } });
+    fireEvent.change(within(dialog).getByLabelText("Value"), { target: { value: "done" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Apply" }));
     expect(screen.getByText("Nested API")).toBeTruthy();
     expect(screen.getByText("Parent delivery").closest(".portfolio-task-row")?.classList.contains("filter-context")).toBe(true);
     expect(screen.queryByText("Unstaged research")).toBeNull();
-    expect(onNavigate).toHaveBeenLastCalledWith("tasks", { query: { status: ["done"] } });
 
     fireEvent.click(screen.getByText("Nested API"));
-    expect(onNavigate).toHaveBeenLastCalledWith("tasks", { projectId: alpha.document.id, taskId: child.document.id, query: { status: ["done"] } });
+    expect(onNavigate).toHaveBeenLastCalledWith("tasks", { projectId: alpha.document.id, taskId: child.document.id, query: expect.objectContaining({ filters: [expect.any(String)] }) });
   });
 
   it("animates the task row while an inline status change is being saved", async () => {

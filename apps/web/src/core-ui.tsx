@@ -19,8 +19,8 @@ import { scheduleEffort, scheduleText, ScheduleResolver, scheduleTracksConfig, w
 import { ScheduleTracksEditor } from "./schedule-tracks-editor.js";
 import { isCompletedStatus, type StatusCategory } from "./status-categories.js";
 import { DraftReadOnlyAlert, draftReadOnlyReason } from "./draft-read-only.js";
-import { AdvancedViewControls } from "./advanced-view-controls.js";
-import { applyAdvancedViewQuery, countViewConditions, defaultLifecycleViewQuery, filterOnlyViewQuery, parseAdvancedViewQuery, serializeAdvancedViewQuery, type AdvancedViewQuery, type ViewField } from "./advanced-view-query.js";
+import { AdvancedViewControls, type QuickViewPreset } from "./advanced-view-controls.js";
+import { applyAdvancedViewQuery, countViewConditions, defaultLifecycleViewQuery, filterOnlyViewQuery, newViewNodeId, parseAdvancedViewQuery, serializeAdvancedViewQuery, type AdvancedViewQuery, type ViewField, type ViewFilterOperator } from "./advanced-view-query.js";
 import { ProjectFileMarkdownField, type ProjectFileReferenceContext } from "./project-file-reference-ui.js";
 import { SafeMarkdown } from "./safe-markdown.js";
 
@@ -34,6 +34,26 @@ interface MutationFeedback { readonly kind: "saving" | "saved" | "undone"; reado
 type CoreCreateEditor = "project" | "task" | null;
 const configValues = (document: GitPmDocument, key: "statuses" | "issue_types"): ConfigValue[] => Array.isArray(document[key]) ? (document[key] as unknown[]).filter((item): item is ConfigValue => typeof item === "object" && item !== null && typeof (item as ConfigValue).slug === "string" && typeof (item as ConfigValue).title === "string" && (item as ConfigValue).active === true) : [];
 const NEW_PROJECT_GROUP = "__new__";
+
+const localCalendarDate = (date: Date = new Date()): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const portfolioTaskPresetQuery = (field: string, operator: ViewFilterOperator): AdvancedViewQuery => ({
+  filter: {
+    kind: "group",
+    id: newViewNodeId("group"),
+    combinator: "and",
+    children: [
+      { kind: "condition", id: newViewNodeId("condition"), field: "lifecycle", operator: "equals", value: "active" },
+      { kind: "condition", id: newViewNodeId("condition"), field, operator },
+    ],
+  },
+  sort: [],
+});
 
 export interface ProjectGroupSection {
   readonly key: string;
@@ -126,13 +146,12 @@ export type CoreSurface = "projects" | "tasks";
 
 type ProjectRiskLevel = "onTrack" | "near" | "overdue" | "unknown";
 
-export function CoreWorkspace({ api, draft, locale, surface = "projects", initialProjectId = "", initialProjectFilter = "", initialTaskId = "", initialCommentId = "", initialStatusFilter = "", initialMilestoneFilter = "", initialAdvancedQuery, onNavigate = () => undefined, confirmAction = () => true, onChanged }: {
+export function CoreWorkspace({ api, draft, locale, surface = "projects", initialProjectId = "", initialTaskId = "", initialCommentId = "", initialStatusFilter = "", initialMilestoneFilter = "", initialAdvancedQuery, onNavigate = () => undefined, confirmAction = () => true, onChanged }: {
   readonly api: GitPmApi;
   readonly draft: DraftStatus;
   readonly locale: Locale;
   readonly surface?: CoreSurface;
   readonly initialProjectId?: string;
-  readonly initialProjectFilter?: string;
   readonly initialTaskId?: string;
   readonly initialCommentId?: string;
   readonly initialStatusFilter?: string;
@@ -148,7 +167,6 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
   const [tasks, setTasks] = useState<readonly EntityResult[]>([]);
   const [people, setPeople] = useState<readonly EntityResult[]>([]);
   const [projectId, setProjectId] = useState<string>(initialProjectId);
-  const [projectFilter, setProjectFilter] = useState(initialProjectFilter);
   const [selectedTask, setSelectedTask] = useState<string>(initialTaskId);
   const [filter, setFilter] = useState(initialStatusFilter);
   const [milestoneFilter, setMilestoneFilter] = useState(initialMilestoneFilter);
@@ -199,7 +217,7 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
   }, [api, draft.draft_id, draft.fingerprint, loadRequest.run, markExternal, projectId, surface]);
 
   useEffect(() => { setSelectedTask(initialTaskId); void load(initialProjectId); }, [draft.draft_id, surface]);
-  useEffect(() => { setProjectFilter(initialProjectFilter); setFilter(initialStatusFilter); setMilestoneFilter(initialMilestoneFilter); }, [initialMilestoneFilter, initialProjectFilter, initialStatusFilter]);
+  useEffect(() => { setFilter(initialStatusFilter); setMilestoneFilter(initialMilestoneFilter); }, [initialMilestoneFilter, initialStatusFilter]);
   useEffect(() => {
     if (draft.writer_mode !== "external" || draft.external_fingerprint === undefined || draft.external_fingerprint === lastExternalFingerprint.current) return;
     lastExternalFingerprint.current = draft.external_fingerprint;
@@ -294,30 +312,38 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
     ),
     [filteredProjects, locale],
   );
-  const statuses = useMemo(() => [...new Set([...statusOptions.map((item) => item.slug), ...activeTasks.map((item) => value(item.document, "status"))])], [activeTasks, statusOptions]);
   const statusTitle = (slug: string) => statusOptions.find((item) => item.slug === slug)?.title ?? slug;
   const confirmDelete = (name: string) => confirmAction(t("core.deleteConfirm", { name }));
-  const projectOptions = useMemo(() => projects.map((project) => ({ value: project.document.id, label: value(project.document, "name") })).sort((left, right) => left.label.localeCompare(right.label, locale)), [locale, projects, value]);
-  const milestoneOptions = useMemo(() => milestones.map((milestone) => {
-    const project = projects.find((item) => item.document.id === milestone.document.project);
-    const projectName = project === undefined ? String(milestone.document.project ?? "") : value(project.document, "name");
-    return { value: milestone.document.id, label: `${projectName} · ${value(milestone.document, "name")}` };
-  }).sort((left, right) => left.label.localeCompare(right.label, locale)), [locale, milestones, projects, value]);
+  const today = localCalendarDate();
   const taskDepthById = useMemo(() => {
     const hierarchy = buildTaskHierarchy(tasks.map((item) => ({ id: item.document.id, ...(value(item.document, "parent") === "" ? {} : { parent: value(item.document, "parent") }) })));
     return new Map(tasks.map((item) => [item.document.id, hierarchy.depthOf(item.document.id)] as const));
   }, [tasks, value]);
+  const nextPortfolioTaskIds = useMemo(() => {
+    const nextByProject = new Map<string, EntityResult>();
+    const comparePriority = (left: EntityResult, right: EntityResult) => {
+      const leftDue = value(left.document, "due") || "9999-12-31";
+      const rightDue = value(right.document, "due") || "9999-12-31";
+      if (leftDue !== rightDue) return leftDue.localeCompare(rightDue);
+      const leftStart = value(left.document, "start") || "9999-12-31";
+      const rightStart = value(right.document, "start") || "9999-12-31";
+      return leftStart.localeCompare(rightStart)
+        || value(left.document, "title").localeCompare(value(right.document, "title"), locale)
+        || left.document.id.localeCompare(right.document.id);
+    };
+    for (const task of activeTasks) {
+      if (isCompletedStatus(statusOptions, value(task.document, "status"))) continue;
+      const taskProject = value(task.document, "project");
+      const current = nextByProject.get(taskProject);
+      if (current === undefined || comparePriority(task, current) < 0) nextByProject.set(taskProject, task);
+    }
+    return new Set([...nextByProject.values()].map((task) => task.document.id));
+  }, [activeTasks, locale, statusOptions, value]);
   const taskFields = useMemo<readonly ViewField<EntityResult>[]>(() => [
     { id: "id", label: t("advancedView.field.id"), type: "text", read: (item) => item.document.id },
     { id: "title", label: t("advancedView.field.title"), type: "text", read: (item) => value(item.document, "title") },
-    { id: "project", label: t("advancedView.field.project"), type: "select", options: projectOptions, read: (item) => value(item.document, "project") },
-    { id: "projectGroup", label: t("advancedView.field.projectGroup"), type: "text", read: (item) => value(projects.find((project) => project.document.id === item.document.project)?.document ?? {}, "group") },
-    { id: "projectOwner", label: t("advancedView.field.projectOwner"), type: "select", options: peopleOptions, read: (item) => value(projects.find((project) => project.document.id === item.document.project)?.document ?? {}, "owner") },
-    { id: "projectStatus", label: t("advancedView.field.projectStatus"), type: "select", options: statusOptions.map((status) => ({ value: status.slug, label: status.title })), read: (item) => value(projects.find((project) => project.document.id === item.document.project)?.document ?? {}, "status") },
     { id: "status", label: t("advancedView.field.status"), type: "select", options: statusOptions.map((status) => ({ value: status.slug, label: status.title })), read: (item) => value(item.document, "status") },
     { id: "type", label: t("advancedView.field.type"), type: "select", options: typeOptions.map((type) => ({ value: type.slug, label: type.title })), read: (item) => value(item.document, "type") },
-    { id: "milestone", label: t("advancedView.field.milestone"), type: "select", options: milestoneOptions, read: (item) => value(item.document, "milestone") },
-    { id: "milestoneLifecycle", label: t("advancedView.field.milestoneLifecycle"), type: "select", options: lifecycleOptions, read: (item) => milestones.find((milestone) => milestone.document.id === item.document.milestone)?.document.lifecycle ?? "" },
     { id: "parent", label: t("advancedView.field.parent"), type: "text", read: (item) => value(item.document, "parent") },
     { id: "depth", label: t("advancedView.field.depth"), type: "number", read: (item) => taskDepthById.get(item.document.id) ?? 0 },
     { id: "assignees", label: t("advancedView.field.assignees"), type: "multi-select", options: peopleOptions, read: (item) => values(item.document, "assignees") },
@@ -325,28 +351,36 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
     { id: "start", label: t("advancedView.field.start"), type: "date", read: (item) => value(item.document, "start") },
     { id: "due", label: t("advancedView.field.due"), type: "date", read: (item) => value(item.document, "due") },
     { id: "estimate", label: t("advancedView.field.estimate"), type: "number", read: (item) => effortOf(item.document) },
-    { id: "overdue", label: t("advancedView.field.overdue"), type: "boolean", read: (item) => { const due = value(item.document, "due"); return /^\d{4}-\d{2}-\d{2}$/u.test(due) && due < new Date().toISOString().slice(0, 10) && !isCompletedStatus(statusOptions, value(item.document, "status")); } },
-  ], [effortOf, lifecycleOptions, locale, milestoneOptions, milestones, operationalProjectIds, peopleOptions, projectOptions, projects, statusOptions, taskDepthById, typeOptions, value]);
+    { id: "overdue", label: t("advancedView.field.overdue"), type: "boolean", read: (item) => { const due = value(item.document, "due"); return /^\d{4}-\d{2}-\d{2}$/u.test(due) && due < today && !isCompletedStatus(statusOptions, value(item.document, "status")); } },
+    { id: "nextProjectTask", label: t("portfolioTasks.presetNext"), type: "boolean", read: (item) => nextPortfolioTaskIds.has(item.document.id) },
+  ], [effortOf, lifecycleOptions, locale, nextPortfolioTaskIds, operationalProjectIds, peopleOptions, statusOptions, taskDepthById, today, typeOptions, value]);
+  const portfolioTaskPresets = useMemo<readonly QuickViewPreset[]>(() => [
+    { id: "portfolio-overdue", label: t("portfolioTasks.presetOverdue"), hint: t("portfolioTasks.presetOverdueHint"), query: portfolioTaskPresetQuery("overdue", "is-true") },
+    { id: "portfolio-next", label: t("portfolioTasks.presetNext"), hint: t("portfolioTasks.presetNextHint"), query: portfolioTaskPresetQuery("nextProjectTask", "is-true") },
+    { id: "portfolio-unassigned", label: t("portfolioTasks.presetUnassigned"), hint: t("portfolioTasks.presetUnassignedHint"), query: portfolioTaskPresetQuery("assignees", "is-empty") },
+    { id: "portfolio-without-due", label: t("portfolioTasks.presetWithoutDue"), hint: t("portfolioTasks.presetWithoutDueHint"), query: portfolioTaskPresetQuery("due", "is-empty") },
+  ], [locale]);
+  useEffect(() => { setHasExplicitAdvancedQuery(initialAdvancedQuery !== undefined); }, [initialAdvancedQuery]);
   useEffect(() => {
-    setHasExplicitAdvancedQuery(initialAdvancedQuery !== undefined);
     if (initialAdvancedQuery !== undefined) setAdvancedQuery(filterOnlyViewQuery(parseAdvancedViewQuery(initialAdvancedQuery, surface === "projects" ? projectFields : taskFields)));
   }, [initialAdvancedQuery, projectFields, surface, taskFields]);
-  const filteredTasks = useMemo(() => applyAdvancedViewQuery(tasks, taskFields, advancedQuery, locale).filter((item) =>
-    (projectId === "" || value(item.document, "project") === projectId)
-    && (projectFilter === "" || value(item.document, "project") === projectFilter)
+  const filteredTasks = useMemo(() => applyAdvancedViewQuery(tasks, taskFields, advancedQuery, locale).filter((item) => projectId === "" || (
+    value(item.document, "project") === projectId
     && (filter === "" || value(item.document, "status") === filter)
-    && (milestoneFilter === "" || (milestoneFilter === "none" ? value(item.document, "milestone") === "" : value(item.document, "milestone") === milestoneFilter))), [advancedQuery, filter, locale, milestoneFilter, projectFilter, projectId, taskFields, tasks, value]);
+    && (milestoneFilter === "" || (milestoneFilter === "none" ? value(item.document, "milestone") === "" : value(item.document, "milestone") === milestoneFilter)))), [advancedQuery, filter, locale, milestoneFilter, projectId, taskFields, tasks, value]);
   const task = tasks.find((item) => item.document.id === selectedTask);
   const selectedProject = projects.find((item) => item.document.id === projectId);
   const selectedProjectName = selectedProject === undefined ? "" : value(selectedProject.document, "name");
   const catalog = useMemo(() => new EntityCatalog({ projects, milestones, tasks }), [projects, milestones, tasks]);
-  const filterMilestones = activeMilestones.filter((item) => (projectId === "" || item.document.project === projectId) && (projectFilter === "" || item.document.project === projectFilter));
+  const filterMilestones = activeMilestones.filter((item) => projectId === "" || item.document.project === projectId);
   const completedTasks = activeTasks.filter((item) => isCompletedStatus(statusOptions, value(item.document, "status"))).length;
   const openPerson = (personId: string) => onNavigate("people", { personId });
-  const taskQuery = (status = filter, milestone = milestoneFilter, project = projectFilter) => ({
-    ...(project === "" ? {} : { project: [project] }),
+  const externalTaskQuery = (status = filter, milestone = milestoneFilter) => projectId === "" ? {} : ({
     ...(status === "" ? {} : { status: [status] }),
     ...(milestone === "" ? {} : { milestone: [milestone] }),
+  });
+  const taskQuery = (status = filter, milestone = milestoneFilter) => ({
+    ...externalTaskQuery(status, milestone),
     ...(!hasExplicitAdvancedQuery || countViewConditions(advancedQuery.filter) === 0 ? {} : { filters: [serializeAdvancedViewQuery(advancedQuery)] }),
   });
   const applyAdvancedQuery = (next: AdvancedViewQuery) => {
@@ -355,8 +389,8 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
     setHasExplicitAdvancedQuery(countViewConditions(filterQuery.filter) > 0);
     const selection = surface === "tasks" && projectId !== "" ? { projectId } : {};
     onNavigate(surface, countViewConditions(filterQuery.filter) > 0
-      ? { ...selection, query: { ...taskQuery(), filters: [serializeAdvancedViewQuery(filterQuery)] } }
-      : { ...selection, query: taskQuery() });
+      ? { ...selection, query: { ...externalTaskQuery(), filters: [serializeAdvancedViewQuery(filterQuery)] } }
+      : { ...selection, query: externalTaskQuery() });
   };
   const renderProjectRegisterHeader = () => <div className="project-register-head"><span>{t("core.projects")}</span><span>{t("core.status")}</span><span>{t("core.owner")}</span><span>{t("core.tasks")}</span><span>{t("core.milestones")}</span><span>{t("core.due")}</span><span>{t("core.risk")}</span></div>;
   const renderProjectRow = (project: EntityResult) => {
@@ -398,11 +432,7 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
       <dl className="project-register-summary"><div><dt>{t("core.projectsTotal")}</dt><dd>{activeProjects.length}</dd></div><div><dt>{t("core.tasksTotal")}</dt><dd>{activeTasks.length}</dd></div><div><dt>{t("core.milestonesTotal")}</dt><dd>{activeMilestones.length}</dd></div><div><dt>{t("core.completedTasks")}</dt><dd>{completedTasks}</dd></div></dl>
       {filteredProjects.length === 0 ? <p>{t("core.empty")}</p> : <div className="project-groups">{projectGroupSections.map((group) => <section className="project-group" data-ungrouped={group.isUngrouped || undefined} key={group.key}><header className="project-group-heading"><h4>{group.title}</h4><span>{t("core.projectsCount", { count: group.projects.length })}</span></header><div className="project-register" aria-label={group.title}>{renderProjectRegisterHeader()}{group.projects.map(renderProjectRow)}</div></section>)}</div>}
     </section>}
-    {surface === "tasks" && projectId === "" && selectedTask === "" && <section className="card portfolio-task-area"><div className="task-toolbar"><div><h3>{t("core.allTasks")}</h3><p>{t("core.allTasksHint")}</p></div></div><AdvancedViewControls allowSorting={false} fields={taskFields} locale={locale} onChange={applyAdvancedQuery} query={advancedQuery} resultCount={filteredTasks.length} totalCount={tasks.length} t={t} leadingControls={<div className="task-toolbar-controls portfolio-task-quick-filters">
-      <label>{t("core.project")}<select aria-label={t("core.project")} value={projectFilter} onChange={(event) => { const nextProject = event.target.value; setProjectFilter(nextProject); setMilestoneFilter(""); onNavigate("tasks", { query: taskQuery(filter, "", nextProject) }); }}><option value="">{t("workload.allProjects")}</option>{activeProjects.map((project) => <option key={project.document.id} value={project.document.id}>{value(project.document, "name")}</option>)}</select></label>
-      <label>{t("core.filter")}<select aria-label={t("core.filter")} value={filter} onChange={(event) => { const nextStatus = event.target.value; setFilter(nextStatus); onNavigate("tasks", { query: taskQuery(nextStatus) }); }}><option value="">{t("core.allStatuses")}</option>{statuses.map((status) => <option key={status} value={status}>{statusTitle(status)}</option>)}</select></label>
-      <label>{t("core.milestone")}<select aria-label={t("core.milestone")} value={milestoneFilter} onChange={(event) => { const nextMilestone = event.target.value; setMilestoneFilter(nextMilestone); onNavigate("tasks", { query: taskQuery(filter, nextMilestone) }); }}><option value="">{t("core.allMilestones")}</option><option value="none">{t("stages.withoutStage")}</option>{filterMilestones.map((milestone) => <option key={milestone.document.id} value={milestone.document.id}>{projectFilter === "" ? `${catalog.project(milestone.document.project).name} · ` : ""}{value(milestone.document, "name")}</option>)}</select></label>
-    </div>} />
+    {surface === "tasks" && projectId === "" && selectedTask === "" && <section className="card portfolio-task-area"><div className="task-toolbar"><div><h3>{t("core.allTasks")}</h3><p>{t("core.allTasksHint")}</p></div></div><AdvancedViewControls allowSorting={false} fields={taskFields} locale={locale} onChange={applyAdvancedQuery} query={advancedQuery} quickPresets={portfolioTaskPresets} resultCount={filteredTasks.length} totalCount={tasks.length} t={t} />
       <dl className="project-register-summary portfolio-task-summary"><div><dt>{t("core.projectsTotal")}</dt><dd>{new Set(filteredTasks.map((item) => item.document.project)).size}</dd></div><div><dt>{t("core.tasksTotal")}</dt><dd>{filteredTasks.length}</dd></div><div><dt>{t("core.milestonesTotal")}</dt><dd>{new Set(filteredTasks.map((item) => value(item.document, "milestone")).filter(Boolean)).size}</dd></div><div><dt>{t("core.completedTasks")}</dt><dd>{filteredTasks.filter((item) => isCompletedStatus(statusOptions, value(item.document, "status"))).length}</dd></div></dl>
       <PortfolioTaskHierarchy filteredTasks={filteredTasks} highlights={highlights} locale={locale} milestones={milestones} onNavigate={onNavigate} onStatusChange={changeTaskStatus} people={people} projects={projects} query={taskQuery()} readOnly={readOnly} statusBusy={statusPending !== null} statusOptions={statusOptions} statusPending={statusPending} statusTitle={statusTitle} tasks={tasks} t={t} value={value} effortOf={effortOf} />
     </section>}
@@ -468,7 +498,7 @@ function PortfolioTaskHierarchy({ projects, milestones, tasks, filteredTasks, pe
     const allWithoutStage = projectTasks.filter(withoutStage);
     return <article className="portfolio-task-project" data-project-id={project.document.id} key={project.document.id}>
       <header className="portfolio-task-project-heading"><button onClick={() => onNavigate("projects", { projectId: project.document.id })} type="button"><span>{t("core.project")} <code>{project.document.id}</code></span><strong>{value(project.document, "name")}</strong>{value(project.document, "group") !== "" && <small>{value(project.document, "group")}</small>}</button><span>{taskCount(visibleProjectTasks.length)}</span></header>
-      <div className="portfolio-task-stages">{visibleMilestones.map((milestone, index) => <section className="portfolio-task-stage" data-milestone-id={milestone.document.id} key={milestone.document.id}>
+      <div className="portfolio-task-stages"><PortfolioTaskColumnHead t={t} />{visibleMilestones.map((milestone, index) => <section className="portfolio-task-stage" data-milestone-id={milestone.document.id} key={milestone.document.id}>
         <header><button onClick={() => onNavigate("stages", { projectId: project.document.id, stageId: milestone.document.id, query })} type="button"><span>{t("core.milestone")} {index + 1} <code>{milestone.document.id}</code></span><strong>{value(milestone.document, "name")}</strong>{milestone.document.lifecycle === "archived" && <small>{t("core.archived")}</small>}</button><span>{taskCount(visibleProjectTasks.filter((task) => value(task.document, "milestone") === milestone.document.id).length)}</span></header>
         <PortfolioTaskGroup allTasks={projectTasks.filter((task) => value(task.document, "milestone") === milestone.document.id)} effortOf={effortOf} highlights={highlights} locale={locale} onNavigate={onNavigate} onStatusChange={onStatusChange} order={values(milestone.document, "task_order")} people={people} projectId={project.document.id} query={query} readOnly={readOnly} statusBusy={statusBusy} statusOptions={statusOptions} statusPending={statusPending} statusTitle={statusTitle} t={t} value={value} visibleTasks={visibleProjectTasks.filter((task) => value(task.document, "milestone") === milestone.document.id)} />
       </section>)}
@@ -476,6 +506,10 @@ function PortfolioTaskHierarchy({ projects, milestones, tasks, filteredTasks, pe
       </div>
     </article>;
   })}</div>;
+}
+
+function PortfolioTaskColumnHead({ t }: { readonly t: (key: MessageKey) => string }) {
+  return <div aria-hidden="true" className="portfolio-task-column-head"><span /><span /><span>{t("portfolioTasks.columnTask")}</span><span>{t("core.assignees")}</span><span>{t("core.due")}</span><span>{t("projectPlan.estimate")}</span><span>{t("core.status")}</span></div>;
 }
 
 function PortfolioTaskGroup({ allTasks, visibleTasks, projectId, order = [], people, locale, query, readOnly, statusOptions, statusBusy, statusPending, highlights, value, effortOf, statusTitle, onStatusChange, onNavigate, t }: {
@@ -511,17 +545,18 @@ function PortfolioTaskGroup({ allTasks, visibleTasks, projectId, order = [], peo
     const task = entry.task.entity;
     const due = value(task.document, "due");
     const estimate = effortOf(task.document);
+    const assignees = values(task.document, "assignees");
     const visibleChildren = hierarchy.childrenOf(task.document.id).filter((child) => includedIds.has(child.id));
     const contextOnly = !visibleIds.has(task.document.id);
     const rowStyle = { "--portfolio-task-depth": entry.depth } as CSSProperties;
     return <div className={`portfolio-task-row${contextOnly ? " filter-context" : ""}${statusPending === task.document.id ? " is-saving" : ""}${highlights[task.document.id]?.includes("$local") ? " recently-changed" : highlights[task.document.id] ? " external-update" : ""}`} data-depth={entry.depth} data-task-id={task.document.id} key={task.document.id} style={rowStyle}>
       <span className="portfolio-task-indent" aria-hidden="true" />
       <span className="portfolio-task-collapse">{entry.hasChildren && visibleChildren.length > 0 && <button aria-expanded={!collapsed.has(task.document.id)} aria-label={collapsed.has(task.document.id) ? t("taskHierarchy.expand", { title: value(task.document, "title") }) : t("taskHierarchy.collapse", { title: value(task.document, "title") })} onClick={() => setCollapsed((current) => { const next = new Set(current); if (next.has(task.document.id)) next.delete(task.document.id); else next.add(task.document.id); return next; })} type="button"><svg aria-hidden="true" viewBox="0 0 12 12"><path d={collapsed.has(task.document.id) ? "M4 2.5 8 6 4 9.5" : "m2.5 4 3.5 4 3.5-4"} /></svg></button>}</span>
-      <button className="portfolio-task-selector" onClick={() => onNavigate("tasks", { projectId, taskId: task.document.id, query })} type="button"><strong>{value(task.document, "title")}</strong><span><code>{task.document.id}</code>{contextOnly && <small>{t("portfolioTasks.filterContext")}</small>}{task.document.lifecycle === "archived" && <small>{t("core.archived")}</small>}</span></button>
-      <span className="portfolio-task-assignees"><PersonLinks empty={t("core.unassigned")} onOpen={(personId) => onNavigate("people", { personId })} people={people} personIds={values(task.document, "assignees")} /></span>
-      <span className="portfolio-task-date">{due === "" ? "—" : <time dateTime={due}>{formatDateOnly(locale, due)}</time>}</span>
-      <span className="portfolio-task-estimate">{estimate === undefined ? "—" : formatDurationHours(locale, estimate)}</span>
-      {readOnly ? <span className="state open">{statusTitle(value(task.document, "status"))}</span> : <select aria-label={`${t("core.status")}: ${value(task.document, "title")}`} className="inline-status-select" disabled={statusBusy} onChange={(event) => onStatusChange(task, event.target.value)} value={value(task.document, "status")}>{statusOptions.map((status) => <option key={status.slug} value={status.slug}>{status.title}</option>)}</select>}
+      <button className="portfolio-task-selector" onClick={() => onNavigate("tasks", { projectId, taskId: task.document.id, query })} title={t("tooltip.openTask")} type="button"><strong>{value(task.document, "title")}</strong><span><code>{task.document.id}</code>{contextOnly && <small>{t("portfolioTasks.filterContext")}</small>}{task.document.lifecycle === "archived" && <small>{t("core.archived")}</small>}</span></button>
+      <span className="portfolio-task-assignees" title={t(assignees.length === 0 ? "tooltip.taskUnassigned" : "tooltip.taskAssignees")}><PersonLinks empty={t("core.unassigned")} onOpen={(personId) => onNavigate("people", { personId })} people={people} personIds={assignees} /></span>
+      <span className="portfolio-task-date" title={t(due === "" ? "tooltip.taskDueMissing" : "tooltip.taskDue")}>{due === "" ? "—" : <time dateTime={due}>{formatDateOnly(locale, due)}</time>}</span>
+      <span className="portfolio-task-estimate" title={t(estimate === undefined ? "tooltip.taskEstimateMissing" : "tooltip.taskEstimate")}>{estimate === undefined ? "—" : formatDurationHours(locale, estimate)}</span>
+      {readOnly ? <span className="state open" title={t("tooltip.taskStatus")}>{statusTitle(value(task.document, "status"))}</span> : <select aria-label={`${t("core.status")}: ${value(task.document, "title")}`} className="inline-status-select" disabled={statusBusy} onChange={(event) => onStatusChange(task, event.target.value)} title={t("tooltip.changeStatus")} value={value(task.document, "status")}>{statusOptions.map((status) => <option key={status.slug} value={status.slug}>{status.title}</option>)}</select>}
     </div>;
   })}</div>;
 }
