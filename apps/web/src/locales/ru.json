@@ -51,6 +51,7 @@
   "nav.tasks": "Задачи",
   "nav.board": "Доска",
   "nav.people": "Люди и команды",
+  "nav.vacations": "Календарь отпусков",
   "nav.calendar": "Рабочие календари",
   "nav.settings": "Настройки портфеля",
   "nav.workload": "Загрузка команды",
@@ -1135,6 +1136,25 @@
   ,"availability.conflictDayCount": "Конфликты доступности: {count}"
   ,"availability.legendUnavailable": "Нет на работе или доступен частично"
   ,"availability.taskPaused": "Пауза: исполнитель недоступен"
+  ,"vacationCalendar.heading": "Календарь отпусков"
+  ,"vacationCalendar.description": "Отсутствия команды на общей шкале. Чтобы изменить отсутствие, откройте карточку сотрудника."
+  ,"vacationCalendar.personFilter": "Сотрудник"
+  ,"vacationCalendar.allPeople": "Все сотрудники"
+  ,"vacationCalendar.allKinds": "Все типы"
+  ,"vacationCalendar.allStates": "Все состояния"
+  ,"vacationCalendar.search": "Поиск по имени"
+  ,"vacationCalendar.months": "Период"
+  ,"vacationCalendar.months3": "3 месяца"
+  ,"vacationCalendar.months6": "6 месяцев"
+  ,"vacationCalendar.months12": "12 месяцев"
+  ,"vacationCalendar.absentToday": "Отсутствуют сегодня"
+  ,"vacationCalendar.leavingSoon": "Уходят в ближайшие 30 дней"
+  ,"vacationCalendar.maxOverlap": "Максимальное одновременное отсутствие"
+  ,"vacationCalendar.empty": "Нет сотрудников, подходящих под текущие фильтры."
+  ,"vacationCalendar.chart": "Календарь отпусков команды"
+  ,"vacationCalendar.barText": "{start} — {finish} · {days}"
+  ,"vacationCalendar.tooltip": "{kind} · {state} · {start} — {finish} · {days} {unit}"
+  ,"vacationCalendar.tooltipNote": "{kind} · {state} · {start} — {finish} · {days} {unit}. {note}"
   ,"advancedView.open": "Фильтры и сортировка"
   ,"advancedView.openFilters": "Фильтры"
   ,"advancedView.title": "Фильтры и сортировка"

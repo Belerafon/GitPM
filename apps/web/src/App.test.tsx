@@ -237,6 +237,18 @@ describe("frontend draft lifecycle", () => {
     expect(`${window.location.pathname}${window.location.search}`).toBe("/calendars/C-26-QD7FJ4");
   });
 
+  it("restores the vacation calendar deep link and team tab", async () => {
+    const api = new FakeApi();
+    api.currentSession = { ...session, mode: "repository", repository: { name: "portfolio", path: "D:\\portfolio", has_remote: false }, gitlab: { configured: false } };
+    api.drafts = [draft({ draft_id: "DRF-LOCAL" })];
+    window.history.replaceState({}, "", "/vacations");
+    render(<App api={api} browserLanguages={["en"]} />);
+
+    expect(await screen.findByRole("heading", { name: "Vacation calendar" })).toBeTruthy();
+    expect(`${window.location.pathname}${window.location.search}`).toBe("/vacations");
+    expect(screen.getByRole("button", { name: "Vacation calendar" }).getAttribute("aria-current")).toBe("page");
+  });
+
   it("restores a project milestone deep link with project tabs and task navigation", async () => {
     const api = new FakeApi();
     api.currentSession = { ...session, mode: "repository", repository: { name: "portfolio", path: "D:\\portfolio", has_remote: false }, gitlab: { configured: false } };

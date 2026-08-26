@@ -51,6 +51,7 @@
   "nav.tasks": "Tasks",
   "nav.board": "Board",
   "nav.people": "People and teams",
+  "nav.vacations": "Vacation calendar",
   "nav.calendar": "Working calendars",
   "nav.settings": "Portfolio settings",
   "nav.workload": "Team workload",
@@ -1135,6 +1136,25 @@
   ,"availability.conflictDayCount": "Availability conflicts: {count}"
   ,"availability.legendUnavailable": "Unavailable or partially available"
   ,"availability.taskPaused": "Paused: person unavailable"
+  ,"vacationCalendar.heading": "Vacation calendar"
+  ,"vacationCalendar.description": "Team absences on a shared timeline. Open a person to edit an absence."
+  ,"vacationCalendar.personFilter": "Person"
+  ,"vacationCalendar.allPeople": "All people"
+  ,"vacationCalendar.allKinds": "All types"
+  ,"vacationCalendar.allStates": "All states"
+  ,"vacationCalendar.search": "Search by name"
+  ,"vacationCalendar.months": "Period"
+  ,"vacationCalendar.months3": "3 months"
+  ,"vacationCalendar.months6": "6 months"
+  ,"vacationCalendar.months12": "12 months"
+  ,"vacationCalendar.absentToday": "Absent today"
+  ,"vacationCalendar.leavingSoon": "Leaving in 30 days"
+  ,"vacationCalendar.maxOverlap": "Peak simultaneous absence"
+  ,"vacationCalendar.empty": "No people match the current filters."
+  ,"vacationCalendar.chart": "Team vacation calendar"
+  ,"vacationCalendar.barText": "{start} — {finish} · {days}"
+  ,"vacationCalendar.tooltip": "{kind} · {state} · {start} — {finish} · {days} {unit}"
+  ,"vacationCalendar.tooltipNote": "{kind} · {state} · {start} — {finish} · {days} {unit}. {note}"
   ,"advancedView.open": "Filters and sorting"
   ,"advancedView.openFilters": "Filters"
   ,"advancedView.title": "Filters and sorting"

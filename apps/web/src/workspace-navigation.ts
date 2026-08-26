@@ -1,4 +1,4 @@
-export type WorkspaceDestination = "projects" | "stages" | "tasks" | "board" | "effort" | "people" | "calendar" | "settings" | "workload" | "gantt" | "changes" | "files" | "history" | "connection";
+export type WorkspaceDestination = "projects" | "stages" | "tasks" | "board" | "effort" | "people" | "calendar" | "settings" | "workload" | "vacations" | "gantt" | "changes" | "files" | "history" | "connection";
 
 export interface WorkspaceSelection {
   readonly projectId?: string;
