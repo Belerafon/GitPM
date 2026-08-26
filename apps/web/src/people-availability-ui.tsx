@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
 import { EditorDrawer } from "./editor-drawer.js";
 import { dayUnit, formatDateOnly, formatNumber, type Locale, type MessageKey } from "./i18n.js";
-import { isPastAbsence, vacationYearBalance, type AvailabilityRecord } from "./people-availability-model.js";
+import { ANNUAL_VACATION_DAYS, annualVacationAllowance, isPastAbsence, vacationYearBalance, type AvailabilityRecord } from "./people-availability-model.js";
 import type { EntityResult, GitPmDocument } from "./types.js";
 import { DEFAULT_WORKING_CALENDAR, isIsoDate, localCalendarDate, workingDayCount, type WorkingCalendar } from "./vacation-calendar-model.js";
 
@@ -49,8 +49,10 @@ function displayStateKey(event: EntityResult, today: string): MessageKey {
   return stateKey(state);
 }
 
-export function PeopleAvailability({ events, locale, onCreate, onUpdate, personId, readOnly, t, today = localCalendarDate(), calendar = DEFAULT_WORKING_CALENDAR }: {
+export function PeopleAvailability({ events, extraDays = 0, extraDaysReason = "", locale, onCreate, onUpdate, personId, readOnly, t, today = localCalendarDate(), calendar = DEFAULT_WORKING_CALENDAR }: {
   readonly events: readonly EntityResult[];
+  readonly extraDays?: number;
+  readonly extraDaysReason?: string;
   readonly locale: Locale;
   readonly onCreate: (document: GitPmDocument) => Promise<boolean>;
   readonly onUpdate: (event: EntityResult, document: GitPmDocument) => Promise<boolean>;
@@ -64,7 +66,8 @@ export function PeopleAvailability({ events, locale, onCreate, onUpdate, personI
   const active = events.filter((event) => event.document.lifecycle === "active").sort((left, right) => text(left.document, "start").localeCompare(text(right.document, "start")) || left.document.id.localeCompare(right.document.id));
   const upcoming = active.filter((event) => !isPastAbsence(text(event.document, "finish"), today));
   const past = active.filter((event) => isPastAbsence(text(event.document, "finish"), today));
-  const year = vacationYearBalance(active.map(asRecord), today, calendar);
+  const allowance = annualVacationAllowance(extraDays);
+  const year = vacationYearBalance(active.map(asRecord), today, calendar, allowance);
   const selected = editing === "new" || editing === null ? undefined : editing;
   const title = editing === "new" ? t("availability.add") : t("availability.edit");
   const save = async (form: HTMLFormElement) => {
@@ -88,7 +91,10 @@ export function PeopleAvailability({ events, locale, onCreate, onUpdate, personI
 
   return <section className="card people-profile-section people-availability-section">
     <div className="card-heading"><div><h3>{t("availability.heading")}</h3><p>{t("availability.description")}</p></div><button className="primary" disabled={readOnly} onClick={() => setEditing("new")} type="button">{t("availability.add")}</button></div>
-    <p className="people-availability-year">{t("availability.yearHeading", { year: today.slice(0, 4), count: year.allowance })}</p>
+    <p className="people-availability-year">{extraDays > 0
+      ? t("availability.yearHeadingExtra", { year: today.slice(0, 4), count: year.allowance, base: ANNUAL_VACATION_DAYS, extra: extraDays })
+      : t("availability.yearHeading", { year: today.slice(0, 4), count: year.allowance })}</p>
+    {extraDays > 0 && extraDaysReason !== "" && <p className="people-availability-extra-reason">{t("availability.extraReason", { reason: extraDaysReason })}</p>}
     <dl className="people-availability-summary">
       <div><dt>{t("availability.yearTaken")}</dt><dd>{t("availability.eventDays", { count: year.taken, unit: dayUnit(locale, year.taken) })}</dd></div>
       <div><dt>{t("availability.yearRemaining")}</dt><dd>{t("availability.eventDays", { count: year.remaining, unit: dayUnit(locale, year.remaining) })}</dd></div>

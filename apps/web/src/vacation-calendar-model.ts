@@ -14,6 +14,8 @@ export interface VacationPerson {
   readonly name: string;
   readonly lifecycle: string;
   readonly calendarId: string;
+  readonly extraDays: number;
+  readonly extraDaysReason: string;
 }
 
 export interface WorkingCalendar {

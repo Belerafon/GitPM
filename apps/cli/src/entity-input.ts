@@ -83,7 +83,7 @@ function csvRows(text: string, source: string): string[][] {
 function coerceCsvValue(key: string, value: string, source: string, row: number): unknown {
   const trimmed = value.trim();
   if (trimmed === "") return undefined;
-  if (["weekly_capacity_hours", "estimate_hours"].includes(key)) {
+  if (["weekly_capacity_hours", "annual_vacation_extra_days", "estimate_hours"].includes(key)) {
     const parsed = Number(trimmed);
     if (!Number.isFinite(parsed)) throw new RepositoryFormatError("CSV_VALUE_INVALID", `Row ${row} field ${key} must be a number`, source);
     return parsed;

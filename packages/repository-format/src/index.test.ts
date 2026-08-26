@@ -111,4 +111,20 @@ describe("safe YAML profile", () => {
     expect(formatYamlText(formatted)).toBe(formatted);
     expect(formatYamlDocument({ ...grouped, group: undefined })).not.toContain("group:");
   });
+
+  it("places annual vacation adjustment fields together before the calendar", () => {
+    const formatted = formatYamlDocument({
+      schema: "gitpm/person@1",
+      id: "U-26-333333",
+      name: "Ada",
+      weekly_capacity_hours: 40,
+      calendar: "C-26-111111",
+      lifecycle: "active",
+      annual_vacation_extra_days_reason: "Overtime compensation",
+      annual_vacation_extra_days: 5,
+    });
+
+    expect(formatted.indexOf("annual_vacation_extra_days: 5")).toBeLessThan(formatted.indexOf("annual_vacation_extra_days_reason:"));
+    expect(formatted.indexOf("annual_vacation_extra_days_reason:")).toBeLessThan(formatted.indexOf("calendar:"));
+  });
 });

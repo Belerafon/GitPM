@@ -2,6 +2,10 @@ import { addDays, clipToWindow, DEFAULT_WORKING_CALENDAR, isIsoDate, workingDayC
 
 export const ANNUAL_VACATION_DAYS = 20;
 
+export function annualVacationAllowance(extraDays = 0): number {
+  return ANNUAL_VACATION_DAYS + (Number.isInteger(extraDays) && extraDays > 0 ? extraDays : 0);
+}
+
 export interface AvailabilityRecord {
   readonly start: string;
   readonly finish: string;

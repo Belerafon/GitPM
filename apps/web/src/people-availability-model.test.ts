@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { currentAbsence, isPastAbsence, vacationYearBalance, type AvailabilityRecord } from "./people-availability-model.js";
+import { annualVacationAllowance, currentAbsence, isPastAbsence, vacationYearBalance, type AvailabilityRecord } from "./people-availability-model.js";
 
 const vacation = (overrides: Partial<AvailabilityRecord> & Pick<AvailabilityRecord, "start" | "finish">): AvailabilityRecord => ({
   kind: "vacation",
@@ -9,6 +9,12 @@ const vacation = (overrides: Partial<AvailabilityRecord> & Pick<AvailabilityReco
 });
 
 describe("vacation year balance", () => {
+  it("adds a positive personal adjustment to the standard 20-day allowance", () => {
+    expect(annualVacationAllowance()).toBe(20);
+    expect(annualVacationAllowance(5)).toBe(25);
+    expect(annualVacationAllowance(-2)).toBe(20);
+  });
+
   it("counts past vacation weekdays as taken and future weekdays as planned against a 20-day allowance", () => {
     const events = [
       vacation({ start: "2026-01-10", finish: "2026-01-19" }),

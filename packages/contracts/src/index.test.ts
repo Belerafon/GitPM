@@ -62,6 +62,23 @@ describe("@gitpm/contracts runtime contracts", () => {
     expect(result.document.schema).toBe("gitpm/availability-event@1");
   });
 
+  it("decodes paired personal vacation adjustment fields and rejects either field alone", () => {
+    const person = {
+      schema: "gitpm/person@1",
+      id: "U-26-5EBAE3",
+      name: "Ada",
+      weekly_capacity_hours: 40,
+      annual_vacation_extra_days: 5,
+      annual_vacation_extra_days_reason: "Overtime compensation",
+      calendar: "C-26-QD7FJ4",
+      lifecycle: "active",
+    };
+
+    expect(decodeEntityDocument(person)).toMatchObject({ annual_vacation_extra_days: 5, annual_vacation_extra_days_reason: "Overtime compensation" });
+    expect(() => decodeEntityDocument({ ...person, annual_vacation_extra_days_reason: undefined })).toThrow(ApiContractError);
+    expect(() => decodeEntityDocument({ ...person, annual_vacation_extra_days: undefined })).toThrow(ApiContractError);
+  });
+
   it("rejects missing required entity fields and unknown properties", () => {
     expect(() => decodeEntityDocument({
       schema: "gitpm/project@2",

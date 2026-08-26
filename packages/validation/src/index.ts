@@ -39,6 +39,8 @@ function schemaExpectation(field: string | undefined): string | undefined {
   if (field === "id") return "entity ID matching <type>-<UTC YY>-<6 Crockford Base32>";
   if (field === "lifecycle") return "active or archived";
   if (field === "weekly_capacity_hours") return "nonnegative number";
+  if (field === "annual_vacation_extra_days") return "positive whole number paired with annual_vacation_extra_days_reason";
+  if (field === "annual_vacation_extra_days_reason") return "nonempty reason paired with annual_vacation_extra_days";
   if (field === "email") return "email address";
   return undefined;
 }

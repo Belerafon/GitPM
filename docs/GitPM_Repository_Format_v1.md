@@ -137,6 +137,10 @@ ID имеет форму `<type>-<YY>-<random>`, где type — один из `
   должна её предлагать. Delete использует restrict.
 
 Email Person, если задан, синтаксически валиден и уникален в repository без учёта регистра.
+Person может содержать парные поля `annual_vacation_extra_days` и
+`annual_vacation_extra_days_reason`. Первое задаёт целое положительное число дополнительных
+рабочих дней ежегодного отпуска сверх базовой нормы в 20 дней, второе — непустое объяснение
+надбавки. Отсутствие обоих полей означает нулевую надбавку; указывать только одно поле нельзя.
 Во входе CLI create/import Person может не содержать Calendar: mutation boundary подставляет
 активный repository `default_calendar`. Это только input default; в сохранённом каноническом
 Person поле `calendar` остаётся обязательным и явным.
@@ -187,6 +191,11 @@ CLI предоставляет `gitpm calendar presets`, `gitpm calendar create 
 или `other`; `state` — `planned`, `taken` или `cancelled`. Planning учитывает активные
 `planned` и `taken` события, а `cancelled` не уменьшает ёмкость. Пересекающиеся активные
 события одного Person запрещены кодом `AVAILABILITY_EVENT_OVERLAP`.
+
+Годовой баланс отпусков считает только события с `kind: vacation`. Базовая норма составляет
+20 рабочих дней; персональная пара `annual_vacation_extra_days` и
+`annual_vacation_extra_days_reason` увеличивает её для Person и отображается в профиле и общем
+календаре отпусков.
 
 Диапазон Task остаётся плановым окном и не переписывается при добавлении отсутствия.
 Пересечение даёт warning `TASK_AVAILABILITY_CONFLICT`: UI показывает паузу, а Workload

@@ -18,9 +18,9 @@ import {
   type VacationTeam,
 } from "./vacation-calendar-model.js";
 
-const ada: VacationPerson = { id: "U-26-ADA", name: "Ada", lifecycle: "active", calendarId: "C-26-DEFAULT" };
-const linus: VacationPerson = { id: "U-26-LINUS", name: "Linus", lifecycle: "active", calendarId: "C-26-DEFAULT" };
-const grace: VacationPerson = { id: "U-26-GRACE", name: "Grace", lifecycle: "archived", calendarId: "C-26-DEFAULT" };
+const ada: VacationPerson = { id: "U-26-ADA", name: "Ada", lifecycle: "active", calendarId: "C-26-DEFAULT", extraDays: 0, extraDaysReason: "" };
+const linus: VacationPerson = { id: "U-26-LINUS", name: "Linus", lifecycle: "active", calendarId: "C-26-DEFAULT", extraDays: 0, extraDaysReason: "" };
+const grace: VacationPerson = { id: "U-26-GRACE", name: "Grace", lifecycle: "archived", calendarId: "C-26-DEFAULT", extraDays: 0, extraDaysReason: "" };
 const core: VacationTeam = { id: "G-26-CORE", name: "Core", members: [ada.id], lifecycle: "active" };
 const vacation = (overrides: Partial<VacationEvent> & Pick<VacationEvent, "id" | "personId" | "start" | "finish">): VacationEvent => ({
   kind: "vacation",

@@ -403,8 +403,9 @@ const schemaExamples: Readonly<Record<string, string>> = {
   ].join("\n"),
   person: [
     "schema: gitpm/person@1", "id: U-26-7K4M9Q", "name: Ada Lovelace",
-    "weekly_capacity_hours: 40", "calendar: C-26-QD7FJ4", "lifecycle: active",
-    "email: ada@example.test", "",
+    "weekly_capacity_hours: 40", "annual_vacation_extra_days: 5",
+    "annual_vacation_extra_days_reason: Overtime compensation",
+    "calendar: C-26-QD7FJ4", "lifecycle: active", "email: ada@example.test", "",
   ].join("\n"),
   calendar: [
     "schema: gitpm/calendar@1", "id: C-26-QD7FJ4", "name: Standard five-day week",

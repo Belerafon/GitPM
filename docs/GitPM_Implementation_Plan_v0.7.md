@@ -220,10 +220,15 @@ Milestone находится в том же Project, что и ссылающи�
 
 Необязательные поля:
 
-- `email`.
+- `email`;
+- `annual_vacation_extra_days` и `annual_vacation_extra_days_reason`.
 
 `weekly_capacity_hours` является неотрицательным числом. Архивный Person остается допустимой старой ссылкой, но UI не предлагает его для новых назначений.
 `email`, если задан, имеет синтаксис email и уникален среди Person без учёта регистра.
+`annual_vacation_extra_days` задаёт целое положительное число дополнительных рабочих дней
+ежегодного отпуска сверх базовой нормы в 20 дней. Поле и непустая причина
+`annual_vacation_extra_days_reason` задаются только вместе; отсутствие пары означает нулевую
+надбавку.
 Create/import input может не содержать `calendar`; mutation boundary материализует текущий
 активный repository `default_calendar`, после чего сохранённый Person по-прежнему содержит
 явную обязательную ссылку Calendar.

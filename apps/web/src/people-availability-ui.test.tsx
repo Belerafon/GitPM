@@ -24,4 +24,12 @@ describe("People availability", () => {
     expect(screen.getByText("Past", { exact: true })).toBeTruthy();
     expect(screen.getByText("Jan 10, 2026 — Jan 19, 2026")).toBeTruthy();
   });
+
+  it("shows the personal vacation adjustment, its reason, and the increased balance", () => {
+    render(<PeopleAvailability events={[]} extraDays={5} extraDaysReason="Overtime compensation" locale="en" onCreate={vi.fn(async () => true)} onUpdate={vi.fn(async () => true)} personId="U-1" readOnly={false} t={(key, values) => message("en", key, values)} today="2026-08-26" />);
+
+    expect(screen.getByText("Vacation in 2026 · 25 working days (20 + 5)")).toBeTruthy();
+    expect(screen.getByText("Additional days: Overtime compensation")).toBeTruthy();
+    expect(screen.getByText("Remaining").nextElementSibling?.textContent).toBe("25 days");
+  });
 });

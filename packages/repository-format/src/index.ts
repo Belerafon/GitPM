@@ -80,7 +80,7 @@ const fieldOrder: Record<string, readonly string[]> = {
   "gitpm/project@2": ["schema", "id", "name", "status", "lifecycle", "group", "description_markdown", "owner", "planning", "schedules", "milestone_order", "labels"],
   "gitpm/task@2": ["schema", "id", "project", "title", "type", "status", "lifecycle", "description_markdown", "acceptance_criteria_markdown", "parent", "milestone", "assignees", "schedules", "labels"],
   "gitpm/milestone@2": ["schema", "id", "project", "name", "lifecycle", "description_markdown", "schedules", "task_order"],
-  "gitpm/person@1": ["schema", "id", "name", "weekly_capacity_hours", "calendar", "lifecycle", "email"],
+  "gitpm/person@1": ["schema", "id", "name", "weekly_capacity_hours", "annual_vacation_extra_days", "annual_vacation_extra_days_reason", "calendar", "lifecycle", "email"],
   "gitpm/team@1": ["schema", "id", "name", "members", "lifecycle"],
   "gitpm/calendar@1": ["schema", "id", "name", "working_weekdays", "holidays", "lifecycle"],
   "gitpm/availability-event@1": ["schema", "id", "person", "start", "finish", "kind", "availability_percent", "state", "note_markdown", "lifecycle"],

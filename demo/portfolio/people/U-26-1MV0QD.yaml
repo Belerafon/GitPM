@@ -2,6 +2,8 @@ schema: gitpm/person@1
 id: U-26-1MV0QD # person: Максим Фёдоров
 name: Максим Фёдоров
 weekly_capacity_hours: 40
+annual_vacation_extra_days: 5
+annual_vacation_extra_days_reason: Компенсация за переработки
 calendar: C-26-G1AADY # calendar: Производственный календарь России
 lifecycle: active
 email: maksim.fedorov@example.test
