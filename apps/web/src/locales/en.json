@@ -1152,7 +1152,7 @@
   ,"availability.past": "Past"
   ,"availability.pastGroup": "Past absences ({count})"
   ,"availability.noUpcoming": "No upcoming absences."
-  ,"availability.yearHeading": "Vacation in {year} · allowance {count} {unit}"
+  ,"availability.yearHeading": "Vacation in {year} · {count} working days"
   ,"availability.yearTaken": "Used"
   ,"availability.yearRemaining": "Remaining"
   ,"availability.yearPlanned": "Planned"

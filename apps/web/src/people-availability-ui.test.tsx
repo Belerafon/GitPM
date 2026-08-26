@@ -16,9 +16,9 @@ describe("People availability", () => {
       result({ schema: "gitpm/availability-event@1", id: "A-26-NEXT", person: "U-1", start: "2026-09-01", finish: "2026-09-05", kind: "vacation", availability_percent: 0, state: "planned", lifecycle: "active" }),
     ];
     render(<PeopleAvailability events={events} locale="en" onCreate={vi.fn(async () => true)} onUpdate={vi.fn(async () => true)} personId="U-1" readOnly={false} t={(key, values) => message("en", key, values)} today="2026-08-26" />);
-    expect(screen.getByText("Used").nextElementSibling?.textContent).toBe("10 days");
-    expect(screen.getByText("Remaining").nextElementSibling?.textContent).toBe("18 days");
-    expect(screen.getAllByText("Planned").find((node) => node.tagName === "DT")?.nextElementSibling?.textContent).toBe("5 days");
+    expect(screen.getByText("Used").nextElementSibling?.textContent).toBe("6 days");
+    expect(screen.getByText("Remaining").nextElementSibling?.textContent).toBe("14 days");
+    expect(screen.getAllByText("Planned").find((node) => node.tagName === "DT")?.nextElementSibling?.textContent).toBe("4 days");
     expect(screen.getByText("Sep 1, 2026 — Sep 5, 2026")).toBeTruthy();
     expect(screen.getByText("Past absences (1)")).toBeTruthy();
     expect(screen.getByText("Past", { exact: true })).toBeTruthy();

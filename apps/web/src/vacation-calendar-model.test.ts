@@ -4,6 +4,7 @@ import {
   barGeometry,
   clipToWindow,
   inclusiveDayCount,
+  workingDayCount,
   VACATION_CALENDAR_DAY_WIDTH,
   vacationBars,
   vacationCalendarWindow,
@@ -17,9 +18,9 @@ import {
   type VacationTeam,
 } from "./vacation-calendar-model.js";
 
-const ada: VacationPerson = { id: "U-26-ADA", name: "Ada", lifecycle: "active" };
-const linus: VacationPerson = { id: "U-26-LINUS", name: "Linus", lifecycle: "active" };
-const grace: VacationPerson = { id: "U-26-GRACE", name: "Grace", lifecycle: "archived" };
+const ada: VacationPerson = { id: "U-26-ADA", name: "Ada", lifecycle: "active", calendarId: "C-26-DEFAULT" };
+const linus: VacationPerson = { id: "U-26-LINUS", name: "Linus", lifecycle: "active", calendarId: "C-26-DEFAULT" };
+const grace: VacationPerson = { id: "U-26-GRACE", name: "Grace", lifecycle: "archived", calendarId: "C-26-DEFAULT" };
 const core: VacationTeam = { id: "G-26-CORE", name: "Core", members: [ada.id], lifecycle: "active" };
 const vacation = (overrides: Partial<VacationEvent> & Pick<VacationEvent, "id" | "personId" | "start" | "finish">): VacationEvent => ({
   kind: "vacation",
@@ -51,6 +52,11 @@ describe("vacation calendar geometry", () => {
 
   it("counts inclusive calendar days and places a bar from the window origin", () => {
     expect(inclusiveDayCount("2026-08-17", "2026-08-21")).toBe(5);
+    expect(workingDayCount("2026-08-21", "2026-08-24")).toBe(2);
+    expect(workingDayCount("2026-08-21", "2026-08-23")).toBe(1);
+    expect(workingDayCount("2026-08-22", "2026-08-23")).toBe(0);
+    expect(workingDayCount("2026-08-03", "2026-08-30")).toBe(20);
+    expect(workingDayCount("2026-11-02", "2026-11-04", { workingWeekdays: [1, 2, 3, 4, 5], holidays: ["2026-11-04"] })).toBe(2);
     const geometry = barGeometry("2026-08-17", "2026-08-21", "2026-08-01", 10);
     expect(geometry).toEqual({ offset: 16, duration: 5, left: 160, width: 50 });
   });
@@ -100,6 +106,9 @@ describe("vacation calendar geometry", () => {
     expect(bands).toEqual([
       { start: "2026-08-01", finish: "2026-08-02", left: 0, width: 20 },
       { start: "2026-08-08", finish: "2026-08-09", left: 30, width: 20 },
+    ]);
+    expect(weekendBands(["2026-11-02", "2026-11-03", "2026-11-04"], 10, { workingWeekdays: [1, 2, 3, 4, 5], holidays: ["2026-11-04"] })).toEqual([
+      { start: "2026-11-04", finish: "2026-11-04", left: 20, width: 10 },
     ]);
   });
 

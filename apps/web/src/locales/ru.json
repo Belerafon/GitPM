@@ -1152,7 +1152,7 @@
   ,"availability.past": "Прошедшие"
   ,"availability.pastGroup": "Прошедшие ({count})"
   ,"availability.noUpcoming": "Нет предстоящих отсутствий."
-  ,"availability.yearHeading": "Отпуск в {year} · норма {count} {unit}"
+  ,"availability.yearHeading": "Отпуск в {year} · норма {count} рабочих дней"
   ,"availability.yearTaken": "Использовано"
   ,"availability.yearRemaining": "Осталось"
   ,"availability.yearPlanned": "Запланировано"

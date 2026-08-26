@@ -24,6 +24,7 @@ describe("Vacation calendar overflow containment", () => {
 
   it("stripes rows, paints weekend columns, and lets bar dates overflow", () => {
     expect(rule(".vacation-calendar-label.even, .vacation-calendar-row.even")).toContain("background: #eef1ec");
+    expect(rule(".vacation-calendar-days-row time")).toContain("border-right: 1px solid #d5d9d2");
     expect(rule(".vacation-calendar-weekend")).toContain("background: #f6e6e7");
     expect(rule(".vacation-calendar-bar")).toContain("overflow: visible");
     expect(rule(".vacation-calendar-bar span")).toContain("overflow: visible");

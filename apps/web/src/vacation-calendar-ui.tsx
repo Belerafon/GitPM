@@ -6,6 +6,7 @@ import { currentAbsence, vacationYearBalance } from "./people-availability-model
 import { availabilityKindLabel } from "./people-availability-ui.js";
 import type { DraftStatus, EntityResult, GitPmDocument } from "./types.js";
 import {
+  DEFAULT_WORKING_CALENDAR,
   emptyVacationFilters,
   hoverDayIndex,
   isWeekend,
@@ -23,16 +24,22 @@ import {
   type VacationEvent,
   type VacationPerson,
   type VacationTeam,
+  type WorkingCalendar,
 } from "./vacation-calendar-model.js";
 import type { WorkspaceNavigate } from "./workspace-navigation.js";
 
 const text = (document: GitPmDocument, key: string): string => typeof document[key] === "string" ? document[key] as string : "";
 const strings = (document: GitPmDocument, key: string): readonly string[] => Array.isArray(document[key]) ? document[key].filter((item): item is string => typeof item === "string") : [];
+const numbers = (document: GitPmDocument, key: string): readonly number[] => Array.isArray(document[key]) ? document[key].filter((item): item is number => typeof item === "number") : [];
+const asWorkingCalendar = (entity: EntityResult): WorkingCalendar => {
+  const weekdays = numbers(entity.document, "working_weekdays");
+  return { workingWeekdays: weekdays.length === 0 ? DEFAULT_WORKING_CALENDAR.workingWeekdays : weekdays, holidays: strings(entity.document, "holidays") };
+};
 const kindClass = (kind: string): string => ({ vacation: "kind-vacation", "day-off": "kind-day-off", "sick-leave": "kind-sick-leave", training: "kind-training", other: "kind-other" }[kind] ?? "kind-other");
 const stateKey = (state: string): MessageKey => ({ planned: "availability.statePlanned", taken: "availability.stateTaken", cancelled: "availability.stateCancelled" }[state] ?? "availability.statePlanned") as MessageKey;
 
 function asPerson(entity: EntityResult): VacationPerson {
-  return { id: entity.document.id, name: text(entity.document, "name") || entity.document.id, lifecycle: text(entity.document, "lifecycle") };
+  return { id: entity.document.id, name: text(entity.document, "name") || entity.document.id, lifecycle: text(entity.document, "lifecycle"), calendarId: text(entity.document, "calendar") };
 }
 
 function asTeam(entity: EntityResult): VacationTeam {
@@ -63,32 +70,39 @@ export function VacationCalendarWorkspace({ api, draft, locale, onNavigate = () 
   const [people, setPeople] = useState<readonly EntityResult[]>([]);
   const [teams, setTeams] = useState<readonly EntityResult[]>([]);
   const [events, setEvents] = useState<readonly EntityResult[]>([]);
+  const [calendars, setCalendars] = useState<readonly EntityResult[]>([]);
+  const [calendarId, setCalendarId] = useState("");
   const [period, setPeriod] = useState<VacationCalendarPeriod>(6);
   const [filters, setFilters] = useState<VacationCalendarFilters>(emptyVacationFilters);
   const [hoverDate, setHoverDate] = useState<string | null>(null);
   const loadRequest = useAsyncLoad();
   const load = useCallback(async () => {
     await loadRequest.run(async () => {
-      const [nextPeople, nextTeams, nextEvents] = await Promise.all([
+      const [nextPeople, nextTeams, nextEvents, nextCalendars] = await Promise.all([
         api.listEntities(draft.draft_id, "people"),
         api.listEntities(draft.draft_id, "teams"),
         api.listEntities(draft.draft_id, "availability-events"),
+        api.listEntities(draft.draft_id, "calendars"),
       ]);
-      return { nextPeople, nextTeams, nextEvents };
-    }, ({ nextPeople, nextTeams, nextEvents }) => {
+      return { nextPeople, nextTeams, nextEvents, nextCalendars };
+    }, ({ nextPeople, nextTeams, nextEvents, nextCalendars }) => {
       setPeople(nextPeople);
       setTeams(nextTeams.filter((item) => item.document.lifecycle === "active"));
       setEvents(nextEvents);
+      setCalendars(nextCalendars.filter((item) => item.document.lifecycle === "active"));
     });
   }, [api, draft.draft_id, draft.external_fingerprint, loadRequest.run]);
   useEffect(() => { void load(); }, [load]);
   const modeledPeople = useMemo(() => people.map(asPerson), [people]);
   const modeledTeams = useMemo(() => teams.map(asTeam), [teams]);
   const modeledEvents = useMemo(() => events.map(asEvent), [events]);
+  const calendarsById = useMemo(() => new Map(calendars.map((item) => [item.document.id, asWorkingCalendar(item)])), [calendars]);
+  const resolvedCalendarId = calendarId !== "" && calendarsById.has(calendarId) ? calendarId : (calendars[0]?.document.id ?? "");
+  const displayCalendar = calendarsById.get(resolvedCalendarId) ?? DEFAULT_WORKING_CALENDAR;
   const window = useMemo(() => vacationCalendarWindow(today, period), [today, period]);
-  const weekends = useMemo(() => weekendBands(window.days, window.dayWidth), [window]);
+  const weekends = useMemo(() => weekendBands(window.days, window.dayWidth, displayCalendar), [window, displayCalendar]);
   const rows = useMemo(() => visiblePeople(modeledPeople, modeledTeams, filters), [modeledPeople, modeledTeams, filters]);
-  const bars = useMemo(() => vacationBars(modeledEvents, rows, window, filters), [modeledEvents, rows, window, filters]);
+  const bars = useMemo(() => vacationBars(modeledEvents, rows, window, filters, calendarsById), [modeledEvents, rows, window, filters, calendarsById]);
   const summary = useMemo(() => vacationSummary(modeledEvents, rows, window, filters, today), [modeledEvents, rows, window, filters, today]);
   const barsByPerson = useMemo(() => {
     const grouped = new Map<string, typeof bars>();
@@ -125,6 +139,7 @@ export function VacationCalendarWorkspace({ api, draft, locale, onNavigate = () 
     <>
     <section className="card vacation-calendar-toolbar">
       <label>{t("workload.teamFilter")}<select aria-label={t("workload.teamFilter")} value={filters.teamId} onChange={(event) => updateFilter("teamId", event.target.value)}><option value="">{t("workload.allTeams")}</option>{modeledTeams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}</select></label>
+      <label>{t("people.calendar")}<select aria-label={t("people.calendar")} value={resolvedCalendarId} onChange={(event) => setCalendarId(event.target.value)}>{calendars.map((item) => <option key={item.document.id} value={item.document.id}>{text(item.document, "name") || item.document.id}</option>)}</select></label>
       <label>{t("vacationCalendar.personFilter")}<select aria-label={t("vacationCalendar.personFilter")} value={filters.personId} onChange={(event) => updateFilter("personId", event.target.value)}><option value="">{t("vacationCalendar.allPeople")}</option>{personOptions.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select></label>
       <label>{t("availability.kind")}<select aria-label={t("availability.kind")} value={filters.kind} onChange={(event) => updateFilter("kind", event.target.value)}><option value="">{t("vacationCalendar.allKinds")}</option><option value="vacation">{t("availability.kindVacation")}</option><option value="day-off">{t("availability.kindDayOff")}</option><option value="sick-leave">{t("availability.kindSickLeave")}</option><option value="training">{t("availability.kindTraining")}</option><option value="other">{t("availability.kindOther")}</option></select></label>
       <label>{t("availability.state")}<select aria-label={t("availability.state")} value={filters.state} onChange={(event) => updateFilter("state", event.target.value)}><option value="">{t("vacationCalendar.allStates")}</option><option value="planned">{t("availability.statePlanned")}</option><option value="taken">{t("availability.stateTaken")}</option><option value="cancelled">{t("availability.stateCancelled")}</option></select></label>
@@ -158,7 +173,7 @@ export function VacationCalendarWorkspace({ api, draft, locale, onNavigate = () 
         {rows.map((person, index) => {
           const personEvents = eventsByPerson.get(person.id) ?? [];
           const away = currentAbsence(personEvents, today);
-          const year = vacationYearBalance(personEvents, today);
+          const year = vacationYearBalance(personEvents, today, calendarsById.get(person.calendarId) ?? displayCalendar);
           const stats = t("vacationCalendar.personStats", { taken: year.taken, planned: year.planned, remaining: year.remaining });
           const hint = away === undefined ? `${t("vacationCalendar.availableToday")}. ${stats}` : `${t("vacationCalendar.awayUntil", { kind: availabilityKindLabel(t, away.kind), date: formatDateOnly(locale, away.finish) })}. ${stats}`;
           return <div className={`vacation-calendar-label ${index % 2 === 0 ? "even" : "odd"}${away === undefined ? "" : " away"}`} data-person-id={person.id} key={person.id} title={hint}>
@@ -170,7 +185,7 @@ export function VacationCalendarWorkspace({ api, draft, locale, onNavigate = () 
       <div className="vacation-calendar-timeline" onMouseLeave={() => setHoverDate(null)} onMouseMove={onTimelineMove} style={{ width: `${window.timelineWidth}px` }}>
         <div className="vacation-calendar-header">
           <div className="vacation-calendar-months-row" style={{ gridTemplateColumns: window.months.map((segment) => `${segment.days * window.dayWidth}px`).join(" ") }}>{window.months.map((segment) => <time dateTime={`${segment.key}-01`} key={segment.key}>{monthLabel(segment.key)}</time>)}</div>
-          <div aria-label={t("vacationCalendar.days")} className="vacation-calendar-days-row" style={{ gridTemplateColumns: `repeat(${window.days.length}, ${window.dayWidth}px)` }}>{window.days.map((day) => <time className={isWeekend(day) ? "weekend" : undefined} dateTime={day} key={day}>{Number(day.slice(8))}</time>)}</div>
+          <div aria-label={t("vacationCalendar.days")} className="vacation-calendar-days-row" style={{ gridTemplateColumns: `repeat(${window.days.length}, ${window.dayWidth}px)` }}>{window.days.map((day) => <time className={isWeekend(day, displayCalendar) ? "weekend" : undefined} dateTime={day} key={day}>{Number(day.slice(8))}</time>)}</div>
         </div>
         {rows.map((person, index) => <div className={`vacation-calendar-row ${index % 2 === 0 ? "even" : "odd"}${currentAbsence(eventsByPerson.get(person.id) ?? [], today) === undefined ? "" : " away"}`} data-person-id={person.id} key={person.id} style={{ top: `${VACATION_CALENDAR_HEADER_HEIGHT + index * VACATION_CALENDAR_ROW_HEIGHT}px`, height: `${VACATION_CALENDAR_ROW_HEIGHT}px` }} />)}
         {weekends.map((band) => <div className="vacation-calendar-weekend" data-finish={band.finish} data-start={band.start} key={band.start} style={{ left: `${band.left}px`, width: `${band.width}px` }} />)}
