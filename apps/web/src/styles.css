@@ -859,7 +859,7 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .admin-workspace { margin-top: 1.5rem; }
 .calendar-admin-sections, .settings-config-sections { display: grid; gap: 1rem; }
 .settings-config-section { display: grid; gap: .65rem; }
-.settings-config-section > h2 { margin: 0; color: #31433a; font-size: 1rem; }
+.admin-section-description { max-width: 82ch; margin: 0; border-left: 3px solid #7da58f; border-radius: 0 8px 8px 0; background: #f2f7f3; padding: .72rem .85rem; color: #52635a; font-size: .82rem; line-height: 1.5; }
 .settings-config-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
 .settings-config-grid > :only-child { grid-column: 1 / -1; }
 .admin-create { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .55rem; align-items: start; }
@@ -1072,6 +1072,7 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
 .config-summary-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .config-summary-heading h3 { margin: 0; font-size: 1rem; }
 .config-summary-heading .editor-trigger { padding: .48rem .7rem; }
+.config-summary-description { max-width: 68ch; margin: -.25rem 0 .1rem; color: #68716b; font-size: .76rem; line-height: 1.45; }
 .default-calendar-summary { display: grid; gap: .55rem; border: 1px solid #dfe3dd; border-radius: 10px; background: #f9fbf8; padding: .8rem; }
 .default-calendar-summary > span { color: #68706b; font-size: .75rem; }
 .default-calendar-link { width: fit-content; font-size: 1rem; font-weight: 720; }

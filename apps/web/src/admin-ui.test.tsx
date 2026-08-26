@@ -91,6 +91,8 @@ describe("administration UI", () => {
 
     rendered.rerender(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="settings" onChanged={changed} />);
     const statusesCard = (await screen.findByRole("heading", { name: "Statuses" })).closest<HTMLElement>(".config-editor")!;
+    expect(screen.getByText(/shared values define how tasks are classified/u)).toBeTruthy();
+    expect(within(statusesCard).getByText(/Lifecycle stages used by task lists/u)).toBeTruthy();
     expect(within(statusesCard).getByText("Backlog").closest<HTMLElement>(".config-preview")?.style.backgroundColor).toBe("rgb(238, 240, 242)");
     fireEvent.click(within(statusesCard).getByRole("button", { name: "Edit Statuses" }));
     const dialog = await screen.findByRole("dialog", { name: "Edit: Statuses" });
@@ -162,14 +164,15 @@ describe("administration UI", () => {
 
   it("loads, displays and updates the schedule tracks configuration", async () => {
     const admin = new AdminApi(); const api = admin as unknown as GitPmApi; const changed = vi.fn(async () => undefined);
-    render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="settings" onChanged={changed} />);
+    render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="settings" initialSection="planning" onChanged={changed} />);
 
-    expect(await screen.findByRole("heading", { name: "Tasks" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Planning" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Time tracking" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Effort categories" })).toBeTruthy();
+    expect(await screen.findByRole("region", { name: "Planning" })).toBeTruthy();
+    expect(screen.getByText(/Configure schedule variants such as a baseline/u)).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Statuses" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Effort categories" })).toBeNull();
     expect(screen.queryByRole("heading", { name: "Calendar for new people" })).toBeNull();
     const tracksCard = (await screen.findByRole("heading", { name: "Plans and actual work" })).closest<HTMLElement>(".config-editor")!;
+    expect(within(tracksCard).getByText(/which plan and actual-work variants projects can use/u)).toBeTruthy();
     expect(admin.configurationReads).toContain("schedule-tracks");
     expect(within(tracksCard).getByText("Plan")).toBeTruthy();
     expect(within(tracksCard).getByText("Target")).toBeTruthy();
@@ -202,7 +205,7 @@ describe("administration UI", () => {
 
   it("explains schedule tracks and their roles in the Russian editor", async () => {
     const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
-    render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="ru" surface="settings" onChanged={vi.fn(async () => undefined)} />);
+    render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="ru" surface="settings" initialSection="planning" onChanged={vi.fn(async () => undefined)} />);
 
     const tracksCard = (await screen.findByRole("heading", { name: "Планы и фактическая работа" })).closest<HTMLElement>(".config-editor")!;
     fireEvent.click(within(tracksCard).getByRole("button", { name: "Редактировать: Планы и фактическая работа" }));
@@ -219,17 +222,21 @@ describe("administration UI", () => {
     expect(defaults.querySelector(".planning-help")).toBeNull();
   });
 
-  it("scrolls to planning when opened from a Gantt settings link", async () => {
+  it("shows only planning when opened from a Gantt settings link", async () => {
     const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
-    const scrollIntoView = vi.fn();
-    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: scrollIntoView, writable: true });
-    try {
-      render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="settings" initialSection="planning" onChanged={vi.fn(async () => undefined)} />);
-      await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
-      expect(document.getElementById("settings-planning-heading")).not.toBeNull();
-    } finally {
-      Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
-    }
+    render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="settings" initialSection="planning" onChanged={vi.fn(async () => undefined)} />);
+    expect(await screen.findByRole("heading", { name: "Plans and actual work" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Statuses" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Effort categories" })).toBeNull();
+  });
+
+  it("explains effort categories on the time-tracking administration tab", async () => {
+    const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
+    render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="settings" initialSection="time" onChanged={vi.fn(async () => undefined)} />);
+    const categoriesCard = (await screen.findByRole("heading", { name: "Effort categories" })).closest<HTMLElement>(".config-editor")!;
+    expect(screen.getByText(/categories available when people record time/u)).toBeTruthy();
+    expect(within(categoriesCard).getByText(/classify time entries and summarize effort/u)).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Statuses" })).toBeNull();
   });
 
   it("changes the calendar for new people without exposing the repository polling interval", async () => {
@@ -238,6 +245,7 @@ describe("administration UI", () => {
     await admin.createEntity("DRF-ADMIN", "calendars", "", { schema: "gitpm/calendar@1", id: "C-26-111111", name: "Old default", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
     await admin.createEntity("DRF-ADMIN", "calendars", "", { schema: "gitpm/calendar@1", id: "C-26-222222", name: "New default", working_weekdays: [1, 2, 3, 4, 5, 6, 7], holidays: ["2026-08-17"], lifecycle: "active" });
     render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="calendar" onOpenCalendar={onOpenCalendar} onChanged={vi.fn(async () => undefined)} />);
+    expect(await screen.findByText(/Working calendars define working weekdays and holidays/u)).toBeTruthy();
     const defaultCalendarCard = (await screen.findByRole("heading", { name: "Calendar for new people" })).closest<HTMLElement>(".config-editor")!;
     const calendarSummary = defaultCalendarCard.querySelector<HTMLElement>(".default-calendar-summary")!;
     expect(within(calendarSummary).getByText("C-26-111111")).toBeTruthy();

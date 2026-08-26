@@ -7,15 +7,15 @@ export const navigationGroups: readonly NavigationGroup[] = [
   { label: "nav.groupWork", items: ["nav.projects", "nav.tasks"] },
   { label: "nav.groupTeam", items: ["nav.team"] },
   { label: "nav.groupGit", items: ["nav.repository"] },
-  { label: "nav.groupSettings", items: ["nav.settings"] },
+  { label: "nav.groupAdministration", items: ["nav.administration"] },
 ];
 
 export const routeViews: Readonly<Record<AppRouteName, MessageKey>> = {
   workspaces: "nav.drafts", projects: "nav.projects", stages: "core.milestones", tasks: "nav.tasks", board: "nav.board", effort: "nav.effort",
-  people: "nav.people", calendars: "nav.calendar", settings: "nav.settings", workload: "nav.workload", vacations: "nav.vacations", gantt: "nav.gantt",
+  people: "nav.people", calendars: "nav.calendar", settings: "nav.administration", workload: "nav.workload", vacations: "nav.vacations", gantt: "nav.gantt",
   changes: "nav.changes", files: "nav.files", history: "nav.history", connection: "nav.repositoryConnection",
 };
 
 export const navigationDestinations: Readonly<Partial<Record<MessageKey, WorkspaceDestination | "workspaces">>> = {
-  "nav.team": "workload", "nav.repository": "workspaces", "nav.projects": "projects", "nav.tasks": "tasks", "nav.settings": "settings",
+  "nav.team": "workload", "nav.repository": "workspaces", "nav.projects": "projects", "nav.tasks": "tasks", "nav.administration": "settings",
 };

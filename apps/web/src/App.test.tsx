@@ -287,7 +287,7 @@ describe("frontend draft lifecycle", () => {
     await screen.findByRole("heading", { name: "Working copies" });
     expect(screen.getByText("Work")).toBeTruthy();
     expect(screen.queryByText("Git")).toBeNull();
-    expect(screen.getAllByRole("button", { name: /^(Projects|Tasks|Team|Git and publishing|Portfolio settings)$/u })).toHaveLength(5);
+    expect(screen.getAllByRole("button", { name: /^(Projects|Tasks|Team|Git and publishing|Administration)$/u })).toHaveLength(5);
     expect(screen.getByRole("button", { name: "Team" })).toBeTruthy();
     const menuButton = screen.getByRole("button", { name: "Open navigation" });
 
@@ -449,7 +449,7 @@ describe("frontend draft lifecycle", () => {
     expect(screen.getAllByText("DRF-LOCAL").length).toBeGreaterThan(0);
   });
 
-  it("keeps repository connection under Git and publishing, away from portfolio settings", async () => {
+  it("separates administration from Git and moves working calendars out of Team", async () => {
     const api = new FakeApi();
     render(<App api={api} browserLanguages={["en"]} />);
     await screen.findByRole("heading", { name: "Working copies" });
@@ -459,9 +459,20 @@ describe("frontend draft lifecycle", () => {
     expect(await screen.findByText("D:/portfolio")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Repository connection" }).getAttribute("aria-current")).toBe("page");
 
-    fireEvent.click(screen.getByRole("button", { name: "Portfolio settings" }));
-    await screen.findByRole("heading", { level: 1, name: "Portfolio settings" });
+    fireEvent.click(screen.getByRole("button", { name: "Administration" }));
+    await screen.findByRole("heading", { level: 1, name: "Task configuration" });
+    const administration = screen.getByRole("navigation", { name: "Administration" });
+    expect(within(administration).getByRole("button", { name: "Planning" })).toBeTruthy();
+    expect(within(administration).getByRole("button", { name: "Time tracking" })).toBeTruthy();
+    fireEvent.click(within(administration).getByRole("button", { name: "Working calendars" }));
+    expect(await screen.findByRole("heading", { level: 1, name: "Working calendars" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Administration" }).className).toContain("active");
+    expect(`${window.location.pathname}${window.location.search}`).toBe("/calendars");
     expect(screen.queryByText("D:/portfolio")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Team" }));
+    const team = await screen.findByRole("navigation", { name: "Team" });
+    expect(within(team).queryByRole("button", { name: "Working calendars" })).toBeNull();
   });
 
   it("persists locale and changes lang/dir without changing API payloads", async () => {

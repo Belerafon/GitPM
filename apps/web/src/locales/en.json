@@ -53,7 +53,8 @@
   "nav.people": "People and teams",
   "nav.vacations": "Vacation calendar",
   "nav.calendar": "Working calendars",
-  "nav.settings": "Portfolio settings",
+  "nav.settings": "Administration",
+  "nav.administration": "Administration",
   "nav.workload": "Team workload",
   "nav.gantt": "Gantt",
   "nav.effort": "Effort",
@@ -69,7 +70,8 @@
   "nav.groupWork": "Work",
   "nav.groupTeam": "Team",
   "nav.groupGit": "Git",
-  "nav.groupSettings": "Settings",
+  "nav.groupSettings": "Administration",
+  "nav.groupAdministration": "Administration",
   "nav.breadcrumbs": "Breadcrumbs",
   "nav.collapseSidebar": "Collapse navigation",
   "nav.expandSidebar": "Expand navigation",
@@ -337,7 +339,7 @@
   ,"admin.teamSearch": "Search teams or members"
   ,"admin.noMembers": "No members yet"
   ,"admin.calendars": "Calendars"
-  ,"admin.settings": "Portfolio settings"
+  ,"admin.settings": "Administration"
   ,"admin.email": "Email"
   ,"admin.personName": "Name"
   ,"admin.capacity": "Weekly capacity"
@@ -413,9 +415,17 @@
   ,"admin.issueTypes": "Issue types"
   ,"admin.workCategories": "Effort categories"
   ,"admin.scheduleTracks": "Plans and actual work"
-  ,"admin.settingsTasks": "Tasks"
+  ,"admin.settingsTasks": "Task configuration"
   ,"admin.settingsPlanning": "Planning"
   ,"admin.settingsTimeTracking": "Time tracking"
+  ,"admin.calendarsDescription": "Working calendars define working weekdays and holidays for people, workload calculations, and project schedules. The default calendar is assigned to new people."
+  ,"admin.settingsTasksDescription": "These shared values define how tasks are classified and move through their lifecycle in every project."
+  ,"admin.statusesDescription": "Lifecycle stages used by task lists, boards, filters, and completion calculations."
+  ,"admin.issueTypesDescription": "Shared labels for classifying the kind of work represented by a task."
+  ,"admin.settingsPlanningDescription": "Configure schedule variants such as a baseline, current plan, and actual work, plus the defaults projects receive."
+  ,"admin.scheduleTracksDescription": "Defines which plan and actual-work variants projects can use and the roles assigned to them by default."
+  ,"admin.settingsTimeTrackingDescription": "Configure the shared categories available when people record time."
+  ,"admin.workCategoriesDescription": "Labels used to classify time entries and summarize effort in reports."
   ,"admin.scheduleTracksHint": "Keep contract or baseline dates, current expectations, and work already performed as separate views of the same schedule."
   ,"admin.scheduleTracksDefinitionsTitle": "Schedule variants"
   ,"admin.scheduleTracksDefinitionsHint": "Give each variant a recognizable name, choose how its data appears, and—for variants filled in by users—select what they can enter."

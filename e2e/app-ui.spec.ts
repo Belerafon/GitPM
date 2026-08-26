@@ -159,7 +159,7 @@ test.describe("GitPM browser UI", () => {
 
   test("keeps every section reachable and restores focus without page overflow at UX00 viewports", async ({ page }) => {
     test.setTimeout(120_000);
-    const destinations = ["Git and publishing", "Team", "Projects", "Portfolio settings"] as const;
+    const destinations = ["Git and publishing", "Team", "Projects", "Administration"] as const;
     await page.goto("/");
     await page.locator(".interface-settings > summary").click();
     await page.locator(".locale-picker select").selectOption("en");
@@ -182,7 +182,8 @@ test.describe("GitPM browser UI", () => {
       }
       if (width === 1280) {
         for (const [section, tabs] of [
-          ["Team", ["Team workload", "People and teams", "Vacation calendar", "Working calendars"]],
+          ["Team", ["Team workload", "People and teams", "Vacation calendar"]],
+          ["Administration", ["Task configuration", "Planning", "Time tracking", "Working calendars"]],
           ["Git and publishing", ["Changes", "Files", "History"]],
         ] as const) {
           await page.getByRole("button", { name: section, exact: true }).click();

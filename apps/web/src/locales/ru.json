@@ -53,7 +53,8 @@
   "nav.people": "Люди и команды",
   "nav.vacations": "Календарь отпусков",
   "nav.calendar": "Рабочие календари",
-  "nav.settings": "Настройки портфеля",
+  "nav.settings": "Администрирование",
+  "nav.administration": "Администрирование",
   "nav.workload": "Загрузка команды",
   "nav.gantt": "Диаграмма Ганта",
   "nav.effort": "Трудозатраты",
@@ -69,7 +70,8 @@
   "nav.groupWork": "Работа",
   "nav.groupTeam": "Команда",
   "nav.groupGit": "Git",
-  "nav.groupSettings": "Настройка",
+  "nav.groupSettings": "Администрирование",
+  "nav.groupAdministration": "Администрирование",
   "nav.breadcrumbs": "Хлебные крошки",
   "nav.collapseSidebar": "Свернуть меню",
   "nav.expandSidebar": "Развернуть меню",
@@ -337,7 +339,7 @@
   ,"admin.teamSearch": "Поиск команд или участников"
   ,"admin.noMembers": "Участников пока нет"
   ,"admin.calendars": "Календари"
-  ,"admin.settings": "Настройки портфеля"
+  ,"admin.settings": "Администрирование"
   ,"admin.email": "Электронная почта"
   ,"admin.personName": "Имя"
   ,"admin.capacity": "Недельная ёмкость"
@@ -413,9 +415,17 @@
   ,"admin.issueTypes": "Типы задач"
   ,"admin.workCategories": "Категории трудозатрат"
   ,"admin.scheduleTracks": "Планы и фактическая работа"
-  ,"admin.settingsTasks": "Задачи"
+  ,"admin.settingsTasks": "Настройка задач"
   ,"admin.settingsPlanning": "Планирование"
   ,"admin.settingsTimeTracking": "Учёт времени"
+  ,"admin.calendarsDescription": "Рабочие календари задают рабочие дни и праздники для сотрудников, расчёта загрузки и расписаний проектов. Календарь по умолчанию назначается новым сотрудникам."
+  ,"admin.settingsTasksDescription": "Эти общие значения определяют, как задачи классифицируются и проходят жизненный цикл во всех проектах."
+  ,"admin.statusesDescription": "Этапы жизненного цикла, используемые в списках задач, на досках, в фильтрах и расчётах завершённости."
+  ,"admin.issueTypesDescription": "Общие метки для классификации характера работы, представленной задачей."
+  ,"admin.settingsPlanningDescription": "Настройте варианты расписания — например, базовый план, текущий прогноз и факт — и значения, которые проекты получают по умолчанию."
+  ,"admin.scheduleTracksDescription": "Определяет доступные проектам варианты плана и факта, а также назначенные им роли по умолчанию."
+  ,"admin.settingsTimeTrackingDescription": "Настройте общие категории, доступные сотрудникам при учёте времени."
+  ,"admin.workCategoriesDescription": "Метки для классификации записей времени и сводок по трудозатратам."
   ,"admin.scheduleTracksHint": "Храните договорные или базовые сроки, текущие ожидания и уже выполненную работу как отдельные представления одного расписания."
   ,"admin.scheduleTracksDefinitionsTitle": "Варианты расписания"
   ,"admin.scheduleTracksDefinitionsHint": "Дайте каждому варианту понятное название, укажите, откуда берутся его данные, и — для заполняемых пользователями вариантов — что именно можно вводить."
