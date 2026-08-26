@@ -40,11 +40,15 @@ describe("PDF summary pages", () => {
 
     const definition = pdfCapture.definition as {
       readonly pageOrientation: string;
+      readonly tagged?: boolean;
+      readonly pageMargins: readonly number[];
       readonly content: readonly unknown[];
     };
     const rendered = JSON.stringify(definition);
 
     expect(definition.pageOrientation).toBe("landscape");
+    expect(definition.tagged).toBe(true);
+    expect(definition.pageMargins[3]).toBeGreaterThanOrEqual(48);
     expect(rendered).toContain('"text":"Active projects"');
     expect(rendered).toContain('"text":"Completed tasks"');
     expect(rendered).toContain('"text":"Project owner"');

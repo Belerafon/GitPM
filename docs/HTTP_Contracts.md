@@ -23,9 +23,10 @@ generic `decodeDto<T>` fallback. A successful HTTP status with a malformed respo
 `API_RESPONSE_CONTRACT_INVALID`.
 
 Binary export is the explicit exception to the JSON decoder rule. The authenticated
-`GET /api/drafts/:draftId/export` route returns a PDF, standalone HTML file, or ZIP archive
-with a safe ASCII filename in `Content-Disposition` and `Cache-Control: no-store`. Query
-validation uses stable `EXPORT_*` error codes. See [`Export.md`](Export.md).
+`GET /api/drafts/:draftId/export` route returns a PDF, standalone HTML file, spreadsheet
+workbook, or ZIP archive with a safe ASCII filename in `Content-Disposition` and
+`Cache-Control: no-store`. Query validation uses stable `EXPORT_*` error codes. See
+[`Export.md`](Export.md).
 
 Mutation routes declare a Fastify body schema. Entity and configuration documents also pass
 through the shared full JSON Schema decoder before the domain layer is called. Malformed requests

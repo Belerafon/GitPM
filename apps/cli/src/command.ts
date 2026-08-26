@@ -186,10 +186,10 @@ const commandHelp: Readonly<Record<string, string>> = {
   diff: "Usage: gitpm diff --semantic [--draft <id>] [--project <id>] [--allow-delete] [--json]",
   export: [
     "Usage:",
-    "  gitpm export [--draft <id>] --format pdf|html|csv|repository [--locale en|ru] [--section projects|people|project-details|gantt]... [--include-git] [--output <path>] [--force] [--json]",
+    "  gitpm export [--draft <id>] --format pdf|html|csv|xlsx|repository [--locale en|ru] [--section portfolio|project-plan|plan-fact|workload|vacations|person-profile|audit|projects|people|project-details|gantt]... [--scope portfolio|project|person|team] [--project <id>] [--person <id>] [--team <id>] [--as-of <YYYY-MM-DD>] [--from <YYYY-MM-DD>] [--to <YYYY-MM-DD>] [--lifecycle active|archived|all] [--include-email] [--hide-personal-data] [--page-size A4|Letter] [--density compact|detailed] [--include-git] [--output <path>] [--force] [--json]",
     "",
     "PDF defaults to Projects and People when --section is omitted.",
-    "HTML is a standalone read-only site. CSV creates a ZIP with one table per schema.",
+    "HTML, CSV and XLSX default to every report. CSV still includes one raw table per schema.",
     "Repository ZIP excludes .git unless --include-git is set; portable Git exports remove the remote URL.",
     "The default filename contains the HEAD commit date and short hash. Existing files are not replaced unless --force is set.",
   ].join("\n"),
@@ -310,7 +310,7 @@ function commandArgumentSpec(command: string | undefined, args: readonly string[
   if (command === "format") return { values: ["--root", "--draft", "--project"], booleans: ["--check", "--allow-delete", "--json"], minPositionals: 0, maxPositionals: 0 };
   if (command === "validate") return { values: ["--root", "--draft", "--project"], booleans: ["--changed", "--allow-delete", "--json"], minPositionals: 0, maxPositionals: 0 };
   if (command === "diff") return { values: ["--root", "--draft", "--project"], booleans: ["--semantic", "--allow-delete", "--json"], minPositionals: 0, maxPositionals: 0 };
-  if (command === "export") return { values: ["--draft", "--format", "--locale", "--output"], repeatable: ["--section"], booleans: ["--include-git", "--force", "--json"], minPositionals: 0, maxPositionals: 0 };
+  if (command === "export") return { values: ["--draft", "--format", "--locale", "--output", "--scope", "--project", "--person", "--team", "--as-of", "--from", "--to", "--lifecycle", "--time-entry-state", "--page-size", "--density", "--title"], repeatable: ["--section"], booleans: ["--include-git", "--include-email", "--hide-personal-data", "--force", "--json"], minPositionals: 0, maxPositionals: 0 };
   if (command === "commit") return { values: ["--draft", "-m", "--message", "--project"], booleans: ["--all", "--allow-delete", "--json"], minPositionals: 0, maxPositionals: 0 };
   if (command === "push") return { values: ["--draft"], booleans: ["--json"], minPositionals: 0, maxPositionals: 0 };
   if (command === "mr") return { values: ["--draft", "--owner", "--title", "--description"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
@@ -1527,14 +1527,28 @@ async function runExport(args: readonly string[], cwd: string, dependencies: Cli
   if (args.includes("--include-git") && format !== "repository") {
     throw new RepositoryFormatError("CLI_USAGE", "--include-git is only valid with --format repository");
   }
-  if (selectedSections.length > 0 && format !== "pdf") {
-    throw new RepositoryFormatError("CLI_USAGE", "--section is only valid with --format pdf");
+  if (selectedSections.length > 0 && format === "repository") {
+    throw new RepositoryFormatError("CLI_USAGE", "--section is only valid with --format pdf, html, csv or xlsx");
   }
   const request: ExportRequest = {
     format,
     locale: (flagValue(args, "--locale") ?? "en") as "en" | "ru",
     ...(selectedSections.length === 0 ? {} : { sections: selectedSections }),
     ...(format === "repository" ? { include_git: args.includes("--include-git") } : {}),
+    ...(flagValue(args, "--scope") === undefined ? {} : { scope: flagValue(args, "--scope") as ExportRequest["scope"] }),
+    ...(flagValue(args, "--project") === undefined ? {} : { project: flagValue(args, "--project") }),
+    ...(flagValue(args, "--person") === undefined ? {} : { person: flagValue(args, "--person") }),
+    ...(flagValue(args, "--team") === undefined ? {} : { team: flagValue(args, "--team") }),
+    ...(flagValue(args, "--as-of") === undefined ? {} : { as_of: flagValue(args, "--as-of") }),
+    ...(flagValue(args, "--from") === undefined ? {} : { period_start: flagValue(args, "--from") }),
+    ...(flagValue(args, "--to") === undefined ? {} : { period_finish: flagValue(args, "--to") }),
+    ...(flagValue(args, "--lifecycle") === undefined ? {} : { lifecycle: flagValue(args, "--lifecycle") as ExportRequest["lifecycle"] }),
+    ...(flagValue(args, "--time-entry-state") === undefined ? {} : { time_entry_state: flagValue(args, "--time-entry-state") as ExportRequest["time_entry_state"] }),
+    ...(flagValue(args, "--page-size") === undefined ? {} : { page_size: flagValue(args, "--page-size") as ExportRequest["page_size"] }),
+    ...(flagValue(args, "--density") === undefined ? {} : { density: flagValue(args, "--density") as ExportRequest["density"] }),
+    ...(flagValue(args, "--title") === undefined ? {} : { report_title: flagValue(args, "--title") }),
+    ...(args.includes("--include-email") ? { include_email: true, hide_personal_data: false } : {}),
+    ...(args.includes("--hide-personal-data") ? { hide_personal_data: true } : {}),
   };
   const artifact = dependencies.direct !== undefined
     ? await dependencies.direct.exportData(request)

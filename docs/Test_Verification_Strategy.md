@@ -17,7 +17,7 @@ new tests added under the same ownership boundary.
 | Server | 11 | HTTP routes, auth, repository runtime and stores | `corepack pnpm test:server` |
 | CLI | 4 | CLI parsing, commands and direct/external workflows | `corepack pnpm test:cli` |
 | Repository | 6 | contracts, domain, repository format, validation, shared identities and task hierarchy | `corepack pnpm test:repository` |
-| Planning domain | 4 | calendars, scheduling, time entries and workload; shared scheduling regression scan | `corepack pnpm test:planning-domain` |
+| Planning domain | 5 | calendars, scheduling, time entries and workload; shared scheduling regression scan | `corepack pnpm test:planning-domain` |
 | Git workflow | 11 | agent, changes, drafts, Git/GitLab, history, logging, publishing and security | `corepack pnpm test:workflow` |
 | Export | 2 | document/PDF export | `corepack pnpm test:export` |
 | Tooling | 5 | repository scripts, verification runner and scheduling regression scan | `corepack pnpm test:tooling` |
