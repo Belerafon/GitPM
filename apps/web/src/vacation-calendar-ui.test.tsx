@@ -32,7 +32,7 @@ function renderCalendar() {
 
 describe("Vacation calendar UI", () => {
   it("renders the 6-month timeline, summary, and bar geometry, then scales to 12 months", async () => {
-    const { container } = renderCalendar();
+    const { container, onNavigate } = renderCalendar();
     await waitFor(() => expect(container.querySelectorAll(".vacation-calendar-bar")).toHaveLength(2));
     const chart = container.querySelector(".vacation-calendar-scroll")!;
     expect(chart.getAttribute("data-start")).toBe("2026-08-01");
@@ -46,7 +46,10 @@ describe("Vacation calendar UI", () => {
     expect(adaBar.getAttribute("data-duration")).toBe("5");
     expect(adaBar.style.left).toBe(`${16 * VACATION_CALENDAR_DAY_WIDTH[6]}px`);
     expect(adaBar.style.width).toBe(`${5 * VACATION_CALENDAR_DAY_WIDTH[6]}px`);
-    expect(adaBar.getAttribute("title")).toContain("Summer leave");
+    expect(adaBar.textContent).toBe("17.08 — 21.08");
+    expect(adaBar.getAttribute("data-control-hint")).toBe("Ada\nVacation · Planned\n17.08.2026 — 21.08.2026\nTotal days: 5\nWorking days: 5\nSummer leave");
+    fireEvent.click(adaBar);
+    expect(onNavigate).toHaveBeenCalledWith("people", { personId: adaId });
     expect(container.querySelector(`.vacation-calendar-label[data-person-id="${adaId}"]`)?.className).not.toContain("away");
     expect(container.querySelector(".vacation-calendar-label small")?.textContent).toContain("Used");
     expect(screen.getByRole("button", { name: "Ada" }).getAttribute("title")).toContain("Available today");
