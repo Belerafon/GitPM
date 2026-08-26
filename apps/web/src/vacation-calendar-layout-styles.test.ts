@@ -16,15 +16,15 @@ const rule = (selector: string): string => {
 
 describe("Vacation calendar overflow containment", () => {
   it("scrolls the timeline horizontally while keeping names sticky", () => {
-    expect(rule(".vacation-calendar-scroll")).toContain("overflow-x: auto");
-    expect(rule(".vacation-calendar-scroll")).toContain("overflow-y: hidden");
+    expect(rule(".vacation-calendar-scroll")).toContain("overflow: auto");
     expect(rule(".vacation-calendar-labels")).toContain("position: sticky");
-    expect(rule(".vacation-calendar-timeline")).toContain("overflow: hidden");
+    expect(rule(".vacation-calendar-header")).toContain("position: sticky");
+    expect(rule(".vacation-calendar-label-head")).toContain("position: sticky");
   });
 
   it("stripes rows, paints weekend columns, and lets bar dates overflow", () => {
     expect(rule(".vacation-calendar-label.even, .vacation-calendar-row.even")).toContain("background: #eef1ec");
-    expect(rule(".vacation-calendar-weekend")).toContain("background: rgba(88, 96, 90, .14)");
+    expect(rule(".vacation-calendar-weekend")).toContain("background: #f8d5e0");
     expect(rule(".vacation-calendar-bar")).toContain("overflow: visible");
     expect(rule(".vacation-calendar-bar span")).toContain("overflow: visible");
   });

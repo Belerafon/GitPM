@@ -48,8 +48,11 @@ describe("Vacation calendar UI", () => {
     expect(adaBar.style.width).toBe(`${5 * VACATION_CALENDAR_DAY_WIDTH[6]}px`);
     expect(adaBar.getAttribute("title")).toContain("Summer leave");
     expect(container.querySelector(`.vacation-calendar-label[data-person-id="${adaId}"]`)?.className).not.toContain("away");
-    expect(container.querySelector(".vacation-calendar-label small")?.textContent).toContain("Taken");
+    expect(container.querySelector(".vacation-calendar-label small")?.textContent).toContain("Used");
     expect(screen.getByRole("button", { name: "Ada" }).getAttribute("title")).toContain("Available today");
+    expect(container.querySelector(".vacation-calendar-days-row time[datetime=\"2026-08-01\"]")?.textContent).toBe("1");
+    fireEvent.mouseMove(container.querySelector(".vacation-calendar-timeline")!, { clientX: 25, clientY: 10 });
+    expect(container.querySelector(".vacation-calendar-hover")?.getAttribute("data-date")).toBe("2026-08-03");
     fireEvent.click(screen.getByRole("button", { name: "12 months" }));
     await waitFor(() => expect(container.querySelector(".vacation-calendar-scroll")?.getAttribute("data-period")).toBe("12"));
     expect(container.querySelectorAll(".vacation-calendar-bar")).toHaveLength(3);

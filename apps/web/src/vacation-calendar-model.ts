@@ -2,7 +2,9 @@ export const VACATION_CALENDAR_PERIODS = [3, 6, 12, "year"] as const;
 export type VacationCalendarPeriod = (typeof VACATION_CALENDAR_PERIODS)[number];
 export const VACATION_CALENDAR_DAY_WIDTH: Readonly<Record<VacationCalendarPeriod, number>> = { 3: 14, 6: 10, 12: 7, year: 7 };
 export const VACATION_CALENDAR_ROW_HEIGHT = 58;
-export const VACATION_CALENDAR_HEADER_HEIGHT = 42;
+export const VACATION_CALENDAR_MONTH_HEADER_HEIGHT = 36;
+export const VACATION_CALENDAR_DAY_HEADER_HEIGHT = 24;
+export const VACATION_CALENDAR_HEADER_HEIGHT = VACATION_CALENDAR_MONTH_HEADER_HEIGHT + VACATION_CALENDAR_DAY_HEADER_HEIGHT;
 
 const DAY_MS = 86_400_000;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
@@ -156,6 +158,13 @@ export function weekendBands(days: readonly string[], dayWidth: number): readonl
     bands.push({ start: day, finish: day, left: index * dayWidth, width: dayWidth });
   }
   return bands;
+}
+
+export function hoverDayIndex(x: number, dayWidth: number, dayCount: number): number | undefined {
+  if (dayWidth <= 0 || dayCount <= 0) return undefined;
+  const index = Math.floor(x / dayWidth);
+  if (index < 0 || index >= dayCount) return undefined;
+  return index;
 }
 
 function buildWindow(start: string, finish: string, dayWidth: number): VacationCalendarWindow {
