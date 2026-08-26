@@ -18,7 +18,7 @@ interface HintState {
 }
 
 function normalized(value: string | null | undefined): string {
-  return value?.replace(/\s+/gu, " ").trim() ?? "";
+  return value?.replaceAll("\r\n", "\n").replace(/[^\S\n]+/gu, " ").replace(/\n{2,}/gu, "\n").trim() ?? "";
 }
 
 interface HintTarget {

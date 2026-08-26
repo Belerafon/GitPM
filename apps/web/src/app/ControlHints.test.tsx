@@ -46,6 +46,14 @@ describe("ControlHints", () => {
     expect(screen.getByRole("tooltip").textContent).toBe("This deletion can be discarded before commit.");
   });
 
+  it("keeps explicit multiline hints instead of collapsing them to one line", () => {
+    render(<><ControlHints t={t} /><button data-control-hint={"Ada\nVacation\nTotal days: 5"}>17.08 — 21.08</button></>);
+
+    revealHover(screen.getByRole("button", { name: "17.08 — 21.08" }));
+
+    expect(screen.getByRole("tooltip").textContent).toBe("Ada\nVacation\nTotal days: 5");
+  });
+
   it("supports keyboard focus and preserves existing native titles", () => {
     render(<><ControlHints t={t} /><button aria-label="Move milestone up" title="Move milestone up">↑</button></>);
     const button = screen.getByRole("button", { name: "Move milestone up" });

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { GitPmApi } from "./api.js";
 import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
-import { dayUnit, formatDateOnly, localeRegistry, message, type Locale, type MessageKey } from "./i18n.js";
+import { formatDateOnly, localeRegistry, message, type Locale, type MessageKey } from "./i18n.js";
 import { currentAbsence, vacationYearBalance } from "./people-availability-model.js";
 import { availabilityKindLabel } from "./people-availability-ui.js";
 import type { DraftStatus, EntityResult, GitPmDocument } from "./types.js";
@@ -9,6 +9,7 @@ import {
   DEFAULT_WORKING_CALENDAR,
   emptyVacationFilters,
   hoverDayIndex,
+  inclusiveDayCount,
   isWeekend,
   localCalendarDate,
   VACATION_CALENDAR_HEADER_HEIGHT,
@@ -37,6 +38,7 @@ const asWorkingCalendar = (entity: EntityResult): WorkingCalendar => {
 };
 const kindClass = (kind: string): string => ({ vacation: "kind-vacation", "day-off": "kind-day-off", "sick-leave": "kind-sick-leave", training: "kind-training", other: "kind-other" }[kind] ?? "kind-other");
 const stateKey = (state: string): MessageKey => ({ planned: "availability.statePlanned", taken: "availability.stateTaken", cancelled: "availability.stateCancelled" }[state] ?? "availability.statePlanned") as MessageKey;
+const numericDate = (value: string, withYear = false): string => withYear ? `${value.slice(8, 10)}.${value.slice(5, 7)}.${value.slice(0, 4)}` : `${value.slice(8, 10)}.${value.slice(5, 7)}`;
 
 function asPerson(entity: EntityResult): VacationPerson {
   return { id: entity.document.id, name: text(entity.document, "name") || entity.document.id, lifecycle: text(entity.document, "lifecycle"), calendarId: text(entity.document, "calendar") };
@@ -128,8 +130,8 @@ export function VacationCalendarWorkspace({ api, draft, locale, onNavigate = () 
     const index = hoverDayIndex(event.clientX - event.currentTarget.getBoundingClientRect().left, window.dayWidth, window.days.length);
     setHoverDate(index === undefined ? null : window.days[index] ?? null);
   };
-  const barTitle = (bar: (typeof bars)[number]) => {
-    const values = { kind: availabilityKindLabel(t, bar.kind), state: t(stateKey(bar.state)), start: formatDateOnly(locale, bar.start), finish: formatDateOnly(locale, bar.finish), days: bar.days, unit: dayUnit(locale, bar.days) };
+  const barHint = (bar: (typeof bars)[number], personName: string) => {
+    const values = { person: personName, kind: availabilityKindLabel(t, bar.kind), state: t(stateKey(bar.state)), start: numericDate(bar.start, true), finish: numericDate(bar.finish, true), calendarDays: inclusiveDayCount(bar.start, bar.finish), workingDays: bar.days };
     return bar.note === "" ? t("vacationCalendar.tooltip", values) : t("vacationCalendar.tooltipNote", { ...values, note: bar.note });
   };
 
@@ -192,7 +194,7 @@ export function VacationCalendarWorkspace({ api, draft, locale, onNavigate = () 
         {hoverDate !== null && <div aria-hidden="true" className="vacation-calendar-hover" data-date={hoverDate} style={{ left: `${window.days.indexOf(hoverDate) * window.dayWidth}px`, width: `${window.dayWidth}px` }}><span>{formatDateOnly(locale, hoverDate)}</span></div>}
         {todayOffset >= 0 && <div aria-label={t("gantt.legendToday")} className="vacation-calendar-today" style={{ left: `${todayOffset * window.dayWidth + window.dayWidth / 2}px` }} />}
         <div className="vacation-calendar-grid" style={{ backgroundSize: `${window.dayWidth}px 100%`, height: `${rows.length * VACATION_CALENDAR_ROW_HEIGHT}px` }} />
-        {rows.map((person, index) => (barsByPerson.get(person.id) ?? []).map((bar) => <div className={`vacation-calendar-bar ${kindClass(bar.kind)} state-${bar.state}`} data-duration={bar.duration} data-event-id={bar.id} data-finish={bar.finish} data-offset={bar.offset} data-person-id={bar.personId} data-start={bar.start} key={bar.id} style={{ left: `${bar.left}px`, top: `${VACATION_CALENDAR_HEADER_HEIGHT + index * VACATION_CALENDAR_ROW_HEIGHT + 8}px`, width: `${bar.width}px` }} title={barTitle(bar)}><span>{t("vacationCalendar.barText", { start: formatDateOnly(locale, bar.start), finish: formatDateOnly(locale, bar.finish), days: bar.days })}</span></div>))}
+        {rows.map((person, index) => (barsByPerson.get(person.id) ?? []).map((bar) => <div className={`vacation-calendar-bar ${kindClass(bar.kind)} state-${bar.state}`} data-control-hint={barHint(bar, person.name)} data-duration={bar.duration} data-event-id={bar.id} data-finish={bar.finish} data-offset={bar.offset} data-person-id={bar.personId} data-start={bar.start} key={bar.id} onClick={() => onNavigate("people", { personId: bar.personId })} style={{ left: `${bar.left}px`, top: `${VACATION_CALENDAR_HEADER_HEIGHT + index * VACATION_CALENDAR_ROW_HEIGHT + 8}px`, width: `${bar.width}px` }}><span>{t("vacationCalendar.barText", { start: numericDate(bar.start), finish: numericDate(bar.finish) })}</span></div>))}
       </div>
     </section>}
     </>
