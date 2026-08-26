@@ -1182,7 +1182,7 @@
   ,"vacationCalendar.legendAway": "Away today"
   ,"vacationCalendar.awayUntil": "{kind} until {date}"
   ,"vacationCalendar.availableToday": "Available today"
-  ,"vacationCalendar.personStats": "Used {taken} · Planned {planned} · Remaining {remaining}"
+  ,"vacationCalendar.personStats": "Used: {taken}, Plan: {planned}, Left: {remaining}"
   ,"advancedView.open": "Filters and sorting"
   ,"advancedView.openFilters": "Filters"
   ,"advancedView.title": "Filters and sorting"

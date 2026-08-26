@@ -1182,7 +1182,7 @@
   ,"vacationCalendar.legendAway": "Сейчас отсутствует"
   ,"vacationCalendar.awayUntil": "{kind} до {date}"
   ,"vacationCalendar.availableToday": "Сегодня доступен"
-  ,"vacationCalendar.personStats": "Использовано {taken} · Запланировано {planned} · Осталось {remaining}"
+  ,"vacationCalendar.personStats": "Исп: {taken}, План: {planned}, Резерв: {remaining}"
   ,"advancedView.open": "Фильтры и сортировка"
   ,"advancedView.openFilters": "Фильтры"
   ,"advancedView.title": "Фильтры и сортировка"
