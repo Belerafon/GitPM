@@ -238,6 +238,7 @@ textarea { min-height: 76px; resize: vertical; border: 1px solid #c9cbc5; border
 .editor-drawer-backdrop { position: absolute; inset: 0; width: 100%; border: 0; border-radius: 0; background: rgba(13, 29, 22, .42); padding: 0; }
 .editor-drawer { position: relative; display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; width: min(520px, calc(100vw - 48px)); height: 100%; background: #fff; box-shadow: -18px 0 44px rgba(13, 29, 22, .2); }
 .editor-drawer.wide { width: min(640px, calc(100vw - 48px)); }
+.editor-drawer:has(.calendar-year-editor) { width: min(980px, calc(100vw - 48px)); }
 .editor-drawer-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; border-bottom: 1px solid #dedfd9; padding: 1rem 1.25rem; }
 .editor-drawer-header h2 { margin: 0; font-size: 1.2rem; }
 .editor-drawer-close { display: inline-grid; flex: 0 0 auto; place-items: center; width: 40px; height: 40px; padding: 0; font-size: 1.45rem; line-height: 1; }
@@ -887,7 +888,33 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .calendar-preset-apply { display: grid; gap: .55rem; border: 1px solid #d8ded8; border-radius: 10px; padding: .75rem; }
 .calendar-preset-apply > p { margin: 0; color: #646b66; font-size: .78rem; line-height: 1.4; }
 .calendar-preset-apply > button { justify-self: start; }
+.calendar-year-editor { display: grid; min-width: 0; gap: .7rem; }
+.calendar-year-editor > p { margin: 0; color: #646b66; font-size: .8rem; line-height: 1.45; }
+.calendar-year-toolbar { display: grid; grid-template-columns: auto minmax(120px, 180px) auto 1fr; align-items: end; gap: .45rem; }
+.calendar-year-toolbar > button { width: 38px; height: 38px; padding: 0; font-size: 1.35rem; }
+.calendar-year-toolbar > label { display: grid; gap: .2rem; color: #59615c; font-size: .72rem; font-weight: 700; }
+.calendar-year-toolbar > label select { height: 38px; padding-block: .4rem; }
+.calendar-year-toolbar > span { justify-self: end; align-self: center; color: #59615c; font-size: .76rem; font-weight: 650; }
+.calendar-year-grid { display: grid; grid-template-columns: repeat(4, minmax(175px, 1fr)); gap: .8rem; }
+.calendar-month { display: grid; align-content: start; gap: .35rem; border: 1px solid #e0e4df; border-radius: 9px; background: #fff; padding: .6rem; }
+.calendar-month h3 { margin: 0; color: #244d3d; font-size: .83rem; text-align: center; text-transform: capitalize; }
+.calendar-month-weekdays, .calendar-month-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+.calendar-month-weekdays span { color: #737b75; font-size: .58rem; font-weight: 750; text-align: center; text-transform: uppercase; }
+.calendar-month-days > button, .calendar-day-empty { aspect-ratio: 1; min-width: 0; min-height: 0; }
+.calendar-month-days > button { display: grid; place-items: center; border: 1px solid transparent; border-radius: 5px; background: transparent; padding: 0; color: #344039; font-size: .67rem; font-weight: 650; line-height: 1; }
+.calendar-month-days > button.working:hover { border-color: #82aa91; background: #edf5ef; }
+.calendar-month-days > button.weekly-off { background: #f8e7e4; color: #94534d; opacity: 1; cursor: default; }
+.calendar-month-days > button.holiday { border-color: #bd4d43; background: #d76055; color: #fff; opacity: 1; }
+.calendar-month-days > button.holiday:hover { background: #bd4d43; }
+.calendar-year-legend { display: flex; flex-wrap: wrap; gap: .45rem 1rem; color: #626a65; font-size: .72rem; }
+.calendar-year-legend span { display: inline-flex; align-items: center; gap: .35rem; }
+.calendar-year-legend span::before { width: .8rem; height: .8rem; border: 1px solid #cfd5d0; border-radius: 3px; background: #fff; content: ""; }
+.calendar-year-legend .weekly-off::before { border-color: #efd4cf; background: #f8e7e4; }
+.calendar-year-legend .holiday::before { border-color: #bd4d43; background: #d76055; }
 .calendar-date-list { display: grid; gap: .55rem; }
+.calendar-year-editor > .calendar-date-list { border: 1px solid #e0e5e0; border-radius: 8px; padding: .6rem; }
+.calendar-year-editor > .calendar-date-list > summary { cursor: pointer; color: #38423c; font-size: .82rem; font-weight: 700; }
+.calendar-year-editor > .calendar-date-list[open] > summary { margin-bottom: .55rem; }
 .calendar-date-list > p { margin: 0; color: #646b66; font-size: .78rem; line-height: 1.4; }
 .calendar-date-list > div { display: grid; gap: .4rem; }
 .calendar-date-year { border: 1px solid #e0e5e0; border-radius: 8px; padding: .45rem .55rem; }
@@ -1202,11 +1229,12 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
   .topbar { flex-wrap: wrap; padding-block: .75rem; }
   .global-search { order: 3; flex-basis: 100%; width: 100%; max-width: none; }
 }
-@media (max-width: 900px) { .settings-config-grid, .admin-grid { grid-template-columns: 1fr; } .admin-create { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 900px) { .settings-config-grid, .admin-grid { grid-template-columns: 1fr; } .admin-create { grid-template-columns: 1fr 1fr; } .calendar-year-grid { grid-template-columns: repeat(3, minmax(150px, 1fr)); } }
+@media (max-width: 680px) { .calendar-year-grid { grid-template-columns: repeat(2, minmax(145px, 1fr)); } .calendar-year-toolbar { grid-template-columns: auto minmax(100px, 1fr) auto; } .calendar-year-toolbar > span { grid-column: 1 / -1; justify-self: start; } }
 @media (max-width: 560px) { .admin-create, .config-row-fields { grid-template-columns: 1fr; } .config-row-heading, .config-row-footer, .config-add-row { align-items: stretch; flex-direction: column; } .config-order { justify-content: end; } .card-heading { align-items: stretch; flex-direction: column; } }
 
 @media (max-width: 560px) {
-  .editor-drawer, .editor-drawer.wide { width: 100vw; }
+  .editor-drawer, .editor-drawer.wide, .editor-drawer:has(.calendar-year-editor) { width: 100vw; }
   .editor-drawer:has(.project-files-panel) { width: 100vw; }
   .editor-drawer-header, .editor-drawer-body { padding-inline: 1rem; }
   .editor-drawer-actions { bottom: -1.25rem; flex-wrap: wrap; margin-inline: -1rem; padding-inline: 1rem; }
@@ -1219,6 +1247,8 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
   .schedule-dependencies-heading { align-items: stretch; flex-direction: column; }
   .schedule-dependency-open { align-self: start; }
 }
+
+@media (max-width: 430px) { .calendar-year-grid { grid-template-columns: 1fr; } }
 
 @media (max-width: 880px) {
   .app-shell { grid-template-columns: 1fr; }

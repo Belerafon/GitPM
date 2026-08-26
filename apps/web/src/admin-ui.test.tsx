@@ -326,9 +326,32 @@ describe("administration UI", () => {
     expect((within(form).getByLabelText("Name") as HTMLInputElement).value).toBe("United States — federal holidays (2026–2030)");
     expect(within(form).getByText("2026–2030: 1249 working days")).toBeTruthy();
     expect(within(form).getByRole("link", { name: "Official source" }).getAttribute("href")).toBe("https://www.opm.gov/policy-data-oversight/pay-leave/federal-holidays/");
-    expect(within(form).getByText("2026 — 11 dates")).toBeTruthy();
-    expect(within(form).getByText("2030 — 11 dates")).toBeTruthy();
+    expect(Array.from((within(form).getByLabelText("Year") as HTMLSelectElement).options, (option) => option.value)).toEqual(["2026", "2027", "2028", "2029", "2030"]);
+    expect(within(form).getByRole("region", { name: "Working calendar for 2026" })).toBeTruthy();
+    expect(within(form).getByText("55 additional days off")).toBeTruthy();
     expect(within(form).getAllByLabelText(/Non-working date/u)).toHaveLength(55);
+  });
+
+  it("edits additional days off directly in the familiar year calendar", async () => {
+    const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
+    await admin.createEntity("DRF-ADMIN", "calendars", "", { schema: "gitpm/calendar@1", id: "C-26-111111", name: "Standard", working_weekdays: [1, 2, 3, 4, 5], holidays: ["2026-01-01"], lifecycle: "active" });
+    render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="calendar" onChanged={vi.fn(async () => undefined)} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Edit calendar" }));
+    const dialog = screen.getByRole("dialog", { name: "Edit calendar: Standard" });
+    const existingHoliday = within(dialog).getByRole("button", { name: /January 1, 2026: Additional day off/u });
+    const workingDate = within(dialog).getByRole("button", { name: /January 2, 2026: Working day/u });
+    const weeklyDayOff = within(dialog).getByRole("button", { name: /January 3, 2026: Weekly day off/u });
+    expect(existingHoliday.getAttribute("aria-pressed")).toBe("true");
+    expect((weeklyDayOff as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.click(workingDate);
+    expect(within(dialog).getByRole("button", { name: /January 2, 2026: Additional day off/u }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(existingHoliday);
+    expect(within(dialog).getByRole("button", { name: /January 1, 2026: Working day/u }).getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(admin.entities[0]?.document.holidays).toEqual(["2026-01-02"]));
   });
 
   it("shows leftover additional dates on calendar cards instead of silently dropping them", async () => {
