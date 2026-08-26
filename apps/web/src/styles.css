@@ -432,6 +432,7 @@ textarea { min-height: 76px; resize: vertical; border: 1px solid #c9cbc5; border
 .portfolio-task-table thead th[aria-sort="descending"] > button::after { content: " ↓"; }
 .portfolio-task-resize { position: absolute; top: 0; right: 0; width: 8px; height: 100%; border: 0; background: transparent; padding: 0; cursor: col-resize; }
 .portfolio-task-resize:hover, .portfolio-task-resize:focus-visible { background: #c5d7cc; }
+.portfolio-task-table tbody { font-size: .82rem; }
 .portfolio-task-table tbody th { font-weight: 400; }
 .portfolio-task-title { display: grid; grid-template-columns: calc(var(--portfolio-task-depth) * 1.25rem) 1.2rem minmax(0, 1fr); gap: .35rem; align-items: center; min-width: 0; }
 .portfolio-task-row.filter-context { opacity: .68; }
@@ -439,14 +440,15 @@ textarea { min-height: 76px; resize: vertical; border: 1px solid #c9cbc5; border
 .portfolio-task-row.is-saving { opacity: .65; }
 .portfolio-task-indent { position: relative; align-self: stretch; }
 .portfolio-task-row:not([data-depth="0"]) .portfolio-task-indent::before { content: ""; position: absolute; inset: 0 .15rem 50% auto; width: .7rem; border-left: 1px solid #c9d9d0; border-bottom: 1px solid #c9d9d0; }
-.portfolio-task-name { font-weight: 400; }
+.portfolio-task-name { color: #202224; font-size: .82rem; font-weight: 700; }
 .portfolio-task-collapse { display: grid; place-items: center; }
 .portfolio-task-collapse button { display: grid; place-items: center; width: 1.125rem; height: 1.125rem; border: 1px solid #ccd9d2; border-radius: 999px; background: #fff; padding: 0; color: #526b60; }
 .portfolio-task-collapse svg { width: .625rem; height: .625rem; }
 .portfolio-task-collapse path { fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.5; }
 .portfolio-task-selector { display: grid; gap: .1rem; min-width: 0; border: 0; background: transparent; padding: 0; text-align: left; }
 .portfolio-task-selector:hover { border-color: transparent; color: #315f50; }
-.portfolio-task-selector > span { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; color: #737a75; font-size: .66rem; }
+.portfolio-task-selector > span { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+.portfolio-task-selector > span:not(.portfolio-task-name) { color: #737a75; font-size: .66rem; }
 .portfolio-task-selector small { color: #68706b; }
 .portfolio-task-assignees { min-width: 0; color: #69716c; font-size: .72rem; overflow-wrap: anywhere; }
 .portfolio-task-date, .portfolio-task-estimate { color: #69716c; font-size: .72rem; white-space: nowrap; }
