@@ -273,9 +273,9 @@ describe("frontend draft lifecycle", () => {
     const api = new FakeApi();
     render(<App api={api} browserLanguages={["en"]} />);
     await screen.findByRole("heading", { name: "Working copies" });
-    expect(screen.queryByText("Work")).toBeNull();
+    expect(screen.getByText("Work")).toBeTruthy();
     expect(screen.queryByText("Git")).toBeNull();
-    expect(screen.getAllByRole("button", { name: /^(Projects|Team|Git and publishing|Portfolio settings)$/u })).toHaveLength(4);
+    expect(screen.getAllByRole("button", { name: /^(Projects|Tasks|Team|Git and publishing|Portfolio settings)$/u })).toHaveLength(5);
     expect(screen.getByRole("button", { name: "Team" })).toBeTruthy();
     const menuButton = screen.getByRole("button", { name: "Open navigation" });
 
@@ -328,7 +328,7 @@ describe("frontend draft lifecycle", () => {
     expect(within(projectsStat.parentElement!).getByText("1")).toBeTruthy();
   });
 
-  it("keeps Tasks inside the selected project workspace", async () => {
+  it("opens all Tasks globally and keeps task details inside the selected project workspace", async () => {
     const api = new FakeApi();
     api.currentSession = {
       ...session,
@@ -365,6 +365,15 @@ describe("frontend draft lifecycle", () => {
     expect(screen.getByText("P-26-7K4M9Q")).toBeTruthy();
     expect(screen.getByRole("button", { name: /New project/u })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Create task" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Tasks" }));
+    expect(await screen.findByRole("heading", { name: "All tasks" })).toBeTruthy();
+    expect(`${window.location.pathname}${window.location.search}`).toBe("/tasks");
+    expect(screen.getAllByText("Alpha")).toHaveLength(2);
+    expect(screen.getByText("First task")).toBeTruthy();
+    expect(screen.getAllByText("Without active milestone")).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: "Projects" }));
+    expect(await screen.findByRole("heading", { name: "Projects" })).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: /Alpha/u }));
     expect(await screen.findByRole("heading", { name: "Plan" })).toBeTruthy();

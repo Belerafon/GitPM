@@ -40,9 +40,9 @@ export function parseAppRoute(input: string | URL): AppRoute | null {
   }
   const query = readQuery(url.searchParams);
   if (segments.length === 1) {
-    if (segments[0] === "tasks" || segments[0] === "portfolio") return route("projects");
+    if (segments[0] === "portfolio") return route("projects");
     const staticRoutes: Readonly<Record<string, AppRouteName>> = {
-      workspaces: "workspaces", projects: "projects", board: "board", people: "people",
+      workspaces: "workspaces", projects: "projects", tasks: "tasks", board: "board", people: "people",
       calendars: "calendars", settings: "settings", workload: "workload", gantt: "gantt", changes: "changes", files: "files", history: "history", connection: "connection",
     };
     const name = staticRoutes[segments[0]!];
@@ -74,7 +74,7 @@ export function serializeAppRoute(value: AppRoute): string {
     case "workspaces": pathname = "/workspaces"; break;
     case "projects": pathname = value.projectId === undefined ? "/projects" : `/projects/${segment(value.projectId)}`; break;
     case "stages": pathname = value.projectId === undefined ? "/projects" : value.stageId === undefined ? `/projects/${segment(value.projectId)}` : `/projects/${segment(value.projectId)}/stages/${segment(value.stageId)}`; break;
-    case "tasks": pathname = value.projectId === undefined ? "/projects" : value.taskId === undefined ? `/projects/${segment(value.projectId)}` : `/projects/${segment(value.projectId)}/tasks/${segment(value.taskId)}`; break;
+    case "tasks": pathname = value.projectId === undefined ? "/tasks" : value.taskId === undefined ? `/projects/${segment(value.projectId)}` : `/projects/${segment(value.projectId)}/tasks/${segment(value.taskId)}`; break;
     case "board": pathname = value.projectId === undefined ? "/board" : `/projects/${segment(value.projectId)}/board`; break;
     case "effort": pathname = value.projectId === undefined ? "/projects" : `/projects/${segment(value.projectId)}/effort`; break;
     case "people": pathname = value.personId === undefined ? "/people" : `/people/${segment(value.personId)}`; break;
@@ -103,7 +103,7 @@ export function routeForDestination(destination: WorkspaceDestination | "workspa
     ? route("projects", { projectId: selection.projectId }, routeQuery)
     : route("stages", { projectId: selection.projectId, stageId: selection.stageId }, routeQuery);
   if (destination === "tasks") return selection.projectId === undefined
-    ? route("projects", {}, routeQuery)
+    ? route("tasks", {}, routeQuery)
     : selection.taskId === undefined
       ? route("projects", { projectId: selection.projectId }, routeQuery)
       : route("tasks", { projectId: selection.projectId, taskId: selection.taskId }, routeQuery);

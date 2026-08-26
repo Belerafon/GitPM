@@ -5,7 +5,7 @@ const roundTrip = (path: string) => serializeAppRoute(parseAppRoute(path)!);
 
 describe("app route model", () => {
   it.each([
-    "/workspaces", "/projects", "/board", "/people", "/calendars", "/settings", "/workload", "/gantt", "/changes", "/files", "/history",
+    "/workspaces", "/projects", "/tasks", "/board", "/people", "/calendars", "/settings", "/workload", "/gantt", "/changes", "/files", "/history",
     "/projects/P-26-ALPHA", "/projects/P-26-ALPHA/stages/M-26-FIRST", "/projects/P-26-ALPHA/tasks/T-26-FIRST", "/projects/P-26-ALPHA/board", "/projects/P-26-ALPHA/timeline", "/projects/P-26-ALPHA/effort", "/people/U-26-ADA", "/calendars/C-26-DEFAULT", "/history/abcdef123456",
   ])("round-trips %s", (path) => expect(roundTrip(path)).toBe(path));
 
@@ -38,10 +38,10 @@ describe("app route model", () => {
     expect(roundTrip("/portfolio")).toBe("/projects");
   });
 
-  it("redirects the removed global task route to the project directory", () => {
-    expect(roundTrip("/tasks")).toBe("/projects");
-    expect(roundTrip("/tasks?status=backlog")).toBe("/projects");
-    expect(serializeAppRoute(routeForDestination("tasks"))).toBe("/projects");
+  it("keeps the global task route and its portfolio-wide filters", () => {
+    expect(roundTrip("/tasks")).toBe("/tasks");
+    expect(roundTrip("/tasks?status=backlog&project=P-1")).toBe("/tasks?project=P-1&status=backlog");
+    expect(serializeAppRoute(routeForDestination("tasks"))).toBe("/tasks");
   });
 
   it("parses and serializes the project effort route", () => {

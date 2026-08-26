@@ -45,15 +45,32 @@ describe("core UI", () => {
     expect(screen.getByText("Person 500")).toBeTruthy();
   });
 
-  it("does not turn the global task entry point into an all-project task stream", async () => {
+  it("shows the global task hierarchy and keeps project, milestone, and parent context while filtering", async () => {
     const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
-    const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
-    await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-222222", project: project.document.id, title: "Must stay scoped", type: "task", status: "backlog", lifecycle: "active" });
+    const alpha = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-111111", name: "Alpha", group: "Delivery", status: "backlog", lifecycle: "active" });
+    const beta = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-222222", name: "Beta", status: "backlog", lifecycle: "active" });
+    const milestone = await entityApi.createEntity("DRF-CORE", "milestones", "", { schema: "gitpm/milestone@2", id: "M-26-111111", project: alpha.document.id, name: "Launch", lifecycle: "active" });
+    const parent = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-111111", project: alpha.document.id, milestone: milestone.document.id, title: "Parent delivery", type: "task", status: "backlog", lifecycle: "active" });
+    const child = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-222222", project: alpha.document.id, milestone: milestone.document.id, parent: parent.document.id, title: "Nested API", type: "task", status: "done", lifecycle: "active" });
+    await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-333333", project: beta.document.id, title: "Unstaged research", type: "task", status: "backlog", lifecycle: "active" });
+    const onNavigate = vi.fn();
 
-    render(<CoreWorkspace api={api} draft={draft} locale="en" surface="tasks" onChanged={vi.fn(async () => undefined)} />);
-    expect(await screen.findByRole("heading", { name: "Choose a project" })).toBeTruthy();
-    expect(screen.queryByText("Must stay scoped")).toBeNull();
-    expect((screen.getByLabelText("Project") as HTMLSelectElement).value).toBe("");
+    const { container } = render(<CoreWorkspace api={api} draft={draft} locale="en" surface="tasks" onNavigate={onNavigate} onChanged={vi.fn(async () => undefined)} />);
+    expect(await screen.findByRole("heading", { name: "All tasks" })).toBeTruthy();
+    expect(screen.getByText("Launch")).toBeTruthy();
+    expect(screen.getByText("Nested API")).toBeTruthy();
+    expect(screen.getByText("Unstaged research")).toBeTruthy();
+    expect(container.querySelector(`[data-task-id="${child.document.id}"]`)?.getAttribute("data-depth")).toBe("1");
+    expect(screen.getAllByText("Without active milestone")).toHaveLength(2);
+
+    fireEvent.change(screen.getByLabelText("Filter tasks"), { target: { value: "done" } });
+    expect(screen.getByText("Nested API")).toBeTruthy();
+    expect(screen.getByText("Parent delivery").closest(".portfolio-task-row")?.classList.contains("filter-context")).toBe(true);
+    expect(screen.queryByText("Unstaged research")).toBeNull();
+    expect(onNavigate).toHaveBeenLastCalledWith("tasks", { query: { status: ["done"] } });
+
+    fireEvent.click(screen.getByText("Nested API"));
+    expect(onNavigate).toHaveBeenLastCalledWith("tasks", { projectId: alpha.document.id, taskId: child.document.id, query: { status: ["done"] } });
   });
 
   it("animates the task row while an inline status change is being saved", async () => {
