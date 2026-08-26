@@ -47,6 +47,9 @@ describe("Vacation calendar UI", () => {
     expect(adaBar.style.left).toBe(`${16 * VACATION_CALENDAR_DAY_WIDTH[6]}px`);
     expect(adaBar.style.width).toBe(`${5 * VACATION_CALENDAR_DAY_WIDTH[6]}px`);
     expect(adaBar.getAttribute("title")).toContain("Summer leave");
+    expect(container.querySelector(`.vacation-calendar-label[data-person-id="${adaId}"]`)?.className).not.toContain("away");
+    expect(container.querySelector(".vacation-calendar-label small")?.textContent).toContain("Taken");
+    expect(screen.getByRole("button", { name: "Ada" }).getAttribute("title")).toContain("Available today");
     fireEvent.click(screen.getByRole("button", { name: "12 months" }));
     await waitFor(() => expect(container.querySelector(".vacation-calendar-scroll")?.getAttribute("data-months")).toBe("12"));
     expect(container.querySelectorAll(".vacation-calendar-bar")).toHaveLength(3);
@@ -82,5 +85,18 @@ describe("Vacation calendar UI", () => {
     expect(screen.queryByRole("button", { name: "Ada" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Linus" }));
     expect(onNavigate).toHaveBeenCalledWith("people", { personId: linusId });
+  });
+
+  it("paints a person red while they are away and shows leave-until in the hint", async () => {
+    const current = result({ schema: "gitpm/availability-event@1", id: "A-26-NOW", person: adaId, start: "2026-08-25", finish: "2026-08-28", kind: "vacation", availability_percent: 0, state: "planned", lifecycle: "active" });
+    const entities = [ada, linus, reviewers, current];
+    const api = {
+      listEntities: vi.fn(async (_draftId: string, type: string) => entities.filter((item) => ({ people: "gitpm/person@1", teams: "gitpm/team@1", "availability-events": "gitpm/availability-event@1" })[type] === item.document.schema)),
+    } as unknown as GitPmApi;
+    const { container } = render(<VacationCalendarWorkspace api={api} draft={draft} locale="en" today="2026-08-26" />);
+    await waitFor(() => expect(container.querySelector(".vacation-calendar-label.away")).not.toBeNull());
+    expect(container.querySelector(`.vacation-calendar-label[data-person-id="${adaId}"]`)?.className).toContain("away");
+    expect(container.querySelector(`.vacation-calendar-row.away[data-person-id="${adaId}"]`)).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Ada" }).getAttribute("title")).toContain("Vacation until");
   });
 });

@@ -1,7 +1,7 @@
 export const VACATION_CALENDAR_MONTHS = [3, 6, 12] as const;
 export type VacationCalendarMonths = (typeof VACATION_CALENDAR_MONTHS)[number];
 export const VACATION_CALENDAR_DAY_WIDTH: Readonly<Record<VacationCalendarMonths, number>> = { 3: 14, 6: 10, 12: 7 };
-export const VACATION_CALENDAR_ROW_HEIGHT = 44;
+export const VACATION_CALENDAR_ROW_HEIGHT = 58;
 export const VACATION_CALENDAR_HEADER_HEIGHT = 42;
 
 const DAY_MS = 86_400_000;
