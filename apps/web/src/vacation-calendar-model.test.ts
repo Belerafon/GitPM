@@ -9,6 +9,8 @@ import {
   vacationCalendarWindow,
   vacationSummary,
   visiblePeople,
+  isWeekend,
+  weekendBands,
   type VacationEvent,
   type VacationPerson,
   type VacationTeam,
@@ -69,6 +71,28 @@ describe("vacation calendar geometry", () => {
     expect(twelveBar.width).toBe(4 * VACATION_CALENDAR_DAY_WIDTH[12]);
     expect(sixBar.left).toBe(sixBar.offset * VACATION_CALENDAR_DAY_WIDTH[6]);
     expect(twelveBar.left).toBe(twelveBar.offset * VACATION_CALENDAR_DAY_WIDTH[12]);
+  });
+
+  it("builds a whole-year window from 1 January through 31 December", () => {
+    const window = vacationCalendarWindow("2026-08-26", "year");
+    expect(window.start).toBe("2026-01-01");
+    expect(window.finish).toBe("2026-12-31");
+    expect(window.months).toHaveLength(12);
+    expect(window.months[0]?.key).toBe("2026-01");
+    expect(window.months.at(-1)?.key).toBe("2026-12");
+    expect(window.dayWidth).toBe(VACATION_CALENDAR_DAY_WIDTH.year);
+    expect(window.days).toHaveLength(365);
+  });
+
+  it("marks Saturday and Sunday as weekend bands", () => {
+    expect(isWeekend("2026-08-01")).toBe(true);
+    expect(isWeekend("2026-08-02")).toBe(true);
+    expect(isWeekend("2026-08-03")).toBe(false);
+    const bands = weekendBands(["2026-08-01", "2026-08-02", "2026-08-03", "2026-08-08", "2026-08-09"], 10);
+    expect(bands).toEqual([
+      { start: "2026-08-01", finish: "2026-08-02", left: 0, width: 20 },
+      { start: "2026-08-08", finish: "2026-08-09", left: 30, width: 20 },
+    ]);
   });
 
   it("shows a far-future absence only in the 12-month view", () => {

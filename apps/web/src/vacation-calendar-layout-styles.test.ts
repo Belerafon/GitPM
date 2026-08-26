@@ -21,4 +21,11 @@ describe("Vacation calendar overflow containment", () => {
     expect(rule(".vacation-calendar-labels")).toContain("position: sticky");
     expect(rule(".vacation-calendar-timeline")).toContain("overflow: hidden");
   });
+
+  it("stripes rows, paints weekend columns, and lets bar dates overflow", () => {
+    expect(rule(".vacation-calendar-label.even, .vacation-calendar-row.even")).toContain("background: #eef1ec");
+    expect(rule(".vacation-calendar-weekend")).toContain("background: rgba(88, 96, 90, .14)");
+    expect(rule(".vacation-calendar-bar")).toContain("overflow: visible");
+    expect(rule(".vacation-calendar-bar span")).toContain("overflow: visible");
+  });
 });

@@ -1,6 +1,6 @@
-export const VACATION_CALENDAR_MONTHS = [3, 6, 12] as const;
-export type VacationCalendarMonths = (typeof VACATION_CALENDAR_MONTHS)[number];
-export const VACATION_CALENDAR_DAY_WIDTH: Readonly<Record<VacationCalendarMonths, number>> = { 3: 14, 6: 10, 12: 7 };
+export const VACATION_CALENDAR_PERIODS = [3, 6, 12, "year"] as const;
+export type VacationCalendarPeriod = (typeof VACATION_CALENDAR_PERIODS)[number];
+export const VACATION_CALENDAR_DAY_WIDTH: Readonly<Record<VacationCalendarPeriod, number>> = { 3: 14, 6: 10, 12: 7, year: 7 };
 export const VACATION_CALENDAR_ROW_HEIGHT = 58;
 export const VACATION_CALENDAR_HEADER_HEIGHT = 42;
 
@@ -137,9 +137,28 @@ export function barGeometry(start: string, finish: string, windowStart: string, 
   return { offset, duration, left: offset * dayWidth, width: duration * dayWidth };
 }
 
-export function vacationCalendarWindow(today: string, months: VacationCalendarMonths): VacationCalendarWindow {
-  const start = monthStart(today);
-  const finish = lastDayOfMonth(addMonths(start, months - 1));
+export function isWeekend(value: string): boolean {
+  const weekday = new Date(`${value}T00:00:00Z`).getUTCDay();
+  return weekday === 0 || weekday === 6;
+}
+
+export function weekendBands(days: readonly string[], dayWidth: number): readonly { readonly start: string; readonly finish: string; readonly left: number; readonly width: number }[] {
+  const bands: { start: string; finish: string; left: number; width: number }[] = [];
+  for (let index = 0; index < days.length; index += 1) {
+    const day = days[index]!;
+    if (!isWeekend(day)) continue;
+    const last = bands.at(-1);
+    if (last !== undefined && dayNumber(day) === dayNumber(last.finish) + 1) {
+      last.finish = day;
+      last.width += dayWidth;
+      continue;
+    }
+    bands.push({ start: day, finish: day, left: index * dayWidth, width: dayWidth });
+  }
+  return bands;
+}
+
+function buildWindow(start: string, finish: string, dayWidth: number): VacationCalendarWindow {
   const first = dayNumber(start);
   const last = dayNumber(finish);
   const days = Array.from({ length: last - first + 1 }, (_, index) => isoDate(first + index));
@@ -150,8 +169,16 @@ export function vacationCalendarWindow(today: string, months: VacationCalendarMo
     if (current?.key === key) current.days += 1;
     else segments.push({ key, days: 1 });
   }
-  const dayWidth = VACATION_CALENDAR_DAY_WIDTH[months];
   return { start, finish, days, months: segments, dayWidth, timelineWidth: days.length * dayWidth };
+}
+
+export function vacationCalendarWindow(today: string, period: VacationCalendarPeriod): VacationCalendarWindow {
+  if (period === "year") {
+    const year = today.slice(0, 4);
+    return buildWindow(`${year}-01-01`, `${year}-12-31`, VACATION_CALENDAR_DAY_WIDTH.year);
+  }
+  const start = monthStart(today);
+  return buildWindow(start, lastDayOfMonth(addMonths(start, period - 1)), VACATION_CALENDAR_DAY_WIDTH[period]);
 }
 
 export function isCountableEvent(event: VacationEvent, filters: VacationCalendarFilters): boolean {

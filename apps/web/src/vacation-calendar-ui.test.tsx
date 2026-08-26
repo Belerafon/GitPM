@@ -37,7 +37,7 @@ describe("Vacation calendar UI", () => {
     const chart = container.querySelector(".vacation-calendar-scroll")!;
     expect(chart.getAttribute("data-start")).toBe("2026-08-01");
     expect(chart.getAttribute("data-finish")).toBe("2027-01-31");
-    expect(chart.getAttribute("data-months")).toBe("6");
+    expect(chart.getAttribute("data-period")).toBe("6");
     expect(screen.getByText("Absent today").nextElementSibling?.textContent).toBe("0");
     expect(screen.getByText("Leaving in 30 days").nextElementSibling?.textContent).toBe("1");
     expect(screen.getByText("Peak simultaneous absence").nextElementSibling?.textContent).toBe("1");
@@ -51,12 +51,20 @@ describe("Vacation calendar UI", () => {
     expect(container.querySelector(".vacation-calendar-label small")?.textContent).toContain("Taken");
     expect(screen.getByRole("button", { name: "Ada" }).getAttribute("title")).toContain("Available today");
     fireEvent.click(screen.getByRole("button", { name: "12 months" }));
-    await waitFor(() => expect(container.querySelector(".vacation-calendar-scroll")?.getAttribute("data-months")).toBe("12"));
+    await waitFor(() => expect(container.querySelector(".vacation-calendar-scroll")?.getAttribute("data-period")).toBe("12"));
     expect(container.querySelectorAll(".vacation-calendar-bar")).toHaveLength(3);
     const julyBar = container.querySelector(`[data-event-id="A-26-JULY"]`) as HTMLElement;
     expect(julyBar.getAttribute("data-duration")).toBe("5");
     expect(julyBar.style.width).toBe(`${5 * VACATION_CALENDAR_DAY_WIDTH[12]}px`);
     expect(container.querySelector(`[data-event-id="A-26-VACATN"]`)?.getAttribute("style")).toContain(`${16 * VACATION_CALENDAR_DAY_WIDTH[12]}px`);
+    fireEvent.click(screen.getByRole("button", { name: "Whole year" }));
+    await waitFor(() => expect(container.querySelector(".vacation-calendar-scroll")?.getAttribute("data-period")).toBe("year"));
+    expect(container.querySelector(".vacation-calendar-scroll")?.getAttribute("data-start")).toBe("2026-01-01");
+    expect(container.querySelector(".vacation-calendar-scroll")?.getAttribute("data-finish")).toBe("2026-12-31");
+    expect(container.querySelector(`[data-event-id="A-26-JULY"]`)).toBeNull();
+    expect(container.querySelectorAll(".vacation-calendar-weekend").length).toBeGreaterThan(0);
+    expect(container.querySelector(".vacation-calendar-label.even")).not.toBeNull();
+    expect(container.querySelector(".vacation-calendar-row.odd")).not.toBeNull();
   });
 
   it("filters by team, person, kind, state and name, then resets", async () => {
