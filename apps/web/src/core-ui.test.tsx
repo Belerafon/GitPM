@@ -58,9 +58,13 @@ describe("core UI", () => {
     const { container } = render(<CoreWorkspace api={api} draft={draft} locale="en" surface="tasks" onNavigate={onNavigate} onChanged={vi.fn(async () => undefined)} />);
     expect(await screen.findByRole("heading", { name: "All tasks" })).toBeTruthy();
     expect(screen.getAllByText("Launch").length).toBeGreaterThan(0);
-    expect(screen.getByText("Nested API")).toBeTruthy();
+    expect(screen.getByText("Parent delivery")).toBeTruthy();
+    expect(screen.queryByText("Nested API")).toBeNull();
     expect(screen.getByText("Unstaged research")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Expand subtasks of Parent delivery" }));
+    expect(screen.getByText("Nested API")).toBeTruthy();
     expect(container.querySelector(`[data-task-id="${child.document.id}"]`)?.getAttribute("data-depth")).toBe("1");
+    expect(container.querySelector(`[data-task-id="${child.document.id}"] .portfolio-task-name`)?.tagName).not.toBe("STRONG");
     expect(screen.getByText("Without active milestone")).toBeTruthy();
     expect(screen.queryByRole("combobox", { name: "Project" })).toBeNull();
     expect(screen.queryByRole("combobox", { name: "Milestone" })).toBeNull();
@@ -108,14 +112,13 @@ describe("core UI", () => {
   it("sorts, hides, and resizes columns in the all-tasks table", async () => {
     const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
     const alpha = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
-    await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-222222", name: "Beta", status: "backlog", lifecycle: "active" });
     await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-111111", project: alpha.document.id, title: "Later task", type: "task", status: "backlog", lifecycle: "active", schedules: { plan: { finish: "2099-09-15", effort_hours: 8 } } });
-    await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-222222", project: "P-26-222222", title: "Earlier task", type: "task", status: "backlog", lifecycle: "active", schedules: { plan: { finish: "2099-08-30", effort_hours: 2 } } });
+    await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-222222", project: alpha.document.id, title: "Earlier task", type: "task", status: "backlog", lifecycle: "active", schedules: { plan: { finish: "2099-08-30", effort_hours: 2 } } });
 
     const { container } = render(<CoreWorkspace api={api} draft={draft} locale="en" surface="tasks" onNavigate={vi.fn()} onChanged={vi.fn(async () => undefined)} />);
     expect(await screen.findByRole("table", { name: "All tasks" })).toBeTruthy();
-    const titles = () => Array.from(container.querySelectorAll(".portfolio-task-selector strong"), (item) => item.textContent);
-    expect(titles()).toEqual(["Later task", "Earlier task"]);
+    const titles = () => Array.from(container.querySelectorAll(".portfolio-task-name"), (item) => item.textContent);
+    expect(titles()).toEqual(["Earlier task", "Later task"]);
 
     fireEvent.click(screen.getByRole("button", { name: "Due date" }));
     expect(container.querySelector("th[aria-sort='ascending']")?.textContent).toContain("Due date");

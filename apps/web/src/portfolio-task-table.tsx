@@ -15,6 +15,7 @@ const COLUMNS_STORAGE_KEY = "gitpm.portfolioTasks.columns";
 const WIDTHS_STORAGE_KEY = "gitpm.portfolioTasks.columnWidths";
 const MIN_COLUMN_WIDTH = 72;
 const MAX_COLUMN_WIDTH = 480;
+const MAX_TREE_DEPTH = 6;
 
 export const PORTFOLIO_TASK_COLUMNS = ["task", "project", "milestone", "assignees", "due", "estimate", "status", "type"] as const;
 export type PortfolioTaskColumn = (typeof PORTFOLIO_TASK_COLUMNS)[number];
@@ -51,6 +52,7 @@ interface TableRow {
   readonly task: EntityResult;
   readonly depth: number;
   readonly hasVisibleChildren: boolean;
+  readonly collapsed: boolean;
   readonly contextOnly: boolean;
 }
 
@@ -128,14 +130,26 @@ function compareSortValues(left: string | number | undefined, right: string | nu
   return direction === "asc" ? comparison : -comparison;
 }
 
-function flattenGroup(allTasks: readonly EntityResult[], visibleTasks: readonly EntityResult[], order: readonly string[], locale: Locale, value: ScheduleTextReader, collapsed: ReadonlySet<string>): readonly TableRow[] {
+function flattenGroup(
+  allTasks: readonly EntityResult[],
+  visibleTasks: readonly EntityResult[],
+  order: readonly string[],
+  locale: Locale,
+  value: ScheduleTextReader,
+  collapseOverrides: Readonly<Record<string, boolean>>,
+  sortCompare?: (left: EntityResult, right: EntityResult) => number,
+): readonly TableRow[] {
   const hierarchy = buildTaskHierarchy<HierarchyTaskPayload>(allTasks.map((entity) => ({
     id: entity.document.id,
     entity,
     ...(value(entity.document, "parent") === "" ? {} : { parent: value(entity.document, "parent") }),
   })), {
     order,
-    compare: (left, right) => value(left.entity.document, "title").localeCompare(value(right.entity.document, "title"), locale) || left.id.localeCompare(right.id),
+    compare: (left, right) => {
+      const sorted = sortCompare?.(left.entity, right.entity) ?? 0;
+      if (sorted !== 0) return sorted;
+      return value(left.entity.document, "title").localeCompare(value(right.entity.document, "title"), locale) || left.id.localeCompare(right.id);
+    },
   });
   const visibleIds = new Set(visibleTasks.map((task) => task.document.id));
   const includedIds = new Set<string>();
@@ -143,12 +157,27 @@ function flattenGroup(allTasks: readonly EntityResult[], visibleTasks: readonly 
     includedIds.add(id);
     for (const ancestor of hierarchy.ancestorsOf(id)) includedIds.add(ancestor.id);
   }
+  const collapsed = new Set<string>();
+  for (const entry of hierarchy.flatten()) {
+    if (entry.hasChildren && hierarchy.childrenOf(entry.task.id).some((child) => includedIds.has(child.id))) collapsed.add(entry.task.id);
+  }
+  for (const id of visibleIds) {
+    const ancestors = hierarchy.ancestorsOf(id);
+    if (ancestors.some((ancestor) => !visibleIds.has(ancestor.id))) {
+      for (const ancestor of ancestors) collapsed.delete(ancestor.id);
+    }
+  }
+  for (const [id, force] of Object.entries(collapseOverrides)) {
+    if (force) collapsed.add(id);
+    else collapsed.delete(id);
+  }
   return hierarchy.flatten()
     .filter((entry) => includedIds.has(entry.task.id) && !hierarchy.ancestorsOf(entry.task.id).some((ancestor) => collapsed.has(ancestor.id)))
     .map((entry) => ({
       task: entry.task.entity,
       depth: entry.depth,
       hasVisibleChildren: entry.hasChildren && hierarchy.childrenOf(entry.task.id).some((child) => includedIds.has(child.id)),
+      collapsed: collapsed.has(entry.task.id),
       contextOnly: !visibleIds.has(entry.task.id),
     }));
 }
@@ -176,7 +205,7 @@ export function PortfolioTaskTable({
   readonly onNavigate: WorkspaceNavigate;
   readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string;
 }) {
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+  const [collapseOverrides, setCollapseOverrides] = useState<Readonly<Record<string, boolean>>>({});
   const [visibleFields, setVisibleFields] = useState(readVisibility);
   const [widths, setWidths] = useState(readWidths);
   const [sort, setSort] = useState<PortfolioTaskSort | null>(null);
@@ -190,11 +219,33 @@ export function PortfolioTaskTable({
   const visibleColumns = useMemo<readonly PortfolioTaskColumn[]>(() => ["task", ...OPTIONAL_COLUMNS.filter((column) => visibleFields[column])], [visibleFields]);
   const tableWidth = visibleColumns.reduce((total, column) => total + widths[column], 0);
 
-  const defaultRows = useMemo(() => {
+  const sortCompare = useMemo(() => {
+    if (sort === null) return undefined;
+    const nameOf = (id: string): string => {
+      const person = people.find((item) => item.document.id === id);
+      const name = person === undefined ? "" : value(person.document, "name");
+      return name === "" ? id : name;
+    };
+    const sortValue = (task: EntityResult): string | number | undefined => {
+      const document = task.document;
+      if (sort.column === "task") return value(document, "title");
+      if (sort.column === "project") return catalog.project(document.project).name;
+      if (sort.column === "milestone") return catalog.milestone(document.milestone)?.name;
+      if (sort.column === "assignees") return values(document, "assignees").map(nameOf).join(", ");
+      if (sort.column === "due") return value(document, "due");
+      if (sort.column === "estimate") return effortOf(document);
+      if (sort.column === "status") return statusTitle(value(document, "status"));
+      return typeOptions.find((item) => item.slug === value(document, "type"))?.title ?? value(document, "type");
+    };
+    return (left: EntityResult, right: EntityResult) => compareSortValues(sortValue(left), sortValue(right), locale, sort.direction)
+      || left.document.id.localeCompare(right.document.id);
+  }, [catalog, effortOf, locale, people, sort, statusTitle, typeOptions, value]);
+
+  const rows = useMemo(() => {
     if (filteredTasks.length === 0) return [];
     const visibleProjectIds = new Set(filteredTasks.map((task) => value(task.document, "project")));
     const visibleProjects = projects.filter((project) => visibleProjectIds.has(project.document.id)).slice().sort((left, right) => value(left.document, "name").localeCompare(value(right.document, "name"), locale) || left.document.id.localeCompare(right.document.id));
-    const rows: TableRow[] = [];
+    const nextRows: TableRow[] = [];
     for (const project of visibleProjects) {
       const projectTasks = tasks.filter((task) => value(task.document, "project") === project.document.id);
       const visibleProjectTasks = filteredTasks.filter((task) => value(task.document, "project") === project.document.id);
@@ -213,46 +264,26 @@ export function PortfolioTaskTable({
         return value(left.document, "name").localeCompare(value(right.document, "name"), locale) || left.document.id.localeCompare(right.document.id);
       });
       for (const milestone of visibleMilestones) {
-        rows.push(...flattenGroup(
+        nextRows.push(...flattenGroup(
           projectTasks.filter((task) => value(task.document, "milestone") === milestone.document.id),
           visibleProjectTasks.filter((task) => value(task.document, "milestone") === milestone.document.id),
           values(milestone.document, "task_order"),
           locale,
           value,
-          collapsed,
+          collapseOverrides,
+          sortCompare,
         ));
       }
       const withoutStage = (task: EntityResult) => !milestoneById.has(value(task.document, "milestone"));
       const visibleWithoutStage = visibleProjectTasks.filter(withoutStage);
       if (visibleWithoutStage.length > 0) {
-        rows.push(...flattenGroup(projectTasks.filter(withoutStage), visibleWithoutStage, [], locale, value, collapsed));
+        nextRows.push(...flattenGroup(projectTasks.filter(withoutStage), visibleWithoutStage, [], locale, value, collapseOverrides, sortCompare));
       }
     }
-    return rows;
-  }, [collapsed, filteredTasks, locale, milestones, projects, tasks, value]);
+    return nextRows;
+  }, [collapseOverrides, filteredTasks, locale, milestones, projects, sortCompare, tasks, value]);
 
   const typeTitle = (slug: string): string => typeOptions.find((item) => item.slug === slug)?.title ?? slug;
-  const rows = useMemo(() => {
-    if (sort === null) return defaultRows;
-    const nameOf = (id: string): string => {
-      const person = people.find((item) => item.document.id === id);
-      const name = person === undefined ? "" : value(person.document, "name");
-      return name === "" ? id : name;
-    };
-    const sortValue = (row: TableRow): string | number | undefined => {
-      const task = row.task.document;
-      if (sort.column === "task") return value(task, "title");
-      if (sort.column === "project") return catalog.project(task.project).name;
-      if (sort.column === "milestone") return catalog.milestone(task.milestone)?.name;
-      if (sort.column === "assignees") return values(task, "assignees").map(nameOf).join(", ");
-      if (sort.column === "due") return value(task, "due");
-      if (sort.column === "estimate") return effortOf(task);
-      if (sort.column === "status") return statusTitle(value(task, "status"));
-      return typeOptions.find((item) => item.slug === value(task, "type"))?.title ?? value(task, "type");
-    };
-    return defaultRows.slice().sort((left, right) => compareSortValues(sortValue(left), sortValue(right), locale, sort.direction)
-      || left.task.document.id.localeCompare(right.task.document.id));
-  }, [catalog, defaultRows, effortOf, locale, people, sort, statusTitle, typeOptions, value]);
 
   const columnLabel = (column: PortfolioTaskColumn): string => {
     if (column === "task") return t("portfolioTasks.columnTask");
@@ -343,12 +374,12 @@ export function PortfolioTaskTable({
             const milestone = catalog.milestone(task.document.milestone);
             const overdue = /^\d{4}-\d{2}-\d{2}$/u.test(due) && due < today && !isCompletedStatus(statusOptions, value(task.document, "status"));
             const rowClass = `portfolio-task-row${row.contextOnly ? " filter-context" : ""}${statusPending === task.document.id ? " is-saving" : ""}${highlights[task.document.id]?.includes("$local") ? " recently-changed" : highlights[task.document.id] ? " external-update" : ""}`;
-            return <tr className={rowClass} data-depth={row.depth} data-milestone-id={milestone?.id ?? ""} data-project-id={projectId} data-task-id={task.document.id} key={task.document.id} style={{ "--portfolio-task-depth": row.depth } as CSSProperties}>
+            return <tr className={rowClass} data-depth={row.depth} data-milestone-id={milestone?.id ?? ""} data-project-id={projectId} data-task-id={task.document.id} key={task.document.id} style={{ "--portfolio-task-depth": Math.min(row.depth, MAX_TREE_DEPTH) } as CSSProperties}>
               {visibleColumns.map((column) => {
                 if (column === "task") return <th key={column} scope="row"><div className="portfolio-task-title">
                   <span className="portfolio-task-indent" aria-hidden="true" />
-                  <span className="portfolio-task-collapse">{row.hasVisibleChildren && <button aria-expanded={!collapsed.has(task.document.id)} aria-label={collapsed.has(task.document.id) ? t("taskHierarchy.expand", { title: value(task.document, "title") }) : t("taskHierarchy.collapse", { title: value(task.document, "title") })} onClick={() => setCollapsed((current) => { const next = new Set(current); if (next.has(task.document.id)) next.delete(task.document.id); else next.add(task.document.id); return next; })} type="button"><svg aria-hidden="true" viewBox="0 0 12 12"><path d={collapsed.has(task.document.id) ? "M4 2.5 8 6 4 9.5" : "m2.5 4 3.5 4 3.5-4"} /></svg></button>}</span>
-                  <button className="portfolio-task-selector" onClick={() => onNavigate("tasks", { projectId, taskId: task.document.id, query })} title={t("tooltip.openTask")} type="button"><strong>{value(task.document, "title")}</strong><span><code>{task.document.id}</code>{row.contextOnly && <small>{t("portfolioTasks.filterContext")}</small>}{task.document.lifecycle === "archived" && <small>{t("core.archived")}</small>}</span></button>
+                  <span className="portfolio-task-collapse">{row.hasVisibleChildren && <button aria-expanded={!row.collapsed} aria-label={row.collapsed ? t("taskHierarchy.expand", { title: value(task.document, "title") }) : t("taskHierarchy.collapse", { title: value(task.document, "title") })} onClick={() => setCollapseOverrides((current) => ({ ...current, [task.document.id]: !row.collapsed }))} type="button"><svg aria-hidden="true" viewBox="0 0 12 12"><path d={row.collapsed ? "M4 2.5 8 6 4 9.5" : "m2.5 4 3.5 4 3.5-4"} /></svg></button>}</span>
+                  <button className="portfolio-task-selector" onClick={() => onNavigate("tasks", { projectId, taskId: task.document.id, query })} title={t("tooltip.openTask")} type="button"><span className="portfolio-task-name">{value(task.document, "title")}</span><span><code>{task.document.id}</code>{row.contextOnly && <small>{t("portfolioTasks.filterContext")}</small>}{task.document.lifecycle === "archived" && <small>{t("core.archived")}</small>}</span></button>
                 </div></th>;
                 if (column === "project") return <td key={column}><ProjectLink name={catalog.project(projectId).name} onOpen={(nextProjectId) => onNavigate("projects", { projectId: nextProjectId })} projectId={projectId} /></td>;
                 if (column === "milestone") return <td key={column}>{milestone === undefined
