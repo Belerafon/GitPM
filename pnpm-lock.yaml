@@ -295,6 +295,9 @@ importers:
 
   packages/export:
     dependencies:
+      '@gitpm/calendar':
+        specifier: workspace:*
+        version: link:../calendar
       '@gitpm/drafts':
         specifier: workspace:*
         version: link:../drafts
@@ -310,12 +313,18 @@ importers:
       '@gitpm/shared':
         specifier: workspace:*
         version: link:../shared
+      '@gitpm/task-hierarchy':
+        specifier: workspace:*
+        version: link:../task-hierarchy
       '@gitpm/time-entries':
         specifier: workspace:*
         version: link:../time-entries
       '@gitpm/validation':
         specifier: workspace:*
         version: link:../validation
+      '@gitpm/workload':
+        specifier: workspace:*
+        version: link:../workload
       pdfmake:
         specifier: 0.2.20
         version: 0.2.20

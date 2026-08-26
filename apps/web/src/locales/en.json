@@ -19,14 +19,26 @@
   "export.pdf": "PDF report",
   "export.html": "Static HTML site",
   "export.csv": "CSV tables (ZIP)",
+  "export.xlsx": "Spreadsheet (XLSX)",
   "export.repository": "Repository archive (ZIP)",
-  "export.pdfSections": "PDF sections",
+  "export.pdfSections": "Report sections",
   "export.projects": "Projects overview",
   "export.people": "People overview",
   "export.projectDetails": "Detailed page for every project",
   "export.gantt": "Gantt page for every project",
-  "export.htmlHint": "A self-contained, read-only site with projects, people, teams, calendars, boards and Gantt views.",
-  "export.csvHint": "A ZIP archive with one UTF-8 CSV file for every data type.",
+  "export.planFact": "Plan versus actual",
+  "export.workload": "Team workload",
+  "export.vacations": "Time off",
+  "export.personProfile": "Person profiles",
+  "export.audit": "Audit",
+  "export.lifecycle": "Lifecycle",
+  "export.lifecycleActive": "Active only",
+  "export.lifecycleArchived": "Archived only",
+  "export.lifecycleAll": "Active and archived",
+  "export.includeEmail": "Include email addresses",
+  "export.htmlHint": "A self-contained, read-only site with portfolio, plan, plan-fact, workload, time-off, profiles and audit reports.",
+  "export.csvHint": "A ZIP archive with one UTF-8 CSV file for every data type plus analytical report tables.",
+  "export.xlsxHint": "A spreadsheet workbook built from the same report model as PDF and HTML.",
   "export.includeGit": "Include portable .git history (remote URL is removed)",
   "export.download": "Download export",
   "export.preparing": "Preparing…",
@@ -1420,12 +1432,19 @@
   ,"fieldHint.historyFiles": "Filters the selected commit's changed-file list by path. It does not search file contents or alter the snapshot."
   ,"fieldHint.directRevertMessage": "Commit message for the compensating commit created in direct mode. GitPM restores the selected historical state as a new change; existing history is not rewritten."
   ,"fieldHint.revertDraft": "ID for a new draft that will contain the historical snapshot as reviewable changes. The current draft and existing commits remain unchanged."
-  ,"fieldHint.exportFormat": "Chooses a read-only representation: PDF report, static HTML site, UTF-8 CSV tables, or repository ZIP. Export never commits or publishes portfolio changes."
-  ,"fieldHint.exportSections": "Selects which report sections are generated in the PDF. Unchecked sections are omitted from this file only; portfolio data is not deleted."
+  ,"fieldHint.exportFormat": "Chooses a read-only representation: PDF report, static HTML site, UTF-8 CSV tables, spreadsheet workbook, or repository ZIP. Export never commits or publishes portfolio changes."
+  ,"fieldHint.exportSections": "Selects which report sections are generated. Unchecked sections are omitted from this file only; portfolio data is not deleted."
   ,"fieldHint.exportProjects": "Adds an overview of active projects with status, owner, active task and milestone counts, finish date, and calculated schedule risk."
   ,"fieldHint.exportPeople": "Adds an overview of active people with their projects, teams, weekly capacity, and working calendar. Archived people are omitted from this section."
   ,"fieldHint.exportProjectDetails": "Adds a detailed page for every active project with active milestones, operational tasks, assignees, planned schedule, and actual effort."
   ,"fieldHint.exportGantt": "Adds a Gantt page for every active project using operational tasks and the current schedule-track configuration."
+  ,"fieldHint.exportPlanFact": "Adds plan versus actual hours by task, person, category and date using the project's workload track."
+  ,"fieldHint.exportWorkload": "Adds weekly allocated hours, capacity and overload from the shared workload formula."
+  ,"fieldHint.exportVacations": "Adds absences, overlap and annual leave balances from the shared vacation calculations."
+  ,"fieldHint.exportPersonProfile": "Adds a profile for each selected person with projects, assigned tasks, absences and leave balance."
+  ,"fieldHint.exportAudit": "Adds archived entities, voided time entries, comments and recent commit history."
+  ,"fieldHint.exportLifecycle": "Chooses whether the report includes active entities, archived entities, or both."
+  ,"fieldHint.exportEmail": "When checked, rendered reports may include person email addresses. Email stays hidden by default."
   ,"fieldHint.exportGit": "Repository ZIP only: includes portable `.git` history while removing origin URLs and reflogs. A linked worktree becomes a standalone Git copy, so the archive can be much larger."
   ,"fieldHint.repositoryUrl": "Git remote used to fetch and push the active branch. Use an HTTP(S) or SSH repository address without embedding usernames, passwords, or access tokens."
   ,"fieldHint.gitlabUrl": "Base URL of the GitLab instance used for OAuth, membership checks, and Merge Requests. Do not include a project path here."

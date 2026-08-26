@@ -231,3 +231,5 @@ export function availabilityPercentOnDate(value: string, exceptions: readonly Av
   }
   return percent;
 }
+
+export * from "./vacation.js";

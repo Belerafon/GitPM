@@ -22,6 +22,8 @@ describe("ExportMenu", () => {
       format: "pdf",
       locale: "en",
       sections: ["projects", "people", "project-details"],
+      lifecycle: "active",
+      includeEmail: false,
     }));
     expect(save).toHaveBeenCalledWith(expect.any(Blob), "gitpm-20260725-deadbeef-portfolio.pdf");
   });

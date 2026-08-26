@@ -304,7 +304,7 @@ All commands accept \`--json\`; use it for automation. Direct-mode commands do n
 - \`gitpm changes list|restore-file|restore-hunk|discard-all ...\` inspects or explicitly
   restores uncommitted changes. Discard-all requires \`--confirm discard-all\`.
 - \`gitpm history list|show|file-diff|file-history ...\` inspects Git history.
-- \`gitpm export --format <pdf|html|csv|repository> [--locale <en|ru>] [--section <projects|people|project-details|gantt>] [--include-git] [--output <path>]\`
+- \`gitpm export --format <pdf|html|csv|xlsx|repository> [--locale <en|ru>] [--section <portfolio|project-plan|plan-fact|workload|vacations|person-profile|audit|projects|people|project-details|gantt>] [--include-git] [--output <path>]\`
   creates a read-only export whose default filename contains the HEAD commit date and short hash.
 - \`gitpm commit --all -m <message> [--project <id>] [--allow-delete]\` validates and commits every change onto the
   active branch.

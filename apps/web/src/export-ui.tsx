@@ -12,6 +12,18 @@ function saveBlob(blob: Blob, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
+const REPORT_SECTIONS: readonly { readonly id: ExportSection; readonly label: MessageKey }[] = [
+  { id: "projects", label: "export.projects" },
+  { id: "people", label: "export.people" },
+  { id: "project-details", label: "export.projectDetails" },
+  { id: "gantt", label: "export.gantt" },
+  { id: "plan-fact", label: "export.planFact" },
+  { id: "workload", label: "export.workload" },
+  { id: "vacations", label: "export.vacations" },
+  { id: "person-profile", label: "export.personProfile" },
+  { id: "audit", label: "export.audit" },
+];
+
 export function ExportMenu({ api, draftId, locale, save = saveBlob }: {
   readonly api: GitPmApi;
   readonly draftId: string;
@@ -22,8 +34,11 @@ export function ExportMenu({ api, draftId, locale, save = saveBlob }: {
   const [format, setFormat] = useState<ExportFormat>("pdf");
   const [selected, setSelected] = useState<ReadonlySet<ExportSection>>(() => new Set(["projects", "people"]));
   const [includeGit, setIncludeGit] = useState(false);
+  const [includeEmail, setIncludeEmail] = useState(false);
+  const [lifecycle, setLifecycle] = useState<"active" | "archived" | "all">("active");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const usesSections = format === "pdf" || format === "html" || format === "csv" || format === "xlsx";
   const toggle = (section: ExportSection, checked: boolean) => {
     setSelected((current) => {
       const next = new Set(current);
@@ -39,7 +54,7 @@ export function ExportMenu({ api, draftId, locale, save = saveBlob }: {
       const artifact = await api.exportData(draftId, {
         format,
         locale: locale === "ru" ? "ru" : "en",
-        ...(format === "pdf" ? { sections: [...selected] } : {}),
+        ...(usesSections ? { sections: [...selected], lifecycle, includeEmail } : {}),
         ...(format === "repository" ? { includeGit } : {}),
       });
       save(artifact.blob, artifact.filename);
@@ -57,19 +72,24 @@ export function ExportMenu({ api, draftId, locale, save = saveBlob }: {
         <option value="pdf">{t("export.pdf")}</option>
         <option value="html">{t("export.html")}</option>
         <option value="csv">{t("export.csv")}</option>
+        <option value="xlsx">{t("export.xlsx")}</option>
         <option value="repository">{t("export.repository")}</option>
       </select></label>
-      {format === "pdf" && <fieldset><legend>{t("export.pdfSections")}</legend>
-        <label><input type="checkbox" checked={selected.has("projects")} onChange={(event) => toggle("projects", event.target.checked)} />{t("export.projects")}</label>
-        <label><input type="checkbox" checked={selected.has("people")} onChange={(event) => toggle("people", event.target.checked)} />{t("export.people")}</label>
-        <label><input type="checkbox" checked={selected.has("project-details")} onChange={(event) => toggle("project-details", event.target.checked)} />{t("export.projectDetails")}</label>
-        <label><input type="checkbox" checked={selected.has("gantt")} onChange={(event) => toggle("gantt", event.target.checked)} />{t("export.gantt")}</label>
+      {usesSections && <fieldset><legend>{t("export.pdfSections")}</legend>
+        {REPORT_SECTIONS.map((section) => <label key={section.id}><input type="checkbox" checked={selected.has(section.id)} onChange={(event) => toggle(section.id, event.target.checked)} />{t(section.label)}</label>)}
       </fieldset>}
+      {usesSections && <label>{t("export.lifecycle")}<select value={lifecycle} onChange={(event) => setLifecycle(event.target.value as "active" | "archived" | "all")}>
+        <option value="active">{t("export.lifecycleActive")}</option>
+        <option value="archived">{t("export.lifecycleArchived")}</option>
+        <option value="all">{t("export.lifecycleAll")}</option>
+      </select></label>}
+      {usesSections && <label><input type="checkbox" checked={includeEmail} onChange={(event) => setIncludeEmail(event.target.checked)} />{t("export.includeEmail")}</label>}
       {format === "html" && <p>{t("export.htmlHint")}</p>}
       {format === "csv" && <p>{t("export.csvHint")}</p>}
+      {format === "xlsx" && <p>{t("export.xlsxHint")}</p>}
       {format === "repository" && <label><input type="checkbox" checked={includeGit} onChange={(event) => setIncludeGit(event.target.checked)} />{t("export.includeGit")}</label>}
       {error !== null && <div className="alert error">{error}</div>}
-      <button className="primary" disabled={busy || (format === "pdf" && selected.size === 0)} onClick={() => { void download(); }} type="button">{busy ? t("export.preparing") : t("export.download")}</button>
+      <button className="primary" disabled={busy || (usesSections && selected.size === 0)} onClick={() => { void download(); }} type="button">{busy ? t("export.preparing") : t("export.download")}</button>
     </div>
   </details>;
 }

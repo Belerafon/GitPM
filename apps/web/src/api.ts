@@ -121,13 +121,36 @@ export class ApiError extends Error {
   }
 }
 
-export type ExportFormat = "pdf" | "html" | "csv" | "repository";
-export type ExportSection = "projects" | "people" | "project-details" | "gantt";
+export type ExportFormat = "pdf" | "html" | "csv" | "xlsx" | "repository";
+export type ExportSection =
+  | "portfolio"
+  | "project-plan"
+  | "plan-fact"
+  | "workload"
+  | "vacations"
+  | "person-profile"
+  | "audit"
+  | "projects"
+  | "people"
+  | "project-details"
+  | "gantt";
 export interface ExportOptions {
   readonly format: ExportFormat;
   readonly locale: string;
   readonly sections?: readonly ExportSection[];
   readonly includeGit?: boolean;
+  readonly scope?: "portfolio" | "project" | "person" | "team";
+  readonly project?: string;
+  readonly person?: string;
+  readonly team?: string;
+  readonly asOf?: string;
+  readonly periodStart?: string;
+  readonly periodFinish?: string;
+  readonly lifecycle?: "active" | "archived" | "all";
+  readonly includeEmail?: boolean;
+  readonly hidePersonalData?: boolean;
+  readonly pageSize?: "A4" | "Letter";
+  readonly density?: "compact" | "detailed";
 }
 export interface ExportDownload {
   readonly blob: Blob;
@@ -389,6 +412,18 @@ export class HttpGitPmApi implements GitPmApi {
     const query = new URLSearchParams({ format: options.format, locale: options.locale });
     if (options.sections !== undefined) query.set("sections", options.sections.join(","));
     if (options.includeGit !== undefined) query.set("include_git", String(options.includeGit));
+    if (options.scope !== undefined) query.set("scope", options.scope);
+    if (options.project !== undefined) query.set("project", options.project);
+    if (options.person !== undefined) query.set("person", options.person);
+    if (options.team !== undefined) query.set("team", options.team);
+    if (options.asOf !== undefined) query.set("as_of", options.asOf);
+    if (options.periodStart !== undefined) query.set("period_start", options.periodStart);
+    if (options.periodFinish !== undefined) query.set("period_finish", options.periodFinish);
+    if (options.lifecycle !== undefined) query.set("lifecycle", options.lifecycle);
+    if (options.includeEmail !== undefined) query.set("include_email", String(options.includeEmail));
+    if (options.hidePersonalData !== undefined) query.set("hide_personal_data", String(options.hidePersonalData));
+    if (options.pageSize !== undefined) query.set("page_size", options.pageSize);
+    if (options.density !== undefined) query.set("density", options.density);
     return await this.requestDownload(`/api/drafts/${encodeURIComponent(draftId)}/export?${query.toString()}`);
   }
 

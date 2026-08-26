@@ -58,7 +58,7 @@ describe("export API", () => {
     });
     apps.push(app);
 
-    const format = await app.inject({ method: "GET", url: "/api/drafts/DRF-1/export?format=xlsx" });
+    const format = await app.inject({ method: "GET", url: "/api/drafts/DRF-1/export?format=docx" });
     const includeGit = await app.inject({ method: "GET", url: "/api/drafts/DRF-1/export?format=repository&include_git=1" });
 
     expect(format.statusCode).toBe(400);

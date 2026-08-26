@@ -87,6 +87,26 @@ describe("ExportService", () => {
     expect(artifact.content.toString("utf8")).toContain("projects.csv");
     expect(artifact.content.toString("utf8")).toContain("saved-views.csv");
     expect(artifact.content.toString("utf8")).toContain("time-entries.csv");
+    expect(artifact.content.toString("utf8")).toContain("work-categories.csv");
+    expect(artifact.content.toString("utf8")).toContain("report-plan-fact.csv");
+    expect(artifact.content.toString("utf8")).toContain("report-vacations.csv");
+  });
+
+  it("builds XLSX and HTML reports from the shared model", async () => {
+    const xlsx = await service.create("DRF-1", { format: "xlsx", locale: "ru", sections: ["portfolio", "plan-fact", "vacations"] });
+    const html = await service.create("DRF-1", { format: "html", locale: "ru", sections: ["portfolio", "project-plan", "plan-fact", "workload", "vacations", "person-profile", "audit"] });
+    const page = html.content.toString("utf8");
+
+    expect(xlsx.filename).toBe("gitpm-20260725-deadbeef-reports.xlsx");
+    expect(xlsx.content.readUInt32LE(0)).toBe(0x04034b50);
+    expect(xlsx.content.toString("utf8")).toContain("xl/workbook.xml");
+    expect(xlsx.content.toString("utf8")).toContain("xl/worksheets/sheet3.xml");
+    expect(page).toContain("План-факт");
+    expect(page).toContain("Загрузка команды");
+    expect(page).toContain("Отпуска и отсутствия");
+    expect(page).toContain("Профиль сотрудника");
+    expect(page).not.toContain("anna@example.test");
+    expect(page).toContain("max-width:760px");
   });
 
   it("resolves named planning tracks and semantic done statuses without a reserved plan or done slug", async () => {

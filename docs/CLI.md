@@ -56,7 +56,7 @@ gitpm history file-history [--draft <id>] --path <path> [--limit <n>]
 gitpm history restore --commit <sha> --path <path> [--path <path> ...]
 gitpm history revert --commit <sha> --message <message>
 gitpm history revert --draft <id> --commit <sha> --new-draft <id> --owner <id>
-gitpm export [--draft <id>] --format pdf|html|csv|repository [--locale en|ru] [--section projects|people|project-details|gantt]... [--include-git] [--output <path>] [--force]
+gitpm export [--draft <id>] --format pdf|html|csv|xlsx|repository [--locale en|ru] [--section portfolio|project-plan|plan-fact|workload|vacations|person-profile|audit|projects|people|project-details|gantt]... [--include-git] [--output <path>] [--force]
 gitpm commit --all [--draft <id>] -m <message> [--project <id>] [--allow-delete]
 gitpm push [--draft <id>]
 gitpm mr create --draft <id> --owner <id> --title <title> [--description <text>]
@@ -73,9 +73,10 @@ gitpm --version [--json]
 
 `gitpm export` использует единый с web/API сервис экспорта. PDF по умолчанию содержит
 разделы Projects и People; повторяемый `--section` добавляет или явно задаёт состав.
-HTML создаётся одним автономным файлом без мутаций, CSV — ZIP с таблицей для каждой
-repository schema, repository ZIP — без `.git` по умолчанию или с переносимой
-историей при `--include-git`. Имя связано с датой `HEAD`-коммита и его short hash.
+HTML, CSV и XLSX строятся из той же модели отчётов. CSV — ZIP с таблицей для каждой
+repository schema и аналитическими `report-*.csv`, repository ZIP — без `.git` по
+умолчанию или с переносимой историей при `--include-git`. Имя связано с датой
+`HEAD`-коммита и его short hash.
 Подробнее: [`Export.md`](Export.md).
 
 `entity create` принимает YAML mapping. При наличии `--type` поля `schema`, `id` и
