@@ -120,6 +120,42 @@ test.describe("GitPM browser UI", () => {
     }
   });
 
+  test("contains narrow workspace layouts without crushing their primary content", async ({ page }) => {
+    test.setTimeout(90_000);
+    const cases = [
+      { width: 390, path: "/vacations", ready: ".vacation-calendar-scroll" },
+      { width: 740, path: "/projects", ready: ".project-register" },
+      { width: 881, path: "/workload", ready: ".workload-table-wrap" },
+      { width: 881, path: "/workspaces", ready: ".draft-detail" },
+      { width: 881, path: "/people/U-26-5EBAE3", ready: ".people-profile-header" },
+    ] as const;
+
+    for (const item of cases) {
+      await page.setViewportSize({ width: item.width, height: 900 });
+      await page.goto(item.path);
+      await expect(page.locator(item.ready)).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    }
+
+    await page.setViewportSize({ width: 740, height: 900 });
+    await page.goto("/projects");
+    const register = page.locator(".project-register");
+    await expect(register).toBeVisible();
+    await expect(register).toHaveCSS("overflow-x", "auto");
+    expect(await register.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+
+    await page.setViewportSize({ width: 881, height: 900 });
+    await page.goto("/people/U-26-5EBAE3");
+    await expect(page.locator(".people-profile-header")).toBeVisible();
+    const profile = await page.locator(".people-profile-header").evaluate((header) => {
+      const identity = header.querySelector<HTMLElement>(".people-profile-identity")!.getBoundingClientRect();
+      const controls = header.querySelector<HTMLElement>(".people-profile-controls")!.getBoundingClientRect();
+      return { controlsTop: controls.top, identityBottom: identity.bottom, identityWidth: identity.width };
+    });
+    expect(profile.identityWidth).toBeGreaterThan(180);
+    expect(profile.controlsTop).toBeGreaterThanOrEqual(profile.identityBottom - 1);
+  });
+
   test("explains the repository default calendar and opens its exact editor", async ({ page }) => {
     await page.goto("/calendars");
     await page.locator(".interface-settings > summary").click();

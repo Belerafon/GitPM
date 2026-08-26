@@ -239,6 +239,36 @@ test.describe("project overview geometry", () => {
     });
   }
 
+  test("keeps the project identity readable across intermediate responsive widths", async ({ page }) => {
+    await page.goto(`/projects/${FIXTURE_PROJECT_ID}`);
+    await expect(page.locator(".project-plan-header")).toBeVisible();
+
+    for (const width of [740, 881, 1032]) {
+      await page.setViewportSize({ width, height: 900 });
+      const geometry = await page.locator(".project-plan-header").evaluate((header) => {
+        const title = header.querySelector<HTMLElement>(".project-plan-title")!;
+        const actions = header.querySelector<HTMLElement>(".project-plan-actions")!;
+        const headerBounds = header.getBoundingClientRect();
+        const titleBounds = title.getBoundingClientRect();
+        const actionBounds = actions.getBoundingClientRect();
+        return {
+          actionLeft: actionBounds.left,
+          actionRight: actionBounds.right,
+          actionTop: actionBounds.top,
+          headerLeft: headerBounds.left,
+          headerRight: headerBounds.right,
+          titleBottom: titleBounds.bottom,
+          titleWidth: titleBounds.width,
+        };
+      });
+
+      expect(geometry.titleWidth).toBeGreaterThan(180);
+      expect(geometry.actionLeft).toBeGreaterThanOrEqual(geometry.headerLeft - 1);
+      expect(geometry.actionRight).toBeLessThanOrEqual(geometry.headerRight + 1);
+      expect(geometry.actionTop).toBeGreaterThanOrEqual(geometry.titleBottom - 1);
+    }
+  });
+
   test("the effort tab loads for the same project and renders its report", async ({ page }) => {
     await page.setViewportSize({ width: 1688, height: 900 });
     await page.goto(`/projects/${FIXTURE_PROJECT_ID}/effort`);

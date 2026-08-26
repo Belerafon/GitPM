@@ -189,7 +189,7 @@ input { min-width: 0; width: 100%; border: 1px solid #c9cbc5; border-radius: 8px
 .project-group-heading h4 { margin: 0; font-size: 1rem; }
 .project-group-heading span { color: #68706b; font-size: .75rem; }
 .field-error { color: #8b2d28; }
-.project-register { display: grid; width: 100%; min-width: 0; max-width: 100%; overflow: hidden; border: 1px solid #dedfd9; border-radius: 10px; background: #fff; }
+.project-register { display: grid; width: 100%; min-width: 0; max-width: 100%; overflow-x: auto; overflow-y: hidden; border: 1px solid #dedfd9; border-radius: 10px; background: #fff; }
 .project-register-head, .project-register-row { display: grid; grid-template-columns: minmax(240px, 2.2fr) minmax(100px, .8fr) minmax(130px, 1fr) 70px 70px minmax(100px, .8fr) minmax(90px, .8fr); gap: .75rem; align-items: center; }
 .project-register-head { background: #f3f5f2; padding: .55rem .75rem; color: #68706b; font-size: .72rem; font-weight: 700; }
 .project-register-row { width: 100%; border: 0; border-top: 1px solid #e3e5df; border-radius: 0; background: #fff; padding: .6rem .75rem; text-align: left; }
@@ -747,6 +747,7 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .empty-copy { color: #707671; }
 @media (max-width: 1350px) { .project-plan-layout.with-inspector { grid-template-columns: 1fr; } .project-plan-inspector { position: fixed; z-index: 50; inset: 0 0 0 auto; width: min(440px, 100vw); max-height: none; border: 0; border-left: 1px solid #d9ddd6; border-radius: 0; background: #fff; box-shadow: -12px 0 32px rgba(24, 53, 42, .16); padding: 1rem; } .plan-pane-resizer { display: none; } }
 @media (max-width: 1000px) { .project-plan-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .project-directory-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .project-detail-layout { grid-template-columns: 1fr; } .task-create { grid-template-columns: 1fr 1fr; } .task-layout { grid-template-columns: 1fr; } .task-panel { border-left: 0; border-top: 1px solid #dedfd9; padding: 1rem 0 0; } }
+@media (max-width: 1180px) { .project-plan-header { grid-template-columns: 1fr; } .project-plan-actions { flex-wrap: wrap; } .project-plan-meta { grid-column: 1; } }
 @media (max-width: 700px) { .project-directory-grid, .project-plan-stats, .core-columns, .task-detail-meta { grid-template-columns: 1fr; } .project-directory .card-heading, .task-toolbar, .task-toolbar-controls, .project-filter-toolbar, .project-filter-controls, .project-plan-work-heading, .project-plan-stage > header { align-items: stretch; flex-direction: column; } .project-plan-header, .advanced-view-bar { grid-template-columns: 1fr; } .project-plan-toolbar { grid-template-areas: "heading" "fields" "filters"; grid-template-columns: 1fr; } .project-plan-actions, .project-plan-stage-actions { flex-direction: column; align-items: stretch; } .project-plan-meta { grid-column: 1; } .project-plan-summary, .project-register-summary { gap: .6rem; } .project-register { overflow-x: auto; } .project-register-head, .project-register-row { min-width: 780px; } .project-plan-stage-progress { grid-template-columns: 1fr; } .project-plan-task-list { grid-template-columns: auto minmax(0, 1fr); column-gap: .25rem; } .project-plan-task-row { grid-template-columns: subgrid; } .task-create, .task-row { grid-template-columns: 1fr; } .advanced-view-bar { align-items: stretch; } .advanced-view-bar > small, .task-field-settings { justify-self: start; } .advanced-sort-rule, .advanced-filter-condition-controls, .advanced-filter-condition-controls:has(input:nth-last-of-type(2)), .advanced-filter-condition-controls:has(select:nth-last-of-type(4)) { grid-template-columns: 1fr auto; } .advanced-sort-rule > span, .advanced-sort-rule > select, .advanced-filter-condition-controls > select, .advanced-filter-condition-controls > input { grid-column: 1; } .advanced-sort-rule > button, .advanced-filter-condition-controls > button { grid-column: 2; grid-row: 1; } }
 @container (max-width: 800px) { .project-plan-task-list { grid-template-columns: auto minmax(0, 1fr); column-gap: .25rem; } .project-plan-task-row { grid-template-columns: subgrid; } .project-plan-task-meta { grid-column: 2; gap: .65rem; align-items: center; } }
 @container (max-width: 560px) { .project-plan-task-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); } .project-plan-task-meta .plan-order-controls { justify-self: start; } }
@@ -1085,8 +1086,9 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .people-project-heading { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
 .people-project-heading > strong { display: grid; place-items: center; min-width: 1.6rem; height: 1.6rem; border-radius: 999px; background: #edf3ee; color: #31584c; font-size: .75rem; }
 @media (max-width: 1100px) { .people-profile-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 1000px) { .people-profile-header { grid-template-columns: auto minmax(0, 1fr); } .people-profile-controls { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) auto; min-width: 0; align-items: end; } }
 @media (max-width: 900px) { .people-profile-layout { grid-template-columns: 1fr; } }
-@media (max-width: 700px) { .people-profile-header, .people-profile-stats { grid-template-columns: 1fr; } .people-profile-controls { min-width: 0; } .people-profile-controls > button { justify-self: stretch; } .people-profile-meta { grid-template-columns: 1fr 1fr; } .people-calendar-heading { align-items: stretch; flex-direction: column; } .people-calendar-navigation { width: 100%; } .people-task-list > button { grid-template-columns: 1fr auto; } .people-task-list time { grid-column: 1 / -1; text-align: left; } .people-availability-summary { flex-wrap: wrap; } .people-availability-list > button { grid-template-columns: 1fr; gap: .25rem; } .people-schedule-list li { grid-template-columns: 1fr; gap: .2rem; } .people-schedule-list time { padding-top: 0; } }
+@media (max-width: 700px) { .people-profile-header, .people-profile-stats, .people-profile-controls { grid-template-columns: 1fr; } .people-profile-controls { min-width: 0; } .people-profile-controls > button { justify-self: stretch; } .people-profile-meta { grid-template-columns: 1fr 1fr; } .people-calendar-heading { align-items: stretch; flex-direction: column; } .people-calendar-navigation { width: 100%; } .people-task-list > button { grid-template-columns: 1fr auto; } .people-task-list time { grid-column: 1 / -1; text-align: left; } .people-availability-summary { flex-wrap: wrap; } .people-availability-list > button { grid-template-columns: 1fr; gap: .25rem; } .people-schedule-list li { grid-template-columns: 1fr; gap: .2rem; } .people-schedule-list time { padding-top: 0; } }
 fieldset { display: flex; flex-wrap: wrap; gap: .5rem; border: 1px solid #dedfd9; border-radius: 8px; }
 fieldset label { display: flex; gap: .25rem; align-items: center; }
 .assignee-fieldset { display: grid; align-items: stretch; }
@@ -1235,6 +1237,7 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
   .global-search { order: 3; flex-basis: 100%; width: 100%; max-width: none; }
 }
 @media (max-width: 900px) { .settings-config-grid, .admin-grid { grid-template-columns: 1fr; } .admin-create { grid-template-columns: 1fr 1fr; } .calendar-year-grid { grid-template-columns: repeat(3, minmax(150px, 1fr)); } }
+@media (max-width: 1000px) { .draft-layout { grid-template-columns: 1fr; } }
 @media (max-width: 680px) { .calendar-year-grid { grid-template-columns: repeat(2, minmax(145px, 1fr)); } .calendar-year-toolbar { grid-template-columns: auto minmax(100px, 1fr) auto; } .calendar-year-toolbar > span { grid-column: 1 / -1; justify-self: start; } }
 @media (max-width: 560px) { .admin-create, .config-row-fields { grid-template-columns: 1fr; } .config-row-heading, .config-row-footer, .config-add-row { align-items: stretch; flex-direction: column; } .config-order { justify-content: end; } .card-heading { align-items: stretch; flex-direction: column; } }
 
@@ -1592,7 +1595,7 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
 .vacation-calendar-toolbar button { justify-self: start; }
 .vacation-calendar-period { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
 .vacation-calendar-period > span { color: #5d625f; font-size: .78rem; }
-.vacation-calendar-months { display: flex; gap: .35rem; }
+.vacation-calendar-months { display: flex; min-width: 0; flex-wrap: wrap; gap: .35rem; }
 .vacation-calendar-months button { border: 1px solid #c9cbc5; background: #fff; color: #315f50; padding: .45rem .75rem; }
 .vacation-calendar-months button.active { border-color: #315f50; background: #e7f0ea; color: #123c2f; font-weight: 700; }
 .vacation-calendar-summary { display: grid; grid-template-columns: repeat(3, minmax(140px, 1fr)); gap: .75rem 1.25rem; }
@@ -1701,7 +1704,7 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
 .workload-contribution h4 { margin: .15rem 0 0; color: #59625c; font-size: .75rem; }
 .workload-contribution ul { display: grid; gap: .35rem; margin: 0; padding-left: 1.15rem; color: #3f5f50; font-size: .78rem; }
 .workload-no-transfer { margin: 0; color: #727772; font-size: .78rem; }
-@media (max-width: 800px) { .workload-toolbar { grid-template-columns: 1fr; } .workload-summary { grid-template-columns: 1fr 1fr; } .workload-calculation { grid-column: 1 / -1; } .workload-exclusions dl { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 1000px) { .workload-toolbar { grid-template-columns: 1fr; } .workload-summary { grid-template-columns: 1fr 1fr; } .workload-calculation { grid-column: 1 / -1; } .workload-exclusions dl { grid-template-columns: 1fr 1fr; } }
 .external-update { position: relative; outline: 2px solid #d9a441; outline-offset: -2px; animation: external-update-fade 1.8s ease-out both; }
 .external-update::after { position: absolute; top: .35rem; right: .45rem; width: .48rem; height: .48rem; border-radius: 50%; background: #d9a441; content: ""; }
 @keyframes external-update-fade { 0%, 70% { background-color: #fff3c9; } 100% { background-color: transparent; outline-color: transparent; } }

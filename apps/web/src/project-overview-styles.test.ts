@@ -44,4 +44,11 @@ describe("project overview styles", () => {
   it("removes the dead rolled-note content rule that no JSX attribute feeds", () => {
     expect(styles).not.toContain("attr(data-rolled-note)");
   });
+
+  it("preserves readable project identity and reachable register columns in narrow workspaces", () => {
+    const registerRule = styles.match(/\.project-register\s*\{([^}]*)\}/u)?.[1] ?? "";
+    expect(registerRule).toContain("overflow-x: auto");
+    expect(styles).toContain("@media (max-width: 1180px) { .project-plan-header { grid-template-columns: 1fr; }");
+    expect(styles).toContain(".project-plan-actions { flex-wrap: wrap; }");
+  });
 });
