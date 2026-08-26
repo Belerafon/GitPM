@@ -1271,6 +1271,7 @@
   ,"advancedView.field.start": "Start date"
   ,"advancedView.field.due": "Finish date"
   ,"advancedView.field.overdue": "Overdue"
+  ,"advancedView.field.projectOverdueHint": "Projects whose finish date has already passed."
   ,"advancedView.field.risk": "Risk"
   ,"advancedView.field.tasks": "Tasks"
   ,"advancedView.field.milestones": "Milestones"

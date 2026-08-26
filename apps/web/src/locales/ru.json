@@ -1271,6 +1271,7 @@
   ,"advancedView.field.start": "Дата начала"
   ,"advancedView.field.due": "Дата завершения"
   ,"advancedView.field.overdue": "Просрочено"
+  ,"advancedView.field.projectOverdueHint": "Проекты, у которых дата завершения уже прошла."
   ,"advancedView.field.risk": "Риск"
   ,"advancedView.field.tasks": "Задачи"
   ,"advancedView.field.milestones": "Этапы"

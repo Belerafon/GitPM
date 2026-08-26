@@ -82,6 +82,26 @@ describe("AdvancedViewControls", () => {
     expect(within(dialog).getByRole("button", { name: "Without a finish date" })).toBeTruthy();
   });
 
+  it("explains a computed field under the selected condition", () => {
+    const nextHint = "One unfinished task with the earliest due date from each active project.";
+    const computedFields: readonly ViewField<(typeof items)[number]>[] = [
+      ...fields,
+      { id: "nextProjectTask", label: "Next per project", type: "boolean", hint: nextHint, read: () => false },
+    ];
+    function ComputedHarness() {
+      const [query, setQuery] = useState<AdvancedViewQuery>(() => emptyViewQuery());
+      return <AdvancedViewControls allowSorting={false} fields={computedFields} locale="en" onChange={setQuery} query={query} resultCount={2} t={(key, values) => message("en", key, values)} totalCount={2} />;
+    }
+    render(<ComputedHarness />);
+    fireEvent.click(screen.getByRole("button", { name: "Filters" }));
+    const dialog = screen.getByRole("dialog", { name: "Filters" });
+    fireEvent.click(within(dialog).getByRole("button", { name: /Add condition/u }));
+    expect(within(dialog).queryByText(nextHint)).toBeNull();
+    fireEvent.change(within(dialog).getByLabelText("Field"), { target: { value: "nextProjectTask" } });
+    expect(within(dialog).getByText(nextHint)).toBeTruthy();
+    expect(within(dialog).getByLabelText("Field").getAttribute("aria-describedby")).toMatch(/-field-hint$/u);
+  });
+
   it("describes the default lifecycle filter by its visible effect", () => {
     render(<LifecycleHarness />);
 

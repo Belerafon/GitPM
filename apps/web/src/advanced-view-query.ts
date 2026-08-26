@@ -12,6 +12,7 @@ export interface ViewField<Row> {
   readonly label: string;
   readonly type: ViewFieldType;
   readonly options?: readonly ViewFieldOption[];
+  readonly hint?: string;
   readonly read: (row: Row) => ViewValue;
   readonly sortable?: boolean;
 }
