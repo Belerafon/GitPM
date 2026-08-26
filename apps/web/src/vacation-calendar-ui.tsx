@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { GitPmApi } from "./api.js";
 import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
 import { dayUnit, formatDateOnly, localeRegistry, message, type Locale, type MessageKey } from "./i18n.js";
+import { currentAbsence, vacationYearBalance } from "./people-availability-model.js";
 import { availabilityKindLabel } from "./people-availability-ui.js";
 import type { DraftStatus, EntityResult, GitPmDocument } from "./types.js";
 import {
@@ -89,6 +90,11 @@ export function VacationCalendarWorkspace({ api, draft, locale, onNavigate = () 
     for (const bar of bars) grouped.set(bar.personId, [...(grouped.get(bar.personId) ?? []), bar]);
     return grouped;
   }, [bars]);
+  const eventsByPerson = useMemo(() => {
+    const grouped = new Map<string, VacationEvent[]>();
+    for (const event of modeledEvents) grouped.set(event.personId, [...(grouped.get(event.personId) ?? []), event]);
+    return grouped;
+  }, [modeledEvents]);
   const personOptions = useMemo(() => visiblePeople(modeledPeople, modeledTeams, { ...filters, personId: "", search: "" }), [modeledPeople, modeledTeams, filters]);
   const monthLabel = (key: string) => new Intl.DateTimeFormat(localeRegistry[locale]?.languageTag ?? "en", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${key}-01T00:00:00Z`));
   const todayOffset = window.days.indexOf(today);
@@ -134,14 +140,26 @@ export function VacationCalendarWorkspace({ api, draft, locale, onNavigate = () 
       <span className="kind-training">{t("availability.kindTraining")}</span>
       <span className="kind-other">{t("availability.kindOther")}</span>
       <span className="today">{t("gantt.legendToday")}</span>
+      <span className="away">{t("vacationCalendar.legendAway")}</span>
     </div>
     {rows.length === 0 ? <section className="card empty-workspace">{t("vacationCalendar.empty")}</section> : <section aria-label={t("vacationCalendar.chart")} className="card vacation-calendar-scroll" data-finish={window.finish} data-months={months} data-start={window.start}>
       <div className="vacation-calendar-labels">
         <div className="vacation-calendar-label-head">{t("workload.person")}</div>
-        {rows.map((person) => <div className="vacation-calendar-label" key={person.id}><button className="text-link" onClick={() => onNavigate("people", { personId: person.id })} type="button">{person.name}</button></div>)}
+        {rows.map((person) => {
+          const personEvents = eventsByPerson.get(person.id) ?? [];
+          const away = currentAbsence(personEvents, today);
+          const year = vacationYearBalance(personEvents, today);
+          const stats = t("vacationCalendar.personStats", { taken: year.taken, planned: year.planned, remaining: year.remaining });
+          const hint = away === undefined ? `${t("vacationCalendar.availableToday")}. ${stats}` : `${t("vacationCalendar.awayUntil", { kind: availabilityKindLabel(t, away.kind), date: formatDateOnly(locale, away.finish) })}. ${stats}`;
+          return <div className={`vacation-calendar-label${away === undefined ? "" : " away"}`} data-person-id={person.id} key={person.id} title={hint}>
+            <button className="text-link" onClick={() => onNavigate("people", { personId: person.id })} title={hint} type="button">{person.name}</button>
+            <small>{stats}</small>
+          </div>;
+        })}
       </div>
       <div className="vacation-calendar-timeline" style={{ width: `${window.timelineWidth}px` }}>
         <div className="vacation-calendar-months-row" style={{ gridTemplateColumns: window.months.map((segment) => `${segment.days * window.dayWidth}px`).join(" ") }}>{window.months.map((segment) => <time dateTime={`${segment.key}-01`} key={segment.key}>{monthLabel(segment.key)}</time>)}</div>
+        {rows.map((person, index) => currentAbsence(eventsByPerson.get(person.id) ?? [], today) === undefined ? null : <div className="vacation-calendar-row away" data-person-id={person.id} key={person.id} style={{ top: `${VACATION_CALENDAR_HEADER_HEIGHT + index * VACATION_CALENDAR_ROW_HEIGHT}px`, height: `${VACATION_CALENDAR_ROW_HEIGHT}px` }} />)}
         {todayOffset >= 0 && <div aria-label={t("gantt.legendToday")} className="vacation-calendar-today" style={{ left: `${todayOffset * window.dayWidth + window.dayWidth / 2}px` }} />}
         <div className="vacation-calendar-grid" style={{ backgroundSize: `${window.dayWidth}px 100%`, height: `${rows.length * VACATION_CALENDAR_ROW_HEIGHT}px` }} />
         {rows.map((person, index) => (barsByPerson.get(person.id) ?? []).map((bar) => <div className={`vacation-calendar-bar ${kindClass(bar.kind)} state-${bar.state}`} data-duration={bar.duration} data-event-id={bar.id} data-finish={bar.finish} data-offset={bar.offset} data-person-id={bar.personId} data-start={bar.start} key={bar.id} style={{ left: `${bar.left}px`, top: `${VACATION_CALENDAR_HEADER_HEIGHT + index * VACATION_CALENDAR_ROW_HEIGHT + 8}px`, width: `${bar.width}px` }} title={barTitle(bar)}><span>{t("vacationCalendar.barText", { start: formatDateOnly(locale, bar.start), finish: formatDateOnly(locale, bar.finish), days: bar.days })}</span></div>))}
