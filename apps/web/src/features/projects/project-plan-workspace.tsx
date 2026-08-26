@@ -437,7 +437,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     { id: "start", label: t("advancedView.field.start"), type: "date", read: (item) => text(item.document, "start") },
     { id: "due", label: t("advancedView.field.due"), type: "date", read: (item) => text(item.document, "due") },
     { id: "estimate", label: t("advancedView.field.estimate"), type: "number", read: (item) => effortOf(item.document) },
-    { id: "overdue", label: t("advancedView.field.overdue"), type: "boolean", read: (item) => { const due = text(item.document, "due"); return /^\d{4}-\d{2}-\d{2}$/u.test(due) && due < today && !isCompletedStatus(statuses, text(item.document, "status")); } },
+    { id: "overdue", label: t("advancedView.field.overdue"), type: "boolean", hint: t("portfolioTasks.presetOverdueHint"), read: (item) => { const due = text(item.document, "due"); return /^\d{4}-\d{2}-\d{2}$/u.test(due) && due < today && !isCompletedStatus(statuses, text(item.document, "status")); } },
   ], [effortOf, locale, peopleOptions, statuses, text, today, types, workspace]);
   useEffect(() => {
     const parsed = filterOnlyViewQuery(parseAdvancedViewQuery(initialAdvancedQuery, taskAdvancedFields));

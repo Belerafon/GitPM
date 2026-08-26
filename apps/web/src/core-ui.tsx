@@ -299,7 +299,7 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
     { id: "lifecycle", label: t("advancedView.field.lifecycle"), type: "select", options: lifecycleOptions, read: (item) => item.document.lifecycle },
     { id: "start", label: t("advancedView.field.start"), type: "date", read: (item) => value(item.document, "start") },
     { id: "due", label: t("advancedView.field.due"), type: "date", read: (item) => value(item.document, "due") },
-    { id: "overdue", label: t("advancedView.field.overdue"), type: "boolean", read: (item) => projectRisk(item) === "overdue" },
+    { id: "overdue", label: t("advancedView.field.overdue"), type: "boolean", hint: t("advancedView.field.projectOverdueHint"), read: (item) => projectRisk(item) === "overdue" },
     { id: "risk", label: t("advancedView.field.risk"), type: "select", options: [{ value: "onTrack", label: t("core.riskOnTrack") }, { value: "near", label: t("core.riskNear") }, { value: "overdue", label: t("core.riskOverdue") }, { value: "unknown", label: t("core.riskUnknown") }], read: projectRisk },
     { id: "tasks", label: t("advancedView.field.tasks"), type: "number", read: (item) => activeTasks.filter((task) => task.document.project === item.document.id).length },
     { id: "milestones", label: t("advancedView.field.milestones"), type: "number", read: (item) => activeMilestones.filter((milestone) => milestone.document.project === item.document.id).length },
@@ -354,8 +354,8 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
     { id: "start", label: t("advancedView.field.start"), type: "date", read: (item) => value(item.document, "start") },
     { id: "due", label: t("advancedView.field.due"), type: "date", read: (item) => value(item.document, "due") },
     { id: "estimate", label: t("advancedView.field.estimate"), type: "number", read: (item) => effortOf(item.document) },
-    { id: "overdue", label: t("advancedView.field.overdue"), type: "boolean", read: (item) => { const due = value(item.document, "due"); return /^\d{4}-\d{2}-\d{2}$/u.test(due) && due < today && !isCompletedStatus(statusOptions, value(item.document, "status")); } },
-    { id: "nextProjectTask", label: t("portfolioTasks.presetNext"), type: "boolean", read: (item) => nextPortfolioTaskIds.has(item.document.id) },
+    { id: "overdue", label: t("advancedView.field.overdue"), type: "boolean", hint: t("portfolioTasks.presetOverdueHint"), read: (item) => { const due = value(item.document, "due"); return /^\d{4}-\d{2}-\d{2}$/u.test(due) && due < today && !isCompletedStatus(statusOptions, value(item.document, "status")); } },
+    { id: "nextProjectTask", label: t("portfolioTasks.presetNext"), type: "boolean", hint: t("portfolioTasks.presetNextHint"), read: (item) => nextPortfolioTaskIds.has(item.document.id) },
   ], [effortOf, lifecycleOptions, locale, milestones, nextPortfolioTaskIds, operationalProjectIds, peopleOptions, projects, statusOptions, taskDepthById, today, typeOptions, value]);
   const portfolioTaskPresets = useMemo<readonly QuickViewPreset[]>(() => [
     { id: "portfolio-overdue", label: t("portfolioTasks.presetOverdue"), hint: t("portfolioTasks.presetOverdueHint"), query: portfolioTaskPresetQuery("overdue", "is-true") },
