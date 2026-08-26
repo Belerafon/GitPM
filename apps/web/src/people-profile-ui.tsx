@@ -235,6 +235,9 @@ function PeopleProfile({ archivePerson, createAvailability, data, deletePerson, 
   const contributingProjects = activeProjects.filter((item) => projectTaskCounts.has(item.document.id)).sort((left, right) => text(left.document, "name").localeCompare(text(right.document, "name"), locale));
   const teams = data.teams.filter((item) => item.document.lifecycle === "active" && strings(item.document, "members").includes(personId));
   const calendar = data.calendars.find((item) => item.document.id === text(person.document, "calendar"));
+  const holidayDates = calendar === undefined ? [] : strings(calendar.document, "holidays").filter(validDate).sort();
+  const visibleHolidays = holidayDates.slice(0, 8);
+  const remainingHolidays = holidayDates.length - visibleHolidays.length;
   const availabilityEvents = data.availabilityEvents.filter((item) => item.document.person === personId);
   const visibleAssignedTasks = assignedTasks.filter((task) => statusSelection.has(text(task.document, "status")) && projectSelection.has(text(task.document, "project")));
   const taskGroups = [...new Set(visibleAssignedTasks.map((task) => text(task.document, "project")))].map((projectId) => ({
@@ -279,7 +282,7 @@ function PeopleProfile({ archivePerson, createAvailability, data, deletePerson, 
       </main>
 
       <aside className="people-profile-aside">
-        <section className="card people-profile-section"><h3>{t("people.workCalendar")}</h3>{calendar === undefined ? <p className="people-empty">{t("people.noCalendar")}</p> : <><p className="people-calendar-capacity">{t("people.calendarCapacity", { count: formatNumber(locale, number(person.document, "weekly_capacity_hours")) })}</p><div className="calendar-week-preview" aria-label={t("admin.weekPreview")}>{[1, 2, 3, 4, 5, 6, 7].map((day) => <span className={numbers(calendar.document, "working_weekdays").includes(day) ? "working" : "off"} key={day}>{t(`admin.day${day}` as MessageKey)}</span>)}</div><h4>{t("people.holidays")}</h4><div className="people-holidays">{strings(calendar.document, "holidays").filter(validDate).sort().slice(0, 8).map((date) => <time dateTime={date} key={date}>{formatDateOnly(locale, date)}</time>)}{strings(calendar.document, "holidays").filter(validDate).length === 0 && <span>{t("admin.noHolidays")}</span>}</div></>}
+        <section className="card people-profile-section"><h3>{t("people.workCalendar")}</h3>{calendar === undefined ? <p className="people-empty">{t("people.noCalendar")}</p> : <><p className="people-calendar-capacity">{t("people.calendarCapacity", { count: formatNumber(locale, number(person.document, "weekly_capacity_hours")) })}</p><div className="calendar-week-preview" aria-label={t("admin.weekPreview")}>{[1, 2, 3, 4, 5, 6, 7].map((day) => <span className={numbers(calendar.document, "working_weekdays").includes(day) ? "working" : "off"} key={day}>{t(`admin.day${day}` as MessageKey)}</span>)}</div><h4>{t("people.holidays")}</h4><div className="people-holidays">{visibleHolidays.map((date) => <time dateTime={date} key={date}>{formatDateOnly(locale, date)}</time>)}{holidayDates.length === 0 && <span>{t("admin.noHolidays")}</span>}{remainingHolidays > 0 && <small className="calendar-more-dates">{t("admin.moreHolidays", { count: remainingHolidays })}</small>}</div></>}
         </section>
 
         <ProjectResponsibility title={t("people.responsibleProjects")} empty={t("people.noResponsibleProjects")} projects={ownedProjects} projectTaskCounts={projectTaskCounts} onNavigate={onNavigate} t={t} />

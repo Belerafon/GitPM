@@ -380,6 +380,7 @@
   ,"admin.applyPresetHint": "Заменит рабочие дни недели и нерабочие даты в этой форме. Изменения запишутся только после сохранения."
   ,"admin.weekPreview": "Предпросмотр рабочей недели"
   ,"admin.nextHolidays": "Дополнительные нерабочие даты"
+  ,"admin.moreHolidays": "+ ещё {count}"
   ,"admin.noHolidays": "Дополнительных дат нет"
   ,"admin.createPerson": "Создать сотрудника"
   ,"admin.createTeam": "Создать команду"
