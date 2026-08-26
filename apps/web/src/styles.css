@@ -877,8 +877,9 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .calendar-week-preview .off { background: #f0f1ef; color: #777d78; }
 .calendar-summary-preview { display: grid; gap: .5rem; }
 .calendar-exceptions { display: flex; flex-wrap: wrap; gap: .35rem; color: #646b66; font-size: .74rem; }
-.calendar-exceptions > span { width: 100%; font-weight: 650; }
+.calendar-exceptions-label { width: 100%; font-weight: 650; }
 .calendar-exceptions time { border-radius: 999px; background: #fff2cc; padding: .2rem .4rem; }
+.calendar-more-dates { border-radius: 999px; background: #e8ebe6; padding: .2rem .4rem; font-weight: 650; }
 .calendar-preset-summary { display: grid; gap: .3rem; border: 1px solid #dce3da; border-radius: 9px; background: #f5f8f4; padding: .75rem; color: #4e5750; }
 .calendar-preset-summary p { margin: 0; font-size: .82rem; line-height: 1.45; }
 .calendar-preset-summary span { font-size: .78rem; font-weight: 650; color: #285936; }

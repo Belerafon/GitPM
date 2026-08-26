@@ -380,6 +380,7 @@
   ,"admin.applyPresetHint": "Replaces working weekdays and non-working dates in this form. Nothing changes until you save."
   ,"admin.weekPreview": "Working week preview"
   ,"admin.nextHolidays": "Additional non-working dates"
+  ,"admin.moreHolidays": "+{count} more"
   ,"admin.noHolidays": "No additional dates"
   ,"admin.createPerson": "Create person"
   ,"admin.createTeam": "Create team"

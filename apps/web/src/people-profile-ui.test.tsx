@@ -281,4 +281,20 @@ describe("person profile", () => {
     expect(await screen.findByText("Administrative changes require Maintainer.")).toBeTruthy();
     expect((screen.getByRole("button", { name: "Edit person" }) as HTMLButtonElement).disabled).toBe(true);
   });
+
+  it("shows leftover calendar exceptions instead of silently dropping them", async () => {
+    const personId = "U-26-ADA";
+    const holidays = ["2026-01-01", "2026-01-02", "2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08", "2026-01-09", "2026-02-23", "2026-03-09", "2026-05-01", "2026-05-11", "2026-06-12", "2026-11-04", "2026-12-31"];
+    const person = result({ schema: "gitpm/person@1", id: personId, name: "Ada", weekly_capacity_hours: 32, calendar: "C-26-DEFAULT", lifecycle: "active" });
+    const calendar = result({ schema: "gitpm/calendar@1", id: "C-26-DEFAULT", name: "Default", working_weekdays: [1, 2, 3, 4, 5], holidays, lifecycle: "active" });
+    const schemaByType: Record<string, string> = { people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1", projects: "gitpm/project@2", tasks: "gitpm/task@2" };
+    const api = { listEntities: vi.fn(async (_draftId: string, type: string) => [person, calendar].filter((item) => item.document.schema === schemaByType[type])), getConfiguration: vi.fn(async (_draftId: string, kind: string) => kind === "schedule-tracks" ? tracksConfig() : statusesConfig()) } as unknown as GitPmApi;
+
+    render(<PeopleProfileWorkspace api={api} draft={draft} locale="en" onNavigate={vi.fn()} personId={personId} />);
+
+    const exceptions = (await screen.findByRole("heading", { name: "Calendar exceptions" })).closest("section")!.querySelector<HTMLElement>(".people-holidays")!;
+    expect(Array.from(exceptions.querySelectorAll("time"), (node) => node.getAttribute("dateTime"))).toEqual(holidays.slice(0, 8));
+    expect(within(exceptions).getByText("+6 more")).toBeTruthy();
+    expect(within(exceptions).queryByText("Dec 31, 2026")).toBeNull();
+  });
 });

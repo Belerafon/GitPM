@@ -161,12 +161,16 @@ export function AdminWorkspace({ api, draft, role, locale, surface, confirmActio
 interface EditorProps { readonly api: GitPmApi; readonly draft: DraftStatus; readonly entity: EntityResult; readonly fingerprint: string; readonly readOnly: boolean; readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string; readonly mutate: (operation: () => Promise<EntityResult>) => Promise<EntityResult | null>; readonly remove: (operation: () => Promise<void>) => Promise<boolean>; readonly confirmDelete: (name: string) => boolean }
 const ActionButtons = ({ disabled, archiveDisabled = false, archived = false, save, archive, restore, remove, close, t }: { disabled: boolean; archiveDisabled?: boolean; archived?: boolean; save: (form: HTMLFormElement) => Promise<boolean>; archive: () => Promise<boolean>; restore: () => Promise<boolean>; remove: () => Promise<boolean>; close: () => void; t: (key: MessageKey) => string }) => <div className="editor-drawer-actions"><details className="more-actions"><summary>{t("core.moreActions")}</summary><div>{archived ? <button type="button" disabled={disabled} onClick={() => { void restore().then((success) => { if (success) close(); }); }}>{t("core.restore")}</button> : <button type="button" disabled={disabled || archiveDisabled} onClick={() => { void archive().then((success) => { if (success) close(); }); }}>{t("core.archive")}</button>}<button type="button" className="danger" data-control-hint={t("controlHint.deleteEntity")} disabled={disabled || archiveDisabled} onClick={() => { void remove().then((success) => { if (success) close(); }); }}>{t("core.delete")}</button></div></details><button onClick={close} type="button">{t("core.cancel")}</button><button type="button" className="primary" disabled={disabled} onClick={(event) => { if (event.currentTarget.form !== null) void save(event.currentTarget.form).then((success) => { if (success) close(); }); }}>{t("core.save")}</button></div>;
 
-function CalendarPreview({ className = "", entity, locale, t }: { readonly className?: string; readonly entity: EntityResult; readonly locale: Locale; readonly t: (key: MessageKey) => string }) {
+const CALENDAR_PREVIEW_HOLIDAY_LIMIT = 8;
+
+function CalendarPreview({ className = "", entity, locale, t }: { readonly className?: string; readonly entity: EntityResult; readonly locale: Locale; readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string }) {
   const weekdays = numbers(entity.document, "working_weekdays");
-  const holidays = strings(entity.document, "holidays").filter((date) => /^\d{4}-\d{2}-\d{2}$/u.test(date)).sort().slice(0, 3);
+  const holidays = strings(entity.document, "holidays").filter((date) => /^\d{4}-\d{2}-\d{2}$/u.test(date)).sort();
+  const visible = holidays.slice(0, CALENDAR_PREVIEW_HOLIDAY_LIMIT);
+  const remaining = holidays.length - visible.length;
   return <div className={`calendar-summary-preview ${className}`.trim()}>
     <div aria-label={t("admin.weekPreview")} className="calendar-week-preview">{[1, 2, 3, 4, 5, 6, 7].map((day) => <span className={weekdays.includes(day) ? "working" : "off"} key={day}>{t(`admin.day${day}` as MessageKey)}</span>)}</div>
-    <div className="calendar-exceptions"><span>{t("admin.nextHolidays")}</span>{holidays.length === 0 ? <small>{t("admin.noHolidays")}</small> : holidays.map((date) => <time dateTime={date} key={date}>{formatDateOnly(locale, date)}</time>)}</div>
+    <div className="calendar-exceptions"><span className="calendar-exceptions-label">{t("admin.nextHolidays")}</span>{holidays.length === 0 ? <small>{t("admin.noHolidays")}</small> : <>{visible.map((date) => <time dateTime={date} key={date}>{formatDateOnly(locale, date)}</time>)}{remaining > 0 && <small className="calendar-more-dates">{t("admin.moreHolidays", { count: remaining })}</small>}</>}</div>
   </div>;
 }
 

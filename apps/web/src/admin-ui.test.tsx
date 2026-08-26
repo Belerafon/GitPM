@@ -331,6 +331,22 @@ describe("administration UI", () => {
     expect(within(form).getAllByLabelText(/Non-working date/u)).toHaveLength(55);
   });
 
+  it("shows leftover additional dates on calendar cards instead of silently dropping them", async () => {
+    const holidays = ["2026-01-01", "2026-01-02", "2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08", "2026-01-09", "2026-02-23", "2026-03-09", "2026-05-01", "2026-05-11", "2026-06-12", "2026-11-04", "2026-12-31"];
+    const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
+    await admin.createEntity("DRF-ADMIN", "calendars", "", { schema: "gitpm/calendar@1", id: "C-26-111111", name: "Russia 2026", working_weekdays: [1, 2, 3, 4, 5], holidays, lifecycle: "active" });
+    render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="calendar" onChanged={vi.fn(async () => undefined)} />);
+
+    const card = (await screen.findByText("Russia 2026 (Default calendar)")).closest<HTMLElement>(".admin-card")!;
+    const preview = within(card).getByText("Additional non-working dates").closest<HTMLElement>(".calendar-exceptions")!;
+    expect(Array.from(preview.querySelectorAll("time"), (node) => node.getAttribute("dateTime"))).toEqual(holidays.slice(0, 8));
+    expect(within(preview).getByText("+6 more")).toBeTruthy();
+    expect(within(preview).queryByText("Dec 31, 2026")).toBeNull();
+
+    fireEvent.click(within(card).getByRole("button", { name: "Edit calendar" }));
+    expect(within(screen.getByRole("dialog", { name: "Edit calendar: Russia 2026" })).getAllByLabelText(/Non-working date/u)).toHaveLength(14);
+  });
+
   it("applies a preset inside the existing-calendar editor before saving", async () => {
     const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
     await admin.createEntity("DRF-ADMIN", "calendars", "", { schema: "gitpm/calendar@1", id: "C-26-111111", name: "Always on", working_weekdays: [1, 2, 3, 4, 5, 6, 7], holidays: ["2026-08-17"], lifecycle: "active" });
