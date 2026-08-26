@@ -8,14 +8,15 @@ import {
   emptyVacationFilters,
   localCalendarDate,
   VACATION_CALENDAR_HEADER_HEIGHT,
-  VACATION_CALENDAR_MONTHS,
+  VACATION_CALENDAR_PERIODS,
   VACATION_CALENDAR_ROW_HEIGHT,
   vacationBars,
   vacationCalendarWindow,
   vacationSummary,
   visiblePeople,
+  weekendBands,
   type VacationCalendarFilters,
-  type VacationCalendarMonths,
+  type VacationCalendarPeriod,
   type VacationEvent,
   type VacationPerson,
   type VacationTeam,
@@ -59,7 +60,7 @@ export function VacationCalendarWorkspace({ api, draft, locale, onNavigate = () 
   const [people, setPeople] = useState<readonly EntityResult[]>([]);
   const [teams, setTeams] = useState<readonly EntityResult[]>([]);
   const [events, setEvents] = useState<readonly EntityResult[]>([]);
-  const [months, setMonths] = useState<VacationCalendarMonths>(6);
+  const [period, setPeriod] = useState<VacationCalendarPeriod>(6);
   const [filters, setFilters] = useState<VacationCalendarFilters>(emptyVacationFilters);
   const loadRequest = useAsyncLoad();
   const load = useCallback(async () => {
@@ -80,7 +81,8 @@ export function VacationCalendarWorkspace({ api, draft, locale, onNavigate = () 
   const modeledPeople = useMemo(() => people.map(asPerson), [people]);
   const modeledTeams = useMemo(() => teams.map(asTeam), [teams]);
   const modeledEvents = useMemo(() => events.map(asEvent), [events]);
-  const window = useMemo(() => vacationCalendarWindow(today, months), [today, months]);
+  const window = useMemo(() => vacationCalendarWindow(today, period), [today, period]);
+  const weekends = useMemo(() => weekendBands(window.days, window.dayWidth), [window]);
   const rows = useMemo(() => visiblePeople(modeledPeople, modeledTeams, filters), [modeledPeople, modeledTeams, filters]);
   const bars = useMemo(() => vacationBars(modeledEvents, rows, window, filters), [modeledEvents, rows, window, filters]);
   const summary = useMemo(() => vacationSummary(modeledEvents, rows, window, filters, today), [modeledEvents, rows, window, filters, today]);
@@ -119,7 +121,7 @@ export function VacationCalendarWorkspace({ api, draft, locale, onNavigate = () 
     <section className="card vacation-calendar-period" aria-label={t("vacationCalendar.months")}>
       <span>{t("vacationCalendar.months")}</span>
       <div className="vacation-calendar-months" role="group" aria-label={t("vacationCalendar.months")}>
-        {VACATION_CALENDAR_MONTHS.map((value) => <button aria-pressed={months === value} className={months === value ? "active" : ""} key={value} onClick={() => setMonths(value)} type="button">{t(`vacationCalendar.months${value}` as MessageKey)}</button>)}
+        {VACATION_CALENDAR_PERIODS.map((value) => <button aria-pressed={period === value} className={period === value ? "active" : ""} key={value} onClick={() => setPeriod(value)} type="button">{t(value === "year" ? "vacationCalendar.year" : `vacationCalendar.months${value}` as MessageKey)}</button>)}
       </div>
     </section>
     <section className="card vacation-calendar-summary">
@@ -134,14 +136,17 @@ export function VacationCalendarWorkspace({ api, draft, locale, onNavigate = () 
       <span className="kind-training">{t("availability.kindTraining")}</span>
       <span className="kind-other">{t("availability.kindOther")}</span>
       <span className="today">{t("gantt.legendToday")}</span>
+      <span className="weekend">{t("vacationCalendar.weekend")}</span>
     </div>
-    {rows.length === 0 ? <section className="card empty-workspace">{t("vacationCalendar.empty")}</section> : <section aria-label={t("vacationCalendar.chart")} className="card vacation-calendar-scroll" data-finish={window.finish} data-months={months} data-start={window.start}>
+    {rows.length === 0 ? <section className="card empty-workspace">{t("vacationCalendar.empty")}</section> : <section aria-label={t("vacationCalendar.chart")} className="card vacation-calendar-scroll" data-finish={window.finish} data-period={period} data-start={window.start}>
       <div className="vacation-calendar-labels">
         <div className="vacation-calendar-label-head">{t("workload.person")}</div>
-        {rows.map((person) => <div className="vacation-calendar-label" key={person.id}><button className="text-link" onClick={() => onNavigate("people", { personId: person.id })} type="button">{person.name}</button></div>)}
+        {rows.map((person, index) => <div className={`vacation-calendar-label ${index % 2 === 0 ? "even" : "odd"}`} key={person.id}><button className="text-link" onClick={() => onNavigate("people", { personId: person.id })} type="button">{person.name}</button></div>)}
       </div>
       <div className="vacation-calendar-timeline" style={{ width: `${window.timelineWidth}px` }}>
         <div className="vacation-calendar-months-row" style={{ gridTemplateColumns: window.months.map((segment) => `${segment.days * window.dayWidth}px`).join(" ") }}>{window.months.map((segment) => <time dateTime={`${segment.key}-01`} key={segment.key}>{monthLabel(segment.key)}</time>)}</div>
+        {rows.map((person, index) => <div className={`vacation-calendar-row ${index % 2 === 0 ? "even" : "odd"}`} data-person-id={person.id} key={person.id} style={{ top: `${VACATION_CALENDAR_HEADER_HEIGHT + index * VACATION_CALENDAR_ROW_HEIGHT}px`, height: `${VACATION_CALENDAR_ROW_HEIGHT}px` }} />)}
+        {weekends.map((band) => <div className="vacation-calendar-weekend" data-finish={band.finish} data-start={band.start} key={band.start} style={{ left: `${band.left}px`, width: `${band.width}px` }} />)}
         {todayOffset >= 0 && <div aria-label={t("gantt.legendToday")} className="vacation-calendar-today" style={{ left: `${todayOffset * window.dayWidth + window.dayWidth / 2}px` }} />}
         <div className="vacation-calendar-grid" style={{ backgroundSize: `${window.dayWidth}px 100%`, height: `${rows.length * VACATION_CALENDAR_ROW_HEIGHT}px` }} />
         {rows.map((person, index) => (barsByPerson.get(person.id) ?? []).map((bar) => <div className={`vacation-calendar-bar ${kindClass(bar.kind)} state-${bar.state}`} data-duration={bar.duration} data-event-id={bar.id} data-finish={bar.finish} data-offset={bar.offset} data-person-id={bar.personId} data-start={bar.start} key={bar.id} style={{ left: `${bar.left}px`, top: `${VACATION_CALENDAR_HEADER_HEIGHT + index * VACATION_CALENDAR_ROW_HEIGHT + 8}px`, width: `${bar.width}px` }} title={barTitle(bar)}><span>{t("vacationCalendar.barText", { start: formatDateOnly(locale, bar.start), finish: formatDateOnly(locale, bar.finish), days: bar.days })}</span></div>))}
