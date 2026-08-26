@@ -208,10 +208,12 @@ test.describe("GitPM browser UI", () => {
     await expect(page).toHaveURL(/\/tasks$/u);
     await expect(page.getByRole("button", { name: "Tasks", exact: true })).toHaveAttribute("aria-current", "page");
     await expect(page.getByRole("heading", { name: "All tasks", exact: true })).toBeVisible();
-    const fixtureProject = page.locator(`.portfolio-task-project[data-project-id="${FIXTURE_PROJECT_ID}"]`);
-    await expect(fixtureProject).toBeVisible();
-    await expect(fixtureProject.locator('[data-milestone-id="M-26-461GDJ"]')).toBeVisible();
-    await expect(fixtureProject.locator('[data-task-id="T-26-P9G3P8"]')).toContainText("Approve schema v1");
+    const fixtureTask = page.locator('[data-task-id="T-26-P9G3P8"]');
+    await expect(fixtureTask).toBeVisible();
+    await expect(fixtureTask).toHaveAttribute("data-project-id", FIXTURE_PROJECT_ID);
+    await expect(fixtureTask).toHaveAttribute("data-milestone-id", "M-26-461GDJ");
+    await expect(fixtureTask).toContainText("Approve schema v1");
+    await expect(page.locator(".portfolio-task-table thead")).toHaveCount(1);
 
     await page.getByRole("button", { name: "Team", exact: true }).click();
     await expect(page).toHaveURL(/\/workload$/u);

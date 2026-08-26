@@ -26,7 +26,7 @@ class EntityApi {
   async updateConfiguration(): Promise<ConfigurationResult> { throw new Error("not used"); }
 }
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); localStorage.clear(); });
 
 describe("core UI", () => {
   it("keeps the form compact and opens the full people directory as a filterable list", () => {
@@ -57,16 +57,19 @@ describe("core UI", () => {
 
     const { container } = render(<CoreWorkspace api={api} draft={draft} locale="en" surface="tasks" onNavigate={onNavigate} onChanged={vi.fn(async () => undefined)} />);
     expect(await screen.findByRole("heading", { name: "All tasks" })).toBeTruthy();
-    expect(screen.getByText("Launch")).toBeTruthy();
+    expect(screen.getAllByText("Launch").length).toBeGreaterThan(0);
     expect(screen.getByText("Nested API")).toBeTruthy();
     expect(screen.getByText("Unstaged research")).toBeTruthy();
     expect(container.querySelector(`[data-task-id="${child.document.id}"]`)?.getAttribute("data-depth")).toBe("1");
     expect(screen.getByText("Without active milestone")).toBeTruthy();
-    expect(screen.queryByLabelText("Project")).toBeNull();
-    expect(screen.queryByLabelText("Milestone")).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "Project" })).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "Milestone" })).toBeNull();
     expect(screen.queryByLabelText("Filter tasks")).toBeNull();
-    const columnHead = container.querySelector(".portfolio-task-column-head") as HTMLElement;
-    for (const heading of ["Task", "Assignees", "Due date", "Estimate (hours)", "Status"]) expect(within(columnHead).getByText(heading)).toBeTruthy();
+    expect(container.querySelectorAll(".portfolio-task-table thead")).toHaveLength(1);
+    const columnHead = container.querySelector(".portfolio-task-table thead") as HTMLElement;
+    for (const heading of ["Task", "Project", "Milestone", "Assignees", "Due date", "Estimate (hours)", "Status"]) expect(within(columnHead).getByRole("button", { name: heading })).toBeTruthy();
+    expect(within(columnHead).queryByRole("button", { name: "Type" })).toBeNull();
+    expect(screen.getByText("Unstaged research").closest(".portfolio-task-row")?.getAttribute("data-project-id")).toBe(beta.document.id);
     const unstagedRow = screen.getByText("Unstaged research").closest(".portfolio-task-row")!;
     expect(unstagedRow.querySelector(".portfolio-task-assignees")?.getAttribute("title")).toBe("No assignees are assigned to this task");
     expect(unstagedRow.querySelector(".portfolio-task-date")?.getAttribute("title")).toBe("No due date is set for this task");
@@ -89,8 +92,8 @@ describe("core UI", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Clear all" }));
     fireEvent.click(within(dialog).getByRole("button", { name: /Add condition/u }));
     const field = within(dialog).getByLabelText("Field") as HTMLSelectElement;
-    expect(Array.from(field.options, (option) => option.text)).not.toContain("Project");
-    expect(Array.from(field.options, (option) => option.text)).not.toContain("Milestone");
+    expect(Array.from(field.options, (option) => option.text)).toContain("Project");
+    expect(Array.from(field.options, (option) => option.text)).toContain("Milestone");
     fireEvent.change(field, { target: { value: "status" } });
     fireEvent.change(within(dialog).getByLabelText("Value"), { target: { value: "done" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Apply" }));
@@ -100,6 +103,38 @@ describe("core UI", () => {
 
     fireEvent.click(screen.getByText("Nested API"));
     expect(onNavigate).toHaveBeenLastCalledWith("tasks", { projectId: alpha.document.id, taskId: child.document.id, query: expect.objectContaining({ filters: [expect.any(String)] }) });
+  });
+
+  it("sorts, hides, and resizes columns in the all-tasks table", async () => {
+    const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
+    const alpha = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
+    await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-222222", name: "Beta", status: "backlog", lifecycle: "active" });
+    await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-111111", project: alpha.document.id, title: "Later task", type: "task", status: "backlog", lifecycle: "active", schedules: { plan: { finish: "2099-09-15", effort_hours: 8 } } });
+    await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-222222", project: "P-26-222222", title: "Earlier task", type: "task", status: "backlog", lifecycle: "active", schedules: { plan: { finish: "2099-08-30", effort_hours: 2 } } });
+
+    const { container } = render(<CoreWorkspace api={api} draft={draft} locale="en" surface="tasks" onNavigate={vi.fn()} onChanged={vi.fn(async () => undefined)} />);
+    expect(await screen.findByRole("table", { name: "All tasks" })).toBeTruthy();
+    const titles = () => Array.from(container.querySelectorAll(".portfolio-task-selector strong"), (item) => item.textContent);
+    expect(titles()).toEqual(["Later task", "Earlier task"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Due date" }));
+    expect(container.querySelector("th[aria-sort='ascending']")?.textContent).toContain("Due date");
+    expect(titles()).toEqual(["Earlier task", "Later task"]);
+    fireEvent.click(screen.getByRole("button", { name: "Due date" }));
+    expect(container.querySelector("th[aria-sort='descending']")?.textContent).toContain("Due date");
+    expect(titles()).toEqual(["Later task", "Earlier task"]);
+
+    fireEvent.click(screen.getByText("Columns"));
+    const settings = container.querySelector(".task-field-settings") as HTMLElement;
+    fireEvent.click(within(settings).getByRole("checkbox", { name: "Project" }));
+    expect(screen.queryByRole("button", { name: "Project" })).toBeNull();
+    expect(JSON.parse(localStorage.getItem("gitpm.portfolioTasks.columns") ?? "{}")).toEqual(expect.objectContaining({ project: false }));
+
+    const handle = container.querySelector('[aria-label="Resize Task column"]') as HTMLElement;
+    fireEvent.pointerDown(handle, { pointerId: 1, clientX: 200, button: 0 });
+    fireEvent.pointerMove(handle, { pointerId: 1, clientX: 260 });
+    fireEvent.pointerUp(handle, { pointerId: 1, clientX: 260 });
+    expect(JSON.parse(localStorage.getItem("gitpm.portfolioTasks.columnWidths") ?? "{}")).toEqual(expect.objectContaining({ task: 340 }));
   });
 
   it("animates the task row while an inline status change is being saved", async () => {
