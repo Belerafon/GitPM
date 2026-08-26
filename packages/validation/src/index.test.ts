@@ -257,6 +257,11 @@ describe("repository validation", () => {
     await replace(invalid, "people/U-26-5EBAE3.yaml", "anna@example.test", "not-an-email");
     report = await validateRepository(invalid);
     expect(report.errors).toEqual(expect.arrayContaining([expect.objectContaining({ code: "SCHEMA_INVALID", field: "email", expected: "email address" })]));
+
+    const missingAdjustmentReason = await fixture();
+    await replace(missingAdjustmentReason, "people/U-26-5EBAE3.yaml", "annual_vacation_extra_days_reason: Overtime compensation\n", "");
+    report = await validateRepository(missingAdjustmentReason);
+    expect(report.errors).toEqual(expect.arrayContaining([expect.objectContaining({ code: "SCHEMA_INVALID", field: "annual_vacation_extra_days_reason", schema_keyword: "dependentRequired" })]));
   });
 
   it("detects dependency cycles", async () => {

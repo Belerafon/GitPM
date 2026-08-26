@@ -56,6 +56,8 @@ export interface EntityDocument extends Readonly<Record<string, unknown>> {
   readonly task_order?: readonly string[];
   readonly labels?: readonly string[];
   readonly weekly_capacity_hours?: number;
+  readonly annual_vacation_extra_days?: number;
+  readonly annual_vacation_extra_days_reason?: string;
   readonly calendar?: string;
   readonly email?: string;
   readonly members?: readonly string[];

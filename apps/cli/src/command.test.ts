@@ -132,8 +132,8 @@ describe("CLI P02 commands", () => {
       expect(commandHelp.help).toContain("--allow-delete");
     }
     const schema = await run(["schema", "show", "person", "--json"]);
-    expect(JSON.parse(schema.output)).toMatchObject({ ok: true, name: "person", required: expect.arrayContaining(["calendar", "weekly_capacity_hours"]), optional: expect.arrayContaining(["email"]) });
-    expect((await run(["schema", "show", "person", "--example"])).output).toContain("schema: gitpm/person@1");
+    expect(JSON.parse(schema.output)).toMatchObject({ ok: true, name: "person", required: expect.arrayContaining(["calendar", "weekly_capacity_hours"]), optional: expect.arrayContaining(["email", "annual_vacation_extra_days", "annual_vacation_extra_days_reason"]) });
+    expect((await run(["schema", "show", "person", "--example"])).output).toContain("annual_vacation_extra_days: 5");
   });
 
   it("checks and applies canonical formatting", async () => {

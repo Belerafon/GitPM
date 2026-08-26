@@ -3,8 +3,8 @@ import { nestScheduleColumns, parseCsvEntities, parseJsonLinesEntities, parseYam
 
 describe("CLI entity import parsers", () => {
   it("parses UTF-8 CSV, quoted commas, CRLF and numeric fields", () => {
-    expect(parseCsvEntities("\uFEFFname,email,weekly_capacity_hours\r\n\"Иван, Иванов\",ivan@example.test,36\r\n", "people.csv"))
-      .toEqual([{ name: "Иван, Иванов", email: "ivan@example.test", weekly_capacity_hours: 36 }]);
+    expect(parseCsvEntities("\uFEFFname,email,weekly_capacity_hours,annual_vacation_extra_days,annual_vacation_extra_days_reason\r\n\"Иван, Иванов\",ivan@example.test,36,5,Переработки\r\n", "people.csv"))
+      .toEqual([{ name: "Иван, Иванов", email: "ivan@example.test", weekly_capacity_hours: 36, annual_vacation_extra_days: 5, annual_vacation_extra_days_reason: "Переработки" }]);
   });
 
   it("rejects malformed CSV rows and numeric values with stable codes", () => {

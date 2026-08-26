@@ -532,6 +532,14 @@ export const personSchema = {
     "calendar",
     "lifecycle"
   ],
+  "dependentRequired": {
+    "annual_vacation_extra_days": [
+      "annual_vacation_extra_days_reason"
+    ],
+    "annual_vacation_extra_days_reason": [
+      "annual_vacation_extra_days"
+    ]
+  },
   "properties": {
     "schema": {
       "const": "gitpm/person@1"
@@ -546,6 +554,15 @@ export const personSchema = {
     "weekly_capacity_hours": {
       "type": "number",
       "minimum": 0
+    },
+    "annual_vacation_extra_days": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "annual_vacation_extra_days_reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000
     },
     "calendar": {
       "$ref": "common.schema.json#/$defs/calendarId"

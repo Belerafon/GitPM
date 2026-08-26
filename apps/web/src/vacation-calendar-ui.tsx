@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { GitPmApi } from "./api.js";
 import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
 import { formatDateOnly, localeRegistry, message, type Locale, type MessageKey } from "./i18n.js";
-import { currentAbsence, vacationYearBalance } from "./people-availability-model.js";
+import { annualVacationAllowance, currentAbsence, vacationYearBalance } from "./people-availability-model.js";
 import { availabilityKindLabel } from "./people-availability-ui.js";
 import type { DraftStatus, EntityResult, GitPmDocument } from "./types.js";
 import {
@@ -30,6 +30,7 @@ import {
 import type { WorkspaceNavigate } from "./workspace-navigation.js";
 
 const text = (document: GitPmDocument, key: string): string => typeof document[key] === "string" ? document[key] as string : "";
+const number = (document: GitPmDocument, key: string): number => typeof document[key] === "number" ? document[key] as number : 0;
 const strings = (document: GitPmDocument, key: string): readonly string[] => Array.isArray(document[key]) ? document[key].filter((item): item is string => typeof item === "string") : [];
 const numbers = (document: GitPmDocument, key: string): readonly number[] => Array.isArray(document[key]) ? document[key].filter((item): item is number => typeof item === "number") : [];
 const asWorkingCalendar = (entity: EntityResult): WorkingCalendar => {
@@ -41,7 +42,14 @@ const stateKey = (state: string): MessageKey => ({ planned: "availability.stateP
 const numericDate = (value: string, withYear = false): string => withYear ? `${value.slice(8, 10)}.${value.slice(5, 7)}.${value.slice(0, 4)}` : `${value.slice(8, 10)}.${value.slice(5, 7)}`;
 
 function asPerson(entity: EntityResult): VacationPerson {
-  return { id: entity.document.id, name: text(entity.document, "name") || entity.document.id, lifecycle: text(entity.document, "lifecycle"), calendarId: text(entity.document, "calendar") };
+  return {
+    id: entity.document.id,
+    name: text(entity.document, "name") || entity.document.id,
+    lifecycle: text(entity.document, "lifecycle"),
+    calendarId: text(entity.document, "calendar"),
+    extraDays: number(entity.document, "annual_vacation_extra_days"),
+    extraDaysReason: text(entity.document, "annual_vacation_extra_days_reason"),
+  };
 }
 
 function asTeam(entity: EntityResult): VacationTeam {
@@ -175,9 +183,11 @@ export function VacationCalendarWorkspace({ api, draft, locale, onNavigate = () 
         {rows.map((person, index) => {
           const personEvents = eventsByPerson.get(person.id) ?? [];
           const away = currentAbsence(personEvents, today);
-          const year = vacationYearBalance(personEvents, today, calendarsById.get(person.calendarId) ?? displayCalendar);
-          const stats = t("vacationCalendar.personStats", { taken: year.taken, planned: year.planned, remaining: year.remaining });
-          const hint = away === undefined ? `${t("vacationCalendar.availableToday")}. ${stats}` : `${t("vacationCalendar.awayUntil", { kind: availabilityKindLabel(t, away.kind), date: formatDateOnly(locale, away.finish) })}. ${stats}`;
+          const year = vacationYearBalance(personEvents, today, calendarsById.get(person.calendarId) ?? displayCalendar, annualVacationAllowance(person.extraDays));
+          const stats = t("vacationCalendar.personStats", { allowance: year.allowance, taken: year.taken, planned: year.planned, remaining: year.remaining });
+          const availabilityHint = away === undefined ? t("vacationCalendar.availableToday") : t("vacationCalendar.awayUntil", { kind: availabilityKindLabel(t, away.kind), date: formatDateOnly(locale, away.finish) });
+          const extraHint = person.extraDays > 0 && person.extraDaysReason !== "" ? ` ${t("vacationCalendar.extraReason", { count: person.extraDays, reason: person.extraDaysReason })}` : "";
+          const hint = `${availabilityHint}. ${stats}.${extraHint}`;
           return <div className={`vacation-calendar-label ${index % 2 === 0 ? "even" : "odd"}${away === undefined ? "" : " away"}`} data-person-id={person.id} key={person.id} title={hint}>
             <button className="text-link" onClick={() => onNavigate("people", { personId: person.id })} title={hint} type="button">{person.name}</button>
             <small>{stats}</small>

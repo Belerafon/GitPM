@@ -117,7 +117,7 @@ Availability Event создаётся тем же generic-контуром, на
 `entity import` (alias: `entity bulk-import`) выполняет пакет атомарно: сначала планирует все ID, затем записывает пакет,
 один раз валидирует полный репозиторий и откатывает все файлы при любой ошибке. `--dry-run`
 выполняет тот же pipeline без сохранения изменений. CSV использует строку заголовков;
-числовые поля (`weekly_capacity_hours`, а также `effort_hours` внутри `schedules.<track>`) разбираются как числа, а списочные
+числовые поля (`weekly_capacity_hours`, `annual_vacation_extra_days`, а также `effort_hours` внутри `schedules.<track>`) разбираются как числа, а списочные
 поля задаются JSON-массивами. YAML import содержит массив mappings, JSONL — один object на
 строку. В JSON-результате элементы содержат `source_index`, `row`, сгенерированный `id` и
 канонический `path`.

@@ -207,10 +207,13 @@ describe("person profile", () => {
     const dialog = screen.getByRole("dialog", { name: "Edit person: Ada" });
     fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "Ada Byron" } });
     fireEvent.change(within(dialog).getByLabelText("Weekly capacity"), { target: { value: "36" } });
+    fireEvent.change(within(dialog).getByLabelText("Additional annual vacation days"), { target: { value: "5" } });
+    fireEvent.change(within(dialog).getByLabelText("Reason for additional days"), { target: { value: "Overtime compensation" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
 
     expect(await screen.findByRole("heading", { name: "Ada Byron" })).toBeTruthy();
-    expect(updateEntity).toHaveBeenCalledWith(draft.draft_id, "people", expect.objectContaining({ document: expect.objectContaining({ name: "Ada" }) }), "b".repeat(64), expect.objectContaining({ name: "Ada Byron", weekly_capacity_hours: 36 }));
+    expect(updateEntity).toHaveBeenCalledWith(draft.draft_id, "people", expect.objectContaining({ document: expect.objectContaining({ name: "Ada" }) }), "b".repeat(64), expect.objectContaining({ name: "Ada Byron", weekly_capacity_hours: 36, annual_vacation_extra_days: 5, annual_vacation_extra_days_reason: "Overtime compensation" }));
+    expect(await screen.findByText(/Vacation in \d{4} · 25 working days \(20 \+ 5\)/u)).toBeTruthy();
     expect(onChanged).toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Edit person" }));

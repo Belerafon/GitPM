@@ -55,9 +55,13 @@ describe("administration UI", () => {
     expect(within(peopleCard).getByRole("button", { name: /Filters and sorting/u })).toBeTruthy();
     fireEvent.click(await screen.findByRole("button", { name: /Create person/u }));
     const personForm = within(screen.getByRole("dialog", { name: "Create person" })).getByRole("button", { name: "Create person" }).closest("form")!;
-    fireEvent.change(within(personForm).getByLabelText("Name"), { target: { value: "Alice" } }); fireEvent.change(within(personForm).getByLabelText("Weekly capacity"), { target: { value: "32" } }); fireEvent.submit(personForm);
+    fireEvent.change(within(personForm).getByLabelText("Name"), { target: { value: "Alice" } }); fireEvent.change(within(personForm).getByLabelText("Weekly capacity"), { target: { value: "32" } });
+    fireEvent.change(within(personForm).getByLabelText("Additional annual vacation days"), { target: { value: "5" } });
+    fireEvent.change(within(personForm).getByLabelText("Reason for additional days"), { target: { value: "Overtime compensation" } });
+    fireEvent.submit(personForm);
     expect(await screen.findByText("Alice")).toBeTruthy();
     expect(admin.entities.find((item) => item.document.schema === "gitpm/person@1")?.document.calendar).toBe(admin.entities.find((item) => item.document.schema === "gitpm/calendar@1")?.document.id);
+    expect(admin.entities.find((item) => item.document.schema === "gitpm/person@1")?.document).toMatchObject({ annual_vacation_extra_days: 5, annual_vacation_extra_days_reason: "Overtime compensation" });
     expect(document.querySelectorAll(".people-directory-table tbody tr")).toHaveLength(1);
     expect(screen.queryByRole("button", { name: "Edit person" })).toBeNull();
     fireEvent.click(screen.getByRole("link", { name: "Alice" }));

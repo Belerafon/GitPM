@@ -4,11 +4,17 @@
   "type": "object",
   "additionalProperties": false,
   "required": ["schema", "id", "name", "weekly_capacity_hours", "calendar", "lifecycle"],
+  "dependentRequired": {
+    "annual_vacation_extra_days": ["annual_vacation_extra_days_reason"],
+    "annual_vacation_extra_days_reason": ["annual_vacation_extra_days"]
+  },
   "properties": {
     "schema": {"const": "gitpm/person@1"},
     "id": {"$ref": "common.schema.json#/$defs/personId"},
     "name": {"type": "string", "minLength": 1},
     "weekly_capacity_hours": {"type": "number", "minimum": 0},
+    "annual_vacation_extra_days": {"type": "integer", "minimum": 1},
+    "annual_vacation_extra_days_reason": {"type": "string", "minLength": 1, "maxLength": 1000},
     "calendar": {"$ref": "common.schema.json#/$defs/calendarId"},
     "lifecycle": {"$ref": "common.schema.json#/$defs/lifecycle"},
     "email": {
