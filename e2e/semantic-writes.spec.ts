@@ -221,25 +221,29 @@ test.describe("semantic scheduling writes", () => {
     await english(page);
     await page.getByRole("button", { name: "Create person", exact: false }).click();
     const dialog = page.getByRole("dialog", { name: "Create person", exact: true });
-    const calendar = await dialog.getByRole("combobox", { name: "Calendar", exact: true }).inputValue();
+    const calendar = await dialog.getByRole("combobox", { name: /^Calendar\b/u }).inputValue();
     expect(calendar).not.toBe("");
     await dialog.getByRole("textbox", { name: "Name", exact: true }).fill("Default calendar E2E");
-    await dialog.getByRole("spinbutton", { name: "Weekly capacity (hours)", exact: true }).fill("32");
-    await dialog.getByRole("spinbutton", { name: "Additional annual vacation days", exact: true }).fill("5");
-    await dialog.getByRole("textbox", { name: "Reason for additional days", exact: true }).fill("Overtime compensation");
+    await dialog.getByRole("spinbutton", { name: "Weekly capacity", exact: true }).fill("32");
     await dialog.getByRole("button", { name: "Create person", exact: true }).click();
     await expect(dialog).toBeHidden();
     await page.reload();
     await expect(page.getByRole("link", { name: "Default calendar E2E", exact: true })).toBeVisible();
 
+    await page.getByRole("link", { name: "Default calendar E2E", exact: true }).click();
+    await page.getByRole("button", { name: "Additional days", exact: true }).click();
+    const allowanceDialog = page.getByRole("dialog", { name: "Additional vacation days", exact: true });
+    await allowanceDialog.getByRole("spinbutton", { name: "Number of days", exact: true }).fill("5");
+    await allowanceDialog.getByRole("textbox", { name: "Reason", exact: true }).fill("Overtime compensation");
+    await allowanceDialog.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(allowanceDialog).toBeHidden();
+    await expect(page.getByText(/Vacation in \d{4} · 25 working days \(20 \+ 5\)/u)).toBeVisible();
+    await expect(page.getByText("Additional days: Overtime compensation", { exact: true })).toBeVisible();
+
     const listed = await request.get(`/api/drafts/${draftId}/entities/people`);
     expect(listed.status(), await listed.text()).toBe(200);
     const saved = (await listed.json() as EntityResult[]).find((item) => item.document.name === "Default calendar E2E");
     expect(saved?.document).toMatchObject({ calendar, annual_vacation_extra_days: 5, annual_vacation_extra_days_reason: "Overtime compensation" });
-
-    await page.getByRole("link", { name: "Default calendar E2E", exact: true }).click();
-    await expect(page.getByText(/Vacation in \d{4} · 25 working days \(20 \+ 5\)/u)).toBeVisible();
-    await expect(page.getByText("Additional days: Overtime compensation", { exact: true })).toBeVisible();
 
     await page.goto("/vacations");
     const personRow = page.locator(".vacation-calendar-label").filter({ hasText: "Default calendar E2E" });

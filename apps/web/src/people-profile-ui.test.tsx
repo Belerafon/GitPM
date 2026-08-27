@@ -207,21 +207,31 @@ describe("person profile", () => {
     const dialog = screen.getByRole("dialog", { name: "Edit person: Ada" });
     fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "Ada Byron" } });
     fireEvent.change(within(dialog).getByLabelText("Weekly capacity"), { target: { value: "36" } });
-    fireEvent.change(within(dialog).getByLabelText("Additional annual vacation days"), { target: { value: "5" } });
-    fireEvent.change(within(dialog).getByLabelText("Reason for additional days"), { target: { value: "Overtime compensation" } });
+    expect(within(dialog).queryByLabelText("Additional annual vacation days")).toBeNull();
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
 
     expect(await screen.findByRole("heading", { name: "Ada Byron" })).toBeTruthy();
-    expect(updateEntity).toHaveBeenCalledWith(draft.draft_id, "people", expect.objectContaining({ document: expect.objectContaining({ name: "Ada" }) }), "b".repeat(64), expect.objectContaining({ name: "Ada Byron", weekly_capacity_hours: 36, annual_vacation_extra_days: 5, annual_vacation_extra_days_reason: "Overtime compensation" }));
-    expect(await screen.findByText(/Vacation in \d{4} · 25 working days \(20 \+ 5\)/u)).toBeTruthy();
+    expect(updateEntity).toHaveBeenCalledWith(draft.draft_id, "people", expect.objectContaining({ document: expect.objectContaining({ name: "Ada" }) }), "b".repeat(64), expect.objectContaining({ name: "Ada Byron", weekly_capacity_hours: 36 }));
     expect(onChanged).toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Additional days" }));
+    const allowanceDialog = screen.getByRole("dialog", { name: "Additional vacation days" });
+    fireEvent.change(within(allowanceDialog).getByLabelText("Number of days"), { target: { value: "5" } });
+    fireEvent.change(within(allowanceDialog).getByLabelText("Reason"), { target: { value: "Overtime compensation" } });
+    fireEvent.click(within(allowanceDialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(updateEntity).toHaveBeenCalledTimes(2));
+    expect(updateEntity.mock.calls[1]?.[3]).toBe("c".repeat(64));
+    expect(updateEntity.mock.calls[1]?.[4]).toEqual(expect.objectContaining({ annual_vacation_extra_days: 5, annual_vacation_extra_days_reason: "Overtime compensation" }));
+    expect(await screen.findByText(/Vacation in \d{4} · 25 working days \(20 \+ 5\)/u)).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Edit person" }));
     const updatedDialog = screen.getByRole("dialog", { name: "Edit person: Ada Byron" });
     fireEvent.change(within(updatedDialog).getByLabelText("Weekly capacity"), { target: { value: "38" } });
     fireEvent.click(within(updatedDialog).getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(updateEntity).toHaveBeenCalledTimes(2));
-    expect(updateEntity.mock.calls[1]?.[3]).toBe("c".repeat(64));
+    await waitFor(() => expect(updateEntity).toHaveBeenCalledTimes(3));
+    expect(updateEntity.mock.calls[2]?.[3]).toBe("d".repeat(64));
+    expect(updateEntity.mock.calls[2]?.[4]).toEqual(expect.objectContaining({ annual_vacation_extra_days: 5, annual_vacation_extra_days_reason: "Overtime compensation" }));
   });
 
   it("protects permanent deletion in the profile and redirects after confirmation", async () => {

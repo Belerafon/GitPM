@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PeopleAvailability } from "./people-availability-ui.js";
 import { message } from "./i18n.js";
@@ -15,7 +15,7 @@ describe("People availability", () => {
       result({ schema: "gitpm/availability-event@1", id: "A-26-PAST", person: "U-1", start: "2026-01-10", finish: "2026-01-19", kind: "vacation", availability_percent: 0, state: "planned", lifecycle: "active" }),
       result({ schema: "gitpm/availability-event@1", id: "A-26-NEXT", person: "U-1", start: "2026-09-01", finish: "2026-09-05", kind: "vacation", availability_percent: 0, state: "planned", lifecycle: "active" }),
     ];
-    render(<PeopleAvailability events={events} locale="en" onCreate={vi.fn(async () => true)} onUpdate={vi.fn(async () => true)} personId="U-1" readOnly={false} t={(key, values) => message("en", key, values)} today="2026-08-26" />);
+    render(<PeopleAvailability events={events} locale="en" onCreate={vi.fn(async () => true)} onUpdate={vi.fn(async () => true)} onUpdateAllowance={vi.fn(async () => true)} personId="U-1" readOnly={false} t={(key, values) => message("en", key, values)} today="2026-08-26" />);
     expect(screen.getByText("Used").nextElementSibling?.textContent).toBe("6 days");
     expect(screen.getByText("Remaining").nextElementSibling?.textContent).toBe("14 days");
     expect(screen.getAllByText("Planned").find((node) => node.tagName === "DT")?.nextElementSibling?.textContent).toBe("4 days");
@@ -26,10 +26,28 @@ describe("People availability", () => {
   });
 
   it("shows the personal vacation adjustment, its reason, and the increased balance", () => {
-    render(<PeopleAvailability events={[]} extraDays={5} extraDaysReason="Overtime compensation" locale="en" onCreate={vi.fn(async () => true)} onUpdate={vi.fn(async () => true)} personId="U-1" readOnly={false} t={(key, values) => message("en", key, values)} today="2026-08-26" />);
+    render(<PeopleAvailability events={[]} extraDays={5} extraDaysReason="Overtime compensation" locale="en" onCreate={vi.fn(async () => true)} onUpdate={vi.fn(async () => true)} onUpdateAllowance={vi.fn(async () => true)} personId="U-1" readOnly={false} t={(key, values) => message("en", key, values)} today="2026-08-26" />);
 
     expect(screen.getByText("Vacation in 2026 · 25 working days (20 + 5)")).toBeTruthy();
     expect(screen.getByText("Additional days: Overtime compensation")).toBeTruthy();
     expect(screen.getByText("Remaining").nextElementSibling?.textContent).toBe("25 days");
+  });
+
+  it("edits the vacation allowance next to the absence action", async () => {
+    const onUpdateAllowance = vi.fn(async () => true);
+    render(<PeopleAvailability events={[]} extraDays={5} extraDaysReason="Overtime compensation" locale="en" onCreate={vi.fn(async () => true)} onUpdate={vi.fn(async () => true)} onUpdateAllowance={onUpdateAllowance} personId="U-1" readOnly={false} t={(key, values) => message("en", key, values)} today="2026-08-26" />);
+
+    const addAbsence = screen.getByRole("button", { name: "Add absence" });
+    const adjustAllowance = screen.getByRole("button", { name: "Additional days" });
+    expect(adjustAllowance.parentElement).toBe(screen.getByText("Vacation in 2026 · 25 working days (20 + 5)").parentElement);
+    expect(addAbsence.parentElement).not.toBe(adjustAllowance.parentElement);
+    fireEvent.click(adjustAllowance);
+    const dialog = screen.getByRole("dialog", { name: "Additional vacation days" });
+    fireEvent.change(within(dialog).getByLabelText("Number of days"), { target: { value: "7" } });
+    fireEvent.change(within(dialog).getByLabelText("Reason"), { target: { value: "On-call compensation" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(onUpdateAllowance).toHaveBeenCalledWith(7, "On-call compensation"));
+    expect(screen.queryByRole("dialog", { name: "Additional vacation days" })).toBeNull();
   });
 });

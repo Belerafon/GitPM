@@ -387,7 +387,7 @@ describe("frontend draft lifecycle", () => {
     fireEvent.click(screen.getByRole("button", { name: "Projects" }));
     expect(await screen.findByRole("heading", { name: "Projects" })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: /Alpha/u }));
+    fireEvent.click(await screen.findByRole("button", { name: /Alpha/u }));
     expect(await screen.findByRole("heading", { name: "Plan" })).toBeTruthy();
     expect(`${window.location.pathname}${window.location.search}`).toBe("/projects/P-26-7K4M9Q");
     let breadcrumbs = screen.getByRole("navigation", { name: "Breadcrumbs" });
