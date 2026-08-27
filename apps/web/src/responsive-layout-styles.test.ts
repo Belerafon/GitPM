@@ -17,4 +17,11 @@ describe("responsive workspace breakpoints", () => {
     expect(styles).toContain("@media (max-width: 1000px) { .people-profile-header { grid-template-columns: auto minmax(0, 1fr); }");
     expect(styles).toContain(".people-profile-controls { grid-column: 1 / -1;");
   });
+
+  it("adapts advanced filter controls to the drawer instead of the viewport", () => {
+    expect(styles).toContain(".advanced-view-form { container: advanced-view-form / inline-size;");
+    expect(styles).toContain("@container advanced-view-form (max-width: 520px)");
+    expect(styles).toContain(".advanced-filter-condition-controls > select, .advanced-filter-condition-controls > input { min-width: 0; width: 100%; }");
+    expect(styles).toContain("grid-template-columns: minmax(0, 1fr) auto;");
+  });
 });
