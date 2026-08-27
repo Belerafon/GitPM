@@ -222,9 +222,42 @@ test.describe("project overview geometry", () => {
       // The complete filter and sorting editor is available in a separate drawer without
       // introducing page-level overflow, including at the mobile viewport.
       await advancedFilterTrigger.click();
-      await expect(page.locator(".editor-drawer .advanced-view-form")).toBeVisible();
+      const advancedViewForm = page.locator(".editor-drawer .advanced-view-form");
+      await expect(advancedViewForm).toBeVisible();
       const drawerOverflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
       expect(drawerOverflow).toBeLessThanOrEqual(0);
+
+      await advancedViewForm.locator(".advanced-filter-add button").first().click();
+      const conditionControls = advancedViewForm.locator(".advanced-filter-condition-controls").first();
+      await conditionControls.locator("select").first().selectOption("due");
+      const filterControlGeometry = await conditionControls.evaluate((controls) => {
+        const bounds = controls.getBoundingClientRect();
+        const fields = Array.from(controls.querySelectorAll<HTMLElement>("select, input"), (field) => {
+          const fieldBounds = field.getBoundingClientRect();
+          return {
+            bottom: fieldBounds.bottom,
+            left: fieldBounds.left,
+            right: fieldBounds.right,
+            top: fieldBounds.top,
+            width: fieldBounds.width,
+          };
+        });
+        return {
+          bounds: { left: bounds.left, right: bounds.right },
+          clientWidth: controls.clientWidth,
+          fields,
+          scrollWidth: controls.scrollWidth,
+        };
+      });
+      expect(filterControlGeometry.scrollWidth).toBeLessThanOrEqual(filterControlGeometry.clientWidth + 1);
+      for (const field of filterControlGeometry.fields) {
+        expect(field.left).toBeGreaterThanOrEqual(filterControlGeometry.bounds.left - 1);
+        expect(field.right).toBeLessThanOrEqual(filterControlGeometry.bounds.right + 1);
+        expect(field.width).toBeGreaterThan(220);
+      }
+      for (let index = 1; index < filterControlGeometry.fields.length; index++) {
+        expect(filterControlGeometry.fields[index]!.top).toBeGreaterThanOrEqual(filterControlGeometry.fields[index - 1]!.bottom - 1);
+      }
       await page.keyboard.press("Escape");
       await expect(page.locator(".editor-drawer")).toHaveCount(0);
 
@@ -238,6 +271,36 @@ test.describe("project overview geometry", () => {
       expect(overflowAfter).toBeLessThanOrEqual(0);
     });
   }
+
+  test("keeps the project identity readable across intermediate responsive widths", async ({ page }) => {
+    await page.goto(`/projects/${FIXTURE_PROJECT_ID}`);
+    await expect(page.locator(".project-plan-header")).toBeVisible();
+
+    for (const width of [740, 881, 1032]) {
+      await page.setViewportSize({ width, height: 900 });
+      const geometry = await page.locator(".project-plan-header").evaluate((header) => {
+        const title = header.querySelector<HTMLElement>(".project-plan-title")!;
+        const actions = header.querySelector<HTMLElement>(".project-plan-actions")!;
+        const headerBounds = header.getBoundingClientRect();
+        const titleBounds = title.getBoundingClientRect();
+        const actionBounds = actions.getBoundingClientRect();
+        return {
+          actionLeft: actionBounds.left,
+          actionRight: actionBounds.right,
+          actionTop: actionBounds.top,
+          headerLeft: headerBounds.left,
+          headerRight: headerBounds.right,
+          titleBottom: titleBounds.bottom,
+          titleWidth: titleBounds.width,
+        };
+      });
+
+      expect(geometry.titleWidth).toBeGreaterThan(180);
+      expect(geometry.actionLeft).toBeGreaterThanOrEqual(geometry.headerLeft - 1);
+      expect(geometry.actionRight).toBeLessThanOrEqual(geometry.headerRight + 1);
+      expect(geometry.actionTop).toBeGreaterThanOrEqual(geometry.titleBottom - 1);
+    }
+  });
 
   test("the effort tab loads for the same project and renders its report", async ({ page }) => {
     await page.setViewportSize({ width: 1688, height: 900 });

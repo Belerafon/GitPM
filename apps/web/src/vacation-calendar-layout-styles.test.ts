@@ -17,6 +17,7 @@ const rule = (selector: string): string => {
 describe("Vacation calendar overflow containment", () => {
   it("scrolls the timeline horizontally while keeping names sticky", () => {
     expect(rule(".vacation-calendar-scroll")).toContain("overflow: auto");
+    expect(rule(".vacation-calendar-months")).toContain("flex-wrap: wrap");
     expect(rule(".vacation-calendar-labels")).toContain("position: sticky");
     expect(rule(".vacation-calendar-header")).toContain("position: sticky");
     expect(rule(".vacation-calendar-label-head")).toContain("position: sticky");
