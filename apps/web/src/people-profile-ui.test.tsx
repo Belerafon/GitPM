@@ -214,10 +214,10 @@ describe("person profile", () => {
     expect(updateEntity).toHaveBeenCalledWith(draft.draft_id, "people", expect.objectContaining({ document: expect.objectContaining({ name: "Ada" }) }), "b".repeat(64), expect.objectContaining({ name: "Ada Byron", weekly_capacity_hours: 36 }));
     expect(onChanged).toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Adjust vacation allowance" }));
-    const allowanceDialog = screen.getByRole("dialog", { name: "Annual vacation allowance" });
-    fireEvent.change(within(allowanceDialog).getByLabelText("Additional annual vacation days"), { target: { value: "5" } });
-    fireEvent.change(within(allowanceDialog).getByLabelText("Reason for additional days"), { target: { value: "Overtime compensation" } });
+    fireEvent.click(screen.getByRole("button", { name: "Additional days" }));
+    const allowanceDialog = screen.getByRole("dialog", { name: "Additional vacation days" });
+    fireEvent.change(within(allowanceDialog).getByLabelText("Number of days"), { target: { value: "5" } });
+    fireEvent.change(within(allowanceDialog).getByLabelText("Reason"), { target: { value: "Overtime compensation" } });
     fireEvent.click(within(allowanceDialog).getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(updateEntity).toHaveBeenCalledTimes(2));

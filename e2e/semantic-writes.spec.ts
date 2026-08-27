@@ -231,10 +231,10 @@ test.describe("semantic scheduling writes", () => {
     await expect(page.getByRole("link", { name: "Default calendar E2E", exact: true })).toBeVisible();
 
     await page.getByRole("link", { name: "Default calendar E2E", exact: true }).click();
-    await page.getByRole("button", { name: "Adjust vacation allowance", exact: true }).click();
-    const allowanceDialog = page.getByRole("dialog", { name: "Annual vacation allowance", exact: true });
-    await allowanceDialog.getByRole("spinbutton", { name: "Additional annual vacation days", exact: true }).fill("5");
-    await allowanceDialog.getByRole("textbox", { name: "Reason for additional days", exact: true }).fill("Overtime compensation");
+    await page.getByRole("button", { name: "Additional days", exact: true }).click();
+    const allowanceDialog = page.getByRole("dialog", { name: "Additional vacation days", exact: true });
+    await allowanceDialog.getByRole("spinbutton", { name: "Number of days", exact: true }).fill("5");
+    await allowanceDialog.getByRole("textbox", { name: "Reason", exact: true }).fill("Overtime compensation");
     await allowanceDialog.getByRole("button", { name: "Save", exact: true }).click();
     await expect(allowanceDialog).toBeHidden();
     await expect(page.getByText(/Vacation in \d{4} · 25 working days \(20 \+ 5\)/u)).toBeVisible();

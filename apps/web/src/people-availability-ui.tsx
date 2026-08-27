@@ -103,10 +103,10 @@ export function PeopleAvailability({ events, extraDays = 0, extraDaysReason = ""
   };
 
   return <section className="card people-profile-section people-availability-section">
-    <div className="card-heading"><div><h3>{t("availability.heading")}</h3><p>{t("availability.description")}</p></div><div className="people-availability-actions"><button disabled={readOnly} onClick={() => setAllowanceEditorOpen(true)} type="button">{t("availability.adjustAllowance")}</button><button className="primary" disabled={readOnly} onClick={() => setEditing("new")} type="button">{t("availability.add")}</button></div></div>
-    <p className="people-availability-year">{extraDays > 0
+    <div className="card-heading"><div><h3>{t("availability.heading")}</h3><p>{t("availability.description")}</p></div><button className="primary" disabled={readOnly} onClick={() => setEditing("new")} type="button">{t("availability.add")}</button></div>
+    <div className="people-availability-year-row"><p className="people-availability-year">{extraDays > 0
       ? t("availability.yearHeadingExtra", { year: today.slice(0, 4), count: year.allowance, base: ANNUAL_VACATION_DAYS, extra: extraDays })
-      : t("availability.yearHeading", { year: today.slice(0, 4), count: year.allowance })}</p>
+      : t("availability.yearHeading", { year: today.slice(0, 4), count: year.allowance })}</p><button className="people-availability-allowance-action" disabled={readOnly} onClick={() => setAllowanceEditorOpen(true)} type="button">{t("availability.adjustAllowance")}</button></div>
     {extraDays > 0 && extraDaysReason !== "" && <p className="people-availability-extra-reason">{t("availability.extraReason", { reason: extraDaysReason })}</p>}
     <dl className="people-availability-summary">
       <div><dt>{t("availability.yearTaken")}</dt><dd>{t("availability.eventDays", { count: year.taken, unit: dayUnit(locale, year.taken) })}</dd></div>
@@ -128,8 +128,8 @@ export function PeopleAvailability({ events, extraDays = 0, extraDaysReason = ""
     </EditorDrawer>
     <EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setAllowanceEditorOpen(false)} open={allowanceEditorOpen} title={t("availability.allowanceEditorTitle")}>
       <form className="editor-drawer-form" onSubmit={(event) => { event.preventDefault(); void saveAllowance(); }}>
-        <label>{t("people.vacationExtraDays")}<input aria-label={t("people.vacationExtraDays")} min="0" name="annual_vacation_extra_days" onChange={(event) => setAllowanceExtraDays(Number(event.target.value))} step="1" type="number" value={allowanceExtraDays} /><small className="field-help">{t("people.vacationExtraHint")}</small></label>
-        <label>{t("people.vacationExtraReason")}<textarea aria-label={t("people.vacationExtraReason")} name="annual_vacation_extra_days_reason" onChange={(event) => setAllowanceReason(event.target.value)} required={allowanceExtraDays > 0} rows={3} value={allowanceReason} /></label>
+        <label>{t("availability.allowanceDays")}<input aria-label={t("availability.allowanceDays")} min="0" name="annual_vacation_extra_days" onChange={(event) => setAllowanceExtraDays(Number(event.target.value))} step="1" type="number" value={allowanceExtraDays} /><small className="field-help">{t("people.vacationExtraHint")}</small></label>
+        <label>{t("availability.allowanceReason")}<textarea aria-label={t("availability.allowanceReason")} name="annual_vacation_extra_days_reason" onChange={(event) => setAllowanceReason(event.target.value)} required={allowanceExtraDays > 0} rows={3} value={allowanceReason} /></label>
         <div className="editor-drawer-actions"><button onClick={() => setAllowanceEditorOpen(false)} type="button">{t("core.cancel")}</button><button className="primary" disabled={readOnly}>{t("core.save")}</button></div>
       </form>
     </EditorDrawer>

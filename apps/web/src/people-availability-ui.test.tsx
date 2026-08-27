@@ -38,15 +38,16 @@ describe("People availability", () => {
     render(<PeopleAvailability events={[]} extraDays={5} extraDaysReason="Overtime compensation" locale="en" onCreate={vi.fn(async () => true)} onUpdate={vi.fn(async () => true)} onUpdateAllowance={onUpdateAllowance} personId="U-1" readOnly={false} t={(key, values) => message("en", key, values)} today="2026-08-26" />);
 
     const addAbsence = screen.getByRole("button", { name: "Add absence" });
-    const adjustAllowance = screen.getByRole("button", { name: "Adjust vacation allowance" });
-    expect(addAbsence.parentElement).toBe(adjustAllowance.parentElement);
+    const adjustAllowance = screen.getByRole("button", { name: "Additional days" });
+    expect(adjustAllowance.parentElement).toBe(screen.getByText("Vacation in 2026 · 25 working days (20 + 5)").parentElement);
+    expect(addAbsence.parentElement).not.toBe(adjustAllowance.parentElement);
     fireEvent.click(adjustAllowance);
-    const dialog = screen.getByRole("dialog", { name: "Annual vacation allowance" });
-    fireEvent.change(within(dialog).getByLabelText("Additional annual vacation days"), { target: { value: "7" } });
-    fireEvent.change(within(dialog).getByLabelText("Reason for additional days"), { target: { value: "On-call compensation" } });
+    const dialog = screen.getByRole("dialog", { name: "Additional vacation days" });
+    fireEvent.change(within(dialog).getByLabelText("Number of days"), { target: { value: "7" } });
+    fireEvent.change(within(dialog).getByLabelText("Reason"), { target: { value: "On-call compensation" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(onUpdateAllowance).toHaveBeenCalledWith(7, "On-call compensation"));
-    expect(screen.queryByRole("dialog", { name: "Annual vacation allowance" })).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "Additional vacation days" })).toBeNull();
   });
 });

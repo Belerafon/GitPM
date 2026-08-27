@@ -1031,12 +1031,13 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .people-calendar-absence { color: #8a332b; font-weight: 750; }
 .people-calendar-legend .unavailable, .calendar-summary-availability { color: #8a332b; }
 .people-availability-section { display: grid; gap: .75rem; }
-.people-availability-actions { display: flex; flex-wrap: wrap; justify-content: end; gap: .5rem; }
 .people-availability-summary { display: flex; gap: 1rem; margin: 0; }
 .people-availability-summary div { display: flex; gap: .35rem; align-items: baseline; }
 .people-availability-summary dt { color: #69716c; font-size: .75rem; }
 .people-availability-summary dd { margin: 0; font-weight: 750; }
+.people-availability-year-row { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
 .people-availability-year { margin: 0; color: #5d625f; font-size: .8rem; }
+.people-availability-allowance-action { padding: .35rem .6rem; font-size: .75rem; }
 .people-availability-extra-reason { margin: -.35rem 0 0; color: #69716c; font-size: .75rem; }
 .people-availability-past { margin-top: .35rem; }
 .people-availability-past summary { cursor: pointer; color: #315f50; font-weight: 700; }
