@@ -1163,6 +1163,8 @@
   ,"availability.description": "Vacations, days off, and other personal capacity exceptions."
   ,"availability.add": "Add absence"
   ,"availability.edit": "Edit absence"
+  ,"availability.adjustAllowance": "Adjust vacation allowance"
+  ,"availability.allowanceEditorTitle": "Annual vacation allowance"
   ,"availability.empty": "No availability events recorded."
   ,"availability.planned": "Planned"
   ,"availability.taken": "Taken"

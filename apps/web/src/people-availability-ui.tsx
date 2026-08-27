@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
 import { EditorDrawer } from "./editor-drawer.js";
 import { dayUnit, formatDateOnly, formatNumber, type Locale, type MessageKey } from "./i18n.js";
@@ -49,13 +49,14 @@ function displayStateKey(event: EntityResult, today: string): MessageKey {
   return stateKey(state);
 }
 
-export function PeopleAvailability({ events, extraDays = 0, extraDaysReason = "", locale, onCreate, onUpdate, personId, readOnly, t, today = localCalendarDate(), calendar = DEFAULT_WORKING_CALENDAR }: {
+export function PeopleAvailability({ events, extraDays = 0, extraDaysReason = "", locale, onCreate, onUpdate, onUpdateAllowance, personId, readOnly, t, today = localCalendarDate(), calendar = DEFAULT_WORKING_CALENDAR }: {
   readonly events: readonly EntityResult[];
   readonly extraDays?: number;
   readonly extraDaysReason?: string;
   readonly locale: Locale;
   readonly onCreate: (document: GitPmDocument) => Promise<boolean>;
   readonly onUpdate: (event: EntityResult, document: GitPmDocument) => Promise<boolean>;
+  readonly onUpdateAllowance: (extraDays: number, reason: string) => Promise<boolean>;
   readonly personId: string;
   readonly readOnly: boolean;
   readonly t: Translate;
@@ -63,6 +64,14 @@ export function PeopleAvailability({ events, extraDays = 0, extraDaysReason = ""
   readonly calendar?: WorkingCalendar;
 }) {
   const [editing, setEditing] = useState<EntityResult | "new" | null>(null);
+  const [allowanceEditorOpen, setAllowanceEditorOpen] = useState(false);
+  const [allowanceExtraDays, setAllowanceExtraDays] = useState(extraDays);
+  const [allowanceReason, setAllowanceReason] = useState(extraDaysReason);
+  useEffect(() => {
+    if (allowanceEditorOpen) return;
+    setAllowanceExtraDays(extraDays);
+    setAllowanceReason(extraDaysReason);
+  }, [allowanceEditorOpen, extraDays, extraDaysReason]);
   const active = events.filter((event) => event.document.lifecycle === "active").sort((left, right) => text(left.document, "start").localeCompare(text(right.document, "start")) || left.document.id.localeCompare(right.document.id));
   const upcoming = active.filter((event) => !isPastAbsence(text(event.document, "finish"), today));
   const past = active.filter((event) => isPastAbsence(text(event.document, "finish"), today));
@@ -88,9 +97,13 @@ export function PeopleAvailability({ events, extraDays = 0, extraDaysReason = ""
       : selected !== undefined && await onUpdate(selected, { ...selected.document, ...values } as GitPmDocument);
     if (success) setEditing(null);
   };
+  const saveAllowance = async () => {
+    const success = await onUpdateAllowance(allowanceExtraDays, allowanceReason.trim());
+    if (success) setAllowanceEditorOpen(false);
+  };
 
   return <section className="card people-profile-section people-availability-section">
-    <div className="card-heading"><div><h3>{t("availability.heading")}</h3><p>{t("availability.description")}</p></div><button className="primary" disabled={readOnly} onClick={() => setEditing("new")} type="button">{t("availability.add")}</button></div>
+    <div className="card-heading"><div><h3>{t("availability.heading")}</h3><p>{t("availability.description")}</p></div><div className="people-availability-actions"><button disabled={readOnly} onClick={() => setAllowanceEditorOpen(true)} type="button">{t("availability.adjustAllowance")}</button><button className="primary" disabled={readOnly} onClick={() => setEditing("new")} type="button">{t("availability.add")}</button></div></div>
     <p className="people-availability-year">{extraDays > 0
       ? t("availability.yearHeadingExtra", { year: today.slice(0, 4), count: year.allowance, base: ANNUAL_VACATION_DAYS, extra: extraDays })
       : t("availability.yearHeading", { year: today.slice(0, 4), count: year.allowance })}</p>
@@ -112,6 +125,13 @@ export function PeopleAvailability({ events, extraDays = 0, extraDaysReason = ""
         <label>{t("availability.note")}<textarea defaultValue={selected === undefined ? "" : text(selected.document, "note_markdown")} name="note" rows={4} /></label>
         <div className="editor-drawer-actions"><button onClick={() => setEditing(null)} type="button">{t("core.cancel")}</button><button className="primary" disabled={readOnly}>{t("core.save")}</button></div>
       </form>}
+    </EditorDrawer>
+    <EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setAllowanceEditorOpen(false)} open={allowanceEditorOpen} title={t("availability.allowanceEditorTitle")}>
+      <form className="editor-drawer-form" onSubmit={(event) => { event.preventDefault(); void saveAllowance(); }}>
+        <label>{t("people.vacationExtraDays")}<input aria-label={t("people.vacationExtraDays")} min="0" name="annual_vacation_extra_days" onChange={(event) => setAllowanceExtraDays(Number(event.target.value))} step="1" type="number" value={allowanceExtraDays} /><small className="field-help">{t("people.vacationExtraHint")}</small></label>
+        <label>{t("people.vacationExtraReason")}<textarea aria-label={t("people.vacationExtraReason")} name="annual_vacation_extra_days_reason" onChange={(event) => setAllowanceReason(event.target.value)} required={allowanceExtraDays > 0} rows={3} value={allowanceReason} /></label>
+        <div className="editor-drawer-actions"><button onClick={() => setAllowanceEditorOpen(false)} type="button">{t("core.cancel")}</button><button className="primary" disabled={readOnly}>{t("core.save")}</button></div>
+      </form>
     </EditorDrawer>
   </section>;
 }

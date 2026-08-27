@@ -1031,6 +1031,7 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .people-calendar-absence { color: #8a332b; font-weight: 750; }
 .people-calendar-legend .unavailable, .calendar-summary-availability { color: #8a332b; }
 .people-availability-section { display: grid; gap: .75rem; }
+.people-availability-actions { display: flex; flex-wrap: wrap; justify-content: end; gap: .5rem; }
 .people-availability-summary { display: flex; gap: 1rem; margin: 0; }
 .people-availability-summary div { display: flex; gap: .35rem; align-items: baseline; }
 .people-availability-summary dt { color: #69716c; font-size: .75rem; }

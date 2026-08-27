@@ -1163,6 +1163,8 @@
   ,"availability.description": "Отпуска, отгулы и другие персональные исключения из рабочей ёмкости."
   ,"availability.add": "Добавить отсутствие"
   ,"availability.edit": "Изменить отсутствие"
+  ,"availability.adjustAllowance": "Изменить норму отпуска"
+  ,"availability.allowanceEditorTitle": "Годовая норма отпуска"
   ,"availability.empty": "Отсутствия не указаны."
   ,"availability.planned": "Запланировано"
   ,"availability.taken": "Подтверждено"
