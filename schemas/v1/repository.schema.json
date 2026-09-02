@@ -8,6 +8,7 @@
     "schema": {"const": "gitpm/repository@1"},
     "default_branch": {"type": "string", "minLength": 1, "pattern": "^[^\\s~^:?*\\[\\]\\\\]+$"},
     "default_calendar": {"$ref": "common.schema.json#/$defs/calendarId"},
+    "default_person_name_format": {"enum": ["full", "family-initials"]},
     "allowed_top_level_files": {
       "type": "array",
       "items": {"type": "string", "minLength": 1, "pattern": "^[^/\\\\]+$"},

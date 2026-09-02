@@ -4,7 +4,7 @@ import type { DraftManager, RepositoryMutationMode, RepositoryWorkspace } from "
 import { formatYamlDocument, parseYamlDocument, referenceLabelForDocument, referenceLabelsForDocuments } from "@gitpm/repository-format";
 import type { GitPmDocument } from "@gitpm/repository-format";
 import { atomicWriteDomainFile, resolveDomainPath } from "@gitpm/security";
-import { ENTITY_ID_PREFIX, isEntityId, newUniqueEntityId, type EntityIdPrefix } from "@gitpm/shared";
+import { DEFAULT_PERSON_NAME_FORMAT, ENTITY_ID_PREFIX, formatPersonName, isEntityId, isPersonNameFormat, newUniqueEntityId, personNameSearchText, type EntityIdPrefix } from "@gitpm/shared";
 import { buildTaskHierarchy } from "@gitpm/task-hierarchy";
 import { discoverRepositoryFiles, validateDelete, validateRepository } from "@gitpm/validation";
 import { ENTITY_TYPE_SCHEMAS, type GlobalSearchEntityType, type GlobalSearchItem, type GlobalSearchResult } from "@gitpm/contracts";
@@ -110,12 +110,17 @@ function stringField(document: GitPmDocument, key: string): string | undefined {
 export function searchRepositoryDocuments(documents: readonly GitPmDocument[], rawQuery: string, limit = 20): GlobalSearchResult {
   const query = normalizedSearchText(rawQuery);
   if (query === "") return { query: rawQuery.trim(), items: [], total: 0 };
+  const configuredNameFormat = documents.find((document) => document.schema === "gitpm/repository@1")?.default_person_name_format;
+  const defaultNameFormat = isPersonNameFormat(configuredNameFormat) ? configuredNameFormat : DEFAULT_PERSON_NAME_FORMAT;
   const projectNames = new Map(documents
     .filter((document) => document.schema === "gitpm/project@2" && typeof document.id === "string")
     .map((document) => [String(document.id), stringField(document, "name") ?? String(document.id)]));
   const personNames = new Map(documents
     .filter((document) => document.schema === "gitpm/person@1" && typeof document.id === "string")
-    .map((document) => [String(document.id), stringField(document, "name") ?? String(document.id)]));
+    .map((document) => [String(document.id), formatPersonName(document, defaultNameFormat) || String(document.id)]));
+  const personSearchNames = new Map(documents
+    .filter((document) => document.schema === "gitpm/person@1" && typeof document.id === "string")
+    .map((document) => [String(document.id), personNameSearchText(document, defaultNameFormat)]));
   const candidates = documents.flatMap((document): readonly SearchCandidate[] => {
     const id = stringField(document, "id");
     const lifecycle = document.lifecycle === "archived" ? "archived" : "active";
@@ -139,13 +144,15 @@ export function searchRepositoryDocuments(documents: readonly GitPmDocument[], r
     }
     if (document.schema === "gitpm/person@1") {
       const email = stringField(document, "email");
-      return [{ entity_type: "person", id, title: stringField(document, "name") ?? id, ...(email === undefined ? {} : { context: email }), lifecycle, searchContext: email === undefined ? [] : [email] }];
+      const title = formatPersonName(document, defaultNameFormat) || id;
+      const nameSearch = personNameSearchText(document, defaultNameFormat);
+      return [{ entity_type: "person", id, title, ...(email === undefined ? {} : { context: email }), lifecycle, searchContext: email === undefined ? [nameSearch] : [nameSearch, email] }];
     }
     if (document.schema === "gitpm/team@1") {
       const memberIds = Array.isArray(document.members) ? document.members.filter((member): member is string => typeof member === "string") : [];
       const members = memberIds.map((member) => personNames.get(member) ?? member);
       const context = members.join(", ");
-      return [{ entity_type: "team", id, title: stringField(document, "name") ?? id, ...(context === "" ? {} : { context }), lifecycle, searchContext: [...memberIds, ...members] }];
+      return [{ entity_type: "team", id, title: stringField(document, "name") ?? id, ...(context === "" ? {} : { context }), lifecycle, searchContext: [...memberIds, ...members, ...memberIds.map((member) => personSearchNames.get(member) ?? member)] }];
     }
     if (document.schema === "gitpm/calendar@1") {
       return [{ entity_type: "calendar", id, title: stringField(document, "name") ?? id, lifecycle, searchContext: [] }];
@@ -614,6 +621,7 @@ function repositoryWithDocuments(repository: RepositoryIndex, documentsByPath: R
 }
 
 export function entityDisplayLabel(document: GitPmDocument): string | undefined {
+  if (document.schema === "gitpm/person@1") return formatPersonName(document) || (typeof document.id === "string" ? document.id : undefined);
   if (typeof document.name === "string" && document.name.trim() !== "") return document.name;
   if (typeof document.title === "string" && document.title.trim() !== "") return document.title;
   if (typeof document.id === "string") return document.id;
@@ -808,6 +816,18 @@ export class EntityStore {
   }
 
   async getRepositoryConfiguration(draftId: string): Promise<EntityResult> {
+    const document = await this.getRepositoryDocument(draftId);
+    const metadata = await this.drafts.getWorkspace(draftId);
+    const relative = ".gitpm/repository.yaml";
+    return {
+      document,
+      path: relative,
+      blob_id: await this.drafts.fileBlobId(draftId, relative),
+      draft_fingerprint: metadata.fingerprint,
+    };
+  }
+
+  async getRepositoryDocument(draftId: string): Promise<GitPmDocument> {
     const metadata = await this.drafts.getWorkspace(draftId);
     const relative = ".gitpm/repository.yaml";
     const absolute = await resolveDomainPath(metadata.worktree_path, relative);
@@ -815,12 +835,7 @@ export class EntityStore {
     if (document.schema !== "gitpm/repository@1") {
       throw new DomainOperationError("SCHEMA_CONST", `${relative} must contain gitpm/repository@1`);
     }
-    return {
-      document,
-      path: relative,
-      blob_id: await this.drafts.fileBlobId(draftId, relative),
-      draft_fingerprint: metadata.fingerprint,
-    };
+    return document;
   }
 
   async getConfigurationImpact(draftId: string, kind: ConfigurationKind, document: GitPmDocument): Promise<ConfigurationImpact> {

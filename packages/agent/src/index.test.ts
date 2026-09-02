@@ -76,7 +76,7 @@ describe("agent file and CLI workflow core", () => {
     expect(await workflow.semanticDiff("DRF-AGENT", { allowedProject: projectId })).toMatchObject({ counts: { updated: 1 }, affected_projects: [projectId] });
 
     const personOriginal = await readFile(path.join(draft.worktree_path, ...personFile.split("/")), "utf8");
-    await atomicWriteDomainFile(draft.worktree_path, personFile, personOriginal.replace("name: Anna Petrova", "name: Out of scope"));
+    await atomicWriteDomainFile(draft.worktree_path, personFile, personOriginal.replace("name: Anna", "name: Out of scope"));
     expect(await workflow.assertScope("DRF-AGENT", { allowedProject: projectId })).toMatchObject({
       affected_projects: [projectId],
       changed_files: [expect.objectContaining({ path: projectFile, kind: "Modified" })],
@@ -157,7 +157,7 @@ describe("agent file and CLI workflow core", () => {
     const personPath = path.join(draft.worktree_path, ...personFile.split("/"));
 
     const updated = await workflow.updateEntity("DRF-UPDATE", { email: "новая-почта@example.test", weekly_capacity_hours: 36 }, "person", "U-26-5EBAE3");
-    expect(updated.document).toMatchObject({ name: "Anna Petrova", email: "новая-почта@example.test", weekly_capacity_hours: 36 });
+    expect(updated.document).toMatchObject({ name: "Anna", family_name: "Petrova", email: "новая-почта@example.test", weekly_capacity_hours: 36 });
     await expect(readFile(personPath, "utf8")).resolves.toContain("email: новая-почта@example.test");
 
     const beforeInvalid = await readFile(personPath, "utf8");
@@ -184,7 +184,7 @@ describe("agent file and CLI workflow core", () => {
     expect(projectTasks.items.length).toBeGreaterThan(0);
 
     const shown = await workflow.getEntity("DRF-ENTITY", "people", "U-26-5EBAE3");
-    expect(shown.document).toMatchObject({ name: "Anna Petrova" });
+    expect(shown.document).toMatchObject({ name: "Anna", family_name: "Petrova" });
     expect(shown.path).toBe("people/U-26-5EBAE3.yaml");
 
     const plan = await workflow.planDelete("DRF-ENTITY", "people", "U-26-15QJP8");

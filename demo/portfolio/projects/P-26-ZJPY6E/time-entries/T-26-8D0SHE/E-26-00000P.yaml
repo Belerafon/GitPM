@@ -2,7 +2,7 @@ schema: gitpm/time-entry@1
 id: E-26-00000P
 project: P-26-ZJPY6E # project: Мобильный банк 2.0
 task: T-26-8D0SHE # task: Исследовать ключевые клиентские сценарии
-person: U-26-ETKSWS # person: Ольга Новикова
+person: U-26-ETKSWS # person: Новикова Ольга
 performed_on: 2026-07-23
 hours: 6
 category: regular

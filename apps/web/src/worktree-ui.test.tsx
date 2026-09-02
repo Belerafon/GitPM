@@ -195,7 +195,7 @@ describe("working tree file manager", () => {
     render(<WorktreeWorkspace api={api} draft={draft} role="Reporter" locale="en" onChanged={noChanged} />);
     expect(await screen.findByText(/read-only/iu)).toBeTruthy();
     expect((screen.getByRole("button", { name: "New folder" }) as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.click(screen.getByRole("button", { name: "readme.md" }));
+    fireEvent.click(await screen.findByRole("button", { name: "readme.md" }));
     expect((screen.getByRole("button", { name: "Rename" }) as HTMLButtonElement).disabled).toBe(true);
   });
 

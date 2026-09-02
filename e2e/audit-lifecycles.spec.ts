@@ -55,6 +55,7 @@ test.describe("audited vertical lifecycles", () => {
     await page.goto(`/projects/${FIXTURE_PROJECT_ID}/board`);
     await expect(page.getByRole("button", { name: /Approve schema v1/u })).toHaveCount(0);
     await page.goto(`/projects/${FIXTURE_PROJECT_ID}/gantt`);
+    await expect(page.getByText("Active projects", { exact: true }).locator("xpath=following-sibling::*[1]")).toHaveText("1");
     await expect(page.getByText("Approve schema v1", { exact: true })).toHaveCount(0);
 
     const restored = await request.post(`/api/drafts/${encodeURIComponent(draft.draft_id)}/entities/projects/${FIXTURE_PROJECT_ID}/restore`, {

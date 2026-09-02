@@ -8,6 +8,7 @@ import { ProjectLink } from "./project-link.js";
 import { MilestoneLink } from "./milestone-link.js";
 import { isCompletedStatus, type StatusOption } from "./status-categories.js";
 import type { WorkspaceNavigate } from "./workspace-navigation.js";
+import { usePersonNameFormatter } from "./person-name.js";
 
 type ScheduleTextReader = (document: Readonly<Record<string, unknown>>, key: string) => string;
 
@@ -205,6 +206,7 @@ export function PortfolioTaskTable({
   readonly onNavigate: WorkspaceNavigate;
   readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string;
 }) {
+  const personName = usePersonNameFormatter();
   const [collapseOverrides, setCollapseOverrides] = useState<Readonly<Record<string, boolean>>>({});
   const [visibleFields, setVisibleFields] = useState(readVisibility);
   const [widths, setWidths] = useState(readWidths);
@@ -223,7 +225,7 @@ export function PortfolioTaskTable({
     if (sort === null) return undefined;
     const nameOf = (id: string): string => {
       const person = people.find((item) => item.document.id === id);
-      const name = person === undefined ? "" : value(person.document, "name");
+      const name = person === undefined ? "" : personName(person.document);
       return name === "" ? id : name;
     };
     const sortValue = (task: EntityResult): string | number | undefined => {

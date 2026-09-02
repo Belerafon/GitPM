@@ -551,6 +551,20 @@ export const personSchema = {
       "type": "string",
       "minLength": 1
     },
+    "family_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "middle_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "display_name_format": {
+      "enum": [
+        "full",
+        "family-initials"
+      ]
+    },
     "weekly_capacity_hours": {
       "type": "number",
       "minimum": 0
@@ -688,6 +702,12 @@ export const repositorySchema = {
     },
     "default_calendar": {
       "$ref": "common.schema.json#/$defs/calendarId"
+    },
+    "default_person_name_format": {
+      "enum": [
+        "full",
+        "family-initials"
+      ]
     },
     "allowed_top_level_files": {
       "type": "array",

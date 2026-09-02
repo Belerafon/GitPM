@@ -4,7 +4,7 @@ name: GitPM launch
 status: in-progress
 lifecycle: active
 description_markdown: Build the first useful GitPM workflow.
-owner: U-26-5EBAE3 # person: Anna Petrova
+owner: U-26-5EBAE3 # person: Petrova Anna
 planning:
   enabled_tracks:
     - target

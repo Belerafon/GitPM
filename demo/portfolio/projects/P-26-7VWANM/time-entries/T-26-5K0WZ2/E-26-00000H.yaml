@@ -2,7 +2,7 @@ schema: gitpm/time-entry@1
 id: E-26-00000H
 project: P-26-7VWANM # project: Переезд аналитической платформы
 task: T-26-5K0WZ2 # task: Развернуть контуры разработки и эксплуатации
-person: U-26-1MV0QD # person: Максим Фёдоров
+person: U-26-1MV0QD # person: Фёдоров Максим
 performed_on: 2026-09-22
 hours: 4
 category: support

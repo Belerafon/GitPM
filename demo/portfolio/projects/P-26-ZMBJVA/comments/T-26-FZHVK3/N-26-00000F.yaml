@@ -10,5 +10,5 @@ created_at: 2026-08-13T12:00:00.000Z
 state: active
 body_markdown: Структура статей согласована с поддержкой. Нужно решение по набору тегов — @[Наталья Павлова](person:U-26-0225HT)?
 mentions:
-  - person: U-26-0225HT # person: Наталья Павлова
+  - person: U-26-0225HT # person: Павлова Наталья
     mentioned_at: 2026-08-13T12:00:00.000Z

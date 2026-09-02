@@ -1,6 +1,7 @@
 import type { GitPmDocument } from "@gitpm/repository-format";
 import type { TimeEntryRecord } from "@gitpm/time-entries";
 import { ISO_DATE, type ExportLocale } from "./types.js";
+import { DEFAULT_PERSON_NAME_FORMAT, formatPersonName, type PersonNameFormat } from "@gitpm/shared";
 
 export interface ExportDocument {
   readonly path: string;
@@ -19,8 +20,8 @@ export function strings(value: unknown): readonly string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
-export function namesById(documents: readonly GitPmDocument[]): ReadonlyMap<string, string> {
-  return new Map(documents.map((document) => [text(document, "id"), text(document, "name") || text(document, "title") || text(document, "id")]));
+export function namesById(documents: readonly GitPmDocument[], defaultPersonNameFormat: PersonNameFormat = DEFAULT_PERSON_NAME_FORMAT): ReadonlyMap<string, string> {
+  return new Map(documents.map((document) => [text(document, "id"), document.schema === "gitpm/person@1" ? formatPersonName(document, defaultPersonNameFormat) : text(document, "name") || text(document, "title") || text(document, "id")]));
 }
 
 export function documentGroups(documents: readonly ExportDocument[]) {
@@ -39,6 +40,7 @@ export function documentGroups(documents: readonly ExportDocument[]) {
     savedViews: bySchema("gitpm/saved-view@1"),
     workCategories: bySchema("gitpm/work-categories@1"),
     scheduleTracks: bySchema("gitpm/schedule-tracks@1"),
+    repository: bySchema("gitpm/repository@1"),
   };
 }
 

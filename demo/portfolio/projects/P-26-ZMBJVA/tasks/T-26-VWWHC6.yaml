@@ -11,9 +11,9 @@ acceptance_criteria_markdown:
 parent: T-26-AVEPT4 # task: Запустить портал клиентской поддержки
 milestone: M-26-QP6SH8 # milestone: Открытие портала клиентам
 assignees:
-  - U-26-9C1ZR4 # person: Елена Морозова
-  - U-26-ETKSWS # person: Ольга Новикова
-  - U-26-0225HT # person: Наталья Павлова
+  - U-26-9C1ZR4 # person: Морозова Елена
+  - U-26-ETKSWS # person: Новикова Ольга
+  - U-26-0225HT # person: Павлова Наталья
 schedules:
   plan:
     start: 2026-07-13

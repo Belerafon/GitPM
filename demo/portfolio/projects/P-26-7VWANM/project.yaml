@@ -5,7 +5,7 @@ status: planned
 lifecycle: active
 group: Платформа данных
 description_markdown: Перенос корпоративной аналитики в новую платформу без остановки отчётности и с усилением контроля качества данных.
-owner: U-26-1MV0QD # person: Максим Фёдоров
+owner: U-26-1MV0QD # person: Фёдоров Максим
 planning:
   enabled_tracks:
     - plan

@@ -87,6 +87,11 @@ repository schema и аналитическими `report-*.csv`, repository ZIP
 остаётся обязательным явным значением. Сохранённый repository YAML всегда содержит полный
 канонический документ.
 
+У Person поле `name` остаётся обязательным именем; `family_name` и `middle_name` необязательны.
+`display_name_format: full|family-initials` переопределяет repository
+`default_person_name_format`. Интерфейс, workload, поиск и экспорт используют одну и ту же
+вычисляемую подпись сотрудника.
+
 `calendar presets` показывает встроенный каталог, границы покрытия, число рабочих дней и
 официальный источник. `calendar create --preset` материализует выбранную предустановку как
 обычную редактируемую Calendar entity. `calendar apply` заменяет у существующего Calendar

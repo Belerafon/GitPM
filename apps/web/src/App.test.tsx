@@ -81,6 +81,7 @@ class FakeApi implements GitPmApi {
     return { document, path: kind, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) };
   }
   async getRepositoryConfiguration() { return { document: { schema: "gitpm/repository@1" as const, default_branch: "main", default_calendar: "C-26-QD7FJ4", allowed_top_level_files: [], ui_poll_interval_seconds: 5 }, path: ".gitpm/repository.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) }; }
+  async getPersonNameFormat() { return "full" as const; }
   async getConfigurationImpact() { return { blocking: false, issues: [] }; }
   async updateConfiguration(): Promise<ConfigurationResult> { throw new Error("not used"); }
   async updateRepositoryConfiguration(_draftId: string, entity: RepositoryResult, _fingerprint: string, document: RepositoryDocument): Promise<RepositoryResult> { return { ...entity, document }; }
@@ -502,7 +503,7 @@ describe("frontend draft lifecycle", () => {
     expect(settings.open).toBe(true);
 
     fireEvent.pointerDown(screen.getByRole("heading", { name: "Working copies" }));
-    expect(settings.open).toBe(false);
+    await waitFor(() => expect(settings.open).toBe(false));
   });
 
   it("creates, polls, switches writer mode, closes, reopens and removes a working copy", async () => {

@@ -11,9 +11,9 @@ acceptance_criteria_markdown:
 parent: T-26-HB2NX5 # task: Запустить программу обновления мобильного банка
 milestone: M-26-SY14EX # milestone: Публикация в магазинах
 assignees:
-  - U-26-RKTV2A # person: Дмитрий Орлов
-  - U-26-FSB3GM # person: Илья Кузнецов
-  - U-26-0225HT # person: Наталья Павлова
+  - U-26-RKTV2A # person: Орлов Дмитрий
+  - U-26-FSB3GM # person: Кузнецов Илья
+  - U-26-0225HT # person: Павлова Наталья
 schedules:
   plan:
     start: 2026-09-21

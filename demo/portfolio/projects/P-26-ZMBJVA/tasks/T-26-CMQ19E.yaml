@@ -11,8 +11,8 @@ acceptance_criteria_markdown:
 parent: T-26-AVEPT4 # task: Запустить портал клиентской поддержки
 milestone: M-26-QP6SH8 # milestone: Открытие портала клиентам
 assignees:
-  - U-26-RKTV2A # person: Дмитрий Орлов
-  - U-26-AD9KDK # person: Алексей Виноградов
+  - U-26-RKTV2A # person: Орлов Дмитрий
+  - U-26-AD9KDK # person: Виноградов Алексей
 schedules:
   plan:
     start: 2026-08-10

@@ -63,6 +63,7 @@ describe("Board and Saved Views", () => {
     fireEvent.change(screen.getByLabelText("View name"), { target: { value: "Done tasks" } });
     fireEvent.click(screen.getByRole("button", { name: "Save as new" }));
     expect(await screen.findByRole("button", { name: /Done tasks/u })).toBeTruthy();
+    await waitFor(() => expect((screen.getByRole("button", { name: "Update current view" }) as HTMLButtonElement).disabled).toBe(false));
     const saved = entityApi.entities.find((item) => item.document.schema === "gitpm/saved-view@1")!;
     expect(saved.document).toMatchObject({ kind: "board", group_by: "status", filters: { statuses: ["done"], types: ["task"], milestones: [milestoneId] } });
 
@@ -79,13 +80,16 @@ describe("Board and Saved Views", () => {
     fireEvent.change(screen.getByLabelText("Type filter"), { target: { value: "bug" } });
     fireEvent.click(screen.getByRole("button", { name: "Update current view" }));
     await waitFor(() => expect(entityApi.entities.find((item) => item.document.id === saved.document.id)?.document.filters).toEqual({ statuses: ["backlog"], types: ["bug"], milestones: [milestoneId] }));
+    await waitFor(() => expect((screen.getByRole("button", { name: "Rename" }) as HTMLButtonElement).disabled).toBe(false));
 
     fireEvent.change(screen.getByLabelText("View name for Done tasks"), { target: { value: "Critical work" } });
     fireEvent.click(screen.getByRole("button", { name: "Rename" }));
     await screen.findByRole("button", { name: "Apply Critical work" });
+    await waitFor(() => expect((screen.getByRole("button", { name: "Archive" }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(screen.getByRole("button", { name: "Archive" }));
     await waitFor(() => expect(entityApi.entities.find((item) => item.document.id === saved.document.id)?.document.lifecycle).toBe("archived"));
     expect(await screen.findByText("Archived")).toBeTruthy();
+    await waitFor(() => expect((screen.getByRole("button", { name: "Delete permanently" }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(screen.getByRole("button", { name: "Delete permanently" }));
     expect(confirmAction).toHaveBeenCalledWith("Delete saved view Critical work permanently? This action cannot be undone.");
     await waitFor(() => expect(entityApi.entities.some((item) => item.document.id === saved.document.id)).toBe(false));

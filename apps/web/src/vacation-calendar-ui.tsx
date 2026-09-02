@@ -28,6 +28,7 @@ import {
   type WorkingCalendar,
 } from "./vacation-calendar-model.js";
 import type { WorkspaceNavigate } from "./workspace-navigation.js";
+import { usePersonNameFormatter } from "./person-name.js";
 
 const text = (document: GitPmDocument, key: string): string => typeof document[key] === "string" ? document[key] as string : "";
 const number = (document: GitPmDocument, key: string): number => typeof document[key] === "number" ? document[key] as number : 0;
@@ -41,10 +42,10 @@ const kindClass = (kind: string): string => ({ vacation: "kind-vacation", "day-o
 const stateKey = (state: string): MessageKey => ({ planned: "availability.statePlanned", taken: "availability.stateTaken", cancelled: "availability.stateCancelled" }[state] ?? "availability.statePlanned") as MessageKey;
 const numericDate = (value: string, withYear = false): string => withYear ? `${value.slice(8, 10)}.${value.slice(5, 7)}.${value.slice(0, 4)}` : `${value.slice(8, 10)}.${value.slice(5, 7)}`;
 
-function asPerson(entity: EntityResult): VacationPerson {
+function asPerson(entity: EntityResult, personName: (document: EntityResult["document"]) => string): VacationPerson {
   return {
     id: entity.document.id,
-    name: text(entity.document, "name") || entity.document.id,
+    name: personName(entity.document) || entity.document.id,
     lifecycle: text(entity.document, "lifecycle"),
     calendarId: text(entity.document, "calendar"),
     extraDays: number(entity.document, "annual_vacation_extra_days"),
@@ -77,6 +78,7 @@ export function VacationCalendarWorkspace({ api, draft, locale, onNavigate = () 
   readonly today?: string;
 }) {
   const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
+  const personName = usePersonNameFormatter();
   const [people, setPeople] = useState<readonly EntityResult[]>([]);
   const [teams, setTeams] = useState<readonly EntityResult[]>([]);
   const [events, setEvents] = useState<readonly EntityResult[]>([]);
@@ -103,7 +105,7 @@ export function VacationCalendarWorkspace({ api, draft, locale, onNavigate = () 
     });
   }, [api, draft.draft_id, draft.external_fingerprint, loadRequest.run]);
   useEffect(() => { void load(); }, [load]);
-  const modeledPeople = useMemo(() => people.map(asPerson), [people]);
+  const modeledPeople = useMemo(() => people.map((person) => asPerson(person, personName)), [people, personName]);
   const modeledTeams = useMemo(() => teams.map(asTeam), [teams]);
   const modeledEvents = useMemo(() => events.map(asEvent), [events]);
   const calendarsById = useMemo(() => new Map(calendars.map((item) => [item.document.id, asWorkingCalendar(item)])), [calendars]);

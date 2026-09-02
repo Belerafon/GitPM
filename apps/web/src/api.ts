@@ -53,6 +53,7 @@ import {
   type ProjectFileUploadResult,
 } from "@gitpm/contracts";
 import type { ChangesList, CommentResult, CommitFileDiff, CommitHistoryDetail, CommitHistoryItem, CommitResult, ConfigurationImpact, DirectRevertResult, DraftSnapshot, DraftStatus, EntityResult, GitPmDocument, GlobalSearchResult, MergeRequestStatus, NotificationsResult, ProjectWorkspaceResult, PublicSession, PushResult, RepositoryConnectionStatus, RepositoryConnectionTest, RepositoryConnectionUpdate, RepositoryDocument, RepositoryResult, RestoreCommitFilesResult, RevertDraftResult, SemanticDiff, TimeEntryDocument, WorkloadReport, WriterMode, WorktreeDirectory, WorktreeFile } from "./types.js";
+import { isPersonNameFormat, type PersonNameFormat } from "@gitpm/shared";
 
 export interface TimeEntryResult {
   readonly document: TimeEntryDocument;
@@ -223,6 +224,7 @@ export interface GitPmApi {
   restoreEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string, options?: LifecycleMutationOptions): Promise<EntityResult>;
   deleteEntity(draftId: string, entityType: string, entity: EntityResult, fingerprint: string, unlinkReferences?: boolean, cascadeReferences?: boolean): Promise<void>;
   getConfiguration(draftId: string, kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks"): Promise<ConfigurationResult>;
+  getPersonNameFormat(draftId: string): Promise<PersonNameFormat>;
   getRepositoryConfiguration(draftId: string): Promise<RepositoryResult>;
   getConfigurationImpact(draftId: string, kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks", document: ConfigurationDocument): Promise<ConfigurationImpact>;
   updateConfiguration(draftId: string, kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks", entity: ConfigurationResult, fingerprint: string, document: ConfigurationDocument): Promise<ConfigurationResult>;
@@ -549,6 +551,13 @@ export class HttpGitPmApi implements GitPmApi {
   }
   async getConfiguration(draftId: string, kind: "statuses" | "issue-types" | "work-categories" | "schedule-tracks"): Promise<ConfigurationResult> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/config/${kind}`, decodeConfigurationResult);
+  }
+  async getPersonNameFormat(draftId: string): Promise<PersonNameFormat> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/person-name-format`, (input) => {
+      const format = input !== null && typeof input === "object" && !Array.isArray(input) ? (input as Record<string, unknown>).format : undefined;
+      if (!isPersonNameFormat(format)) throw new ApiError("API_RESPONSE_CONTRACT_INVALID", "PersonNameFormat: expected a supported format");
+      return format;
+    });
   }
   async getRepositoryConfiguration(draftId: string): Promise<RepositoryResult> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/config/repository`, decodeRepositoryResult);

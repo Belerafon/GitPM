@@ -237,6 +237,7 @@ export interface RepositoryDocument {
   readonly schema: "gitpm/repository@1";
   readonly default_branch: string;
   readonly default_calendar: string;
+  readonly default_person_name_format?: "full" | "family-initials";
   readonly allowed_top_level_files: readonly string[];
   readonly allowed_top_level_directories?: readonly string[];
   readonly ui_poll_interval_seconds: number;

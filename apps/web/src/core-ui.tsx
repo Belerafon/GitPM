@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEventHandler, type FormEvent, type ReactNode } from "react";
-import { activeProjectIds, ENTITY_ID_PREFIX, isOperationalTask, newUniqueEntityId } from "@gitpm/shared";
+import { activeProjectIds, ENTITY_ID_PREFIX, isOperationalTask, newUniqueEntityId, personNameSearchText } from "@gitpm/shared";
 import { buildTaskHierarchy } from "@gitpm/task-hierarchy";
 import { formatApiError, type GitPmApi } from "./api.js";
 import { formatDateOnly, formatDurationHours, message, type Locale, type MessageKey } from "./i18n.js";
@@ -24,6 +24,7 @@ import { applyAdvancedViewQuery, countViewConditions, defaultLifecycleViewQuery,
 import { ProjectFileMarkdownField, type ProjectFileReferenceContext } from "./project-file-reference-ui.js";
 import { SafeMarkdown } from "./safe-markdown.js";
 import { PortfolioTaskTable } from "./portfolio-task-table.js";
+import { useDefaultPersonNameFormat, usePersonNameFormatter } from "./person-name.js";
 
 export { SafeMarkdown } from "./safe-markdown.js";
 
@@ -163,6 +164,7 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
   readonly onChanged: () => Promise<void>;
 }) {
   const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
+  const personName = usePersonNameFormatter();
   const [projects, setProjects] = useState<readonly EntityResult[]>([]);
   const [milestones, setMilestones] = useState<readonly EntityResult[]>([]);
   const [tasks, setTasks] = useState<readonly EntityResult[]>([]);
@@ -288,7 +290,7 @@ export function CoreWorkspace({ api, draft, locale, surface = "projects", initia
     return days < 0 ? "overdue" : days <= 14 ? "near" : "onTrack";
   }, [value]);
   const existingGroups = useMemo(() => existingProjectGroups(projects, locale), [projects, locale]);
-  const peopleOptions = useMemo(() => people.map((person) => ({ value: person.document.id, label: stringValue(person.document, "name") })).sort((left, right) => left.label.localeCompare(right.label, locale)), [people, locale]);
+  const peopleOptions = useMemo(() => people.map((person) => ({ value: person.document.id, label: personName(person.document) })).sort((left, right) => left.label.localeCompare(right.label, locale)), [people, locale, personName]);
   const lifecycleOptions = useMemo(() => [{ value: "active", label: t("core.lifecycleActive") }, { value: "archived", label: t("core.lifecycleArchived") }], [locale]);
   const projectFields = useMemo<readonly ViewField<EntityResult>[]>(() => [
     { id: "id", label: t("advancedView.field.id"), type: "text", read: (item) => item.document.id },
@@ -618,6 +620,8 @@ export function AssigneeChecks({ people, selected, disabled, onChange, t }: {
   readonly onChange?: (next: string[]) => void;
   readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string;
 }) {
+  const personName = usePersonNameFormatter();
+  const defaultPersonNameFormat = useDefaultPersonNameFormat();
   const [internalSelected, setInternalSelected] = useState([...selected]);
   const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState("");
@@ -625,17 +629,17 @@ export function AssigneeChecks({ people, selected, disabled, onChange, t }: {
   const update = (next: string[]) => onChange === undefined ? setInternalSelected(next) : onChange(next);
   const selectedPeople = current.map((id) => people.find((person) => person.document.id === id)).filter((person): person is EntityResult => person !== undefined);
   const normalizedQuery = query.trim().toLocaleLowerCase();
-  const matches = people.filter((person) => !current.includes(person.document.id) && (normalizedQuery === "" || `${stringValue(person.document, "name")} ${stringValue(person.document, "email")}`.toLocaleLowerCase().includes(normalizedQuery)));
+  const matches = people.filter((person) => !current.includes(person.document.id) && (normalizedQuery === "" || `${personNameSearchText(person.document, defaultPersonNameFormat)} ${stringValue(person.document, "email")}`.toLocaleLowerCase().includes(normalizedQuery)));
   const availableCount = people.filter((person) => !current.includes(person.document.id)).length;
   return <fieldset className="assignee-fieldset"><legend>{t("core.assignees")}</legend>
     <div className="assignee-current">
-      {selectedPeople.length === 0 ? <span className="empty-copy">{t("core.unassigned")}</span> : selectedPeople.map((person) => { const name = stringValue(person.document, "name") || person.document.id; return <div className="assignee-row" key={person.document.id}><span>{name}</span><button aria-label={t("core.removeAssigneeLabel", { name })} disabled={disabled} onClick={() => update(current.filter((id) => id !== person.document.id))} type="button">{t("core.removeAssignee")}</button></div>; })}
+      {selectedPeople.length === 0 ? <span className="empty-copy">{t("core.unassigned")}</span> : selectedPeople.map((person) => { const name = personName(person.document) || person.document.id; return <div className="assignee-row" key={person.document.id}><span>{name}</span><button aria-label={t("core.removeAssigneeLabel", { name })} disabled={disabled} onClick={() => update(current.filter((id) => id !== person.document.id))} type="button">{t("core.removeAssignee")}</button></div>; })}
     </div>
     {current.map((id) => <input key={id} name="assignees" type="hidden" value={id} />)}
     {!adding && <button className="assignee-add" disabled={disabled || availableCount === 0} onClick={() => { setAdding(true); setQuery(""); }} type="button">+ {t("core.addAssignee")}</button>}
     {adding && <div className="assignee-search-panel">
       <label>{t("core.assigneeSearch")}<input autoFocus onChange={(event) => setQuery(event.target.value)} type="search" value={query} /></label>
-      {matches.length === 0 ? <span className="assignee-search-message">{t("core.assigneeNoMatches")}</span> : <div className="assignee-search-results">{matches.map((person) => <button key={person.document.id} onClick={() => { update([...current, person.document.id]); setAdding(false); setQuery(""); }} type="button"><span>{stringValue(person.document, "name") || person.document.id}</span>{stringValue(person.document, "email") !== "" && <small>{stringValue(person.document, "email")}</small>}</button>)}</div>}
+      {matches.length === 0 ? <span className="assignee-search-message">{t("core.assigneeNoMatches")}</span> : <div className="assignee-search-results">{matches.map((person) => <button key={person.document.id} onClick={() => { update([...current, person.document.id]); setAdding(false); setQuery(""); }} type="button"><span>{personName(person.document) || person.document.id}</span>{stringValue(person.document, "email") !== "" && <small>{stringValue(person.document, "email")}</small>}</button>)}</div>}
       <button onClick={() => { setAdding(false); setQuery(""); }} type="button">{t("core.cancel")}</button>
     </div>}
     {people.length === 0 && <span className="empty-copy">{t("core.noPeople")}</span>}

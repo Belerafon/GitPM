@@ -2,7 +2,7 @@ schema: gitpm/time-entry@1
 id: E-26-00000C
 project: P-26-7VWANM # project: Переезд аналитической платформы
 task: T-26-ZDA1WV # task: Спроектировать целевую архитектуру хранилища
-person: U-26-AD9KDK # person: Алексей Виноградов
+person: U-26-AD9KDK # person: Виноградов Алексей
 performed_on: 2026-09-15
 hours: 6
 category: regular

@@ -2,7 +2,7 @@ schema: gitpm/time-entry@1
 id: E-26-00000X
 project: P-26-ZJPY6E # project: Мобильный банк 2.0
 task: T-26-ZQFF0R # task: Подготовить дизайн-систему мобильного приложения
-person: U-26-9C1ZR4 # person: Елена Морозова
+person: U-26-9C1ZR4 # person: Морозова Елена
 performed_on: 2026-08-13
 hours: 6
 category: regular

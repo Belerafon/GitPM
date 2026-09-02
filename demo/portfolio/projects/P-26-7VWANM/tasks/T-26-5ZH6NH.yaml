@@ -11,8 +11,8 @@ acceptance_criteria_markdown:
 parent: T-26-SQ5YK5 # task: Перевести аналитику на новую платформу
 milestone: M-26-9HGQWY # milestone: Отключение старого хранилища
 assignees:
-  - U-26-RKTV2A # person: Дмитрий Орлов
-  - U-26-1MV0QD # person: Максим Фёдоров
+  - U-26-RKTV2A # person: Орлов Дмитрий
+  - U-26-1MV0QD # person: Фёдоров Максим
 schedules:
   plan:
     start: 2026-09-21

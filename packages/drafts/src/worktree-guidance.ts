@@ -251,7 +251,9 @@ Core schemas and relations:
 - \`gitpm/task@2\`: owning Project, title, type, status, lifecycle, optional parent and
   milestone, assignees, estimate, dates, dependencies, labels, Markdown fields.
 - \`gitpm/milestone@2\`: owning Project, name, lifecycle, due date, task order.
-- \`gitpm/person@1\`: name, weekly capacity, Calendar, lifecycle, optional email.
+- \`gitpm/person@1\`: required given \`name\`, optional \`family_name\` and \`middle_name\`,
+  optional \`display_name_format: full|family-initials\`, weekly capacity, Calendar, lifecycle,
+  optional email. Omitted display format inherits repository \`default_person_name_format\`.
 - \`gitpm/team@1\`: name, Person members, lifecycle.
 - \`gitpm/calendar@1\`: working weekdays, holidays, lifecycle.
 - \`gitpm/availability-event@1\`: Person, date range, kind, availability percentage, state,

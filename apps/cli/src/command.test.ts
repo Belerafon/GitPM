@@ -132,7 +132,7 @@ describe("CLI P02 commands", () => {
       expect(commandHelp.help).toContain("--allow-delete");
     }
     const schema = await run(["schema", "show", "person", "--json"]);
-    expect(JSON.parse(schema.output)).toMatchObject({ ok: true, name: "person", required: expect.arrayContaining(["calendar", "weekly_capacity_hours"]), optional: expect.arrayContaining(["email", "annual_vacation_extra_days", "annual_vacation_extra_days_reason"]) });
+    expect(JSON.parse(schema.output)).toMatchObject({ ok: true, name: "person", required: expect.arrayContaining(["calendar", "name", "weekly_capacity_hours"]), optional: expect.arrayContaining(["family_name", "middle_name", "display_name_format", "email", "annual_vacation_extra_days", "annual_vacation_extra_days_reason"]) });
     expect((await run(["schema", "show", "person", "--example"])).output).toContain("annual_vacation_extra_days: 5");
   });
 
@@ -866,7 +866,7 @@ describe.concurrent("CLI direct mode", () => {
 
     const shown = await run(["entity", "show", "--type", "person", "--id", "U-26-15QJP8", "--json"], process.cwd(), { direct });
     expect(shown.exitCode).toBe(0);
-    expect(JSON.parse(shown.output)).toMatchObject({ ok: true, document: { id: "U-26-15QJP8", name: "Boris Sokolov" }, path: "people/U-26-15QJP8.yaml" });
+    expect(JSON.parse(shown.output)).toMatchObject({ ok: true, document: { id: "U-26-15QJP8", name: "Boris", family_name: "Sokolov" }, path: "people/U-26-15QJP8.yaml" });
 
     const missing = await run(["entity", "show", "--type", "person", "--id", "U-99-ZZZZZZ", "--json"], process.cwd(), { direct });
     expect(JSON.parse(missing.output)).toMatchObject({ ok: false, code: "ENTITY_NOT_FOUND" });

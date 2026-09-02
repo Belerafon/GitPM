@@ -1,5 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { activeProjectIds, ENTITY_ID_PREFIX, isEntityId, isOperationalTask, newEntityId, newUniqueEntityId, resolveRepositoryMode, DEFAULT_REPOSITORY_MODE, REPOSITORY_MODES } from "./index.js";
+import { activeProjectIds, ENTITY_ID_PREFIX, formatPersonName, isEntityId, isOperationalTask, newEntityId, newUniqueEntityId, personNameSearchText, resolveRepositoryMode, DEFAULT_REPOSITORY_MODE, REPOSITORY_MODES } from "./index.js";
+
+describe("person name formatting", () => {
+  it("composes full and initial-based names while skipping empty parts", () => {
+    const person = { name: " Иван ", family_name: "Иванов", middle_name: "Иванович" };
+    expect(formatPersonName(person)).toBe("Иванов Иван Иванович");
+    expect(formatPersonName(person, "family-initials")).toBe("Иванов И. И.");
+    expect(formatPersonName({ name: "Иван" }, "family-initials")).toBe("Иван");
+    expect(formatPersonName({ name: "Иван", middle_name: "Иванович" }, "family-initials")).toBe("Иван Иванович");
+  });
+
+  it("lets a person override the repository default and keeps every part searchable", () => {
+    const person = { name: "Иван", family_name: "Иванов", middle_name: "Иванович", display_name_format: "full" };
+    expect(formatPersonName(person, "family-initials")).toBe("Иванов Иван Иванович");
+    expect(personNameSearchText({ ...person, display_name_format: "family-initials" })).toContain("Иванов Иван Иванович");
+  });
+});
 
 describe("short entity IDs", () => {
   it("includes the entity type, UTC year and six Crockford Base32 characters", () => {

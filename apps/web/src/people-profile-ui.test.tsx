@@ -205,13 +205,16 @@ describe("person profile", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Edit person" }));
     const dialog = screen.getByRole("dialog", { name: "Edit person: Ada" });
-    fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "Ada Byron" } });
+    fireEvent.change(within(dialog).getByLabelText("Family name"), { target: { value: "Lovelace" } });
+    fireEvent.change(within(dialog).getByLabelText("Middle name"), { target: { value: "Byron" } });
+    fireEvent.change(within(dialog).getByLabelText("Display format"), { target: { value: "family-initials" } });
+    expect(within(dialog).getByText("Lovelace A. B.")).toBeTruthy();
     fireEvent.change(within(dialog).getByLabelText("Weekly capacity"), { target: { value: "36" } });
     expect(within(dialog).queryByLabelText("Additional annual vacation days")).toBeNull();
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
 
-    expect(await screen.findByRole("heading", { name: "Ada Byron" })).toBeTruthy();
-    expect(updateEntity).toHaveBeenCalledWith(draft.draft_id, "people", expect.objectContaining({ document: expect.objectContaining({ name: "Ada" }) }), "b".repeat(64), expect.objectContaining({ name: "Ada Byron", weekly_capacity_hours: 36 }));
+    expect(await screen.findByRole("heading", { name: "Lovelace A. B." })).toBeTruthy();
+    expect(updateEntity).toHaveBeenCalledWith(draft.draft_id, "people", expect.objectContaining({ document: expect.objectContaining({ name: "Ada" }) }), "b".repeat(64), expect.objectContaining({ name: "Ada", family_name: "Lovelace", middle_name: "Byron", display_name_format: "family-initials", weekly_capacity_hours: 36 }));
     expect(onChanged).toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Additional days" }));
@@ -226,7 +229,7 @@ describe("person profile", () => {
     expect(await screen.findByText(/Vacation in \d{4} · 25 working days \(20 \+ 5\)/u)).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Edit person" }));
-    const updatedDialog = screen.getByRole("dialog", { name: "Edit person: Ada Byron" });
+    const updatedDialog = screen.getByRole("dialog", { name: "Edit person: Lovelace A. B." });
     fireEvent.change(within(updatedDialog).getByLabelText("Weekly capacity"), { target: { value: "38" } });
     fireEvent.click(within(updatedDialog).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(updateEntity).toHaveBeenCalledTimes(3));

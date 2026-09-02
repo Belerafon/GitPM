@@ -2,7 +2,7 @@ schema: gitpm/time-entry@1
 id: E-26-00000Q
 project: P-26-ZJPY6E # project: Мобильный банк 2.0
 task: T-26-8D0SHE # task: Исследовать ключевые клиентские сценарии
-person: U-26-0225HT # person: Наталья Павлова
+person: U-26-0225HT # person: Павлова Наталья
 performed_on: 2026-07-28
 hours: 4
 category: regular

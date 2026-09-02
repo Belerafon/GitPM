@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type FormEvent } from "react";
 import { CALENDAR_PRESETS, calendarPreset, workingDatesBetween, type CalendarPreset, type CalendarPresetGroup, type CalendarPresetId } from "@gitpm/calendar";
 import { resolvePlanning, type ScheduleTracksConfig, type TrackDefinition } from "@gitpm/scheduling";
-import { activeProjectIds, ENTITY_ID_PREFIX, isOperationalTask, newUniqueEntityId } from "@gitpm/shared";
+import { activeProjectIds, ENTITY_ID_PREFIX, isOperationalTask, isPersonNameFormat, newUniqueEntityId, personNameSearchText, type PersonNameFormat } from "@gitpm/shared";
 import { formatApiError, type GitPmApi } from "./api.js";
 import { formatDateOnly, message, type Locale, type MessageKey } from "./i18n.js";
 import type { ConfigurationDocument, ConfigurationImpactIssue, ConfigurationResult, DraftStatus, EntityResult, GitPmDocument, GitPmRole, ProjectPlanning, RepositoryDocument, RepositoryResult } from "./types.js";
@@ -15,6 +15,7 @@ import { draftReadOnlyReason } from "./draft-read-only.js";
 import { ProjectPlanningEditor } from "./project-planning-editor.js";
 import { AdvancedViewControls } from "./advanced-view-controls.js";
 import { applyAdvancedViewQuery, defaultLifecycleViewQuery, type AdvancedViewQuery, type ViewField } from "./advanced-view-query.js";
+import { PersonNameEditorFields, useDefaultPersonNameFormat, usePersonNameFormatter } from "./person-name.js";
 
 type AdminSurface = "people" | "calendar" | "settings";
 type AdminCreateEditor = "calendar" | "person" | "team" | null;
@@ -35,8 +36,10 @@ const CALENDAR_PRESET_GROUP_MESSAGES: Readonly<Record<CalendarPresetGroup, Messa
   "united-states": "admin.presetGroupUnitedStates",
 };
 
-export function AdminWorkspace({ api, draft, role, locale, surface, confirmAction = () => true, initialCalendarId, initialSection, onOpenCalendar, onOpenPerson, onOpenProject, onOpenView, onChanged }: { readonly api: GitPmApi; readonly draft: DraftStatus; readonly role: GitPmRole; readonly locale: Locale; readonly surface: AdminSurface; readonly confirmAction?: (message: string) => boolean; readonly initialCalendarId?: string; readonly initialSection?: string; readonly onOpenCalendar?: (calendarId: string) => void; readonly onOpenPerson?: (personId: string) => void; readonly onOpenProject?: (projectId: string) => void; readonly onOpenView?: (projectId: string, viewId: string) => void; readonly onChanged: () => Promise<void> }) {
+export function AdminWorkspace({ api, draft, role, locale, surface, confirmAction = () => true, initialCalendarId, initialSection, onOpenCalendar, onOpenPerson, onOpenProject, onOpenView, onPersonNameFormatChanged, onChanged }: { readonly api: GitPmApi; readonly draft: DraftStatus; readonly role: GitPmRole; readonly locale: Locale; readonly surface: AdminSurface; readonly confirmAction?: (message: string) => boolean; readonly initialCalendarId?: string; readonly initialSection?: string; readonly onOpenCalendar?: (calendarId: string) => void; readonly onOpenPerson?: (personId: string) => void; readonly onOpenProject?: (projectId: string) => void; readonly onOpenView?: (projectId: string, viewId: string) => void; readonly onPersonNameFormatChanged?: (format: PersonNameFormat) => void; readonly onChanged: () => Promise<void> }) {
   const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
+  const personName = usePersonNameFormatter();
+  const contextPersonNameFormat = useDefaultPersonNameFormat();
   const [calendars, setCalendars] = useState<readonly EntityResult[]>([]);
   const [people, setPeople] = useState<readonly EntityResult[]>([]);
   const [teams, setTeams] = useState<readonly EntityResult[]>([]);
@@ -86,9 +89,10 @@ export function AdminWorkspace({ api, draft, role, locale, surface, confirmActio
   const remove = async (operation: () => Promise<void>) => { setError(null); try { await operation(); await load(); await onChanged(); return true; } catch (caught) { setError(caught instanceof Error ? caught.message : String(caught)); return false; } };
   const activeCalendars = calendars.filter((item) => item.document.lifecycle === "active");
   const repositoryDefaultCalendar = repository === null ? undefined : activeCalendars.find((item) => item.document.id === repository.document.default_calendar);
+  const defaultPersonNameFormat = repository !== null && isPersonNameFormat(repository.document.default_person_name_format) ? repository.document.default_person_name_format : contextPersonNameFormat;
   const activePeople = people.filter((item) => item.document.lifecycle === "active");
   const activeTeams = teams.filter((item) => item.document.lifecycle === "active");
-  const peopleNames = new Map(people.map((item) => [item.document.id, text(item.document, "name")]));
+  const peopleNames = new Map(people.map((item) => [item.document.id, personName(item.document)]));
   const teamsByPerson = new Map(activePeople.map((person) => [person.document.id, activeTeams.filter((team) => strings(team.document, "members").includes(person.document.id))]));
   const activeProjects = projects.filter((item) => item.document.lifecycle === "active");
   const activeTasks = tasks.filter((item) => isOperationalTask(item.document, activeProjectIds(activeProjects.map((project) => project.document))));
@@ -100,17 +104,17 @@ export function AdminWorkspace({ api, draft, role, locale, surface, confirmActio
   }));
   const lifecycleOptions = useMemo(() => [{ value: "active", label: t("core.lifecycleActive") }, { value: "archived", label: t("core.lifecycleArchived") }], [locale]);
   const calendarOptions = useMemo(() => calendars.map((calendar) => ({ value: calendar.document.id, label: text(calendar.document, "name") })), [calendars]);
-  const personOptions = useMemo(() => people.map((person) => ({ value: person.document.id, label: text(person.document, "name") })), [people]);
+  const personOptions = useMemo(() => people.map((person) => ({ value: person.document.id, label: personName(person.document) })), [people, personName]);
   const peopleFields = useMemo<readonly ViewField<EntityResult>[]>(() => [
     { id: "id", label: t("advancedView.field.id"), type: "text", read: (item) => item.document.id },
-    { id: "name", label: t("advancedView.field.name"), type: "text", read: (item) => text(item.document, "name") },
+    { id: "name", label: t("advancedView.field.name"), type: "text", read: (item) => personNameSearchText(item.document, defaultPersonNameFormat) },
     { id: "email", label: t("advancedView.field.email"), type: "text", read: (item) => text(item.document, "email") },
     { id: "capacity", label: t("advancedView.field.capacity"), type: "number", read: (item) => number(item.document, "weekly_capacity_hours") },
     { id: "calendar", label: t("advancedView.field.calendar"), type: "select", options: calendarOptions, read: (item) => text(item.document, "calendar") },
     { id: "projects", label: t("advancedView.field.projects"), type: "number", read: (item) => projectsByPerson.get(item.document.id)?.length ?? 0 },
     { id: "teams", label: t("advancedView.field.teams"), type: "multi-select", options: teams.map((team) => ({ value: team.document.id, label: text(team.document, "name") })), read: (item) => (teamsByPerson.get(item.document.id) ?? []).map((team) => team.document.id) },
     { id: "lifecycle", label: t("advancedView.field.lifecycle"), type: "select", options: lifecycleOptions, read: (item) => item.document.lifecycle },
-  ], [calendarOptions, lifecycleOptions, locale, projectsByPerson, teams, teamsByPerson]);
+  ], [calendarOptions, defaultPersonNameFormat, lifecycleOptions, locale, projectsByPerson, teams, teamsByPerson]);
   const teamFields = useMemo<readonly ViewField<EntityResult>[]>(() => [
     { id: "id", label: t("advancedView.field.id"), type: "text", read: (item) => item.document.id },
     { id: "name", label: t("advancedView.field.name"), type: "text", read: (item) => text(item.document, "name") },
@@ -151,7 +155,10 @@ export function AdminWorkspace({ api, draft, role, locale, surface, confirmActio
     const document = {
       schema: "gitpm/person@1",
       id: newUniqueEntityId(ENTITY_ID_PREFIX.person, new Set(people.map((item) => item.document.id))),
-      name: String(data.get("name")),
+      name: String(data.get("name")).trim(),
+      ...(String(data.get("family_name") ?? "").trim() === "" ? {} : { family_name: String(data.get("family_name")).trim() }),
+      ...(String(data.get("middle_name") ?? "").trim() === "" ? {} : { middle_name: String(data.get("middle_name")).trim() }),
+      ...(isPersonNameFormat(data.get("display_name_format")) ? { display_name_format: data.get("display_name_format") as PersonNameFormat } : {}),
       weekly_capacity_hours: Number(data.get("capacity")),
       ...(extraDays > 0 ? { annual_vacation_extra_days: extraDays, annual_vacation_extra_days_reason: extraReason } : {}),
       calendar,
@@ -173,7 +180,25 @@ export function AdminWorkspace({ api, draft, role, locale, surface, confirmActio
       {repository !== null && <DefaultCalendarEditor api={api} calendars={activeCalendars} draft={draft} entity={repository} locale={locale} onOpenCalendar={onOpenCalendar} readOnly={readOnly} t={t} mutate={mutate} />}
       <section className="card">{initialCalendarId !== undefined && calendars.every((item) => item.document.id !== initialCalendarId) && <div className="alert warning">{t("admin.calendarNotFound", { id: initialCalendarId })}</div>}<button className="primary editor-trigger" disabled={readOnly} onClick={() => setCreateEditor("calendar")} type="button">+ {t("admin.createCalendar")}</button><EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setCreateEditor(null)} open={createEditor === "calendar"} title={t("admin.createCalendar")}><CalendarCreateForm disabled={readOnly} locale={locale} onCancel={() => setCreateEditor(null)} onSubmit={createCalendar} t={t} /></EditorDrawer><AdvancedViewControls fields={calendarFields} locale={locale} onChange={setCalendarQuery} query={calendarQuery} resultCount={visibleCalendars.length} t={t} totalCount={calendars.length} /><div className="admin-grid">{visibleCalendars.map((entity) => <div className={highlights[entity.document.id] ? "recently-changed" : ""} key={entity.document.id}><CalendarEditor {...{ api, draft, entity, fingerprint, readOnly, t, locale, mutate, remove, confirmDelete }} defaultCalendarId={repository?.document.default_calendar} initialOpen={entity.document.id === initialCalendarId} /></div>)}</div></section>
     </div>}
-    {surface === "people" && <div className="people-admin-sections"><section className="card directory-card people-directory-card"><div className="card-heading"><h3>{t("admin.people")}</h3></div><button className="primary editor-trigger" disabled={readOnly || repositoryDefaultCalendar === undefined} onClick={() => { setCreatePersonExtraDays(0); setCreateEditor("person"); }} type="button">+ {t("admin.createPerson")}</button><EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setCreateEditor(null)} open={createEditor === "person"} title={t("admin.createPerson")}><form className="editor-drawer-form" key={createEditor === "person" ? "person-open" : "person-closed"} onSubmit={createPerson}><label>{t("admin.personName")}<input name="name" required /></label><label>{t("admin.email")}<input name="email" type="email" /></label><label>{t("admin.capacity")}<span className="input-with-suffix"><input aria-label={t("admin.capacity")} name="capacity" type="number" min="0" step="0.25" defaultValue="40" required /><span aria-hidden="true">{t("admin.hoursPerWeekUnit")}</span></span></label><label>{t("people.vacationExtraDays")}<input aria-label={t("people.vacationExtraDays")} min="0" name="annual_vacation_extra_days" onChange={(event) => setCreatePersonExtraDays(Number(event.target.value))} step="1" type="number" value={createPersonExtraDays} /><small className="field-help">{t("people.vacationExtraHint")}</small></label><label>{t("people.vacationExtraReason")}<textarea aria-label={t("people.vacationExtraReason")} name="annual_vacation_extra_days_reason" required={createPersonExtraDays > 0} rows={3} /></label><label>{t("admin.calendar")}<select defaultValue={repositoryDefaultCalendar?.document.id} name="calendar" required>{activeCalendars.map((item) => <option value={item.document.id} key={item.document.id}>{item.document.id === repositoryDefaultCalendar?.document.id ? `${text(item.document, "name")} (${t("admin.defaultCalendar")})` : text(item.document, "name")}</option>)}</select>{repositoryDefaultCalendar !== undefined && <small className="field-help">{t("admin.defaultCalendarHint", { name: text(repositoryDefaultCalendar.document, "name") })}</small>}</label><div className="editor-drawer-actions"><button onClick={() => setCreateEditor(null)} type="button">{t("core.cancel")}</button><button className="primary" disabled={readOnly || repositoryDefaultCalendar === undefined}>{t("admin.createPerson")}</button></div></form></EditorDrawer><AdvancedViewControls fields={peopleFields} locale={locale} onChange={setPeopleQuery} query={peopleQuery} resultCount={visiblePeople.length} t={t} totalCount={people.length} /><div className="directory-table-wrap"><table className="directory-table people-directory-table"><thead><tr><th>{t("admin.person")}</th><th>{t("people.projects")}</th><th>{t("admin.teams")}</th><th>{t("admin.capacity")}</th><th>{t("admin.calendar")}</th></tr></thead><tbody>{visiblePeople.map((entity) => { const calendar = activeCalendars.find((item) => item.document.id === text(entity.document, "calendar")); const personTeams = teamsByPerson.get(entity.document.id) ?? []; return <tr className={highlights[entity.document.id] ? "recently-changed" : ""} key={entity.document.id}><th><PersonLink name={text(entity.document, "name")} onOpen={onOpenPerson} personId={entity.document.id} /></th><td><ProjectLinks empty="—" onOpen={onOpenProject} projectIds={(projectsByPerson.get(entity.document.id) ?? []).map((project) => project.document.id)} projects={activeProjects} /></td><td>{personTeams.length === 0 ? "—" : personTeams.map((team) => text(team.document, "name")).join(", ")}</td><td>{t("people.hoursPerWeek", { count: number(entity.document, "weekly_capacity_hours") })}</td><td>{calendar === undefined ? "—" : text(calendar.document, "name")}</td></tr>; })}</tbody></table></div></section>
+    {surface === "people" && <div className="people-admin-sections">
+      {repository !== null && <DefaultPersonNameFormatEditor api={api} draft={draft} entity={repository} readOnly={readOnly} t={t} mutate={mutate} onChanged={onPersonNameFormatChanged} />}
+      <section className="card directory-card people-directory-card">
+        <div className="card-heading"><h3>{t("admin.people")}</h3></div>
+        <button className="primary editor-trigger" disabled={readOnly || repositoryDefaultCalendar === undefined} onClick={() => { setCreatePersonExtraDays(0); setCreateEditor("person"); }} type="button">+ {t("admin.createPerson")}</button>
+        <EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setCreateEditor(null)} open={createEditor === "person"} title={t("admin.createPerson")}>
+          <form className="editor-drawer-form" key={createEditor === "person" ? "person-open" : "person-closed"} onSubmit={createPerson}>
+            <PersonNameEditorFields defaultFormat={defaultPersonNameFormat} t={t} />
+            <label>{t("admin.email")}<input name="email" type="email" /></label>
+            <label>{t("admin.capacity")}<span className="input-with-suffix"><input aria-label={t("admin.capacity")} name="capacity" type="number" min="0" step="0.25" defaultValue="40" required /><span aria-hidden="true">{t("admin.hoursPerWeekUnit")}</span></span></label>
+            <label>{t("people.vacationExtraDays")}<input aria-label={t("people.vacationExtraDays")} min="0" name="annual_vacation_extra_days" onChange={(event) => setCreatePersonExtraDays(Number(event.target.value))} step="1" type="number" value={createPersonExtraDays} /><small className="field-help">{t("people.vacationExtraHint")}</small></label>
+            <label>{t("people.vacationExtraReason")}<textarea aria-label={t("people.vacationExtraReason")} name="annual_vacation_extra_days_reason" required={createPersonExtraDays > 0} rows={3} /></label>
+            <label>{t("admin.calendar")}<select defaultValue={repositoryDefaultCalendar?.document.id} name="calendar" required>{activeCalendars.map((item) => <option value={item.document.id} key={item.document.id}>{item.document.id === repositoryDefaultCalendar?.document.id ? `${text(item.document, "name")} (${t("admin.defaultCalendar")})` : text(item.document, "name")}</option>)}</select>{repositoryDefaultCalendar !== undefined && <small className="field-help">{t("admin.defaultCalendarHint", { name: text(repositoryDefaultCalendar.document, "name") })}</small>}</label>
+            <div className="editor-drawer-actions"><button onClick={() => setCreateEditor(null)} type="button">{t("core.cancel")}</button><button className="primary" disabled={readOnly || repositoryDefaultCalendar === undefined}>{t("admin.createPerson")}</button></div>
+          </form>
+        </EditorDrawer>
+        <AdvancedViewControls fields={peopleFields} locale={locale} onChange={setPeopleQuery} query={peopleQuery} resultCount={visiblePeople.length} t={t} totalCount={people.length} />
+        <div className="directory-table-wrap"><table className="directory-table people-directory-table"><thead><tr><th>{t("admin.person")}</th><th>{t("people.projects")}</th><th>{t("admin.teams")}</th><th>{t("admin.capacity")}</th><th>{t("admin.calendar")}</th></tr></thead><tbody>{visiblePeople.map((entity) => { const calendar = activeCalendars.find((item) => item.document.id === text(entity.document, "calendar")); const personTeams = teamsByPerson.get(entity.document.id) ?? []; return <tr className={highlights[entity.document.id] ? "recently-changed" : ""} key={entity.document.id}><th><PersonLink name={personName(entity.document)} onOpen={onOpenPerson} personId={entity.document.id} /></th><td><ProjectLinks empty="—" onOpen={onOpenProject} projectIds={(projectsByPerson.get(entity.document.id) ?? []).map((project) => project.document.id)} projects={activeProjects} /></td><td>{personTeams.length === 0 ? "—" : personTeams.map((team) => text(team.document, "name")).join(", ")}</td><td>{t("people.hoursPerWeek", { count: number(entity.document, "weekly_capacity_hours") })}</td><td>{calendar === undefined ? "—" : text(calendar.document, "name")}</td></tr>; })}</tbody></table></div>
+      </section>
       <section className="card directory-card"><div className="card-heading"><h3>{t("admin.teams")}</h3></div><button className="primary editor-trigger" disabled={readOnly} onClick={() => setCreateEditor("team")} type="button">+ {t("admin.createTeam")}</button><EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setCreateEditor(null)} open={createEditor === "team"} title={t("admin.createTeam")}><form className="editor-drawer-form" onSubmit={createTeam}><label>{t("core.name")}<input name="name" required /></label><MemberChecks people={activePeople} selected={[]} t={t} /><div className="editor-drawer-actions"><button onClick={() => setCreateEditor(null)} type="button">{t("core.cancel")}</button><button className="primary" disabled={readOnly}>{t("admin.createTeam")}</button></div></form></EditorDrawer><AdvancedViewControls fields={teamFields} locale={locale} onChange={setTeamQuery} query={teamQuery} resultCount={visibleTeams.length} t={t} totalCount={teams.length} /><div className="directory-table-wrap"><table className="directory-table team-directory-table"><thead><tr><th>{t("admin.team")}</th><th>{t("admin.members")}</th><th>{t("admin.actions")}</th></tr></thead><tbody>{visibleTeams.map((entity) => <tr className={highlights[entity.document.id] ? "recently-changed" : ""} key={entity.document.id}><TeamEditor {...{ api, draft, entity, fingerprint, readOnly, t, people, mutate, remove, confirmDelete, onOpenPerson }} /></tr>)}</tbody></table></div></section></div>}
     {surface === "settings" && <section aria-label={t(surfaceHeading)} className="settings-config-sections">
       {settingsSection === "tasks" && <section className="settings-config-section"><p className="admin-section-description">{t("admin.settingsTasksDescription")}</p><div className="settings-config-grid">{statuses !== null && <ConfigEditor api={api} description={t("admin.statusesDescription")} draft={draft} entity={statuses} kind="statuses" listKey="statuses" title={t("admin.statuses")} onOpenView={onOpenView} readOnly={readOnly} t={t} mutate={mutate} />}{issueTypes !== null && <ConfigEditor api={api} description={t("admin.issueTypesDescription")} draft={draft} entity={issueTypes} kind="issue-types" listKey="issue_types" title={t("admin.issueTypes")} onOpenView={onOpenView} readOnly={readOnly} t={t} mutate={mutate} />}</div></section>}
@@ -298,11 +323,12 @@ function CalendarYearEditor({ locale, selected, t, workingWeekdays }: { readonly
 }
 
 function MemberChecks({ people, selected, t }: { people: readonly EntityResult[]; selected: readonly string[]; t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string }) {
+  const personName = usePersonNameFormatter();
   return <fieldset className="member-picker"><legend>{t("admin.members")}</legend>
     <div className="member-picker-scroll">
       <table aria-label={t("admin.members")} className="member-picker-table">
         <thead><tr><th aria-label={t("admin.members")} className="member-picker-check-column" scope="col">✓</th><th scope="col">{t("admin.person")}</th><th scope="col">{t("admin.capacity")}</th></tr></thead>
-        <tbody>{people.map((person) => { const name = text(person.document, "name"); return <tr key={person.document.id}><td><input aria-label={name} type="checkbox" name="members" value={person.document.id} defaultChecked={selected.includes(person.document.id)} /></td><th scope="row">{name}</th><td>{t("people.hoursPerWeek", { count: number(person.document, "weekly_capacity_hours") })}</td></tr>; })}</tbody>
+        <tbody>{people.map((person) => { const name = personName(person.document); return <tr key={person.document.id}><td><input aria-label={name} type="checkbox" name="members" value={person.document.id} defaultChecked={selected.includes(person.document.id)} /></td><th scope="row">{name}</th><td>{t("people.hoursPerWeek", { count: number(person.document, "weekly_capacity_hours") })}</td></tr>; })}</tbody>
       </table>
       {people.length === 0 && <p className="member-picker-empty">{t("core.noPeople")}</p>}
     </div>
@@ -320,6 +346,26 @@ function TeamEditor(props: EditorProps & { people: readonly EntityResult[]; read
   const selectablePeople = people.filter((person) => person.document.lifecycle === "active" || selected.includes(person.document.id));
   const update = async (form: HTMLFormElement) => { const data = new FormData(form); return await mutate(async () => await api.updateEntity(draft.draft_id, "teams", entity, fingerprint, { ...entity.document, name: String(data.get("name")), members: data.getAll("members").map(String) })) !== null; };
   return <><th>{name}</th><td><PersonLinks empty={t("admin.noMembers")} onOpen={onOpenPerson} people={people} personIds={selected} /></td><td><button className="editor-trigger" onClick={() => setOpen(true)} type="button">{t("admin.editTeam")}</button><EditorDrawer closeLabel={t("core.closeEditor")} onClose={() => setOpen(false)} open={open} title={`${t("admin.editTeam")}: ${name}`}><form className="editor-drawer-form" onSubmit={(event) => event.preventDefault()}><label>{t("core.name")}<input name="name" aria-label={`${t("core.name")} ${name}`} defaultValue={name} /></label><MemberChecks people={selectablePeople} selected={selected} t={t} /><ActionButtons archived={entity.document.lifecycle === "archived"} disabled={readOnly} t={t} close={() => setOpen(false)} save={update} archive={async () => await mutate(async () => await api.archiveEntity(draft.draft_id, "teams", entity, fingerprint)) !== null} restore={async () => await mutate(async () => await api.restoreEntity(draft.draft_id, "teams", entity, fingerprint)) !== null} remove={async () => confirmDelete(name) && await remove(async () => await api.deleteEntity(draft.draft_id, "teams", entity, fingerprint))} /></form></EditorDrawer></td></>;
+}
+
+function DefaultPersonNameFormatEditor({ api, draft, entity, readOnly, t, mutate, onChanged }: { readonly api: GitPmApi; readonly draft: DraftStatus; readonly entity: RepositoryResult; readonly readOnly: boolean; readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string; readonly mutate: (operation: () => Promise<RepositoryResult>) => Promise<RepositoryResult | null>; readonly onChanged?: (format: PersonNameFormat) => void }) {
+  const persisted = isPersonNameFormat(entity.document.default_person_name_format) ? entity.document.default_person_name_format : "full";
+  const [format, setFormat] = useState<PersonNameFormat>(persisted);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { setFormat(persisted); }, [persisted]);
+  const label = (value: PersonNameFormat) => t(value === "family-initials" ? "people.nameFormatFamilyInitials" : "people.nameFormatFull");
+  const save = () => {
+    setBusy(true);
+    const document = { ...entity.document, default_person_name_format: format } as RepositoryDocument;
+    void mutate(async () => await api.updateRepositoryConfiguration(draft.draft_id, entity, entity.draft_fingerprint, document)).then((result) => {
+      if (result !== null) onChanged?.(format);
+      setBusy(false);
+    });
+  };
+  return <article className="config-editor config-summary person-name-format-editor">
+    <header className="config-summary-heading"><div><h3>{t("people.defaultNameFormat")}</h3><p>{t("people.defaultNameFormatHint")}</p></div></header>
+    <div className="person-name-format-control"><label>{t("people.nameFormat")}<select disabled={readOnly || busy} value={format} onChange={(event) => setFormat(event.currentTarget.value as PersonNameFormat)}><option value="full">{label("full")}</option><option value="family-initials">{label("family-initials")}</option></select></label><div className="person-name-preview"><span>{t("people.namePreview")}</span><strong>{t(format === "family-initials" ? "people.namePreviewInitialsExample" : "people.namePreviewFullExample")}</strong></div><button className="primary" disabled={readOnly || busy || format === persisted} onClick={save} type="button">{t("core.save")}</button></div>
+  </article>;
 }
 
 function DefaultCalendarEditor({ api, calendars, draft, entity, locale, onOpenCalendar, readOnly, t, mutate }: { readonly api: GitPmApi; readonly calendars: readonly EntityResult[]; readonly draft: DraftStatus; readonly entity: RepositoryResult; readonly locale: Locale; readonly onOpenCalendar?: (calendarId: string) => void; readonly readOnly: boolean; readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string; readonly mutate: (operation: () => Promise<RepositoryResult>) => Promise<RepositoryResult | null> }) {

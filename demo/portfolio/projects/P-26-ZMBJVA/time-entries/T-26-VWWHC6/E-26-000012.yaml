@@ -2,7 +2,7 @@ schema: gitpm/time-entry@1
 id: E-26-000012
 project: P-26-ZMBJVA # project: Портал поддержки клиентов
 task: T-26-VWWHC6 # task: Провести интервью с операторами поддержки
-person: U-26-9C1ZR4 # person: Елена Морозова
+person: U-26-9C1ZR4 # person: Морозова Елена
 performed_on: 2026-07-14
 hours: 4
 category: regular

@@ -2,7 +2,7 @@ schema: gitpm/time-entry@1
 id: E-26-000014
 project: P-26-ZMBJVA # project: Портал поддержки клиентов
 task: T-26-VWWHC6 # task: Провести интервью с операторами поддержки
-person: U-26-0225HT # person: Наталья Павлова
+person: U-26-0225HT # person: Павлова Наталья
 performed_on: 2026-07-23
 hours: 4
 category: regular

@@ -7,7 +7,7 @@ status: backlog
 lifecycle: active
 milestone: M-26-461GDJ # milestone: Alpha
 assignees:
-  - U-26-15QJP8 # person: Boris Sokolov
+  - U-26-15QJP8 # person: Sokolov Boris
 schedules:
   plan:
     effort_hours: 24.25

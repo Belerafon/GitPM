@@ -5,6 +5,8 @@ import type { CommentResult, DraftStatus, EntityResult } from "./types.js";
 import type { WorkspaceNavigate } from "./workspace-navigation.js";
 import { ProjectFileMarkdownField, type ProjectFileReferenceContext } from "./project-file-reference-ui.js";
 import { SafeMarkdown } from "./safe-markdown.js";
+import { personNameSearchText } from "@gitpm/shared";
+import { useDefaultPersonNameFormat, usePersonNameFormatter } from "./person-name.js";
 
 const mentionPattern = /@\[([^\]\r\n]{1,200})\]\(person:(U-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6})\)/gu;
 
@@ -12,7 +14,7 @@ function text(document: EntityResult["document"], key: string): string {
   return typeof document[key] === "string" ? document[key] as string : "";
 }
 
-function inlineComment(value: string, people: readonly EntityResult[], onNavigate: WorkspaceNavigate): ReactNode[] {
+function inlineComment(value: string, people: readonly EntityResult[], onNavigate: WorkspaceNavigate, personName: (person: EntityResult["document"]) => string): ReactNode[] {
   const result: ReactNode[] = [];
   let offset = 0;
   for (const match of value.matchAll(mentionPattern)) {
@@ -20,7 +22,7 @@ function inlineComment(value: string, people: readonly EntityResult[], onNavigat
     if (index > offset) result.push(<Fragment key={`text-${offset}`}>{value.slice(offset, index)}</Fragment>);
     const personId = match[2]!;
     const person = people.find((item) => item.document.id === personId);
-    const name = person === undefined ? match[1]! : text(person.document, "name");
+    const name = person === undefined ? match[1]! : personName(person.document);
     result.push(<button className="comment-mention" key={`${personId}-${index}`} onClick={() => onNavigate("people", { personId })} type="button">@{name}</button>);
     offset = index + match[0].length;
   }
@@ -29,7 +31,8 @@ function inlineComment(value: string, people: readonly EntityResult[], onNavigat
 }
 
 function CommentMarkdown({ fileContext, source, people, onNavigate }: { readonly fileContext?: ProjectFileReferenceContext; readonly source: string; readonly people: readonly EntityResult[]; readonly onNavigate: WorkspaceNavigate }) {
-  return <div className="comment-markdown"><SafeMarkdown fileContext={fileContext} renderText={(value) => inlineComment(value, people, onNavigate)} source={source} /></div>;
+  const personName = usePersonNameFormatter();
+  return <div className="comment-markdown"><SafeMarkdown fileContext={fileContext} renderText={(value) => inlineComment(value, people, onNavigate, personName)} source={source} /></div>;
 }
 
 function initials(name: string): string {
@@ -63,6 +66,8 @@ export function TaskComments({ api, draft, fileContext, projectId, taskId, peopl
   readonly confirmDelete: () => boolean;
 }) {
   const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
+  const personName = usePersonNameFormatter();
+  const defaultPersonNameFormat = useDefaultPersonNameFormat();
   const draftKey = `gitpm.comment-draft:${draft.draft_id}:${taskId}`;
   const [comments, setComments] = useState<readonly CommentResult[]>([]);
   const [body, setBody] = useState(() => window.sessionStorage.getItem(draftKey) ?? "");
@@ -79,7 +84,7 @@ export function TaskComments({ api, draft, fileContext, projectId, taskId, peopl
   const activePeople = useMemo(() => people.filter((person) => person.document.lifecycle === "active"), [people]);
   const suggestions = mentionQuery === null ? [] : activePeople.filter((person) => {
     const query = mentionQuery.query.toLocaleLowerCase(locale);
-    return text(person.document, "name").toLocaleLowerCase(locale).includes(query) || text(person.document, "email").toLocaleLowerCase(locale).includes(query);
+    return personNameSearchText(person.document, defaultPersonNameFormat).toLocaleLowerCase(locale).includes(query) || text(person.document, "email").toLocaleLowerCase(locale).includes(query);
   }).slice(0, 6);
 
   const load = async () => {
@@ -116,7 +121,7 @@ export function TaskComments({ api, draft, fileContext, projectId, taskId, peopl
   const chooseMention = (person: EntityResult) => {
     if (mentionQuery === null) return;
     const cursor = textarea.current?.selectionStart ?? body.length;
-    const token = `@[${text(person.document, "name")}](person:${person.document.id}) `;
+    const token = `@[${personName(person.document)}](person:${person.document.id}) `;
     const next = `${body.slice(0, mentionQuery.start)}${token}${body.slice(cursor)}`;
     setBody(next); setMentionQuery(null);
     requestAnimationFrame(() => { const position = mentionQuery.start + token.length; textarea.current?.focus(); textarea.current?.setSelectionRange(position, position); });
@@ -179,7 +184,7 @@ export function TaskComments({ api, draft, fileContext, projectId, taskId, peopl
       {error !== null && <div className="alert error">{error}<button onClick={() => { void load(); }}>{t("status.retry")}</button></div>}
       {showComposer && <div className="comment-composer" id={`comment-composer-${taskId}`}>
         <ProjectFileMarkdownField ariaDescribedBy={`comment-help-${taskId}`} context={fileContext} disabled={busy} label={t("comments.add")} onCursorActivity={detectMention} onKeyDown={composerKey} onValueChange={(next) => { setBody(next); setMentionQuery(null); }} placeholder={t("comments.placeholder")} ref={textarea} rows={4} value={body} />
-        {suggestions.length > 0 && <div className="mention-suggestions" role="listbox" aria-label={t("comments.mentionSuggestions")}>{suggestions.map((person) => <button key={person.document.id} onClick={() => chooseMention(person)} role="option" type="button"><strong>{text(person.document, "name")}</strong>{text(person.document, "email") !== "" && <span>{text(person.document, "email")}</span>}</button>)}</div>}
+        {suggestions.length > 0 && <div className="mention-suggestions" role="listbox" aria-label={t("comments.mentionSuggestions")}>{suggestions.map((person) => <button key={person.document.id} onClick={() => chooseMention(person)} role="option" type="button"><strong>{personName(person.document)}</strong>{text(person.document, "email") !== "" && <span>{text(person.document, "email")}</span>}</button>)}</div>}
         <div className="comment-composer-actions"><span className="field-hint" id={`comment-help-${taskId}`}>{t("comments.draftHint", { draft: draft.draft_id })}</span><button className="primary" disabled={busy || body.trim() === ""} onClick={() => { void create(); }} type="button">{busy ? t("feedback.saving") : t("comments.submit")}</button></div>
       </div>}
       {readOnly && <p className="field-hint">{t("comments.readOnly")}</p>}

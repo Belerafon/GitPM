@@ -108,7 +108,7 @@ test.describe("GitPM browser UI", () => {
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: 900 });
 
-      await expect(page.getByRole("heading", { name: "Anna Petrova", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Petrova Anna", exact: true })).toBeVisible();
       await expect(page.getByRole("heading", { name: "Schedule", exact: true })).toBeVisible();
       await expect(page.locator('[data-date="2026-07-01"]')).toHaveClass(/busy/u);
       await expect(page.locator('[data-date="2026-07-03"]')).toHaveClass(/free/u);

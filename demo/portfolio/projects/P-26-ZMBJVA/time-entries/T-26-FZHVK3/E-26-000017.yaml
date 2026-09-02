@@ -2,7 +2,7 @@ schema: gitpm/time-entry@1
 id: E-26-000017
 project: P-26-ZMBJVA # project: Портал поддержки клиентов
 task: T-26-FZHVK3 # task: Подготовить интерактивный прототип
-person: U-26-0225HT # person: Наталья Павлова
+person: U-26-0225HT # person: Павлова Наталья
 performed_on: 2026-08-12
 hours: 4
 category: regular

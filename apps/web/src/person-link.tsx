@@ -1,5 +1,6 @@
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 import type { EntityResult } from "./types.js";
+import { usePersonNameFormatter } from "./person-name.js";
 
 export function PersonLink({ personId, name, onOpen, className = "" }: { readonly personId: string; readonly name: string; readonly onOpen?: (personId: string) => void; readonly className?: string }) {
   const title = name === personId ? name : `${name} · ${personId}`;
@@ -14,10 +15,11 @@ export function PersonLink({ personId, name, onOpen, className = "" }: { readonl
 }
 
 export function PersonLinks({ personIds, people, onOpen, empty }: { readonly personIds: readonly string[]; readonly people: readonly EntityResult[]; readonly onOpen?: (personId: string) => void; readonly empty: ReactNode }) {
+  const personName = usePersonNameFormatter();
   if (personIds.length === 0) return <>{empty}</>;
   return <span className="person-links">{personIds.map((personId, index) => {
     const person = people.find((item) => item.document.id === personId);
-    const name = typeof person?.document.name === "string" && person.document.name !== "" ? person.document.name : personId;
+    const name = person === undefined ? personId : personName(person.document) || personId;
     return <span key={personId}>{index > 0 && <span aria-hidden="true">, </span>}<PersonLink name={name} onOpen={onOpen} personId={personId} /></span>;
   })}</span>;
 }

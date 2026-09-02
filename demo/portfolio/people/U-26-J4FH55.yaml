@@ -1,6 +1,7 @@
 schema: gitpm/person@1
-id: U-26-J4FH55 # person: Сергей Лебедев
-name: Сергей Лебедев
+id: U-26-J4FH55 # person: Лебедев Сергей
+family_name: Лебедев
+name: Сергей
 weekly_capacity_hours: 40
 calendar: C-26-G1AADY # calendar: Производственный календарь России
 lifecycle: active

@@ -5,7 +5,7 @@ status: in-progress
 lifecycle: active
 group: Клиентские продукты
 description_markdown: Единый портал самообслуживания с базой знаний, заявками, контролем SLA и интеграцией с внутренними системами поддержки.
-owner: U-26-0225HT # person: Наталья Павлова
+owner: U-26-0225HT # person: Павлова Наталья
 planning:
   enabled_tracks:
     - plan

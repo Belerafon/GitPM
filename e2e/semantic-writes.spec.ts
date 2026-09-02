@@ -78,6 +78,7 @@ test.describe("semantic scheduling writes", () => {
     await english(page);
     await page.getByRole("button", { name: "Edit", exact: true }).click();
     const projectEditor = page.getByRole("dialog", { name: "Edit: GitPM launch", exact: true });
+    await projectEditor.locator(".editor-advanced-section > summary").click();
     await projectEditor.getByRole("combobox", { name: "Primary track", exact: true }).selectOption("target");
     await projectEditor.getByRole("button", { name: "Save", exact: true }).click();
     await expect(projectEditor).toBeHidden();
@@ -104,6 +105,7 @@ test.describe("semantic scheduling writes", () => {
     await targetDue.press("Tab");
     await expect(targetDue).toHaveValue("2026-08-29");
     await renamedEditor.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(renamedEditor).toBeHidden();
 
     await expect.poll(async () => {
       const response = await request.get(`/api/drafts/${draftId}/entities/tasks/${taskId}`);
@@ -190,6 +192,7 @@ test.describe("semantic scheduling writes", () => {
     await page.goto(`/projects/${targetProjectId}`);
     await page.getByRole("button", { name: "Edit", exact: true }).click();
     const targetProjectEditor = page.getByRole("dialog", { name: "Edit: Operations", exact: true });
+    await targetProjectEditor.locator(".editor-advanced-section > summary").click();
     // Track checkboxes carry their full description in the accessible name and sit in the
     // "Enabled tracks" region rather than next to the heading text.
     const enabledTracks = targetProjectEditor.getByRole("region", { name: "Enabled tracks", exact: true });
