@@ -1,6 +1,7 @@
 schema: gitpm/person@1
-id: U-26-FSB3GM # person: Илья Кузнецов
-name: Илья Кузнецов
+id: U-26-FSB3GM # person: Кузнецов Илья
+family_name: Кузнецов
+name: Илья
 weekly_capacity_hours: 40
 calendar: C-26-G1AADY # calendar: Производственный календарь России
 lifecycle: active

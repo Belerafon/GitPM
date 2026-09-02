@@ -390,6 +390,12 @@ describe("HttpGitPmApi request bodies", () => {
     expect(result.document.default_calendar).toBe("C-26-QD7FJ4");
   });
 
+  it("loads the employee display format without repository mutation metadata", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ format: "family-initials" }), { status: 200, headers: { "content-type": "application/json" } })));
+
+    await expect(new HttpGitPmApi().getPersonNameFormat("DRF-1")).resolves.toBe("family-initials");
+  });
+
   it("updates repository configuration with optimistic file metadata", async () => {
     const entity = { document: { schema: "gitpm/repository@1" as const, default_branch: "main", default_calendar: "C-26-QD7FJ4", allowed_top_level_files: ["README.md"], ui_poll_interval_seconds: 5 }, path: ".gitpm/repository.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) };
     const next = { ...entity.document, ui_poll_interval_seconds: 7 };

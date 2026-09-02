@@ -2,7 +2,7 @@ schema: gitpm/time-entry@1
 id: E-26-00000E
 project: P-26-7VWANM # project: Переезд аналитической платформы
 task: T-26-5K0WZ2 # task: Развернуть контуры разработки и эксплуатации
-person: U-26-FSB3GM # person: Илья Кузнецов
+person: U-26-FSB3GM # person: Кузнецов Илья
 performed_on: 2026-09-08
 hours: 6
 category: regular

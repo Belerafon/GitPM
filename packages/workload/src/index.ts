@@ -1,6 +1,6 @@
 import { availabilityPercentOnDate, formatDateOnly, isoWeekday, parseDateOnly, workingDatesBetween, type AvailabilityException, type CalendarDefinition } from "@gitpm/calendar";
 import { resolvePlanning, type ScheduleTracksConfig } from "@gitpm/scheduling";
-import { activeProjectIds, isOperationalTask } from "@gitpm/shared";
+import { activeProjectIds, DEFAULT_PERSON_NAME_FORMAT, formatPersonName, isOperationalTask, isPersonNameFormat } from "@gitpm/shared";
 
 const DAY_MS = 86_400_000;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
@@ -203,6 +203,7 @@ export interface WorkloadWorkspaceInput {
   readonly availabilityEvents?: readonly WorkloadEntityDocument[];
   readonly teams?: readonly WorkloadEntityDocument[];
   readonly scheduleTracks: WorkloadEntityDocument;
+  readonly repository?: WorkloadEntityDocument;
   readonly filters?: WorkloadFilters;
 }
 
@@ -224,6 +225,8 @@ export function buildWorkloadReport(input: WorkloadWorkspaceInput): WorkloadRepo
   const filters = input.filters ?? {};
   const projectById = new Map(input.projects.map((project) => [entityId(project), project]));
   const config = input.scheduleTracks as unknown as ScheduleTracksConfig;
+  const configuredNameFormat = documentText(input.repository ?? {}, "default_person_name_format");
+  const defaultNameFormat = isPersonNameFormat(configuredNameFormat) ? configuredNameFormat : DEFAULT_PERSON_NAME_FORMAT;
   const teamMembers = filters.team === undefined
     ? undefined
     : new Set(documentStrings(input.teams?.find((team) => entityId(team) === filters.team) ?? {}, "members"));
@@ -247,7 +250,7 @@ export function buildWorkloadReport(input: WorkloadWorkspaceInput): WorkloadRepo
   });
   const projects = input.projects.map((project): WorkloadProject => ({ id: entityId(project), lifecycle: lifecycle(project) }));
   const people = input.people.map((person): WorkloadPerson => ({
-    id: entityId(person), name: documentText(person, "name") ?? entityId(person), lifecycle: lifecycle(person),
+    id: entityId(person), name: formatPersonName(person, defaultNameFormat) || entityId(person), lifecycle: lifecycle(person),
     weekly_capacity_hours: documentNumber(person, "weekly_capacity_hours") ?? 0, calendar: documentText(person, "calendar") ?? "",
   }));
   const calendars = input.calendars.map((calendar): WorkloadCalendar => ({

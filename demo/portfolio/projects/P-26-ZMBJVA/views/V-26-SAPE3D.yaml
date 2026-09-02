@@ -10,14 +10,14 @@ filters:
     - review
     - blocked
   assignees:
-    - U-26-0225HT # person: Наталья Павлова
-    - U-26-9C1ZR4 # person: Елена Морозова
-    - U-26-RKTV2A # person: Дмитрий Орлов
-    - U-26-NEDN00 # person: Мария Соколова
-    - U-26-ETKSWS # person: Ольга Новикова
-    - U-26-AD9KDK # person: Алексей Виноградов
-    - U-26-FSB3GM # person: Илья Кузнецов
-    - U-26-J4FH55 # person: Сергей Лебедев
-    - U-26-2SRX95 # person: Анна Волкова
+    - U-26-0225HT # person: Павлова Наталья
+    - U-26-9C1ZR4 # person: Морозова Елена
+    - U-26-RKTV2A # person: Орлов Дмитрий
+    - U-26-NEDN00 # person: Соколова Мария
+    - U-26-ETKSWS # person: Новикова Ольга
+    - U-26-AD9KDK # person: Виноградов Алексей
+    - U-26-FSB3GM # person: Кузнецов Илья
+    - U-26-J4FH55 # person: Лебедев Сергей
+    - U-26-2SRX95 # person: Волкова Анна
 group_by: status
 lifecycle: active

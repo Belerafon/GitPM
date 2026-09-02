@@ -11,8 +11,8 @@ acceptance_criteria_markdown:
 parent: T-26-HB2NX5 # task: Запустить программу обновления мобильного банка
 milestone: M-26-SY14EX # milestone: Публикация в магазинах
 assignees:
-  - U-26-NEDN00 # person: Мария Соколова
-  - U-26-9C1ZR4 # person: Елена Морозова
+  - U-26-NEDN00 # person: Соколова Мария
+  - U-26-9C1ZR4 # person: Морозова Елена
 schedules:
   plan:
     start: 2026-08-03

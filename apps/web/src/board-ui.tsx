@@ -49,6 +49,7 @@ export function BoardWorkspace({ api, draft, locale, initialProjectId = "", init
   const [activeViewId, setActiveViewId] = useState(initialViewId);
   const [error, setError] = useState<string | null>(null);
   const [savingTaskId, setSavingTaskId] = useState<string | null>(null);
+  const [mutationPending, setMutationPending] = useState(false);
   const { highlights, mark } = useExternalHighlights(500);
   const reducedMotion = useReducedMotion();
   const columnsRef = useFlipList<HTMLDivElement>(reducedMotion);
@@ -79,6 +80,8 @@ export function BoardWorkspace({ api, draft, locale, initialProjectId = "", init
   }, [initialMilestoneFilter, initialStatusFilter, initialTypeFilter, initialViewId]);
   const report = (caught: unknown) => setError(caught instanceof Error ? caught.message : String(caught));
   const mutate = async (operation: () => Promise<EntityResult>): Promise<EntityResult | null> => {
+    if (mutationPending) return null;
+    setMutationPending(true);
     setError(null);
     try {
       const result = await operation();
@@ -89,6 +92,7 @@ export function BoardWorkspace({ api, draft, locale, initialProjectId = "", init
       await onChanged(); await load();
       return result;
     } catch (caught) { report(caught); return null; }
+    finally { setMutationPending(false); }
   };
 
   const activeTasks = tasks.filter((item) => isOperationalTask(item.document, activeProjectIds(projects.map((project) => project.document))));
@@ -197,17 +201,17 @@ export function BoardWorkspace({ api, draft, locale, initialProjectId = "", init
       </section>;
     })}</div>
     <details className="card saved-view-manager"><summary>{t("board.manageViews")}</summary><section className="saved-views"><div><h3>{t("board.savedViews")}</h3><p>{t("board.savedDescription")}</p></div>
-      <form className="saved-view-create" onSubmit={saveView}><input name="name" aria-label={t("board.viewName")} placeholder={t("board.viewName")} required /><button className="primary" disabled={readOnly || projectId === ""}>{t("board.saveViewAsNew")}</button></form>
+      <form className="saved-view-create" onSubmit={saveView}><input disabled={mutationPending} name="name" aria-label={t("board.viewName")} placeholder={t("board.viewName")} required /><button className="primary" disabled={readOnly || projectId === "" || mutationPending}>{t("board.saveViewAsNew")}</button></form>
       <div className="saved-view-list">{managedViews.map((view) => {
         const name = text(view.document, "name"); const archived = view.document.lifecycle === "archived";
         return <article className={`${activeViewId === view.document.id ? "selected" : ""}${archived ? " archived" : ""}`} key={view.document.id}>
           <header><strong>{name}</strong><code>{view.document.id}</code>{archived && <span>{t("core.archived")}</span>}</header>
           {!archived && <button type="button" onClick={() => openView(view)}>{t("board.applyView", { name })}</button>}
-          <form onSubmit={(event) => event.preventDefault()}><label>{t("board.viewName")}<input aria-label={t("board.viewNameFor", { name })} defaultValue={name} key={`${view.document.id}:${view.blob_id}`} name="name" required /></label><div className="saved-view-actions">
-            <button disabled={readOnly || archived} onClick={(event) => updateManagedView(event.currentTarget.form!, view, false)} type="button">{t("board.renameView")}</button>
-            <button className="primary" disabled={readOnly || archived} onClick={(event) => updateManagedView(event.currentTarget.form!, view, true)} type="button">{t("board.updateView")}</button>
-            {archived ? <button disabled={readOnly} onClick={() => restoreView(view)} type="button">{t("core.restore")}</button> : <button disabled={readOnly} onClick={() => archiveView(view)} type="button">{t("core.archive")}</button>}
-            <button className="danger" data-control-hint={t("controlHint.deleteSavedView")} disabled={readOnly} onClick={() => deleteView(view)} type="button">{t("board.deleteView")}</button>
+          <form onSubmit={(event) => event.preventDefault()}><label>{t("board.viewName")}<input aria-label={t("board.viewNameFor", { name })} defaultValue={name} disabled={mutationPending} key={`${view.document.id}:${view.blob_id}`} name="name" required /></label><div className="saved-view-actions">
+            <button disabled={readOnly || archived || mutationPending} onClick={(event) => updateManagedView(event.currentTarget.form!, view, false)} type="button">{t("board.renameView")}</button>
+            <button className="primary" disabled={readOnly || archived || mutationPending} onClick={(event) => updateManagedView(event.currentTarget.form!, view, true)} type="button">{t("board.updateView")}</button>
+            {archived ? <button disabled={readOnly || mutationPending} onClick={() => restoreView(view)} type="button">{t("core.restore")}</button> : <button disabled={readOnly || mutationPending} onClick={() => archiveView(view)} type="button">{t("core.archive")}</button>}
+            <button className="danger" data-control-hint={t("controlHint.deleteSavedView")} disabled={readOnly || mutationPending} onClick={() => deleteView(view)} type="button">{t("board.deleteView")}</button>
           </div></form>
         </article>;
       })}</div>

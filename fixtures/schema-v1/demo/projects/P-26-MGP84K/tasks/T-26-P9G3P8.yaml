@@ -7,7 +7,7 @@ status: done
 lifecycle: active
 milestone: M-26-461GDJ # milestone: Alpha
 assignees:
-  - U-26-5EBAE3 # person: Anna Petrova
+  - U-26-5EBAE3 # person: Petrova Anna
 schedules:
   plan:
     start: 2026-07-01

@@ -50,10 +50,11 @@ afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recur
 
 describe("global repository search", () => {
   const documents: GitPmDocument[] = [
+    { schema: "gitpm/repository@1", default_branch: "main", default_calendar: "C-26-7GQW87", default_person_name_format: "family-initials", allowed_top_level_files: [], ui_poll_interval_seconds: 5 },
     { schema: "gitpm/project@2", id: "P-26-Y9S1D8", name: "Платёжный шлюз", group: "Финансы", status: "backlog", lifecycle: "active" },
     { schema: "gitpm/task@2", id: "T-26-FM5Q4W", project: "P-26-Y9S1D8", title: "Подключить банк", type: "task", status: "backlog", lifecycle: "archived" },
     { schema: "gitpm/milestone@2", id: "M-26-KK4VXH", project: "P-26-Y9S1D8", name: "Пилот", lifecycle: "active" },
-    { schema: "gitpm/person@1", id: "U-26-KB9RXB", name: "Анна Кузнецова", email: "anna@example.test", weekly_capacity_hours: 40, calendar: "C-26-7GQW87", lifecycle: "active" },
+    { schema: "gitpm/person@1", id: "U-26-KB9RXB", family_name: "Кузнецова", name: "Анна", middle_name: "Сергеевна", email: "anna@example.test", weekly_capacity_hours: 40, calendar: "C-26-7GQW87", lifecycle: "active" },
     { schema: "gitpm/team@1", id: "G-26-22K88P", name: "Core team", members: ["U-26-KB9RXB"], lifecycle: "active" },
     { schema: "gitpm/calendar@1", id: "C-26-7GQW87", name: "Standard week", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" },
     { schema: "gitpm/saved-view@1", id: "V-26-B0C5A1", project: "P-26-Y9S1D8", name: "Hidden search view", kind: "list", filters: {}, lifecycle: "active" },
@@ -71,6 +72,7 @@ describe("global repository search", () => {
   it("searches locale-neutral context fields, includes all supported types, and applies the limit", () => {
     expect(searchRepositoryDocuments(documents, "ANNA@EXAMPLE.TEST").items[0]).toMatchObject({ entity_type: "person", id: "U-26-KB9RXB" });
     expect(searchRepositoryDocuments(documents, "Анна").items.map((item) => item.entity_type)).toEqual(["person", "team"]);
+    expect(searchRepositoryDocuments(documents, "Кузнецова").items[0]).toMatchObject({ title: "Кузнецова А. С." });
     expect(searchRepositoryDocuments(documents, "standard").items[0]).toMatchObject({ entity_type: "calendar" });
     expect(searchRepositoryDocuments(documents, "п", 2)).toMatchObject({ total: 3, items: expect.any(Array) });
     expect(searchRepositoryDocuments(documents, "п", 2).items).toHaveLength(2);

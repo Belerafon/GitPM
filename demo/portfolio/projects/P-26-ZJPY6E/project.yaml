@@ -5,7 +5,7 @@ status: in-progress
 lifecycle: active
 group: Клиентские продукты
 description_markdown: "Обновление мобильного банка: единая витрина продуктов, биометрический вход и новая система уведомлений."
-owner: U-26-2SRX95 # person: Анна Волкова
+owner: U-26-2SRX95 # person: Волкова Анна
 planning:
   enabled_tracks:
     - plan

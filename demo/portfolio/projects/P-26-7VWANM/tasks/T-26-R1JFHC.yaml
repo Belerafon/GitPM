@@ -11,8 +11,8 @@ acceptance_criteria_markdown:
 parent: T-26-SQ5YK5 # task: Перевести аналитику на новую платформу
 milestone: M-26-9HGQWY # milestone: Отключение старого хранилища
 assignees:
-  - U-26-FSB3GM # person: Илья Кузнецов
-  - U-26-AD9KDK # person: Алексей Виноградов
+  - U-26-FSB3GM # person: Кузнецов Илья
+  - U-26-AD9KDK # person: Виноградов Алексей
 schedules:
   plan:
     start: 2026-10-19

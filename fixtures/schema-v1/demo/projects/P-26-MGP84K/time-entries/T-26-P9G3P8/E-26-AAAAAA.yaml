@@ -2,7 +2,7 @@ schema: gitpm/time-entry@1
 id: E-26-AAAAAA
 project: P-26-MGP84K # project: GitPM launch
 task: T-26-P9G3P8 # task: Approve schema v1
-person: U-26-5EBAE3 # person: Anna Petrova
+person: U-26-5EBAE3 # person: Petrova Anna
 performed_on: 2026-08-10
 hours: 1.5
 category: warranty

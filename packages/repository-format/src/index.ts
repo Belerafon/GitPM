@@ -1,4 +1,5 @@
 import { Document, isAlias, parseDocument, visit } from "yaml";
+import { formatPersonName } from "@gitpm/shared";
 
 const MAX_BYTES = 1_048_576;
 const MAX_LINE_LENGTH = 20_000;
@@ -80,13 +81,13 @@ const fieldOrder: Record<string, readonly string[]> = {
   "gitpm/project@2": ["schema", "id", "name", "status", "lifecycle", "group", "description_markdown", "owner", "planning", "schedules", "milestone_order", "labels"],
   "gitpm/task@2": ["schema", "id", "project", "title", "type", "status", "lifecycle", "description_markdown", "acceptance_criteria_markdown", "parent", "milestone", "assignees", "schedules", "labels"],
   "gitpm/milestone@2": ["schema", "id", "project", "name", "lifecycle", "description_markdown", "schedules", "task_order"],
-  "gitpm/person@1": ["schema", "id", "name", "weekly_capacity_hours", "annual_vacation_extra_days", "annual_vacation_extra_days_reason", "calendar", "lifecycle", "email"],
+  "gitpm/person@1": ["schema", "id", "family_name", "name", "middle_name", "display_name_format", "weekly_capacity_hours", "annual_vacation_extra_days", "annual_vacation_extra_days_reason", "calendar", "lifecycle", "email"],
   "gitpm/team@1": ["schema", "id", "name", "members", "lifecycle"],
   "gitpm/calendar@1": ["schema", "id", "name", "working_weekdays", "holidays", "lifecycle"],
   "gitpm/availability-event@1": ["schema", "id", "person", "start", "finish", "kind", "availability_percent", "state", "note_markdown", "lifecycle"],
   "gitpm/saved-view@1": ["schema", "id", "project", "name", "kind", "filters", "group_by", "lifecycle"],
   "gitpm/comment@1": ["schema", "id", "project", "task", "author", "created_at", "updated_at", "state", "body_markdown", "mentions", "deleted_at", "deleted_by"],
-  "gitpm/repository@1": ["schema", "default_branch", "default_calendar", "allowed_top_level_files", "allowed_top_level_directories", "ui_poll_interval_seconds"],
+  "gitpm/repository@1": ["schema", "default_branch", "default_calendar", "default_person_name_format", "allowed_top_level_files", "allowed_top_level_directories", "ui_poll_interval_seconds"],
   "gitpm/statuses@2": ["schema", "statuses"],
   "gitpm/issue-types@1": ["schema", "issue_types"],
   "gitpm/schedule-tracks@1": ["schema", "tracks", "defaults"],
@@ -163,7 +164,7 @@ function singleLine(value: string): string {
 
 export function referenceLabelForDocument(document: GitPmDocument): string | undefined {
   if (typeof document.id !== "string") return undefined;
-  const displayValue = typeof document.title === "string" ? document.title : typeof document.name === "string" ? document.name : undefined;
+  const displayValue = document.schema === "gitpm/person@1" ? formatPersonName(document) : typeof document.title === "string" ? document.title : typeof document.name === "string" ? document.name : undefined;
   if (displayValue === undefined) return undefined;
   const display = singleLine(displayValue);
   if (display === "") return undefined;

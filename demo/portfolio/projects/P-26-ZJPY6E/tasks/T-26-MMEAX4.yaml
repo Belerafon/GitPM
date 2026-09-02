@@ -11,8 +11,8 @@ acceptance_criteria_markdown:
 parent: T-26-HB2NX5 # task: Запустить программу обновления мобильного банка
 milestone: M-26-SY14EX # milestone: Публикация в магазинах
 assignees:
-  - U-26-FSB3GM # person: Илья Кузнецов
-  - U-26-J4FH55 # person: Сергей Лебедев
+  - U-26-FSB3GM # person: Кузнецов Илья
+  - U-26-J4FH55 # person: Лебедев Сергей
 schedules:
   plan:
     start: 2026-10-05

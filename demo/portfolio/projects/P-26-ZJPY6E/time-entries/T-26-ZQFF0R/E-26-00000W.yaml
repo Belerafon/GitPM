@@ -2,7 +2,7 @@ schema: gitpm/time-entry@1
 id: E-26-00000W
 project: P-26-ZJPY6E # project: Мобильный банк 2.0
 task: T-26-ZQFF0R # task: Подготовить дизайн-систему мобильного приложения
-person: U-26-NEDN00 # person: Мария Соколова
+person: U-26-NEDN00 # person: Соколова Мария
 performed_on: 2026-08-06
 hours: 6
 category: regular

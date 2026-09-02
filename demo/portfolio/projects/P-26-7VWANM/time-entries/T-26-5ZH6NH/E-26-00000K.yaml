@@ -2,7 +2,7 @@ schema: gitpm/time-entry@1
 id: E-26-00000K
 project: P-26-7VWANM # project: Переезд аналитической платформы
 task: T-26-5ZH6NH # task: Перенести загрузку транзакционных данных
-person: U-26-RKTV2A # person: Дмитрий Орлов
+person: U-26-RKTV2A # person: Орлов Дмитрий
 performed_on: 2026-09-25
 hours: 6
 category: regular

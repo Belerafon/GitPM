@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { DEFAULT_PERSON_NAME_FORMAT, isPersonNameFormat, type PersonNameFormat } from "@gitpm/shared";
 import type { GitPmApi } from "./api.js";
 import { DraftProvider, useDrafts } from "./draft-context.js";
 import { formatDateTime, localeRegistry, LOCALE_STORAGE_KEY, message, selectLocale, type Locale, type MessageKey } from "./i18n.js";
@@ -27,6 +28,7 @@ import { RepositoryConnectionSettings } from "./repository-connection-ui.js";
 import { ExportMenu } from "./export-ui.js";
 import { entityRouteKey, initialNavigationTrail, restoreNavigationTrail, truncateNavigationTrail, visitNavigationTrail, type NavigationTrail } from "./app/navigation-trail.js";
 import { GlobalSearch } from "./global-search.js";
+import { PersonNameFormatProvider } from "./person-name.js";
 
 interface AppProps {
   readonly api: GitPmApi;
@@ -61,7 +63,8 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
   const drafts = useDrafts();
   const [draftId, setDraftId] = useState("");
   const [activeRoute, setActiveRoute] = useState<AppRoute | null>(() => parseAppRoute(window.location.href));
-  const [catalog, setCatalog] = useState(() => new EntityCatalog({}));
+  const [defaultPersonNameFormat, setDefaultPersonNameFormat] = useState<PersonNameFormat>(DEFAULT_PERSON_NAME_FORMAT);
+  const [catalog, setCatalog] = useState(() => new EntityCatalog({}, DEFAULT_PERSON_NAME_FORMAT));
   const [navigationTrail, setNavigationTrail] = useState<NavigationTrail | null>(() => initialNavigationTrail(parseAppRoute(window.location.href)));
   const [navigationLabels, setNavigationLabels] = useState<Readonly<Record<string, string>>>({});
   const repositoryMode = drafts.session?.mode === "repository";
@@ -131,20 +134,29 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
   };
   const activeDraft = drafts.snapshot?.draft;
   useEffect(() => {
+    if (activeDraft === undefined) { setDefaultPersonNameFormat(DEFAULT_PERSON_NAME_FORMAT); return; }
+    let current = true;
+    void api.getPersonNameFormat(activeDraft.draft_id).then((configured) => {
+      if (!current) return;
+      setDefaultPersonNameFormat(isPersonNameFormat(configured) ? configured : DEFAULT_PERSON_NAME_FORMAT);
+    }).catch(() => { if (current) setDefaultPersonNameFormat(DEFAULT_PERSON_NAME_FORMAT); });
+    return () => { current = false; };
+  }, [activeDraft?.draft_id, api]);
+  useEffect(() => {
     const needsProject = activeRoute?.projectId !== undefined;
     const needsTask = activeRoute?.taskId !== undefined;
     const needsStage = activeRoute?.stageId !== undefined;
     const needsPerson = activeRoute?.personId !== undefined;
-    if (activeDraft === undefined || (!needsProject && !needsTask && !needsStage && !needsPerson)) { setCatalog(new EntityCatalog({})); return; }
+    if (activeDraft === undefined || (!needsProject && !needsTask && !needsStage && !needsPerson)) { setCatalog(new EntityCatalog({}, defaultPersonNameFormat)); return; }
     let current = true;
     void Promise.all([
       api.listEntities(activeDraft.draft_id, "projects"),
       needsStage ? api.listEntities(activeDraft.draft_id, "milestones", activeRoute?.projectId) : Promise.resolve([]),
       needsTask ? api.listEntities(activeDraft.draft_id, "tasks", activeRoute?.projectId) : Promise.resolve([]),
       needsPerson ? api.listEntities(activeDraft.draft_id, "people") : Promise.resolve([]),
-    ]).then(([projects, milestones, tasks, people]) => { if (current) setCatalog(new EntityCatalog({ projects, milestones, tasks, people })); }).catch(() => { if (current) setCatalog(new EntityCatalog({})); });
+    ]).then(([projects, milestones, tasks, people]) => { if (current) setCatalog(new EntityCatalog({ projects, milestones, tasks, people }, defaultPersonNameFormat)); }).catch(() => { if (current) setCatalog(new EntityCatalog({}, defaultPersonNameFormat)); });
     return () => { current = false; };
-  }, [activeDraft?.draft_id, activeDraft?.fingerprint, activeDraft?.external_fingerprint, activeRoute?.projectId, activeRoute?.stageId, activeRoute?.taskId, activeRoute?.personId, api]);
+  }, [activeDraft?.draft_id, activeDraft?.fingerprint, activeDraft?.external_fingerprint, activeRoute?.projectId, activeRoute?.stageId, activeRoute?.taskId, activeRoute?.personId, api, defaultPersonNameFormat]);
   useEffect(() => {
     if (activeRoute === null) return;
     const labels: Record<string, string> = {};
@@ -233,7 +245,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
   };
   const openRepositoryStatus = () => navigateToRoute(routeForDestination("changes"));
   return (
-    <><ControlHints t={t} /><AppShell activeView={shellActiveView}
+    <><ControlHints t={t} /><PersonNameFormatProvider format={defaultPersonNameFormat}><AppShell activeView={shellActiveView}
       banner={drafts.error !== null && <div className="alert error">{t("status.error", { message: drafts.error })}<button onClick={() => { void drafts.refresh(); }}>{t("status.retry")}</button></div>}
       breadcrumbs={breadcrumbs}
       headerMeta={<><strong>{repository?.name ?? t("app.repository")}</strong>{directMode && repository?.branch !== undefined && <span className="runtime-context"><code>{repository.branch}</code></span>}<span className="runtime-context">{t("auth.localMode")} · {t("auth.role", { role: drafts.session.role })}</span></>}
@@ -317,7 +329,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
           ? <div className="card empty-workspace">{t("core.selectProject")}</div>
           : view === "nav.people" && workspaceSelection.personId !== undefined
             ? <PeopleProfileWorkspace api={api} confirmAction={confirmAction} draft={active} locale={locale} onChanged={drafts.refresh} onNavigate={openWorkspace} personId={workspaceSelection.personId} role={drafts.session.role} />
-            : <AdminWorkspace api={api} confirmAction={confirmAction} draft={active} role={drafts.session.role} locale={locale} initialCalendarId={workspaceSelection.calendarId} initialSection={settingsSection} onOpenCalendar={(calendarId) => openWorkspace("calendar", { calendarId })} onOpenPerson={(personId) => openWorkspace("people", { personId })} onOpenProject={(projectId) => openWorkspace("projects", { projectId })} onOpenView={(projectId, viewId) => openWorkspace("board", { projectId, query: { view: [viewId] } })} surface={view === "nav.people" ? "people" : view === "nav.calendar" ? "calendar" : "settings"} onChanged={drafts.refresh} />)}
+            : <AdminWorkspace api={api} confirmAction={confirmAction} draft={active} role={drafts.session.role} locale={locale} initialCalendarId={workspaceSelection.calendarId} initialSection={settingsSection} onOpenCalendar={(calendarId) => openWorkspace("calendar", { calendarId })} onOpenPerson={(personId) => openWorkspace("people", { personId })} onOpenProject={(projectId) => openWorkspace("projects", { projectId })} onOpenView={(projectId, viewId) => openWorkspace("board", { projectId, query: { view: [viewId] } })} onPersonNameFormatChanged={setDefaultPersonNameFormat} surface={view === "nav.people" ? "people" : view === "nav.calendar" ? "calendar" : "settings"} onChanged={drafts.refresh} />)}
         {view === "nav.changes" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <ChangesWorkspace api={api} draft={active} role={drafts.session.role} locale={locale} onChanged={drafts.refresh} confirmAction={confirmAction} remoteAvailable={repository?.has_remote === true} gitlabConfigured={gitlab?.configured === true} gitlabSignedIn={gitlab?.user !== undefined} onGitLabLogin={loginToGitLab} onNavigate={openWorkspace} directMode={directMode} />)}
         {view === "nav.files" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <WorktreeWorkspace api={api} confirmAction={confirmAction} draft={active} key={`nav.files:${active.draft_id}:${active.external_fingerprint ?? ""}`} locale={locale} onChanged={drafts.refresh} role={drafts.session.role} />)}
         {view === "nav.history" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <HistoryWorkspace api={api} confirmAction={confirmAction} directMode={directMode} draft={active} key={`nav.history:${workspaceSelection.commit ?? ""}`} locale={locale} canRevert={drafts.session.role !== "Reporter"} initialCommit={workspaceSelection.commit} onChanged={drafts.refresh} onNavigate={openWorkspace} onDraftCreated={drafts.select} />)}
@@ -328,7 +340,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
         {view === "nav.workload" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <WorkloadWorkspace api={api} draft={active} locale={locale} onNavigate={openWorkspace} />)}
         {view === "nav.vacations" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <VacationCalendarWorkspace api={api} draft={active} locale={locale} onNavigate={openWorkspace} />)}
         {!projectWorkspaceRoute && !["nav.drafts", "nav.projects", "nav.tasks", "nav.people", "nav.calendar", "nav.administration", "nav.changes", "nav.files", "nav.history", "nav.repositoryConnection", "nav.board", "nav.gantt", "nav.effort", "nav.workload", "nav.vacations"].includes(view) && <div className="card empty-workspace">{t("common.notAvailable")}</div>}
-    </AppShell></>
+    </AppShell></PersonNameFormatProvider></>
   );
 }
 

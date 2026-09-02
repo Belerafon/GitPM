@@ -11,7 +11,7 @@ import {
 import type { GitHistoryEntry } from "@gitpm/git-client";
 import type { GitPmDocument } from "@gitpm/repository-format";
 import { windowEffort, type GanttModel } from "@gitpm/scheduling";
-import { activeProjectIds, isOperationalTask } from "@gitpm/shared";
+import { activeProjectIds, DEFAULT_PERSON_NAME_FORMAT, formatPersonName, isOperationalTask, isPersonNameFormat, type PersonNameFormat } from "@gitpm/shared";
 import { buildTaskHierarchy } from "@gitpm/task-hierarchy";
 import { groupByCategory, groupByDate, groupByPerson, type TimeEntryRecord } from "@gitpm/time-entries";
 import { buildWorkloadReport, type WorkloadReport } from "@gitpm/workload";
@@ -307,13 +307,15 @@ export function buildExportReportModel(snapshot: ExportSnapshot, request: Export
   const options = normalizeExportOptions(request, snapshot);
   const labels = COPY[options.locale];
   const groups = documentGroups(snapshot.documents);
+  const configuredNameFormat = groups.repository[0]?.default_person_name_format;
+  const defaultPersonNameFormat = isPersonNameFormat(configuredNameFormat) ? configuredNameFormat : DEFAULT_PERSON_NAME_FORMAT;
   const allEntries = groups.timeEntries.map(timeEntry).filter((entry): entry is TimeEntryRecord => entry !== undefined);
   const entries = filterEntries(allEntries, options.timeEntryState, options.periodStart, options.periodFinish);
   const scheduling = buildExportScheduling(snapshot.documents, entries);
   const titlesByStatus = statusTitles(groups.statuses);
   const doneSlugs = completedStatusSlugs(groups.statuses);
   const categoryNames = categoryTitles(groups.workCategories);
-  const peopleNames = namesById(groups.people);
+  const peopleNames = namesById(groups.people, defaultPersonNameFormat);
   const projectNames = namesById(groups.projects);
   const calendarNames = namesById(groups.calendars);
   const teamMembers = options.team === undefined
@@ -381,7 +383,7 @@ export function buildExportReportModel(snapshot: ExportSnapshot, request: Export
           };
         }),
       })),
-      people: people.map((person) => personRow(person, visibleProjects, visibleTasks, visibleTeams, projectNames, calendarNames, options, labels)),
+      people: people.map((person) => personRow(person, visibleProjects, visibleTasks, visibleTeams, projectNames, calendarNames, options, labels, defaultPersonNameFormat)),
     };
   }
 
@@ -427,6 +429,7 @@ export function buildExportReportModel(snapshot: ExportSnapshot, request: Export
         availabilityEvents: groups.availability,
         teams: visibleTeams,
         scheduleTracks,
+        repository: groups.repository[0],
         filters: {
           ...(options.project === undefined ? {} : { project: options.project }),
           ...(options.team === undefined ? {} : { team: options.team }),
@@ -442,6 +445,7 @@ export function buildExportReportModel(snapshot: ExportSnapshot, request: Export
       groups.availability,
       groups.calendars,
       options,
+      defaultPersonNameFormat,
     );
   }
 
@@ -458,6 +462,7 @@ export function buildExportReportModel(snapshot: ExportSnapshot, request: Export
       calendarNames,
       options,
       labels,
+      defaultPersonNameFormat,
     ));
   }
 
@@ -529,6 +534,7 @@ function personRow(
   calendarNames: ReadonlyMap<string, string>,
   options: NormalizedExportOptions,
   labels: CopyText,
+  defaultPersonNameFormat: PersonNameFormat,
 ) {
   const personId = text(person, "id");
   const personProjectIds = new Set(projects.filter((project) => text(project, "owner") === personId).map((project) => text(project, "id")));
@@ -538,7 +544,7 @@ function personRow(
   const capacity = number(person, "weekly_capacity_hours");
   return {
     id: personId,
-    name: text(person, "name"),
+    name: formatPersonName(person, defaultPersonNameFormat),
     email: options.includeEmail ? text(person, "email") : "",
     projects: [...personProjectIds].map((id) => projectNames.get(id) ?? id).sort((left, right) => left.localeCompare(right, options.locale)).join(", ") || "-",
     teams: teams.filter((team) => strings(team.members).includes(personId)).map((team) => text(team, "name")).sort((left, right) => left.localeCompare(right, options.locale)).join(", ") || "-",
@@ -656,10 +662,11 @@ function buildVacationReport(
   availability: readonly GitPmDocument[],
   calendars: readonly GitPmDocument[],
   options: NormalizedExportOptions,
+  defaultPersonNameFormat: PersonNameFormat,
 ): VacationReport {
   const vacationPeople: VacationPerson[] = people.map((person) => ({
     id: text(person, "id"),
-    name: text(person, "name"),
+    name: formatPersonName(person, defaultPersonNameFormat),
     lifecycle: text(person, "lifecycle") || "active",
     calendarId: text(person, "calendar"),
     extraDays: number(person, "annual_vacation_extra_days") ?? 0,
@@ -719,6 +726,7 @@ function buildPersonProfile(
   calendarNames: ReadonlyMap<string, string>,
   options: NormalizedExportOptions,
   labels: CopyText,
+  defaultPersonNameFormat: PersonNameFormat,
 ): PersonProfileReport {
   const personId = text(person, "id");
   const owned = projects.filter((project) => text(project, "owner") === personId);
@@ -729,7 +737,7 @@ function buildPersonProfile(
   const capacity = number(person, "weekly_capacity_hours");
   return {
     id: personId,
-    name: text(person, "name"),
+    name: formatPersonName(person, defaultPersonNameFormat),
     email: options.includeEmail ? text(person, "email") : "",
     capacity: capacity === undefined ? "-" : `${capacity} ${labels.hoursPerWeek}`,
     calendar: calendarNames.get(text(person, "calendar")) ?? "-",

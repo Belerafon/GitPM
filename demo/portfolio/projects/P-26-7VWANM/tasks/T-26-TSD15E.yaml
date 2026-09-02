@@ -11,9 +11,9 @@ acceptance_criteria_markdown:
 parent: T-26-SQ5YK5 # task: Перевести аналитику на новую платформу
 milestone: M-26-9HGQWY # milestone: Отключение старого хранилища
 assignees:
-  - U-26-J4FH55 # person: Сергей Лебедев
-  - U-26-ETKSWS # person: Ольга Новикова
-  - U-26-0225HT # person: Наталья Павлова
+  - U-26-J4FH55 # person: Лебедев Сергей
+  - U-26-ETKSWS # person: Новикова Ольга
+  - U-26-0225HT # person: Павлова Наталья
 schedules:
   plan:
     start: 2026-11-30

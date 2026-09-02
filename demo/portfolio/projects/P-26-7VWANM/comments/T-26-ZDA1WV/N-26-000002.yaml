@@ -10,5 +10,5 @@ created_at: 2026-09-03T12:20:00.000Z
 state: active
 body_markdown: Планируем шифрование на уровне хранилища (TDE), column-level вынесем в отдельную задачу — см. @[Илья Кузнецов](person:U-26-FSB3GM).
 mentions:
-  - person: U-26-FSB3GM # person: Илья Кузнецов
+  - person: U-26-FSB3GM # person: Кузнецов Илья
     mentioned_at: 2026-09-03T12:20:00.000Z

@@ -1,6 +1,6 @@
 schema: gitpm/availability-event@1
 id: A-26-VACATN
-person: U-26-0225HT
+person: U-26-0225HT # person: Павлова Наталья
 start: 2026-12-28
 finish: 2026-12-31
 kind: vacation

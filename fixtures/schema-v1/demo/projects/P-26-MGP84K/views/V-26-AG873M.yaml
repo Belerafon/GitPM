@@ -8,7 +8,7 @@ filters:
     - backlog
     - in-progress
   assignees:
-    - U-26-5EBAE3 # person: Anna Petrova
-    - U-26-15QJP8 # person: Boris Sokolov
+    - U-26-5EBAE3 # person: Petrova Anna
+    - U-26-15QJP8 # person: Sokolov Boris
 group_by: status
 lifecycle: active

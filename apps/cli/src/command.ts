@@ -402,7 +402,8 @@ const schemaExamples: Readonly<Record<string, string>> = {
     "availability_percent: 0", "state: planned", "lifecycle: active", "",
   ].join("\n"),
   person: [
-    "schema: gitpm/person@1", "id: U-26-7K4M9Q", "name: Ada Lovelace",
+    "schema: gitpm/person@1", "id: U-26-7K4M9Q", "family_name: Lovelace", "name: Ada", "middle_name: Byron",
+    "display_name_format: family-initials",
     "weekly_capacity_hours: 40", "annual_vacation_extra_days: 5",
     "annual_vacation_extra_days_reason: Overtime compensation",
     "calendar: C-26-QD7FJ4", "lifecycle: active", "email: ada@example.test", "",
@@ -1342,6 +1343,7 @@ const execFileAsync = promisify(execFile);
 const initRepositoryYaml = (calendarId: string, calendarName: string) => `schema: gitpm/repository@1
 default_branch: main
 default_calendar: ${calendarId} # calendar: ${calendarName}
+default_person_name_format: full
 allowed_top_level_files:
   - README.md
   - .gitignore

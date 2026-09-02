@@ -1,6 +1,7 @@
 schema: gitpm/person@1
-id: U-26-5EBAE3 # person: Anna Petrova
-name: Anna Petrova
+id: U-26-5EBAE3 # person: Petrova Anna
+family_name: Petrova
+name: Anna
 weekly_capacity_hours: 40
 annual_vacation_extra_days: 5
 annual_vacation_extra_days_reason: Overtime compensation

@@ -11,9 +11,9 @@ acceptance_criteria_markdown:
 parent: T-26-HB2NX5 # task: Запустить программу обновления мобильного банка
 milestone: M-26-SY14EX # milestone: Публикация в магазинах
 assignees:
-  - U-26-J4FH55 # person: Сергей Лебедев
-  - U-26-0225HT # person: Наталья Павлова
-  - U-26-2SRX95 # person: Анна Волкова
+  - U-26-J4FH55 # person: Лебедев Сергей
+  - U-26-0225HT # person: Павлова Наталья
+  - U-26-2SRX95 # person: Волкова Анна
 schedules:
   plan:
     start: 2026-10-19

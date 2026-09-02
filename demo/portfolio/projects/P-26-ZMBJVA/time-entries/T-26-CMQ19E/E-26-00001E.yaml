@@ -2,7 +2,7 @@ schema: gitpm/time-entry@1
 id: E-26-00001E
 project: P-26-ZMBJVA # project: Портал поддержки клиентов
 task: T-26-CMQ19E # task: Подключить единый вход клиента
-person: U-26-RKTV2A # person: Дмитрий Орлов
+person: U-26-RKTV2A # person: Орлов Дмитрий
 performed_on: 2026-08-12
 hours: 6
 category: regular

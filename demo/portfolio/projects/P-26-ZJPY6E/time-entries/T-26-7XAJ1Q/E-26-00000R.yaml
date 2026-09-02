@@ -2,7 +2,7 @@ schema: gitpm/time-entry@1
 id: E-26-00000R
 project: P-26-ZJPY6E # project: Мобильный банк 2.0
 task: T-26-7XAJ1Q # task: Реализовать API-агрегатор продуктов
-person: U-26-RKTV2A # person: Дмитрий Орлов
+person: U-26-RKTV2A # person: Орлов Дмитрий
 performed_on: 2026-08-05
 hours: 6
 category: regular

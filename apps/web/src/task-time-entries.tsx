@@ -8,6 +8,7 @@ import { EditorDrawer } from "./editor-drawer.js";
 import { PersonLink } from "./person-link.js";
 import { ProjectFileMarkdownField, type ProjectFileReferenceContext } from "./project-file-reference-ui.js";
 import { SafeMarkdown } from "./safe-markdown.js";
+import { usePersonNameFormatter } from "./person-name.js";
 
 interface WorkCategory { readonly slug: string; readonly title: string; readonly active: boolean }
 interface TimeEntryCorrection { readonly person: string; readonly performed_on: string; readonly hours: number; readonly category: string; readonly note: string }
@@ -35,6 +36,7 @@ export function TaskTimeEntries(props: {
 }) {
   const { api, draft, fileContext, projectId, taskId, people, readOnly, locale, onOpenPerson, assigneeIds = NO_ASSIGNEES } = props;
   const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
+  const formatEmployeeName = usePersonNameFormatter();
   const [entries, setEntries] = useState<readonly TimeEntryResult[]>([]);
   const [categories, setCategories] = useState<readonly WorkCategory[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -49,12 +51,12 @@ export function TaskTimeEntries(props: {
     const historical = historicalPerson?.document.id === id ? historicalPerson : undefined;
     const match = person ?? historical;
     if (match !== undefined) {
-      const name = typeof match.document.name === "string" && match.document.name !== "" ? match.document.name : id;
+      const name = formatEmployeeName(match.document) || id;
       // Archived people are shown by name with an explicit "(archived)" marker rather than their technical id.
       return match.document.lifecycle === "archived" ? t("actualReport.archivedEntity", { name }) : name;
     }
     return id;
-  }, [historicalPerson, people, t]);
+  }, [formatEmployeeName, historicalPerson, people, t]);
 
   useEffect(() => { void (async () => {
     let loadError: string | null = null;
@@ -102,12 +104,12 @@ export function TaskTimeEntries(props: {
   const activePeople = useMemo(() => people.filter((person) => person.document.lifecycle === "active"), [people]);
   const activeCategories = useMemo(() => categories.filter((category) => category.active), [categories]);
   const correctionPeople = useMemo(() => {
-    const active = activePeople.map((person) => ({ id: String(person.document.id), name: String(person.document.name ?? person.document.id), archived: false }));
+    const active = activePeople.map((person) => ({ id: String(person.document.id), name: formatEmployeeName(person.document) || person.document.id, archived: false }));
     if (editingEntry === null || active.some((person) => person.id === editingEntry.document.person)) return active;
     const historical = people.find((person) => person.document.id === editingEntry.document.person)
       ?? (historicalPerson?.document.id === editingEntry.document.person ? historicalPerson : undefined);
-    return [...active, { id: editingEntry.document.person, name: String(historical?.document.name ?? editingEntry.document.person), archived: true }];
-  }, [activePeople, editingEntry, historicalPerson, people]);
+    return [...active, { id: editingEntry.document.person, name: historical === undefined ? editingEntry.document.person : formatEmployeeName(historical.document), archived: true }];
+  }, [activePeople, editingEntry, formatEmployeeName, historicalPerson, people]);
   const correctionCategories = useMemo(() => {
     if (editingEntry === null || activeCategories.some((category) => category.slug === editingEntry.document.category)) return activeCategories;
     const historical = categories.find((category) => category.slug === editingEntry.document.category);
@@ -220,7 +222,7 @@ export function TaskTimeEntries(props: {
           </ul>
           {!readOnly && (
             <form className="time-entry-form" onSubmit={createEntry}>
-              <label>{t("timeEffort.person")}<select defaultValue={defaultPersonId} disabled={busy} name="person" required>{activePeople.map((person) => <option key={person.document.id} value={person.document.id}>{person.document.name}</option>)}</select></label>
+              <label>{t("timeEffort.person")}<select defaultValue={defaultPersonId} disabled={busy} name="person" required>{activePeople.map((person) => <option key={person.document.id} value={person.document.id}>{formatEmployeeName(person.document)}</option>)}</select></label>
               <label>{t("timeEffort.date")}<input defaultValue={today} disabled={busy} name="performed_on" required type="date" /></label>
               <label>{t("timeEffort.hours")}<input disabled={busy} min="0.25" name="hours" required step="0.25" type="number" /></label>
               <label>{t("timeEffort.category")}<select disabled={busy} name="category" required>{activeCategories.map((category) => <option key={category.slug} value={category.slug}>{category.title}</option>)}</select></label>

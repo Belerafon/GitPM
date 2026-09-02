@@ -2,7 +2,7 @@ schema: gitpm/time-entry@1
 id: E-26-00000M
 project: P-26-7VWANM # project: Переезд аналитической платформы
 task: T-26-5ZH6NH # task: Перенести загрузку транзакционных данных
-person: U-26-1MV0QD # person: Максим Фёдоров
+person: U-26-1MV0QD # person: Фёдоров Максим
 performed_on: 2026-09-29
 hours: 4
 category: regular

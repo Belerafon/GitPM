@@ -1,4 +1,5 @@
 import type { EntityResult, GitPmDocument } from "./types.js";
+import { DEFAULT_PERSON_NAME_FORMAT, formatPersonName, type PersonNameFormat } from "@gitpm/shared";
 
 export interface EntityReference {
   readonly id: string;
@@ -30,7 +31,7 @@ export class EntityCatalog {
     readonly milestones?: readonly EntityResult[];
     readonly tasks?: readonly EntityResult[];
     readonly people?: readonly EntityResult[];
-  }) {
+  }, defaultPersonNameFormat: PersonNameFormat = DEFAULT_PERSON_NAME_FORMAT) {
     this.projects = new Map(projects.map((entity) => [entity.document.id, reference(entity)]));
     this.milestones = new Map(milestones.map((entity) => [entity.document.id, reference(entity)]));
     this.tasks = new Map(tasks.map((entity) => [entity.document.id, {
@@ -38,7 +39,11 @@ export class EntityCatalog {
       name: text(entity.document, "title") || entity.document.id,
       lifecycle: entity.document.lifecycle,
     }]));
-    this.people = new Map(people.map((entity) => [entity.document.id, reference(entity)]));
+    this.people = new Map(people.map((entity) => [entity.document.id, {
+      id: entity.document.id,
+      name: formatPersonName(entity.document, defaultPersonNameFormat) || entity.document.id,
+      lifecycle: entity.document.lifecycle,
+    }]));
   }
 
   project(id: unknown): EntityReference {

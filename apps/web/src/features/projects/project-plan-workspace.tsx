@@ -26,6 +26,7 @@ import { AdvancedViewControls } from "../../advanced-view-controls.js";
 import { applyAdvancedViewQuery, countViewConditions, emptyViewQuery, filterOnlyViewQuery, newViewNodeId, parseAdvancedViewQuery, serializeAdvancedViewQuery, type AdvancedViewQuery, type ViewField, type ViewFilterNode } from "../../advanced-view-query.js";
 import { ProjectFilesPanel, readProjectFilesView, type ProjectFilesView } from "./project-files-panel.js";
 import { ProjectFileMarkdownField, type ProjectFileReferenceContext } from "../../project-file-reference-ui.js";
+import { usePersonNameFormatter } from "../../person-name.js";
 
 type TaskInsertSpec = { readonly parentId?: string; readonly beforeId?: string; readonly afterId?: string };
 type PlanEditor = { readonly kind: "project" | "new-stage" }
@@ -160,6 +161,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   readonly onChanged: () => Promise<void>;
   readonly confirmAction?: (message: string) => boolean;
 }) {
+  const personName = usePersonNameFormatter();
   const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
   const loader = useAsyncLoad();
   const { state: filesLoadState, run: runFilesLoad } = useAsyncLoad();
@@ -426,7 +428,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     .map((milestone) => milestone.document.id)), [workspace]);
   const currentPlanTasks = useMemo(() => activeTasks.filter((task) => !archivedMilestoneIds.has(text(task.document, "milestone"))), [activeTasks, archivedMilestoneIds, text]);
   const today = localCalendarDate();
-  const peopleOptions = useMemo(() => people.map((person) => ({ value: person.document.id, label: text(person.document, "name") })), [people, text]);
+  const peopleOptions = useMemo(() => people.map((person) => ({ value: person.document.id, label: personName(person.document) })), [people, personName]);
   const taskAdvancedFields = useMemo<readonly ViewField<EntityResult>[]>(() => [
     { id: "id", label: t("advancedView.field.id"), type: "text", read: (item) => item.document.id },
     { id: "title", label: t("advancedView.field.title"), type: "text", read: (item) => text(item.document, "title") },
@@ -957,7 +959,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
           <label>{t("core.name")}<input defaultValue={text(workspace.project.document, "name")} disabled={readOnly} name="name" required /></label>
           <label>{t("core.status")}<select defaultValue={text(workspace.project.document, "status")} disabled={readOnly} name="status">{statuses.map((item) => <option key={item.slug} value={item.slug}>{item.title}</option>)}</select></label>
           <ProjectGroupField currentGroup={text(workspace.project.document, "group")} disabled={readOnly} groups={availableProjectGroups} key={editor?.kind === "project" ? "open" : "closed"} t={t} />
-          <label>{t("core.owner")}<select defaultValue={text(workspace.project.document, "owner")} disabled={readOnly} name="owner"><option value="">{t("core.unassigned")}</option>{people.map((person) => <option key={person.document.id} value={person.document.id}>{text(person.document, "name")}</option>)}</select></label>
+          <label>{t("core.owner")}<select defaultValue={text(workspace.project.document, "owner")} disabled={readOnly} name="owner"><option value="">{t("core.unassigned")}</option>{people.map((person) => <option key={person.document.id} value={person.document.id}>{personName(person.document)}</option>)}</select></label>
         </div></TaskEditorSection>
         <TaskEditorSection title={t("taskEditor.planning")}><ScheduleTracksEditor schedules={projectSchedulesDraft} tracks={projectEditorManualTracks} actualTrack={projectEditorActualTrack} primaryTrack={projectEditorPlanning.primary_track ?? ""} dependencies={[]} showDependencies={false} disabled={readOnly} locale={locale} onChange={setProjectSchedulesDraft} /></TaskEditorSection>
         <TaskEditorSection title={t("taskEditor.description")}><ProjectFileMarkdownField context={fileReferenceContext} defaultValue={text(workspace.project.document, "description_markdown")} disabled={readOnly} label={t("core.description")} name="description" /></TaskEditorSection>

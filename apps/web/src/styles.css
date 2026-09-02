@@ -328,6 +328,12 @@ textarea { min-height: 76px; resize: vertical; border: 1px solid #c9cbc5; border
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); clip-path: inset(50%); white-space: nowrap; }
 .editor-drawer-form { display: grid; min-width: 0; min-height: 100%; gap: .8rem; align-content: start; }
 .editor-drawer-form > label { display: grid; min-width: 0; gap: .3rem; }
+.person-name-preview { display: grid; gap: .2rem; border: 1px solid #d9ddd6; border-radius: 8px; background: #f7f8f5; padding: .7rem .8rem; }
+.person-name-preview > span { color: #68716b; font-size: .72rem; }
+.person-name-preview > strong { overflow-wrap: anywhere; }
+.person-name-format-control { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr) auto; align-items: end; gap: .8rem; }
+.person-name-format-control > label { display: grid; gap: .3rem; }
+.person-name-format-editor .config-summary-heading p { margin: .25rem 0 0; color: #68716b; font-size: .76rem; font-weight: 400; }
 .editor-drawer-form select, .editor-drawer-form textarea { min-width: 0; width: 100%; max-width: 100%; border: 1px solid #c9cbc5; border-radius: 8px; background: #fff; padding: .62rem; }
 .task-editor-form { gap: 1.15rem; }
 .task-editor-section { display: grid; min-width: 0; gap: .8rem; border-top: 1px solid #e1e4df; padding-top: 1rem; }
@@ -758,6 +764,7 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 @container (max-width: 800px) { .project-plan-task-list { grid-template-columns: auto minmax(0, 1fr); column-gap: .25rem; } .project-plan-task-row { grid-template-columns: subgrid; } .project-plan-task-meta { grid-column: 2; gap: .65rem; align-items: center; } }
 @container (max-width: 560px) { .project-plan-task-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); } .project-plan-task-meta .plan-order-controls { justify-self: start; } }
 @media (max-width: 700px) {
+  .person-name-format-control { grid-template-columns: 1fr; }
   .project-plan-stage > header { grid-template-columns: 1fr; }
   .project-plan-stage-actions { grid-column: 1; flex-direction: row; justify-content: space-between; align-items: center; }
   .project-plan-stage-description { white-space: normal; }

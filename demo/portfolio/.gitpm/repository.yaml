@@ -1,6 +1,7 @@
 schema: gitpm/repository@1
 default_branch: main
 default_calendar: C-26-G1AADY # calendar: Производственный календарь России
+default_person_name_format: full
 allowed_top_level_files:
   - README.md
   - .gitignore

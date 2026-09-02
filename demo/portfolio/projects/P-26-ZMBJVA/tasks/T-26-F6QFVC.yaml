@@ -11,9 +11,9 @@ acceptance_criteria_markdown:
 parent: T-26-FZHVK3 # task: Подготовить интерактивный прототип
 milestone: M-26-QP6SH8 # milestone: Открытие портала клиентам
 assignees:
-  - U-26-RKTV2A # person: Дмитрий Орлов
-  - U-26-NEDN00 # person: Мария Соколова
-  - U-26-0225HT # person: Наталья Павлова
+  - U-26-RKTV2A # person: Орлов Дмитрий
+  - U-26-NEDN00 # person: Соколова Мария
+  - U-26-0225HT # person: Павлова Наталья
 schedules:
   plan:
     start: 2026-08-17

@@ -3,7 +3,7 @@ id: P-26-8S9HQQ # project: Operations
 name: Operations
 status: backlog
 lifecycle: active
-owner: U-26-15QJP8 # person: Boris Sokolov
+owner: U-26-15QJP8 # person: Sokolov Boris
 planning:
   enabled_tracks:
     - plan

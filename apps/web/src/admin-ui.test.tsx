@@ -38,6 +38,31 @@ class AdminApi {
 afterEach(cleanup);
 
 describe("administration UI", () => {
+  it("configures employee name defaults and previews a per-person override", async () => {
+    const admin = new AdminApi();
+    await admin.createEntity("DRF-ADMIN", "calendars", "", { schema: "gitpm/calendar@1", id: "C-26-QD7FJ4", name: "Default", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
+    render(<AdminWorkspace api={admin as unknown as GitPmApi} draft={draft} role="Maintainer" locale="en" surface="people" onChanged={vi.fn(async () => undefined)} />);
+
+    const formatCard = (await screen.findByRole("heading", { name: "Default employee name format" })).closest<HTMLElement>(".config-editor")!;
+    fireEvent.change(within(formatCard).getByLabelText("Display format"), { target: { value: "family-initials" } });
+    await waitFor(() => expect(within(formatCard).getByText("Smith J. M.")).toBeTruthy());
+    fireEvent.click(within(formatCard).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(admin.repository?.document.default_person_name_format).toBe("family-initials"));
+
+    fireEvent.click(screen.getByRole("button", { name: /Create person/u }));
+    const dialog = screen.getByRole("dialog", { name: "Create person" });
+    fireEvent.change(within(dialog).getByLabelText("Family name"), { target: { value: "Smith" } });
+    fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "John" } });
+    fireEvent.change(within(dialog).getByLabelText("Middle name"), { target: { value: "Michael" } });
+    expect(within(dialog).getByText("Smith J. M.")).toBeTruthy();
+    fireEvent.change(within(dialog).getByLabelText("Display format"), { target: { value: "full" } });
+    expect(within(dialog).getByText("Smith John Michael")).toBeTruthy();
+    fireEvent.submit(within(dialog).getByRole("button", { name: "Create person" }).closest("form")!);
+
+    await waitFor(() => expect(admin.entities.find((item) => item.document.schema === "gitpm/person@1")?.document).toMatchObject({ name: "John", family_name: "Smith", middle_name: "Michael", display_name_format: "full" }));
+    expect(await screen.findByText("Smith John Michael")).toBeTruthy();
+  });
+
   it("lets Maintainer create Calendar, Person and Team and edit statuses", async () => {
     const admin = new AdminApi(); const api = admin as unknown as GitPmApi; const changed = vi.fn(async () => undefined);
     const rendered = render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="calendar" onChanged={changed} />);
@@ -62,7 +87,7 @@ describe("administration UI", () => {
     expect(await screen.findByText("Alice")).toBeTruthy();
     expect(admin.entities.find((item) => item.document.schema === "gitpm/person@1")?.document.calendar).toBe(admin.entities.find((item) => item.document.schema === "gitpm/calendar@1")?.document.id);
     expect(admin.entities.find((item) => item.document.schema === "gitpm/person@1")?.document).toMatchObject({ annual_vacation_extra_days: 5, annual_vacation_extra_days_reason: "Overtime compensation" });
-    expect(document.querySelectorAll(".people-directory-table tbody tr")).toHaveLength(1);
+    await waitFor(() => expect(document.querySelectorAll(".people-directory-table tbody tr")).toHaveLength(1));
     expect(screen.queryByRole("button", { name: "Edit person" })).toBeNull();
     fireEvent.click(screen.getByRole("link", { name: "Alice" }));
     expect(onOpenPerson).toHaveBeenCalledWith(expect.stringMatching(/^U-/u));

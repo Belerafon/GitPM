@@ -1,5 +1,43 @@
 export const GITPM_VERSION = "0.1.0";
 
+export const PERSON_NAME_FORMATS = ["full", "family-initials"] as const;
+export type PersonNameFormat = (typeof PERSON_NAME_FORMATS)[number];
+export const DEFAULT_PERSON_NAME_FORMAT: PersonNameFormat = "full";
+
+export interface PersonNameFields {
+  readonly name?: unknown;
+  readonly family_name?: unknown;
+  readonly middle_name?: unknown;
+  readonly display_name_format?: unknown;
+}
+
+export function isPersonNameFormat(value: unknown): value is PersonNameFormat {
+  return typeof value === "string" && (PERSON_NAME_FORMATS as readonly string[]).includes(value);
+}
+
+const normalizedNamePart = (value: unknown): string => typeof value === "string" ? value.trim().replaceAll(/\s+/gu, " ") : "";
+const initial = (value: string): string => value === "" ? "" : `${Array.from(value)[0]}.`;
+
+/** Builds the only employee label used by UI, search, planning and exports. */
+export function formatPersonName(person: PersonNameFields | Readonly<Record<string, unknown>>, defaultFormat: PersonNameFormat = DEFAULT_PERSON_NAME_FORMAT): string {
+  const fields = person as Readonly<Record<string, unknown>>;
+  const name = normalizedNamePart(fields.name);
+  const familyName = normalizedNamePart(fields.family_name);
+  const middleName = normalizedNamePart(fields.middle_name);
+  const format = isPersonNameFormat(fields.display_name_format) ? fields.display_name_format : defaultFormat;
+  if (format === "family-initials" && familyName !== "") {
+    return [familyName, [initial(name), initial(middleName)].filter(Boolean).join(" ")].filter(Boolean).join(" ");
+  }
+  return [familyName, name, middleName].filter(Boolean).join(" ");
+}
+
+export function personNameSearchText(person: PersonNameFields | Readonly<Record<string, unknown>>, defaultFormat: PersonNameFormat = DEFAULT_PERSON_NAME_FORMAT): string {
+  const fields = person as Readonly<Record<string, unknown>>;
+  return [formatPersonName(fields, defaultFormat), normalizedNamePart(fields.family_name), normalizedNamePart(fields.name), normalizedNamePart(fields.middle_name)]
+    .filter(Boolean)
+    .join(" ");
+}
+
 export * from "./project-file-references.js";
 
 export const ENTITY_ID_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";

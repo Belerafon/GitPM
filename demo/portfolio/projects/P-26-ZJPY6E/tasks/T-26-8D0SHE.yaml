@@ -11,9 +11,9 @@ acceptance_criteria_markdown:
 parent: T-26-HB2NX5 # task: Запустить программу обновления мобильного банка
 milestone: M-26-SY14EX # milestone: Публикация в магазинах
 assignees:
-  - U-26-9C1ZR4 # person: Елена Морозова
-  - U-26-ETKSWS # person: Ольга Новикова
-  - U-26-0225HT # person: Наталья Павлова
+  - U-26-9C1ZR4 # person: Морозова Елена
+  - U-26-ETKSWS # person: Новикова Ольга
+  - U-26-0225HT # person: Павлова Наталья
 schedules:
   plan:
     start: 2026-07-20

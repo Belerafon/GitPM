@@ -15,6 +15,7 @@ import type { DraftStatus, EntityResult } from "../../types.js";
 import { scheduleEffortReader, scheduleTextReader } from "../../schedules.js";
 import type { WorkspaceNavigate } from "../../workspace-navigation.js";
 import { buildProjectTaskViewModel, canonicalTaskComparator, flattenProjectTaskViewModel, orderActiveMilestones } from "./project-task-view-model.js";
+import { usePersonNameFormatter } from "../../person-name.js";
 import {
   buildTaskRelations,
   resolveEffortScope,
@@ -104,6 +105,7 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
   readonly trackTitle?: (slug: string) => string;
   readonly workloadTrack: string;
 }) {
+  const formatEmployeeName = usePersonNameFormatter();
   const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
   const [filters, setFilters] = useState<ReportFilters>(EMPTY_FILTERS);
   const [scopeMode, setScopeMode] = useState<EffortScopeMode>("withSubtasks");
@@ -246,7 +248,7 @@ export function ProjectActualReport({ api, categories = [], draft, locale, miles
   const personName = (id: string) => {
     const person = people.find((item) => item.document.id === id);
     if (person === undefined) return t("actualReport.unknownPerson", { id });
-    const name = text(person, "name") || id;
+    const name = formatEmployeeName(person.document) || id;
     return person.document.lifecycle === "archived" ? t("actualReport.archivedEntity", { name }) : name;
   };
   const categoryName = (slug: string) => categories.find((category) => category.slug === slug)?.title ?? slug;

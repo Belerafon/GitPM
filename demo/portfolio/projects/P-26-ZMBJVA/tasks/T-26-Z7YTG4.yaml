@@ -11,9 +11,9 @@ acceptance_criteria_markdown:
 parent: T-26-AVEPT4 # task: Запустить портал клиентской поддержки
 milestone: M-26-QP6SH8 # milestone: Открытие портала клиентам
 assignees:
-  - U-26-FSB3GM # person: Илья Кузнецов
-  - U-26-J4FH55 # person: Сергей Лебедев
-  - U-26-AD9KDK # person: Алексей Виноградов
+  - U-26-FSB3GM # person: Кузнецов Илья
+  - U-26-J4FH55 # person: Лебедев Сергей
+  - U-26-AD9KDK # person: Виноградов Алексей
 schedules:
   plan:
     start: 2026-10-05

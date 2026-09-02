@@ -27,6 +27,7 @@ import { SecurityBoundaryError } from "@gitpm/security";
 import type { GitPmDocument as RepositoryFormatDocument } from "@gitpm/repository-format";
 import { ExportError } from "@gitpm/export";
 import { buildWorkloadReport, type WorkloadEntityDocument } from "@gitpm/workload";
+import { DEFAULT_PERSON_NAME_FORMAT, isPersonNameFormat } from "@gitpm/shared";
 import { MemoryNotificationReadStore, type NotificationReadStore } from "./notification-read-store.js";
 
 export type ProjectRole = "Reporter" | "Developer" | "Maintainer";
@@ -670,7 +671,7 @@ export function registerEntityApi(
     async (request) => {
       const actor = await authenticate(request);
       await requireDraftRead(manager, actor, request.params.draftId);
-      const [tasks, projects, people, calendars, availabilityEvents, teams, tracks] = await Promise.all([
+      const [tasks, projects, people, calendars, availabilityEvents, teams, tracks, repository] = await Promise.all([
         store.list(request.params.draftId, "tasks"),
         store.list(request.params.draftId, "projects"),
         store.list(request.params.draftId, "people"),
@@ -678,11 +679,13 @@ export function registerEntityApi(
         store.list(request.params.draftId, "availability-events"),
         store.list(request.params.draftId, "teams"),
         store.getConfiguration(request.params.draftId, "schedule-tracks"),
+        store.getRepositoryDocument(request.params.draftId),
       ]);
       const documents = (items: readonly { readonly document: unknown }[]) => items.map((item) => item.document as WorkloadEntityDocument);
       return buildWorkloadReport({
         tasks: documents(tasks), projects: documents(projects), people: documents(people), calendars: documents(calendars), availabilityEvents: documents(availabilityEvents), teams: documents(teams),
         scheduleTracks: tracks.document as WorkloadEntityDocument,
+        repository: repository as WorkloadEntityDocument,
         filters: request.query,
       });
     },
@@ -840,6 +843,16 @@ export function registerEntityApi(
       const actor = await authenticate(request);
       await requireDraftRead(manager, actor, request.params.draftId);
       return await store.getRepositoryConfiguration(request.params.draftId);
+    },
+  );
+
+  app.get<{ Params: { draftId: string } }>(
+    "/api/drafts/:draftId/person-name-format",
+    async (request) => {
+      const actor = await authenticate(request);
+      await requireDraftRead(manager, actor, request.params.draftId);
+      const configured = (await store.getRepositoryDocument(request.params.draftId)).default_person_name_format;
+      return { format: isPersonNameFormat(configured) ? configured : DEFAULT_PERSON_NAME_FORMAT };
     },
   );
 

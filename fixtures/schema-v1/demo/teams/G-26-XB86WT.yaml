@@ -2,6 +2,6 @@ schema: gitpm/team@1
 id: G-26-XB86WT # team: Core team
 name: Core team
 members:
-  - U-26-5EBAE3 # person: Anna Petrova
-  - U-26-15QJP8 # person: Boris Sokolov
+  - U-26-5EBAE3 # person: Petrova Anna
+  - U-26-15QJP8 # person: Sokolov Boris
 lifecycle: active

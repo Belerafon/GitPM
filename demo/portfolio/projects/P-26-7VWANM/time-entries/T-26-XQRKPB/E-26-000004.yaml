@@ -2,7 +2,7 @@ schema: gitpm/time-entry@1
 id: E-26-000004
 project: P-26-7VWANM # project: Переезд аналитической платформы
 task: T-26-XQRKPB # task: Инвентаризировать источники и потребителей данных
-person: U-26-ETKSWS # person: Ольга Новикова
+person: U-26-ETKSWS # person: Новикова Ольга
 performed_on: 2026-08-19
 hours: 6
 category: regular

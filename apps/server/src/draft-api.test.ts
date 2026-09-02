@@ -177,6 +177,18 @@ describe("entity API contract", () => {
     expect(entityStore.getRepositoryConfiguration).toHaveBeenCalledWith("DRF-API");
   });
 
+  it("returns the employee display format without calculating repository blob metadata", async () => {
+    const entityStore = { getRepositoryDocument: vi.fn(async () => ({ schema: "gitpm/repository@1", default_person_name_format: "family-initials" })) } as unknown as EntityStore;
+    const app = buildApp({ authenticate: () => ({ userId: "42", role: "Developer" }), draftManager: manager(), entityStore });
+    apps.push(app);
+
+    const response = await app.inject({ method: "GET", url: "/api/drafts/DRF-API/person-name-format" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ format: "family-initials" });
+    expect(entityStore.getRepositoryDocument).toHaveBeenCalledWith("DRF-API");
+  });
+
   it("updates repository configuration through the Maintainer-only route", async () => {
     const document = { schema: "gitpm/repository@1" as const, default_branch: "main", default_calendar: "C-26-QD7FJ4", allowed_top_level_files: ["README.md"], ui_poll_interval_seconds: 7 };
     const repository = { document, path: ".gitpm/repository.yaml", blob_id: "b".repeat(40), draft_fingerprint: "c".repeat(64) };
