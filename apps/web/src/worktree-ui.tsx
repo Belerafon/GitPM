@@ -1,10 +1,11 @@
-import { type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type DragEvent as ReactDragEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { GitPmApi } from "./api.js";
 import type { Locale, MessageKey } from "./i18n.js";
 import { message } from "./i18n.js";
 import type { DraftStatus, GitPmRole, WorktreeEntry, WorktreeFile } from "./types.js";
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const WORKTREE_ENTRY_DRAG_TYPE = "application/x-gitpm-worktree-entry";
 const PANE_STORAGE_KEY = "gitpm.worktree.browserPaneShare";
 const DEFAULT_BROWSER_PANE_SHARE = 58;
 const MIN_BROWSER_PANE_SHARE = 30;
@@ -205,6 +206,9 @@ export function WorktreeWorkspace({ api, draft, role, locale, onChanged, confirm
   const [dialog, setDialog] = useState<DialogState>(null);
   const [nameValue, setNameValue] = useState("");
   const [actionMenuPath, setActionMenuPath] = useState<string | null>(null);
+  const [draggedEntryPath, setDraggedEntryPath] = useState<string | null>(null);
+  const [dropTargetPath, setDropTargetPath] = useState<string | null>(null);
+  const [externalDropActive, setExternalDropActive] = useState(false);
   const [browserPaneShare, setBrowserPaneShare] = useState(readBrowserPaneShare);
   const [paneResize, setPaneResize] = useState<PaneResize | null>(null);
   const treeRequest = useRef(0);
@@ -340,6 +344,44 @@ export function WorktreeWorkspace({ api, draft, role, locale, onChanged, confirm
     void run(async () => { await api.moveWorktreeEntry(draft.draft_id, draft.fingerprint, entry.path, to); }, selectedPath !== entry.path);
   };
 
+  const resetDragState = () => {
+    setDraggedEntryPath(null);
+    setDropTargetPath(null);
+    setExternalDropActive(false);
+  };
+
+  const externalFilesFrom = (event: ReactDragEvent<HTMLElement>): readonly File[] => Array.from(event.dataTransfer.files ?? []);
+  const isExternalFileDrag = (event: ReactDragEvent<HTMLElement>): boolean =>
+    Array.from(event.dataTransfer.types ?? []).includes("Files") || externalFilesFrom(event).length > 0;
+
+  const beginEntryDrag = (event: ReactDragEvent<HTMLButtonElement>, entry: WorktreeEntry) => {
+    if (!canMutate || busy || entry.type !== "file") {
+      event.preventDefault();
+      return;
+    }
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData(WORKTREE_ENTRY_DRAG_TYPE, entry.path);
+    setDraggedEntryPath(entry.path);
+    setActionMenuPath(null);
+  };
+
+  const acceptFolderDrag = (event: ReactDragEvent<HTMLElement>, folder: WorktreeEntry) => {
+    const acceptsExternalFiles = isExternalFileDrag(event);
+    const sourcePath = draggedEntryPath ?? event.dataTransfer.getData(WORKTREE_ENTRY_DRAG_TYPE);
+    const acceptsExistingFile = sourcePath !== "" && parentOf(sourcePath) !== folder.path;
+    if (!canMutate || busy || (!acceptsExternalFiles && !acceptsExistingFile)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = acceptsExternalFiles ? "copy" : "move";
+    setDropTargetPath(folder.path);
+    if (acceptsExternalFiles) setExternalDropActive(false);
+  };
+
+  const leaveDropTarget = (event: ReactDragEvent<HTMLElement>, path: string) => {
+    if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
+    setDropTargetPath((current) => current === path ? null : current);
+  };
+
   const beginPaneResize = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
     const layout = layoutRef.current;
@@ -386,9 +428,7 @@ export function WorktreeWorkspace({ api, draft, role, locale, onChanged, confirm
     }
   };
 
-  const onFilesSelected = async (files: FileList | null) => {
-    const selected = files === null ? [] : Array.from(files);
-    if (fileInput.current) fileInput.current.value = "";
+  const uploadFiles = async (selected: readonly File[], destination: string) => {
     if (!canMutate || busy || selected.length === 0) return;
     setBusy(true);
     setActionError(null);
@@ -397,7 +437,7 @@ export function WorktreeWorkspace({ api, draft, role, locale, onChanged, confirm
       for (const file of selected) {
         if (file.size > MAX_UPLOAD_BYTES) { setActionError(message(locale, "worktree.uploadTooLarge", { name: file.name })); return; }
         const base64 = await readAsBase64(file);
-        fingerprint = await api.uploadWorktreeFile(draft.draft_id, fingerprint, joinPath(currentPath, file.name), base64);
+        fingerprint = await api.uploadWorktreeFile(draft.draft_id, fingerprint, joinPath(destination, file.name), base64);
       }
       await onChanged();
       load(currentPath);
@@ -406,6 +446,42 @@ export function WorktreeWorkspace({ api, draft, role, locale, onChanged, confirm
     } finally {
       setBusy(false);
     }
+  };
+
+  const onFilesSelected = (files: FileList | null) => {
+    const selected = files === null ? [] : Array.from(files);
+    if (fileInput.current) fileInput.current.value = "";
+    void uploadFiles(selected, currentPath);
+  };
+
+  const dropIntoFolder = (event: ReactDragEvent<HTMLElement>, folder: WorktreeEntry) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const externalFiles = externalFilesFrom(event);
+    const sourcePath = draggedEntryPath ?? event.dataTransfer.getData(WORKTREE_ENTRY_DRAG_TYPE);
+    resetDragState();
+    if (!canMutate || busy) return;
+    if (externalFiles.length > 0) {
+      void uploadFiles(externalFiles, folder.path);
+      return;
+    }
+    const source = entries?.find((entry) => entry.path === sourcePath && entry.type === "file");
+    if (source !== undefined && parentOf(source.path) !== folder.path) moveEntryTo(source, folder.path);
+  };
+
+  const acceptCurrentFolderDrop = (event: ReactDragEvent<HTMLDivElement>) => {
+    if (!isExternalFileDrag(event)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    if (canMutate && !busy) setExternalDropActive(true);
+  };
+
+  const dropIntoCurrentFolder = (event: ReactDragEvent<HTMLDivElement>) => {
+    const externalFiles = externalFilesFrom(event);
+    if (externalFiles.length === 0) return;
+    event.preventDefault();
+    resetDragState();
+    void uploadFiles(externalFiles, currentPath);
   };
 
   const breadcrumb = useMemo(() => crumbs(currentPath), [currentPath]);
@@ -438,6 +514,7 @@ export function WorktreeWorkspace({ api, draft, role, locale, onChanged, confirm
             <input ref={fileInput} type="file" multiple className="fm-file-input" onChange={(event) => void onFilesSelected(event.target.files)} />
           </div>
         </div>
+        {canMutate && <p className="fm-drag-hint">{t("worktree.dragHint")}</p>}
         <div className="fm-pathbar">
           <nav className="fm-breadcrumbs" aria-label={t("worktree.heading")}>
             <button type="button" onClick={() => navigate("")}>{t("worktree.root")}</button>
@@ -448,7 +525,19 @@ export function WorktreeWorkspace({ api, draft, role, locale, onChanged, confirm
         {!canMutate && <div className="alert warning">{t("worktree.readOnly")}</div>}
         {actionError !== null && <div className="alert error">{actionError}</div>}
       </header>
-      <div className="fm-list" role="region" aria-label={t("worktree.heading")}>
+      <div
+        className={`fm-list${externalDropActive ? " external-drop-active" : ""}`}
+        role="region"
+        aria-label={t("worktree.heading")}
+        onDragEnter={acceptCurrentFolderDrop}
+        onDragLeave={(event) => {
+          if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
+          setExternalDropActive(false);
+        }}
+        onDragOver={acceptCurrentFolderDrop}
+        onDrop={dropIntoCurrentFolder}
+      >
+        {externalDropActive && <span className="fm-drop-overlay">{message(locale, "worktree.dropCurrent", { folder: currentPath === "" ? t("worktree.root") : currentPath })}</span>}
         {entries === null && treeError === null && <span className="fm-empty">{t("status.loading")}</span>}
         {treeError !== null && <span className="fm-empty error">{treeError}</span>}
         {entries !== null && entries.length === 0 && <span className="fm-empty">{t("worktree.empty")}</span>}
@@ -467,10 +556,22 @@ export function WorktreeWorkspace({ api, draft, role, locale, onChanged, confirm
               const unavailable = !isFile && !isDir;
               const typeLabel = isDir ? t("worktree.type.folder") : isFile ? t("worktree.type.file") : entry.type;
               const menuOpen = actionMenuPath === entry.path;
-              return <div className={`fm-row${selectedPath === entry.path ? " previewing" : ""}`} key={entry.path}>
+              return <div className={`fm-row${selectedPath === entry.path ? " previewing" : ""}${dropTargetPath === entry.path ? " drop-target" : ""}`} key={entry.path}>
                 {unavailable
                   ? <span className="fm-row-open unavailable" title={t(entry.type === "symlink" ? "worktree.symlinkUnavailable" : "worktree.entryUnavailable")}>{entryIcon(entry)}<span className="fm-row-name">{entry.name}</span></span>
-                  : <button type="button" className="fm-row-open" onClick={() => (isDir ? navigate(entry.path) : selectFile(entry.path))} title={entry.path}>{entryIcon(entry)}<span className="fm-row-name">{entry.name}</span></button>}
+                  : <button
+                    type="button"
+                    className="fm-row-open"
+                    draggable={canMutate && !busy && isFile}
+                    onClick={() => (isDir ? navigate(entry.path) : selectFile(entry.path))}
+                    onDragEnd={resetDragState}
+                    onDragStart={(event) => beginEntryDrag(event, entry)}
+                    onDragEnter={isDir ? (event) => acceptFolderDrag(event, entry) : undefined}
+                    onDragLeave={isDir ? (event) => leaveDropTarget(event, entry.path) : undefined}
+                    onDragOver={isDir ? (event) => acceptFolderDrag(event, entry) : undefined}
+                    onDrop={isDir ? (event) => dropIntoFolder(event, entry) : undefined}
+                    title={isFile && canMutate ? message(locale, "worktree.dragFileHint", { name: entry.name }) : entry.path}
+                  >{entryIcon(entry)}<span className="fm-row-name">{entry.name}</span></button>}
                 <span className="fm-row-type">{typeLabel}</span>
                 <span className="fm-row-size">{entry.size !== undefined ? formatBytes(locale, entry.size) : "—"}</span>
                 {!unavailable

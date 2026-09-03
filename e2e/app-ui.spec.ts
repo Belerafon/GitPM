@@ -311,6 +311,44 @@ test.describe("GitPM browser UI", () => {
     await expect(page.getByLabel("Type filter", { exact: true })).toHaveValue("task");
   });
 
+  test("uploads desktop files by dropping them and moves existing files onto folders", async ({ page }) => {
+    await page.goto("/files");
+    await page.locator(".interface-settings > summary").click();
+    await page.locator(".locale-picker select").selectOption("en");
+    await page.locator(".interface-settings > summary").click();
+
+    const fileRegion = page.getByRole("region", { name: "Files", exact: true });
+    await expect(fileRegion).toBeVisible();
+    const uploadTransfer = await page.evaluateHandle(() => {
+      const transfer = new DataTransfer();
+      transfer.items.add(new File(["drag-and-drop upload\n"], "drag-upload.txt", { type: "text/plain" }));
+      return transfer;
+    });
+    await fileRegion.dispatchEvent("dragenter", { dataTransfer: uploadTransfer });
+    await expect(page.getByText("Drop to upload into Root", { exact: true })).toBeVisible();
+    await fileRegion.dispatchEvent("drop", { dataTransfer: uploadTransfer });
+    const uploadedFile = page.getByRole("button", { name: "drag-upload.txt", exact: true });
+    await expect(uploadedFile).toBeVisible();
+
+    await page.getByRole("button", { name: "New folder", exact: true }).click();
+    await page.getByLabel("Name", { exact: true }).fill("dnd-target");
+    await page.getByRole("button", { name: "Create", exact: true }).click();
+    const targetFolder = page.getByRole("button", { name: "dnd-target", exact: true });
+    await expect(targetFolder).toBeVisible();
+
+    const moveTransfer = await page.evaluateHandle(() => new DataTransfer());
+    await uploadedFile.dispatchEvent("dragstart", { dataTransfer: moveTransfer });
+    await targetFolder.dispatchEvent("dragover", { dataTransfer: moveTransfer });
+    await expect(targetFolder.locator("xpath=ancestor::div[contains(@class, 'fm-row')]")).toHaveClass(/drop-target/u);
+    await targetFolder.dispatchEvent("drop", { dataTransfer: moveTransfer });
+    await expect(uploadedFile).toHaveCount(0);
+
+    await targetFolder.click();
+    await expect(page.getByRole("button", { name: "drag-upload.txt", exact: true })).toBeVisible();
+    await uploadTransfer.dispose();
+    await moveTransfer.dispose();
+  });
+
   test("creates, switches and remembers a working copy", async ({ page }) => {
     await page.goto("/");
     await page.getByRole("button", { name: "Git и публикация", exact: true }).click();

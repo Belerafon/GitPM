@@ -148,6 +148,72 @@ describe("working tree file manager", () => {
     expect(live).toHaveLength(0);
   });
 
+  it("uploads files dropped from the computer into the open folder without using the upload button", async () => {
+    const api = apiFor([]);
+    render(<WorktreeWorkspace api={api} draft={draft} role="Developer" locale="en" onChanged={noChanged} />);
+    const dropped = new File(["dropped"], "drop.txt");
+    const dataTransfer = {
+      files: [dropped],
+      types: ["Files"],
+      dropEffect: "none",
+      effectAllowed: "all",
+      getData: () => "",
+      setData: vi.fn(),
+    } as unknown as DataTransfer;
+
+    const fileRegion = await screen.findByRole("region", { name: "Files" });
+    fireEvent.dragEnter(fileRegion, { dataTransfer });
+    expect(screen.getByText("Drop to upload into Root")).toBeTruthy();
+    fireEvent.drop(fileRegion, { dataTransfer });
+
+    await vi.waitFor(() => expect(api.uploadWorktreeFile).toHaveBeenCalledWith("DRF-TREE", draft.fingerprint, "drop.txt", expect.any(String)));
+  });
+
+  it("uploads computer files directly into a folder drop target", async () => {
+    const api = apiFor([dir("docs")]);
+    render(<WorktreeWorkspace api={api} draft={draft} role="Developer" locale="en" onChanged={noChanged} />);
+    const dropped = new File(["guide"], "guide.txt");
+    const dataTransfer = {
+      files: [dropped],
+      types: ["Files"],
+      dropEffect: "none",
+      effectAllowed: "all",
+      getData: () => "",
+      setData: vi.fn(),
+    } as unknown as DataTransfer;
+
+    const folder = await screen.findByRole("button", { name: "docs" });
+    fireEvent.dragEnter(folder, { dataTransfer });
+    expect(folder.closest(".fm-row")?.classList.contains("drop-target")).toBe(true);
+    expect(screen.queryByText("Drop to upload into Root")).toBeNull();
+    fireEvent.drop(folder, { dataTransfer });
+
+    await vi.waitFor(() => expect(api.uploadWorktreeFile).toHaveBeenCalledWith("DRF-TREE", draft.fingerprint, "docs/guide.txt", expect.any(String)));
+  });
+
+  it("moves an existing file when it is dragged onto a folder", async () => {
+    const api = apiFor([dir("docs"), file("notes.txt", 4)]);
+    render(<WorktreeWorkspace api={api} draft={draft} role="Developer" locale="en" onChanged={noChanged} />);
+    const values = new Map<string, string>();
+    const dataTransfer = {
+      files: [],
+      types: ["application/x-gitpm-worktree-entry"],
+      dropEffect: "none",
+      effectAllowed: "all",
+      getData: (type: string) => values.get(type) ?? "",
+      setData: (type: string, value: string) => values.set(type, value),
+    } as unknown as DataTransfer;
+
+    const source = await screen.findByRole("button", { name: "notes.txt" });
+    const folder = screen.getByRole("button", { name: "docs" });
+    fireEvent.dragStart(source, { dataTransfer });
+    fireEvent.dragOver(folder, { dataTransfer });
+    expect(folder.closest(".fm-row")?.classList.contains("drop-target")).toBe(true);
+    fireEvent.drop(folder, { dataTransfer });
+
+    await vi.waitFor(() => expect(api.moveWorktreeEntry).toHaveBeenCalledWith("DRF-TREE", draft.fingerprint, "notes.txt", "docs/notes.txt"));
+  });
+
   it("groups folders and files and always renders the preview with a pane resizer", async () => {
     const api = apiFor([file("notes.txt", 4), dir("docs")]);
     const { container } = render(<WorktreeWorkspace api={api} draft={draft} role="Developer" locale="en" onChanged={noChanged} />);
@@ -194,6 +260,7 @@ describe("working tree file manager", () => {
     const api = apiFor([file("readme.md", 4)]);
     render(<WorktreeWorkspace api={api} draft={draft} role="Reporter" locale="en" onChanged={noChanged} />);
     expect(await screen.findByText(/read-only/iu)).toBeTruthy();
+    expect(screen.queryByText(/Drag files from your computer/iu)).toBeNull();
     expect((screen.getByRole("button", { name: "New folder" }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(await screen.findByRole("button", { name: "readme.md" }));
     expect((screen.getByRole("button", { name: "Rename" }) as HTMLButtonElement).disabled).toBe(true);
