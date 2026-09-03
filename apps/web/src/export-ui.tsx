@@ -78,7 +78,7 @@ export function ExportMenu({ api, draftId, locale, save = saveBlob }: {
       {usesSections && <fieldset><legend>{t("export.pdfSections")}</legend>
         {REPORT_SECTIONS.map((section) => <label key={section.id}><input type="checkbox" checked={selected.has(section.id)} onChange={(event) => toggle(section.id, event.target.checked)} />{t(section.label)}</label>)}
       </fieldset>}
-      {usesSections && <label>{t("export.lifecycle")}<select value={lifecycle} onChange={(event) => setLifecycle(event.target.value as "active" | "archived" | "all")}>
+      {usesSections && <label data-field-hint={t("fieldHint.exportLifecycle")}>{t("export.lifecycle")}<select value={lifecycle} onChange={(event) => setLifecycle(event.target.value as "active" | "archived" | "all")}>
         <option value="active">{t("export.lifecycleActive")}</option>
         <option value="archived">{t("export.lifecycleArchived")}</option>
         <option value="all">{t("export.lifecycleAll")}</option>

@@ -2,9 +2,11 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { message, type MessageKey } from "../i18n.js";
+import { PersonNameEditorFields } from "../person-name.js";
 import { ControlHints } from "./ControlHints.js";
 
 const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => message("en", key, values);
+const ru = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => message("ru", key, values);
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => {
@@ -119,6 +121,35 @@ describe("ControlHints", () => {
 
     fireEvent.focusIn(screen.getByLabelText(t("search.label")));
     expect(screen.getByRole("tooltip").textContent).toContain("Archived entities are included");
+  });
+
+  it("uses linked and inline field help before a generic caption match", () => {
+    render(<><ControlHints t={t} /><span id="custom-label">Description</span><p id="custom-help">Context for this exact field.</p><textarea aria-describedby="custom-help" aria-labelledby="custom-label" /><label>Name<input /><small>Person-specific name help.</small></label></>);
+
+    fireEvent.focusIn(screen.getByRole("textbox", { name: "Description" }));
+    expect(screen.getByRole("tooltip").textContent).toBe("Context for this exact field.");
+    fireEvent.focusOut(screen.getByRole("textbox", { name: "Description" }), { relatedTarget: document.body });
+
+    fireEvent.focusIn(screen.getByRole("textbox", { name: /^Name/ }));
+    expect(screen.getByRole("tooltip").textContent).toBe("Person-specific name help.");
+  });
+
+  it("keeps every Russian person-name field bound to its own semantic hint", () => {
+    render(<><ControlHints t={ru} /><PersonNameEditorFields defaultFormat="full" t={ru} /></>);
+    const cases = [
+      ["people.familyName", "fieldHint.personFamilyName"],
+      ["admin.personName", "fieldHint.personGivenName"],
+      ["people.middleName", "fieldHint.personMiddleName"],
+      ["people.nameFormat", "fieldHint.personNameFormat"],
+    ] as const;
+
+    for (const [label, hint] of cases) {
+      const control = screen.getByLabelText(ru(label));
+      fireEvent.focusIn(control);
+      expect(screen.getByRole("tooltip").textContent).toBe(ru(hint));
+      expect(screen.getByRole("tooltip").textContent).not.toBe(ru("fieldHint.fileName"));
+      fireEvent.focusOut(control, { relatedTarget: document.body });
+    }
   });
 
   it("explains how selecting a parent changes the task hierarchy", () => {
