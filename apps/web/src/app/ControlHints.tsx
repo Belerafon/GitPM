@@ -50,7 +50,12 @@ function hintTargetFor(target: EventTarget | null): HintTarget | null {
 }
 
 function fieldCaption(label: HTMLElement): string {
-  if (label.matches(FIELD_CONTROL_SELECTOR)) return normalized(label.getAttribute("aria-label"));
+  if (label.matches(FIELD_CONTROL_SELECTOR)) {
+    const ariaLabel = normalized(label.getAttribute("aria-label"));
+    if (ariaLabel !== "") return ariaLabel;
+    const labelledBy = label.getAttribute("aria-labelledby")?.split(/\s+/u) ?? [];
+    return normalized(labelledBy.map((id) => document.getElementById(id)?.textContent ?? "").join(" "));
+  }
   const directText = Array.from(label.childNodes)
     .filter((node) => node.nodeType === Node.TEXT_NODE)
     .map((node) => node.textContent ?? "")
@@ -58,6 +63,16 @@ function fieldCaption(label: HTMLElement): string {
   if (normalized(directText) !== "") return normalized(directText);
   const caption = Array.from(label.children).find((child) => !child.matches(FIELD_CONTROL_SELECTOR) && !child.querySelector(FIELD_CONTROL_SELECTOR));
   return normalized(caption?.textContent);
+}
+
+function linkedDescription(target: HTMLElement): string {
+  const ids = target.getAttribute("aria-describedby")?.split(/\s+/u).filter((id) => id !== "" && id !== TOOLTIP_ID) ?? [];
+  return normalized(ids.map((id) => document.getElementById(id)?.textContent ?? "").join(" "));
+}
+
+function inlineFieldHelp(target: HTMLElement): string {
+  if (target.matches(FIELD_CONTROL_SELECTOR)) return "";
+  return normalized(target.querySelector<HTMLElement>(":scope > .field-help, :scope > small")?.textContent);
 }
 
 function positionFor(target: HTMLElement, text: string): HintState {
@@ -177,6 +192,10 @@ export function ControlHints({ t }: {
     const hintText = (target: HintTarget): string => {
       const explicit = normalized(target.source.dataset.controlHint ?? target.source.dataset.fieldHint);
       if (explicit !== "") return explicit;
+      const described = linkedDescription(target.anchor);
+      if (described !== "") return described;
+      const inlineHelp = inlineFieldHelp(target.source);
+      if (inlineHelp !== "") return inlineHelp;
       if (target.source.matches(".person-link")) return t("controlHint.openPerson");
       if (target.source.matches(".project-link")) return t("controlHint.openProject");
       if (target.source.matches(".milestone-link")) return t("controlHint.openMilestone");

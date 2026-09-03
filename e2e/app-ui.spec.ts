@@ -120,6 +120,24 @@ test.describe("GitPM browser UI", () => {
     }
   });
 
+  test("keeps employee name hints attached to the correct fields", async ({ page }) => {
+    await page.goto("/people/U-26-5EBAE3");
+    await page.getByRole("button", { name: "Редактировать сотрудника", exact: true }).click();
+    const editor = page.getByRole("dialog", { name: /Редактировать сотрудника:/u });
+
+    const expected = [
+      ["family_name", "Необязательная фамилия для формирования отображаемого имени сотрудника."],
+      ["name", "Обязательное имя, по которому сотрудник отображается в GitPM."],
+      ["middle_name", "Необязательное отчество для формирования отображаемого имени сотрудника."],
+      ["display_name_format", "Переопределяет общий формат отображения только для этого сотрудника."],
+    ] as const;
+    for (const [name, hintStart] of expected) {
+      await editor.locator(`[name="${name}"]`).hover();
+      await expect(page.getByRole("tooltip")).toContainText(hintStart);
+      await expect(page.getByRole("tooltip")).not.toContainText("Имя одного файла или каталога");
+    }
+  });
+
   test("contains narrow workspace layouts without crushing their primary content", async ({ page }) => {
     test.setTimeout(90_000);
     const cases = [

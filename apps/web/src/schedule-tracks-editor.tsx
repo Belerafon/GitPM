@@ -159,7 +159,7 @@ function DependenciesField({ disabled, allTasks, selected, onAdd, onRemove, t }:
       })}
     </div>
     {open && <div className="schedule-dependencies-picker">
-      <label><span>{t("scheduleTracks.searchDependency")}</span><input autoFocus disabled={disabled} onChange={(event) => setQuery(event.target.value)} placeholder={t("scheduleTracks.searchDependencyPlaceholder")} type="search" value={query} /></label>
+      <label data-field-hint={t("fieldHint.scheduleDependencySearch")}><span>{t("scheduleTracks.searchDependency")}</span><input autoFocus disabled={disabled} onChange={(event) => setQuery(event.target.value)} placeholder={t("scheduleTracks.searchDependencyPlaceholder")} type="search" value={query} /></label>
       <div className="schedule-dependency-results">
         {matches.length === 0 ? <span className="empty-copy">{t("scheduleTracks.noDependencyMatches")}</span> : matches.map((task) => <button key={task.document.id} onClick={() => { onAdd(task.document.id); close(); }} type="button"><strong>{titleOf(task)}</strong><code>{task.document.id}</code></button>)}
       </div>

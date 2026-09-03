@@ -31,10 +31,10 @@ export function PersonNameEditorFields({ person = {}, defaultFormat, t }: {
   const effectiveFormat = isPersonNameFormat(override) ? override : defaultFormat;
   const preview = formatPersonName({ family_name: familyName, name, middle_name: middleName }, effectiveFormat);
   return <>
-    <label>{t("people.familyName")}<input autoComplete="family-name" name="family_name" value={familyName} onChange={(event) => setFamilyName(event.currentTarget.value)} /></label>
-    <label>{t("admin.personName")}<input autoComplete="given-name" name="name" required value={name} onChange={(event) => setName(event.currentTarget.value)} /></label>
-    <label>{t("people.middleName")}<input autoComplete="additional-name" name="middle_name" value={middleName} onChange={(event) => setMiddleName(event.currentTarget.value)} /></label>
-    <label>{t("people.nameFormat")}<select name="display_name_format" value={override} onChange={(event) => setOverride(event.currentTarget.value as PersonNameFormat | "")}>
+    <label data-field-hint={t("fieldHint.personFamilyName")}>{t("people.familyName")}<input autoComplete="family-name" name="family_name" value={familyName} onChange={(event) => setFamilyName(event.currentTarget.value)} /></label>
+    <label data-field-hint={t("fieldHint.personGivenName")}>{t("admin.personName")}<input autoComplete="given-name" name="name" required value={name} onChange={(event) => setName(event.currentTarget.value)} /></label>
+    <label data-field-hint={t("fieldHint.personMiddleName")}>{t("people.middleName")}<input autoComplete="additional-name" name="middle_name" value={middleName} onChange={(event) => setMiddleName(event.currentTarget.value)} /></label>
+    <label data-field-hint={t("fieldHint.personNameFormat")}>{t("people.nameFormat")}<select name="display_name_format" value={override} onChange={(event) => setOverride(event.currentTarget.value as PersonNameFormat | "")}>
       <option value="">{t("people.nameFormatDefault", { format: t(formatMessageKey(defaultFormat)) })}</option>
       <option value="full">{t("people.nameFormatFull")}</option>
       <option value="family-initials">{t("people.nameFormatFamilyInitials")}</option>

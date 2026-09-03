@@ -2,7 +2,7 @@ import type { MessageKey } from "../i18n.js";
 
 type Translate = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string;
 
-const FIELD_HINT_KEYS = [
+export const FIELD_HINT_KEYS = [
   ["locale.label", "fieldHint.locale"],
   ["drafts.current", "fieldHint.currentDraft"],
   ["drafts.id", "fieldHint.draftId"],
@@ -39,12 +39,9 @@ const FIELD_HINT_KEYS = [
   ["timeEffort.category", "fieldHint.timeCategory"],
   ["timeEffort.note", "fieldHint.timeNote"],
   ["comments.add", "fieldHint.comment"],
-  ["availability.kind", "fieldHint.availabilityKind"],
-  ["availability.start", "fieldHint.availabilityStart"],
-  ["availability.finish", "fieldHint.availabilityFinish"],
+  ["projectFileReferences.acceptanceCriterion", "fieldHint.acceptanceCriterion"],
   ["availability.percent", "fieldHint.availabilityPercent"],
   ["availability.note", "fieldHint.availabilityNote"],
-  ["availability.state", "fieldHint.availabilityState"],
   ["admin.email", "fieldHint.personEmail"],
   ["admin.capacity", "fieldHint.personCapacity"],
   ["admin.calendar", "fieldHint.personCalendar"],
@@ -58,20 +55,15 @@ const FIELD_HINT_KEYS = [
   ["admin.newTechnicalId", "fieldHint.configSlug"],
   ["admin.trackKind", "fieldHint.trackKind"],
   ["admin.capabilities", "fieldHint.trackCapabilities"],
-  ["board.project", "fieldHint.boardProject"],
   ["board.statusFilter", "fieldHint.boardStatus"],
   ["board.typeFilter", "fieldHint.boardType"],
   ["board.savedView", "fieldHint.savedView"],
   ["board.viewName", "fieldHint.savedViewName"],
-  ["gantt.project", "fieldHint.ganttProject"],
   ["gantt.scale", "fieldHint.ganttScale"],
-  ["gantt.primaryTrack", "fieldHint.ganttPrimaryTrack"],
   ["gantt.additionalTracks", "fieldHint.ganttAdditionalTracks"],
   ["gantt.dependencyTrack", "fieldHint.ganttDependencyTrack"],
-  ["workload.projectFilter", "fieldHint.workloadProject"],
   ["workload.teamFilter", "fieldHint.workloadTeam"],
   ["workload.period", "fieldHint.workloadPeriod"],
-  ["actualReport.milestone", "fieldHint.actualMilestone"],
   ["actualReport.task", "fieldHint.actualTask"],
   ["actualReport.from", "fieldHint.actualFrom"],
   ["actualReport.to", "fieldHint.actualTo"],
@@ -90,7 +82,6 @@ const FIELD_HINT_KEYS = [
   ["history.searchCommits", "fieldHint.historySearch"],
   ["history.authorFilter", "fieldHint.historyAuthor"],
   ["history.projectFilter", "fieldHint.historyProject"],
-  ["history.dateFilter", "fieldHint.historyDate"],
   ["history.searchFiles", "fieldHint.historyFiles"],
   ["history.directRevertMessage", "fieldHint.directRevertMessage"],
   ["history.revertDraft", "fieldHint.revertDraft"],
@@ -105,21 +96,27 @@ const FIELD_HINT_KEYS = [
   ["export.vacations", "fieldHint.exportVacations"],
   ["export.personProfile", "fieldHint.exportPersonProfile"],
   ["export.audit", "fieldHint.exportAudit"],
-  ["export.lifecycle", "fieldHint.exportLifecycle"],
   ["export.includeEmail", "fieldHint.exportEmail"],
   ["export.includeGit", "fieldHint.exportGit"],
   ["repositoryConnection.repositoryUrl", "fieldHint.repositoryUrl"],
   ["repositoryConnection.gitlabUrl", "fieldHint.gitlabUrl"],
   ["repositoryConnection.gitlabProject", "fieldHint.gitlabProject"],
   ["repositoryConnection.clientId", "fieldHint.gitlabClientId"],
-  ["worktree.nameLabel", "fieldHint.fileName"],
 ] as const satisfies readonly (readonly [MessageKey, MessageKey])[];
 
 export function localizedFieldHints(t: Translate): ReadonlyMap<string, string> {
   const result = new Map<string, string>();
+  const ambiguous = new Set<string>();
   for (const [label, hint] of FIELD_HINT_KEYS) {
     const localizedLabel = t(label);
-    if (!result.has(localizedLabel)) result.set(localizedLabel, t(hint));
+    const localizedHint = t(hint);
+    const existing = result.get(localizedLabel);
+    if (existing !== undefined && existing !== localizedHint) {
+      result.delete(localizedLabel);
+      ambiguous.add(localizedLabel);
+    } else if (!ambiguous.has(localizedLabel)) {
+      result.set(localizedLabel, localizedHint);
+    }
   }
   return result;
 }
