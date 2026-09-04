@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, type GitPmApi } from "./api.js";
+import { ApiError } from "./api.js";
+import { gitPmApi } from "./test-gitpm-api.js";
 import { PeopleProfileWorkspace } from "./people-profile-ui.js";
-import type { DraftStatus, EntityDocument, EntityResult } from "./types.js";
+import type { ConfigurationResult, DraftStatus, EntityDocument, EntityResult } from "./types.js";
 
 const draft: DraftStatus = { draft_id: "DRF-PEOPLE", owner_gitlab_user_id: "42", branch: "gitpm/42/DRF-PEOPLE", base_commit: "a".repeat(40), writer_mode: "ui", state: "open", fingerprint: "b".repeat(64), created_at: "2026-07-10T00:00:00.000Z", updated_at: "2026-07-10T00:00:00.000Z" };
 const result = (document: EntityDocument): EntityResult => ({ document, path: `${document.id}.yaml`, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) });
@@ -14,8 +15,8 @@ const statusesConfig = (slugs: readonly { slug: string; title: string; category:
   { slug: "review", title: "Review", category: "active" },
   { slug: "blocked", title: "Blocked", category: "active" },
   { slug: "done", title: "Done", category: "done" },
-]) => ({ document: { schema: "gitpm/statuses@2", id: "statuses", lifecycle: "active", statuses: slugs.map((status) => ({ ...status, active: true, color: "gray" })) }, path: ".gitpm/statuses.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) });
-const tracksConfig = () => ({ document: { schema: "gitpm/schedule-tracks@1", tracks: [{ slug: "plan", title: "Plan", kind: "manual", capabilities: ["dates", "effort", "dependencies"] }], defaults: { enabled_tracks: ["plan"], primary_track: "plan", workload_track: "plan", dashboard_tracks: ["plan"] } }, path: ".gitpm/schedule-tracks.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) });
+]): ConfigurationResult => ({ document: { schema: "gitpm/statuses@2", id: "statuses", lifecycle: "active", statuses: slugs.map((status) => ({ ...status, active: true, color: "gray" })) }, path: ".gitpm/statuses.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) });
+const tracksConfig = (): ConfigurationResult => ({ document: { schema: "gitpm/schedule-tracks@1", tracks: [{ slug: "plan", title: "Plan", kind: "manual", capabilities: ["dates", "effort", "dependencies"] }], defaults: { enabled_tracks: ["plan"], primary_track: "plan", workload_track: "plan", dashboard_tracks: ["plan"] } }, path: ".gitpm/schedule-tracks.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) });
 
 afterEach(() => { cleanup(); localStorage.clear(); });
 
@@ -36,7 +37,7 @@ describe("person profile", () => {
       result({ schema: "gitpm/task@2", id: "T-26-SECOND", project: contributingProjectId, title: "Review calendar", status: "planned", assignees: [personId], schedules: { plan: { start: "2026-07-22", finish: "2026-07-23" } }, lifecycle: "active" }),
     ];
     const schemaByType: Record<string, string> = { people: "gitpm/person@1", calendars: "gitpm/calendar@1", "availability-events": "gitpm/availability-event@1", teams: "gitpm/team@1", projects: "gitpm/project@2", tasks: "gitpm/task@2" };
-    const api = { listEntities: vi.fn(async (_draftId: string, type: string) => entities.filter((item) => item.document.schema === schemaByType[type])), getConfiguration: vi.fn(async (_draftId: string, kind: string) => kind === "schedule-tracks" ? tracksConfig() : statusesConfig()) } as unknown as GitPmApi;
+    const api = gitPmApi({ listEntities: vi.fn(async (_draftId: string, type: string) => entities.filter((item) => item.document.schema === schemaByType[type])), getConfiguration: vi.fn(async (_draftId: string, kind: string) => kind === "schedule-tracks" ? tracksConfig() : statusesConfig()) });
     const onNavigate = vi.fn();
 
     render(<PeopleProfileWorkspace api={api} draft={draft} locale="en" onNavigate={onNavigate} personId={personId} />);
@@ -75,7 +76,7 @@ describe("person profile", () => {
       result({ schema: "gitpm/task@2", id: "T-DONE", project: projectId, title: "Finished work", status: "done", assignees: [personId], lifecycle: "active" }),
     ];
     const schemaByType: Record<string, string> = { people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1", projects: "gitpm/project@2", tasks: "gitpm/task@2" };
-    const api = { listEntities: vi.fn(async (_draftId: string, type: string) => entities.filter((item) => item.document.schema === schemaByType[type])), getConfiguration: vi.fn(async (_draftId: string, kind: string) => kind === "schedule-tracks" ? tracksConfig() : statusesConfig()) } as unknown as GitPmApi;
+    const api = gitPmApi({ listEntities: vi.fn(async (_draftId: string, type: string) => entities.filter((item) => item.document.schema === schemaByType[type])), getConfiguration: vi.fn(async (_draftId: string, kind: string) => kind === "schedule-tracks" ? tracksConfig() : statusesConfig()) });
 
     render(<PeopleProfileWorkspace api={api} draft={draft} locale="en" onNavigate={vi.fn()} personId={personId} />);
 
@@ -105,7 +106,7 @@ describe("person profile", () => {
       result({ schema: "gitpm/task@2", id: "T-BETA-PLANNED", project: contributingProjectId, title: "Beta planned", status: "planned", assignees: [personId], lifecycle: "active" }),
     ];
     const schemaByType: Record<string, string> = { people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1", projects: "gitpm/project@2", tasks: "gitpm/task@2" };
-    const buildApi = () => ({ listEntities: vi.fn(async (_draftId: string, type: string) => entities.filter((item) => item.document.schema === schemaByType[type])), getConfiguration: vi.fn(async (_draftId: string, kind: string) => kind === "schedule-tracks" ? tracksConfig() : statusesConfig()) } as unknown as GitPmApi);
+    const buildApi = () => (gitPmApi({ listEntities: vi.fn(async (_draftId: string, type: string) => entities.filter((item) => item.document.schema === schemaByType[type])), getConfiguration: vi.fn(async (_draftId: string, kind: string) => kind === "schedule-tracks" ? tracksConfig() : statusesConfig()) }));
 
     const { unmount } = render(<PeopleProfileWorkspace api={buildApi()} draft={draft} locale="en" onNavigate={vi.fn()} personId={personId} />);
     const tasks = (await screen.findByRole("heading", { name: "Tasks by project" })).closest("section")!;
@@ -142,7 +143,7 @@ describe("person profile", () => {
       result({ schema: "gitpm/task@2", id: "T-2", project: projectId, title: "Finished work", status: "done", assignees: [personId], lifecycle: "active" }),
     ];
     const schemaByType: Record<string, string> = { people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1", projects: "gitpm/project@2", tasks: "gitpm/task@2" };
-    const api = { listEntities: vi.fn(async (_draftId: string, type: string) => entities.filter((item) => item.document.schema === schemaByType[type])), getConfiguration: vi.fn(async (_draftId: string, kind: string) => kind === "schedule-tracks" ? tracksConfig() : statusesConfig()) } as unknown as GitPmApi;
+    const api = gitPmApi({ listEntities: vi.fn(async (_draftId: string, type: string) => entities.filter((item) => item.document.schema === schemaByType[type])), getConfiguration: vi.fn(async (_draftId: string, kind: string) => kind === "schedule-tracks" ? tracksConfig() : statusesConfig()) });
 
     render(<PeopleProfileWorkspace api={api} draft={draft} locale="en" onNavigate={vi.fn()} personId={personId} />);
     const tasks = (await screen.findByRole("heading", { name: "Tasks by project" })).closest("section")!;
@@ -165,11 +166,11 @@ describe("person profile", () => {
       availabilityEvents = [created];
       return created;
     });
-    const api = {
+    const api = gitPmApi({
       listEntities: vi.fn(async (_draftId: string, type: string) => [...availabilityEvents, person, calendar].filter((item) => item.document.schema === schemaByType[type])),
       getConfiguration: vi.fn(async (_draftId: string, kind: string) => kind === "schedule-tracks" ? tracksConfig() : statusesConfig()),
       createEntity,
-    } as unknown as GitPmApi;
+    });
 
     render(<PeopleProfileWorkspace api={api} draft={draft} locale="en" onNavigate={vi.fn()} personId={personId} role="Maintainer" />);
     fireEvent.click(await screen.findByRole("button", { name: "Add absence" }));
@@ -194,11 +195,11 @@ describe("person profile", () => {
       person = { ...result(document), draft_fingerprint: (revision === 1 ? "c" : "d").repeat(64) };
       return person;
     });
-    const api = {
+    const api = gitPmApi({
       listEntities: vi.fn(async (_draftId: string, type: string) => [person, calendar].filter((item) => item.document.schema === schemaByType[type])),
       getConfiguration: vi.fn(async (_draftId: string, kind: string) => kind === "schedule-tracks" ? tracksConfig() : statusesConfig()),
       updateEntity,
-    } as unknown as GitPmApi;
+    });
     const onChanged = vi.fn(async () => undefined);
 
     render(<PeopleProfileWorkspace api={api} draft={draft} locale="en" onChanged={onChanged} onNavigate={vi.fn()} personId={personId} role="Maintainer" />);
@@ -245,7 +246,7 @@ describe("person profile", () => {
     const deleteEntity = vi.fn(async () => undefined);
     const confirmAction = vi.fn(() => false);
     const onNavigate = vi.fn();
-    const api = { listEntities: vi.fn(async (_draftId: string, type: string) => [person, calendar].filter((item) => item.document.schema === schemaByType[type])), getConfiguration: vi.fn(async (_draftId: string, kind: string) => kind === "schedule-tracks" ? tracksConfig() : statusesConfig()), deleteEntity } as unknown as GitPmApi;
+    const api = gitPmApi({ listEntities: vi.fn(async (_draftId: string, type: string) => [person, calendar].filter((item) => item.document.schema === schemaByType[type])), getConfiguration: vi.fn(async (_draftId: string, kind: string) => kind === "schedule-tracks" ? tracksConfig() : statusesConfig()), deleteEntity });
 
     render(<PeopleProfileWorkspace api={api} confirmAction={confirmAction} draft={draft} locale="en" onNavigate={onNavigate} personId={personId} role="Maintainer" />);
     fireEvent.click(await screen.findByRole("button", { name: "Edit person" }));
@@ -272,7 +273,7 @@ describe("person profile", () => {
       .mockResolvedValueOnce(undefined);
     const confirmAction = vi.fn(() => true);
     const onNavigate = vi.fn();
-    const api = { listEntities: vi.fn(async (_draftId: string, type: string) => [person, calendar].filter((item) => item.document.schema === schemaByType[type])), getConfiguration: vi.fn(async (_draftId: string, kind: string) => kind === "schedule-tracks" ? tracksConfig() : statusesConfig()), deleteEntity } as unknown as GitPmApi;
+    const api = gitPmApi({ listEntities: vi.fn(async (_draftId: string, type: string) => [person, calendar].filter((item) => item.document.schema === schemaByType[type])), getConfiguration: vi.fn(async (_draftId: string, kind: string) => kind === "schedule-tracks" ? tracksConfig() : statusesConfig()), deleteEntity });
 
     render(<PeopleProfileWorkspace api={api} confirmAction={confirmAction} draft={draft} locale="en" onNavigate={onNavigate} personId={personId} role="Maintainer" />);
     fireEvent.click(await screen.findByRole("button", { name: "Edit person" }));
@@ -290,7 +291,7 @@ describe("person profile", () => {
     const person = result({ schema: "gitpm/person@1", id: personId, name: "Ada", weekly_capacity_hours: 32, calendar: "C-26-DEFAULT", lifecycle: "active" });
     const calendar = result({ schema: "gitpm/calendar@1", id: "C-26-DEFAULT", name: "Default", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
     const schemaByType: Record<string, string> = { people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1", projects: "gitpm/project@2", tasks: "gitpm/task@2" };
-    const api = { listEntities: vi.fn(async (_draftId: string, type: string) => [person, calendar].filter((item) => item.document.schema === schemaByType[type])), getConfiguration: vi.fn(async (_draftId: string, kind: string) => kind === "schedule-tracks" ? tracksConfig() : statusesConfig()) } as unknown as GitPmApi;
+    const api = gitPmApi({ listEntities: vi.fn(async (_draftId: string, type: string) => [person, calendar].filter((item) => item.document.schema === schemaByType[type])), getConfiguration: vi.fn(async (_draftId: string, kind: string) => kind === "schedule-tracks" ? tracksConfig() : statusesConfig()) });
 
     render(<PeopleProfileWorkspace api={api} draft={draft} locale="en" onNavigate={vi.fn()} personId={personId} role="Developer" />);
 
@@ -304,7 +305,7 @@ describe("person profile", () => {
     const person = result({ schema: "gitpm/person@1", id: personId, name: "Ada", weekly_capacity_hours: 32, calendar: "C-26-DEFAULT", lifecycle: "active" });
     const calendar = result({ schema: "gitpm/calendar@1", id: "C-26-DEFAULT", name: "Default", working_weekdays: [1, 2, 3, 4, 5], holidays, lifecycle: "active" });
     const schemaByType: Record<string, string> = { people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1", projects: "gitpm/project@2", tasks: "gitpm/task@2" };
-    const api = { listEntities: vi.fn(async (_draftId: string, type: string) => [person, calendar].filter((item) => item.document.schema === schemaByType[type])), getConfiguration: vi.fn(async (_draftId: string, kind: string) => kind === "schedule-tracks" ? tracksConfig() : statusesConfig()) } as unknown as GitPmApi;
+    const api = gitPmApi({ listEntities: vi.fn(async (_draftId: string, type: string) => [person, calendar].filter((item) => item.document.schema === schemaByType[type])), getConfiguration: vi.fn(async (_draftId: string, kind: string) => kind === "schedule-tracks" ? tracksConfig() : statusesConfig()) });
 
     render(<PeopleProfileWorkspace api={api} draft={draft} locale="en" onNavigate={vi.fn()} personId={personId} />);
 

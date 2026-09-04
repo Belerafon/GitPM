@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { GitPmApi } from "./api.js";
 import { GlobalSearch } from "./global-search.js";
 import { message, type MessageKey } from "./i18n.js";
 
@@ -16,7 +15,7 @@ describe("GlobalSearch", () => {
       items: [{ entity_type: "task" as const, id: "T-26-P9G3P8", title: "Approve schema v1", context: "GitPM launch", project_id: "P-26-MGP84K", lifecycle: "archived" as const }],
     }));
     const onNavigate = vi.fn();
-    render(<GlobalSearch api={{ searchEntities } as unknown as GitPmApi} draftId="DRF-1" onNavigate={onNavigate} t={t} />);
+    render(<GlobalSearch api={{ searchEntities }} draftId="DRF-1" onNavigate={onNavigate} t={t} />);
 
     fireEvent.keyDown(document, { key: "k", ctrlKey: true });
     const input = screen.getByRole("combobox", { name: "Global search" });
@@ -37,7 +36,7 @@ describe("GlobalSearch", () => {
       .mockResolvedValueOnce({ query: "none", total: 0, items: [] })
       .mockResolvedValueOnce({ query: "core", total: 1, items: [{ entity_type: "team", id: "G-26-XB86WT", title: "Core team", lifecycle: "active" }] });
     const onNavigate = vi.fn();
-    render(<GlobalSearch api={{ searchEntities } as unknown as GitPmApi} draftId="DRF-1" onNavigate={onNavigate} t={t} />);
+    render(<GlobalSearch api={{ searchEntities }} draftId="DRF-1" onNavigate={onNavigate} t={t} />);
     const input = screen.getByRole("combobox", { name: "Global search" });
 
     fireEvent.change(input, { target: { value: "none" } });

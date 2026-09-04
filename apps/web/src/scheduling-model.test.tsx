@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { GitPmApi } from "./api.js";
+import { gitPmApi } from "./test-gitpm-api.js";
 import { ScheduleResolver, scheduleTracksConfig } from "./schedules.js";
 import type { ConfigurationDocument, ConfigurationResult, DraftStatus, EntityDocument, EntityResult, ProjectWorkspaceResult } from "./types.js";
 import { BoardWorkspace } from "./board-ui.js";
@@ -65,7 +65,7 @@ describe("unified scheduling model", () => {
     const second = result({ schema: "gitpm/task@2", id: "T-26-222222", project: projectId, title: "Second task", type: "task", status: "backlog", lifecycle: "active", schedules: { working: { start: "2026-07-04", finish: "2026-07-06", depends_on: [first.document.id] } } });
     const milestone = result({ schema: "gitpm/milestone@2", id: "M-26-888888", project: projectId, name: "Release", lifecycle: "active", schedules: { working: { finish: "2026-07-06" } } });
     const entities = [project, first, second, milestone];
-    const api = { listEntities: listEntitiesMock(entities), getConfiguration: buildGetConfiguration(), listProjectTimeEntries: vi.fn(async () => ({ items: [], total: 0, offset: 0, limit: 200 })), listTimeEntries: vi.fn(async () => []) } as unknown as GitPmApi;
+    const api = gitPmApi({ listEntities: listEntitiesMock(entities), getConfiguration: buildGetConfiguration(), listProjectTimeEntries: vi.fn(async () => ({ items: [], total: 0, offset: 0, limit: 200 })), listTimeEntries: vi.fn(async () => []) });
     const { container } = render(<GanttWorkspace api={api} draft={draft} locale="en" onNavigate={vi.fn()} />);
     await waitFor(() => expect(container.querySelectorAll(".gantt-bar")).toHaveLength(2));
     expect(container.querySelectorAll(".gantt-dependencies path[data-from]").length).toBeGreaterThan(0);
@@ -80,7 +80,7 @@ describe("unified scheduling model", () => {
     const project = result({ schema: "gitpm/project@2", id: projectId, name: "Workload project", status: "backlog", lifecycle: "active", planning });
     const task = result({ schema: "gitpm/task@2", id: "T-26-444444", project: projectId, title: "Sized task", type: "task", status: "backlog", lifecycle: "active", schedules: { working: { start: "2026-07-06", finish: "2026-07-10", effort_hours: 40 } }, assignees: [adaId] });
     const entities = [calendar, ada, project, task];
-    const api = { listEntities: listEntitiesMock(entities), getConfiguration: buildGetConfiguration() } as unknown as GitPmApi;
+    const api = gitPmApi({ listEntities: listEntitiesMock(entities), getConfiguration: buildGetConfiguration() });
     const { container } = render(<WorkloadWorkspace api={api} draft={draft} locale="en" onNavigate={vi.fn()} />);
     await waitFor(() => expect(container.querySelector(".workload-table")).not.toBeNull());
     expect(Array.from(container.querySelectorAll(".workload-table td")).some((cell) => /40h/u.test(cell.textContent ?? ""))).toBe(true);
@@ -112,7 +112,7 @@ describe("unified scheduling model", () => {
     const calProject = result({ schema: "gitpm/project@2", id: projectId, name: "Calendar project", status: "backlog", lifecycle: "active", planning: { enabled_tracks: ["working", "forecast", "estimate", "actual"], primary_track: "working", workload_track: "estimate", comparison_track: "forecast", dashboard_tracks: ["working", "forecast", "estimate", "actual"] } });
     const calTask = result({ schema: "gitpm/task@2", id: "T-26-CAL", project: projectId, title: "Shared task", type: "task", status: "backlog", lifecycle: "active", schedules: { working: { effort_hours: 999 }, estimate: { start: "2026-07-06", finish: "2026-07-17", effort_hours: 80 } }, assignees: [adaId, boId] });
     const entities = [eng, support, ada, bo, calProject, calTask];
-    const api = { listEntities: listEntitiesMock(entities), getConfiguration } as unknown as GitPmApi;
+    const api = gitPmApi({ listEntities: listEntitiesMock(entities), getConfiguration });
     const { container } = render(<WorkloadWorkspace api={api} draft={draft} locale="en" onNavigate={vi.fn()} />);
     await waitFor(() => expect(container.querySelector(".workload-table")).not.toBeNull());
 
@@ -145,7 +145,7 @@ describe("unified scheduling model", () => {
     const project = result({ schema: "gitpm/project@2", id: projectId, name: "Alpha", owner: personId, status: "in-progress", lifecycle: "active", planning });
     const task = result({ schema: "gitpm/task@2", id: "T-26-222222", project: projectId, title: "Profile task", status: "in-progress", assignees: [personId], schedules: { working: { start: "2026-07-20", finish: "2026-07-24" } }, lifecycle: "active" });
     const entities = [person, project, task];
-    const api = { listEntities: listEntitiesMock(entities), getConfiguration: buildGetConfiguration() } as unknown as GitPmApi;
+    const api = gitPmApi({ listEntities: listEntitiesMock(entities), getConfiguration: buildGetConfiguration() });
     render(<PeopleProfileWorkspace api={api} draft={draft} locale="en" onNavigate={vi.fn()} personId={personId} />);
     expect(await screen.findByText("Jul 20, 2026 — Jul 24, 2026")).toBeTruthy();
     expect(screen.getAllByText("Profile task").length).toBeGreaterThan(0);
@@ -157,7 +157,7 @@ describe("unified scheduling model", () => {
     const milestone = result({ schema: "gitpm/milestone@2", id: "M-26-888888", project: projectId, name: "Launch", lifecycle: "active", schedules: { working: { finish: "2026-08-15" } } });
     const task = result({ schema: "gitpm/task@2", id: "T-26-333333", project: projectId, milestone: milestone.document.id, title: "Plan task", type: "task", status: "backlog", lifecycle: "active", schedules: { working: { start: "2026-07-10", finish: "2026-07-20", effort_hours: 12 } } });
     const workspace: ProjectWorkspaceResult = { project, milestones: [milestone], tasks: [task], draft_fingerprint: fingerprint };
-    const api = { projectWorkspace: vi.fn(async () => workspace), listEntities: listEntitiesMock([project]), getConfiguration: buildGetConfiguration() } as unknown as GitPmApi;
+    const api = gitPmApi({ projectWorkspace: vi.fn(async () => workspace), listEntities: listEntitiesMock([project]), getConfiguration: buildGetConfiguration() });
     const { container } = render(<ProjectPlanWorkspace api={api} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={projectId} />);
     await screen.findByRole("heading", { name: "Plan project" });
     expect(container.textContent).toContain("Jul 1, 2026");
@@ -171,7 +171,7 @@ describe("unified scheduling model", () => {
     const milestone = result({ schema: "gitpm/milestone@2", id: "M-26-888888", project: projectId, name: "Launch", lifecycle: "active", schedules: { working: { finish: "2026-08-15" } } });
     const task = result({ schema: "gitpm/task@2", id: "T-26-333333", project: projectId, milestone: milestone.document.id, title: "Stage task", type: "task", status: "backlog", lifecycle: "active", schedules: { working: { start: "2026-07-10", finish: "2026-08-01", effort_hours: 8 } } });
     const workspace: ProjectWorkspaceResult = { project, milestones: [milestone], tasks: [task], draft_fingerprint: fingerprint };
-    const api = { projectWorkspace: vi.fn(async () => workspace), listEntities: listEntitiesMock([]), getConfiguration: buildGetConfiguration() } as unknown as GitPmApi;
+    const api = gitPmApi({ projectWorkspace: vi.fn(async () => workspace), listEntities: listEntitiesMock([]), getConfiguration: buildGetConfiguration() });
     const { container } = render(<ProjectPlanWorkspace api={api} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={projectId} selectedStageId={milestone.document.id} />);
     await screen.findByRole("complementary", { name: "Milestone" });
     expect(screen.getByRole("button", { name: /Stage task/u })).toBeTruthy();
@@ -183,7 +183,7 @@ describe("unified scheduling model", () => {
     const project = result({ schema: "gitpm/project@2", id: projectId, name: "Board project", status: "backlog", lifecycle: "active", planning });
     const task = result({ schema: "gitpm/task@2", id: "T-26-222222", project: projectId, title: "Board task", type: "task", status: "backlog", lifecycle: "active", schedules: { working: { start: "2026-07-01", finish: "2026-07-03" } } });
     const entities = [project, task];
-    const api = { listEntities: listEntitiesMock(entities), getConfiguration: buildGetConfiguration() } as unknown as GitPmApi;
+    const api = gitPmApi({ listEntities: listEntitiesMock(entities), getConfiguration: buildGetConfiguration() });
     render(<BoardWorkspace api={api} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} />);
     expect(await screen.findByText("Board task")).toBeTruthy();
   });
@@ -193,7 +193,7 @@ describe("unified scheduling model", () => {
     const project = result({ schema: "gitpm/project@2", id: projectId, name: "Core project", status: "backlog", lifecycle: "active", planning });
     const task = result({ schema: "gitpm/task@2", id: "T-26-333333", project: projectId, title: "Detail task", type: "task", status: "backlog", lifecycle: "active", schedules: { working: { start: "2026-07-20", finish: "2026-07-24", effort_hours: 16 } } });
     const entities = [project, task];
-    const api = { listEntities: listEntitiesMock(entities), getConfiguration: buildGetConfiguration() } as unknown as GitPmApi;
+    const api = gitPmApi({ listEntities: listEntitiesMock(entities), getConfiguration: buildGetConfiguration() });
     const { container } = render(<CoreWorkspace api={api} draft={draft} initialProjectId={projectId} initialTaskId={task.document.id} locale="en" surface="tasks" onNavigate={vi.fn()} onChanged={vi.fn(async () => undefined)} />);
     await screen.findByRole("heading", { name: "Detail task" });
     const metadata = container.querySelector<HTMLElement>(".task-detail-meta")!;

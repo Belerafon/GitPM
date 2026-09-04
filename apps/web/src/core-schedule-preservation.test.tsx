@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { GitPmApi } from "./api.js";
+import { gitPmApi } from "./test-gitpm-api.js";
 import { CoreWorkspace } from "./core-ui.js";
 import type { ConfigurationDocument, ConfigurationResult, DraftStatus, EntityDocument, EntityResult } from "./types.js";
 
@@ -47,7 +47,7 @@ afterEach(cleanup);
 describe("schedule track preservation", () => {
   it("edits only working.finish and keeps target, forecast, and working.depends_on", async () => {
     const entityApi = new MultiTrackApi();
-    const api = entityApi as unknown as GitPmApi;
+    const api = gitPmApi(entityApi);
     const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-111111", name: "Multi-track", status: "backlog", lifecycle: "active" } as EntityDocument);
     const dependency = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-AAAAAA", project: project.document.id, title: "Dependency", type: "task", status: "backlog", lifecycle: "active" } as EntityDocument);
     await entityApi.createEntity("DRF-CORE", "tasks", "", {
@@ -85,7 +85,7 @@ describe("schedule track preservation", () => {
 
   it("removes only the working window when the task form clears every editable field", async () => {
     const entityApi = new MultiTrackApi();
-    const api = entityApi as unknown as GitPmApi;
+    const api = gitPmApi(entityApi);
     const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-222222", name: "Clear window", status: "backlog", lifecycle: "active" } as EntityDocument);
     await entityApi.createEntity("DRF-CORE", "tasks", "", {
       schema: "gitpm/task@2",

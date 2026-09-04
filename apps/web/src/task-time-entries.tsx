@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { actualWindow, sumHours } from "@gitpm/time-entries";
-import { formatApiError, type GitPmApi } from "./api.js";
+import { formatApiError, type GitPmApiPort } from "./api.js";
 import { formatDateOnly, formatDurationHours, message, type Locale, type MessageKey } from "./i18n.js";
 import type { DraftStatus, EntityResult } from "./types.js";
 import type { TimeEntryResult } from "./api.js";
@@ -21,7 +21,7 @@ function todayISODate(): string {
 }
 
 export function TaskTimeEntries(props: {
-  readonly api: GitPmApi;
+  readonly api: GitPmApiPort<"createTimeEntry" | "getConfiguration" | "getEntity" | "listTimeEntries" | "replaceTimeEntry" | "voidTimeEntry">;
   readonly draft: DraftStatus;
   readonly fileContext?: ProjectFileReferenceContext;
   readonly fingerprint: string;

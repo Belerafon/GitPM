@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { GitPmApi } from "./api.js";
+import { gitPmApi } from "./test-gitpm-api.js";
 import { BoardWorkspace } from "./board-ui.js";
 import type { ConfigurationDocument, ConfigurationResult, DraftStatus, EntityDocument, EntityResult } from "./types.js";
 
@@ -32,7 +32,7 @@ class BoardApi {
 afterEach(cleanup);
 describe("Board and Saved Views", () => {
   it("drags a Task between status columns and reopens persisted filters", async () => {
-    const entityApi = new BoardApi(); const api = entityApi as unknown as GitPmApi;
+    const entityApi = new BoardApi(); const api = gitPmApi(entityApi);
     const onNavigate = vi.fn(); const confirmAction = vi.fn(() => true);
     const { container } = render(<BoardWorkspace api={api} confirmAction={confirmAction} draft={draft} locale="en" onNavigate={onNavigate} onChanged={vi.fn(async () => undefined)} />);
     const card = await screen.findByText("Drag me");
@@ -97,7 +97,7 @@ describe("Board and Saved Views", () => {
   });
 
   it("restores project, status, type and saved view route state", async () => {
-    const api = new BoardApi() as unknown as GitPmApi;
+    const api = gitPmApi(new BoardApi());
     render(<BoardWorkspace api={api} draft={draft} locale="en" initialProjectId={projectId} initialStatusFilter="done" initialTypeFilter="task" initialMilestoneFilter={milestoneId} initialViewId="V-26-ROUTED" onChanged={vi.fn(async () => undefined)} />);
     expect(await screen.findByLabelText("Status filter")).toHaveProperty("value", "done");
     expect(screen.getByLabelText("Type filter")).toHaveProperty("value", "task");
@@ -114,7 +114,7 @@ describe("Board and Saved Views", () => {
       entityApi.result({ schema: "gitpm/task@2", id: "T-26-777777", parent: childId, project: projectId, milestone: milestoneId, title: "POST /projects", type: "task", status: "backlog", lifecycle: "active" }),
     );
 
-    const { container } = render(<BoardWorkspace api={entityApi as unknown as GitPmApi} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} />);
+    const { container } = render(<BoardWorkspace api={gitPmApi(entityApi)} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} />);
     expect(await screen.findByText("POST /projects")).toBeTruthy();
     expect(container.querySelector('[data-task-id="T-26-777777"] .board-task-path')?.textContent).toBe("API delivery › Endpoints");
     expect(container.querySelectorAll(".board-card")).toHaveLength(4);

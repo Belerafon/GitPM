@@ -3,7 +3,7 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type ReactNode } from "react";
 import { DraftProvider, POLL_INTERVAL_MS, draftSignature, isSameSnapshot, useDrafts } from "./draft-context.js";
-import type { GitPmApi } from "./api.js";
+import { gitPmApi } from "./test-gitpm-api.js";
 import type { DraftSnapshot, DraftStatus, PublicSession } from "./types.js";
 
 const baseDraft: DraftStatus = {
@@ -86,11 +86,11 @@ describe("DraftProvider polling", () => {
   it("keeps the snapshot reference when a poll returns a content-equal snapshot, and updates on a real change", async () => {
     const initial = makeSnapshot();
     let current = initial;
-    const api = {
+    const api = gitPmApi({
       session: vi.fn(async () => sessionValue),
       listDrafts: vi.fn(async () => [current.draft]),
       snapshot: vi.fn(async () => current),
-    } as unknown as GitPmApi;
+    });
 
     const { result } = renderHook(() => useDrafts(), { wrapper: ({ children }: { readonly children: ReactNode }) => <DraftProvider api={api}>{children}</DraftProvider> });
     await flush();

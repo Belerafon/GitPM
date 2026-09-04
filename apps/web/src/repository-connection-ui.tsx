@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { ApiError, formatApiError, type GitPmApi } from "./api.js";
+import { ApiError, formatApiError, type GitPmApiPort } from "./api.js";
 import { message, type Locale, type MessageKey } from "./i18n.js";
 import type { RepositoryConnectionStatus } from "./types.js";
 
@@ -33,8 +33,10 @@ const PROVIDER_LABEL_KEY: Readonly<Record<ProviderKind, MessageKey>> = {
   none: "repositoryConnection.providerNone",
 };
 
+export type RepositoryConnectionApi = GitPmApiPort<"login" | "repositoryConnection" | "testRepositoryConnection" | "updateRepositoryConnection">;
+
 export function RepositoryConnectionSettings({ api, locale, maintainer, confirmAction = () => true }: {
-  readonly api: GitPmApi;
+  readonly api: RepositoryConnectionApi;
   readonly locale: Locale;
   readonly maintainer: boolean;
   readonly confirmAction?: (message: string) => boolean;

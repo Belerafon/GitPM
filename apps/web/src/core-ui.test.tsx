@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { GitPmApi } from "./api.js";
+import { gitPmApi } from "./test-gitpm-api.js";
 import { AssigneeChecks, CoreWorkspace, existingProjectGroups, groupProjects, newEntityId, SafeMarkdown } from "./core-ui.js";
 import { message } from "./i18n.js";
 import type { ConfigurationDocument, ConfigurationResult, DraftStatus, EntityDocument, EntityResult } from "./types.js";
@@ -46,7 +46,7 @@ describe("core UI", () => {
   });
 
   it("shows the global task hierarchy and keeps project, milestone, and parent context while filtering", async () => {
-    const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
+    const entityApi = new EntityApi(); const api = gitPmApi(entityApi);
     const alpha = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-111111", name: "Alpha", group: "Delivery", status: "backlog", lifecycle: "active" });
     const beta = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-222222", name: "Beta", status: "backlog", lifecycle: "active" });
     const milestone = await entityApi.createEntity("DRF-CORE", "milestones", "", { schema: "gitpm/milestone@2", id: "M-26-111111", project: alpha.document.id, name: "Launch", lifecycle: "active" });
@@ -110,7 +110,7 @@ describe("core UI", () => {
   });
 
   it("sorts, hides, and resizes columns in the all-tasks table", async () => {
-    const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
+    const entityApi = new EntityApi(); const api = gitPmApi(entityApi);
     const alpha = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
     await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-111111", project: alpha.document.id, title: "Later task", type: "task", status: "backlog", lifecycle: "active", schedules: { plan: { finish: "2099-09-15", effort_hours: 8 } } });
     await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-222222", project: alpha.document.id, title: "Earlier task", type: "task", status: "backlog", lifecycle: "active", schedules: { plan: { finish: "2099-08-30", effort_hours: 2 } } });
@@ -141,7 +141,7 @@ describe("core UI", () => {
   });
 
   it("animates the task row while an inline status change is being saved", async () => {
-    const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
+    const entityApi = new EntityApi(); const api = gitPmApi(entityApi);
     const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
     await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-222222", project: project.document.id, title: "Animated task", type: "task", status: "backlog", lifecycle: "active" });
     let finishRefresh: () => void = () => undefined;
@@ -167,7 +167,7 @@ describe("core UI", () => {
   });
 
   it("derives exact group options and sorts named groups, projects, and the ungrouped section", async () => {
-    const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
+    const entityApi = new EntityApi(); const api = gitPmApi(entityApi);
     const projects = [
       await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-111111", name: "Zulu project", status: "backlog", lifecycle: "active", group: "Delivery" }),
       await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-222222", name: "Alpha project", status: "backlog", lifecycle: "active", group: "Delivery" }),
@@ -199,7 +199,7 @@ describe("core UI", () => {
   });
 
   it("creates, changes, and removes a Project group while validating new group names", async () => {
-    const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
+    const entityApi = new EntityApi(); const api = gitPmApi(entityApi);
     await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-111111", name: "Existing", status: "backlog", lifecycle: "active", group: "Platform" });
     await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-222222", name: "Archived", status: "backlog", lifecycle: "archived", group: "Research" });
     const onChanged = vi.fn(async () => undefined);
@@ -232,7 +232,7 @@ describe("core UI", () => {
 
   it("creates a Project and Task, then edits and archives the Task in the drawer", async () => {
     const entityApi = new EntityApi();
-    const api = entityApi as unknown as GitPmApi;
+    const api = gitPmApi(entityApi);
     const onChanged = vi.fn(async () => undefined);
     const person = await entityApi.createEntity("DRF-CORE", "people", "", { schema: "gitpm/person@1", id: "U-26-555555", name: "Ada", weekly_capacity_hours: 40, calendar: "C-26-111111", lifecycle: "active" });
     const rendered = render(<CoreWorkspace api={api} draft={draft} locale="en" surface="projects" onChanged={onChanged} />);
@@ -290,7 +290,7 @@ describe("core UI", () => {
   });
 
   it("shows resolved project and archived milestone names in task details", async () => {
-    const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
+    const entityApi = new EntityApi(); const api = gitPmApi(entityApi);
     const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
     const milestone = await entityApi.createEntity("DRF-CORE", "milestones", "", { schema: "gitpm/milestone@2", id: "M-26-222222", project: project.document.id, name: "Archived stage", lifecycle: "archived" });
     const task = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-333333", project: project.document.id, milestone: milestone.document.id, title: "Linked task", type: "task", status: "backlog", lifecycle: "active" });
@@ -308,7 +308,7 @@ describe("core UI", () => {
   });
 
   it("offers to restore an archived Task together with its archived Milestone", async () => {
-    const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
+    const entityApi = new EntityApi(); const api = gitPmApi(entityApi);
     const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
     const milestone = await entityApi.createEntity("DRF-CORE", "milestones", "", { schema: "gitpm/milestone@2", id: "M-26-222222", project: project.document.id, name: "Archived stage", lifecycle: "archived" });
     const task = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-333333", project: project.document.id, milestone: milestone.document.id, title: "Archived task", type: "task", status: "backlog", lifecycle: "archived" });
@@ -320,7 +320,7 @@ describe("core UI", () => {
   });
 
   it("shows task ancestry and rollups and creates a same-milestone subtask from task details", async () => {
-    const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
+    const entityApi = new EntityApi(); const api = gitPmApi(entityApi);
     const person = await entityApi.createEntity("DRF-CORE", "people", "", { schema: "gitpm/person@1", id: "U-26-666666", name: "Ada", weekly_capacity_hours: 40, calendar: "C-26-111111", lifecycle: "active" });
     const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
     const milestone = await entityApi.createEntity("DRF-CORE", "milestones", "", { schema: "gitpm/milestone@2", id: "M-26-222222", project: project.document.id, name: "Beta", lifecycle: "active" });
@@ -365,7 +365,7 @@ describe("core UI", () => {
   });
 
   it("filters tasks by milestone", async () => {
-    const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
+    const entityApi = new EntityApi(); const api = gitPmApi(entityApi);
     const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
     const milestone = await entityApi.createEntity("DRF-CORE", "milestones", "", { schema: "gitpm/milestone@2", id: "M-26-222222", project: project.document.id, name: "Beta", lifecycle: "active" });
     await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-333333", project: project.document.id, milestone: milestone.document.id, title: "Linked", type: "task", status: "done", lifecycle: "active" });
@@ -378,7 +378,7 @@ describe("core UI", () => {
   });
 
   it("moves a task through the explicit project transfer workflow", async () => {
-    const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
+    const entityApi = new EntityApi(); const api = gitPmApi(entityApi);
     const source = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-111111", name: "Source", status: "backlog", lifecycle: "active" });
     const target = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-222222", name: "Target", status: "backlog", lifecycle: "active" });
     const milestone = await entityApi.createEntity("DRF-CORE", "milestones", "", { schema: "gitpm/milestone@2", id: "M-26-333333", project: target.document.id, name: "Target stage", lifecycle: "active" });
@@ -403,7 +403,7 @@ describe("core UI", () => {
   });
 
   it("reloads external changes, marks only changed fields, and keeps the focused read control", async () => {
-    const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
+    const entityApi = new EntityApi(); const api = gitPmApi(entityApi);
     const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-111111", name: "External project", status: "backlog", lifecycle: "active" });
     const task = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-222222", project: project.document.id, title: "Before agent", type: "task", status: "backlog", lifecycle: "active" });
     const external = { ...draft, writer_mode: "external" as const, changed_externally: false, external_fingerprint: "1".repeat(64) };
@@ -420,7 +420,7 @@ describe("core UI", () => {
   });
 
   it("filters the project directory from a compact drawer and exposes removable chips", async () => {
-    const entityApi = new EntityApi(); const api = entityApi as unknown as GitPmApi;
+    const entityApi = new EntityApi(); const api = gitPmApi(entityApi);
     const owner = await entityApi.createEntity("DRF-CORE", "people", "", { schema: "gitpm/person@1", id: "U-26-000001", name: "Owner One", lifecycle: "active" });
     await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-000001", name: "Alpha", status: "backlog", lifecycle: "active", group: "Delivery", owner: owner.document.id, schedules: { plan: { finish: "2020-01-01" } } });
     await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-000002", name: "Beta", status: "done", lifecycle: "active", group: "Research" });

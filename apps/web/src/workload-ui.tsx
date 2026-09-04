@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { buildWorkloadReport, type PersonWeekWorkload, type TaskWeekAllocation } from "@gitpm/workload";
-import type { GitPmApi } from "./api.js";
+import type { GitPmApiPort } from "./api.js";
 import { formatDateOnly, formatNumber, message, type Locale, type MessageKey } from "./i18n.js";
 import type { ConfigurationResult, DraftStatus, EntityResult, GitPmDocument } from "./types.js";
 import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
@@ -22,7 +22,7 @@ function transferCandidates(selected: PersonWeekWorkload, allocation: TaskWeekAl
     .slice(0, 3);
 }
 
-export function WorkloadWorkspace({ api, draft, locale, onNavigate = () => undefined }: { readonly api: GitPmApi; readonly draft: DraftStatus; readonly locale: Locale; readonly onNavigate?: WorkspaceNavigate }) {
+export function WorkloadWorkspace({ api, draft, locale, onNavigate = () => undefined }: { readonly api: GitPmApiPort<"getConfiguration" | "listEntities">; readonly draft: DraftStatus; readonly locale: Locale; readonly onNavigate?: WorkspaceNavigate }) {
   const t = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
   const [tasks, setTasks] = useState<readonly EntityResult[]>([]);
   const [people, setPeople] = useState<readonly EntityResult[]>([]);

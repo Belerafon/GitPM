@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { GitPmApi } from "./api.js";
 import { ExportMenu } from "./export-ui.js";
 
 afterEach(cleanup);
@@ -10,7 +9,7 @@ describe("ExportMenu", () => {
   it("defaults PDF to Projects and People and sends optional project sections", async () => {
     const exportData = vi.fn(async () => ({ blob: new Blob(["pdf"]), filename: "gitpm-20260725-deadbeef-portfolio.pdf" }));
     const save = vi.fn();
-    render(<ExportMenu api={{ exportData } as unknown as GitPmApi} draftId="DRF-1" locale="en" save={save} />);
+    render(<ExportMenu api={{ exportData }} draftId="DRF-1" locale="en" save={save} />);
 
     fireEvent.click(screen.getByText("Export"));
     expect((screen.getByLabelText("Projects overview") as HTMLInputElement).checked).toBe(true);
@@ -30,7 +29,7 @@ describe("ExportMenu", () => {
 
   it("offers repository ZIP with or without portable Git history", async () => {
     const exportData = vi.fn(async () => ({ blob: new Blob(["zip"]), filename: "gitpm-20260725-deadbeef-repository-with-git.zip" }));
-    render(<ExportMenu api={{ exportData } as unknown as GitPmApi} draftId="DRF-1" locale="en" save={vi.fn()} />);
+    render(<ExportMenu api={{ exportData }} draftId="DRF-1" locale="en" save={vi.fn()} />);
 
     fireEvent.change(screen.getByLabelText("Format"), { target: { value: "repository" } });
     fireEvent.click(screen.getByLabelText("Include portable .git history (remote URL is removed)"));

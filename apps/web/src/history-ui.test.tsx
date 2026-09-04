@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { GitPmApi } from "./api.js";
 import { HistoryWorkspace } from "./history-ui.js";
+import { gitPmApi } from "./test-gitpm-api.js";
 import type { CommitFileDiff, CommitHistoryDetail, CommitHistoryItem, DraftStatus } from "./types.js";
 
 const commit = "a".repeat(40);
@@ -18,11 +18,11 @@ describe("History workspace", () => {
     const olderItem = { ...item, commit: olderCommit, subject: "Older change", author_name: "Dev", authored_at: "2026-07-09T12:00:00.000Z", semantic_summary: { ...item.semantic_summary, affected_projects: ["P-26-222222"] } };
     const lookedUpItem = { ...olderItem, commit: lookedUpCommit, subject: "Deep history change" };
     const onNavigate = vi.fn();
-    const api = {
+    const api = gitPmApi({
       history: async () => [item],
       commitDetail: async (_draftId: string, selectedCommit: string) => ({ ...detail, ...(selectedCommit === olderCommit ? olderItem : selectedCommit === lookedUpCommit ? lookedUpItem : item) }),
       commitFileDiff: async (): Promise<CommitFileDiff> => ({ diff: "", oversized: false }),
-    } as unknown as GitPmApi;
+    });
 
     render(<HistoryWorkspace api={api} draft={draft} locale="en" canRevert={false} initialCommit={olderCommit} onNavigate={onNavigate} onDraftCreated={vi.fn(async () => undefined)} />);
     expect(await screen.findByRole("heading", { name: "Older change" })).toBeTruthy();
@@ -47,7 +47,7 @@ describe("History workspace", () => {
   it("shows the selected file diff and file history and creates a separate revert draft without a rebase action", async () => {
     const createRevertDraft = vi.fn(async () => ({ draft: { ...draft, draft_id: "REVERT-AAAAAAAA", branch: "gitpm/42/REVERT-AAAAAAAA" }, reverted_commit: commit, conflicted: false, conflicted_files: [] }));
     const select = vi.fn(async () => undefined);
-    const api = { history: async () => [item], commitDetail: async () => detail, commitFileDiff: async () => ({ diff: "@@ -1 +1 @@\n-old\n+new\n", oversized: false }), fileHistory: async () => [item], createRevertDraft } as unknown as GitPmApi;
+    const api = gitPmApi({ history: async () => [item], commitDetail: async () => detail, commitFileDiff: async () => ({ diff: "@@ -1 +1 @@\n-old\n+new\n", oversized: false }), fileHistory: async () => [item], createRevertDraft });
     render(<HistoryWorkspace api={api} draft={draft} locale="en" canRevert={true} onDraftCreated={select} />);
     expect(await screen.findByRole("heading", { name: "Merged task update" })).toBeTruthy();
     expect(screen.queryByText(/rebase/iu)).toBeNull();
@@ -66,7 +66,7 @@ describe("History workspace", () => {
     const onNavigate = vi.fn();
     const onChanged = vi.fn(async () => undefined);
     const confirmAction = vi.fn(() => true);
-    const api = { history: async () => [item], commitDetail: async () => detail, commitFileDiff: async () => ({ diff: "", oversized: false }), restoreCommitFiles, revertDirect } as unknown as GitPmApi;
+    const api = gitPmApi({ history: async () => [item], commitDetail: async () => detail, commitFileDiff: async () => ({ diff: "", oversized: false }), restoreCommitFiles, revertDirect });
     render(<HistoryWorkspace api={api} confirmAction={confirmAction} directMode draft={draft} locale="en" canRevert onChanged={onChanged} onNavigate={onNavigate} />);
     expect(await screen.findByRole("heading", { name: "Merged task update" })).toBeTruthy();
 
@@ -83,7 +83,7 @@ describe("History workspace", () => {
 
   it("keeps long file lists in the file pane and filters them on demand", async () => {
     const files = Array.from({ length: 11 }, (_, index) => ({ path: `projects/P-26-111111/tasks/T-${String(index).padStart(2, "0")}.yaml`, status: "Added" as const, additions: 1, deletions: 0 }));
-    const api = { history: async () => [item], commitDetail: async () => ({ ...detail, files }), commitFileDiff: async () => ({ diff: "", oversized: false }) } as unknown as GitPmApi;
+    const api = gitPmApi({ history: async () => [item], commitDetail: async () => ({ ...detail, files }), commitFileDiff: async () => ({ diff: "", oversized: false }) });
     render(<HistoryWorkspace api={api} draft={draft} locale="en" canRevert={false} onDraftCreated={vi.fn(async () => undefined)} />);
     expect(await screen.findByText("Changed files: 11")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Search changed files"), { target: { value: "T-07" } });
@@ -99,12 +99,12 @@ describe("History workspace", () => {
       [firstPath, "@@ -1 +1 @@\n-old project\n+new project\n"],
       [secondPath, "@@ -3 +3 @@\n-old task\n+new task\n"],
     ]);
-    const api = {
+    const api = gitPmApi({
       history: async () => [item],
       commitDetail: async () => ({ ...detail, files }),
       commitFileDiff: async (_draftId: string, _commit: string, path: string): Promise<CommitFileDiff> => ({ diff: diffs.get(path) ?? "", oversized: false }),
       fileHistory: async () => [],
-    } as unknown as GitPmApi;
+    });
     render(<HistoryWorkspace api={api} draft={draft} locale="en" canRevert={false} onDraftCreated={vi.fn(async () => undefined)} />);
 
     expect(await screen.findByText("-old project")).toBeTruthy();
@@ -115,12 +115,12 @@ describe("History workspace", () => {
   });
 
   it("shows a too-large notice instead of a diff when a single file exceeds the output limit", async () => {
-    const api = {
+    const api = gitPmApi({
       history: async () => [item],
       commitDetail: async () => detail,
       commitFileDiff: async (): Promise<CommitFileDiff> => ({ diff: "", oversized: true }),
       fileHistory: async () => [],
-    } as unknown as GitPmApi;
+    });
     render(<HistoryWorkspace api={api} draft={draft} locale="en" canRevert={false} onDraftCreated={vi.fn(async () => undefined)} />);
     expect(await screen.findByText(/too large to display/iu)).toBeTruthy();
     expect(screen.queryByText("-old")).toBeNull();

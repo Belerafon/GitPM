@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import type { GitPmApi } from "./api.js";
+import type { GitPmApiPort } from "./api.js";
 import { formatDateTime, message, type Locale } from "./i18n.js";
 import type { CommitHistoryDetail, CommitHistoryItem, DraftStatus } from "./types.js";
 import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
@@ -44,7 +44,7 @@ function FileDiff({ diff, oversized, loading, emptyLabel, tooLargeLabel, loading
 }
 
 export function HistoryWorkspace({ api, draft, locale, canRevert, directMode = false, initialCommit = "", onNavigate = () => undefined, onDraftCreated = async () => undefined, onChanged = async () => undefined, confirmAction = () => true }: {
-  readonly api: GitPmApi;
+  readonly api: GitPmApiPort<"commitDetail" | "commitFileDiff" | "createRevertDraft" | "fileHistory" | "history" | "restoreCommitFiles" | "revertDirect">;
   readonly draft: DraftStatus;
   readonly locale: Locale;
   readonly canRevert: boolean;

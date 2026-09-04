@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { GitPmApi } from "./api.js";
+import { gitPmApi } from "./test-gitpm-api.js";
 import { SafeMarkdown } from "./core-ui.js";
 import { HistoryWorkspace } from "./history-ui.js";
 import type { CommitHistoryDetail, CommitHistoryItem, DraftStatus } from "./types.js";
@@ -46,12 +46,12 @@ describe("P13A hostile browser content", () => {
     expect(markdown.container.querySelector("img,script,svg")).toBeNull();
     markdown.unmount();
 
-    const api = {
+    const api = gitPmApi({
       history: vi.fn(async () => [item]),
       commitDetail: vi.fn(async () => detail),
       commitFileDiff: vi.fn(async () => ({ diff: `+${payload}\n`, oversized: false })),
       fileHistory: vi.fn(async () => [item]),
-    } as unknown as GitPmApi;
+    });
     const history = render(<HistoryWorkspace api={api} draft={draft} locale="en" canRevert={false} onDraftCreated={vi.fn(async () => undefined)} />);
     await screen.findAllByText(payload);
     expect(history.container.textContent).toContain(payload);

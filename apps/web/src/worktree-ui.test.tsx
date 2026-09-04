@@ -1,9 +1,8 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { GitPmApi } from "./api.js";
 import type { DraftStatus, WorktreeDirectory, WorktreeEntry, WorktreeFile } from "./types.js";
-import { WorktreeWorkspace } from "./worktree-ui.js";
+import { WorktreeWorkspace, type WorktreeApi } from "./worktree-ui.js";
 
 const draft: DraftStatus = {
   draft_id: "DRF-TREE",
@@ -20,7 +19,7 @@ const draft: DraftStatus = {
 const file = (path: string, size = 4): WorktreeEntry => ({ name: path.split("/").at(-1)!, path, type: "file", size });
 const dir = (path: string): WorktreeEntry => ({ name: path.split("/").at(-1)!, path, type: "directory" });
 
-function apiFor(entries: readonly WorktreeEntry[], overrides: Partial<GitPmApi> = {}): GitPmApi {
+function apiFor(entries: readonly WorktreeEntry[], overrides: Partial<WorktreeApi> = {}): WorktreeApi {
   const listing: WorktreeDirectory = { path: "", entries };
   return {
     listWorktree: vi.fn(async (_draftId: string, _path?: string) => listing),
@@ -31,7 +30,7 @@ function apiFor(entries: readonly WorktreeEntry[], overrides: Partial<GitPmApi> 
     uploadWorktreeFile: vi.fn(async () => "c".repeat(64)),
     moveWorktreeEntry: vi.fn(async () => "c".repeat(64)),
     ...overrides,
-  } as unknown as GitPmApi;
+  };
 }
 
 const noChanged = vi.fn(async () => undefined);

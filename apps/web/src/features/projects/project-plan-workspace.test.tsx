@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError, type GitPmApi, type TimeEntryResult } from "../../api.js";
+import { gitPmApi } from "../../test-gitpm-api.js";
 import type { ProjectFileList } from "@gitpm/contracts";
 import type { AdvancedViewQuery } from "../../advanced-view-query.js";
 import type { CommentResult, ConfigurationDocument, ConfigurationResult, DraftStatus, EntityDocument, EntityResult } from "../../types.js";
@@ -59,7 +60,7 @@ function api(
   const replaceProjectFile = vi.fn();
   const renameProjectFile = vi.fn();
   const deleteProjectFile = vi.fn();
-  return {
+  return gitPmApi({
     projectWorkspace: vi.fn(async () => ({ project: currentProject, milestones: currentStages, tasks: currentTasks, draft_fingerprint: fingerprint })),
     getConfiguration: vi.fn(async (_draftId: string, kind: "statuses" | "issue-types" | "schedule-tracks") => configuration(kind === "statuses"
       ? { schema: "gitpm/statuses@2", statuses: [{ slug: "backlog", title: "Backlog", color: "gray", active: true, category: "backlog" }, { slug: "done", title: "Done", color: "green", active: true, category: "done" }] }
@@ -78,7 +79,7 @@ function api(
     archiveEntity,
     restoreEntity,
     deleteEntity,
-  } as unknown as GitPmApi & { createEntity: typeof createEntity; updateEntity: typeof updateEntity; archiveEntity: typeof archiveEntity; restoreEntity: typeof restoreEntity; deleteEntity: typeof deleteEntity; listProjectFiles: typeof listProjectFiles; projectFileReferences: typeof projectFileReferences; uploadProjectFile: typeof uploadProjectFile; replaceProjectFile: typeof replaceProjectFile; renameProjectFile: typeof renameProjectFile; deleteProjectFile: typeof deleteProjectFile };
+  });
 }
 
 afterEach(() => { cleanup(); localStorage.clear(); vi.useRealTimers(); });

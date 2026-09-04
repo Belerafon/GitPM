@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { GitPmApi } from "./api.js";
+import type { GitPmApiPort } from "./api.js";
 import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
 import { formatDateOnly, localeRegistry, message, type Locale, type MessageKey } from "./i18n.js";
 import { annualVacationAllowance, currentAbsence, vacationYearBalance } from "./people-availability-model.js";
@@ -71,7 +71,7 @@ function asEvent(entity: EntityResult): VacationEvent {
 }
 
 export function VacationCalendarWorkspace({ api, draft, locale, onNavigate = () => undefined, today = localCalendarDate() }: {
-  readonly api: GitPmApi;
+  readonly api: GitPmApiPort<"listEntities">;
   readonly draft: DraftStatus;
   readonly locale: Locale;
   readonly onNavigate?: WorkspaceNavigate;

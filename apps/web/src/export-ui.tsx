@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ExportFormat, ExportSection, GitPmApi } from "./api.js";
+import type { ExportFormat, ExportSection, GitPmApiPort } from "./api.js";
 import { formatApiError } from "./api.js";
 import { message, type Locale, type MessageKey } from "./i18n.js";
 
@@ -25,7 +25,7 @@ const REPORT_SECTIONS: readonly { readonly id: ExportSection; readonly label: Me
 ];
 
 export function ExportMenu({ api, draftId, locale, save = saveBlob }: {
-  readonly api: GitPmApi;
+  readonly api: GitPmApiPort<"exportData">;
   readonly draftId: string;
   readonly locale: Locale;
   readonly save?: (blob: Blob, filename: string) => void;

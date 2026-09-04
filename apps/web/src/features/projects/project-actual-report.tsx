@@ -10,7 +10,7 @@ import {
   type TimeEntryRecord,
 } from "@gitpm/time-entries";
 import { formatDateOnly, formatDurationHours, formatNumber, message, type Locale, type MessageKey } from "../../i18n.js";
-import { formatApiError, listAllProjectTimeEntries, type GitPmApi, type ProjectTimeEntryFilters } from "../../api.js";
+import { formatApiError, listAllProjectTimeEntries, type GitPmApiPort, type ProjectTimeEntryFilters } from "../../api.js";
 import type { DraftStatus, EntityResult } from "../../types.js";
 import { scheduleEffortReader, scheduleTextReader } from "../../schedules.js";
 import type { WorkspaceNavigate } from "../../workspace-navigation.js";
@@ -90,8 +90,10 @@ const actorName = (actor: unknown): string => {
   return typeof subject === "string" ? subject : "";
 };
 
+export type ProjectActualReportApi = GitPmApiPort<"listProjectTimeEntries">;
+
 export function ProjectActualReport({ api, categories = [], draft, locale, milestones = [], onNavigate, people = [], project, projectId, readModels, tasks = [], trackTitle, workloadTrack }: {
-  readonly api: GitPmApi;
+  readonly api: ProjectActualReportApi;
   readonly categories?: readonly ActualReportCategory[];
   readonly draft: DraftStatus;
   readonly locale: Locale;

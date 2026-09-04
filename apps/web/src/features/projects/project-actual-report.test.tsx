@@ -4,7 +4,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { resolveSchedulingHierarchy, type SchedulingHierarchyTask } from "@gitpm/scheduling";
 import { ProjectActualReport } from "./project-actual-report.js";
 import { ScheduleResolver, scheduleTracksConfig } from "../../schedules.js";
-import type { GitPmApi } from "../../api.js";
 import type { DraftStatus, EntityDocument, EntityResult } from "../../types.js";
 
 const configDocument = { schema: "gitpm/schedule-tracks@1", tracks: [{ slug: "plan", title: "Plan", kind: "manual", capabilities: ["dates", "effort", "dependencies"] }, { slug: "target", title: "Target", kind: "manual", capabilities: ["dates"] }, { slug: "actual", title: "Actual", kind: "actual", source: "time_entries" }], defaults: { enabled_tracks: ["plan", "target", "actual"], primary_track: "plan", workload_track: "plan", comparison_track: "target", dashboard_tracks: ["plan", "target", "actual"] } };
@@ -52,7 +51,7 @@ describe("ProjectActualReport", () => {
       const offset = filters?.offset ?? 0; const limit = filters?.limit ?? 200;
       return { total: items.length, offset, limit, items: items.slice(offset, offset + limit) };
     });
-    const api = { listProjectTimeEntries, listTimeEntries: vi.fn() } as unknown as GitPmApi;
+    const api = { listProjectTimeEntries, listTimeEntries: vi.fn() };
     const task = { document: { schema: "gitpm/task@2", id: "T-1", project: "P-26-1", title: "T", type: "task", status: "done", lifecycle: "active" }, path: "t.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
     const projectDoc = project({ plan: { finish: "2026-03-20" }, target: { finish: "2026-02-28" } }, { primary_track: "plan", comparison_track: "target" });
     const { readModels, workloadTrack } = buildReportProps(projectDoc, [], [task], scheduling);
@@ -87,7 +86,7 @@ describe("ProjectActualReport", () => {
         && (filters.performed_to === undefined || item.document.performed_on <= String(filters.performed_to)));
       return { total: filtered.length, offset: Number(filters.offset ?? 0), limit: Number(filters.limit ?? 200), items: filtered };
     });
-    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const api = { listProjectTimeEntries };
     const projectDoc = project({ plan: { start: "2026-09-01", finish: "2026-09-30" } }, { enabled_tracks: ["plan", "actual"], primary_track: "plan", workload_track: "plan", dashboard_tracks: ["plan", "actual"] });
     const { readModels, workloadTrack } = buildReportProps(projectDoc, [milestone], [taskOne, taskTwo], scheduling);
     render(<ProjectActualReport api={api} categories={[{ slug: "regular", title: "Regular work" }, { slug: "support", title: "Support" }]} draft={draft} locale="en" milestones={[milestone]} onNavigate={onNavigate} people={[person]} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[taskOne, taskTwo]} workloadTrack={workloadTrack} />);
@@ -120,7 +119,7 @@ describe("ProjectActualReport", () => {
       { document: { schema: "gitpm/time-entry@1" as const, id: "E-26-WL", project: "P-26-1", task: task.document.id, person: "U-1", performed_on: "2026-09-10", hours: 4, category: "regular", created_at: "2026-09-10T00:00:00.000Z", state: "active" as const }, path: "e", blob_id: "a", draft_fingerprint: "f" },
     ];
     const listProjectTimeEntries = vi.fn(async () => ({ total: items.length, offset: 0, limit: 200, items }));
-    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const api = { listProjectTimeEntries };
     const projectDoc = project({ working: { finish: "2026-09-30" } }, { primary_track: "working", workload_track: "estimate", comparison_track: "forecast" });
     const { readModels, workloadTrack } = buildReportProps(projectDoc, [], [task], multiTrackScheduling);
     render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[task]} workloadTrack={workloadTrack} />);
@@ -138,7 +137,7 @@ describe("ProjectActualReport", () => {
       const filtered = items.filter((item) => item.document.state === String(filters.state ?? item.document.state));
       return { total: filtered.length, offset: Number(filters.offset ?? 0), limit: Number(filters.limit ?? 200), items: filtered };
     });
-    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const api = { listProjectTimeEntries };
     const projectDoc = project({ plan: { finish: "2026-09-30" } }, { primary_track: "plan", workload_track: "plan", comparison_track: "target" });
     const { readModels, workloadTrack } = buildReportProps(projectDoc, [], [task], scheduling);
     render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[task]} workloadTrack={workloadTrack} />);
@@ -166,7 +165,7 @@ describe("ProjectActualReport", () => {
       const filtered = items.filter((item) => item.document.state === String(filters.state ?? item.document.state));
       return { total: filtered.length, offset: Number(filters.offset ?? 0), limit: Number(filters.limit ?? 200), items: filtered };
     });
-    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const api = { listProjectTimeEntries };
     const projectDoc = project({ plan: { finish: "2026-09-30" }, target: { finish: "2026-09-15" } }, { primary_track: "plan", comparison_track: "target" });
     const { readModels, workloadTrack } = buildReportProps(projectDoc, [], [task], scheduling);
     render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[task]} workloadTrack={workloadTrack} />);
@@ -208,7 +207,7 @@ describe("ProjectActualReport", () => {
       const filtered = items.filter((item) => item.document.state === String(filters.state ?? item.document.state));
       return { total: filtered.length, offset: Number(filters.offset ?? 0), limit: Number(filters.limit ?? 200), items: filtered };
     });
-    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const api = { listProjectTimeEntries };
     const projectDoc = project({ plan: { finish: "2026-09-30" } }, { primary_track: "plan", workload_track: "plan", comparison_track: "target" });
     const { readModels, workloadTrack } = buildReportProps(projectDoc, [], [task], scheduling);
     const { container } = render(<ProjectActualReport api={api} draft={draft} locale="ru" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[task]} workloadTrack={workloadTrack} />);
@@ -230,7 +229,7 @@ describe("ProjectActualReport", () => {
     const rootOne = { document: { schema: "gitpm/task@2", id: "T-26-R1", project: "P-26-1", title: "Root one", type: "task", status: "in-progress", lifecycle: "active", schedules: { estimate: { effort_hours: 400 } } }, path: "r1.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
     const rootTwo = { document: { schema: "gitpm/task@2", id: "T-26-R2", project: "P-26-1", title: "Root two", type: "task", status: "in-progress", lifecycle: "active", schedules: { estimate: { effort_hours: 308 } } }, path: "r2.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
     const listProjectTimeEntries = vi.fn(async () => ({ total: 0, offset: 0, limit: 200, items: [] }));
-    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const api = { listProjectTimeEntries };
     const projectDoc = project({ estimate: { effort_hours: 80 } }, { primary_track: "working", workload_track: "estimate", comparison_track: "forecast" });
     const { readModels, workloadTrack } = buildReportProps(projectDoc, [], [rootOne, rootTwo], multiTrackScheduling);
     render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[rootOne, rootTwo]} trackTitle={(slug) => multiTrackScheduling.trackTitle(slug)} workloadTrack={workloadTrack} />);
@@ -251,7 +250,7 @@ describe("ProjectActualReport", () => {
     const childOne = { document: { schema: "gitpm/task@2", id: "T-26-C1", project: "P-26-1", parent: "T-26-P", title: "Child one", type: "task", status: "in-progress", lifecycle: "active", schedules: { estimate: { effort_hours: 30 } } }, path: "c1.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
     const childTwo = { document: { schema: "gitpm/task@2", id: "T-26-C2", project: "P-26-1", parent: "T-26-P", title: "Child two", type: "task", status: "in-progress", lifecycle: "active", schedules: { estimate: { effort_hours: 50 } } }, path: "c2.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
     const listProjectTimeEntries = vi.fn(async () => ({ total: 0, offset: 0, limit: 200, items: [] }));
-    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const api = { listProjectTimeEntries };
     const projectDoc = project({}, { primary_track: "working", workload_track: "estimate", comparison_track: "forecast" });
     const { readModels, workloadTrack } = buildReportProps(projectDoc, [], [parentTask, childOne, childTwo], multiTrackScheduling);
     render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[parentTask, childOne, childTwo]} workloadTrack={workloadTrack} />);
@@ -279,7 +278,7 @@ describe("ProjectActualReport", () => {
     const childOne = { document: { schema: "gitpm/task@2", id: "T-26-C1", project: "P-26-1", parent: "T-26-P", title: "Child one", type: "task", status: "in-progress", lifecycle: "active", schedules: { estimate: { effort_hours: 30 } } }, path: "c1.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
     const childTwo = { document: { schema: "gitpm/task@2", id: "T-26-C2", project: "P-26-1", parent: "T-26-P", title: "Child two", type: "task", status: "in-progress", lifecycle: "active", schedules: { estimate: { effort_hours: 50 } } }, path: "c2.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
     const listProjectTimeEntries = vi.fn(async () => ({ total: 0, offset: 0, limit: 200, items: [] }));
-    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const api = { listProjectTimeEntries };
     const projectDoc = project({}, { primary_track: "working", workload_track: "estimate", comparison_track: "forecast" });
     const { readModels, workloadTrack } = buildReportProps(projectDoc, [], [parentTask, childOne, childTwo], multiTrackScheduling);
     render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[parentTask, childOne, childTwo]} workloadTrack={workloadTrack} />);
@@ -298,7 +297,7 @@ describe("ProjectActualReport", () => {
       { document: { schema: "gitpm/time-entry@1" as const, id: "E-2", project: "P-26-1", task: childTwo.document.id, person: "U-1", performed_on: "2026-09-03", hours: 30, category: "regular", created_at: "2026-09-03T00:00:00.000Z", state: "active" as const }, path: "2", blob_id: "a", draft_fingerprint: "f" },
     ];
     const listProjectTimeEntries = vi.fn(async () => ({ total: items.length, offset: 0, limit: 200, items }));
-    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const api = { listProjectTimeEntries };
     const projectDoc = project({}, { primary_track: "working", workload_track: "estimate", comparison_track: "forecast" });
     const { readModels, workloadTrack } = buildReportProps(projectDoc, [], [parentTask, childOne, childTwo], multiTrackScheduling);
     render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[parentTask, childOne, childTwo]} workloadTrack={workloadTrack} />);
@@ -313,7 +312,7 @@ describe("ProjectActualReport", () => {
   it("navigates to a task when a table row title is clicked", async () => {
     const task = { document: { schema: "gitpm/task@2", id: "T-26-NAV", project: "P-26-1", title: "Navigate me", type: "task", status: "in-progress", lifecycle: "active", schedules: { plan: { effort_hours: 5 } } }, path: "t.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
     const listProjectTimeEntries = vi.fn(async () => ({ total: 0, offset: 0, limit: 200, items: [] }));
-    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const api = { listProjectTimeEntries };
     const projectDoc = project({}, { primary_track: "plan", workload_track: "plan", comparison_track: "target" });
     const { readModels, workloadTrack } = buildReportProps(projectDoc, [], [task], scheduling);
     render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[task]} workloadTrack={workloadTrack} />);
@@ -330,7 +329,7 @@ describe("ProjectActualReport", () => {
     const parentTask = { document: { schema: "gitpm/task@2", id: "T-26-Z", project: "P-26-1", milestone: "M-26-ORDER", title: "Zebra", type: "task", status: "in-progress", lifecycle: "active", schedules: { estimate: { effort_hours: 5 } } }, path: "z.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
     const childTask = { document: { schema: "gitpm/task@2", id: "T-26-A", project: "P-26-1", milestone: "M-26-ORDER", parent: "T-26-Z", title: "Alpha", type: "task", status: "in-progress", lifecycle: "active", schedules: { estimate: { effort_hours: 3 } } }, path: "a.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
     const listProjectTimeEntries = vi.fn(async () => ({ total: 0, offset: 0, limit: 200, items: [] }));
-    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const api = { listProjectTimeEntries };
     const projectDoc = project({}, { primary_track: "working", workload_track: "estimate", comparison_track: "forecast" });
     const { readModels, workloadTrack } = buildReportProps(projectDoc, [stage], [parentTask, childTask], multiTrackScheduling);
     render(<ProjectActualReport api={api} draft={draft} locale="en" milestones={[stage]} onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[parentTask, childTask]} workloadTrack={workloadTrack} />);
@@ -348,7 +347,7 @@ describe("ProjectActualReport", () => {
     const milestone = { document: { schema: "gitpm/milestone@2", id: "M-26-KEEP", project: "P-26-1", name: "Keep", lifecycle: "active" }, path: "m.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
     const taskOne = { document: { schema: "gitpm/task@2", id: "T-26-KEEP", project: "P-26-1", milestone: milestone.document.id, title: "Keep task", type: "task", status: "done", lifecycle: "active", schedules: { plan: { effort_hours: 5 } } }, path: "t.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
     const listProjectTimeEntries = vi.fn(async () => ({ total: 0, offset: 0, limit: 200, items: [] }));
-    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const api = { listProjectTimeEntries };
     const projectDoc = project({}, { primary_track: "plan", workload_track: "plan", comparison_track: "target" });
     const { readModels, workloadTrack } = buildReportProps(projectDoc, [milestone], [taskOne], scheduling);
     render(<ProjectActualReport api={api} draft={draft} locale="en" milestones={[milestone]} onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[taskOne]} workloadTrack={workloadTrack} />);
@@ -366,7 +365,7 @@ describe("ProjectActualReport", () => {
     const taskInA = { document: { schema: "gitpm/task@2", id: "T-26-INA", project: "P-26-1", milestone: milestoneA.document.id, title: "In A", type: "task", status: "in-progress", lifecycle: "active", schedules: { plan: { effort_hours: 5 } } }, path: "ina.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
     const orphan = { document: { schema: "gitpm/task@2", id: "T-26-ORPHAN", project: "P-26-1", title: "Orphan", type: "task", status: "in-progress", lifecycle: "active", schedules: { plan: { effort_hours: 2 } } }, path: "orphan.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
     const listProjectTimeEntries = vi.fn(async () => ({ total: 0, offset: 0, limit: 200, items: [] }));
-    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const api = { listProjectTimeEntries };
     const projectDoc = project({}, { primary_track: "plan", workload_track: "plan", comparison_track: "target" });
     const { readModels, workloadTrack } = buildReportProps(projectDoc, [milestoneA], [taskInA, orphan], scheduling);
     render(<ProjectActualReport api={api} draft={draft} locale="en" milestones={[milestoneA]} onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[taskInA, orphan]} workloadTrack={workloadTrack} />);
@@ -391,7 +390,7 @@ describe("ProjectActualReport", () => {
     const taskInB = { document: { schema: "gitpm/task@2", id: "T-26-INB", project: "P-26-1", milestone: milestoneB.document.id, title: "In B", type: "task", status: "in-progress", lifecycle: "active", schedules: { plan: { effort_hours: 5 } } }, path: "inb.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
     const orphan = { document: { schema: "gitpm/task@2", id: "T-26-ORPHAN", project: "P-26-1", title: "Orphan", type: "task", status: "in-progress", lifecycle: "active", schedules: { plan: { effort_hours: 2 } } }, path: "orphan.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
     const listProjectTimeEntries = vi.fn(async () => ({ total: 0, offset: 0, limit: 200, items: [] }));
-    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const api = { listProjectTimeEntries };
     const projectDoc = project({}, { primary_track: "plan", workload_track: "plan", comparison_track: "target" });
     const { readModels, workloadTrack } = buildReportProps(projectDoc, [milestoneA, milestoneB], [taskInA, taskInB, orphan], scheduling);
     render(<ProjectActualReport api={api} draft={draft} locale="en" milestones={[milestoneA, milestoneB]} onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[taskInA, taskInB, orphan]} workloadTrack={workloadTrack} />);
@@ -435,7 +434,7 @@ describe("ProjectActualReport", () => {
       const filtered = all.filter((entry) => entry.document.state === String(filters.state ?? entry.document.state));
       return { total: filtered.length, offset: 0, limit: 200, items: filtered };
     });
-    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const api = { listProjectTimeEntries };
     const projectDoc = project({}, { primary_track: "plan", workload_track: "plan", comparison_track: "target" });
     const { readModels, workloadTrack } = buildReportProps(projectDoc, [], [taskOne], scheduling);
     render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[taskOne]} workloadTrack={workloadTrack} />);
@@ -453,7 +452,7 @@ describe("ProjectActualReport", () => {
     const archivedTask = { document: { schema: "gitpm/task@2", id: "T-ARCH", project: "P-26-1", title: "Legacy task", type: "task", status: "done", lifecycle: "archived" } } as EntityResult;
     const items = [{ document: { schema: "gitpm/time-entry@1" as const, id: "E-1", project: "P-26-1", task: "T-ARCH", person: "U-ARCH", performed_on: "2026-05-01", hours: 5, category: "regular", created_at: "2026-05-01T00:00:00.000Z", state: "active" as const }, path: "1", blob_id: "a", draft_fingerprint: "f" }];
     const listProjectTimeEntries = vi.fn(async () => ({ total: items.length, offset: 0, limit: 200, items }));
-    const api = { listProjectTimeEntries, listTimeEntries: vi.fn() } as unknown as GitPmApi;
+    const api = { listProjectTimeEntries, listTimeEntries: vi.fn() };
     const projectDoc = project({}, { primary_track: "working", workload_track: "estimate" });
     const { readModels, workloadTrack } = buildReportProps(projectDoc, [], [archivedTask], multiTrackScheduling);
     render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} people={[archivedPerson]} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[archivedTask]} workloadTrack={workloadTrack} />);
@@ -469,7 +468,7 @@ describe("ProjectActualReport", () => {
   it("hides archived tasks that have no historical time records so they cannot inflate the current estimate", async () => {
     const archivedTask = { document: { schema: "gitpm/task@2", id: "T-ARCH-EMPTY", project: "P-26-1", title: "Ghost legacy", type: "task", status: "done", lifecycle: "archived", schedules: { estimate: { effort_hours: 99 } } }, path: "g.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
     const listProjectTimeEntries = vi.fn(async () => ({ total: 0, offset: 0, limit: 200, items: [] }));
-    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const api = { listProjectTimeEntries };
     const projectDoc = project({}, { primary_track: "working", workload_track: "estimate" });
     const { readModels, workloadTrack } = buildReportProps(projectDoc, [], [archivedTask], multiTrackScheduling);
     render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[archivedTask]} workloadTrack={workloadTrack} />);
@@ -507,7 +506,7 @@ describe("ProjectActualReport", () => {
   it("scenario 1: an archived root task with an estimate but no time records never reaches the current plan, table, or selector", async () => {
     const archivedRoot = { document: { schema: "gitpm/task@2", id: "T-ARCH-ROOT", project: "P-26-1", title: "Archived root", type: "task", status: "done", lifecycle: "archived", schedules: { estimate: { effort_hours: 99 } } }, path: "g.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
     const listProjectTimeEntries = vi.fn(async () => ({ total: 0, offset: 0, limit: 200, items: [] }));
-    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const api = { listProjectTimeEntries };
     const projectDoc = project({ estimate: { effort_hours: 10 } }, { primary_track: "working", workload_track: "estimate" });
     const { readModels, workloadTrack } = buildActiveReportProps(projectDoc, [], [archivedRoot], multiTrackScheduling);
     render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[archivedRoot]} workloadTrack={workloadTrack} />);
@@ -529,7 +528,7 @@ describe("ProjectActualReport", () => {
     const activeChild = { document: { schema: "gitpm/task@2", id: "T-ACT-C", project: "P-26-1", parent: "T-ACT-P", title: "Active child", type: "task", status: "in-progress", lifecycle: "active", schedules: { estimate: { effort_hours: 20 } } }, path: "c.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
     const archivedChild = { document: { schema: "gitpm/task@2", id: "T-ARCH-C", project: "P-26-1", parent: "T-ACT-P", title: "Archived child", type: "task", status: "done", lifecycle: "archived", schedules: { estimate: { effort_hours: 80 } } }, path: "ac.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
     const listProjectTimeEntries = vi.fn(async () => ({ total: 0, offset: 0, limit: 200, items: [] }));
-    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const api = { listProjectTimeEntries };
     const projectDoc = project({}, { primary_track: "working", workload_track: "estimate" });
     const { readModels, workloadTrack } = buildActiveReportProps(projectDoc, [], [parentTask, activeChild, archivedChild], multiTrackScheduling);
     render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[parentTask, activeChild, archivedChild]} workloadTrack={workloadTrack} />);
@@ -549,7 +548,7 @@ describe("ProjectActualReport", () => {
     const archivedTask = { document: { schema: "gitpm/task@2", id: "T-ARCH-HIST", project: "P-26-1", title: "Legacy with hours", type: "task", status: "done", lifecycle: "archived", schedules: { estimate: { effort_hours: 50 } } }, path: "h.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
     const items = [{ document: { schema: "gitpm/time-entry@1" as const, id: "E-HIST", project: "P-26-1", task: archivedTask.document.id, person: "U-1", performed_on: "2026-05-01", hours: 5, category: "regular", created_at: "2026-05-01T00:00:00.000Z", state: "active" as const }, path: "e", blob_id: "a", draft_fingerprint: "f" }];
     const listProjectTimeEntries = vi.fn(async () => ({ total: items.length, offset: 0, limit: 200, items }));
-    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const api = { listProjectTimeEntries };
     const projectDoc = project({ estimate: { effort_hours: 10 } }, { primary_track: "working", workload_track: "estimate" });
     const { readModels, workloadTrack } = buildActiveReportProps(projectDoc, [], [activeRoot, archivedTask], multiTrackScheduling);
     render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[activeRoot, archivedTask]} workloadTrack={workloadTrack} />);
@@ -581,7 +580,7 @@ describe("ProjectActualReport", () => {
       const filtered = allItems.filter((item) => filters.person === undefined || item.document.person === filters.person);
       return { total: filtered.length, offset: Number(filters.offset ?? 0), limit: Number(filters.limit ?? 200), items: filtered };
     });
-    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const api = { listProjectTimeEntries };
     const projectDoc = project({}, { primary_track: "working", workload_track: "estimate" });
     const { readModels, workloadTrack } = buildActiveReportProps(projectDoc, [], [activeTask, archivedWithHistory, archivedWithoutHistory], multiTrackScheduling);
     render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[activeTask, archivedWithHistory, archivedWithoutHistory]} workloadTrack={workloadTrack} />);
@@ -610,7 +609,7 @@ describe("ProjectActualReport", () => {
     const archivedParent = { document: { schema: "gitpm/task@2", id: "T-ARCH-PAR", project: "P-26-1", title: "Archived parent", type: "task", status: "done", lifecycle: "archived", schedules: { estimate: { effort_hours: 50 } } }, path: "ap.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
     const activeChild = { document: { schema: "gitpm/task@2", id: "T-ACT-CHILD", project: "P-26-1", parent: archivedParent.document.id, title: "Active child", type: "task", status: "in-progress", lifecycle: "active", schedules: { estimate: { effort_hours: 20 } } }, path: "ac.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
     const listProjectTimeEntries = vi.fn(async () => ({ total: 0, offset: 0, limit: 200, items: [] }));
-    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const api = { listProjectTimeEntries };
     const projectDoc = project({}, { primary_track: "working", workload_track: "estimate" });
     const { readModels, workloadTrack } = buildActiveReportProps(projectDoc, [], [archivedParent, activeChild], multiTrackScheduling);
     render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[archivedParent, activeChild]} workloadTrack={workloadTrack} />);
@@ -638,7 +637,7 @@ describe("ProjectActualReport", () => {
     const activeChild = { document: { schema: "gitpm/task@2", id: "T-ACT-CHILD-H", project: "P-26-1", parent: archivedParent.document.id, title: "Active child H", type: "task", status: "in-progress", lifecycle: "active", schedules: { estimate: { effort_hours: 20 } } }, path: "ac.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
     const items = [{ document: { schema: "gitpm/time-entry@1" as const, id: "E-ARCH-PAR-H", project: "P-26-1", task: archivedParent.document.id, person: "U-1", performed_on: "2026-05-01", hours: 5, category: "regular", created_at: "2026-05-01T00:00:00.000Z", state: "active" as const }, path: "e", blob_id: "a", draft_fingerprint: "f" }];
     const listProjectTimeEntries = vi.fn(async () => ({ total: items.length, offset: 0, limit: 200, items }));
-    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const api = { listProjectTimeEntries };
     const projectDoc = project({}, { primary_track: "working", workload_track: "estimate" });
     const { readModels, workloadTrack } = buildActiveReportProps(projectDoc, [], [archivedParent, activeChild], multiTrackScheduling);
     render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[archivedParent, activeChild]} workloadTrack={workloadTrack} />);
@@ -663,7 +662,7 @@ describe("ProjectActualReport", () => {
   it("missing parent: task with an unknown parent id is rendered as root, in the selector, and in the plan", async () => {
     const orphan = { document: { schema: "gitpm/task@2", id: "T-ORPHAN", project: "P-26-1", parent: "T-GONE", title: "Orphan task", type: "task", status: "in-progress", lifecycle: "active", schedules: { estimate: { effort_hours: 12 } } }, path: "o.yaml", blob_id: "a", draft_fingerprint: "f" } as EntityResult;
     const listProjectTimeEntries = vi.fn(async () => ({ total: 0, offset: 0, limit: 200, items: [] }));
-    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const api = { listProjectTimeEntries };
     const projectDoc = project({}, { primary_track: "working", workload_track: "estimate" });
     const { readModels, workloadTrack } = buildActiveReportProps(projectDoc, [], [orphan], multiTrackScheduling);
     render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[orphan]} workloadTrack={workloadTrack} />);
@@ -702,7 +701,7 @@ describe("ProjectActualReport", () => {
       // Request B initial (mount, no person) — returns immediately.
       return { total: allItems.length, offset: 0, limit: 200, items: allItems };
     });
-    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const api = { listProjectTimeEntries };
     const projectDoc = project({}, { primary_track: "working", workload_track: "estimate" });
     const { readModels, workloadTrack } = buildActiveReportProps(projectDoc, [], [activeTask, archivedTask], multiTrackScheduling);
     render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} people={[personAEntity, personBEntity]} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[activeTask, archivedTask]} workloadTrack={workloadTrack} />);
@@ -743,7 +742,7 @@ describe("ProjectActualReport", () => {
       const items = draftId === "DRF" ? [draft1Entry] : [];
       return { total: items.length, offset: 0, limit: 200, items };
     });
-    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const api = { listProjectTimeEntries };
     const projectDoc = project({}, { primary_track: "working", workload_track: "estimate" });
     const { readModels, workloadTrack } = buildActiveReportProps(projectDoc, [], [activeTask, archivedTask], multiTrackScheduling);
     const draftTwo: DraftStatus = { ...draft, draft_id: "DRF-2" };
@@ -780,7 +779,7 @@ describe("ProjectActualReport", () => {
       const items = projectId === "P-26-1" ? [project1Entry] : [];
       return { total: items.length, offset: 0, limit: 200, items };
     });
-    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const api = { listProjectTimeEntries };
     const projectDoc = project({}, { primary_track: "working", workload_track: "estimate" });
     const projectTwoDoc = { ...projectDoc, id: "P-26-2" } as EntityDocument;
     const { readModels, workloadTrack } = buildActiveReportProps(projectDoc, [], [activeTask, archivedTask], multiTrackScheduling);
@@ -817,7 +816,7 @@ describe("ProjectActualReport", () => {
       const filtered = allItems.filter((item) => filters.person === undefined || item.document.person === filters.person);
       return { total: filtered.length, offset: 0, limit: 200, items: filtered };
     });
-    const api = { listProjectTimeEntries } as unknown as GitPmApi;
+    const api = { listProjectTimeEntries };
     const projectDoc = project({}, { primary_track: "working", workload_track: "estimate" });
     const { readModels, workloadTrack } = buildActiveReportProps(projectDoc, [], [activeTask, archivedTask], multiTrackScheduling);
     render(<ProjectActualReport api={api} draft={draft} locale="en" onNavigate={onNavigate} project={projectEntity(projectDoc)} projectId={String(projectDoc.id)} readModels={readModels} tasks={[activeTask, archivedTask]} workloadTrack={workloadTrack} />);

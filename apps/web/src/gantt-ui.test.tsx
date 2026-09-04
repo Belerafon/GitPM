@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { GitPmApi } from "./api.js";
+import { gitPmApi } from "./test-gitpm-api.js";
 import { projectTimelineProjection, dependencyPath, ganttTaskDateDiagnostics, GanttWorkspace } from "./gantt-ui.js";
-import type { DraftStatus, EntityDocument, EntityResult } from "./types.js";
+import type { ConfigurationResult, DraftStatus, EntityDocument, EntityResult } from "./types.js";
 import type { TrackDefinition } from "@gitpm/scheduling";
 
 const projectId = "P-26-111111";
@@ -105,10 +105,10 @@ describe("read-only Gantt", () => {
     const entities = [result({ schema: "gitpm/project@2", id: projectId, name: "Beta portfolio", status: "backlog", lifecycle: "active" }), parent, child, grandchild, dependent, review, launch, undated, archived, milestone];
     const listProjectTimeEntries = vi.fn(async () => ({ total: 0, offset: 0, limit: 100, items: [] }));
     const listTimeEntries = vi.fn(async () => []);
-    const api = { listEntities: vi.fn(async (_draftId: string, type: string, project?: string) => entities.filter((item) => {
+    const api = gitPmApi({ listEntities: vi.fn(async (_draftId: string, type: string, project?: string) => entities.filter((item) => {
       const schemas: Record<string, string> = { projects: "gitpm/project@2", tasks: "gitpm/task@2", milestones: "gitpm/milestone@2" };
       return item.document.schema === schemas[type] && (project === undefined || item.document.project === project);
-    })), getConfiguration: vi.fn(async (_draftId: string, kind: string) => ({ document: kind === "schedule-tracks" ? { schema: "gitpm/schedule-tracks@1", tracks: [{ slug: "plan", title: "Plan", kind: "manual", capabilities: ["dates", "effort", "dependencies"] }], defaults: { enabled_tracks: ["plan"], primary_track: "plan", workload_track: "plan", dashboard_tracks: ["plan"] } } : { schema: "gitpm/statuses@2", statuses: [] }, path: kind, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) })), listProjectTimeEntries, listTimeEntries, updateEntity, createEntity, deleteEntity } as unknown as GitPmApi;
+    })), getConfiguration: vi.fn(async (_draftId: string, kind: string): Promise<ConfigurationResult> => ({ document: kind === "schedule-tracks" ? { schema: "gitpm/schedule-tracks@1", tracks: [{ slug: "plan", title: "Plan", kind: "manual", capabilities: ["dates", "effort", "dependencies"] }], defaults: { enabled_tracks: ["plan"], primary_track: "plan", workload_track: "plan", dashboard_tracks: ["plan"] } } : { schema: "gitpm/statuses@2", statuses: [] }, path: kind, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) })), listProjectTimeEntries, listTimeEntries, updateEntity, createEntity, deleteEntity });
     const { container } = render(<GanttWorkspace api={api} draft={draft} locale="en" onNavigate={onNavigate} />);
     await waitFor(() => expect(container.querySelectorAll(".gantt-bar")).toHaveLength(6));
     expect(screen.queryByText("Undated")).toBeNull(); expect(screen.queryByText("Archived")).toBeNull();
@@ -140,13 +140,13 @@ describe("read-only Gantt", () => {
     const project = result({ schema: "gitpm/project@2", id: projectId, name: "Broken-looking Gantt", status: "backlog", lifecycle: "active" });
     const entities = [project, missing, incomplete, milestoneOnly];
     const onNavigate = vi.fn();
-    const api = {
+    const api = gitPmApi({
       listEntities: vi.fn(async (_draftId: string, type: string, projectFilter?: string) => entities.filter((item) => {
         const schemas: Record<string, string> = { projects: "gitpm/project@2", tasks: "gitpm/task@2", milestones: "gitpm/milestone@2" };
         return item.document.schema === schemas[type] && (projectFilter === undefined || item.document.project === projectFilter);
       })),
-      getConfiguration: vi.fn(async () => ({ document: { schema: "gitpm/schedule-tracks@1", tracks: [planTrack], defaults: { enabled_tracks: ["plan"], primary_track: "plan", workload_track: "plan", dashboard_tracks: ["plan"] } }, path: "schedule-tracks", blob_id: "a", draft_fingerprint: "b" })),
-    } as unknown as GitPmApi;
+      getConfiguration: vi.fn(async (): Promise<ConfigurationResult> => ({ document: { schema: "gitpm/schedule-tracks@1", tracks: [planTrack], defaults: { enabled_tracks: ["plan"], primary_track: "plan", workload_track: "plan", dashboard_tracks: ["plan"] } }, path: "schedule-tracks", blob_id: "a", draft_fingerprint: "b" })),
+    });
 
     const { container } = render(<GanttWorkspace api={api} draft={draft} locale="en" onNavigate={onNavigate} />);
     await waitFor(() => expect(container.querySelector(".gantt-scroll")?.getAttribute("data-due")).toBe("2026-05-17"));
@@ -171,7 +171,7 @@ describe("read-only Gantt", () => {
       const offset = filters?.offset ?? 0; const limit = filters?.limit ?? 200;
       return { items: entries.slice(offset, offset + limit), total: entries.length, offset, limit };
     });
-    const tracks = [
+    const tracks: TrackDefinition[] = [
       { slug: "plan", title: "Plan", kind: "manual", capabilities: ["dates", "effort"] },
       { slug: "target", title: "Target", kind: "manual", capabilities: ["dates"] },
       { slug: "links", title: "Links", kind: "manual", capabilities: ["dependencies"] },
@@ -179,11 +179,11 @@ describe("read-only Gantt", () => {
       { slug: "actual", title: "Actual", kind: "actual", source: "time_entries" },
     ];
     const onNavigate = vi.fn();
-    const api = {
+    const api = gitPmApi({
       listEntities: vi.fn(async (_draftId: string, type: string) => type === "projects" ? [project] : type === "tasks" ? [scheduled] : []),
-      getConfiguration: vi.fn(async () => ({ document: { schema: "gitpm/schedule-tracks@1", tracks, defaults: { enabled_tracks: ["plan"], primary_track: "plan", workload_track: "plan", dashboard_tracks: ["plan"] } }, path: "schedule-tracks", blob_id: "a", draft_fingerprint: "b" })),
+      getConfiguration: vi.fn(async (): Promise<ConfigurationResult> => ({ document: { schema: "gitpm/schedule-tracks@1", tracks, defaults: { enabled_tracks: ["plan"], primary_track: "plan", workload_track: "plan", dashboard_tracks: ["plan"] } }, path: "schedule-tracks", blob_id: "a", draft_fingerprint: "b" })),
       listProjectTimeEntries,
-    } as unknown as GitPmApi;
+    });
 
     const { container } = render(<GanttWorkspace api={api} draft={draft} locale="en" onNavigate={onNavigate} />);
     await waitFor(() => expect(container.querySelector(".gantt-scroll")?.getAttribute("data-due")).toBe("2026-12-31"));
@@ -202,11 +202,11 @@ describe("read-only Gantt", () => {
     const scheduled = task("H", "No actual", "2026-07-01", "2026-07-10");
     const project = result({ schema: "gitpm/project@2", id: projectId, name: "No actual", status: "backlog", lifecycle: "active", planning: { enabled_tracks: ["plan", "observed"], primary_track: "plan", workload_track: "plan", dashboard_tracks: ["plan", "observed"] } });
     const listProjectTimeEntries = vi.fn();
-    const api = {
+    const api = gitPmApi({
       listEntities: vi.fn(async (_draftId: string, type: string) => type === "projects" ? [project] : type === "tasks" ? [scheduled] : []),
-      getConfiguration: vi.fn(async () => ({ document: { schema: "gitpm/schedule-tracks@1", tracks: [{ slug: "plan", title: "Plan", kind: "manual", capabilities: ["dates", "effort"] }, { slug: "observed", title: "Observed", kind: "actual", source: "external" }], defaults: { enabled_tracks: ["plan"], primary_track: "plan", workload_track: "plan", dashboard_tracks: ["plan"] } }, path: "schedule-tracks", blob_id: "a", draft_fingerprint: "b" })),
+      getConfiguration: vi.fn(async (): Promise<ConfigurationResult> => ({ document: { schema: "gitpm/schedule-tracks@1", tracks: [{ slug: "plan", title: "Plan", kind: "manual", capabilities: ["dates", "effort"] }, { slug: "observed", title: "Observed", kind: "manual", capabilities: ["dates"] }], defaults: { enabled_tracks: ["plan"], primary_track: "plan", workload_track: "plan", dashboard_tracks: ["plan"] } }, path: "schedule-tracks", blob_id: "a", draft_fingerprint: "b" })),
       listProjectTimeEntries,
-    } as unknown as GitPmApi;
+    });
 
     const { container } = render(<GanttWorkspace api={api} draft={draft} locale="en" />);
     await waitFor(() => expect(container.querySelectorAll(".gantt-bar")).toHaveLength(1));
@@ -219,10 +219,10 @@ describe("read-only Gantt", () => {
     const scheduled = task("R", "Расписание", "2026-07-01", "2026-07-10");
     const project = result({ schema: "gitpm/project@2", id: projectId, name: "Планы", status: "backlog", lifecycle: "active", planning: { enabled_tracks: ["plan", "commitment"], primary_track: "plan", workload_track: "plan", dashboard_tracks: ["plan", "commitment"] } });
     const onNavigate = vi.fn();
-    const api = {
+    const api = gitPmApi({
       listEntities: vi.fn(async (_draftId: string, type: string) => type === "projects" ? [project] : type === "tasks" ? [scheduled] : []),
-      getConfiguration: vi.fn(async () => ({ document: { schema: "gitpm/schedule-tracks@1", tracks: [{ slug: "plan", title: "Working plan", kind: "manual", capabilities: ["dates", "effort"] }, { slug: "commitment", title: "Commitment", kind: "manual", capabilities: ["dates"] }], defaults: { enabled_tracks: ["plan", "commitment"], primary_track: "plan", workload_track: "plan", dashboard_tracks: ["plan", "commitment"] } }, path: "schedule-tracks", blob_id: "a", draft_fingerprint: "b" })),
-    } as unknown as GitPmApi;
+      getConfiguration: vi.fn(async (): Promise<ConfigurationResult> => ({ document: { schema: "gitpm/schedule-tracks@1", tracks: [{ slug: "plan", title: "Working plan", kind: "manual", capabilities: ["dates", "effort"] }, { slug: "commitment", title: "Commitment", kind: "manual", capabilities: ["dates"] }], defaults: { enabled_tracks: ["plan", "commitment"], primary_track: "plan", workload_track: "plan", dashboard_tracks: ["plan", "commitment"] } }, path: "schedule-tracks", blob_id: "a", draft_fingerprint: "b" })),
+    });
     render(<GanttWorkspace api={api} draft={draft} locale="ru" onNavigate={onNavigate} />);
     await waitFor(() => expect(screen.getByRole("combobox", { name: "Основной вариант расписания" })).toBeTruthy());
     expect(screen.getByText("Working plan", { selector: "option" })).toBeTruthy();

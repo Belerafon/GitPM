@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, type GitPmApi } from "./api.js";
+import { ApiError } from "./api.js";
+import { gitPmApi } from "./test-gitpm-api.js";
 import { AdminWorkspace } from "./admin-ui.js";
 import type { ConfigurationDocument, ConfigurationImpact, ConfigurationResult, DraftStatus, EntityDocument, EntityResult, RepositoryDocument, RepositoryResult } from "./types.js";
 
@@ -41,7 +42,7 @@ describe("administration UI", () => {
   it("configures employee name defaults and previews a per-person override", async () => {
     const admin = new AdminApi();
     await admin.createEntity("DRF-ADMIN", "calendars", "", { schema: "gitpm/calendar@1", id: "C-26-QD7FJ4", name: "Default", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
-    render(<AdminWorkspace api={admin as unknown as GitPmApi} draft={draft} role="Maintainer" locale="en" surface="people" onChanged={vi.fn(async () => undefined)} />);
+    render(<AdminWorkspace api={gitPmApi(admin)} draft={draft} role="Maintainer" locale="en" surface="people" onChanged={vi.fn(async () => undefined)} />);
 
     const formatCard = (await screen.findByRole("heading", { name: "Default employee name format" })).closest<HTMLElement>(".config-editor")!;
     fireEvent.change(within(formatCard).getByLabelText("Display format"), { target: { value: "family-initials" } });
@@ -64,7 +65,7 @@ describe("administration UI", () => {
   });
 
   it("lets Maintainer create Calendar, Person and Team and edit statuses", async () => {
-    const admin = new AdminApi(); const api = admin as unknown as GitPmApi; const changed = vi.fn(async () => undefined);
+    const admin = new AdminApi(); const api = gitPmApi(admin); const changed = vi.fn(async () => undefined);
     const rendered = render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="calendar" onChanged={changed} />);
     fireEvent.click(await screen.findByRole("button", { name: /Create calendar/u }));
     const calendarForm = within(screen.getByRole("dialog", { name: "Create calendar" })).getByRole("button", { name: "Create calendar" }).closest("form")!;
@@ -168,7 +169,7 @@ describe("administration UI", () => {
   });
 
   it("preserves current archived members when a team is edited", async () => {
-    const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
+    const admin = new AdminApi(); const api = gitPmApi(admin);
     const activePersonId = "U-26-ACTIVE"; const archivedMemberId = "U-26-FORMER"; const otherArchivedId = "U-26-OTHER"; const teamId = "G-26-CORE";
     admin.entities = [
       { document: { schema: "gitpm/person@1", id: activePersonId, name: "Alice", weekly_capacity_hours: 40, calendar: "C-26-DEFAULT", lifecycle: "active" }, path: `${activePersonId}.yaml`, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) },
@@ -192,7 +193,7 @@ describe("administration UI", () => {
   });
 
   it("loads, displays and updates the schedule tracks configuration", async () => {
-    const admin = new AdminApi(); const api = admin as unknown as GitPmApi; const changed = vi.fn(async () => undefined);
+    const admin = new AdminApi(); const api = gitPmApi(admin); const changed = vi.fn(async () => undefined);
     render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="settings" initialSection="planning" onChanged={changed} />);
 
     expect(await screen.findByRole("region", { name: "Planning" })).toBeTruthy();
@@ -233,7 +234,7 @@ describe("administration UI", () => {
   });
 
   it("explains schedule tracks and their roles in the Russian editor", async () => {
-    const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
+    const admin = new AdminApi(); const api = gitPmApi(admin);
     render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="ru" surface="settings" initialSection="planning" onChanged={vi.fn(async () => undefined)} />);
 
     const tracksCard = (await screen.findByRole("heading", { name: "Планы и фактическая работа" })).closest<HTMLElement>(".config-editor")!;
@@ -252,7 +253,7 @@ describe("administration UI", () => {
   });
 
   it("shows only planning when opened from a Gantt settings link", async () => {
-    const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
+    const admin = new AdminApi(); const api = gitPmApi(admin);
     render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="settings" initialSection="planning" onChanged={vi.fn(async () => undefined)} />);
     expect(await screen.findByRole("heading", { name: "Plans and actual work" })).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "Statuses" })).toBeNull();
@@ -260,7 +261,7 @@ describe("administration UI", () => {
   });
 
   it("explains effort categories on the time-tracking administration tab", async () => {
-    const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
+    const admin = new AdminApi(); const api = gitPmApi(admin);
     render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="settings" initialSection="time" onChanged={vi.fn(async () => undefined)} />);
     const categoriesCard = (await screen.findByRole("heading", { name: "Effort categories" })).closest<HTMLElement>(".config-editor")!;
     expect(screen.getByText(/categories available when people record time/u)).toBeTruthy();
@@ -269,7 +270,7 @@ describe("administration UI", () => {
   });
 
   it("changes the calendar for new people without exposing the repository polling interval", async () => {
-    const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
+    const admin = new AdminApi(); const api = gitPmApi(admin);
     const onOpenCalendar = vi.fn();
     await admin.createEntity("DRF-ADMIN", "calendars", "", { schema: "gitpm/calendar@1", id: "C-26-111111", name: "Old default", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
     await admin.createEntity("DRF-ADMIN", "calendars", "", { schema: "gitpm/calendar@1", id: "C-26-222222", name: "New default", working_weekdays: [1, 2, 3, 4, 5, 6, 7], holidays: ["2026-08-17"], lifecycle: "active" });
@@ -300,7 +301,7 @@ describe("administration UI", () => {
   });
 
   it("opens the editor for a calendar selected by a deep link", async () => {
-    const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
+    const admin = new AdminApi(); const api = gitPmApi(admin);
     await admin.createEntity("DRF-ADMIN", "calendars", "", { schema: "gitpm/calendar@1", id: "C-26-111111", name: "Deep linked", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
     render(<AdminWorkspace api={api} draft={draft} initialCalendarId="C-26-111111" role="Maintainer" locale="en" surface="calendar" onChanged={vi.fn(async () => undefined)} />);
 
@@ -308,7 +309,7 @@ describe("administration UI", () => {
   });
 
   it("shows concrete reference blockers instead of submitting an unsafe configuration update", async () => {
-    const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
+    const admin = new AdminApi(); const api = gitPmApi(admin);
     admin.configurationImpact = { blocking: true, issues: [{ code: "CONFIG_REFERENCE", path: "projects/P-26-111111/views/V-26-333333.yaml", field: "filters.statuses", message: "Status backlog is still in use" }] };
     const onOpenView = vi.fn();
     render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="settings" onOpenView={onOpenView} onChanged={vi.fn(async () => undefined)} />);
@@ -324,7 +325,7 @@ describe("administration UI", () => {
   });
 
   it("creates the official Russian 2026 preset with understandable defaults", async () => {
-    const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
+    const admin = new AdminApi(); const api = gitPmApi(admin);
     render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="ru" surface="calendar" onChanged={vi.fn(async () => undefined)} />);
 
     fireEvent.click(await screen.findByRole("button", { name: /Создать календарь/u }));
@@ -350,7 +351,7 @@ describe("administration UI", () => {
   });
 
   it("offers the published United States federal calendar through 2030", async () => {
-    const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
+    const admin = new AdminApi(); const api = gitPmApi(admin);
     render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="calendar" onChanged={vi.fn(async () => undefined)} />);
 
     fireEvent.click(await screen.findByRole("button", { name: /Create calendar/u }));
@@ -370,7 +371,7 @@ describe("administration UI", () => {
   });
 
   it("edits additional days off directly in the familiar year calendar", async () => {
-    const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
+    const admin = new AdminApi(); const api = gitPmApi(admin);
     await admin.createEntity("DRF-ADMIN", "calendars", "", { schema: "gitpm/calendar@1", id: "C-26-111111", name: "Standard", working_weekdays: [1, 2, 3, 4, 5], holidays: ["2026-01-01"], lifecycle: "active" });
     render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="calendar" onChanged={vi.fn(async () => undefined)} />);
 
@@ -393,7 +394,7 @@ describe("administration UI", () => {
 
   it("shows leftover additional dates on calendar cards instead of silently dropping them", async () => {
     const holidays = ["2026-01-01", "2026-01-02", "2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08", "2026-01-09", "2026-02-23", "2026-03-09", "2026-05-01", "2026-05-11", "2026-06-12", "2026-11-04", "2026-12-31"];
-    const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
+    const admin = new AdminApi(); const api = gitPmApi(admin);
     await admin.createEntity("DRF-ADMIN", "calendars", "", { schema: "gitpm/calendar@1", id: "C-26-111111", name: "Russia 2026", working_weekdays: [1, 2, 3, 4, 5], holidays, lifecycle: "active" });
     render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="calendar" onChanged={vi.fn(async () => undefined)} />);
 
@@ -408,7 +409,7 @@ describe("administration UI", () => {
   });
 
   it("applies a preset inside the existing-calendar editor before saving", async () => {
-    const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
+    const admin = new AdminApi(); const api = gitPmApi(admin);
     await admin.createEntity("DRF-ADMIN", "calendars", "", { schema: "gitpm/calendar@1", id: "C-26-111111", name: "Always on", working_weekdays: [1, 2, 3, 4, 5, 6, 7], holidays: ["2026-08-17"], lifecycle: "active" });
     render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="calendar" onChanged={vi.fn(async () => undefined)} />);
 
@@ -423,7 +424,7 @@ describe("administration UI", () => {
   });
 
   it("renders Developer administration as read-only", async () => {
-    const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
+    const admin = new AdminApi(); const api = gitPmApi(admin);
     render(<AdminWorkspace api={api} draft={draft} role="Developer" locale="en" surface="calendar" onChanged={vi.fn(async () => undefined)} />);
     expect(await screen.findByText("Administrative changes require Maintainer.")).toBeTruthy();
     expect((screen.getByRole("button", { name: /Create calendar/u }) as HTMLButtonElement).disabled).toBe(true);
@@ -431,7 +432,7 @@ describe("administration UI", () => {
   });
 
   it("blocks default-calendar archival and deletion until another default is selected", async () => {
-    const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
+    const admin = new AdminApi(); const api = gitPmApi(admin);
     await admin.createEntity("DRF-ADMIN", "calendars", "", { schema: "gitpm/calendar@1", id: "C-26-111111", name: "Default", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
     await admin.createEntity("DRF-ADMIN", "calendars", "", { schema: "gitpm/calendar@1", id: "C-26-222222", name: "Replacement", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
     const confirmAction = vi.fn(() => true);
@@ -470,7 +471,7 @@ describe("administration UI", () => {
     const personId = "U-26-ADA";
     const ownedProjectId = "P-26-ALPHA";
     const taskProjectId = "P-26-BETA";
-    const admin = new AdminApi(); const api = admin as unknown as GitPmApi;
+    const admin = new AdminApi(); const api = gitPmApi(admin);
     await admin.createEntity("DRF-ADMIN", "calendars", "", { schema: "gitpm/calendar@1", id: "CAL-26-DEFAULT", name: "Default", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
     await admin.createEntity("DRF-ADMIN", "people", "", { schema: "gitpm/person@1", id: personId, name: "Ada", weekly_capacity_hours: 32, calendar: "CAL-26-DEFAULT", lifecycle: "active" });
     await admin.createEntity("DRF-ADMIN", "projects", "", { schema: "gitpm/project@2", id: ownedProjectId, name: "Alpha", owner: personId, status: "in-progress", lifecycle: "active" });

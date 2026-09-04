@@ -265,6 +265,9 @@ export interface GitPmApi {
   replaceTimeEntry(draftId: string, projectId: string, taskId: string, entry: TimeEntryResult, fingerprint: string, input: { readonly person: string; readonly performed_on: string; readonly hours: number; readonly category: string; readonly note_markdown?: string }): Promise<TimeEntryReplacementResult>;
 }
 
+/** A consumer-owned view of the API, limited to the capabilities it actually uses. */
+export type GitPmApiPort<Methods extends keyof GitPmApi> = Pick<GitPmApi, Methods>;
+
 export interface ProjectFileUploadOptions {
   readonly largeFileConfirmation?: string;
   readonly signal?: AbortSignal;

@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
-import type { GitPmApi } from "./api.js";
+import type { GitPmApiPort } from "./api.js";
 import type { MessageKey } from "./i18n.js";
 import type { GlobalSearchItem, GlobalSearchResult } from "./types.js";
 import type { WorkspaceNavigate } from "./workspace-navigation.js";
@@ -14,7 +14,7 @@ const TYPE_LABELS: Readonly<Record<GlobalSearchItem["entity_type"], MessageKey>>
 };
 
 export function GlobalSearch({ api, draftId, onNavigate, t }: {
-  readonly api: GitPmApi;
+  readonly api: GitPmApiPort<"searchEntities">;
   readonly draftId?: string;
   readonly onNavigate: WorkspaceNavigate;
   readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string;

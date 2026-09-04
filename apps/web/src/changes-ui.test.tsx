@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { GitPmApi } from "./api.js";
+import { gitPmApi } from "./test-gitpm-api.js";
 import { ChangesWorkspace, safeExternalUrl } from "./changes-ui.js";
 import type { ChangesList, DraftStatus, EntityResult, SemanticDiff } from "./types.js";
 
@@ -55,7 +55,7 @@ describe("Changes workspace", () => {
 
   it("leads with named entities, hides empty groups and keeps the exact Git diff collapsed", async () => {
     const fixture = new ChangesApi();
-    render(<ChangesWorkspace api={fixture as unknown as GitPmApi} draft={draft} role="Developer" locale="en" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} />);
+    render(<ChangesWorkspace api={gitPmApi(fixture)} draft={draft} role="Developer" locale="en" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} />);
     expect(await screen.findByRole("heading", { name: "What changed" })).toBeTruthy();
     expect(screen.getAllByText("Alpha project").length).toBeGreaterThan(0);
     expect(screen.getByText("T-26-111111")).toBeTruthy();
@@ -78,7 +78,7 @@ describe("Changes workspace", () => {
 
   it("localizes entity types on file cards", async () => {
     const fixture = new ChangesApi();
-    render(<ChangesWorkspace api={fixture as unknown as GitPmApi} draft={draft} role="Developer" locale="ru" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} />);
+    render(<ChangesWorkspace api={gitPmApi(fixture)} draft={draft} role="Developer" locale="ru" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} />);
     expect(await screen.findByText("Что изменилось")).toBeTruthy();
     expect(screen.getAllByText("Проект").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Alpha project").length).toBeGreaterThan(0);
@@ -99,7 +99,7 @@ describe("Changes workspace", () => {
       file_entities: [{ path: ".gitpm/schedule-tracks.yaml", schema: "gitpm/schedule-tracks@1" }],
     };
 
-    render(<ChangesWorkspace api={fixture as unknown as GitPmApi} draft={draft} role="Maintainer" locale="ru" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} />);
+    render(<ChangesWorkspace api={gitPmApi(fixture)} draft={draft} role="Maintainer" locale="ru" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} />);
     const scheduleVariants = await screen.findAllByText("Варианты расписания");
     expect(scheduleVariants.length).toBeGreaterThan(0);
     fireEvent.click(scheduleVariants[0]!);
@@ -126,7 +126,7 @@ describe("Changes workspace", () => {
       ],
     };
     const onNavigate = vi.fn();
-    render(<ChangesWorkspace api={fixture as unknown as GitPmApi} draft={draft} role="Reporter" locale="ru" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} onNavigate={onNavigate} />);
+    render(<ChangesWorkspace api={gitPmApi(fixture)} draft={draft} role="Reporter" locale="ru" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} onNavigate={onNavigate} />);
 
     expect(await screen.findByRole("heading", { name: "Файлы проектов" })).toBeTruthy();
     expect(screen.getByText("ТЗ_v1.docx → ТЗ_v2.docx")).toBeTruthy();
@@ -151,7 +151,7 @@ describe("Changes workspace", () => {
     fixture.changes = { changed_files_count: 1, affected_projects: [], project_files: [], files: [
       { path: "projects/P-26-111111/project.yaml", kind: "Modified", diff_token: "big", diff: "diff --git\n", hunks: [], oversized: true },
     ] };
-    render(<ChangesWorkspace api={fixture as unknown as GitPmApi} draft={draft} role="Developer" locale="en" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} />);
+    render(<ChangesWorkspace api={gitPmApi(fixture)} draft={draft} role="Developer" locale="en" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} />);
     await screen.findByText("Technical file changes");
     fireEvent.click(screen.getByText("Technical file changes"));
     expect(screen.getByText(/This change is too large to display/u)).toBeTruthy();
@@ -160,7 +160,7 @@ describe("Changes workspace", () => {
 
   it("commits every file without staging selection, then pushes and creates a merge request", async () => {
     const fixture = new ChangesApi();
-    render(<ChangesWorkspace api={fixture as unknown as GitPmApi} draft={draft} role="Developer" locale="en" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} />);
+    render(<ChangesWorkspace api={gitPmApi(fixture)} draft={draft} role="Developer" locale="en" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} />);
     await screen.findAllByText("projects/P-26-111111/project.yaml");
     fireEvent.click(screen.getByRole("button", { name: "Prepare commit" }));
     expect(screen.getByText("All 3 changed files will be committed.")).toBeTruthy();
@@ -179,7 +179,7 @@ describe("Changes workspace", () => {
 
   it("direct mode commits and pushes without offering a Merge Request", async () => {
     const fixture = new ChangesApi();
-    render(<ChangesWorkspace api={fixture as unknown as GitPmApi} draft={{ ...draft, branch: "main" }} role="Developer" locale="en" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} directMode />);
+    render(<ChangesWorkspace api={gitPmApi(fixture)} draft={{ ...draft, branch: "main" }} role="Developer" locale="en" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} directMode />);
     await screen.findAllByText("projects/P-26-111111/project.yaml");
     fireEvent.click(screen.getByRole("button", { name: "Prepare commit" }));
     fireEvent.change(screen.getByLabelText("Commit message"), { target: { value: "Direct publish" } });

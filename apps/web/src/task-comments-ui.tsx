@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import type { GitPmApi } from "./api.js";
+import type { GitPmApiPort } from "./api.js";
 import { formatDateTime, message, type Locale, type MessageKey } from "./i18n.js";
 import type { CommentResult, DraftStatus, EntityResult } from "./types.js";
 import type { WorkspaceNavigate } from "./workspace-navigation.js";
@@ -50,8 +50,10 @@ function relativeTime(locale: Locale, timestamp: string): string {
   return formatDateTime(locale, timestamp);
 }
 
+export type TaskCommentsApi = GitPmApiPort<"createComment" | "deleteComment" | "listComments" | "updateComment">;
+
 export function TaskComments({ api, draft, fileContext, projectId, taskId, people, fingerprint, readOnly, locale, focusCommentId, onNavigate, onFingerprintChange, confirmDelete }: {
-  readonly api: GitPmApi;
+  readonly api: TaskCommentsApi;
   readonly draft: DraftStatus;
   readonly fileContext?: ProjectFileReferenceContext;
   readonly projectId: string;

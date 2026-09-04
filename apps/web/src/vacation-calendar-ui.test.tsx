@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { GitPmApi } from "./api.js";
 import type { DraftStatus, EntityDocument, EntityResult } from "./types.js";
 import { VacationCalendarWorkspace } from "./vacation-calendar-ui.js";
 import { VACATION_CALENDAR_DAY_WIDTH } from "./vacation-calendar-model.js";
@@ -25,7 +24,7 @@ function renderCalendar() {
   const onNavigate = vi.fn();
   const api = {
     listEntities: vi.fn(async (_draftId: string, type: string) => entities.filter((item) => ({ people: "gitpm/person@1", teams: "gitpm/team@1", "availability-events": "gitpm/availability-event@1" })[type] === item.document.schema)),
-  } as unknown as GitPmApi;
+  };
   const view = render(<VacationCalendarWorkspace api={api} draft={draft} locale="en" onNavigate={onNavigate} today="2026-08-26" />);
   return { ...view, onNavigate };
 }
@@ -106,7 +105,7 @@ describe("Vacation calendar UI", () => {
     const entities = [ada, linus, reviewers, current];
     const api = {
       listEntities: vi.fn(async (_draftId: string, type: string) => entities.filter((item) => ({ people: "gitpm/person@1", teams: "gitpm/team@1", "availability-events": "gitpm/availability-event@1" })[type] === item.document.schema)),
-    } as unknown as GitPmApi;
+    };
     const { container } = render(<VacationCalendarWorkspace api={api} draft={draft} locale="en" today="2026-08-26" />);
     await waitFor(() => expect(container.querySelector(".vacation-calendar-label.away")).not.toBeNull());
     expect(container.querySelector(`.vacation-calendar-label[data-person-id="${adaId}"]`)?.className).toContain("away");

@@ -1,8 +1,10 @@
 import { type CSSProperties, type DragEvent as ReactDragEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
-import type { GitPmApi } from "./api.js";
+import type { GitPmApiPort } from "./api.js";
 import type { Locale, MessageKey } from "./i18n.js";
 import { message } from "./i18n.js";
 import type { DraftStatus, GitPmRole, WorktreeEntry, WorktreeFile } from "./types.js";
+
+export type WorktreeApi = GitPmApiPort<"createWorktreeDirectory" | "deleteWorktreeEntry" | "downloadWorktreeFile" | "listWorktree" | "moveWorktreeEntry" | "readWorktreeFile" | "uploadWorktreeFile">;
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const WORKTREE_ENTRY_DRAG_TYPE = "application/x-gitpm-worktree-entry";
@@ -128,7 +130,7 @@ interface NameDialogState {
 type DialogState = NameDialogState | MoveDialogState | null;
 
 function FolderPicker({ api, draftId, excludePath, entryName, locale, onSelect, onCancel, t }: {
-  readonly api: GitPmApi;
+  readonly api: WorktreeApi;
   readonly draftId: string;
   readonly excludePath: string;
   readonly entryName: string;
@@ -183,7 +185,7 @@ function FolderPicker({ api, draftId, excludePath, entryName, locale, onSelect, 
 }
 
 export function WorktreeWorkspace({ api, draft, role, locale, onChanged, confirmAction = () => true, save = saveBlob }: {
-  readonly api: GitPmApi;
+  readonly api: WorktreeApi;
   readonly draft: DraftStatus;
   readonly role: GitPmRole;
   readonly locale: Locale;

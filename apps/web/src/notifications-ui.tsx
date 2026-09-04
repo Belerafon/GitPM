@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import type { GitPmApi } from "./api.js";
+import type { GitPmApiPort } from "./api.js";
 import { formatDateTime, message, type Locale, type MessageKey } from "./i18n.js";
 import type { DraftStatus, MentionNotification, NotificationsResult } from "./types.js";
 import type { WorkspaceNavigate } from "./workspace-navigation.js";
 
 export function NotificationsMenu({ api, draft, locale, namespace, onNavigate }: {
-  readonly api: GitPmApi;
+  readonly api: GitPmApiPort<"markNotificationsRead" | "notifications">;
   readonly draft?: DraftStatus;
   readonly locale: Locale;
   readonly namespace: string;

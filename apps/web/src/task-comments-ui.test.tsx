@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { GitPmApi } from "./api.js";
 import { NotificationsMenu } from "./notifications-ui.js";
 import { TaskComments } from "./task-comments-ui.js";
+import { gitPmApi } from "./test-gitpm-api.js";
 import type { CommentResult, DraftStatus, EntityResult } from "./types.js";
 import type { ProjectFileList } from "@gitpm/contracts";
 import type { ProjectFileReferenceContext } from "./project-file-reference-ui.js";
@@ -69,13 +69,13 @@ describe("task comments", () => {
       can_edit: true,
       can_delete: true,
     };
-    const api = {
+    const api = gitPmApi({
       listComments: vi.fn(async () => []),
       createComment: vi.fn(async (_draftId: string, _projectId: string, _taskId: string, _fingerprint: string, body: string) => {
         submittedBody = body;
         return { ...created, document: { ...created.document, body_markdown: body } };
       }),
-    } as unknown as GitPmApi;
+    });
 
     render(<TaskComments api={api} confirmDelete={() => true} draft={draft} fingerprint={draft.fingerprint} locale="en" onFingerprintChange={async () => undefined} onNavigate={() => undefined} people={[anna]} projectId="P-26-MGP84K" readOnly={false} taskId="T-26-P9G3P8" />);
     const toggle = await screen.findByRole("button", { name: "Discussion" });
@@ -115,9 +115,9 @@ describe("task comments", () => {
       can_edit: true,
       can_delete: true,
     };
-    const api = {
+    const api = gitPmApi({
       listComments: vi.fn(async () => [existing]),
-    } as unknown as GitPmApi;
+    });
 
     render(<TaskComments api={api} confirmDelete={() => true} draft={draft} fingerprint={draft.fingerprint} locale="en" onFingerprintChange={async () => undefined} onNavigate={() => undefined} people={[]} projectId="P-26-MGP84K" readOnly={false} taskId="T-26-P9G3P8" />);
 
@@ -145,7 +145,7 @@ describe("task comments", () => {
       can_edit: true,
       can_delete: true,
     };
-    const api = { listComments: vi.fn(async () => [existing]) } as unknown as GitPmApi;
+    const api = gitPmApi({ listComments: vi.fn(async () => [existing]) });
 
     render(<TaskComments api={api} confirmDelete={() => true} draft={draft} fingerprint={draft.fingerprint} locale="en" onFingerprintChange={async () => undefined} onNavigate={() => undefined} people={[]} projectId="P-26-MGP84K" readOnly={false} taskId="T-26-P9G3P8" />);
 
@@ -163,7 +163,7 @@ describe("task comments", () => {
   it("renders file references and person mentions together without interpreting @ inside a filename", async () => {
     const active = comment("N-26-FILES1", "@[Anna Petrova](person:U-26-5EBAE3) см. [[file:ТЗ @team \\[финал\\].pdf]] и [[file:missing.txt]] <img src=x>");
     const deleted = comment("N-26-FILES2", "[[file:Документ.docx]] secret", "deleted");
-    const api = { listComments: vi.fn(async () => [active, deleted]), listProjectFiles: vi.fn() } as unknown as GitPmApi;
+    const api = gitPmApi({ listComments: vi.fn(async () => [active, deleted]), listProjectFiles: vi.fn() });
 
     const rendered = render(<TaskComments api={api} confirmDelete={() => true} draft={draft} fileContext={fileContext} fingerprint={draft.fingerprint} locale="en" onFingerprintChange={async () => undefined} onNavigate={() => undefined} people={[anna]} projectId={files.project_id} readOnly={false} taskId="T-26-P9G3P8" />);
 
@@ -185,7 +185,7 @@ describe("task comments", () => {
     const createComment = vi.fn(async (_d: string, _p: string, _t: string, _fingerprint: string, body: string) => ({ ...created, document: { ...created.document, body_markdown: body }, draft_fingerprint: "f".repeat(64) }));
     const updateComment = vi.fn(async (_d: string, _p: string, _t: string, original: CommentResult, _fingerprint: string, body: string) => ({ ...original, document: { ...original.document, body_markdown: body }, draft_fingerprint: "9".repeat(64) }));
     const onFingerprintChange = vi.fn(async () => undefined);
-    const api = { listComments: vi.fn(async () => [existing]), createComment, updateComment } as unknown as GitPmApi;
+    const api = gitPmApi({ listComments: vi.fn(async () => [existing]), createComment, updateComment });
 
     render(<TaskComments api={api} confirmDelete={() => true} draft={draft} fileContext={fileContext} fingerprint={draft.fingerprint} locale="en" onFingerprintChange={onFingerprintChange} onNavigate={() => undefined} people={[anna]} projectId={files.project_id} readOnly={false} taskId="T-26-P9G3P8" />);
     const composer = await screen.findByLabelText("Add comment") as HTMLTextAreaElement;
@@ -213,7 +213,7 @@ describe("task comments", () => {
 
   it("keeps file references neutral during loading and disables picker in read-only comments", async () => {
     const existing = comment("N-26-READ01", "[[file:Документ.docx]]");
-    const api = { listComments: vi.fn(async () => [existing]) } as unknown as GitPmApi;
+    const api = gitPmApi({ listComments: vi.fn(async () => [existing]) });
     render(<TaskComments api={api} confirmDelete={() => true} draft={draft} fileContext={{ ...fileContext, files: null, loadState: { status: "loading" } }} fingerprint={draft.fingerprint} locale="en" onFingerprintChange={async () => undefined} onNavigate={() => undefined} people={[]} projectId={files.project_id} readOnly taskId="T-26-P9G3P8" />);
     expect(await screen.findByLabelText("File reference not checked: Документ.docx")).toBeTruthy();
     expect(screen.queryByLabelText("Add comment")).toBeNull();
@@ -236,13 +236,13 @@ describe("mention notifications", () => {
       author: { provider: "git" as const, subject: "boris@example.test", display_name: "Boris" },
       excerpt: "Please review @Anna Petrova",
     };
-    const api = {
+    const api = gitPmApi({
       notifications: vi.fn(async () => ({
         recipient_person_id: "U-26-5EBAE3",
         items: [notification],
       })),
       markNotificationsRead: vi.fn(async () => ({ recipient_person_id: "U-26-5EBAE3", items: [{ ...notification, read: true }] })),
-    } as unknown as GitPmApi;
+    });
 
     render(<NotificationsMenu api={api} draft={draft} locale="en" namespace="test" onNavigate={onNavigate} />);
     await waitFor(() => expect(api.notifications).toHaveBeenCalledOnce());
@@ -257,10 +257,10 @@ describe("mention notifications", () => {
     const key = "N-26-ABC123:2026-07-20T10:05:00.000Z";
     const notification = { key, read: false, person_id: "U-26-5EBAE3", mentioned_at: "2026-07-20T10:05:00.000Z", project_id: "P-26-MGP84K", task_id: "T-26-P9G3P8", task_title: "Approve schema v1", comment_id: "N-26-ABC123", author: { provider: "git" as const, subject: "boris@example.test", display_name: "Boris" }, excerpt: "Please review" };
     localStorage.setItem("gitpm.notifications.read:test", JSON.stringify([key]));
-    const api = {
+    const api = gitPmApi({
       notifications: vi.fn(async () => ({ recipient_person_id: "U-26-5EBAE3", items: [notification] })),
       markNotificationsRead: vi.fn(async () => ({ recipient_person_id: "U-26-5EBAE3", items: [{ ...notification, read: true }] })),
-    } as unknown as GitPmApi;
+    });
 
     render(<NotificationsMenu api={api} draft={draft} locale="en" namespace="test" onNavigate={vi.fn()} />);
 

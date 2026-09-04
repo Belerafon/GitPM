@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { GitPmApi } from "./api.js";
+import { gitPmApi } from "./test-gitpm-api.js";
 import type { TimeEntryResult } from "./api.js";
 import { TaskTimeEntries } from "./task-time-entries.js";
 import type { DraftStatus, EntityResult } from "./types.js";
@@ -35,12 +35,12 @@ describe("TaskTimeEntries", () => {
   it("lists entries, sums hours and adds then voids an entry", async () => {
     const createTimeEntry = vi.fn(async (): Promise<TimeEntryResult> => entry("E-26-NEW2", { performed_on: "2026-09-03", hours: 3 }));
     const voidTimeEntry = vi.fn(async (): Promise<TimeEntryResult> => entry("E-26-NEW2", { performed_on: "2026-09-03", hours: 3, state: "voided" }));
-    const api = {
+    const api = gitPmApi({
       listTimeEntries: vi.fn(async (): Promise<readonly TimeEntryResult[]> => [entry("E-26-AAAA", { performed_on: "2026-08-17", hours: 4 })]),
-      getConfiguration: vi.fn(async (_draftId: string, kind: string) => ({ document: { schema: "gitpm/work-categories@1", categories: [{ slug: "regular", title: "Regular", active: true }] }, path: kind, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) })),
+      getConfiguration: vi.fn(async (_draftId: string, kind: string) => ({ document: { schema: "gitpm/work-categories@1" as const, categories: [{ slug: "regular", title: "Regular", active: true }] }, path: kind, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) })),
       createTimeEntry,
       voidTimeEntry,
-    } as unknown as GitPmApi;
+    });
 
     const onOpenPerson = vi.fn();
     render(<TaskTimeEntries api={api} draft={draft} fingerprint={draft.fingerprint} projectId="P-26-1" taskId="T-26-1" people={[person]} readOnly={false} locale="en" onFingerprintChange={vi.fn(async () => undefined)} onOpenPerson={onOpenPerson} />);
@@ -62,10 +62,10 @@ describe("TaskTimeEntries", () => {
   });
 
   it("defaults the date to today and the person to the first active assignee", async () => {
-    const api = {
+    const api = gitPmApi({
       listTimeEntries: vi.fn(async (): Promise<readonly TimeEntryResult[]> => []),
-      getConfiguration: vi.fn(async (_draftId: string, kind: string) => ({ document: { schema: "gitpm/work-categories@1", categories: [{ slug: "regular", title: "Regular", active: true }] }, path: kind, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) })),
-    } as unknown as GitPmApi;
+      getConfiguration: vi.fn(async (_draftId: string, kind: string) => ({ document: { schema: "gitpm/work-categories@1" as const, categories: [{ slug: "regular", title: "Regular", active: true }] }, path: kind, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) })),
+    });
     const other = { document: { schema: "gitpm/person@1", id: "U-26-LIN", name: "Linus", lifecycle: "active" }, path: "p.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) } as EntityResult;
 
     render(<TaskTimeEntries api={api} draft={draft} fingerprint={draft.fingerprint} projectId="P-26-1" taskId="T-26-1" people={[other, person]} assigneeIds={[person.document.id]} readOnly={false} locale="en" onFingerprintChange={vi.fn(async () => undefined)} />);
@@ -81,11 +81,11 @@ describe("TaskTimeEntries", () => {
     const voided = entry("E-26-ORIGINAL", { hours: 2, note_markdown: "wrong", state: "voided", replacement: "E-26-CORRECT" });
     const created = entry("E-26-CORRECT", { hours: 3.5, note_markdown: "corrected" });
     const replaceTimeEntry = vi.fn(async () => ({ voided, created }));
-    const api = {
+    const api = gitPmApi({
       listTimeEntries: vi.fn(async (): Promise<readonly TimeEntryResult[]> => [original]),
       getConfiguration: vi.fn(() => new Promise<never>(() => undefined)),
       replaceTimeEntry,
-    } as unknown as GitPmApi;
+    });
 
     render(<TaskTimeEntries api={api} draft={draft} fingerprint={draft.fingerprint} projectId="P-26-1" taskId="T-26-1" people={[person]} readOnly={false} locale="en" onFingerprintChange={vi.fn(async () => undefined)} />);
 
@@ -108,12 +108,12 @@ describe("TaskTimeEntries", () => {
       voided: entry("E-26-HISTORY", { ...original.document, state: "voided", replacement: "E-26-HISTORY2" }),
       created: entry("E-26-HISTORY2", { person: input.person, category: input.category, hours: input.hours }),
     }));
-    const api = {
+    const api = gitPmApi({
       listTimeEntries: vi.fn(async (): Promise<readonly TimeEntryResult[]> => [original]),
-      getConfiguration: vi.fn(async (_draftId: string, kind: string) => ({ document: { schema: "gitpm/work-categories@1", categories: [{ slug: "regular", title: "Regular", active: true }, { slug: "warranty", title: "Warranty", active: false }] }, path: kind, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) })),
+      getConfiguration: vi.fn(async (_draftId: string, kind: string) => ({ document: { schema: "gitpm/work-categories@1" as const, categories: [{ slug: "regular", title: "Regular", active: true }, { slug: "warranty", title: "Warranty", active: false }] }, path: kind, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) })),
       getEntity: vi.fn(async () => archivedPerson),
       replaceTimeEntry,
-    } as unknown as GitPmApi;
+    });
 
     render(<TaskTimeEntries api={api} draft={draft} fingerprint={draft.fingerprint} projectId="P-26-1" taskId="T-26-1" people={[person]} readOnly={false} locale="en" onFingerprintChange={vi.fn(async () => undefined)} />);
     fireEvent.click(await screen.findByRole("button", { name: "Correct" }));
@@ -128,10 +128,10 @@ describe("TaskTimeEntries", () => {
   });
 
   it("collapses and expands via the heading toggle", async () => {
-    const api = {
+    const api = gitPmApi({
       listTimeEntries: vi.fn(async (): Promise<readonly TimeEntryResult[]> => []),
-      getConfiguration: vi.fn(async (_draftId: string, kind: string) => ({ document: { schema: "gitpm/work-categories@1", categories: [{ slug: "regular", title: "Regular", active: true }] }, path: kind, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) })),
-    } as unknown as GitPmApi;
+      getConfiguration: vi.fn(async (_draftId: string, kind: string) => ({ document: { schema: "gitpm/work-categories@1" as const, categories: [{ slug: "regular", title: "Regular", active: true }] }, path: kind, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) })),
+    });
 
     render(<TaskTimeEntries api={api} draft={draft} fingerprint={draft.fingerprint} projectId="P-26-1" taskId="T-26-1" people={[person]} readOnly={false} locale="en" onFingerprintChange={vi.fn(async () => undefined)} />);
 
@@ -146,13 +146,13 @@ describe("TaskTimeEntries", () => {
   });
 
   it("renders exact, missing and hostile references in active and voided historical notes", async () => {
-    const api = {
+    const api = gitPmApi({
       listTimeEntries: vi.fn(async (): Promise<readonly TimeEntryResult[]> => [
         entry("E-26-FILE01", { note_markdown: "See [[file:Отчёт \\[август\\].xlsx]] <script>x</script>" }),
         entry("E-26-FILE02", { note_markdown: "Old [[file:missing.xlsx]]", state: "voided" }),
       ]),
-      getConfiguration: vi.fn(async () => ({ document: { schema: "gitpm/work-categories@1", categories: [{ slug: "regular", title: "Regular", active: true }] }, path: "work-categories", blob_id: "a".repeat(40), draft_fingerprint: draft.fingerprint })),
-    } as unknown as GitPmApi;
+      getConfiguration: vi.fn(async () => ({ document: { schema: "gitpm/work-categories@1" as const, categories: [{ slug: "regular", title: "Regular", active: true }] }, path: "work-categories", blob_id: "a".repeat(40), draft_fingerprint: draft.fingerprint })),
+    });
     const rendered = render(<TaskTimeEntries api={api} draft={draft} fileContext={fileContext} fingerprint={draft.fingerprint} projectId={files.project_id} taskId="T-26-1" people={[person]} readOnly={false} locale="en" onFingerprintChange={vi.fn(async () => undefined)} />);
 
     expect(await screen.findByRole("link", { name: "Download Отчёт [август].xlsx" })).toBeTruthy();
@@ -172,11 +172,11 @@ describe("TaskTimeEntries", () => {
       created: { ...entry("E-26-FILE05", { note_markdown: input.note_markdown }), draft_fingerprint: "f".repeat(64) },
     }));
     const onFingerprintChange = vi.fn(async () => undefined);
-    const api = {
+    const api = gitPmApi({
       listTimeEntries: vi.fn(async (): Promise<readonly TimeEntryResult[]> => [original]),
-      getConfiguration: vi.fn(async () => ({ document: { schema: "gitpm/work-categories@1", categories: [{ slug: "regular", title: "Regular", active: true }] }, path: "work-categories", blob_id: "a".repeat(40), draft_fingerprint: draft.fingerprint })),
+      getConfiguration: vi.fn(async () => ({ document: { schema: "gitpm/work-categories@1" as const, categories: [{ slug: "regular", title: "Regular", active: true }] }, path: "work-categories", blob_id: "a".repeat(40), draft_fingerprint: draft.fingerprint })),
       createTimeEntry, replaceTimeEntry,
-    } as unknown as GitPmApi;
+    });
     render(<TaskTimeEntries api={api} draft={draft} fileContext={fileContext} fingerprint={draft.fingerprint} projectId={files.project_id} taskId="T-26-1" people={[person]} readOnly={false} locale="en" onFingerprintChange={onFingerprintChange} />);
 
     const note = await screen.findByLabelText("Note") as HTMLTextAreaElement;
@@ -202,10 +202,10 @@ describe("TaskTimeEntries", () => {
   });
 
   it("keeps notes readable but hides all mutation and insertion controls in read-only mode", async () => {
-    const api = {
+    const api = gitPmApi({
       listTimeEntries: vi.fn(async (): Promise<readonly TimeEntryResult[]> => [entry("E-26-READ01", { note_markdown: "[[file:Отчёт \\[август\\].xlsx]]" })]),
-      getConfiguration: vi.fn(async () => ({ document: { schema: "gitpm/work-categories@1", categories: [] }, path: "work-categories", blob_id: "a".repeat(40), draft_fingerprint: draft.fingerprint })),
-    } as unknown as GitPmApi;
+      getConfiguration: vi.fn(async () => ({ document: { schema: "gitpm/work-categories@1" as const, categories: [] }, path: "work-categories", blob_id: "a".repeat(40), draft_fingerprint: draft.fingerprint })),
+    });
     render(<TaskTimeEntries api={api} draft={draft} fileContext={fileContext} fingerprint={draft.fingerprint} projectId={files.project_id} taskId="T-26-1" people={[person]} readOnly locale="en" onFingerprintChange={vi.fn(async () => undefined)} />);
     expect(await screen.findByRole("link", { name: "Download Отчёт [август].xlsx" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Correct" })).toBeNull();

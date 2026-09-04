@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { resolveSchedulingHierarchy, type SchedulingHierarchyTask } from "@gitpm/scheduling";
 import { AsyncBoundary, useAsyncLoad } from "../../async-data.js";
-import type { GitPmApi } from "../../api.js";
+import type { GitPmApiPort } from "../../api.js";
 import { message, type Locale, type MessageKey } from "../../i18n.js";
 import { ScheduleResolver, scheduleTracksConfig } from "../../schedules.js";
 import type { ConfigurationResult, DraftStatus, EntityDocument, EntityResult, ProjectWorkspaceResult } from "../../types.js";
@@ -13,8 +13,10 @@ interface WorkCategoryEntry { readonly slug: string; readonly title: string }
 
 const text = (document: EntityDocument, key: string): string => typeof document[key] === "string" ? String(document[key]) : "";
 
+export type ProjectEffortWorkspaceApi = GitPmApiPort<"getConfiguration" | "listEntities" | "listProjectTimeEntries" | "projectWorkspace">;
+
 export function ProjectEffortWorkspace({ api, draft, locale, projectId, onNavigate, onChanged }: {
-  readonly api: GitPmApi;
+  readonly api: ProjectEffortWorkspaceApi;
   readonly draft: DraftStatus;
   readonly locale: Locale;
   readonly projectId: string;

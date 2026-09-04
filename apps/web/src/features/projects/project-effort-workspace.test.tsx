@@ -1,9 +1,8 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { GitPmApi } from "../../api.js";
 import type { ConfigurationDocument, ConfigurationResult, DraftStatus, EntityDocument, EntityResult, ProjectWorkspaceResult } from "../../types.js";
-import { ProjectEffortWorkspace } from "./project-effort-workspace.js";
+import { ProjectEffortWorkspace, type ProjectEffortWorkspaceApi } from "./project-effort-workspace.js";
 
 const fingerprint = "b".repeat(64);
 const draft: DraftStatus = { draft_id: "DRF-EFFORT", owner_gitlab_user_id: "42", branch: "gitpm/42/DRF-EFFORT", base_commit: "a".repeat(40), writer_mode: "ui", state: "open", fingerprint, created_at: "2026-07-10T00:00:00.000Z", updated_at: "2026-07-10T00:00:00.000Z" };
@@ -30,7 +29,7 @@ const task = result({ schema: "gitpm/task@2", id: "T-26-WORK", project: projectI
 
 const timeEntry = (hours: number, performedOn: string) => ({ document: { schema: "gitpm/time-entry@1" as const, id: `E-${performedOn}`, project: projectId, task: task.document.id, person: person.document.id, performed_on: performedOn, hours, category: "regular", created_at: `${performedOn}T00:00:00.000Z`, state: "active" as const }, path: "e", blob_id: "a", draft_fingerprint: fingerprint });
 
-function api(): GitPmApi & { listProjectTimeEntries: ReturnType<typeof vi.fn>; getConfiguration: ReturnType<typeof vi.fn>; listEntities: ReturnType<typeof vi.fn>; projectWorkspace: ReturnType<typeof vi.fn> } {
+function api() {
   const workspace: ProjectWorkspaceResult = { project, milestones: [], tasks: [task], draft_fingerprint: fingerprint };
   const listProjectTimeEntries = vi.fn(async (_draftId: string, _projectId: string, filters: { readonly offset?: number; readonly limit?: number } = {}) => {
     const items = [timeEntry(4, "2026-09-10")];
@@ -46,7 +45,7 @@ function api(): GitPmApi & { listProjectTimeEntries: ReturnType<typeof vi.fn>; g
       ? tracksConfig
       : { schema: "gitpm/issue-types@1", issue_types: [{ slug: "task", title: "Task", active: true }] })),
     listProjectTimeEntries,
-  } as unknown as ReturnType<typeof api>;
+  } satisfies ProjectEffortWorkspaceApi;
 }
 
 afterEach(() => { cleanup(); localStorage.clear(); });
@@ -110,7 +109,7 @@ describe("ProjectEffortWorkspace", () => {
         ? tracksConfig
         : { schema: "gitpm/issue-types@1", issue_types: [{ slug: "task", title: "Task", active: true }] })),
       listProjectTimeEntries,
-    } as unknown as GitPmApi & { listProjectTimeEntries: typeof listProjectTimeEntries };
+    } satisfies ProjectEffortWorkspaceApi;
 
     render(<ProjectEffortWorkspace api={scenarioApi} draft={draft} locale="en" onNavigate={vi.fn()} projectId={projectId} />);
     await screen.findByRole("heading", { name: "Effort project" });
@@ -166,7 +165,7 @@ describe("ProjectEffortWorkspace", () => {
         ? tracksConfig
         : { schema: "gitpm/issue-types@1", issue_types: [{ slug: "task", title: "Task", active: true }] })),
       listProjectTimeEntries,
-    } as unknown as GitPmApi & { listProjectTimeEntries: typeof listProjectTimeEntries };
+    } satisfies ProjectEffortWorkspaceApi;
 
     const draftTwo: DraftStatus = { ...draft, draft_id: "DRF-EFFORT-2" };
 

@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, type GitPmApi } from "./api.js";
-import { RepositoryConnectionSettings } from "./repository-connection-ui.js";
+import { ApiError } from "./api.js";
+import { RepositoryConnectionSettings, type RepositoryConnectionApi } from "./repository-connection-ui.js";
 import type { RepositoryConnectionStatus } from "./types.js";
 
 const baseStatus = (overrides: Partial<RepositoryConnectionStatus> = {}): RepositoryConnectionStatus => ({
@@ -16,13 +16,13 @@ const baseStatus = (overrides: Partial<RepositoryConnectionStatus> = {}): Reposi
   ...overrides,
 }) as RepositoryConnectionStatus;
 
-function mockApi(status: RepositoryConnectionStatus, update: (status: RepositoryConnectionStatus) => void = () => undefined): GitPmApi {
+function mockApi(status: RepositoryConnectionStatus, update: (status: RepositoryConnectionStatus) => void = () => undefined): RepositoryConnectionApi {
   return {
     repositoryConnection: vi.fn(async () => status),
     updateRepositoryConnection: vi.fn(async () => { update(status); return status; }),
     testRepositoryConnection: vi.fn(async () => ({ ok: true as const, branch: "main", commit: "a".repeat(40) })),
     login: vi.fn(async () => "https://gitlab.example/oauth/authorize"),
-  } as unknown as GitPmApi;
+  };
 }
 
 afterEach(cleanup);
