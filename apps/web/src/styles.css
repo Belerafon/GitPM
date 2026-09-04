@@ -178,6 +178,7 @@ input { min-width: 0; width: 100%; border: 1px solid #c9cbc5; border-radius: 8px
 .project-risk.unknown { background: #e8eae6; color: #575c58; }
 .project-directory { margin-top: 1.25rem; }
 .project-directory .card-heading { align-items: start; }
+.project-directory .advanced-view-trigger { padding-block: .4rem; }
 .project-directory .card-heading p, .task-toolbar p { margin: .3rem 0 0; color: #68706b; font-size: .82rem; }
 .project-register-summary { display: flex; flex-wrap: wrap; gap: 1.5rem; margin: 1rem 0 .75rem; border-block: 1px solid #dedfd9; padding: .65rem 0; }
 .project-register-summary div { display: flex; gap: .45rem; align-items: baseline; }
