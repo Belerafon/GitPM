@@ -8,12 +8,17 @@ const configuredWorkers = Number(process.env.GITPM_E2E_WORKERS);
 const workers = Number.isInteger(configuredWorkers) && configuredWorkers > 0
   ? configuredWorkers
   : 1;
+const configuredMaxFailures = Number(process.env.GITPM_E2E_MAX_FAILURES);
+const maxFailures = Number.isInteger(configuredMaxFailures) && configuredMaxFailures >= 0
+  ? configuredMaxFailures
+  : process.env.CI ? 0 : 1;
 
 export default defineConfig({
   testDir: "./e2e",
   testMatch: /.*\.spec\.(?:ts|mjs)$/u,
   fullyParallel: false,
   workers,
+  maxFailures,
   retries: process.env.CI ? 1 : 0,
   forbidOnly: Boolean(process.env.CI),
   timeout: 60_000,

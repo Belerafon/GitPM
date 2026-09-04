@@ -39,13 +39,21 @@ export async function cleanupDrafts(request: APIRequestContext, draftPrefix: str
   const drafts = await listed.json() as readonly DraftStatus[];
   for (const draft of drafts) {
     if (!draft.draft_id.startsWith(draftPrefix)) continue;
-    if (draft.state === "open") {
-      const closed = await request.post(`/api/drafts/${encodeURIComponent(draft.draft_id)}/close`);
-      if (!closed.ok()) throw new Error(`Could not close ${draft.draft_id}: ${await closed.text()}`);
+    let lastFailure = "unknown cleanup failure";
+    for (let attempt = 1; attempt <= 4; attempt += 1) {
+      if (draft.state === "open") {
+        const closed = await request.post(`/api/drafts/${encodeURIComponent(draft.draft_id)}/close`);
+        if (!closed.ok() && closed.status() !== 404 && closed.status() !== 409) {
+          lastFailure = `close returned ${closed.status()}: ${await closed.text()}`;
+        }
+      }
+      const cleaned = await request.delete(`/api/drafts/${encodeURIComponent(draft.draft_id)}`, {
+        data: { confirmation: draft.draft_id },
+      });
+      if (cleaned.ok() || cleaned.status() === 404) break;
+      lastFailure = `delete returned ${cleaned.status()}: ${await cleaned.text()}`;
+      if (attempt === 4) throw new Error(`Could not clean ${draft.draft_id} after ${attempt} attempts: ${lastFailure}`);
+      await new Promise((resolve) => setTimeout(resolve, attempt * 250));
     }
-    const cleaned = await request.delete(`/api/drafts/${encodeURIComponent(draft.draft_id)}`, {
-      data: { confirmation: draft.draft_id },
-    });
-    if (!cleaned.ok()) throw new Error(`Could not clean ${draft.draft_id}: ${await cleaned.text()}`);
   }
 }

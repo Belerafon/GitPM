@@ -1,7 +1,14 @@
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
+import { createHash } from "node:crypto";
+import { mkdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import process from "node:process";
+import { promisify } from "node:util";
 import { pathToFileURL } from "node:url";
+import { stepAffectedByPaths } from "./verification-change-impact.mjs";
+
+const execFileAsync = promisify(execFile);
 
 const corepack = process.platform === "win32" ? "corepack.cmd" : "corepack";
 const git = process.platform === "win32" ? "git.exe" : "git";
@@ -129,6 +136,7 @@ const profiles = {
     pnpmStep("workflow browser tests", ["e2e:workflow"], 20),
     diffCheck,
   ],
+  docs: [diffCheck],
 };
 
 const installStep = {
@@ -153,6 +161,9 @@ export function formatDuration(milliseconds) {
 export function parseArguments(arguments_) {
   let profile = "full";
   let install = false;
+  let resume = false;
+  let lowImpact = false;
+  let reportPath;
   for (let index = 0; index < arguments_.length; index += 1) {
     const argument = arguments_[index];
     if (argument === "--install") {
@@ -164,10 +175,24 @@ export function parseArguments(arguments_) {
       index += 1;
       continue;
     }
+    if (argument === "--resume") {
+      resume = true;
+      continue;
+    }
+    if (argument === "--low-impact") {
+      lowImpact = true;
+      continue;
+    }
+    if (argument === "--report") {
+      reportPath = arguments_[index + 1] ?? "";
+      index += 1;
+      if (!reportPath) throw new Error("Verification report path must not be empty");
+      continue;
+    }
     throw new Error(`Unknown verification option: ${argument}`);
   }
   if (!(profile in profiles)) throw new Error(`Unknown verification profile: ${profile}`);
-  return { profile, install };
+  return { profile, install, resume, lowImpact, reportPath };
 }
 
 export function verificationPlan(options) {
@@ -203,6 +228,7 @@ async function terminateProcessTree(child) {
 
 async function runStep(step, position, total, settings) {
   const startedAt = Date.now();
+  const resourceStart = systemSample();
   const timeoutMinutes = positiveNumber(
     process.env.GITPM_VERIFY_TIMEOUT_MINUTES,
     step.timeoutMinutes,
@@ -216,7 +242,7 @@ async function runStep(step, position, total, settings) {
   const child = spawn(step.command, step.args, {
     cwd: process.cwd(),
     detached: process.platform !== "win32",
-    env: process.env,
+    env: settings.environment,
     shell: process.platform === "win32" && step.command.endsWith(".cmd"),
     stdio: "inherit",
     windowsHide: true,
@@ -253,15 +279,114 @@ async function runStep(step, position, total, settings) {
   } else {
     console.error(`[verify] FAIL ${step.name} in ${formatDuration(durationMilliseconds)}; exit=${result.code}${result.signal ? `; signal=${result.signal}` : ""}`);
   }
-  return { name: step.name, durationMilliseconds, code: result.code };
+  return {
+    name: step.name,
+    command: displayCommand(step),
+    status: result.code === 0 ? "passed" : "failed",
+    startedAt: new Date(startedAt).toISOString(),
+    finishedAt: new Date().toISOString(),
+    durationMilliseconds,
+    code: result.code,
+    system: systemDelta(resourceStart, systemSample()),
+  };
 }
 
 function printSummary(results, totalStartedAt) {
   console.log("\n[verify] SUMMARY");
   for (const result of results) {
-    console.log(`[verify] ${result.code === 0 ? "PASS" : "FAIL"} ${result.name}: ${formatDuration(result.durationMilliseconds)}`);
+    console.log(`[verify] ${result.cached ? "CACHED" : result.code === 0 ? "PASS" : "FAIL"} ${result.name}: ${formatDuration(result.durationMilliseconds)}`);
   }
   console.log(`[verify] TOTAL ${formatDuration(Date.now() - totalStartedAt)}`);
+}
+
+function systemSample() {
+  const cpus = os.cpus();
+  return {
+    cpuIdle: cpus.reduce((total, cpu) => total + cpu.times.idle, 0),
+    cpuTotal: cpus.reduce((total, cpu) => total + Object.values(cpu.times).reduce((sum, value) => sum + value, 0), 0),
+    freeMemoryBytes: os.freemem(),
+  };
+}
+
+function systemDelta(start, end) {
+  const total = end.cpuTotal - start.cpuTotal;
+  const idle = end.cpuIdle - start.cpuIdle;
+  return {
+    averageCpuPercent: total > 0 ? Math.round((1 - idle / total) * 1000) / 10 : 0,
+    freeMemoryBytesAtStart: start.freeMemoryBytes,
+    freeMemoryBytesAtEnd: end.freeMemoryBytes,
+  };
+}
+
+async function workspaceSnapshot() {
+  const { stdout } = await execFileAsync(git, ["ls-files", "-co", "--exclude-standard", "-z"], {
+    cwd: process.cwd(),
+    encoding: "buffer",
+    maxBuffer: 32 * 1024 * 1024,
+  });
+  const files = {};
+  for (const relativePath of stdout.toString("utf8").split("\0").filter(Boolean).sort()) {
+    try {
+      const fileStat = await stat(path.resolve(relativePath));
+      if (!fileStat.isFile()) continue;
+      const contents = await readFile(path.resolve(relativePath));
+      files[relativePath.replaceAll("\\", "/")] = createHash("sha256").update(contents).digest("hex");
+    } catch (error) {
+      if (!(error instanceof Error) || !Reflect.has(error, "code") || error.code !== "ENOENT") throw error;
+    }
+  }
+  const fingerprint = createHash("sha256");
+  for (const [file, digest] of Object.entries(files)) fingerprint.update(`${file}\0${digest}\0`);
+  return { fingerprint: fingerprint.digest("hex"), files };
+}
+
+function changedSnapshotPaths(previous, current) {
+  const names = new Set([...Object.keys(previous?.files ?? {}), ...Object.keys(current.files)]);
+  return [...names].filter((name) => previous?.files?.[name] !== current.files[name]).sort();
+}
+
+function safeProfileName(profile) {
+  return profile.replaceAll(/[^a-z0-9-]/giu, "-");
+}
+
+function defaultReportPath(profile) {
+  const timestamp = new Date().toISOString().replaceAll(/[:.]/gu, "-");
+  return path.resolve(".tmp", "verification-reports", `${timestamp}-${safeProfileName(profile)}.json`);
+}
+
+function checkpointPath(profile) {
+  return path.resolve(".tmp", "verification-checkpoints", `${safeProfileName(profile)}.json`);
+}
+
+async function readJson(file) {
+  try {
+    return JSON.parse(await readFile(file, "utf8"));
+  } catch (error) {
+    if (error instanceof Error && Reflect.has(error, "code") && error.code === "ENOENT") return undefined;
+    throw error;
+  }
+}
+
+async function writeJson(file, value) {
+  await mkdir(path.dirname(file), { recursive: true });
+  const temporary = `${file}.${process.pid}.tmp`;
+  await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+  await rename(temporary, file).catch(async () => {
+    await writeFile(file, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+    await unlink(temporary).catch(() => undefined);
+  });
+}
+
+function cachedResult(step, previous) {
+  return {
+    name: step.name,
+    command: displayCommand(step),
+    status: "passed",
+    cached: true,
+    cachedFrom: previous.finishedAt,
+    durationMilliseconds: 0,
+    code: 0,
+  };
 }
 
 export async function runVerification(options) {
@@ -274,12 +399,43 @@ export async function runVerification(options) {
   );
   const settings = {
     heartbeatMilliseconds: heartbeatSeconds * 1000,
+    environment: {
+      ...process.env,
+      ...(options.lowImpact && !process.env.GITPM_TEST_WORKERS ? { GITPM_TEST_WORKERS: "2" } : {}),
+      ...(options.lowImpact && !process.env.GITPM_E2E_WORKERS ? { GITPM_E2E_WORKERS: "1" } : {}),
+    },
     onChild: (child) => {
       activeChild = child;
     },
   };
   const results = [];
   const totalStartedAt = Date.now();
+  const snapshot = await workspaceSnapshot();
+  const checkpointFile = checkpointPath(options.profile);
+  const previousReport = options.resume ? await readJson(checkpointFile) : undefined;
+  const changedPaths = previousReport ? changedSnapshotPaths(previousReport.snapshot, snapshot) : [];
+  const reportFile = options.reportPath ? path.resolve(options.reportPath) : defaultReportPath(options.profile);
+  const report = {
+    schema: "gitpm-verification-report@1",
+    profile: options.profile,
+    result: "running",
+    startedAt: new Date(totalStartedAt).toISOString(),
+    finishedAt: undefined,
+    durationMilliseconds: undefined,
+    options: { install: options.install, resume: options.resume, lowImpact: options.lowImpact },
+    environment: {
+      platform: process.platform,
+      architecture: process.arch,
+      node: process.version,
+      logicalCpus: os.availableParallelism(),
+      totalMemoryBytes: os.totalmem(),
+      testWorkers: settings.environment.GITPM_TEST_WORKERS ?? "default",
+      e2eWorkers: settings.environment.GITPM_E2E_WORKERS ?? "default",
+    },
+    snapshot,
+    changedPathsSinceCheckpoint: changedPaths,
+    steps: results,
+  };
   let activeChild;
 
   const stop = async (signal) => {
@@ -293,17 +449,37 @@ export async function runVerification(options) {
   process.once("SIGTERM", onSigTerm);
 
   try {
-    console.log(`[verify] profile=${options.profile}; steps=${plan.length}; heartbeat=${heartbeatSeconds}s`);
+    console.log(`[verify] profile=${options.profile}; steps=${plan.length}; heartbeat=${heartbeatSeconds}s; low-impact=${options.lowImpact}`);
+    console.log(`[verify] report=${reportFile}`);
+    if (options.resume && !previousReport) console.log(`[verify] no checkpoint found at ${checkpointFile}; running the complete plan`);
+    if (previousReport) console.log(`[verify] resuming checkpoint; changed paths=${changedPaths.length}`);
+    await writeJson(reportFile, report);
     for (let index = 0; index < plan.length; index += 1) {
-      const result = await runStep(plan[index], index + 1, plan.length, settings);
+      const step = plan[index];
+      const previous = previousReport?.steps?.find((candidate) => candidate.name === step.name && candidate.status === "passed");
+      if (previous && !stepAffectedByPaths(step.name, changedPaths)) {
+        const result = cachedResult(step, previous);
+        results.push(result);
+        console.log(`\n[verify] CACHED ${index + 1}/${plan.length} ${step.name}; unchanged since ${previous.finishedAt}`);
+        await writeJson(reportFile, report);
+        continue;
+      }
+      const result = await runStep(step, index + 1, plan.length, settings);
       results.push(result);
+      await writeJson(reportFile, report);
       if (result.code !== 0) break;
     }
   } finally {
     activeChild = undefined;
     process.removeListener("SIGINT", onSigInt);
     process.removeListener("SIGTERM", onSigTerm);
+    report.finishedAt = new Date().toISOString();
+    report.durationMilliseconds = Date.now() - totalStartedAt;
+    report.result = results.length === plan.length && results.every((result) => result.code === 0) ? "passed" : "failed";
+    await writeJson(reportFile, report);
+    await writeJson(checkpointFile, report);
     printSummary(results, totalStartedAt);
+    console.log(`[verify] REPORT ${reportFile}`);
   }
   return results.at(-1)?.code ?? 1;
 }
