@@ -218,7 +218,7 @@ describe("frontend draft lifecycle", () => {
     window.history.replaceState({}, "", "/people/U-26-ADA");
     render(<App api={api} browserLanguages={["en"]} />);
 
-    expect(await screen.findByRole("heading", { name: "Ada Lovelace" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Ada Lovelace" }, { timeout: 5_000 })).toBeTruthy();
     expect(`${window.location.pathname}${window.location.search}`).toBe("/people/U-26-ADA");
     fireEvent.click(screen.getByRole("button", { name: /All people and teams/u }));
     expect(`${window.location.pathname}${window.location.search}`).toBe("/people");

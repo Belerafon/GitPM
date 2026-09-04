@@ -1,16 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { DEFAULT_PERSON_NAME_FORMAT, isPersonNameFormat, type PersonNameFormat } from "@gitpm/shared";
 import type { GitPmApi } from "./api.js";
 import { DraftProvider, useDrafts } from "./draft-context.js";
 import { formatDateTime, localeRegistry, LOCALE_STORAGE_KEY, message, selectLocale, type Locale, type MessageKey } from "./i18n.js";
-import { CoreWorkspace } from "./core-ui.js";
-import { AdminWorkspace } from "./admin-ui.js";
-import { ChangesWorkspace } from "./changes-ui.js";
-import { HistoryWorkspace } from "./history-ui.js";
-import { BoardWorkspace } from "./board-ui.js";
-import { GanttWorkspace } from "./gantt-ui.js";
-import { WorkloadWorkspace } from "./workload-ui.js";
-import { VacationCalendarWorkspace } from "./vacation-calendar-ui.js";
 import type { WorkspaceDestination, WorkspaceSelection } from "./workspace-navigation.js";
 import { parseAppRoute, routeForDestination, serializeAppRoute, type AppRoute } from "./app/router.js";
 import { AppShell } from "./app/AppShell.js";
@@ -18,17 +10,26 @@ import { ControlHints } from "./app/ControlHints.js";
 import { navigationDestinations, navigationGroups, routeViews } from "./app/navigation.js";
 import { SectionTabs, type SectionTab } from "./app/SectionTabs.js";
 import { ProjectTabs } from "./features/projects/project-tabs.js";
-import { ProjectPlanWorkspace } from "./features/projects/project-plan-workspace.js";
-import { ProjectEffortWorkspace } from "./features/projects/project-effort-workspace.js";
 import { EntityCatalog } from "./entity-catalog.js";
-import { PeopleProfileWorkspace } from "./people-profile-ui.js";
 import { NotificationsMenu } from "./notifications-ui.js";
-import { WorktreeWorkspace } from "./worktree-ui.js";
-import { RepositoryConnectionSettings } from "./repository-connection-ui.js";
 import { ExportMenu } from "./export-ui.js";
 import { entityRouteKey, initialNavigationTrail, restoreNavigationTrail, truncateNavigationTrail, visitNavigationTrail, type NavigationTrail } from "./app/navigation-trail.js";
 import { GlobalSearch } from "./global-search.js";
 import { PersonNameFormatProvider } from "./person-name.js";
+
+const CoreWorkspace = lazy(async () => ({ default: (await import("./core-ui.js")).CoreWorkspace }));
+const AdminWorkspace = lazy(async () => ({ default: (await import("./admin-ui.js")).AdminWorkspace }));
+const ChangesWorkspace = lazy(async () => ({ default: (await import("./changes-ui.js")).ChangesWorkspace }));
+const HistoryWorkspace = lazy(async () => ({ default: (await import("./history-ui.js")).HistoryWorkspace }));
+const BoardWorkspace = lazy(async () => ({ default: (await import("./board-ui.js")).BoardWorkspace }));
+const GanttWorkspace = lazy(async () => ({ default: (await import("./gantt-ui.js")).GanttWorkspace }));
+const WorkloadWorkspace = lazy(async () => ({ default: (await import("./workload-ui.js")).WorkloadWorkspace }));
+const VacationCalendarWorkspace = lazy(async () => ({ default: (await import("./vacation-calendar-ui.js")).VacationCalendarWorkspace }));
+const ProjectPlanWorkspace = lazy(async () => ({ default: (await import("./features/projects/project-plan-workspace.js")).ProjectPlanWorkspace }));
+const ProjectEffortWorkspace = lazy(async () => ({ default: (await import("./features/projects/project-effort-workspace.js")).ProjectEffortWorkspace }));
+const PeopleProfileWorkspace = lazy(async () => ({ default: (await import("./people-profile-ui.js")).PeopleProfileWorkspace }));
+const WorktreeWorkspace = lazy(async () => ({ default: (await import("./worktree-ui.js")).WorktreeWorkspace }));
+const RepositoryConnectionSettings = lazy(async () => ({ default: (await import("./repository-connection-ui.js")).RepositoryConnectionSettings }));
 
 interface AppProps {
   readonly api: GitPmApi;
@@ -319,6 +320,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
           query={activeRoute.query}
           t={t}
         />}
+        <Suspense fallback={<div className="card empty-workspace" role="status">{t("status.loading")}</div>}>
         {projectWorkspaceRoute && activeRoute?.projectId !== undefined && (active === undefined
           ? <div className="card empty-workspace">{t("core.selectProject")}</div>
           : <ProjectPlanWorkspace api={api} confirmAction={confirmAction} draft={active} initialAdvancedQuery={workspaceSelection.query?.filters?.[0]} initialArchiveMode={workspaceSelection.query?.archive?.[0] === "1"} initialMilestoneFilter={workspaceSelection.query?.milestone?.[0]} initialStatusFilter={workspaceSelection.query?.status?.[0]} initialSummaryFilter={workspaceSelection.query?.summary?.[0]} key={`project-plan:${activeRoute.projectId}`} locale={locale} onChanged={drafts.refresh} onNavigate={openWorkspace} projectId={activeRoute.projectId} selectedStageId={activeRoute.stageId} selectedTaskId={activeRoute.taskId} />)}
@@ -340,6 +342,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
         {view === "nav.workload" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <WorkloadWorkspace api={api} draft={active} locale={locale} onNavigate={openWorkspace} />)}
         {view === "nav.vacations" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <VacationCalendarWorkspace api={api} draft={active} locale={locale} onNavigate={openWorkspace} />)}
         {!projectWorkspaceRoute && !["nav.drafts", "nav.projects", "nav.tasks", "nav.people", "nav.calendar", "nav.administration", "nav.changes", "nav.files", "nav.history", "nav.repositoryConnection", "nav.board", "nav.gantt", "nav.effort", "nav.workload", "nav.vacations"].includes(view) && <div className="card empty-workspace">{t("common.notAvailable")}</div>}
+        </Suspense>
     </AppShell></PersonNameFormatProvider></>
   );
 }
