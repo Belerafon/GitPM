@@ -7,7 +7,6 @@ import type {
   ProjectFileItem,
   ProjectFileList,
   ProjectFileDeleteReferenceMode,
-  ProjectFileReferenceLocation,
   ProjectFileReferencePreview,
   ProjectFileReplaceResult,
   ProjectFileReferencesChecked,
@@ -15,19 +14,20 @@ import type {
   ProjectFileRenameResult,
   ProjectFileUploadResult,
 } from "@gitpm/contracts";
-import type { DraftManager, DraftMetadata, RepositoryWorkspace } from "@gitpm/drafts";
-import { formatYamlDocument, parseYamlDocument, referenceLabelsForDocuments, type GitPmDocument } from "@gitpm/repository-format";
-import { atomicWriteDomainFile, resolveDomainPath, SecurityBoundaryError } from "@gitpm/security";
+import type { DraftManager, RepositoryWorkspace } from "@gitpm/drafts";
+import { parseYamlDocument } from "@gitpm/repository-format";
+import { resolveDomainPath, SecurityBoundaryError } from "@gitpm/security";
 import { ENTITY_ID_PREFIX, formatProjectFileReference, isEntityId } from "@gitpm/shared";
-import { discoverRepositoryFiles, projectFileNameComparisonKey, projectFileNameInvalidReason, validateRepository } from "@gitpm/validation";
-import { searchProjectFileReferences } from "./project-file-reference-search.js";
+import { projectFileNameComparisonKey, projectFileNameInvalidReason, validateRepository } from "@gitpm/validation";
+import { ProjectFileOperationError } from "./project-file-operation-error.js";
+import {
+  ProjectFileReferenceTransaction,
+  type CheckedProjectFileReferences,
+  type ProjectFileReferenceMutation,
+  type ProjectFileWorkspace,
+} from "./project-file-reference-transaction.js";
 
-export class ProjectFileOperationError extends Error {
-  constructor(public readonly code: string, message: string) {
-    super(message);
-    this.name = "ProjectFileOperationError";
-  }
-}
+export { ProjectFileOperationError } from "./project-file-operation-error.js";
 
 export interface OpenProjectFile {
   readonly item: ProjectFileItem;
@@ -69,21 +69,6 @@ interface DirectorySnapshot {
   readonly canonicalPath: string;
   readonly dev: number;
   readonly ino: number;
-}
-
-interface LoadedDocument {
-  readonly absolute: string;
-  readonly relative: string;
-  readonly original: string;
-  readonly identity: Stats;
-  readonly document: GitPmDocument;
-}
-
-interface WrittenDocument {
-  readonly relative: string;
-  readonly original: string;
-  readonly written: string;
-  readonly identity: Stats;
 }
 
 const INLINE_MEDIA_TYPES: Readonly<Record<string, string>> = {
@@ -146,7 +131,7 @@ function assertProjectId(projectId: string): void {
   }
 }
 
-async function assertProject(metadata: RepositoryWorkspace, projectId: string): Promise<void> {
+async function assertProject(metadata: ProjectFileWorkspace, projectId: string): Promise<void> {
   assertProjectId(projectId);
   const relative = `projects/${projectId}/project.yaml`;
   let document;
@@ -306,65 +291,6 @@ function assertDeleteReferenceMode(mode: ProjectFileDeleteReferenceMode): void {
   }
 }
 
-async function loadRepositoryDocuments(root: string): Promise<readonly LoadedDocument[]> {
-  const discovery = await discoverRepositoryFiles(root);
-  if (discovery.issues.length > 0) {
-    const issue = discovery.issues[0]!;
-    throw new ProjectFileOperationError(issue.code, issue.message);
-  }
-  return await Promise.all(discovery.files.map(async (absolute) => {
-    const relative = normalize(path.relative(root, absolute));
-    const identity = await lstat(absolute);
-    if (identity.isSymbolicLink() || !identity.isFile()) throw new ProjectFileOperationError("PROJECT_FILE_REFERENCES_CHANGED", "Repository document is not a regular file");
-    const original = await readFile(absolute, "utf8");
-    const after = await lstat(absolute);
-    if (!sameIdentity(identity, after)) throw new ProjectFileOperationError("PROJECT_FILE_REFERENCES_CHANGED", "Repository document changed while references were loaded");
-    return { absolute, relative, original, identity: after, document: parseYamlDocument(original, relative) };
-  }));
-}
-
-function replaceAtOffsets(source: string, locations: readonly ProjectFileReferenceLocation[], replacement: string): string {
-  let result = source;
-  for (const location of [...locations].sort((left, right) => right.start - left.start || right.end - left.end)) {
-    result = `${result.slice(0, location.start)}${replacement}${result.slice(location.end)}`;
-  }
-  return result;
-}
-
-function rewriteDocument(
-  document: GitPmDocument,
-  locations: readonly ProjectFileReferenceLocation[],
-  replacement: string,
-): GitPmDocument {
-  const next = { ...document } as Record<string, unknown>;
-  const byField = new Map<string, ProjectFileReferenceLocation[]>();
-  for (const location of locations) {
-    const key = `${location.field}:${location.value_index ?? ""}`;
-    const entries = byField.get(key) ?? [];
-    entries.push(location);
-    byField.set(key, entries);
-  }
-  for (const entries of byField.values()) {
-    const first = entries[0]!;
-    if (first.field === "acceptance_criteria_markdown") {
-      const values = Array.isArray(next[first.field]) ? [...next[first.field] as unknown[]] : [];
-      const index = first.value_index;
-      if (index === undefined || typeof values[index] !== "string") {
-        throw new ProjectFileOperationError("PROJECT_FILE_REFERENCES_CHANGED", "Project file reference field changed during mutation");
-      }
-      values[index] = replaceAtOffsets(values[index] as string, entries, replacement);
-      next[first.field] = values;
-    } else {
-      const value = next[first.field];
-      if (typeof value !== "string") {
-        throw new ProjectFileOperationError("PROJECT_FILE_REFERENCES_CHANGED", "Project file reference field changed during mutation");
-      }
-      next[first.field] = replaceAtOffsets(value, entries, replacement);
-    }
-  }
-  return next as GitPmDocument;
-}
-
 async function removeIfSameIdentity(target: string, identity: Stats): Promise<boolean> {
   const current = await existingRegularFile(target);
   if (current === undefined) return true;
@@ -420,28 +346,17 @@ async function restoreFromHandle(directory: string, target: string, source: File
 
 export class ProjectFileStore {
   private readonly maxUploadBytes: number;
+  private readonly referenceTransaction: ProjectFileReferenceTransaction;
 
   constructor(private readonly drafts: DraftManager, private readonly options: ProjectFileStoreOptions = {}) {
     this.maxUploadBytes = options.maxUploadBytes ?? DEFAULT_PROJECT_FILE_MAX_UPLOAD_BYTES;
+    this.referenceTransaction = new ProjectFileReferenceTransaction(options);
   }
 
   private async workspace(draftId: string, projectId: string): Promise<RepositoryWorkspace> {
     const metadata = await this.drafts.getWorkspace(draftId);
     await assertProject(metadata, projectId);
     return metadata;
-  }
-
-  private async checkedReferences(
-    metadata: RepositoryWorkspace,
-    projectId: string,
-    fileName: string,
-  ): Promise<{ readonly documents: readonly LoadedDocument[]; readonly preview: Omit<ProjectFileReferencePreview, "draft_fingerprint"> }> {
-    const documents = await loadRepositoryDocuments(metadata.worktree_path);
-    const found = searchProjectFileReferences({ projectId, fileName, documents: documents.map((item) => item.document) });
-    return {
-      documents,
-      preview: { project_id: projectId, file_name: fileName, status: "checked", count: found.count, locations: found.locations },
-    };
   }
 
   async referencePreview(draftId: string, projectId: string, fileName: string): Promise<ProjectFileReferencePreview> {
@@ -452,101 +367,8 @@ export class ProjectFileStore {
     if (names.get(projectFileNameComparisonKey(fileName)) !== fileName) {
       throw new ProjectFileOperationError("PROJECT_FILE_NOT_FOUND", `Project file ${fileName} does not exist`);
     }
-    const checked = await this.checkedReferences(metadata, projectId, fileName);
+    const checked = await this.referenceTransaction.check(metadata, projectId, fileName);
     return { ...checked.preview, draft_fingerprint: metadata.fingerprint };
-  }
-
-  private async writeReferences(
-    metadata: DraftMetadata,
-    projectId: string,
-    fileName: string,
-    replacement: string,
-    action: "updated" | "unlinked",
-    loaded?: Awaited<ReturnType<ProjectFileStore["checkedReferences"]>>,
-  ): Promise<{ readonly references: ProjectFileReferencesChecked; readonly journal: readonly WrittenDocument[] }> {
-    const checked = loaded ?? await this.checkedReferences(metadata as unknown as RepositoryWorkspace, projectId, fileName);
-    const locationsByPath = new Map<string, ProjectFileReferenceLocation[]>();
-    for (const location of checked.preview.locations) {
-      const entries = locationsByPath.get(location.path) ?? [];
-      entries.push(location);
-      locationsByPath.set(location.path, entries);
-    }
-    const updated = new Map<string, GitPmDocument>();
-    for (const item of checked.documents) {
-      const locations = locationsByPath.get(item.relative);
-      if (locations !== undefined) updated.set(item.relative, rewriteDocument(item.document, locations, replacement));
-    }
-    const labels = referenceLabelsForDocuments(checked.documents.map((item) => updated.get(item.relative) ?? item.document));
-    const journal: WrittenDocument[] = [];
-    try {
-      await this.options.beforeReferenceWriteForTest?.();
-      for (const item of checked.documents.filter((candidate) => updated.has(candidate.relative))) {
-        const written = formatYamlDocument(updated.get(item.relative)!, labels);
-        const identity = await atomicWriteDomainFile(metadata.worktree_path, item.relative, written, {
-          beforeRenameForTest: async () => {
-            const current = await lstat(item.absolute);
-            const content = current.isFile() && !current.isSymbolicLink() ? await readFile(item.absolute, "utf8") : undefined;
-            if (!sameIdentity(current, item.identity) || content !== item.original) {
-              throw new ProjectFileOperationError("PROJECT_FILE_REFERENCES_CHANGED", "Repository document changed before reference update");
-            }
-          },
-        });
-        journal.push({ relative: item.relative, original: item.original, written, identity });
-        await this.options.afterReferenceWriteForTest?.();
-      }
-      const after = await this.checkedReferences(metadata as unknown as RepositoryWorkspace, projectId, fileName);
-      if (after.preview.count !== 0) {
-        throw new ProjectFileOperationError("PROJECT_FILE_REFERENCES_CHANGED", "Project file references changed during mutation");
-      }
-      return {
-        references: {
-          status: "checked",
-          action,
-          before_count: checked.preview.count,
-          affected_count: checked.preview.count,
-          remaining_count: 0,
-          locations: checked.preview.locations,
-        },
-        journal,
-      };
-    } catch (error) {
-      await this.rollbackReferences(metadata, projectId, journal);
-      throw error;
-    }
-  }
-
-  private async rollbackReferences(metadata: DraftMetadata, projectId: string, journal: readonly WrittenDocument[]): Promise<void> {
-    const recoveries: string[] = [];
-    let recoveryWriteFailures = 0;
-    for (const entry of [...journal].reverse()) {
-      const absolute = await resolveDomainPath(metadata.worktree_path, entry.relative);
-      try {
-        await atomicWriteDomainFile(metadata.worktree_path, entry.relative, entry.original, {
-          beforeRenameForTest: async () => {
-            const current = await lstat(absolute);
-            const content = current.isFile() && !current.isSymbolicLink() ? await readFile(absolute, "utf8") : undefined;
-            if (!current.isFile() || current.isSymbolicLink() || !sameIdentity(current, entry.identity) || content !== entry.written) {
-              throw new ProjectFileOperationError("PROJECT_FILE_REFERENCES_CHANGED", "Repository document changed before reference rollback");
-            }
-          },
-        });
-      } catch {
-        const recoveryName = `.gitpm-project-file-${randomUUID()}.references-recovery`;
-        const recoveryPath = `projects/${projectId}/files/${recoveryName}`;
-        try {
-          await this.options.beforeReferenceRecoveryWriteForTest?.();
-          await atomicWriteDomainFile(metadata.worktree_path, recoveryPath, entry.original);
-          recoveries.push(recoveryPath);
-        } catch {
-          recoveryWriteFailures += 1;
-        }
-      }
-    }
-    if (recoveries.length > 0 || recoveryWriteFailures > 0) {
-      const created = recoveries.length === 0 ? "" : `; recovery copies: ${recoveries.join(", ")}`;
-      const failed = recoveryWriteFailures === 0 ? "" : `; ${recoveryWriteFailures} recovery copy could not be created`;
-      throw new ProjectFileOperationError("PROJECT_FILE_ROLLBACK_FAILED", `Project file reference rollback was incomplete${created}${failed}`);
-    }
   }
 
   async list(draftId: string, projectId: string): Promise<ProjectFileList> {
@@ -674,11 +496,11 @@ export class ProjectFileStore {
       if (name === newName) {
         throw new ProjectFileOperationError("PROJECT_FILE_RENAME_NO_CHANGE", "New Project file name is unchanged");
       }
-      await assertProject(metadata as unknown as RepositoryWorkspace, projectId);
+      await assertProject(metadata, projectId);
       try {
         const checked = referenceMode === "ignore_unchecked"
           ? undefined
-          : await this.checkedReferences(metadata as unknown as RepositoryWorkspace, projectId, name);
+          : await this.referenceTransaction.check(metadata, projectId, name);
         const kept: ProjectFileReferencesChecked | undefined = referenceMode === "keep" && checked !== undefined ? {
           status: "checked",
           action: "kept",
@@ -688,7 +510,7 @@ export class ProjectFileStore {
           locations: checked.preview.locations,
         } : undefined;
         return await this.renameInWorkspace(metadata, projectId, name, newName, referenceMode === "update" && checked !== undefined
-          ? async () => await this.writeReferences(metadata, projectId, name, formatProjectFileReference(newName), "updated", checked)
+          ? async () => await this.referenceTransaction.write(metadata, projectId, name, formatProjectFileReference(newName), "updated", checked)
           : undefined, kept);
       } catch (error) {
         filesystemError(error, "PROJECT_FILE_NOT_FOUND", `Project file ${name} does not exist`);
@@ -723,11 +545,11 @@ export class ProjectFileStore {
           "Project file deletion requires confirmation of the exact file name",
         );
       }
-      await assertProject(metadata as unknown as RepositoryWorkspace, projectId);
+      await assertProject(metadata, projectId);
       try {
         const checked = referenceMode === "ignore_unchecked"
           ? undefined
-          : await this.checkedReferences(metadata as unknown as RepositoryWorkspace, projectId, name);
+          : await this.referenceTransaction.check(metadata, projectId, name);
         if (referenceMode === "restrict" && checked !== undefined && checked.preview.count > 0) {
           throw new ProjectFileOperationError("PROJECT_FILE_DELETE_REFERENCED", "Project file is referenced and must be unlinked explicitly");
         }
@@ -735,7 +557,7 @@ export class ProjectFileStore {
           status: "checked", action: "preserved", before_count: 0, affected_count: 0, remaining_count: 0, locations: [],
         } : undefined;
         return await this.deleteInWorkspace(metadata, projectId, name, referenceMode === "unlink" && checked !== undefined
-          ? async () => await this.writeReferences(metadata, projectId, name, name, "unlinked", checked)
+          ? async () => await this.referenceTransaction.write(metadata, projectId, name, name, "unlinked", checked)
           : undefined, restricted);
       } catch (error) {
         filesystemError(error, "PROJECT_FILE_NOT_FOUND", `Project file ${name} does not exist`);
@@ -754,11 +576,11 @@ export class ProjectFileStore {
   }
 
   private async renameInWorkspace(
-    metadata: DraftMetadata,
+    metadata: ProjectFileWorkspace,
     projectId: string,
     name: string,
     newName: string,
-    mutateReferences?: () => Promise<{ readonly references: ProjectFileReferencesChecked; readonly journal: readonly WrittenDocument[] }>,
+    mutateReferences?: () => Promise<ProjectFileReferenceMutation>,
     existingReferences?: ProjectFileReferencesChecked,
   ): Promise<{ readonly item: ProjectFileItem; readonly references?: ProjectFileReferencesChecked }> {
     const filesDirectory = await resolveDomainPath(metadata.worktree_path, `projects/${projectId}/files`);
@@ -786,7 +608,7 @@ export class ProjectFileStore {
     let sourceDetached = false;
     let publishedIdentity: Stats | undefined;
     let preserveTemporaryForRecovery = false;
-    let referenceMutation: { readonly references: ProjectFileReferencesChecked; readonly journal: readonly WrittenDocument[] } | undefined;
+    let referenceMutation: ProjectFileReferenceMutation | undefined;
     try {
       await this.options.beforeRenameForTest?.();
       await assertDirectoryUnchanged(filesSnapshot);
@@ -852,7 +674,7 @@ export class ProjectFileStore {
     } catch (error) {
       let rollbackError: unknown;
       if (referenceMutation !== undefined) {
-        try { await this.rollbackReferences(metadata, projectId, referenceMutation.journal); }
+        try { await this.referenceTransaction.rollback(metadata, projectId, referenceMutation.journal); }
         catch (referenceError) { rollbackError = referenceError; }
       }
       if (publishedIdentity !== undefined) {
@@ -898,10 +720,10 @@ export class ProjectFileStore {
   }
 
   private async deleteInWorkspace(
-    metadata: DraftMetadata,
+    metadata: ProjectFileWorkspace,
     projectId: string,
     name: string,
-    mutateReferences?: () => Promise<{ readonly references: ProjectFileReferencesChecked; readonly journal: readonly WrittenDocument[] }>,
+    mutateReferences?: () => Promise<ProjectFileReferenceMutation>,
     existingReferences?: ProjectFileReferencesChecked,
   ): Promise<{ readonly stat: Stats; readonly references?: ProjectFileReferencesChecked }> {
     const filesDirectory = await resolveDomainPath(metadata.worktree_path, `projects/${projectId}/files`);
@@ -920,7 +742,7 @@ export class ProjectFileStore {
     let temporaryExists = false;
     let deleted = false;
     let preserveTemporaryForRecovery = false;
-    let referenceMutation: { readonly references: ProjectFileReferencesChecked; readonly journal: readonly WrittenDocument[] } | undefined;
+    let referenceMutation: ProjectFileReferenceMutation | undefined;
     try {
       await this.options.beforeDeleteForTest?.();
       await assertDirectoryUnchanged(filesSnapshot);
@@ -963,7 +785,7 @@ export class ProjectFileStore {
     } catch (error) {
       let rollbackError: unknown;
       if (referenceMutation !== undefined) {
-        try { await this.rollbackReferences(metadata, projectId, referenceMutation.journal); }
+        try { await this.referenceTransaction.rollback(metadata, projectId, referenceMutation.journal); }
         catch (referenceError) { rollbackError = referenceError; }
       }
       if (deleted) {
@@ -1019,8 +841,8 @@ export class ProjectFileStore {
       if (input.sizeBytes > PROJECT_FILE_LARGE_THRESHOLD_BYTES && input.largeFileConfirmation !== input.name) {
         throw new ProjectFileOperationError("PROJECT_FILE_LARGE_CONFIRMATION_REQUIRED", "Files larger than 50 MiB require confirmation of the exact new file name");
       }
-      await assertProject(metadata as unknown as RepositoryWorkspace, projectId);
-      const checked = await this.checkedReferences(metadata as unknown as RepositoryWorkspace, projectId, previousName);
+      await assertProject(metadata, projectId);
+      const checked = await this.referenceTransaction.check(metadata, projectId, previousName);
       try {
         return await this.replaceInWorkspace(metadata, projectId, previousName, input, checked);
       } catch (error) {
@@ -1038,11 +860,11 @@ export class ProjectFileStore {
   }
 
   private async replaceInWorkspace(
-    metadata: DraftMetadata,
+    metadata: ProjectFileWorkspace,
     projectId: string,
     previousName: string,
     input: ProjectFileReplaceInput,
-    checked: Awaited<ReturnType<ProjectFileStore["checkedReferences"]>>,
+    checked: CheckedProjectFileReferences,
   ): Promise<{ readonly item: ProjectFileItem; readonly references: ProjectFileReferencesChecked }> {
     const filesDirectory = await resolveDomainPath(metadata.worktree_path, `projects/${projectId}/files`);
     const filesSnapshot = await existingFilesDirectorySnapshot(filesDirectory, previousName);
@@ -1069,7 +891,7 @@ export class ProjectFileStore {
     let backupIdentity: Stats | undefined;
     let backupExists = false;
     let publishedIdentity: Stats | undefined;
-    let referenceMutation: { readonly references: ProjectFileReferencesChecked; readonly journal: readonly WrittenDocument[] } | undefined;
+    let referenceMutation: ProjectFileReferenceMutation | undefined;
     let preserveBackupForRecovery = false;
     try {
       let handle: FileHandle;
@@ -1119,7 +941,7 @@ export class ProjectFileStore {
       if (!sameIdentity(publishedIdentity, temporaryIdentity)) throw new ProjectFileOperationError("PROJECT_FILE_CHANGED_EXTERNALLY", "Project file replacement staging changed during publication");
 
       if (previousName !== input.name) {
-        referenceMutation = await this.writeReferences(metadata, projectId, previousName, formatProjectFileReference(input.name), "updated", checked);
+        referenceMutation = await this.referenceTransaction.write(metadata, projectId, previousName, formatProjectFileReference(input.name), "updated", checked);
       }
       await this.options.beforeValidationForTest?.("replace");
       const report = await validateRepository(metadata.worktree_path);
@@ -1132,13 +954,13 @@ export class ProjectFileStore {
         throw new ProjectFileOperationError("PROJECT_FILE_CHANGED_EXTERNALLY", "Project file names changed while replacement was validated");
       }
       if (previousName === input.name) {
-        const fresh = await this.checkedReferences(metadata as unknown as RepositoryWorkspace, projectId, previousName);
+        const fresh = await this.referenceTransaction.check(metadata, projectId, previousName);
         referenceMutation = { references: {
           status: "checked", action: "preserved", before_count: fresh.preview.count, affected_count: 0,
           remaining_count: fresh.preview.count, locations: fresh.preview.locations,
         }, journal: [] };
       } else {
-        const oldReferences = await this.checkedReferences(metadata as unknown as RepositoryWorkspace, projectId, previousName);
+        const oldReferences = await this.referenceTransaction.check(metadata, projectId, previousName);
         if (oldReferences.preview.count !== 0) throw new ProjectFileOperationError("PROJECT_FILE_REFERENCES_CHANGED", "Project file references changed during replacement validation");
       }
       if (!await removeIfSameIdentity(temporary, temporaryIdentity)) throw new ProjectFileOperationError("PROJECT_FILE_CHANGED_EXTERNALLY", "Project file replacement staging changed during cleanup");
@@ -1150,7 +972,7 @@ export class ProjectFileStore {
     } catch (error) {
       let rollbackError: unknown;
       if (referenceMutation !== undefined && referenceMutation.journal.length > 0) {
-        try { await this.rollbackReferences(metadata, projectId, referenceMutation.journal); }
+        try { await this.referenceTransaction.rollback(metadata, projectId, referenceMutation.journal); }
         catch (caught) { rollbackError = caught; }
       }
       if (publishedIdentity !== undefined) {
@@ -1201,7 +1023,7 @@ export class ProjectFileStore {
       if (input.mode === "create" && input.referenceMode === "preserve_checked") {
         throw new ProjectFileOperationError("PROJECT_FILE_REFERENCES_UNSUPPORTED", "Checked reference preservation is available only for exact replacement");
       }
-      await assertProject(metadata as unknown as RepositoryWorkspace, projectId);
+      await assertProject(metadata, projectId);
       try {
         return await this.uploadInWorkspace(metadata, projectId, input);
       } catch (error) {
@@ -1218,7 +1040,7 @@ export class ProjectFileStore {
   }
 
   private async uploadInWorkspace(
-    metadata: DraftMetadata,
+    metadata: ProjectFileWorkspace,
     projectId: string,
     input: ProjectFileUploadInput,
   ): Promise<{ readonly operation: "created" | "replaced"; readonly item: ProjectFileItem; readonly references?: ProjectFileReferencesChecked }> {
@@ -1370,7 +1192,7 @@ export class ProjectFileStore {
           throw new ProjectFileOperationError("PROJECT_FILE_VALIDATION_FAILED", report.errors[0]?.message ?? "Repository validation failed");
         }
         const checked = input.mode === "replace" && input.referenceMode === "preserve_checked"
-          ? await this.checkedReferences(metadata as unknown as RepositoryWorkspace, projectId, input.name)
+          ? await this.referenceTransaction.check(metadata, projectId, input.name)
           : undefined;
         const references: ProjectFileReferencesChecked | undefined = checked === undefined ? undefined : {
           status: "checked", action: "preserved", before_count: checked.preview.count,
