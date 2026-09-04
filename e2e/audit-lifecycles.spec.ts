@@ -27,7 +27,10 @@ async function archiveProject(request: APIRequestContext, draft: DraftStatus, pr
 }
 
 test.describe("audited vertical lifecycles", () => {
-  test.afterEach(async ({ request }) => await cleanupDrafts(request, prefix));
+  test.afterEach(async ({ page, request }) => {
+    await page.close();
+    await cleanupDrafts(request, prefix);
+  });
 
   test("archive Project -> reload Workload -> active Tasks are excluded", async ({ page, request }) => {
     test.setTimeout(120_000);

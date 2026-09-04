@@ -4,7 +4,13 @@ import { formatDuration, parseArguments, verificationPlan } from "./run-local-ve
 describe("local verification runner", () => {
   it("builds the complete local plan with a frozen install", () => {
     const options = parseArguments(["--install"]);
-    expect(options).toEqual({ profile: "full", install: true });
+    expect(options).toEqual({
+      profile: "full",
+      install: true,
+      resume: false,
+      lowImpact: false,
+      reportPath: undefined,
+    });
     expect(verificationPlan(options).map((step) => step.name)).toEqual([
       "frozen install",
       "clean",
@@ -61,5 +67,15 @@ describe("local verification runner", () => {
   it("rejects unknown profiles and renders useful elapsed time", () => {
     expect(() => parseArguments(["--profile", "mystery"])).toThrow("Unknown verification profile");
     expect(formatDuration(125_400)).toBe("2m 05s");
+  });
+
+  it("parses resumable low-impact verification with an explicit report", () => {
+    expect(parseArguments(["--resume", "--low-impact", "--report", ".tmp/result.json"])).toEqual({
+      profile: "full",
+      install: false,
+      resume: true,
+      lowImpact: true,
+      reportPath: ".tmp/result.json",
+    });
   });
 });

@@ -191,10 +191,16 @@ most groups. It is an escalation path, not the default for every source, test, o
 change.
 
 The verification runner prints each command, PID, timeout, 30-second heartbeat, per-step result,
-and final timing summary. Vitest uses half of the available logical CPUs, capped at four workers;
+and final timing summary, and writes JSON reports and resumable checkpoints under `.tmp/`. After
+repairing a failed full gate, use `corepack pnpm verify:resume`; it fingerprints source inputs and
+reuses only successful stages unaffected by the repair. Use `corepack pnpm verify:changed` as a
+conservative starting profile selector, but review its printed paths and profiles before relying on
+them. Vitest uses half of the available logical CPUs, capped at four workers;
 override it with `GITPM_TEST_WORKERS` only for diagnosis. Playwright stays at one worker because
-its files share repository servers and polling state. Do not overlap browser profiles from
-multiple worktrees because their ports are fixed. Override heartbeat or step timeout with
+its files share repository servers and polling state. Browser commands automatically lock across
+worktrees because their ports are fixed, and local runs stop after the first failure to prevent
+cascades. Use `corepack pnpm verify:local:low-impact` to cap Vitest at two workers while the machine
+is in use. Override heartbeat or step timeout with
 `GITPM_VERIFY_HEARTBEAT_SECONDS` or `GITPM_VERIFY_TIMEOUT_MINUTES`.
 
 If a selected profile cannot run, do not describe the work as verified: report the exact failing

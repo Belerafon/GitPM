@@ -28,16 +28,18 @@ corepack pnpm verify
 The install must not modify `pnpm-lock.yaml`. `verify` performs a clean build, lint, typecheck,
 tests, health smoke, schema fixtures, credential-boundary report and planning checks. The local
 runner reports the active command and PID, emits a heartbeat every 30 seconds, enforces a timeout
-for every step, fails fast, and prints a timing summary. This makes slow Git and browser tests
-distinguishable from a stalled process.
+for every step, fails fast, and prints a timing summary. It also writes incremental machine-readable
+reports to `.tmp/verification-reports/` and a resumable checkpoint per profile. This makes slow Git
+and browser tests distinguishable from a stalled process.
 
 Local verification runs Vitest with half of the available logical CPUs, capped at four workers.
 `GITPM_TEST_WORKERS` overrides that value for constrained-machine diagnosis. Playwright remains at
 one worker because its files share repository servers and polling state; measurements with two
 workers exposed fingerprint/polling races for only a modest wall-clock improvement.
 `GITPM_E2E_WORKERS` remains a diagnostic override and values above one are not accepted for the
-required gate. Run only one complete gate at a time: E2E uses fixed ports and concurrent Git-heavy
-suites slow each other down. Set `GITPM_VERIFY_HEARTBEAT_SECONDS` to change heartbeat frequency or
+required gate. Playwright commands automatically serialize through the shared Git directory because
+E2E uses fixed ports; a second worktree waits for the lock. Local runs stop after one browser failure
+to prevent cleanup and timeout cascades. Set `GITPM_VERIFY_HEARTBEAT_SECONDS` to change heartbeat frequency or
 `GITPM_VERIFY_TIMEOUT_MINUTES` to override every step timeout.
 
 For normal development, select one or more impact profiles from
@@ -47,6 +49,13 @@ For normal development, select one or more impact profiles from
 crosses the corresponding browser boundary. For a text-only change to generated agent guidance,
 use `verify:guidance`. Each profile keeps the frozen install and the build, lint, test, and
 specialized checks relevant to its ownership boundary while skipping unrelated suites.
+
+`corepack pnpm verify:changed` prints the changed files and selects the conservative profile set
+against `main`; use `--base <ref>` to select another comparison base. After a failed full gate,
+fix the failure and use `corepack pnpm verify:resume`. The runner fingerprints tracked and untracked
+source inputs and reuses only successful stages unaffected by the repair. Use
+`corepack pnpm verify:local:low-impact` to cap Vitest at two workers while doing other work on the
+same computer. The normal four-worker cap remains the faster unattended mode.
 
 Use `corepack pnpm verify:local` for releases and changes whose impact cannot be bounded
 confidently, including root dependency/lockfile, build/test infrastructure, and broad
