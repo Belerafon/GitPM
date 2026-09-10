@@ -60,6 +60,7 @@ COPY --from=opencode /usr/local/bin/opencode /usr/local/bin/opencode
 
 WORKDIR /app
 COPY . .
+RUN chmod +x scripts/git-askpass.mjs
 
 # Capture the build version from Git into build-version.json (mandatory: the
 # step fails if .git is absent, so the version is never silently faked), then

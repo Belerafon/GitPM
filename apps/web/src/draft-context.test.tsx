@@ -110,4 +110,26 @@ describe("DraftProvider polling", () => {
     expect(result.current.snapshot).not.toBe(initial);
     expect(result.current.snapshot?.draft.fingerprint).toBe("c".repeat(64));
   });
+
+  it("shows the GitLab login state when the session has GitLab configured but no signed-in user", async () => {
+    const listDrafts = vi.fn(async () => {
+      throw new Error("SESSION_INVALID");
+    });
+    const api = gitPmApi({
+      session: vi.fn(async () => ({
+        user: { id: "anonymous", username: "anonymous" },
+        role: "Reporter" as const,
+        mode: "repository" as const,
+        repository_mode: "worktree" as const,
+        repository: { name: "repository", path: "/repository", has_remote: true },
+        gitlab: { configured: true },
+        expires_at: "9999-12-31T23:59:59.999Z",
+      })),
+      listDrafts,
+    });
+    const { result } = renderHook(() => useDrafts(), { wrapper: ({ children }: { readonly children: ReactNode }) => <DraftProvider api={api}>{children}</DraftProvider> });
+    await flush();
+    expect(result.current.session).toBeNull();
+    expect(listDrafts).not.toHaveBeenCalled();
+  });
 });
