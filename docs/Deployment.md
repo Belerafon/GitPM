@@ -166,6 +166,9 @@ be combined with `GITPM_GITLAB_PROJECT_TOKEN`.
 
 This profile bundles the OpenCode web UI (`:4096`) alongside GitPM, with Caddy
 in front of GitPM's web (`:80` inside the container) providing HTTP basic auth.
+Caddy proxies `/api` to the GitPM server (`:3000`) and the rest of the UI to
+Vite (`:5173`). `/api/auth/callback` is excluded from basic auth so GitLab can
+complete OAuth; other `/api` routes stay behind basic auth.
 It is the profile used on a dedicated server such as `myserver`.
 
 ### Layout

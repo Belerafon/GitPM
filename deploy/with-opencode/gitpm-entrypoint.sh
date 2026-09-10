@@ -10,17 +10,33 @@ if [ -z "$BASIC_AUTH_USER" ] || [ -z "$BASIC_AUTH_PASS" ]; then
   echo "[entrypoint] WARNING: BASIC_AUTH_* not set, starting Caddy WITHOUT auth"
   cat > /tmp/Caddyfile <<'CADDYEOF'
 :80 {
-    reverse_proxy 127.0.0.1:5173
+    handle /api* {
+        reverse_proxy 127.0.0.1:3000
+    }
+    handle {
+        reverse_proxy 127.0.0.1:5173
+    }
 }
 CADDYEOF
 else
   HASH=$(caddy hash-password --plaintext "$BASIC_AUTH_PASS")
   cat > /tmp/Caddyfile <<CADDYEOF
 :80 {
-    basicauth {
-        $BASIC_AUTH_USER $HASH
+    handle /api/auth/callback* {
+        reverse_proxy 127.0.0.1:3000
     }
-    reverse_proxy 127.0.0.1:5173
+    handle /api* {
+        basicauth {
+            $BASIC_AUTH_USER $HASH
+        }
+        reverse_proxy 127.0.0.1:3000
+    }
+    handle {
+        basicauth {
+            $BASIC_AUTH_USER $HASH
+        }
+        reverse_proxy 127.0.0.1:5173
+    }
 }
 CADDYEOF
 fi
