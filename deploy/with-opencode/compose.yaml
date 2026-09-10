@@ -32,6 +32,7 @@ services:
       GITPM_NO_BROWSER: "1"
       GITPM_REPOSITORY_PATH: /repository
       GITPM_DATA_DIR: /data
+      GITPM_WEB_URL: ${GITPM_WEB_URL:-http://10.0.0.1:86}
     volumes:
       # Durable user data lives on the host; rebuilding the image never touches it.
       - ${GITPM_DEPLOY_ROOT:-/srv/gitpm}/repository:/repository
