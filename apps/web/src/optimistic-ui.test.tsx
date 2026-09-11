@@ -6,6 +6,7 @@ import { useFlipList } from "./optimistic-ui.js";
 interface TestItem {
   readonly key: string;
   readonly rect: string;
+  readonly translate?: string;
 }
 
 interface FlipHostProps {
@@ -18,7 +19,18 @@ function FlipHost({ items, hostRect = "0,0", reducedMotion = false }: FlipHostPr
   const ref = useFlipList<HTMLDivElement>(reducedMotion);
   return (
     <div ref={ref} data-rect={hostRect}>
-      {items.map((item) => <div data-flip-key={item.key} data-rect={item.rect} key={item.key} />)}
+      {items.map((item) => <div data-flip-key={item.key} data-rect={item.rect} data-translate={item.translate} key={item.key} />)}
+    </div>
+  );
+}
+
+function NestedFlipHost({ parent, child, hostRect = "0,0" }: { readonly parent: TestItem; readonly child: TestItem; readonly hostRect?: string }) {
+  const ref = useFlipList<HTMLDivElement>(false);
+  return (
+    <div ref={ref} data-rect={hostRect}>
+      <div data-flip-key={parent.key} data-rect={parent.rect} data-translate={parent.translate}>
+        <div data-flip-key={child.key} data-rect={child.rect} data-translate={child.translate} />
+      </div>
     </div>
   );
 }
@@ -41,11 +53,29 @@ function installRectMock() {
   });
 }
 
+function installStyleMock() {
+  const original = window.getComputedStyle.bind(window);
+  return vi.spyOn(window, "getComputedStyle").mockImplementation((element: Element, pseudoElt?: string | null) => {
+    const style = original(element, pseudoElt);
+    const marker = (element as HTMLElement).dataset?.translate;
+    if (marker === undefined) return style;
+    const { left, top } = parseRect(marker);
+    return new Proxy(style, {
+      get(target, prop, receiver) {
+        if (prop === "transform") return `matrix(1, 0, 0, 1, ${left}, ${top})`;
+        const value = Reflect.get(target, prop, receiver);
+        return typeof value === "function" ? (value as (...args: never[]) => unknown).bind(target) : value;
+      },
+    });
+  });
+}
+
 type AnimateProperty = ((this: HTMLElement, keyframes: unknown, options?: unknown) => unknown) | undefined;
 
 describe("useFlipList", () => {
   const animateMock = vi.fn();
   let rectSpy: ReturnType<typeof installRectMock>;
+  let styleSpy: ReturnType<typeof installStyleMock>;
   let originalAnimate: AnimateProperty;
 
   beforeEach(() => {
@@ -53,10 +83,12 @@ describe("useFlipList", () => {
     (Element.prototype as { animate?: AnimateProperty }).animate = animateMock as unknown as NonNullable<AnimateProperty>;
     animateMock.mockReset();
     rectSpy = installRectMock();
+    styleSpy = installStyleMock();
   });
 
   afterEach(() => {
     rectSpy.mockRestore();
+    styleSpy.mockRestore();
     if (originalAnimate === undefined) delete (Element.prototype as { animate?: AnimateProperty }).animate;
     else (Element.prototype as { animate?: AnimateProperty }).animate = originalAnimate;
     cleanup();
@@ -103,6 +135,24 @@ describe("useFlipList", () => {
     const { rerender } = render(<FlipHost items={[{ key: "A", rect: "0,0" }, { key: "B", rect: "0,40" }]} hostRect="0,0" />);
     animateMock.mockClear();
     rerender(<FlipHost items={[{ key: "B", rect: "0,40" }, { key: "C", rect: "0,80" }]} hostRect="0,0" />);
+    expect(animateMock).not.toHaveBeenCalled();
+  });
+
+  it("does not restart when a later render samples in-flight translates of an unchanged layout", () => {
+    const { rerender } = render(<FlipHost items={[{ key: "A", rect: "0,0" }, { key: "B", rect: "0,40" }]} hostRect="0,0" />);
+    rerender(<FlipHost items={[{ key: "A", rect: "0,40" }, { key: "B", rect: "0,0" }]} hostRect="0,0" />);
+    expect(animateMock).toHaveBeenCalled();
+    animateMock.mockClear();
+    rerender(<FlipHost items={[{ key: "A", rect: "0,20", translate: "0,-20" }, { key: "B", rect: "0,20", translate: "0,20" }]} hostRect="0,0" />);
+    expect(animateMock).not.toHaveBeenCalled();
+  });
+
+  it("does not animate nested keys when only an ancestor's in-flight translate remains", () => {
+    const { rerender } = render(<NestedFlipHost parent={{ key: "stage", rect: "0,0" }} child={{ key: "task", rect: "0,40" }} />);
+    rerender(<NestedFlipHost parent={{ key: "stage", rect: "0,80" }} child={{ key: "task", rect: "0,120" }} />);
+    expect(animateMock).toHaveBeenCalled();
+    animateMock.mockClear();
+    rerender(<NestedFlipHost parent={{ key: "stage", rect: "0,40", translate: "0,-40" }} child={{ key: "task", rect: "0,80" }} />);
     expect(animateMock).not.toHaveBeenCalled();
   });
 });

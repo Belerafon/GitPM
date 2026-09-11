@@ -569,7 +569,6 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
       : null;
     void mutate(async () => {
       const created = await api.createEntity(draft.draft_id, "tasks", priorWorkspace.draft_fingerprint, document);
-      applyResult(created);
       if (reorder === null) return created;
       const stage = priorWorkspace.milestones.find((item) => item.document.id === reorder.stageId);
       if (stage === undefined) return created;
@@ -581,7 +580,14 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
         reorder.beforeId,
         reorder.afterId,
       );
-      return await api.updateEntity(draft.draft_id, "milestones", stage, created.draft_fingerprint, { ...stage.document, task_order: taskOrder } as EntityDocument);
+      const orderedDocument = { ...stage.document, task_order: taskOrder } as EntityDocument;
+      setWorkspace((current) => current === null ? current : {
+        ...current,
+        tasks: upsertEntity(current.tasks, created),
+        milestones: current.milestones.map((item) => item.document.id === stage.document.id ? { ...item, document: orderedDocument } : item),
+        draft_fingerprint: created.draft_fingerprint,
+      });
+      return await api.updateEntity(draft.draft_id, "milestones", stage, created.draft_fingerprint, orderedDocument);
     }, id);
   };
 
