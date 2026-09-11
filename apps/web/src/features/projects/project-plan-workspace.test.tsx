@@ -1424,6 +1424,15 @@ describe("ProjectPlanWorkspace", () => {
     expect(orphanTitles).not.toContain("Active milestone task");
   });
 
+  it("hides the outside-active-milestones group when every active task belongs to an active milestone", async () => {
+    const client = api([linked, urgent], [stage, laterStage]);
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={project.document.id} />);
+    await screen.findByRole("heading", { name: "Alpha" });
+    expect(screen.queryByRole("heading", { name: "Outside active milestones" })).toBeNull();
+    expect(document.querySelector(".project-plan-unassigned")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Outside active milestones:/u })).toBeNull();
+  });
+
   it("does not list archived tasks in the current plan", async () => {
     const ghost = result({ schema: "gitpm/task@2", id: "T-26-GHOST", project: project.document.id, milestone: stage.document.id, title: "Ghost task", type: "task", status: "backlog", lifecycle: "archived" });
     const client = api([ghost, linked], [stage, laterStage]);

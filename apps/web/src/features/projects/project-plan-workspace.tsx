@@ -729,7 +729,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
               number={number}
               t={t}
             />)}
-            {(milestoneFilter === "" || milestoneFilter === "none") && (!filterActive || visibleOutsideStages.length > 0) && <section className={`project-plan-stage project-plan-unassigned${visibleOutsideStages.length > 0 ? " has-work" : ""}`}>
+            {(milestoneFilter === "" || milestoneFilter === "none") && visibleOutsideStages.length > 0 && <section className="project-plan-stage project-plan-unassigned has-work">
               <header><div><span className="project-plan-stage-kind">{t("projectPlan.systemGroup")}</span><h3>{t("projectPlan.unassignedHeading")}</h3><p>{t("projectPlan.unassignedDescription")}</p></div><div className="project-plan-stage-actions"><button disabled={readOnly} onClick={() => setEditor({ kind: "task" })}>+ {t("core.createTaskAction")}</button></div></header>
               <TaskRows allTasks={outsideStages} locale={locale} onCreate={(spec) => setEditor({ kind: "task", ...spec })} onNavigate={onNavigate} onStatusChange={changeTaskStatus} people={people} projectId={projectId} query={navigationQuery} readOnly={readOnly} roots={systemRoots} savingTaskIds={new Set([...(orderPending ?? []), ...(statusPending === null ? [] : [statusPending])])} selectedTaskId={selectedTaskId} statusBusy={statusPending !== null} statusOptions={statuses} statusTitle={statusTitle} taskFields={taskFields} visibleIds={new Set(visibleOutsideStages.map((task) => task.document.id))} text={text} number={number} t={t} />
             </section>}
