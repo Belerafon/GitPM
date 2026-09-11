@@ -319,6 +319,36 @@ describe("core UI", () => {
     await waitFor(() => expect(restore).toHaveBeenCalledWith(draft.draft_id, "tasks", task, expect.any(String), { restoreMilestone: true }));
   });
 
+  it("deletes a task from detail actions without opening the editor", async () => {
+    const entityApi = new EntityApi(); const api = gitPmApi(entityApi);
+    const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
+    const task = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-333333", project: project.document.id, title: "Doomed task", type: "task", status: "backlog", lifecycle: "active" });
+    const confirmAction = vi.fn(() => true);
+    const onNavigate = vi.fn();
+    render(<CoreWorkspace api={api} confirmAction={confirmAction} draft={draft} initialProjectId={project.document.id} initialTaskId={task.document.id} locale="en" surface="tasks" onNavigate={onNavigate} onChanged={vi.fn(async () => undefined)} />);
+    await screen.findByRole("heading", { name: "Doomed task" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    expect(confirmAction).toHaveBeenCalledWith("Delete Doomed task permanently? This action cannot be undone.");
+    await waitFor(() => expect(entityApi.entities.some((item) => item.document.id === task.document.id)).toBe(false));
+    expect(onNavigate).toHaveBeenCalledWith("tasks", { projectId: project.document.id });
+  });
+
+  it("keeps task delete visible in the editor footer without extra actions", async () => {
+    const entityApi = new EntityApi(); const api = gitPmApi(entityApi);
+    const project = await entityApi.createEntity("DRF-CORE", "projects", "", { schema: "gitpm/project@2", id: "P-26-111111", name: "Alpha", status: "backlog", lifecycle: "active" });
+    const task = await entityApi.createEntity("DRF-CORE", "tasks", "", { schema: "gitpm/task@2", id: "T-26-333333", project: project.document.id, title: "Editable task", type: "task", status: "backlog", lifecycle: "active" });
+    const confirmAction = vi.fn(() => true);
+    render(<CoreWorkspace api={api} confirmAction={confirmAction} draft={draft} initialProjectId={project.document.id} initialTaskId={task.document.id} locale="en" surface="tasks" onNavigate={vi.fn()} onChanged={vi.fn(async () => undefined)} />);
+    await screen.findByRole("heading", { name: "Editable task" });
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    const editDialog = screen.getByRole("dialog", { name: "Edit: Editable task" });
+    expect(within(editDialog).getByText("More actions")).toBeTruthy();
+    fireEvent.click(within(editDialog).getByRole("button", { name: "Delete" }));
+    expect(confirmAction).toHaveBeenCalledWith("Delete Editable task permanently? This action cannot be undone.");
+    await waitFor(() => expect(entityApi.entities.some((item) => item.document.id === task.document.id)).toBe(false));
+  });
+
   it("shows task ancestry and rollups and creates a same-milestone subtask from task details", async () => {
     const entityApi = new EntityApi(); const api = gitPmApi(entityApi);
     const person = await entityApi.createEntity("DRF-CORE", "people", "", { schema: "gitpm/person@1", id: "U-26-666666", name: "Ada", weekly_capacity_hours: 40, calendar: "C-26-111111", lifecycle: "active" });
