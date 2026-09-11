@@ -393,7 +393,7 @@ describe("ProjectPlanWorkspace", () => {
     expect((await screen.findAllByText(renamed.name)).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     const deleteDialog = screen.getByRole("dialog", { name: "Delete file" });
-    fireEvent.change(within(deleteDialog).getByLabelText(`Type the exact full name “${renamed.name}” to delete`), { target: { value: renamed.name } });
+    expect(deleteDialog.textContent).toContain("Really delete?");
     await waitFor(() => expect(within(deleteDialog).getByRole("button", { name: "Delete" })).toHaveProperty("disabled", false));
     fireEvent.click(within(deleteDialog).getByRole("button", { name: "Delete" }));
 

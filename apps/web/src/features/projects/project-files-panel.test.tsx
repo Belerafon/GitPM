@@ -326,7 +326,7 @@ describe("ProjectFilesPanel", () => {
     expect(screen.getByRole("link", { name: `Download ${original.name}` })).toBeTruthy();
   });
 
-  it("requires the exact full name for delete and updates through the decoded result", async () => {
+  it("confirms delete without typing the file name and updates through the decoded result", async () => {
     const doomed = item("Договор final.pdf", 88);
     const result = { project_id: "P-26-111111", operation: "deleted" as const, name: doomed.name, path: doomed.path, size_bytes: doomed.size_bytes, references: { status: "not_checked" as const }, secure_erase: false as const, draft_fingerprint: "d".repeat(64) };
     uploadApi.deleteProjectFile.mockResolvedValueOnce(result);
@@ -337,11 +337,11 @@ describe("ProjectFilesPanel", () => {
     const dialog = screen.getByRole("dialog", { name: "Delete file" });
     const confirm = within(dialog).getByRole("button", { name: "Delete" });
     expect(confirm).toHaveProperty("disabled", true);
+    expect(dialog.textContent).toContain("Really delete?");
     expect(dialog.textContent).toContain("not secure erase");
+    expect(within(dialog).queryByRole("textbox")).toBeNull();
     await waitFor(() => expect(dialog.textContent).toContain("Verified references in this Project: 0"));
-    fireEvent.change(within(dialog).getByLabelText(`Type the exact full name “${doomed.name}” to delete`), { target: { value: doomed.name.toLocaleLowerCase() } });
-    expect(confirm).toHaveProperty("disabled", true);
-    fireEvent.change(within(dialog).getByLabelText(`Type the exact full name “${doomed.name}” to delete`), { target: { value: doomed.name } });
+    expect(confirm).toHaveProperty("disabled", false);
     fireEvent.click(confirm);
     await waitFor(() => expect(onDeleted).toHaveBeenCalledWith(result));
     expect(uploadApi.deleteProjectFile).toHaveBeenCalledWith("DRF-1", "P-26-111111", doomed.name, "b".repeat(64), doomed.name, "restrict");
@@ -356,7 +356,7 @@ describe("ProjectFilesPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     const dialog = screen.getByRole("dialog", { name: "Delete file" });
     await waitFor(() => expect(dialog.textContent).toContain("Verified references in this Project: 1"));
-    fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: doomed.name } });
+    expect(within(dialog).queryByRole("textbox")).toBeNull();
     const confirm = within(dialog).getByRole("button", { name: "Delete" });
     expect(confirm).toHaveProperty("disabled", true);
     expect(uploadApi.deleteProjectFile).not.toHaveBeenCalled();

@@ -399,12 +399,12 @@ export function ProjectFilesPanel({ api, draftId, fingerprint, locale, list, loa
     finally { setActionBusy(false); }
   };
   const deleteSelected = async () => {
-    if (selected === undefined || actionValue !== selected.name) return;
+    if (selected === undefined) return;
     setActionBusy(true);
     setActionError(undefined);
     try {
       if (referencePreview?.status !== "ready") return;
-      const result = await api.deleteProjectFile(draftId, projectId, selected.name, fingerprintRef.current, actionValue, referenceChoice === "unlink" ? "unlink" : "restrict");
+      const result = await api.deleteProjectFile(draftId, projectId, selected.name, fingerprintRef.current, selected.name, referenceChoice === "unlink" ? "unlink" : "restrict");
       fingerprintRef.current = result.draft_fingerprint;
       onDeleted(result);
       setSelectedName(undefined);
@@ -550,14 +550,14 @@ export function ProjectFilesPanel({ api, draftId, fingerprint, locale, list, loa
             </>}
           </>}
           {fileAction === "delete" && <>
+            <p>{t("projectFiles.deleteConfirm")}</p>
             <p>{t("projectFiles.deleteGitWarning", { name: selected.name })}</p>
             {referencePreview?.status === "loading" && <p role="status">{t("projectFiles.referencesChecking")}</p>}
             {referencePreview?.status === "error" && <div className="alert error" role="alert"><span>{t("projectFiles.referencesCheckFailed", { message: referencePreview.error })}</span><button onClick={() => loadActionReferences(selected.name)} type="button">{t("status.retry")}</button></div>}
             {referencePreview?.status === "ready" && <div className="project-file-reference-consequences"><p>{t("projectFiles.referencesFound", { count: referencePreview.value.count })}</p><ul>{referencePreview.value.locations.slice(0, 5).map((location) => <li key={`${location.path}:${location.field}:${location.value_index ?? ""}:${location.start}`}>{location.entity_type} {location.entity_id} · {location.field}</li>)}</ul>{referencePreview.value.count > 0 && <label data-field-hint={t("fieldHint.projectFileDeleteReferences")}><input checked={referenceChoice === "unlink"} disabled={actionBusy} onChange={(event) => setReferenceChoice(event.target.checked ? "unlink" : "restrict")} type="checkbox" />{t("projectFiles.deleteUnlinkReferences", { count: referencePreview.value.count })}</label>}</div>}
-            <label data-field-hint={t("fieldHint.projectFileConfirmation")}>{t("projectFiles.deleteTypeName", { name: selected.name })}<input autoFocus disabled={actionBusy} onChange={(event) => setActionValue(event.target.value)} value={actionValue} /></label>
           </>}
           {actionError !== undefined && <div className="alert error" role="alert">{actionError}</div>}
-          <div className="project-file-large-actions"><button autoFocus={fileAction === "properties"} disabled={actionBusy && fileAction !== "replace"} onClick={() => { if (actionBusy && fileAction === "replace") activeController.current?.abort(); closeAction(); }} type="button">{t(fileAction === "properties" ? "core.closeEditor" : "core.cancel")}</button>{fileAction === "rename" && <button className="primary" disabled={actionBusy || referencePreview?.status !== "ready" || actionValue === selected.name || actionValue === ""} onClick={() => { void renameSelected(); }} type="button">{t("projectFiles.rename")}</button>}{fileAction === "replace" && <button className="primary" disabled={actionBusy || referencePreview?.status !== "ready" || replacementFile === undefined || (replacementFile.size > PROJECT_FILE_LARGE_WARNING_BYTES && replacementConfirmation !== replacementFile.name) || list?.items.some((item) => item.name !== selected.name && comparableName(item.name) === comparableName(replacementFile.name)) === true} onClick={() => { void replaceSelected(); }} type="button">{t("projectFiles.replaceConfirm")}</button>}{fileAction === "delete" && <button className="danger" disabled={actionBusy || referencePreview?.status !== "ready" || actionValue !== selected.name || (referencePreview.value.count > 0 && referenceChoice !== "unlink")} onClick={() => { void deleteSelected(); }} type="button">{t("projectFiles.delete")}</button>}</div>
+          <div className="project-file-large-actions"><button autoFocus={fileAction === "properties" || fileAction === "delete"} disabled={actionBusy && fileAction !== "replace"} onClick={() => { if (actionBusy && fileAction === "replace") activeController.current?.abort(); closeAction(); }} type="button">{t(fileAction === "properties" ? "core.closeEditor" : "core.cancel")}</button>{fileAction === "rename" && <button className="primary" disabled={actionBusy || referencePreview?.status !== "ready" || actionValue === selected.name || actionValue === ""} onClick={() => { void renameSelected(); }} type="button">{t("projectFiles.rename")}</button>}{fileAction === "replace" && <button className="primary" disabled={actionBusy || referencePreview?.status !== "ready" || replacementFile === undefined || (replacementFile.size > PROJECT_FILE_LARGE_WARNING_BYTES && replacementConfirmation !== replacementFile.name) || list?.items.some((item) => item.name !== selected.name && comparableName(item.name) === comparableName(replacementFile.name)) === true} onClick={() => { void replaceSelected(); }} type="button">{t("projectFiles.replaceConfirm")}</button>}{fileAction === "delete" && <button className="danger" disabled={actionBusy || referencePreview?.status !== "ready" || (referencePreview.value.count > 0 && referenceChoice !== "unlink")} onClick={() => { void deleteSelected(); }} type="button">{t("projectFiles.delete")}</button>}</div>
         </div>
       </div>}
       {activeConfirmation !== undefined && <div aria-labelledby="project-file-large-title" aria-modal="true" className="project-file-large-dialog" onKeyDown={(event) => { if (event.key === "Escape") cancelItem(activeConfirmation); }} role="dialog">
