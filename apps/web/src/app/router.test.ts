@@ -62,4 +62,23 @@ describe("app route model", () => {
     expect(parseAppRoute("/projects/P-1/unknown")).toBeNull();
     expect(parseAppRoute("/projects/%E0%A4%A")).toBeNull();
   });
+
+  it("treats a derived slug as decorative and keeps the canonical entity ID", () => {
+    expect(parseAppRoute("/projects/P-26-7K4M9Q-pereezd-analiticheskoy-platformy")).toEqual({
+      name: "projects", projectId: "P-26-7K4M9Q", query: {},
+    });
+    expect(parseAppRoute("/projects/P-26-7K4M9Q-old-title/tasks/T-26-X8D2FW-nastroit-pipeline")).toEqual({
+      name: "tasks", projectId: "P-26-7K4M9Q", taskId: "T-26-X8D2FW", query: {},
+    });
+    expect(parseAppRoute("/people/U-26-5EBAE3-orlov-dmitriy")).toEqual({
+      name: "people", personId: "U-26-5EBAE3", query: {},
+    });
+    expect(serializeAppRoute({ name: "projects", projectId: "P-26-7K4M9Q", query: {} }, { project: "Переезд аналитической платформы" }))
+      .toBe("/projects/P-26-7K4M9Q-pereezd-analiticheskoy-platformy");
+    expect(serializeAppRoute({ name: "tasks", projectId: "P-26-7K4M9Q", taskId: "T-26-X8D2FW", query: {} }, { project: "Alpha", task: "First task" }))
+      .toBe("/projects/P-26-7K4M9Q-alpha/tasks/T-26-X8D2FW-first-task");
+    expect(serializeAppRoute({ name: "people", personId: "U-26-5EBAE3", query: {} }, { person: "Орлов Дмитрий" }))
+      .toBe("/people/U-26-5EBAE3-orlov-dmitriy");
+    expect(roundTrip("/projects/P-26-7K4M9Q-pereezd")).toBe("/projects/P-26-7K4M9Q");
+  });
 });

@@ -1,5 +1,5 @@
 import type { EntityResult, GitPmDocument } from "./types.js";
-import { DEFAULT_PERSON_NAME_FORMAT, formatPersonName, type PersonNameFormat } from "@gitpm/shared";
+import { DEFAULT_PERSON_NAME_FORMAT, formatPersonName, personUrlLabel, type PersonNameFormat } from "@gitpm/shared";
 
 export interface EntityReference {
   readonly id: string;
@@ -25,12 +25,15 @@ export class EntityCatalog {
   readonly milestones: ReadonlyMap<string, EntityReference>;
   readonly tasks: ReadonlyMap<string, EntityReference>;
   readonly people: ReadonlyMap<string, EntityReference>;
+  readonly calendars: ReadonlyMap<string, EntityReference>;
+  private readonly personUrlLabels: ReadonlyMap<string, string>;
 
-  constructor({ projects = [], milestones = [], tasks = [], people = [] }: {
+  constructor({ projects = [], milestones = [], tasks = [], people = [], calendars = [] }: {
     readonly projects?: readonly EntityResult[];
     readonly milestones?: readonly EntityResult[];
     readonly tasks?: readonly EntityResult[];
     readonly people?: readonly EntityResult[];
+    readonly calendars?: readonly EntityResult[];
   }, defaultPersonNameFormat: PersonNameFormat = DEFAULT_PERSON_NAME_FORMAT) {
     this.projects = new Map(projects.map((entity) => [entity.document.id, reference(entity)]));
     this.milestones = new Map(milestones.map((entity) => [entity.document.id, reference(entity)]));
@@ -44,6 +47,8 @@ export class EntityCatalog {
       name: formatPersonName(entity.document, defaultPersonNameFormat) || entity.document.id,
       lifecycle: entity.document.lifecycle,
     }]));
+    this.calendars = new Map(calendars.map((entity) => [entity.document.id, reference(entity)]));
+    this.personUrlLabels = new Map(people.map((entity) => [entity.document.id, personUrlLabel(entity.document) || entity.document.id]));
   }
 
   project(id: unknown): EntityReference {
@@ -64,6 +69,21 @@ export class EntityCatalog {
   person(id: unknown): EntityReference {
     const key = typeof id === "string" ? id : "";
     return this.people.get(key) ?? { id: key, name: key, lifecycle: "active" };
+  }
+
+  calendar(id: unknown): EntityReference {
+    const key = typeof id === "string" ? id : "";
+    return this.calendars.get(key) ?? { id: key, name: key, lifecycle: "active" };
+  }
+
+  urlLabel(kind: "project" | "stage" | "task" | "person" | "calendar", id: string): string | undefined {
+    if (kind === "person") {
+      const label = this.personUrlLabels.get(id);
+      return label === undefined || label === "" || label === id ? undefined : label;
+    }
+    const map = kind === "project" ? this.projects : kind === "stage" ? this.milestones : kind === "task" ? this.tasks : this.calendars;
+    const ref = map.get(id);
+    return ref === undefined || ref.name === "" || ref.name === ref.id ? undefined : ref.name;
   }
 
   referencesForTask(document: GitPmDocument): TaskReferences {

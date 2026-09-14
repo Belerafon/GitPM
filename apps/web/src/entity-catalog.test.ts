@@ -32,4 +32,15 @@ describe("EntityCatalog", () => {
     expect(catalog.person(person.document.id).name).toBe("Ada");
     expect(catalog.person("U-26-MISSING").name).toBe("U-26-MISSING");
   });
+
+  it("exposes URL labels from loaded documents and ignores display-name format for people", () => {
+    const project = entity({ schema: "gitpm/project@2", id: "P-26-111111", name: "Alpha", lifecycle: "active" });
+    const person = entity({ schema: "gitpm/person@1", id: "U-26-5EBAE3", name: "Иван", family_name: "Иванов", middle_name: "Иванович", display_name_format: "family-initials", lifecycle: "active" });
+    const catalog = new EntityCatalog({ projects: [project], people: [person] }, "family-initials");
+
+    expect(catalog.person(person.document.id).name).toBe("Иванов И. И.");
+    expect(catalog.urlLabel("project", "P-26-111111")).toBe("Alpha");
+    expect(catalog.urlLabel("person", "U-26-5EBAE3")).toBe("Иванов Иван Иванович");
+    expect(catalog.urlLabel("project", "P-26-MISSING")).toBeUndefined();
+  });
 });

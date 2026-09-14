@@ -14,6 +14,7 @@ export interface EntityResult {
 
 export const FIXTURE_PROJECT_ID = "P-26-MGP84K";
 export const E2E_TASK_ID = "T-26-9NJTEF";
+export const entityUrlIdPattern = (id: string): string => `${id}(?:-[^/?]+)?`;
 
 export function taskDocument(id = E2E_TASK_ID) {
   return {

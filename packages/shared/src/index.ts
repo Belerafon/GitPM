@@ -31,6 +31,11 @@ export function formatPersonName(person: PersonNameFields | Readonly<Record<stri
   return [familyName, name, middleName].filter(Boolean).join(" ");
 }
 
+export function personUrlLabel(person: PersonNameFields | Readonly<Record<string, unknown>>): string {
+  const fields = person as Readonly<Record<string, unknown>>;
+  return [normalizedNamePart(fields.family_name), normalizedNamePart(fields.name), normalizedNamePart(fields.middle_name)].filter(Boolean).join(" ");
+}
+
 export function personNameSearchText(person: PersonNameFields | Readonly<Record<string, unknown>>, defaultFormat: PersonNameFormat = DEFAULT_PERSON_NAME_FORMAT): string {
   const fields = person as Readonly<Record<string, unknown>>;
   return [formatPersonName(fields, defaultFormat), normalizedNamePart(fields.family_name), normalizedNamePart(fields.name), normalizedNamePart(fields.middle_name)]
@@ -39,6 +44,7 @@ export function personNameSearchText(person: PersonNameFields | Readonly<Record<
 }
 
 export * from "./project-file-references.js";
+export * from "./url-slug.js";
 
 export const ENTITY_ID_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 

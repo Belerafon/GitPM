@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activeProjectIds, ENTITY_ID_PREFIX, formatPersonName, isEntityId, isOperationalTask, newEntityId, newUniqueEntityId, personNameSearchText, resolveRepositoryMode, DEFAULT_REPOSITORY_MODE, REPOSITORY_MODES } from "./index.js";
+import { activeProjectIds, ENTITY_ID_PREFIX, entityIdFromSegment, entityUrlSegment, formatPersonName, isEntityId, isOperationalTask, newEntityId, newUniqueEntityId, personNameSearchText, personUrlLabel, resolveRepositoryMode, slugifyEntityLabel, DEFAULT_REPOSITORY_MODE, REPOSITORY_MODES } from "./index.js";
 
 describe("person name formatting", () => {
   it("composes full and initial-based names while skipping empty parts", () => {
@@ -14,6 +14,46 @@ describe("person name formatting", () => {
     const person = { name: "Иван", family_name: "Иванов", middle_name: "Иванович", display_name_format: "full" };
     expect(formatPersonName(person, "family-initials")).toBe("Иванов Иван Иванович");
     expect(personNameSearchText({ ...person, display_name_format: "family-initials" })).toContain("Иванов Иван Иванович");
+  });
+
+  it("uses the full name parts for URL labels regardless of display format", () => {
+    const person = { name: "Иван", family_name: "Иванов", middle_name: "Иванович", display_name_format: "family-initials" };
+    expect(personUrlLabel(person)).toBe("Иванов Иван Иванович");
+    expect(personUrlLabel({ name: "Ada Lovelace" })).toBe("Ada Lovelace");
+  });
+});
+
+describe("entity URL slugs", () => {
+  it("transliterates Cyrillic names into stable ASCII slugs", () => {
+    expect(slugifyEntityLabel("Переезд аналитической платформы")).toBe("pereezd-analiticheskoy-platformy");
+    expect(slugifyEntityLabel("Орлов Дмитрий")).toBe("orlov-dmitriy");
+    expect(slugifyEntityLabel("GitPM launch")).toBe("gitpm-launch");
+    expect(slugifyEntityLabel("Café API v2 / Переезд")).toBe("cafe-api-v2-pereezd");
+    expect(slugifyEntityLabel("!!!")).toBe("");
+  });
+
+  it("truncates long slugs on a hyphen boundary", () => {
+    const label = "Очень длинное название проекта для проверки обрезки транслитерированного хвоста адреса";
+    const slug = slugifyEntityLabel(label);
+    expect(slug.length).toBeLessThanOrEqual(60);
+    expect(slug.startsWith("ochen-dlinnoe-nazvanie")).toBe(true);
+    expect(slug.endsWith("-")).toBe(false);
+  });
+
+  it("appends a slug only to canonical entity IDs", () => {
+    expect(entityUrlSegment("P-26-7K4M9Q", "Alpha")).toBe("P-26-7K4M9Q-alpha");
+    expect(entityUrlSegment("P-26-7K4M9Q", "P-26-7K4M9Q")).toBe("P-26-7K4M9Q");
+    expect(entityUrlSegment("P-26-7K4M9Q", "!!!")).toBe("P-26-7K4M9Q");
+    expect(entityUrlSegment("P-1", "Alpha")).toBe("P-1");
+    expect(entityUrlSegment("U-26-ADA", "Ada Lovelace")).toBe("U-26-ADA");
+  });
+
+  it("extracts the canonical ID and ignores a decorative slug", () => {
+    expect(entityIdFromSegment("P-26-7K4M9Q-pereezd-analiticheskoy-platformy")).toBe("P-26-7K4M9Q");
+    expect(entityIdFromSegment("P-26-7K4M9Q")).toBe("P-26-7K4M9Q");
+    expect(entityIdFromSegment("P-1")).toBe("P-1");
+    expect(entityIdFromSegment("P-26-ALPHA")).toBe("P-26-ALPHA");
+    expect(entityIdFromSegment("P-26-7K4M9Qalpha")).toBe("P-26-7K4M9Qalpha");
   });
 });
 

@@ -1,5 +1,5 @@
 import { expect, request as createRequestContext, test, type APIRequestContext, type Page } from "@playwright/test";
-import { FIXTURE_PROJECT_ID, cleanupDrafts, createDraft, type EntityResult } from "./helpers.js";
+import { FIXTURE_PROJECT_ID, cleanupDrafts, createDraft, entityUrlIdPattern, type EntityResult } from "./helpers.js";
 
 const draftId = "DRF-UI-SEMANTIC-WRITES";
 const targetProjectId = "P-26-8S9HQQ";
@@ -206,7 +206,7 @@ test.describe("semantic scheduling writes", () => {
     await move.getByRole("button", { name: "Move task", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Accepted task with actuals", exact: true })).toBeVisible();
 
-    await expect(page).toHaveURL(new RegExp(`/projects/${targetProjectId}/tasks/${taskId}`, "u"));
+    await expect(page).toHaveURL(new RegExp(`/projects/${entityUrlIdPattern(targetProjectId)}/tasks/${entityUrlIdPattern(taskId)}`, "u"));
     const sourceEntries = await request.get(`/api/drafts/${draftId}/projects/${FIXTURE_PROJECT_ID}/time-entries`);
     expect(sourceEntries.status(), await sourceEntries.text()).toBe(200);
     expect((await sourceEntries.json() as { items: Array<{ document: { task: string } }> }).items.filter((entry) => entry.document.task === taskId)).toHaveLength(0);

@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
-import { FIXTURE_PROJECT_ID, cleanupDrafts, createDraft, type DraftStatus, type EntityResult } from "./helpers.js";
+import { FIXTURE_PROJECT_ID, cleanupDrafts, createDraft, entityUrlIdPattern, type DraftStatus, type EntityResult } from "./helpers.js";
 
 const prefix = "DRF-AUDIT-";
 
@@ -102,7 +102,7 @@ test.describe("audited vertical lifecycles", () => {
     await issueDialog.getByRole("button", { name: "Save", exact: true }).click();
     await expect(issueDialog.getByRole("button", { name: "Open blocking view", exact: true })).toBeVisible();
     await issueDialog.getByRole("button", { name: "Open blocking view", exact: true }).click();
-    await expect(page).toHaveURL(new RegExp(`/projects/${FIXTURE_PROJECT_ID}/board\\?view=V-`, "u"));
+    await expect(page).toHaveURL(new RegExp(`/projects/${entityUrlIdPattern(FIXTURE_PROJECT_ID)}/board\\?view=V-`, "u"));
 
     await page.getByText("Create and manage saved views", { exact: true }).click();
     const renamedCard = page.getByText("Renamed blockers", { exact: true }).locator("xpath=ancestor::article[1]");

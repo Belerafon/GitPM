@@ -18,6 +18,9 @@ This made valid domain relationships difficult to discover and produced a task s
    ```text
    /projects/:projectId
    /projects/:projectId/stages/:stageId
+
+   The `:projectId` and `:stageId` segments are the immutable IDs. A derived ASCII
+   slug may follow the ID in the same segment; see ADR 0007.
    ```
 
 4. Board and Timeline use project-scoped canonical routes. Legacy query routes are parsed and replaced without losing filters.

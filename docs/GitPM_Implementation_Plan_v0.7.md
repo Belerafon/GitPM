@@ -77,6 +77,7 @@ M-26-3RC7NA
 - отдельного display key нет;
 - внутренние ссылки и mutation API используют ID;
 - title и name не являются идентичностью;
+- browser UI may append a derived ASCII slug after the ID in the address bar; the slug is not identity, is ignored when parsing, and is not stored in the repository;
 - `P`, `T`, `M`, `U`, `G`, `C`, `V`, `N`, `E` и `A` обозначают соответственно Project, Task,
   Milestone, Person, Team, Calendar, Saved View, Comment, Time Entry и Availability Event;
 - случайная часть генерируется криптографическим генератором, а уникальность
