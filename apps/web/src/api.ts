@@ -441,9 +441,9 @@ export class HttpGitPmApi implements GitPmApi {
     const query = new URLSearchParams({ q: search, limit: String(limit) });
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/search?${query.toString()}`, decodeGlobalSearchResult);
   }
-  async workload(draftId: string, filters: { readonly project?: string; readonly milestone?: string; readonly team?: string } = {}): Promise<WorkloadReport> {
+  async workload(draftId: string, filters: { readonly project?: string; readonly milestone?: string; readonly team?: string; readonly person?: string; readonly from?: string; readonly weeks?: number; readonly end?: string } = {}): Promise<WorkloadReport> {
     const query = new URLSearchParams();
-    for (const [key, value] of Object.entries(filters)) if (value !== undefined) query.set(key, value);
+    for (const [key, value] of Object.entries(filters)) if (value !== undefined) query.set(key, String(value));
     const suffix = query.size === 0 ? "" : `?${query.toString()}`;
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/workload${suffix}`, decodeWorkloadReport);
   }

@@ -17,5 +17,5 @@ export const routeViews: Readonly<Record<AppRouteName, MessageKey>> = {
 };
 
 export const navigationDestinations: Readonly<Partial<Record<MessageKey, WorkspaceDestination | "workspaces">>> = {
-  "nav.team": "workload", "nav.repository": "workspaces", "nav.projects": "projects", "nav.tasks": "tasks", "nav.administration": "settings",
+  "nav.team": "people", "nav.repository": "workspaces", "nav.projects": "projects", "nav.tasks": "tasks", "nav.administration": "settings",
 };

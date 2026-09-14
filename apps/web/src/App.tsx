@@ -40,8 +40,8 @@ interface AppProps {
 }
 
 const teamTabs: readonly SectionTab[] = [
-  { destination: "workload", label: "nav.workload" },
   { destination: "people", label: "nav.people" },
+  { destination: "workload", label: "nav.workload" },
   { destination: "vacations", label: "nav.vacations" },
 ];
 
@@ -49,6 +49,7 @@ const administrationTabs: readonly SectionTab[] = [
   { destination: "settings", label: "admin.settingsTasks", selection: { query: { section: ["tasks"] } } },
   { destination: "settings", label: "admin.settingsPlanning", selection: { query: { section: ["planning"] } } },
   { destination: "settings", label: "admin.settingsTimeTracking", selection: { query: { section: ["time"] } } },
+  { destination: "settings", label: "admin.settingsPeople", selection: { query: { section: ["people"] } } },
   { destination: "calendar", label: "nav.calendar" },
 ];
 
@@ -89,14 +90,16 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
   // repository nav lands on changes instead of the draft management panel.
   const view: typeof rawView = directMode && rawView === "nav.drafts" ? "nav.changes" : rawView;
   const requestedSettingsSection = activeRoute?.name === "settings" ? activeRoute.query.section?.[0] : undefined;
-  const settingsSection = requestedSettingsSection === "planning" || requestedSettingsSection === "time" ? requestedSettingsSection : "tasks";
+  const settingsSection = requestedSettingsSection === "planning" || requestedSettingsSection === "time" || requestedSettingsSection === "people" ? requestedSettingsSection : "tasks";
   const administrationActiveTab: MessageKey = view === "nav.calendar"
     ? "nav.calendar"
     : settingsSection === "planning"
       ? "admin.settingsPlanning"
       : settingsSection === "time"
         ? "admin.settingsTimeTracking"
-        : "admin.settingsTasks";
+        : settingsSection === "people"
+          ? "admin.settingsPeople"
+          : "admin.settingsTasks";
   const shellActiveView = activeRoute?.projectId !== undefined && ["projects", "stages", "tasks", "board", "gantt", "effort"].includes(activeRoute.name)
     ? "nav.projects"
     : ["nav.people", "nav.workload", "nav.vacations"].includes(view)
@@ -341,7 +344,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
           ? <div className="card empty-workspace">{t("core.selectProject")}</div>
           : view === "nav.people" && workspaceSelection.personId !== undefined
             ? <PeopleProfileWorkspace api={api} confirmAction={confirmAction} draft={active} locale={locale} onChanged={drafts.refresh} onNavigate={openWorkspace} personId={workspaceSelection.personId} role={drafts.session.role} />
-            : <AdminWorkspace api={api} confirmAction={confirmAction} draft={active} role={drafts.session.role} locale={locale} initialCalendarId={workspaceSelection.calendarId} initialSection={settingsSection} onOpenCalendar={(calendarId) => openWorkspace("calendar", { calendarId })} onOpenPerson={(personId) => openWorkspace("people", { personId })} onOpenProject={(projectId) => openWorkspace("projects", { projectId })} onOpenView={(projectId, viewId) => openWorkspace("board", { projectId, query: { view: [viewId] } })} onPersonNameFormatChanged={setDefaultPersonNameFormat} surface={view === "nav.people" ? "people" : view === "nav.calendar" ? "calendar" : "settings"} onChanged={drafts.refresh} />)}
+            : <AdminWorkspace api={api} confirmAction={confirmAction} draft={active} role={drafts.session.role} locale={locale} initialCalendarId={workspaceSelection.calendarId} initialSection={settingsSection} onOpenCalendar={(calendarId) => openWorkspace("calendar", { calendarId })} onOpenPerson={(personId) => openWorkspace("people", { personId })} onOpenProject={(projectId) => openWorkspace("projects", { projectId })} onOpenWorkload={(selection) => openWorkspace("workload", { query: selection.personId === undefined ? { team: [selection.teamId!] } : { person: [selection.personId] } })} onOpenView={(projectId, viewId) => openWorkspace("board", { projectId, query: { view: [viewId] } })} onPersonNameFormatChanged={setDefaultPersonNameFormat} surface={view === "nav.people" ? "people" : view === "nav.calendar" ? "calendar" : "settings"} onChanged={drafts.refresh} />)}
         {view === "nav.changes" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <ChangesWorkspace api={api} draft={active} role={drafts.session.role} locale={locale} onChanged={drafts.refresh} confirmAction={confirmAction} remoteAvailable={repository?.has_remote === true} gitlabConfigured={gitlab?.configured === true} gitlabSignedIn={gitlab?.user !== undefined} onGitLabLogin={loginToGitLab} onNavigate={openWorkspace} directMode={directMode} mergeRequest={snapshot?.mergeRequest} />)}
         {view === "nav.files" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <WorktreeWorkspace api={api} confirmAction={confirmAction} draft={active} key={`nav.files:${active.draft_id}:${active.external_fingerprint ?? ""}`} locale={locale} onChanged={drafts.refresh} role={drafts.session.role} />)}
         {view === "nav.history" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <HistoryWorkspace api={api} confirmAction={confirmAction} directMode={directMode} draft={active} key={`nav.history:${workspaceSelection.commit ?? ""}`} locale={locale} canRevert={drafts.session.role !== "Reporter"} initialCommit={workspaceSelection.commit} onChanged={drafts.refresh} onNavigate={openWorkspace} onDraftCreated={drafts.select} />)}
@@ -349,7 +352,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
         {view === "nav.board" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <BoardWorkspace api={api} confirmAction={confirmAction} draft={active} key={`nav.board:${workspaceSelection.projectId ?? ""}`} locale={locale} initialProjectId={workspaceSelection.projectId} initialStatusFilter={workspaceSelection.query?.status?.[0]} initialTypeFilter={workspaceSelection.query?.type?.[0]} initialMilestoneFilter={workspaceSelection.query?.milestone?.[0]} initialViewId={workspaceSelection.query?.view?.[0]} onNavigate={openWorkspace} onChanged={drafts.refresh} />)}
         {view === "nav.gantt" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <GanttWorkspace api={api} draft={active} key={`nav.gantt:${workspaceSelection.projectId ?? ""}`} locale={locale} initialProjectId={workspaceSelection.projectId} onNavigate={openWorkspace} />)}
         {view === "nav.effort" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <ProjectEffortWorkspace api={api} draft={active} key={`nav.effort:${activeRoute?.projectId ?? ""}`} locale={locale} projectId={activeRoute?.projectId ?? ""} onNavigate={openWorkspace} />)}
-        {view === "nav.workload" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <WorkloadWorkspace api={api} draft={active} locale={locale} onNavigate={openWorkspace} />)}
+        {view === "nav.workload" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <WorkloadWorkspace api={api} draft={active} locale={locale} query={workspaceSelection.query} onNavigate={openWorkspace} />)}
         {view === "nav.vacations" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <VacationCalendarWorkspace api={api} draft={active} locale={locale} onNavigate={openWorkspace} />)}
         {!projectWorkspaceRoute && !["nav.drafts", "nav.projects", "nav.tasks", "nav.people", "nav.calendar", "nav.administration", "nav.changes", "nav.files", "nav.history", "nav.repositoryConnection", "nav.board", "nav.gantt", "nav.effort", "nav.workload", "nav.vacations"].includes(view) && <div className="card empty-workspace">{t("common.notAvailable")}</div>}
         </Suspense>

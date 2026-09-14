@@ -656,7 +656,7 @@ export function registerEntityApi(
 
   app.get<{
     Params: { draftId: string };
-    Querystring: { project?: string; milestone?: string; team?: string };
+    Querystring: { project?: string; milestone?: string; team?: string; person?: string; from?: string; weeks?: number; end?: string };
   }>(
     "/api/drafts/:draftId/workload",
     {
@@ -668,6 +668,10 @@ export function registerEntityApi(
             project: { type: "string", pattern: "^P-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}$" },
             milestone: { type: "string", pattern: "^M-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}$" },
             team: { type: "string", pattern: "^G-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}$" },
+            person: { type: "string", pattern: "^U-[0-9]{2}-[0-9A-HJKMNP-TV-Z]{6}$" },
+            from: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+            weeks: { type: "integer", minimum: 1, maximum: 52 },
+            end: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
           },
         },
       },

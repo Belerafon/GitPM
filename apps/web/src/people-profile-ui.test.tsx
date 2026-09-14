@@ -43,6 +43,8 @@ describe("person profile", () => {
     render(<PeopleProfileWorkspace api={api} draft={draft} locale="en" onNavigate={onNavigate} personId={personId} />);
 
     expect(await screen.findByRole("heading", { name: "Ada Lovelace" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Open in workload" }));
+    expect(onNavigate).toHaveBeenCalledWith("workload", { query: { person: [personId] } });
     expect(screen.getByText("32 h/week")).toBeTruthy();
     expect(screen.getByText("Core")).toBeTruthy();
     expect(screen.getByText("Jul 20, 2026 — Jul 24, 2026")).toBeTruthy();

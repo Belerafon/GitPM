@@ -220,7 +220,7 @@ describe("frontend draft lifecycle", () => {
 
     expect(await screen.findByRole("heading", { name: "Ada Lovelace" }, { timeout: 5_000 })).toBeTruthy();
     expect(`${window.location.pathname}${window.location.search}`).toBe("/people/U-26-ADA");
-    fireEvent.click(screen.getByRole("button", { name: /All people and teams/u }));
+    fireEvent.click(screen.getByRole("button", { name: /All roster/u }));
     expect(`${window.location.pathname}${window.location.search}`).toBe("/people");
   });
 

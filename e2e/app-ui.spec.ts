@@ -236,8 +236,8 @@ test.describe("GitPM browser UI", () => {
       }
       if (width === 1280) {
         for (const [section, tabs] of [
-          ["Team", ["Team workload", "People and teams", "Vacation calendar"]],
-          ["Administration", ["Task configuration", "Planning", "Time tracking", "Working calendars"]],
+          ["Team", ["Roster", "Team workload", "Vacation calendar"]],
+          ["Administration", ["Task configuration", "Planning", "Time tracking", "People", "Working calendars"]],
           ["Git and publishing", ["Changes", "Files", "History"]],
         ] as const) {
           await page.getByRole("button", { name: section, exact: true }).click();
@@ -271,16 +271,17 @@ test.describe("GitPM browser UI", () => {
     await expect(page.locator(".portfolio-task-table thead")).toHaveCount(1);
 
     await page.getByRole("button", { name: "Team", exact: true }).click();
-    await expect(page).toHaveURL(/\/workload$/u);
-    await page.getByRole("button", { name: "People and teams", exact: true }).click();
     await expect(page).toHaveURL(/\/people$/u);
-    await expect(page.getByRole("heading", { name: "People and teams", exact: true })).toBeVisible();
-
-    await page.goBack();
+    await expect(page.getByRole("heading", { name: "Roster", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Team workload", exact: true }).click();
     await expect(page).toHaveURL(/\/workload$/u);
     await expect(page.getByRole("heading", { name: "Team workload", exact: true })).toBeVisible();
-    await page.goForward();
+
+    await page.goBack();
     await expect(page).toHaveURL(/\/people$/u);
+    await expect(page.getByRole("heading", { name: "Roster", exact: true })).toBeVisible();
+    await page.goForward();
+    await expect(page).toHaveURL(/\/workload$/u);
 
     await page.goto(`/projects/${FIXTURE_PROJECT_ID}/tasks`);
     await expect(page).toHaveURL(new RegExp(`/projects/${FIXTURE_PROJECT_ID}(?:\\?.*)?$`, "u"));

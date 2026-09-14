@@ -930,12 +930,15 @@ async function runWorkload(args: readonly string[], dependencies: CliDependencie
       ...(flagValue(args, "--project") === undefined ? {} : { project: flagValue(args, "--project") }),
       ...(flagValue(args, "--milestone") === undefined ? {} : { milestone: flagValue(args, "--milestone") }),
       ...(flagValue(args, "--team") === undefined ? {} : { team: flagValue(args, "--team") }),
+      ...(flagValue(args, "--person") === undefined ? {} : { person: flagValue(args, "--person") }),
+      ...(flagValue(args, "--from") === undefined ? {} : { from: flagValue(args, "--from") }),
+      ...(flagValue(args, "--weeks") === undefined || Number.isNaN(Number(flagValue(args, "--weeks"))) ? {} : { weeks: Number(flagValue(args, "--weeks")) }),
     },
   });
   const excluded = Object.values(report.exclusions).reduce((sum, count) => sum + count, 0);
   return {
     exitCode: 0,
-    output: render(args.includes("--json"), { ok: true, code: "OK", report }, `Workload: ${report.included_tasks} included, ${excluded} excluded, ${report.weeks.length} week(s)`),
+    output: render(args.includes("--json"), { ok: true, code: "OK", report }, `Workload: ${report.person_census.scoped} people, ${report.included_tasks} included, ${excluded} excluded, ${report.weeks.length} week(s)`),
   };
 }
 

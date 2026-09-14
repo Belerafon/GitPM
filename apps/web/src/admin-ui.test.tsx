@@ -42,7 +42,7 @@ describe("administration UI", () => {
   it("configures employee name defaults and previews a per-person override", async () => {
     const admin = new AdminApi();
     await admin.createEntity("DRF-ADMIN", "calendars", "", { schema: "gitpm/calendar@1", id: "C-26-QD7FJ4", name: "Default", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
-    render(<AdminWorkspace api={gitPmApi(admin)} draft={draft} role="Maintainer" locale="en" surface="people" onChanged={vi.fn(async () => undefined)} />);
+    const rendered = render(<AdminWorkspace api={gitPmApi(admin)} draft={draft} role="Maintainer" locale="en" surface="settings" initialSection="people" onChanged={vi.fn(async () => undefined)} />);
 
     const formatCard = (await screen.findByRole("heading", { name: "Default employee name format" })).closest<HTMLElement>(".config-editor")!;
     fireEvent.change(within(formatCard).getByLabelText("Display format"), { target: { value: "family-initials" } });
@@ -50,7 +50,8 @@ describe("administration UI", () => {
     fireEvent.click(within(formatCard).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(admin.repository?.document.default_person_name_format).toBe("family-initials"));
 
-    fireEvent.click(screen.getByRole("button", { name: /Create person/u }));
+    rendered.rerender(<AdminWorkspace api={gitPmApi(admin)} draft={draft} role="Maintainer" locale="en" surface="people" onChanged={vi.fn(async () => undefined)} />);
+    fireEvent.click(await screen.findByRole("button", { name: /Create person/u }));
     const dialog = screen.getByRole("dialog", { name: "Create person" });
     fireEvent.change(within(dialog).getByLabelText("Family name"), { target: { value: "Smith" } });
     fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "John" } });
@@ -92,6 +93,7 @@ describe("administration UI", () => {
     expect(screen.queryByRole("button", { name: "Edit person" })).toBeNull();
     fireEvent.click(screen.getByRole("link", { name: "Alice" }));
     expect(onOpenPerson).toHaveBeenCalledWith(expect.stringMatching(/^U-/u));
+    fireEvent.click(screen.getByRole("tab", { name: /Teams/u }));
     fireEvent.click(screen.getByRole("button", { name: /Create team/u }));
     const teamForm = within(screen.getByRole("dialog", { name: "Create team" })).getByRole("button", { name: "Create team" }).closest("form")!;
     const memberTable = within(teamForm).getByRole("table", { name: "Members" });
@@ -179,6 +181,7 @@ describe("administration UI", () => {
     ];
 
     render(<AdminWorkspace api={api} draft={draft} role="Maintainer" locale="en" surface="people" onChanged={vi.fn(async () => undefined)} />);
+    fireEvent.click(await screen.findByRole("tab", { name: /Teams/u }));
     const editTeam = await screen.findByRole("button", { name: "Edit team" });
     const teamTable = document.querySelector<HTMLElement>(".team-directory-table")!;
     expect(within(teamTable).getByText("Former member")).toBeTruthy();
