@@ -34,10 +34,10 @@ describe("Workload UI", () => {
     const entities = [shared, span, spike, undated, archived, archivedProjectTask, ada, linus, calendar, absence, project, archivedProject, reviewers];
     const onNavigate = vi.fn();
     const api = { listEntities: vi.fn(async (_draftId: string, type: string) => entities.filter((item) => ({ tasks: "gitpm/task@2", people: "gitpm/person@1", calendars: "gitpm/calendar@1", "availability-events": "gitpm/availability-event@1", projects: "gitpm/project@2", teams: "gitpm/team@1" })[type] === item.document.schema)), getConfiguration: vi.fn(async (_draftId: string, kind: string): Promise<ConfigurationResult> => kind === "schedule-tracks" ? tracksConfig() : { document: { schema: "gitpm/statuses@2", id: "statuses", lifecycle: "active", statuses: [] }, path: kind, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) }) };
-    const { container } = render(<WorkloadWorkspace api={api} draft={draft} locale="en" onNavigate={onNavigate} />);
+    const { container } = render(<WorkloadWorkspace api={api} draft={draft} locale="en" now="2026-07-06" onNavigate={onNavigate} />);
     await waitFor(() => expect(container.querySelectorAll(".workload-table tbody tr")).toHaveLength(2));
-    expect(screen.getByText("Included Tasks").nextElementSibling?.textContent).toBe("3");
-    expect(screen.getByText("Excluded Tasks").nextElementSibling?.textContent).toBe("3");
+    expect(screen.getByText("People shown").nextElementSibling?.textContent).toBe("2 of 2 · 2 active");
+    expect(screen.getByText("Calculation quality: 3 of 6 tasks included")).toBeTruthy();
     expect(container.querySelector(`[data-person-id="${adaId}"][data-week="2026-07-06"]`)?.textContent).toContain("35.5h / 24h");
     expect(container.querySelector(`[data-person-id="${adaId}"][data-week="2026-07-13"]`)?.textContent).toContain("22.5h / 40h");
     expect(container.querySelector(`[data-person-id="${linusId}"][data-week="2026-07-06"]`)?.textContent).toContain("20h / 25.6h");
@@ -59,8 +59,10 @@ describe("Workload UI", () => {
     fireEvent.click(within(reopenedBreakdown).getByRole("button", { name: "Release spike" }));
     expect(onNavigate).toHaveBeenCalledWith("tasks", { projectId, taskId: spike.document.id });
     fireEvent.change(screen.getByLabelText("Team"), { target: { value: reviewers.document.id } });
-    await waitFor(() => expect(screen.getByText("Included Tasks").nextElementSibling?.textContent).toBe("1"));
-    fireEvent.click(screen.getByRole("button", { name: "Ada" }));
-    expect(onNavigate).toHaveBeenCalledWith("people", { personId: adaId });
+    await waitFor(() => expect(container.querySelectorAll(".workload-table tbody tr")).toHaveLength(1));
+    expect(screen.queryByRole("button", { name: "Ada" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Linus" }));
+    expect(onNavigate).toHaveBeenCalledWith("people", { personId: linusId });
+    expect(onNavigate).toHaveBeenCalledWith("workload", { query: { team: [reviewers.document.id] } });
   });
 });

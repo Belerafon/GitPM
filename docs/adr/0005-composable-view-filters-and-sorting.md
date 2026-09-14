@@ -49,8 +49,10 @@ not required to make interactive directories queryable.
 
 Board saved views, workload horizon controls and repository-operational screens keep their own domain
 controls. They are not entity directories and must not silently adopt a Project-scoped saved-view
-contract. A future durable advanced-view schema can reuse the query semantics only through an
-explicit versioned repository-format change.
+contract. Workload may serialize its own person-scope, task-scope and calendar-window query
+parameters on `/workload`; that URL state is not a `gitpm/saved-view@1` and must not reuse
+People/Team directory filters. A future durable advanced-view schema can reuse the query semantics
+only through an explicit versioned repository-format change.
 
 ## Consequences
 

@@ -422,6 +422,7 @@ describe("HttpGitPmApi request bodies", () => {
       rows: [{ person_id: "U-26-5EBAE3", person_name: "Anna", week: "2026-07-06", allocated_hours: 8, base_capacity_hours: 40, capacity_hours: 40, unavailable_hours: 0, utilization_percent: 20, task_ids: ["T-26-P9G3P8"], task_allocations: [{ task_id: "T-26-P9G3P8", allocated_hours: 8 }] }],
       included_tasks: 1,
       exclusions: { archived: 0, undated: 0, unestimated: 0, unassigned: 0, unavailable_assignees: 0 },
+      person_census: { total_active: 1, scoped: 1, calculable: 1, without_calendar: [] },
     };
     const fetchMock = vi.fn(async () => new Response(JSON.stringify(report), { status: 200, headers: { "content-type": "application/json" } }));
     vi.stubGlobal("fetch", fetchMock);

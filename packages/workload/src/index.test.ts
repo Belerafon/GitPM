@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateWorkload, type WorkloadTask } from "./index.js";
+import { buildWorkloadReport, calculateWorkload, type WorkloadEntityDocument, type WorkloadTask } from "./index.js";
 
 const calendar = { id: "C-26-111111", lifecycle: "active" as const, working_weekdays: [1, 2, 3, 4, 5], holidays: ["2026-07-08"] };
 const ada = { id: "U-26-ADA000", name: "Ada", lifecycle: "active" as const, weekly_capacity_hours: 40, calendar: calendar.id };
@@ -63,5 +63,71 @@ describe("workload calculator", () => {
 
     expect(report.formula).toBe("equal-assignee-share/capacity-weighted-person-day/v2");
     expect(report.rows[0]).toMatchObject({ allocated_hours: 40, base_capacity_hours: 32, capacity_hours: 24, unavailable_hours: 8, utilization_percent: 166.6667 });
+  });
+});
+
+const tracks = { schema: "gitpm/schedule-tracks@1", tracks: [{ slug: "plan", title: "Plan", kind: "manual", capabilities: ["dates", "effort"] }], defaults: { enabled_tracks: ["plan"], primary_track: "plan", workload_track: "plan", dashboard_tracks: ["plan"] } };
+const entity = (document: WorkloadEntityDocument): WorkloadEntityDocument => document;
+const reportInput = {
+  scheduleTracks: tracks,
+  calendars: [entity({ schema: "gitpm/calendar@1", id: calendar.id, working_weekdays: calendar.working_weekdays, holidays: calendar.holidays, lifecycle: "active" })],
+  projects: [entity({ schema: "gitpm/project@2", id: project.id, lifecycle: "active" })],
+  people: [
+    entity({ schema: "gitpm/person@1", id: ada.id, name: "Ada", weekly_capacity_hours: 40, calendar: calendar.id, lifecycle: "active" }),
+    entity({ schema: "gitpm/person@1", id: linus.id, name: "Linus", weekly_capacity_hours: 32, calendar: calendar.id, lifecycle: "active" }),
+  ],
+  teams: [entity({ schema: "gitpm/team@1", id: "G-26-REVIEW", name: "Reviewers", members: [linus.id], lifecycle: "active" })],
+  tasks: [
+    entity({ schema: "gitpm/task@2", id: "T-26-SHARED", project: project.id, title: "Shared", lifecycle: "active", assignees: [ada.id, linus.id], schedules: { plan: { effort_hours: 40, start: "2026-07-06", finish: "2026-07-10" } } }),
+    entity({ schema: "gitpm/task@2", id: "T-26-ADA000", project: project.id, title: "Ada only", lifecycle: "active", assignees: [ada.id], schedules: { plan: { effort_hours: 8, start: "2026-07-06", finish: "2026-07-10" } } }),
+  ],
+};
+
+describe("workload person and task scopes", () => {
+  it("limits rows to team members and keeps outsider shares out of the grid", () => {
+    const report = buildWorkloadReport({ ...reportInput, filters: { team: "G-26-REVIEW" } });
+    expect(report.included_tasks).toBe(2);
+    expect(report.rows.map((row) => row.person_id)).toEqual([linus.id]);
+    expect(report.rows[0]).toMatchObject({ allocated_hours: 20, task_ids: ["T-26-SHARED"] });
+    expect(report.person_census).toEqual({ total_active: 2, scoped: 1, calculable: 1, without_calendar: [] });
+  });
+
+  it("keeps selected people in rows when a project filter leaves them with zero hours", () => {
+    const otherProject = entity({ schema: "gitpm/project@2", id: "P-26-OTHER0", lifecycle: "active" });
+    const report = buildWorkloadReport({
+      ...reportInput,
+      projects: [...reportInput.projects, otherProject],
+      filters: { team: "G-26-REVIEW", project: otherProject.id as string, from: "2026-07-06", weeks: 1 },
+    });
+    expect(report.included_tasks).toBe(0);
+    expect(report.weeks).toEqual(["2026-07-06"]);
+    expect(report.rows).toEqual([expect.objectContaining({ person_id: linus.id, allocated_hours: 0, task_ids: [] })]);
+    expect(report.person_census.scoped).toBe(1);
+  });
+
+  it("emits the requested calendar window even when a week has no tasks", () => {
+    const report = buildWorkloadReport({ ...reportInput, filters: { person: ada.id, from: "2026-07-06", weeks: 2 } });
+    expect(report.weeks).toEqual(["2026-07-06", "2026-07-13"]);
+    expect(report.rows).toHaveLength(2);
+    expect(report.rows[1]).toMatchObject({ person_id: ada.id, week: "2026-07-13", allocated_hours: 0 });
+  });
+
+  it("counts scoped people without an active calendar instead of dropping them", () => {
+    const report = buildWorkloadReport({
+      ...reportInput,
+      people: [
+        ...reportInput.people,
+        entity({ schema: "gitpm/person@1", id: "U-26-NOCAL0", name: "No Calendar", weekly_capacity_hours: 40, calendar: "C-26-MISSING", lifecycle: "active" }),
+      ],
+      teams: [entity({ schema: "gitpm/team@1", id: "G-26-REVIEW", name: "Reviewers", members: [linus.id, "U-26-NOCAL0"], lifecycle: "active" })],
+      filters: { team: "G-26-REVIEW" },
+    });
+    expect(report.rows.map((row) => row.person_id)).toEqual([linus.id]);
+    expect(report.person_census).toEqual({
+      total_active: 3,
+      scoped: 2,
+      calculable: 1,
+      without_calendar: [{ person_id: "U-26-NOCAL0", person_name: "No Calendar" }],
+    });
   });
 });

@@ -127,9 +127,12 @@ const commandHelp: Readonly<Record<CliCommandName | "root", string>> = {
   ].join("\n"),
   workload: [
     "Usage:",
-    "  gitpm workload report [--draft <id>] [--project <id>] [--milestone <id>] [--team <id>] [--json]",
+    "  gitpm workload report [--draft <id>] [--project <id>] [--milestone <id>] [--team <id>] [--person <id>] [--from <yyyy-mm-dd>] [--weeks <n>] [--json]",
     "",
     "Uses the same repository-level workload calculation as the HTTP API and GUI.",
+    "--team and --person limit Person rows. --project and --milestone limit which Tasks contribute hours.",
+    "A shared Task does not add a co-assignee outside the selected team or person to the row set.",
+    "--from and --weeks set an explicit calendar window; without them the horizon follows dated Tasks.",
     "Active Tasks owned by archived Projects are excluded from capacity and reported as archived exclusions.",
   ].join("\n"),
   config: [
@@ -209,7 +212,7 @@ export function commandArgumentSpec(command: string | undefined, args: readonly 
   if (command === "time-entry") return { values: ["--draft", "--project", "--task", "--milestone", "--id", "--person", "--date", "--hours", "--category", "--note", "--after", "--state", "--from", "--to", "--offset", "--limit"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
   if (command === "schedule") return { values: ["--draft", "--type", "--id", "--track", "--start", "--finish", "--effort-hours", "--project"], repeatable: ["--depends-on"], booleans: ["--clear-start", "--clear-finish", "--clear-effort", "--clear-dependencies", "--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
   if (command === "planning") return { values: ["--draft", "--project", "--primary-track", "--workload-track", "--comparison-track"], repeatable: ["--enabled-track", "--dashboard-track"], booleans: ["--clear-comparison-track", "--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 };
-  if (command === "workload") return { values: ["--draft", "--project", "--milestone", "--team"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
+  if (command === "workload") return { values: ["--draft", "--project", "--milestone", "--team", "--person", "--from", "--weeks"], booleans: ["--json"], minPositionals: 1, maxPositionals: 1 };
   if (command === "config") {
     return action === "update"
       ? { values: ["--draft", "--kind", "--file", "--path"], repeatable: ["--set", "--unset"], booleans: ["--allow-delete", "--json"], minPositionals: 1, maxPositionals: 1 }

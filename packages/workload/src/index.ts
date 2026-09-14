@@ -67,12 +67,31 @@ export interface WorkloadExclusions {
   readonly unavailable_assignees: number;
 }
 
+export interface WorkloadPersonRef {
+  readonly person_id: string;
+  readonly person_name: string;
+}
+
+export interface WorkloadPersonCensus {
+  readonly total_active: number;
+  readonly scoped: number;
+  readonly calculable: number;
+  readonly without_calendar: readonly WorkloadPersonRef[];
+}
+
 export interface WorkloadReport {
   readonly formula: "equal-assignee-share/capacity-weighted-person-day/v2";
   readonly weeks: readonly string[];
   readonly rows: readonly PersonWeekWorkload[];
   readonly included_tasks: number;
   readonly exclusions: WorkloadExclusions;
+  readonly person_census: WorkloadPersonCensus;
+}
+
+export interface WorkloadCalculationOptions {
+  readonly rowPersonIds?: ReadonlySet<string>;
+  readonly weeks?: readonly string[];
+  readonly personCensus?: WorkloadPersonCensus;
 }
 
 const round = (value: number): number => Math.round((value + Number.EPSILON) * 10_000) / 10_000;
@@ -108,16 +127,27 @@ function calendarCapacity(week: string, person: WorkloadPerson, calendar: Worklo
   };
 }
 
+function personCensus(people: readonly WorkloadPerson[], activeCalendars: ReadonlyMap<string, WorkloadCalendar>, rowPersonIds?: ReadonlySet<string>): WorkloadPersonCensus {
+  const active = people.filter((person) => person.lifecycle === "active");
+  const scoped = rowPersonIds === undefined ? active : active.filter((person) => rowPersonIds.has(person.id));
+  const withoutCalendar = scoped.filter((person) => !activeCalendars.has(person.calendar)).map((person) => ({ person_id: person.id, person_name: person.name }));
+  return { total_active: active.length, scoped: scoped.length, calculable: scoped.length - withoutCalendar.length, without_calendar: withoutCalendar };
+}
+
 export function calculateWorkload(
   tasks: readonly WorkloadTask[],
   people: readonly WorkloadPerson[],
   calendars: readonly WorkloadCalendar[],
   projects: readonly WorkloadProject[],
   availabilityEvents: readonly WorkloadAvailabilityEvent[] = [],
+  options: WorkloadCalculationOptions = {},
 ): WorkloadReport {
   const activeProjects = activeProjectIds(projects);
   const activeCalendars = new Map(calendars.filter((calendar) => calendar.lifecycle === "active").map((calendar) => [calendar.id, calendar]));
   const activePeople = new Map(people.filter((person) => person.lifecycle === "active" && activeCalendars.has(person.calendar)).map((person) => [person.id, person]));
+  const rowPeople = [...(options.rowPersonIds === undefined ? activePeople.values() : [...activePeople.values()].filter((person) => options.rowPersonIds!.has(person.id)))]
+    .sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
+  const census = options.personCensus ?? personCensus(people, activeCalendars, options.rowPersonIds);
   const exclusions = { archived: 0, undated: 0, unestimated: 0, unassigned: 0, unavailable_assignees: 0 };
   const included: { task: WorkloadTask; assignees: readonly WorkloadPerson[]; assigneeCount: number }[] = [];
 
@@ -132,10 +162,14 @@ export function calculateWorkload(
     included.push({ task, assignees, assigneeCount: task.assignees.length });
   }
 
-  if (included.length === 0) return { formula: "equal-assignee-share/capacity-weighted-person-day/v2", weeks: [], rows: [], included_tasks: 0, exclusions };
-  const first = included.reduce((value, item) => dayTime(item.task.start!) < dayTime(value) ? item.task.start! : value, included[0]!.task.start!);
-  const last = included.reduce((value, item) => dayTime(item.task.finish!) > dayTime(value) ? item.task.finish! : value, included[0]!.task.finish!);
-  const weeks = weekStartsBetween(first, last);
+  const taskWeeks = included.length === 0
+    ? []
+    : weekStartsBetween(
+      included.reduce((value, item) => dayTime(item.task.start!) < dayTime(value) ? item.task.start! : value, included[0]!.task.start!),
+      included.reduce((value, item) => dayTime(item.task.finish!) > dayTime(value) ? item.task.finish! : value, included[0]!.task.finish!),
+    );
+  const weeks = options.weeks ?? taskWeeks;
+  if (weeks.length === 0) return { formula: "equal-assignee-share/capacity-weighted-person-day/v2", weeks: [], rows: [], included_tasks: included.length, exclusions, person_census: census };
   const allocations = new Map<string, { hours: number; taskHours: Map<string, number> }>();
 
   for (const { task, assignees, assigneeCount } of included) {
@@ -161,7 +195,7 @@ export function calculateWorkload(
     }
   }
 
-  const rows = [...activePeople.values()].sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id)).flatMap((person) => weeks.map((week): PersonWeekWorkload => {
+  const rows = rowPeople.flatMap((person) => weeks.map((week): PersonWeekWorkload => {
     const allocation = allocations.get(`${person.id}:${week}`);
     const allocated = round(allocation?.hours ?? 0);
     const capacity = calendarCapacity(week, person, activeCalendars.get(person.calendar)!, availabilityEvents);
@@ -181,7 +215,7 @@ export function calculateWorkload(
       task_allocations: taskAllocations,
     };
   }));
-  return { formula: "equal-assignee-share/capacity-weighted-person-day/v2", weeks, rows, included_tasks: included.length, exclusions };
+  return { formula: "equal-assignee-share/capacity-weighted-person-day/v2", weeks, rows, included_tasks: included.length, exclusions, person_census: census };
 }
 
 export interface WorkloadEntityDocument extends Readonly<Record<string, unknown>> {
@@ -193,6 +227,10 @@ export interface WorkloadFilters {
   readonly project?: string;
   readonly milestone?: string;
   readonly team?: string;
+  readonly person?: string;
+  readonly from?: string;
+  readonly weeks?: number;
+  readonly end?: string;
 }
 
 export interface WorkloadWorkspaceInput {
@@ -214,6 +252,14 @@ const documentNumbers = (document: Readonly<Record<string, unknown>>, key: strin
 const lifecycle = (document: Readonly<Record<string, unknown>>): "active" | "archived" => document.lifecycle === "archived" ? "archived" : "active";
 const entityId = (document: WorkloadEntityDocument): string => documentText(document, "id") ?? "";
 
+export function weeksFromFilters(filters: WorkloadFilters): readonly string[] | undefined {
+  if (filters.from === undefined || !DATE_PATTERN.test(filters.from)) return undefined;
+  const start = isoWeekStart(filters.from);
+  if (filters.end !== undefined && DATE_PATTERN.test(filters.end)) return weekStartsBetween(start, filters.end);
+  const count = filters.weeks !== undefined && Number.isInteger(filters.weeks) && filters.weeks > 0 ? filters.weeks : 8;
+  return Array.from({ length: count }, (_, index) => formatDateOnly(new Date(dayTime(start) + index * 7 * DAY_MS)));
+}
+
 function scheduleWindow(document: WorkloadEntityDocument, track: string): Readonly<Record<string, unknown>> {
   const schedules = typeof document.schedules === "object" && document.schedules !== null ? document.schedules as Readonly<Record<string, unknown>> : {};
   const window = schedules[track];
@@ -233,7 +279,7 @@ export function buildWorkloadReport(input: WorkloadWorkspaceInput): WorkloadRepo
   const selectedTasks = input.tasks.filter((task) => {
     if (filters.project !== undefined && documentText(task, "project") !== filters.project) return false;
     if (filters.milestone !== undefined && documentText(task, "milestone") !== filters.milestone) return false;
-    return teamMembers === undefined || documentStrings(task, "assignees").some((id) => teamMembers.has(id));
+    return true;
   });
   const tasks = selectedTasks.map((task): WorkloadTask => {
     const project = documentText(task, "project") ?? "";
@@ -262,5 +308,23 @@ export function buildWorkloadReport(input: WorkloadWorkspaceInput): WorkloadRepo
     state: documentText(event, "state") === "taken" ? "taken" : documentText(event, "state") === "cancelled" ? "cancelled" : "planned",
     lifecycle: lifecycle(event),
   }));
-  return calculateWorkload(tasks, people, calendars, projects, availabilityEvents);
+  const activeCalendarIds = new Set(calendars.filter((calendar) => calendar.lifecycle === "active").map((calendar) => calendar.id));
+  const activePeople = people.filter((person) => person.lifecycle === "active");
+  const scopedPeople = activePeople.filter((person) => {
+    if (filters.person !== undefined && person.id !== filters.person) return false;
+    if (teamMembers !== undefined && !teamMembers.has(person.id)) return false;
+    return true;
+  });
+  const withoutCalendar = scopedPeople.filter((person) => !activeCalendarIds.has(person.calendar));
+  const calculable = scopedPeople.filter((person) => activeCalendarIds.has(person.calendar));
+  return calculateWorkload(tasks, people, calendars, projects, availabilityEvents, {
+    rowPersonIds: new Set(calculable.map((person) => person.id)),
+    weeks: weeksFromFilters(filters),
+    personCensus: {
+      total_active: activePeople.length,
+      scoped: scopedPeople.length,
+      calculable: calculable.length,
+      without_calendar: withoutCalendar.map((person) => ({ person_id: person.id, person_name: person.name })),
+    },
+  });
 }

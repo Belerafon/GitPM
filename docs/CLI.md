@@ -27,7 +27,7 @@ gitpm calendar apply [--draft <id>] --preset <id> --id <calendar-id> [--name <na
 gitpm schedule set [--draft <id>] --type project|task|milestone --id <entity-id> --track <slug> [--start <yyyy-mm-dd>] [--finish <yyyy-mm-dd>] [--effort-hours <n>] [--depends-on <task-id>]... [--clear-start] [--clear-finish] [--clear-effort] [--clear-dependencies] [--project <id>] [--allow-delete]
 gitpm planning show [--draft <id>] --project <id>
 gitpm planning set [--draft <id>] --project <id> [--primary-track <slug>] [--workload-track <slug>] [--comparison-track <slug>|--clear-comparison-track] [--enabled-track <slug>]... [--dashboard-track <slug>]... [--allow-delete]
-gitpm workload report [--draft <id>] [--project <id>] [--milestone <id>] [--team <id>] [--json]
+gitpm workload report [--draft <id>] [--project <id>] [--milestone <id>] [--team <id>] [--person <id>] [--from <yyyy-mm-dd>] [--weeks <n>] [--json]
 gitpm comment list [--draft <id>] --project <id> --task <id>
 gitpm comment create [--draft <id>] --project <id> --task <id> (--body <text> | --file <path>)
 gitpm comment update [--draft <id>] --project <id> --task <id> --id <comment-id> (--body <text> | --file <path>)
@@ -70,6 +70,9 @@ gitpm --version [--json]
 ту же формулу распределения, что итоговое поле `allocated_hours`. Поля
 `base_capacity_hours`, `capacity_hours` и `unavailable_hours` разделяют базовую ёмкость,
 эффективную ёмкость и потери из-за персональных Availability Event.
+`--team` и `--person` ограничивают строки людей; `--project` и `--milestone` ограничивают Tasks,
+чьи часы попадают в ячейки. Общий Task не добавляет соисполнителя вне выбранной команды в строки.
+`person_census` сообщает `total_active`, `scoped`, `calculable` и людей без активного календаря.
 
 `gitpm export` использует единый с web/API сервис экспорта. PDF по умолчанию содержит
 разделы Projects и People; повторяемый `--section` добавляет или явно задаёт состав.

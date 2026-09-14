@@ -62,6 +62,13 @@ export interface TaskWeekAllocation {
   readonly allocated_hours: number;
 }
 
+export interface WorkloadPersonCensus {
+  readonly total_active: number;
+  readonly scoped: number;
+  readonly calculable: number;
+  readonly without_calendar: readonly { readonly person_id: string; readonly person_name: string }[];
+}
+
 export interface WorkloadReport {
   readonly formula: "equal-assignee-share/capacity-weighted-person-day/v2";
   readonly weeks: readonly string[];
@@ -74,6 +81,7 @@ export interface WorkloadReport {
     readonly unassigned: number;
     readonly unavailable_assignees: number;
   };
+  readonly person_census: WorkloadPersonCensus;
 }
 
 export interface PublicSession {
@@ -884,6 +892,15 @@ const workloadReportSchema = objectSchema({
     unestimated: integerSchema,
     unassigned: integerSchema,
     unavailable_assignees: integerSchema,
+  }),
+  person_census: objectSchema({
+    total_active: integerSchema,
+    scoped: integerSchema,
+    calculable: integerSchema,
+    without_calendar: arraySchema(objectSchema({
+      person_id: stringSchema,
+      person_name: stringSchema,
+    })),
   }),
 });
 

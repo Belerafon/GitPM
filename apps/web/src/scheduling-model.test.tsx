@@ -81,7 +81,7 @@ describe("unified scheduling model", () => {
     const task = result({ schema: "gitpm/task@2", id: "T-26-444444", project: projectId, title: "Sized task", type: "task", status: "backlog", lifecycle: "active", schedules: { working: { start: "2026-07-06", finish: "2026-07-10", effort_hours: 40 } }, assignees: [adaId] });
     const entities = [calendar, ada, project, task];
     const api = gitPmApi({ listEntities: listEntitiesMock(entities), getConfiguration: buildGetConfiguration() });
-    const { container } = render(<WorkloadWorkspace api={api} draft={draft} locale="en" onNavigate={vi.fn()} />);
+    const { container } = render(<WorkloadWorkspace api={api} draft={draft} locale="en" now="2026-07-06" onNavigate={vi.fn()} />);
     await waitFor(() => expect(container.querySelector(".workload-table")).not.toBeNull());
     expect(Array.from(container.querySelectorAll(".workload-table td")).some((cell) => /40h/u.test(cell.textContent ?? ""))).toBe(true);
   });
@@ -113,7 +113,7 @@ describe("unified scheduling model", () => {
     const calTask = result({ schema: "gitpm/task@2", id: "T-26-CAL", project: projectId, title: "Shared task", type: "task", status: "backlog", lifecycle: "active", schedules: { working: { effort_hours: 999 }, estimate: { start: "2026-07-06", finish: "2026-07-17", effort_hours: 80 } }, assignees: [adaId, boId] });
     const entities = [eng, support, ada, bo, calProject, calTask];
     const api = gitPmApi({ listEntities: listEntitiesMock(entities), getConfiguration });
-    const { container } = render(<WorkloadWorkspace api={api} draft={draft} locale="en" onNavigate={vi.fn()} />);
+    const { container } = render(<WorkloadWorkspace api={api} draft={draft} locale="en" now="2026-07-06" onNavigate={vi.fn()} />);
     await waitFor(() => expect(container.querySelector(".workload-table")).not.toBeNull());
 
     const adaWeek1 = container.querySelector<HTMLElement>(`td[data-person-id="${adaId}"][data-week="2026-07-06"]`)!;

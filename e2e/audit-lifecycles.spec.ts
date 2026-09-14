@@ -36,14 +36,15 @@ test.describe("audited vertical lifecycles", () => {
     test.setTimeout(120_000);
     const draft = await createDraft(request, `${prefix}WORKLOAD`);
     await openDraft(page, draft.draft_id, "/workload");
-    await expect(page.getByText("Included Tasks").locator("xpath=following-sibling::*[1]")).toHaveText("1");
+    await expect(page.getByText(/Calculation quality: 1 of /u)).toBeVisible();
 
     const archivedProject = await archiveProject(request, draft, await entity(request, draft.draft_id, "projects", FIXTURE_PROJECT_ID));
     await page.reload();
 
-    await expect(page.getByText("Included Tasks").locator("xpath=following-sibling::*[1]")).toHaveText("0");
+    await expect(page.getByText(/Calculation quality: 0 of /u)).toBeVisible();
+    await page.getByText(/Calculation quality: 0 of /u).click();
     await expect(page.getByText("Archived", { exact: true }).locator("xpath=following-sibling::*[1]")).toHaveText("2");
-    await expect(page.locator(".workload-table")).toHaveCount(0);
+    await expect(page.locator(".workload-table")).toHaveCount(1);
 
     await page.goto("/portfolio");
     await expect(page).toHaveURL(/\/projects$/u);
