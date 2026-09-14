@@ -18,6 +18,13 @@ function rememberActiveId(draftId: string | null): void {
   } catch { /* storage can be disabled */ }
 }
 
+export function requiresGitLabLogin(session: PublicSession | null): boolean {
+  if (session === null) return true;
+  return session.user.id === "anonymous"
+    && session.gitlab?.configured === true
+    && session.gitlab.user === undefined;
+}
+
 /**
  * Builds a stable signature for the UI-relevant fields of a draft. Intentionally ignores
  * server timestamps (e.g. `updated_at`) that may change on every poll even when nothing the
@@ -125,7 +132,7 @@ export function DraftProvider({ api, children }: { readonly api: GitPmApi; reado
         setSession((current) => current === undefined ? null : current);
         throw caught;
       }
-      if (currentSession === null || (currentSession.gitlab?.configured === true && currentSession.gitlab.user === undefined)) {
+      if (requiresGitLabLogin(currentSession)) {
         setSession(null);
         setDrafts([]);
         setActiveId(null);
@@ -186,8 +193,15 @@ export function DraftProvider({ api, children }: { readonly api: GitPmApi; reado
     await run(async () => {
       await api.logout();
       const currentSession = await api.session();
+      if (requiresGitLabLogin(currentSession)) {
+        setSession(null);
+        setDrafts([]);
+        setActiveId(null);
+        rememberActiveId(null);
+        setSnapshot(null);
+        return;
+      }
       setSession(currentSession);
-      if (currentSession === null) { setDrafts([]); setActiveId(null); rememberActiveId(null); setSnapshot(null); }
     });
   }, [api, run]);
 

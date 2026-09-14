@@ -105,7 +105,9 @@ for concurrent authors. Parallel local editing is unsupported and must instead
 use Git branches/worktrees and the normal Git workflow.
 
 The legacy `user-oauth-publication` flow authenticates remote publication, not
-the whole HTTP API. The authenticated multi-user profile requires worktree mode
+the whole HTTP API. The web UI in that profile lets the local Maintainer browse
+and edit without GitLab login; GitLab sign-in is requested only for push and
+Merge Requests. The authenticated multi-user profile requires worktree mode
 and `GITPM_GITLAB_AUTH_MODE=oauth-identity-project-token`, as described below.
 
 ## Multi-user GitLab authentication
