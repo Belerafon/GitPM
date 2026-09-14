@@ -28,6 +28,8 @@ export function draftSignature(draft: DraftStatus): string {
     draft.draft_id, draft.owner_gitlab_user_id, draft.branch, draft.base_commit,
     draft.writer_mode, draft.state, draft.fingerprint, draft.external_fingerprint ?? "",
     draft.changed_externally ? "1" : "0", draft.merge_request_iid ?? "",
+    draft.sync?.head ?? "", String(draft.sync?.ahead ?? ""), String(draft.sync?.behind ?? ""),
+    draft.sync?.remote_commit ?? "", String(draft.sync?.default_branch_ahead ?? ""),
   ].join("|");
 }
 

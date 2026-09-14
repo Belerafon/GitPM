@@ -100,6 +100,15 @@ export interface PublicSession {
   readonly expires_at: string;
 }
 
+export interface DraftPublicationSync {
+  readonly head: string;
+  readonly ahead: number;
+  readonly behind: number;
+  readonly remote_commit?: string;
+  readonly default_branch: string;
+  readonly default_branch_ahead: number;
+}
+
 export interface DraftStatus {
   readonly draft_id: string;
   readonly owner_gitlab_user_id: string;
@@ -113,6 +122,7 @@ export interface DraftStatus {
   readonly changed_externally?: boolean;
   readonly created_at: string;
   readonly updated_at: string;
+  readonly sync?: DraftPublicationSync;
 }
 
 export interface ChangesSummary {
@@ -527,6 +537,15 @@ const actorSchema = objectSchema({
   display_name: stringSchema,
 }, ["provider", "subject", "display_name"]);
 
+const draftPublicationSyncSchema = objectSchema({
+  head: stringSchema,
+  ahead: nonNegativeIntegerSchema,
+  behind: nonNegativeIntegerSchema,
+  remote_commit: stringSchema,
+  default_branch: stringSchema,
+  default_branch_ahead: nonNegativeIntegerSchema,
+}, ["head", "ahead", "behind", "default_branch", "default_branch_ahead"]);
+
 const draftStatusSchema = objectSchema({
   draft_id: stringSchema,
   owner_gitlab_user_id: stringSchema,
@@ -540,6 +559,7 @@ const draftStatusSchema = objectSchema({
   changed_externally: booleanSchema,
   created_at: stringSchema,
   updated_at: stringSchema,
+  sync: draftPublicationSyncSchema,
 }, ["draft_id", "owner_gitlab_user_id", "branch", "base_commit", "writer_mode", "state", "fingerprint", "created_at", "updated_at"]);
 
 const entityDocumentSchema = {

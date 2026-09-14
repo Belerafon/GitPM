@@ -434,7 +434,9 @@ describe("frontend draft lifecycle", () => {
     };
     api.drafts = [draft({ draft_id: "DRF-LOCAL", owner_gitlab_user_id: "local-user" })];
     render(<App api={api} browserLanguages={["en"]} />);
-    expect(await screen.findByText("Local mode · Role: Maintainer")).toBeTruthy();
+    expect(await screen.findByText("No remote")).toBeTruthy();
+    expect(screen.getByText("Role: Maintainer")).toBeTruthy();
+    expect(screen.queryByText("Local mode")).toBeNull();
     expect(screen.getByText("portfolio")).toBeTruthy();
     expect(screen.getByTestId("sidebar-version").textContent).toContain("Version —");
     expect(await screen.findByRole("heading", { name: "Projects" })).toBeTruthy();
@@ -556,7 +558,7 @@ describe("frontend draft lifecycle", () => {
     render(<App api={api} browserLanguages={["en"]} />);
     // Git and publishing lands on Changes in direct mode, never on the draft panel.
     fireEvent.click(await screen.findByRole("button", { name: "Git and publishing" }));
-    await screen.findByText(/Commit, push/i);
+    await screen.findByText(/Commit and push/i);
     expect(screen.queryByLabelText("Working copy ID")).toBeNull();
     expect(screen.queryByRole("button", { name: "Create working copy" })).toBeNull();
     expect(screen.queryByLabelText("Current working copy")).toBeNull();

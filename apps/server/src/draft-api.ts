@@ -53,7 +53,8 @@ interface ErrorPayload {
   };
 }
 
-function publicMetadata(metadata: DraftMetadata) {
+async function publicMetadata(manager: DraftManager, metadata: DraftMetadata) {
+  const sync = await manager.publicationSync(metadata);
   return {
     draft_id: metadata.draft_id,
     owner_gitlab_user_id: metadata.owner_gitlab_user_id,
@@ -65,6 +66,7 @@ function publicMetadata(metadata: DraftMetadata) {
     fingerprint: metadata.fingerprint,
     created_at: metadata.created_at,
     updated_at: metadata.updated_at,
+    ...(sync === undefined ? {} : { sync }),
   };
 }
 
@@ -254,15 +256,17 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
     requireMutationRole(actor);
     requireWorktreeDraftOperation(manager);
     const metadata = await manager.createDraft(request.body.draft_id, actor.userId);
-    await reply.code(201).send(publicMetadata(metadata));
+    await reply.code(201).send(await publicMetadata(manager, metadata));
   });
 
   app.get("/api/drafts", async (request) => {
     const actor = await authenticate(request);
     const drafts = await manager.listDrafts();
-    return drafts
-      .filter((draft) => draft.owner_gitlab_user_id === actor.userId)
-      .map(publicMetadata);
+    return await Promise.all(
+      drafts
+        .filter((draft) => draft.owner_gitlab_user_id === actor.userId)
+        .map((draft) => publicMetadata(manager, draft)),
+    );
   });
 
   app.get<{ Params: { draftId: string } }>("/api/drafts/:draftId", async (request) => {
@@ -271,7 +275,7 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
     if (status.metadata.owner_gitlab_user_id !== actor.userId) {
       throw new DraftRuntimeError("DRAFT_FORBIDDEN", "Draft owner mismatch");
     }
-    return { ...publicMetadata(status.metadata), changed_externally: status.changedExternally, external_fingerprint: status.currentFingerprint };
+    return { ...await publicMetadata(manager, status.metadata), changed_externally: status.changedExternally, external_fingerprint: status.currentFingerprint };
   });
 
   app.get<{ Params: { draftId: string } }>("/api/drafts/:draftId/validation", async (request) => {
@@ -291,27 +295,27 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
     const actor = await authenticate(request);
     requireMutationRole(actor);
     requireWorktreeDraftOperation(manager);
-    return publicMetadata(await manager.setWriterMode(request.params.draftId, actor.userId, request.body.writer_mode));
+    return await publicMetadata(manager, await manager.setWriterMode(request.params.draftId, actor.userId, request.body.writer_mode));
   });
 
   app.post<{ Params: { draftId: string } }>("/api/drafts/:draftId/acknowledge-external-changes", async (request) => {
     const actor = await authenticate(request);
     requireMutationRole(actor);
-    return publicMetadata(await manager.acknowledgeExternalChanges(request.params.draftId, actor.userId));
+    return await publicMetadata(manager, await manager.acknowledgeExternalChanges(request.params.draftId, actor.userId));
   });
 
   app.post<{ Params: { draftId: string } }>("/api/drafts/:draftId/close", async (request) => {
     const actor = await authenticate(request);
     requireMutationRole(actor);
     requireWorktreeDraftOperation(manager);
-    return publicMetadata(await manager.closeDraft(request.params.draftId, actor.userId));
+    return await publicMetadata(manager, await manager.closeDraft(request.params.draftId, actor.userId));
   });
 
   app.post<{ Params: { draftId: string } }>("/api/drafts/:draftId/reopen", async (request) => {
     const actor = await authenticate(request);
     requireMutationRole(actor);
     requireWorktreeDraftOperation(manager);
-    return publicMetadata(await manager.reopenDraft(request.params.draftId, actor.userId));
+    return await publicMetadata(manager, await manager.reopenDraft(request.params.draftId, actor.userId));
   });
 
   app.delete<{ Params: { draftId: string }; Body: { confirmation: string } }>("/api/drafts/:draftId", { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.cleanupDraft } }, async (request, reply) => {
@@ -526,7 +530,7 @@ export function registerHistoryApi(
     requireWorktreeDraftOperation(manager);
     await requireDraftRead(manager, actor, request.params.draftId);
     const result = await history.createRevertDraft(request.params.draftId, request.params.commit, request.body.draft_id, actor.userId);
-    await reply.code(201).send({ ...result, draft: publicMetadata(result.draft) });
+    await reply.code(201).send({ ...result, draft: await publicMetadata(manager, result.draft) });
   });
 
   app.post<{ Params: { draftId: string; commit: string }; Body: { expected_fingerprint: string; paths: string[] } }>(

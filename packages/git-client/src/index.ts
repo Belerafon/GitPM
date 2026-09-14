@@ -956,10 +956,11 @@ export class GitClient {
     }
   }
 
-  async checkoutRemoteCommit(checkoutPath: string): Promise<string | undefined> {
-    const checkout = await realpath(checkoutPath);
+  async remoteBranchCommit(repoPath: string, branch: string): Promise<string | undefined> {
+    const checkout = await realpath(repoPath);
+    const safeBranch = assertSafeBranchName(branch);
     try {
-      const result = await this.git(["-C", checkout, "rev-parse", `refs/remotes/origin/${this.defaultBranch}^{commit}`]);
+      const result = await this.git(["-C", checkout, "rev-parse", `refs/remotes/origin/${safeBranch}^{commit}`]);
       const commit = result.stdout.trim();
       if (!/^[0-9a-f]{40,64}$/u.test(commit)) return undefined;
       return commit;
@@ -969,23 +970,48 @@ export class GitClient {
     }
   }
 
+  async checkoutRemoteCommit(checkoutPath: string): Promise<string | undefined> {
+    return await this.remoteBranchCommit(checkoutPath, this.defaultBranch);
+  }
+
+  /**
+   * Ahead/behind for HEAD versus refs/remotes/origin/<branch>. Both counts are 0
+   * when that remote-tracking ref does not exist (never fetched or never pushed).
+   */
+  async aheadBehind(repoPath: string, remoteBranch: string): Promise<{ ahead: number; behind: number; remoteCommit?: string }> {
+    const checkout = await realpath(repoPath);
+    const safeBranch = assertSafeBranchName(remoteBranch);
+    const remoteCommit = await this.remoteBranchCommit(checkout, safeBranch);
+    if (remoteCommit === undefined) {
+      return { ahead: 0, behind: 0, remoteCommit: undefined };
+    }
+    const counts = await this.git([
+      "-C", checkout, "rev-list", "--left-right", "--count",
+      `refs/remotes/origin/${safeBranch}...HEAD`,
+    ]);
+    const [behind = "0", ahead = "0"] = counts.stdout.trim().split(/\s+/u);
+    return { ahead: Number.parseInt(ahead, 10) || 0, behind: Number.parseInt(behind, 10) || 0, remoteCommit };
+  }
+
   /**
    * Direct mode: ahead/behind counts for the checkout HEAD versus
    * refs/remotes/origin/<defaultBranch>. Both counts are 0 when no remote ref
    * exists (for example a brand-new local-only repository).
    */
   async checkoutAheadBehind(checkoutPath: string): Promise<{ ahead: number; behind: number; remoteCommit?: string }> {
-    const checkout = await realpath(checkoutPath);
-    const remoteCommit = await this.checkoutRemoteCommit(checkout);
-    if (remoteCommit === undefined) {
-      return { ahead: 0, behind: 0, remoteCommit: undefined };
+    return await this.aheadBehind(checkoutPath, this.defaultBranch);
+  }
+
+  async commitCount(repoPath: string, fromCommit: string, to: { readonly head: true } | { readonly remoteBranch: string } = { head: true }): Promise<number> {
+    if (!/^[0-9a-f]{40,64}$/iu.test(fromCommit)) {
+      throw new GitCommandError("GIT_COMMIT_INVALID", "Commit id is invalid");
     }
-    const counts = await this.git([
-      "-C", checkout, "rev-list", "--left-right", "--count",
-      `refs/remotes/origin/${this.defaultBranch}...HEAD`,
-    ]);
-    const [behind = "0", ahead = "0"] = counts.stdout.trim().split(/\s+/u);
-    return { ahead: Number.parseInt(ahead, 10) || 0, behind: Number.parseInt(behind, 10) || 0, remoteCommit };
+    const checkout = await realpath(repoPath);
+    const right = "remoteBranch" in to
+      ? `refs/remotes/origin/${assertSafeBranchName(to.remoteBranch)}`
+      : "HEAD";
+    const result = await this.git(["-C", checkout, "rev-list", "--count", `${fromCommit}..${right}`]);
+    return Number.parseInt(result.stdout.trim(), 10) || 0;
   }
 
   /**

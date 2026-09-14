@@ -193,7 +193,7 @@ export function deleteRestrictionLabels(details: unknown): readonly string[] {
 
 export interface GitPmApi {
   session(): Promise<PublicSession | null>;
-  login(): Promise<string>;
+  login(returnTo?: string): Promise<string>;
   logout(): Promise<void>;
   repositoryConnection(): Promise<RepositoryConnectionStatus>;
   updateRepositoryConnection(update: RepositoryConnectionUpdate): Promise<RepositoryConnectionStatus>;
@@ -367,8 +367,9 @@ export class HttpGitPmApi implements GitPmApi {
     catch (error) { if (error instanceof ApiError && error.code === "SESSION_INVALID") return null; throw error; }
   }
 
-  async login(): Promise<string> {
-    return (await this.request("/api/auth/login", decodeAuthorization)).authorization_url;
+  async login(returnTo?: string): Promise<string> {
+    const query = returnTo === undefined || returnTo === "" ? "" : `?return_to=${encodeURIComponent(returnTo)}`;
+    return (await this.request(`/api/auth/login${query}`, decodeAuthorization)).authorization_url;
   }
 
   async logout(): Promise<void> { await this.requestEmpty("/api/auth/logout", { method: "POST" }); }

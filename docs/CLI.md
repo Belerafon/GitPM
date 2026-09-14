@@ -313,7 +313,7 @@ draft/publish-командам дополнительно нужен remote runt
 | `GITPM_RUNTIME_MODE` | — | `production` собирает web и запускает Vite `preview`. |
 | `GITPM_API_TARGET` | `http://127.0.0.1:3000` | Куда Vite проксирует `/api`. На сервере не нужен, если web и api в одном хосте. |
 | `GITPM_NO_BROWSER` | — | Значение `1` отключает попытку открыть браузер на Windows. |
-| `GITPM_WEB_URL` | `http://127.0.0.1:5173` | Базовый URL web UI. |
+| `GITPM_WEB_URL` | `http://127.0.0.1:5173` | Базовый URL web UI. OAuth callback возвращает браузер на этот origin; безопасный `return_to` (например `/changes`) добавляется как путь. |
 | `GITPM_AUTHOR_NAME` / `GITPM_AUTHOR_EMAIL` | из git config | Подпись коммитов от лица UI-пользователя. |
 | `LOG_LEVEL` | `error` | Уровень логов сервера. |
 

@@ -3,7 +3,7 @@ import type { PublicSession } from "@gitpm/gitlab";
 import type { PublicationService } from "@gitpm/publishing";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildApp } from "./app.js";
-import { registerAuthApi } from "./auth-api.js";
+import { registerAuthApi, sanitizeReturnTo } from "./auth-api.js";
 import type { RepositoryConnectionManager } from "./repository-connection.js";
 
 const apps: ReturnType<typeof buildApp>[] = [];
@@ -16,6 +16,7 @@ afterEach(async () => {
 });
 
 function repositoryAuth() {
+  let returnTo: string | undefined;
   const session: PublicSession = {
     session_id: "session-id",
     user: {
@@ -28,8 +29,11 @@ function repositoryAuth() {
     expires_at: new Date(Date.now() + 60_000).toISOString(),
   };
   return {
-    startLogin: () => ({ authorization_url: "https://gitlab.example/oauth/authorize", state: "state" }),
-    completeLogin: vi.fn(async () => session),
+    startLogin: (path?: string) => {
+      returnTo = path;
+      return { authorization_url: "https://gitlab.example/oauth/authorize", state: "state" };
+    },
+    completeLogin: vi.fn(async () => ({ ...session, ...(returnTo === undefined ? {} : { return_to: returnTo }) })),
     authorize: vi.fn(async () => ({ session, accessToken: "token" })),
     logout: vi.fn(),
   };
@@ -111,6 +115,26 @@ describe("optional GitLab repository session", () => {
     const response = await app.inject({ method: "GET", url: "/api/auth/callback?state=state&code=code" });
     expect(response.headers["set-cookie"]).toContain("; HttpOnly; SameSite=Lax;");
     expect(response.headers["set-cookie"]).not.toContain("; Secure;");
+  });
+
+  it("returns to a same-origin app path after GitLab login", async () => {
+    delete process.env.GITPM_COOKIE_SECURE;
+    const app = buildApp({ draftManager: {} as DraftManager, authenticate: () => ({ userId: "local-user", role: "Maintainer" }) });
+    apps.push(app);
+    registerAuthApi(app, baseRepositorySession(), {} as PublicationService, localContext, repositoryAuth(), "http://127.0.0.1:5173");
+
+    await app.inject({ method: "GET", url: "/api/auth/login?return_to=/changes" });
+    const response = await app.inject({ method: "GET", url: "/api/auth/callback?state=state&code=code" });
+    expect(response.statusCode).toBe(302);
+    expect(response.headers.location).toBe("http://127.0.0.1:5173/changes");
+  });
+
+  it("rejects an absolute or protocol-relative OAuth return path", async () => {
+    expect(sanitizeReturnTo("/changes", "http://127.0.0.1:5173")).toBe("/changes");
+    expect(sanitizeReturnTo("/changes?tab=files", "http://127.0.0.1:5173")).toBe("/changes?tab=files");
+    expect(sanitizeReturnTo("https://evil.example/phish", "http://127.0.0.1:5173")).toBeUndefined();
+    expect(sanitizeReturnTo("//evil.example", "http://127.0.0.1:5173")).toBeUndefined();
+    expect(sanitizeReturnTo("/\\evil", "http://127.0.0.1:5173")).toBeUndefined();
   });
 
   it("keeps local access and commit available without a GitLab cookie", async () => {

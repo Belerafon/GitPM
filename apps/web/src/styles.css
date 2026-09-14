@@ -1412,6 +1412,10 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
 .unclassified, .alpha-limitations { margin: .75rem 0 0; color: #777c77; font-size: .76rem; }
 .publish-panel { align-items: start; }
 .publish-panel p { max-width: 650px; margin: .35rem 0 0; color: #6e736f; font-size: .82rem; }
+.publish-sync { display: grid; gap: .2rem; margin: .55rem 0 0; }
+.publish-sync div { display: grid; gap: .1rem; }
+.publish-sync dt, .publish-sync dd { margin: 0; color: #6e736f; font-size: .82rem; }
+.sync-counts { font-variant-numeric: tabular-nums; }
 .publish-action { display: grid; justify-items: end; gap: .35rem; }
 .publish-action span { max-width: 260px; color: #6e736f; font-size: .75rem; text-align: right; }
 .publish-flow { display: grid; gap: .65rem; min-width: min(100%, 420px); }

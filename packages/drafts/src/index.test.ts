@@ -386,4 +386,30 @@ describe("direct mode draft manager", () => {
     expect(await readFile(absolute, "utf8")).toBe(edited);
     expect((await manager.poll("DRF-LOCAL")).changedExternally).toBe(false);
   });
+
+  it("reports unpublished draft commits and a moved default branch without fetching on read", async () => {
+    const test = await fixture();
+    const { gitClient, manager } = runtime(test.remote, test.data);
+    const draft = await manager.createDraft("DRF-SYNC", "42");
+    expect(await manager.publicationSync(draft)).toMatchObject({
+      ahead: 0,
+      behind: 0,
+      default_branch: "main",
+      default_branch_ahead: 0,
+    });
+
+    await writeFile(path.join(draft.worktree_path, "extra.txt"), "x\n", "utf8");
+    await git(draft.worktree_path, "add", ".");
+    await git(draft.worktree_path, "-c", "user.name=GitPM Test", "-c", "user.email=gitpm@example.test", "commit", "-m", "draft commit");
+    expect((await manager.publicationSync(draft))?.ahead).toBe(1);
+    expect((await manager.publicationSync(draft))?.remote_commit).toBeUndefined();
+
+    await writeFile(path.join(test.source, "moved.txt"), "m\n", "utf8");
+    await git(test.source, "add", ".");
+    await git(test.source, "-c", "user.name=GitPM Test", "-c", "user.email=gitpm@example.test", "commit", "-m", "advance main");
+    await git(test.source, "push", "origin", "main");
+    expect((await manager.publicationSync(draft))?.default_branch_ahead).toBe(0);
+    await gitClient.fetch();
+    expect((await manager.publicationSync(draft))?.default_branch_ahead).toBe(1);
+  });
 });

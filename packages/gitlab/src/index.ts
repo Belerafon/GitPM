@@ -76,6 +76,7 @@ export interface AuthServiceOptions {
 interface PendingLogin {
   readonly verifier: string;
   readonly expiresAt: number;
+  readonly returnTo?: string;
 }
 
 interface Session {
@@ -137,11 +138,15 @@ export class AuthService {
     return accessToken;
   }
 
-  startLogin(): { authorization_url: string; state: string } {
+  startLogin(returnTo?: string): { authorization_url: string; state: string } {
     const state = base64Url(randomBytes(32));
     const verifier = base64Url(randomBytes(64));
     const challenge = base64Url(createHash("sha256").update(verifier).digest());
-    this.pending.set(state, { verifier, expiresAt: this.now() + PENDING_LOGIN_MS });
+    this.pending.set(state, {
+      verifier,
+      expiresAt: this.now() + PENDING_LOGIN_MS,
+      ...(returnTo === undefined ? {} : { returnTo }),
+    });
     const url = new URL(this.options.authorizeUrl);
     url.searchParams.set("client_id", this.options.clientId);
     url.searchParams.set("redirect_uri", this.options.redirectUri);
@@ -153,7 +158,7 @@ export class AuthService {
     return { authorization_url: url.toString(), state };
   }
 
-  async completeLogin(state: string, code: string): Promise<PublicSession> {
+  async completeLogin(state: string, code: string): Promise<PublicSession & { readonly return_to?: string }> {
     const pending = this.pending.get(state);
     this.pending.delete(state);
     if (!pending || pending.expiresAt < this.now()) throw new AuthError("OAUTH_STATE_INVALID", "OAuth state is invalid or expired");
@@ -177,7 +182,7 @@ export class AuthService {
       expiresAt: this.now() + Math.min(token.expires_in * 1000, MAX_SESSION_MS),
     };
     this.sessions.set(session.id, session);
-    return this.public(session);
+    return pending.returnTo === undefined ? this.public(session) : { ...this.public(session), return_to: pending.returnTo };
   }
 
   async authorize(sessionId: string, operation: ProtectedOperation): Promise<{ session: PublicSession; accessToken: string }> {

@@ -199,7 +199,7 @@ function DiffViewer({ file, canRestore, busy, restoreFile, restoreHunk, labels }
   </div>;
 }
 
-export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmAction, remoteAvailable = true, gitlabConfigured = true, gitlabSignedIn = true, onGitLabLogin = () => undefined, onNavigate, directMode = false }: {
+export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmAction, remoteAvailable = true, gitlabConfigured = true, gitlabSignedIn = true, onGitLabLogin = () => undefined, onNavigate, directMode = false, mergeRequest: initialMergeRequest }: {
   readonly api: GitPmApi;
   readonly draft: DraftStatus;
   readonly role: GitPmRole;
@@ -209,6 +209,7 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
   readonly remoteAvailable?: boolean;
   readonly gitlabConfigured?: boolean;
   readonly gitlabSignedIn?: boolean;
+  readonly mergeRequest?: MergeRequestStatus;
   readonly onGitLabLogin?: () => void;
   readonly onNavigate?: WorkspaceNavigate;
   readonly directMode?: boolean;
@@ -222,10 +223,11 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
   const [commitOpen, setCommitOpen] = useState(false);
   const [commitMessage, setCommitMessage] = useState("");
   const [commit, setCommit] = useState<CommitResult>();
-  const [pushed, setPushed] = useState(false);
+  const [optimisticAhead, setOptimisticAhead] = useState(0);
+  const [branchPublished, setBranchPublished] = useState(false);
   const [mrTitle, setMrTitle] = useState("");
   const [mrDescription, setMrDescription] = useState("");
-  const [mergeRequest, setMergeRequest] = useState<MergeRequestStatus>();
+  const [mergeRequest, setMergeRequest] = useState<MergeRequestStatus | undefined>(initialMergeRequest);
   const [technicalOpen, setTechnicalOpen] = useState(false);
   const loadRequest = useAsyncLoad();
   const canMutate = role !== "Reporter" && draft.state === "open" && draft.writer_mode === "ui";
@@ -262,6 +264,15 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
     }, { keepData });
   };
   useEffect(() => { setError(null); void load(); }, [draft.draft_id, draft.fingerprint, draft.external_fingerprint]);
+  useEffect(() => { setMergeRequest(initialMergeRequest); }, [initialMergeRequest?.iid, initialMergeRequest?.state, initialMergeRequest?.web_url]);
+  useEffect(() => {
+    if ((draft.sync?.ahead ?? 0) > 0) setOptimisticAhead(0);
+    if (draft.sync?.remote_commit !== undefined) setBranchPublished(true);
+  }, [draft.sync?.ahead, draft.sync?.remote_commit]);
+  useEffect(() => {
+    if (mergeRequest !== undefined || draft.merge_request_iid === undefined) return;
+    void api.pollMergeRequest(draft.draft_id).then(setMergeRequest).catch(() => undefined);
+  }, [api, draft.draft_id, draft.merge_request_iid, mergeRequest]);
   useEffect(() => {
     if (mergeRequest === undefined) return;
     const timer = window.setInterval(() => { void api.pollMergeRequest(draft.draft_id).then(setMergeRequest).catch(() => undefined); }, 3000);
@@ -278,13 +289,13 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
     setBusy(true); setError(null);
     try {
       const result = await api.commitAll(draft.draft_id, commitMessage.trim());
-      setCommit(result); setCommitOpen(false); setMrTitle(commitMessage.trim()); await onChanged(); await load(true);
+      setCommit(result); setOptimisticAhead(1); setCommitOpen(false); setMrTitle(commitMessage.trim()); await onChanged(); await load(true);
     } catch (caught) { setError(caught instanceof Error ? caught.message : String(caught)); }
     finally { setBusy(false); }
   };
   const push = async () => {
     setBusy(true); setError(null);
-    try { await api.push(draft.draft_id); setPushed(true); }
+    try { await api.push(draft.draft_id); setOptimisticAhead(0); setBranchPublished(true); await onChanged(); }
     catch (caught) { setError(caught instanceof Error ? caught.message : String(caught)); }
     finally { setBusy(false); }
   };
@@ -294,6 +305,21 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
     catch (caught) { setError(caught instanceof Error ? caught.message : String(caught)); }
     finally { setBusy(false); }
   };
+
+  const dirty = changes.changed_files_count > 0;
+  const ahead = Math.max(draft.sync?.ahead ?? 0, optimisticAhead);
+  const behind = draft.sync?.behind ?? 0;
+  const diverged = ahead > 0 && behind > 0;
+  const published = branchPublished || draft.sync?.remote_commit !== undefined;
+  const originBranch = draft.sync?.default_branch ?? draft.branch;
+  const trackingBranch = directMode ? originBranch : draft.branch;
+  const defaultMoved = !directMode && (draft.sync?.default_branch_ahead ?? 0) > 0;
+  const canPushRemote = remoteAvailable && (!gitlabConfigured || gitlabSignedIn);
+  const needsGitLabLogin = remoteAvailable && gitlabConfigured && !gitlabSignedIn && ahead > 0 && behind === 0;
+  const canPush = canMutate && canPushRemote && ahead > 0 && behind === 0 && !dirty;
+  const showMrForm = !directMode && !dirty && ahead === 0 && published && mergeRequest === undefined && gitlabConfigured && gitlabSignedIn;
+  const needsGitLabForMr = !directMode && !dirty && ahead === 0 && published && mergeRequest === undefined && gitlabConfigured && !gitlabSignedIn;
+  const short = (value: string | undefined) => value === undefined ? "—" : value.slice(0, 12);
 
   return <section className="changes-workspace">
     <div className="section-heading"><span className="eyebrow draft-context-id">{draft.draft_id}</span><h2 aria-hidden="true">{t("changes.heading")}</h2><p>{t("changes.description")}</p></div>
@@ -324,13 +350,27 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
         <div className="card change-detail">{selected === undefined ? <div className="empty-change"><strong>{t("changes.clean")}</strong><span>{t("changes.cleanHint")}</span></div> : <DiffViewer file={selected} canRestore={canMutate} busy={busy} restoreFile={() => void run(() => api.restoreFile(draft.draft_id, draft.fingerprint, selected.path))} restoreHunk={(index) => void run(() => api.restoreHunk(draft.draft_id, draft.fingerprint, selected.path, selected.diff_token, index))} labels={{ restoreFile: t("changes.restoreFile"), restoreHunk: t("changes.restoreHunk"), kind: t(`changes.kind${selected.kind}`), tooLarge: t("changes.diffTooLarge") }} />}</div>
       </div>
     </details>
-    <div className="card publish-panel"><div><span className="eyebrow">{t("changes.publishEyebrow")}</span><h3>{t("changes.publishHeading")}</h3><p>{t("changes.commitAllHint")}</p></div>
-      {commit === undefined ? <div className="publish-action"><button className="primary" disabled={!canMutate || busy || changes.changed_files_count === 0} onClick={() => setCommitOpen(true)}>{t("changes.openCommit")}</button>{changes.changed_files_count === 0 && <span>{t("changes.cleanHint")}</span>}</div> : <div className="publish-flow">
-        <div className="publish-step complete"><span>1</span><div><strong>{t("changes.committed")}</strong><code>{commit.commit.slice(0, 12)}</code></div></div>
-        {!remoteAvailable ? <span>{t("changes.localOnly")}</span> : !gitlabConfigured ? <span>{t("changes.gitlabNotConfigured")}</span> : !gitlabSignedIn ? <button className="primary" onClick={onGitLabLogin}>{t("changes.loginForPush")}</button> : !pushed ? <button className="primary" disabled={busy} onClick={() => void push()}>{t("changes.push")}</button> : directMode ? <span className="mr-result">{t("changes.pushed", { branch: draft.branch })}</span> : mergeRequest === undefined ? <div className="mr-form"><label>{t("changes.mrTitle")}<input maxLength={255} value={mrTitle} onChange={(event) => setMrTitle(event.target.value)} /></label><label>{t("changes.mrDescription")}<textarea value={mrDescription} onChange={(event) => setMrDescription(event.target.value)} /></label><button className="primary" disabled={busy || !mrTitle.trim()} onClick={() => void createMr()}>{t("changes.createMr")}</button></div> : safeExternalUrl(mergeRequest.web_url) === undefined
+    <div className="card publish-panel"><div><span className="eyebrow">{t("changes.publishEyebrow")}</span><h3>{t(directMode ? "changes.publishHeadingDirect" : "changes.publishHeading")}</h3><p>{t("changes.commitAllHint")}</p>
+        <dl className="publish-sync">
+          <div><dt>{t("changes.syncLocal", { branch: draft.branch, head: short(commit?.commit ?? draft.sync?.head) })}</dt><dd className="sync-counts">{ahead > 0 ? t("changes.syncAhead", { count: ahead }) : behind > 0 ? t("changes.syncBehind", { count: behind }) : remoteAvailable && draft.sync?.remote_commit !== undefined ? t("changes.syncEven", { branch: trackingBranch }) : remoteAvailable ? t("changes.syncUnknown") : t("changes.localOnly")}</dd></div>
+          {draft.sync?.remote_commit !== undefined && <div><dt>{t("changes.syncOrigin", { branch: trackingBranch, commit: short(draft.sync.remote_commit) })}</dt><dd /></div>}
+        </dl>
+        {diverged && <div className="alert warning">{t("changes.syncDiverged")}</div>}
+        {!diverged && behind > 0 && <div className="alert warning">{t("changes.syncBehind", { count: behind })}</div>}
+        {defaultMoved && <div className="alert info">{t("changes.defaultBranchMoved", { branch: originBranch, count: draft.sync?.default_branch_ahead ?? 0 })}</div>}
+      </div>
+      <div className="publish-action">
+        {dirty && <button className="primary" disabled={!canMutate || busy} onClick={() => setCommitOpen(true)}>{t("changes.openCommit")}</button>}
+        {(needsGitLabLogin || needsGitLabForMr) && <button className="primary" onClick={onGitLabLogin}>{t("changes.loginForPush")}</button>}
+        {canPush && <button className="primary" disabled={busy} onClick={() => void push()}>{t("changes.push")}</button>}
+        {!remoteAvailable && ahead > 0 && <span>{t("changes.localOnly")}</span>}
+        {directMode && !dirty && ahead === 0 && published && <span className="mr-result">{t("changes.pushed", { branch: draft.branch })}</span>}
+        {showMrForm && <div className="mr-form"><label>{t("changes.mrTitle")}<input maxLength={255} value={mrTitle} onChange={(event) => setMrTitle(event.target.value)} /></label><label>{t("changes.mrDescription")}<textarea value={mrDescription} onChange={(event) => setMrDescription(event.target.value)} /></label><button className="primary" disabled={busy || !mrTitle.trim()} onClick={() => void createMr()}>{t("changes.createMr")}</button></div>}
+        {mergeRequest !== undefined && (safeExternalUrl(mergeRequest.web_url) === undefined
           ? <span className="mr-result">{t("changes.mrReady", { iid: mergeRequest.iid, state: mergeRequest.state })}</span>
-          : <a className="mr-result" href={safeExternalUrl(mergeRequest.web_url)} target="_blank" rel="noreferrer">{t("changes.mrReady", { iid: mergeRequest.iid, state: mergeRequest.state })}</a>}
-      </div>}
+          : <a className="mr-result" href={safeExternalUrl(mergeRequest.web_url)} target="_blank" rel="noreferrer">{t("changes.mrReady", { iid: mergeRequest.iid, state: mergeRequest.state })}</a>)}
+        {!dirty && ahead === 0 && !needsGitLabLogin && !canPush && !showMrForm && mergeRequest === undefined && !(directMode && published) && <span>{t("changes.cleanHint")}</span>}
+      </div>
     </div>
     <details className="repository-rules"><summary>{t("changes.repositoryRules")}</summary><p>{t("changes.alphaLimitations")}</p></details>
     {commitOpen && <div className="modal-backdrop" role="presentation"><section className="commit-dialog" role="dialog" aria-modal="true" aria-labelledby="commit-heading"><h3 id="commit-heading">{t("changes.commitHeading")}</h3><p>{t("changes.commitScope", { count: changes.changed_files_count })}</p><label>{t("changes.commitMessage")}<input autoFocus maxLength={500} value={commitMessage} onChange={(event) => setCommitMessage(event.target.value)} /></label><div className="actions"><button onClick={() => setCommitOpen(false)}>{t("changes.cancel")}</button><button className="primary" disabled={busy || !commitMessage.trim()} onClick={() => void commitEverything()}>{t("changes.commitAll")}</button></div></section></div>}
