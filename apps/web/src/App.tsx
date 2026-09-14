@@ -4,7 +4,7 @@ import type { GitPmApi } from "./api.js";
 import { DraftProvider, useDrafts } from "./draft-context.js";
 import { formatDateTime, localeRegistry, LOCALE_STORAGE_KEY, message, selectLocale, type Locale, type MessageKey } from "./i18n.js";
 import type { WorkspaceDestination, WorkspaceSelection } from "./workspace-navigation.js";
-import { parseAppRoute, routeForDestination, serializeAppRoute, type AppRoute } from "./app/router.js";
+import { parseAppRoute, routeEntityCatalogKey, routeForDestination, serializeAppRoute, type AppRoute, type RouteEntityLabels } from "./app/router.js";
 import { AppShell } from "./app/AppShell.js";
 import { ControlHints } from "./app/ControlHints.js";
 import { navigationDestinations, navigationGroups, routeViews } from "./app/navigation.js";
@@ -54,6 +54,16 @@ const administrationTabs: readonly SectionTab[] = [
 
 const suggestedDraftId = () => `DRF-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${Math.random().toString(36).slice(2, 6).toUpperCase().padEnd(4, "0")}`;
 
+function labelsFromCatalog(route: AppRoute, catalog: EntityCatalog): RouteEntityLabels {
+  return {
+    project: route.projectId === undefined ? undefined : catalog.urlLabel("project", route.projectId),
+    stage: route.stageId === undefined ? undefined : catalog.urlLabel("stage", route.stageId),
+    task: route.taskId === undefined ? undefined : catalog.urlLabel("task", route.taskId),
+    person: route.personId === undefined ? undefined : catalog.urlLabel("person", route.personId),
+    calendar: route.calendarId === undefined ? undefined : catalog.urlLabel("calendar", route.calendarId),
+  };
+}
+
 function Shell({ locale, setLocale, api, navigate, confirmAction }: {
   readonly locale: Locale;
   readonly setLocale: (locale: Locale) => void;
@@ -66,6 +76,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
   const [activeRoute, setActiveRoute] = useState<AppRoute | null>(() => parseAppRoute(window.location.href));
   const [defaultPersonNameFormat, setDefaultPersonNameFormat] = useState<PersonNameFormat>(DEFAULT_PERSON_NAME_FORMAT);
   const [catalog, setCatalog] = useState(() => new EntityCatalog({}, DEFAULT_PERSON_NAME_FORMAT));
+  const [catalogRoute, setCatalogRoute] = useState<string | null>(null);
   const [navigationTrail, setNavigationTrail] = useState<NavigationTrail | null>(() => initialNavigationTrail(parseAppRoute(window.location.href)));
   const [navigationLabels, setNavigationLabels] = useState<Readonly<Record<string, string>>>({});
   const repositoryMode = drafts.session?.mode === "repository";
@@ -116,7 +127,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
     if (value !== "") { void drafts.create(value); setDraftId(""); }
   };
   const navigateToRoute = (nextRoute: AppRoute, replace = false) => {
-    const nextUrl = serializeAppRoute(nextRoute);
+    const nextUrl = serializeAppRoute(nextRoute, labelsFromCatalog(nextRoute, catalog));
     if (`${window.location.pathname}${window.location.search}` !== nextUrl) window.history[replace ? "replaceState" : "pushState"]({}, "", nextUrl);
     setNavigationTrail((current) => visitNavigationTrail(current, nextRoute));
     setActiveRoute(nextRoute);
@@ -148,16 +159,32 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
     const needsTask = activeRoute?.taskId !== undefined;
     const needsStage = activeRoute?.stageId !== undefined;
     const needsPerson = activeRoute?.personId !== undefined;
-    if (activeDraft === undefined || (!needsProject && !needsTask && !needsStage && !needsPerson)) { setCatalog(new EntityCatalog({}, defaultPersonNameFormat)); return; }
+    const needsCalendar = activeRoute?.calendarId !== undefined;
+    const catalogKey = routeEntityCatalogKey(activeRoute);
+    if (activeDraft === undefined) return;
+    if (!needsProject && !needsTask && !needsStage && !needsPerson && !needsCalendar) {
+      setCatalog(new EntityCatalog({}, defaultPersonNameFormat));
+      setCatalogRoute(catalogKey);
+      return;
+    }
     let current = true;
     void Promise.all([
       api.listEntities(activeDraft.draft_id, "projects"),
       needsStage ? api.listEntities(activeDraft.draft_id, "milestones", activeRoute?.projectId) : Promise.resolve([]),
       needsTask ? api.listEntities(activeDraft.draft_id, "tasks", activeRoute?.projectId) : Promise.resolve([]),
       needsPerson ? api.listEntities(activeDraft.draft_id, "people") : Promise.resolve([]),
-    ]).then(([projects, milestones, tasks, people]) => { if (current) setCatalog(new EntityCatalog({ projects, milestones, tasks, people }, defaultPersonNameFormat)); }).catch(() => { if (current) setCatalog(new EntityCatalog({}, defaultPersonNameFormat)); });
+      needsCalendar ? api.listEntities(activeDraft.draft_id, "calendars") : Promise.resolve([]),
+    ]).then(([projects, milestones, tasks, people, calendars]) => {
+      if (!current) return;
+      setCatalog(new EntityCatalog({ projects, milestones, tasks, people, calendars }, defaultPersonNameFormat));
+      setCatalogRoute(catalogKey);
+    }).catch(() => {
+      if (!current) return;
+      setCatalog(new EntityCatalog({}, defaultPersonNameFormat));
+      setCatalogRoute(catalogKey);
+    });
     return () => { current = false; };
-  }, [activeDraft?.draft_id, activeDraft?.fingerprint, activeDraft?.external_fingerprint, activeRoute?.projectId, activeRoute?.stageId, activeRoute?.taskId, activeRoute?.personId, api, defaultPersonNameFormat]);
+  }, [activeDraft?.draft_id, activeDraft?.fingerprint, activeDraft?.external_fingerprint, activeRoute?.projectId, activeRoute?.stageId, activeRoute?.taskId, activeRoute?.personId, activeRoute?.calendarId, api, defaultPersonNameFormat]);
   useEffect(() => {
     if (activeRoute === null) return;
     const labels: Record<string, string> = {};
@@ -176,7 +203,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
     if (navigationTrail === null) return;
     const nextTrail = truncateNavigationTrail(navigationTrail, index);
     const nextRoute = nextTrail.entries.at(-1)!;
-    const nextUrl = serializeAppRoute(nextRoute);
+    const nextUrl = serializeAppRoute(nextRoute, labelsFromCatalog(nextRoute, catalog));
     if (`${window.location.pathname}${window.location.search}` !== nextUrl) window.history.pushState({}, "", nextUrl);
     setNavigationTrail(nextTrail);
     setActiveRoute(nextRoute);
@@ -207,10 +234,10 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
   }, []);
 
   useEffect(() => {
-    if (activeRoute === null) return;
-    const canonical = serializeAppRoute(activeRoute);
+    if (activeRoute === null || catalogRoute !== routeEntityCatalogKey(activeRoute)) return;
+    const canonical = serializeAppRoute(activeRoute, labelsFromCatalog(activeRoute, catalog));
     if (`${window.location.pathname}${window.location.search}` !== canonical) window.history.replaceState({}, "", canonical);
-  }, [activeRoute]);
+  }, [activeRoute, catalog, catalogRoute]);
 
   useEffect(() => {
     if (drafts.session === undefined || activeRoute !== null || window.location.pathname !== "/") return;

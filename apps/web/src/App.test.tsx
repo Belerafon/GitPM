@@ -219,7 +219,7 @@ describe("frontend draft lifecycle", () => {
     render(<App api={api} browserLanguages={["en"]} />);
 
     expect(await screen.findByRole("heading", { name: "Ada Lovelace" }, { timeout: 5_000 })).toBeTruthy();
-    expect(`${window.location.pathname}${window.location.search}`).toBe("/people/U-26-ADA");
+    await waitFor(() => expect(`${window.location.pathname}${window.location.search}`).toBe("/people/U-26-ADA"));
     fireEvent.click(screen.getByRole("button", { name: /All people and teams/u }));
     expect(`${window.location.pathname}${window.location.search}`).toBe("/people");
   });
@@ -235,7 +235,7 @@ describe("frontend draft lifecycle", () => {
     render(<App api={api} browserLanguages={["en"]} />);
 
     expect(await screen.findByRole("dialog", { name: "Edit calendar: Standard five-day week" })).toBeTruthy();
-    expect(`${window.location.pathname}${window.location.search}`).toBe("/calendars/C-26-QD7FJ4");
+    await waitFor(() => expect(`${window.location.pathname}${window.location.search}`).toBe("/calendars/C-26-QD7FJ4-standard-five-day-week"));
   });
 
   it("restores the vacation calendar deep link and team tab", async () => {
@@ -248,6 +248,21 @@ describe("frontend draft lifecycle", () => {
     expect(await screen.findByRole("heading", { name: "Vacation calendar" })).toBeTruthy();
     expect(`${window.location.pathname}${window.location.search}`).toBe("/vacations");
     expect(screen.getByRole("button", { name: "Vacation calendar" }).getAttribute("aria-current")).toBe("page");
+  });
+
+  it("keeps a decorative slug until the current name is known, then rewrites it", async () => {
+    const api = new FakeApi();
+    api.currentSession = { ...session, mode: "repository", repository: { name: "portfolio", path: "D:\\portfolio", has_remote: false }, gitlab: { configured: false } };
+    api.drafts = [draft({ draft_id: "DRF-LOCAL" })];
+    api.entities = [
+      { document: { schema: "gitpm/project@2", id: "P-26-7K4M9Q", name: "Alpha", status: "backlog", lifecycle: "active" }, path: "project.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) },
+    ];
+    window.history.replaceState({}, "", "/projects/P-26-7K4M9Q-old-title");
+    render(<App api={api} browserLanguages={["en"]} />);
+
+    expect(window.location.pathname).toBe("/projects/P-26-7K4M9Q-old-title");
+    expect(await screen.findByRole("heading", { name: "Plan" })).toBeTruthy();
+    await waitFor(() => expect(window.location.pathname).toBe("/projects/P-26-7K4M9Q-alpha"));
   });
 
   it("restores a project milestone deep link with project tabs and task navigation", async () => {
@@ -265,19 +280,20 @@ describe("frontend draft lifecycle", () => {
 
     expect(await screen.findByRole("heading", { level: 1, name: "Plan" })).toBeTruthy();
     expect(await screen.findByRole("heading", { level: 2, name: "Launch" })).toBeTruthy();
+    await waitFor(() => expect(`${window.location.pathname}${window.location.search}`).toBe("/projects/P-26-7K4M9Q-alpha/stages/M-26-3RC7NA-launch"));
     expect(screen.getByRole("navigation", { name: "Project navigation" })).toBeTruthy();
     const breadcrumbs = screen.getByRole("navigation", { name: "Breadcrumbs" });
     expect((await within(breadcrumbs).findByRole("button", { name: "Alpha" }))).toBeTruthy();
     expect((await within(breadcrumbs).findByText("Launch")).getAttribute("aria-current")).toBe("page");
     fireEvent.click(screen.getByRole("button", { name: /First task/u }));
-    expect(`${window.location.pathname}${window.location.search}`).toBe("/projects/P-26-7K4M9Q/tasks/T-26-X8D2FW");
+    await waitFor(() => expect(`${window.location.pathname}${window.location.search}`).toBe("/projects/P-26-7K4M9Q-alpha/tasks/T-26-X8D2FW-first-task"));
     expect((await screen.findByRole("button", { name: /First task/u })).getAttribute("aria-current")).toBe("true");
     expect((await within(breadcrumbs).findByText("First task")).getAttribute("aria-current")).toBe("page");
     fireEvent.click((await screen.findAllByRole("link", { name: "Ada Lovelace" }))[0]!);
     expect(await screen.findByRole("heading", { name: "Ada Lovelace" })).toBeTruthy();
     expect((await within(breadcrumbs).findByText("Ada Lovelace")).getAttribute("aria-current")).toBe("page");
     fireEvent.click(within(breadcrumbs).getByRole("button", { name: "First task" }));
-    expect(`${window.location.pathname}${window.location.search}`).toBe("/projects/P-26-7K4M9Q/tasks/T-26-X8D2FW");
+    await waitFor(() => expect(`${window.location.pathname}${window.location.search}`).toBe("/projects/P-26-7K4M9Q-alpha/tasks/T-26-X8D2FW-first-task"));
     expect((await within(breadcrumbs).findByText("First task")).getAttribute("aria-current")).toBe("page");
     expect(within(breadcrumbs).queryByText("Ada Lovelace")).toBeNull();
   });
@@ -390,7 +406,7 @@ describe("frontend draft lifecycle", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /Alpha/u }));
     expect(await screen.findByRole("heading", { name: "Plan" })).toBeTruthy();
-    expect(`${window.location.pathname}${window.location.search}`).toBe("/projects/P-26-7K4M9Q");
+    await waitFor(() => expect(`${window.location.pathname}${window.location.search}`).toBe("/projects/P-26-7K4M9Q-alpha"));
     let breadcrumbs = screen.getByRole("navigation", { name: "Breadcrumbs" });
     expect(within(breadcrumbs).getByRole("button", { name: "Projects" })).toBeTruthy();
     expect((await within(breadcrumbs).findByText("Alpha")).getAttribute("aria-current")).toBe("page");
@@ -413,7 +429,7 @@ describe("frontend draft lifecycle", () => {
     expect(new URLSearchParams(activeFilterSearch).has("filters")).toBe(true);
     expect(screen.getByRole("button", { name: /Remove filter: Status/u })).toBeTruthy();
     fireEvent.click(await screen.findByRole("button", { name: /First task/u }));
-    expect(`${window.location.pathname}${window.location.search}`).toBe(`/projects/P-26-7K4M9Q/tasks/T-26-X8D2FW${activeFilterSearch}`);
+    await waitFor(() => expect(`${window.location.pathname}${window.location.search}`).toBe(`/projects/P-26-7K4M9Q-alpha/tasks/T-26-X8D2FW-first-task${activeFilterSearch}`));
     expect(await screen.findByRole("heading", { level: 1, name: "Plan" })).toBeTruthy();
     expect(screen.getByRole("complementary", { name: "Task details" })).toBeTruthy();
     expect(screen.getByText("No milestone")).toBeTruthy();

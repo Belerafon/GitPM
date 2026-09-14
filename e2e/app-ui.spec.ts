@@ -1,5 +1,5 @@
 import { expect, request as createRequestContext, test, type APIRequestContext } from "@playwright/test";
-import { FIXTURE_PROJECT_ID, cleanupDrafts, createDraft } from "./helpers.js";
+import { FIXTURE_PROJECT_ID, cleanupDrafts, createDraft, entityUrlIdPattern } from "./helpers.js";
 
 const activeDraftStorageKey = "gitpm.activeWorkingCopy";
 const e2eDraftInitializedKey = "gitpm.e2e.activeWorkingCopyInitialized";
@@ -190,7 +190,7 @@ test.describe("GitPM browser UI", () => {
     await expect(calendar.locator(".calendar-week-preview .working")).toHaveCount(5);
 
     await calendar.getByRole("button", { name: "Open calendar", exact: true }).click();
-    await expect(page).toHaveURL(`/calendars/${calendarId}`);
+    await expect(page).toHaveURL(new RegExp(`/calendars/${calendarId}(?:-[^/?]+)?$`, "u"));
     const editor = page.getByRole("dialog", { name: `Edit calendar: ${calendarName}`, exact: true });
     await expect(editor).toBeVisible();
     const presets = editor.getByLabel("Calendar preset");
@@ -283,10 +283,10 @@ test.describe("GitPM browser UI", () => {
     await expect(page).toHaveURL(/\/people$/u);
 
     await page.goto(`/projects/${FIXTURE_PROJECT_ID}/tasks`);
-    await expect(page).toHaveURL(new RegExp(`/projects/${FIXTURE_PROJECT_ID}(?:\\?.*)?$`, "u"));
+    await expect(page).toHaveURL(new RegExp(`/projects/${entityUrlIdPattern(FIXTURE_PROJECT_ID)}(?:\\?.*)?$`, "u"));
     await expect(page.getByRole("heading", { name: "Plan", exact: true })).toBeVisible();
     await page.getByRole("button", { name: /Approve schema v1/u }).click();
-    await expect(page).toHaveURL(new RegExp(`/projects/${FIXTURE_PROJECT_ID}/tasks/[^/?]+(?:\\?.*)?$`, "u"));
+    await expect(page).toHaveURL(new RegExp(`/projects/${entityUrlIdPattern(FIXTURE_PROJECT_ID)}/tasks/[^/?]+(?:\\?.*)?$`, "u"));
     const taskUrl = page.url();
     await expect(page.getByRole("complementary", { name: "Task details", exact: true })).toBeVisible();
 
@@ -295,18 +295,18 @@ test.describe("GitPM browser UI", () => {
     await expect(page.getByRole("complementary", { name: "Task details", exact: true })).toBeVisible();
 
     await page.getByRole("button", { name: "Plan", exact: true }).click();
-    await expect(page).toHaveURL(new RegExp(`/projects/${FIXTURE_PROJECT_ID}(?:\\?.*)?$`, "u"));
+    await expect(page).toHaveURL(new RegExp(`/projects/${entityUrlIdPattern(FIXTURE_PROJECT_ID)}(?:\\?.*)?$`, "u"));
     await expect(page.getByRole("heading", { name: "Work plan", exact: true })).toBeVisible();
     await expect(page.locator(".project-plan-task-selector").filter({ hasText: "Approve schema v1" })).toBeVisible();
     await page.getByRole("button", { name: /Alpha/u }).click();
-    await expect(page).toHaveURL(new RegExp(`/projects/${FIXTURE_PROJECT_ID}/stages/[^/?]+$`, "u"));
+    await expect(page).toHaveURL(new RegExp(`/projects/${entityUrlIdPattern(FIXTURE_PROJECT_ID)}/stages/[^/?]+$`, "u"));
     await expect(page.getByLabel("Milestone", { exact: true }).getByRole("heading", { name: "Alpha", exact: true })).toBeVisible();
 
     await page.goto(`/board?project=${FIXTURE_PROJECT_ID}&status=backlog&type=task`);
     await expect(page.getByLabel("Status filter", { exact: true })).toHaveValue("backlog");
     await expect(page.getByLabel("Type filter", { exact: true })).toHaveValue("task");
     await page.reload();
-    await expect(page).toHaveURL(new RegExp(`/projects/${FIXTURE_PROJECT_ID}/board\\?status=backlog&type=task$`, "u"));
+    await expect(page).toHaveURL(new RegExp(`/projects/${entityUrlIdPattern(FIXTURE_PROJECT_ID)}/board\\?status=backlog&type=task$`, "u"));
     await expect(page.getByLabel("Status filter", { exact: true })).toHaveValue("backlog");
     await expect(page.getByLabel("Type filter", { exact: true })).toHaveValue("task");
   });

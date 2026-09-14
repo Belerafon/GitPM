@@ -1,3 +1,4 @@
+import { entityIdFromSegment, entityUrlSegment } from "@gitpm/shared";
 import type { WorkspaceDestination, WorkspaceSelection } from "../workspace-navigation.js";
 
 export type AppRouteName = "workspaces" | "projects" | "stages" | "tasks" | "board" | "effort" | "people" | "calendars" | "settings" | "workload" | "vacations" | "gantt" | "changes" | "files" | "history" | "connection";
@@ -12,6 +13,19 @@ export interface AppRoute {
   readonly calendarId?: string;
   readonly commit?: string;
   readonly query: RouteQuery;
+}
+
+export interface RouteEntityLabels {
+  readonly project?: string;
+  readonly stage?: string;
+  readonly task?: string;
+  readonly person?: string;
+  readonly calendar?: string;
+}
+
+export function routeEntityCatalogKey(route: AppRoute | null): string {
+  if (route === null) return "";
+  return [route.projectId ?? "", route.stageId ?? "", route.taskId ?? "", route.personId ?? "", route.calendarId ?? ""].join("\0");
 }
 
 const emptyQuery: RouteQuery = Object.freeze({});
@@ -53,40 +67,41 @@ export function parseAppRoute(input: string | URL): AppRoute | null {
     }
     return route(name, {}, query);
   }
-  if (segments[0] === "projects" && segments.length === 2) return route("projects", { projectId: segments[1] }, query);
-  if (segments[0] === "projects" && segments[2] === "stages" && segments.length === 3) return route("projects", { projectId: segments[1] }, query);
-  if (segments[0] === "projects" && segments[2] === "stages" && segments.length === 4) return route("stages", { projectId: segments[1], stageId: segments[3] }, query);
-  if (segments[0] === "projects" && segments[2] === "tasks" && segments.length === 3) return route("projects", { projectId: segments[1] }, query);
-  if (segments[0] === "projects" && segments[2] === "tasks" && segments.length === 4) return route("tasks", { projectId: segments[1], taskId: segments[3] }, query);
-  if (segments[0] === "projects" && segments[2] === "board" && segments.length === 3) return route("board", { projectId: segments[1] }, query);
-  if (segments[0] === "projects" && segments[2] === "effort" && segments.length === 3) return route("effort", { projectId: segments[1] }, query);
-  if (segments[0] === "projects" && segments[2] === "timeline" && segments.length === 3) return route("gantt", { projectId: segments[1] }, query);
-  if (segments[0] === "people" && segments.length === 2) return route("people", { personId: segments[1] }, query);
-  if (segments[0] === "calendars" && segments.length === 2) return route("calendars", { calendarId: segments[1] }, query);
+  if (segments[0] === "projects" && segments.length === 2) return route("projects", { projectId: entityIdFromSegment(segments[1]!) }, query);
+  if (segments[0] === "projects" && segments[2] === "stages" && segments.length === 3) return route("projects", { projectId: entityIdFromSegment(segments[1]!) }, query);
+  if (segments[0] === "projects" && segments[2] === "stages" && segments.length === 4) return route("stages", { projectId: entityIdFromSegment(segments[1]!), stageId: entityIdFromSegment(segments[3]!) }, query);
+  if (segments[0] === "projects" && segments[2] === "tasks" && segments.length === 3) return route("projects", { projectId: entityIdFromSegment(segments[1]!) }, query);
+  if (segments[0] === "projects" && segments[2] === "tasks" && segments.length === 4) return route("tasks", { projectId: entityIdFromSegment(segments[1]!), taskId: entityIdFromSegment(segments[3]!) }, query);
+  if (segments[0] === "projects" && segments[2] === "board" && segments.length === 3) return route("board", { projectId: entityIdFromSegment(segments[1]!) }, query);
+  if (segments[0] === "projects" && segments[2] === "effort" && segments.length === 3) return route("effort", { projectId: entityIdFromSegment(segments[1]!) }, query);
+  if (segments[0] === "projects" && segments[2] === "timeline" && segments.length === 3) return route("gantt", { projectId: entityIdFromSegment(segments[1]!) }, query);
+  if (segments[0] === "people" && segments.length === 2) return route("people", { personId: entityIdFromSegment(segments[1]!) }, query);
+  if (segments[0] === "calendars" && segments.length === 2) return route("calendars", { calendarId: entityIdFromSegment(segments[1]!) }, query);
   if (segments[0] === "history" && segments.length === 2) return route("history", { commit: segments[1] }, query);
   return null;
 }
 
-export function serializeAppRoute(value: AppRoute): string {
-  const segment = (item: string) => encodeURIComponent(item);
+export function serializeAppRoute(value: AppRoute, labels: RouteEntityLabels = {}): string {
+  const segment = (id: string, label?: string) => encodeURIComponent(entityUrlSegment(id, label));
+  const project = value.projectId === undefined ? undefined : segment(value.projectId, labels.project);
   let pathname: string;
   switch (value.name) {
     case "workspaces": pathname = "/workspaces"; break;
-    case "projects": pathname = value.projectId === undefined ? "/projects" : `/projects/${segment(value.projectId)}`; break;
-    case "stages": pathname = value.projectId === undefined ? "/projects" : value.stageId === undefined ? `/projects/${segment(value.projectId)}` : `/projects/${segment(value.projectId)}/stages/${segment(value.stageId)}`; break;
-    case "tasks": pathname = value.projectId === undefined ? "/tasks" : value.taskId === undefined ? `/projects/${segment(value.projectId)}` : `/projects/${segment(value.projectId)}/tasks/${segment(value.taskId)}`; break;
-    case "board": pathname = value.projectId === undefined ? "/board" : `/projects/${segment(value.projectId)}/board`; break;
-    case "effort": pathname = value.projectId === undefined ? "/projects" : `/projects/${segment(value.projectId)}/effort`; break;
-    case "people": pathname = value.personId === undefined ? "/people" : `/people/${segment(value.personId)}`; break;
-    case "calendars": pathname = value.calendarId === undefined ? "/calendars" : `/calendars/${segment(value.calendarId)}`; break;
+    case "projects": pathname = project === undefined ? "/projects" : `/projects/${project}`; break;
+    case "stages": pathname = project === undefined ? "/projects" : value.stageId === undefined ? `/projects/${project}` : `/projects/${project}/stages/${segment(value.stageId, labels.stage)}`; break;
+    case "tasks": pathname = project === undefined ? "/tasks" : value.taskId === undefined ? `/projects/${project}` : `/projects/${project}/tasks/${segment(value.taskId, labels.task)}`; break;
+    case "board": pathname = project === undefined ? "/board" : `/projects/${project}/board`; break;
+    case "effort": pathname = project === undefined ? "/projects" : `/projects/${project}/effort`; break;
+    case "people": pathname = value.personId === undefined ? "/people" : `/people/${segment(value.personId, labels.person)}`; break;
+    case "calendars": pathname = value.calendarId === undefined ? "/calendars" : `/calendars/${segment(value.calendarId, labels.calendar)}`; break;
     case "settings": pathname = "/settings"; break;
     case "workload": pathname = "/workload"; break;
     case "vacations": pathname = "/vacations"; break;
-    case "gantt": pathname = value.projectId === undefined ? "/gantt" : `/projects/${segment(value.projectId)}/timeline`; break;
+    case "gantt": pathname = project === undefined ? "/gantt" : `/projects/${project}/timeline`; break;
     case "changes": pathname = "/changes"; break;
     case "files": pathname = "/files"; break;
     case "connection": pathname = "/connection"; break;
-    case "history": pathname = value.commit === undefined ? "/history" : `/history/${segment(value.commit)}`; break;
+    case "history": pathname = value.commit === undefined ? "/history" : `/history/${encodeURIComponent(value.commit)}`; break;
   }
   const search = new URLSearchParams();
   for (const key of Object.keys(value.query).sort()) for (const item of value.query[key] ?? []) search.append(key, item);
