@@ -30,9 +30,12 @@ class ChangesApi {
     { document: { schema: "gitpm/project@2", id: "P-26-111111", name: "Alpha project", lifecycle: "active" }, path: "projects/P-26-111111/project.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) },
     { document: { schema: "gitpm/project@2", id: "P-26-222222", name: "Бета", lifecycle: "active" }, path: "projects/P-26-222222/project.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) },
   ];
+  people: EntityResult[] = [];
+  taskEntities: EntityResult[] = [];
+  milestoneEntities: EntityResult[] = [];
   listChanges = vi.fn(async () => this.committed ? { changed_files_count: 0, affected_projects: [], files: [], project_files: [] } : this.changes);
   semanticChanges = vi.fn(async () => this.committed ? { created: [], updated: [], archived: [], deleted: [], counts: { created: 0, updated: 0, archived: 0, deleted: 0 }, affected_projects: [], file_entities: [], unclassified_files: [] } : this.semantic);
-  listEntities = vi.fn(async (_draftId: string, type: string) => type === "projects" ? this.projects : []);
+  listEntities = vi.fn(async (_draftId: string, type: string) => type === "projects" ? this.projects : type === "people" ? this.people : type === "tasks" ? this.taskEntities : type === "milestones" ? this.milestoneEntities : []);
   restoreFile = vi.fn(async (_draftId: string, _fingerprint: string, path: string) => { this.restored.push(path); });
   restoreHunk = vi.fn(async (_draftId: string, _fingerprint: string, path: string) => { this.restored.push(path); });
   discardAll = vi.fn(async () => undefined);
@@ -74,6 +77,39 @@ describe("Changes workspace", () => {
     expect(screen.getByText("Old task (T-26-222222)")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Restore hunk" }));
     await waitFor(() => expect(fixture.restoreHunk).toHaveBeenCalledWith("DRF-CHANGES", draft.fingerprint, "projects/P-26-111111/project.yaml", "one", 0));
+  });
+
+  it("resolves person, milestone and task references in field values to display names", async () => {
+    const fixture = new ChangesApi();
+    fixture.people = [
+      { document: { schema: "gitpm/person@1", id: "U-26-900001", name: "Иван", family_name: "Иванов", middle_name: "Иванович", lifecycle: "active" }, path: "people/U-26-900001.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) },
+      { document: { schema: "gitpm/person@1", id: "U-26-900002", name: "Анна", family_name: "Петрова", lifecycle: "active" }, path: "people/U-26-900002.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) },
+    ];
+    fixture.taskEntities = [
+      { document: { schema: "gitpm/task@2", id: "T-26-900003", title: "Подготовка стенда", lifecycle: "active", project: "P-26-111111" }, path: "projects/P-26-111111/tasks/T-26-900003.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) },
+    ];
+    fixture.milestoneEntities = [
+      { document: { schema: "gitpm/milestone@2", id: "M-26-900004", name: "Этап 2", lifecycle: "active", project: "P-26-111111" }, path: "projects/P-26-111111/milestones/M-26-900004.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) },
+    ];
+    fixture.semantic = {
+      created: [], archived: [], deleted: [],
+      updated: [{ id: "T-26-111111", path: "projects/P-26-111111/tasks/T-26-111111.yaml", schema: "gitpm/task@2", project: "P-26-111111", fields: [
+        { field: "assignees", after: ["U-26-900001", "U-26-900002"] },
+        { field: "owner", before: "U-26-900002", after: "U-26-900001" },
+        { field: "milestone", after: "M-26-900004" },
+        { field: "parent", after: "T-26-900003" },
+      ] }],
+      counts: { created: 0, updated: 1, archived: 0, deleted: 0 }, affected_projects: ["P-26-111111"], unclassified_files: [],
+      file_entities: [{ path: "projects/P-26-111111/tasks/T-26-111111.yaml", schema: "gitpm/task@2", id: "T-26-111111", display_name: "Проведение испытаний" }],
+    };
+
+    render(<ChangesWorkspace api={gitPmApi(fixture)} draft={draft} role="Developer" locale="ru" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} />);
+    fireEvent.click((await screen.findAllByText("Проведение испытаний"))[0]!);
+    expect(screen.getByText("Иванов Иван Иванович (U-26-900001), Петрова Анна (U-26-900002)")).toBeTruthy();
+    expect(screen.getByText("Петрова Анна (U-26-900002)")).toBeTruthy();
+    expect(screen.getByText("Иванов Иван Иванович (U-26-900001)")).toBeTruthy();
+    expect(screen.getByText("Этап 2 (M-26-900004)")).toBeTruthy();
+    expect(screen.getByText("Подготовка стенда (T-26-900003)")).toBeTruthy();
   });
 
   it("localizes entity types on file cards", async () => {

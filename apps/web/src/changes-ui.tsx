@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import type { GitPmApi } from "./api.js";
 import { message, type Locale, type MessageKey } from "./i18n.js";
+import { usePersonNameFormatter } from "./person-name.js";
 import { ProjectLink } from "./project-link.js";
-import type { ChangesList, CommitResult, DraftStatus, FileChange, GitPmRole, MergeRequestStatus, ProjectFileChange, SemanticChange, SemanticDiff, SemanticFileEntity } from "./types.js";
+import type { ChangesList, CommitResult, DraftStatus, FileChange, GitPmDocument, GitPmRole, MergeRequestStatus, ProjectFileChange, SemanticChange, SemanticDiff, SemanticFileEntity } from "./types.js";
 import { AsyncBoundary, useAsyncLoad } from "./async-data.js";
 import type { WorkspaceNavigate } from "./workspace-navigation.js";
 
@@ -87,6 +88,12 @@ function valueText(value: unknown, empty: string, namesById: ReadonlyMap<string,
   return JSON.stringify(value);
 }
 
+function referenceName(document: GitPmDocument, formatPersonName: (person: Readonly<Record<string, unknown>>) => string): string {
+  if (document.schema === "gitpm/person@1") return formatPersonName(document).trim();
+  const raw = typeof document.title === "string" ? document.title : typeof document.name === "string" ? document.name : "";
+  return raw.trim();
+}
+
 function fieldLabel(field: string, t: (key: MessageKey) => string): string {
   return field.split(".").map((segment) => {
     const key = fieldKeys[segment];
@@ -101,14 +108,15 @@ function entityType(schema: string, t: (key: MessageKey) => string): string {
   return key === undefined ? schema.replace(/^gitpm\//u, "").replace(/@.*$/u, "") : t(key);
 }
 
-function ChangeFileButton({ file, entity, selected, select, t }: {
+function ChangeFileButton({ file, entity, namesById, selected, select, t }: {
   readonly file: FileChange;
   readonly entity?: SemanticFileEntity;
+  readonly namesById: ReadonlyMap<string, string>;
   readonly selected: boolean;
   readonly select: () => void;
   readonly t: (key: MessageKey) => string;
 }) {
-  const name = entity?.display_name ?? entity?.id;
+  const name = (entity?.id !== undefined ? namesById.get(entity.id) : undefined) ?? entity?.display_name ?? entity?.id;
   return <button className={selected ? "change-file selected" : "change-file"} onClick={select}>
     <span className={`change-dot kind-${file.kind.toLowerCase()}`} />
     <span className="change-file-body">
@@ -130,7 +138,7 @@ function SemanticGroup({ title, items, entitiesByPath, namesById, empty, fieldCo
   if (items.length === 0) return null;
   return <section className="semantic-group"><h4>{title}<span>{items.length}</span></h4><div className="semantic-items">{items.map((item) => {
     const entity = entitiesByPath.get(item.path);
-    const name = entity?.display_name ?? entity?.id ?? item.id;
+    const name = (item.id !== undefined ? namesById.get(item.id) : undefined) ?? entity?.display_name ?? entity?.id ?? item.id;
     return <details className="semantic-item" key={`${title}-${item.path}`}>
       <summary>
         <span className="semantic-identity"><span>{entityType(item.schema, t)}</span>{name !== undefined && <strong>{name}</strong>}{item.id !== undefined && <code>{item.id}</code>}</span>
@@ -139,10 +147,6 @@ function SemanticGroup({ title, items, entitiesByPath, namesById, empty, fieldCo
       {item.fields.length > 0 && <dl>{item.fields.map((field) => <div key={field.field}><dt>{fieldLabel(field.field, t)}</dt><dd><del>{valueText(field.before, empty, namesById)}</del><span aria-hidden="true">→</span><ins>{valueText(field.after, empty, namesById)}</ins></dd></div>)}</dl>}
     </details>;
   })}</div></section>;
-}
-
-function projectDisplayName(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function ProjectFileGroups({ items, namesById, onOpenProject, select, t }: {
@@ -215,6 +219,7 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
   readonly directMode?: boolean;
 }) {
   const t = (key: Parameters<typeof message>[1], values?: Readonly<Record<string, string | number>>) => message(locale, key, values);
+  const formatPersonName = usePersonNameFormatter();
   const [changes, setChanges] = useState<ChangesList>(emptyChanges);
   const [semantic, setSemantic] = useState<SemanticDiff>(emptySemantic);
   const [selectedPath, setSelectedPath] = useState<string>();
@@ -233,33 +238,41 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
   const canMutate = role !== "Reporter" && draft.state === "open" && draft.writer_mode === "ui";
   const selected = useMemo(() => changes.files.find((file) => file.path === selectedPath) ?? changes.files[0], [changes, selectedPath]);
   const entitiesByPath = useMemo(() => new Map((semantic.file_entities ?? []).map((entity) => [entity.path, entity])), [semantic.file_entities]);
-  const namesById = useMemo(() => new Map((semantic.file_entities ?? []).flatMap((entity) => entity.id === undefined || entity.display_name === undefined ? [] : [[entity.id, entity.display_name] as const])), [semantic.file_entities]);
-  const [projectNames, setProjectNames] = useState<ReadonlyMap<string, string>>(() => new Map());
-  const projectGroupNames = useMemo(() => {
-    const merged = new Map(projectNames);
-    for (const [id, name] of namesById) merged.set(id, name);
+  const [catalogNames, setCatalogNames] = useState<ReadonlyMap<string, string>>(() => new Map());
+  const namesById = useMemo(() => {
+    const merged = new Map((semantic.file_entities ?? []).flatMap((entity) => entity.id === undefined || entity.display_name === undefined ? [] : [[entity.id, entity.display_name] as const]));
+    for (const [id, name] of catalogNames) merged.set(id, name);
     return merged;
-  }, [namesById, projectNames]);
+  }, [semantic.file_entities, catalogNames]);
   const changedEntitiesCount = semantic.counts.created + semantic.counts.updated + semantic.counts.archived + semantic.counts.deleted;
 
   const load = async (keepData = true) => {
     await loadRequest.run(async () => {
       const [nextChanges, nextSemantic] = await Promise.all([api.listChanges(draft.draft_id), api.semanticChanges(draft.draft_id)]);
       const projectIds = [...new Set(nextChanges.project_files.map((item) => item.project_id))];
-      let nextProjectNames: ReadonlyArray<readonly [string, string]> = [];
-      if (projectIds.length > 0) {
+      const nextChangedEntities = nextSemantic.counts.created + nextSemantic.counts.updated + nextSemantic.counts.archived + nextSemantic.counts.deleted;
+      let nextCatalogNames: ReadonlyArray<readonly [string, string]> = [];
+      if (projectIds.length > 0 || nextChangedEntities > 0) {
         try {
-          nextProjectNames = (await api.listEntities(draft.draft_id, "projects")).flatMap((project) => {
-            const name = projectDisplayName(project.document.name);
-            return name === "" ? [] : [[project.document.id, name] as const];
+          const entityLists = await Promise.all([
+            api.listEntities(draft.draft_id, "projects"),
+            api.listEntities(draft.draft_id, "people"),
+            api.listEntities(draft.draft_id, "tasks"),
+            api.listEntities(draft.draft_id, "milestones"),
+            api.listEntities(draft.draft_id, "calendars"),
+            api.listEntities(draft.draft_id, "teams"),
+          ]);
+          nextCatalogNames = entityLists.flat().flatMap((entity) => {
+            const name = referenceName(entity.document, formatPersonName);
+            return name === "" ? [] : [[entity.document.id, name] as const];
           });
         } catch {
-          nextProjectNames = [];
+          nextCatalogNames = [];
         }
       }
-      return { nextChanges, nextSemantic, nextProjectNames };
-    }, ({ nextChanges, nextSemantic, nextProjectNames }) => {
-      setChanges(nextChanges); setSemantic(nextSemantic); setProjectNames(new Map(nextProjectNames));
+      return { nextChanges, nextSemantic, nextCatalogNames };
+    }, ({ nextChanges, nextSemantic, nextCatalogNames }) => {
+      setChanges(nextChanges); setSemantic(nextSemantic); setCatalogNames(new Map(nextCatalogNames));
       setSelectedPath((current) => nextChanges.files.some((file) => file.path === current) ? current : nextChanges.files[0]?.path);
     }, { keepData });
   };
@@ -341,11 +354,11 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
       </div>
       {semantic.unclassified_files.length > 0 && <p className="unclassified">{t("changes.unclassified", { count: semantic.unclassified_files.length })}</p>}
     </div>
-    <ProjectFileGroups items={changes.project_files} namesById={projectGroupNames} onOpenProject={onNavigate === undefined ? undefined : (projectId) => onNavigate("projects", { projectId })} select={(path) => { setSelectedPath(path); setTechnicalOpen(true); }} t={t} />
+    <ProjectFileGroups items={changes.project_files} namesById={namesById} onOpenProject={onNavigate === undefined ? undefined : (projectId) => onNavigate("projects", { projectId })} select={(path) => { setSelectedPath(path); setTechnicalOpen(true); }} t={t} />
     <details className="technical-changes" open={technicalOpen} onToggle={(event) => setTechnicalOpen(event.currentTarget.open)}><summary><span><strong>{t("changes.fileChanges")}</strong><small>{t("changes.fileChangesHint")}</small></span><span>{changes.changed_files_count}</span></summary>
       <div className={`changes-layout${changes.files.length === 0 ? " clean" : ""}`}>
         <aside className="card change-files"><div className="change-files-heading"><h3>{t("changes.changedFiles")}</h3>{changes.files.length > 0 && canMutate && <button className="danger subtle" disabled={busy} onClick={() => { if (confirmAction(t("changes.discardConfirm"))) void run(() => api.discardAll(draft.draft_id, draft.fingerprint)); }}>{t("changes.discardAll")}</button>}</div>
-          {changes.files.length === 0 ? <p>{t("changes.clean")}</p> : changes.files.map((file) => <ChangeFileButton entity={entitiesByPath.get(file.path)} file={file} key={file.path} select={() => setSelectedPath(file.path)} selected={selected?.path === file.path} t={t} />)}
+          {changes.files.length === 0 ? <p>{t("changes.clean")}</p> : changes.files.map((file) => <ChangeFileButton entity={entitiesByPath.get(file.path)} file={file} key={file.path} namesById={namesById} select={() => setSelectedPath(file.path)} selected={selected?.path === file.path} t={t} />)}
         </aside>
         <div className="card change-detail">{selected === undefined ? <div className="empty-change"><strong>{t("changes.clean")}</strong><span>{t("changes.cleanHint")}</span></div> : <DiffViewer file={selected} canRestore={canMutate} busy={busy} restoreFile={() => void run(() => api.restoreFile(draft.draft_id, draft.fingerprint, selected.path))} restoreHunk={(index) => void run(() => api.restoreHunk(draft.draft_id, draft.fingerprint, selected.path, selected.diff_token, index))} labels={{ restoreFile: t("changes.restoreFile"), restoreHunk: t("changes.restoreHunk"), kind: t(`changes.kind${selected.kind}`), tooLarge: t("changes.diffTooLarge") }} />}</div>
       </div>
