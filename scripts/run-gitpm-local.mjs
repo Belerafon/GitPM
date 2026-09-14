@@ -15,6 +15,7 @@ const serverPort = process.env.GITPM_SERVER_PORT ?? "3000";
 const webPort = process.env.GITPM_WEB_PORT ?? "5173";
 const serverUrl = `http://127.0.0.1:${serverPort}`;
 const webUrl = process.env.GITPM_WEB_URL?.trim() || `http://127.0.0.1:${webPort}`;
+const readinessWebUrl = `http://127.0.0.1:${webPort}`;
 const serverCwd = resolve(process.cwd(), "apps/server");
 const webCwd = resolve(process.cwd(), "apps/web");
 const serverRequire = createRequire(resolve(serverCwd, "package.json"));
@@ -97,7 +98,7 @@ function shutdown() {
 async function openWhenReady() {
   const ready = await waitForGitPmServices({
     serverUrl: `${serverUrl}/health/ready`,
-    webUrl,
+    webUrl: readinessWebUrl,
     attempts: 240,
     intervalMs: 250,
     isCancelled: () => stopping,
