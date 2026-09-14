@@ -468,6 +468,23 @@ describe("frontend draft lifecycle", () => {
     expect(screen.getAllByText("DRF-LOCAL").length).toBeGreaterThan(0);
   });
 
+  it("lets a local operator browse when GitLab is configured only for publication", async () => {
+    const api = new FakeApi();
+    api.currentSession = {
+      ...session,
+      user: { id: "local-user", username: "local" },
+      mode: "repository",
+      repository: { name: "portfolio", path: "D:\\portfolio", has_remote: true },
+      gitlab: { configured: true },
+    };
+    api.drafts = [draft({ draft_id: "DRF-LOCAL", owner_gitlab_user_id: "local-user" })];
+    render(<App api={api} browserLanguages={["en"]} />);
+    expect(await screen.findByRole("heading", { name: "Projects" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Sign in to GitPM" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Sign in with GitLab" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Sign out of GitLab" })).toBeNull();
+  });
+
   it("separates administration from Git and moves working calendars out of Team", async () => {
     const api = new FakeApi();
     render(<App api={api} browserLanguages={["en"]} />);

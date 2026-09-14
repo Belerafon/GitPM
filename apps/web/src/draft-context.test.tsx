@@ -2,7 +2,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type ReactNode } from "react";
-import { DraftProvider, POLL_INTERVAL_MS, draftSignature, isSameSnapshot, useDrafts } from "./draft-context.js";
+import { DraftProvider, POLL_INTERVAL_MS, draftSignature, isSameSnapshot, requiresGitLabLogin, useDrafts } from "./draft-context.js";
 import { gitPmApi } from "./test-gitpm-api.js";
 import type { DraftSnapshot, DraftStatus, PublicSession } from "./types.js";
 
@@ -111,7 +111,7 @@ describe("DraftProvider polling", () => {
     expect(result.current.snapshot?.draft.fingerprint).toBe("c".repeat(64));
   });
 
-  it("shows the GitLab login state when the session has GitLab configured but no signed-in user", async () => {
+  it("shows the GitLab login state for an unsigned multi-user session", async () => {
     const listDrafts = vi.fn(async () => {
       throw new Error("SESSION_INVALID");
     });
@@ -131,5 +131,51 @@ describe("DraftProvider polling", () => {
     await flush();
     expect(result.current.session).toBeNull();
     expect(listDrafts).not.toHaveBeenCalled();
+  });
+
+  it("keeps a local Maintainer session when GitLab is configured only for publication", async () => {
+    const listDrafts = vi.fn(async () => [baseDraft]);
+    const api = gitPmApi({
+      session: vi.fn(async () => ({
+        user: { id: "local-user", username: "local" },
+        role: "Maintainer" as const,
+        mode: "repository" as const,
+        repository_mode: "direct" as const,
+        repository: { name: "portfolio", path: "/portfolio", has_remote: true },
+        gitlab: { configured: true },
+        expires_at: "9999-12-31T23:59:59.999Z",
+      })),
+      listDrafts,
+      snapshot: vi.fn(async () => makeSnapshot()),
+    });
+    const { result } = renderHook(() => useDrafts(), { wrapper: ({ children }: { readonly children: ReactNode }) => <DraftProvider api={api}>{children}</DraftProvider> });
+    await flush();
+    expect(result.current.session?.user.id).toBe("local-user");
+    expect(listDrafts).toHaveBeenCalledTimes(1);
+    expect(result.current.drafts).toEqual([baseDraft]);
+  });
+});
+
+describe("requiresGitLabLogin", () => {
+  it("requires GitLab only for an unsigned multi-user identity", () => {
+    expect(requiresGitLabLogin(null)).toBe(true);
+    expect(requiresGitLabLogin({
+      user: { id: "anonymous", username: "anonymous" },
+      role: "Reporter",
+      gitlab: { configured: true },
+      expires_at: "9999-12-31T23:59:59.999Z",
+    })).toBe(true);
+    expect(requiresGitLabLogin({
+      user: { id: "local-user", username: "local" },
+      role: "Maintainer",
+      gitlab: { configured: true },
+      expires_at: "9999-12-31T23:59:59.999Z",
+    })).toBe(false);
+    expect(requiresGitLabLogin({
+      user: { id: "anonymous", username: "anonymous" },
+      role: "Reporter",
+      gitlab: { configured: true, user: { id: "42", username: "ada" } },
+      expires_at: "9999-12-31T23:59:59.999Z",
+    })).toBe(false);
   });
 });
