@@ -299,6 +299,25 @@ describe("person profile", () => {
     expect((screen.getByRole("button", { name: "Edit person" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it("marks today's cell on the schedule calendar", async () => {
+    const personId = "U-26-ADA";
+    const projectId = "P-26-ALPHA";
+    const entities = [
+      result({ schema: "gitpm/person@1", id: personId, name: "Ada Lovelace", weekly_capacity_hours: 32, lifecycle: "active" }),
+      result({ schema: "gitpm/project@2", id: projectId, name: "Alpha", owner: personId, status: "in-progress", lifecycle: "active" }),
+      result({ schema: "gitpm/task@2", id: "T-26-FIRST", project: projectId, title: "Ship profile", status: "in-progress", assignees: [personId], schedules: { plan: { start: "2026-07-20", finish: "2026-07-24" } }, lifecycle: "active" }),
+    ];
+    const schemaByType: Record<string, string> = { people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1", projects: "gitpm/project@2", tasks: "gitpm/task@2" };
+    const api = gitPmApi({ listEntities: vi.fn(async (_draftId: string, type: string) => entities.filter((item) => item.document.schema === schemaByType[type])), getConfiguration: vi.fn(async (_draftId: string, kind: string) => kind === "schedule-tracks" ? tracksConfig() : statusesConfig()) });
+
+    render(<PeopleProfileWorkspace api={api} draft={draft} locale="en" onNavigate={vi.fn()} personId={personId} today="2026-07-22" />);
+
+    expect(await screen.findByText("Today")).toBeTruthy();
+    expect(document.querySelector<HTMLElement>('[data-date="2026-07-22"]')?.className).toContain("today");
+    expect(document.querySelector<HTMLElement>('[data-date="2026-07-21"]')?.className).not.toContain("today");
+    expect(screen.getByLabelText(/Jul 22, 2026 · Today/u)).toBeTruthy();
+  });
+
   it("shows leftover calendar exceptions instead of silently dropping them", async () => {
     const personId = "U-26-ADA";
     const holidays = ["2026-01-01", "2026-01-02", "2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08", "2026-01-09", "2026-02-23", "2026-03-09", "2026-05-01", "2026-05-11", "2026-06-12", "2026-11-04", "2026-12-31"];
