@@ -191,4 +191,22 @@ describe("Changes workspace", () => {
     expect(screen.queryByLabelText("Merge request title")).toBeNull();
     expect(screen.queryByRole("button", { name: "Create merge request" })).toBeNull();
   });
+
+  it("offers push from unpublished commits after reload", async () => {
+    const fixture = new ChangesApi();
+    fixture.changes = { changed_files_count: 0, affected_projects: [], project_files: [], files: [] };
+    render(<ChangesWorkspace api={gitPmApi(fixture)} draft={{ ...draft, sync: { head: "c".repeat(40), ahead: 2, behind: 0, default_branch: "main", default_branch_ahead: 0 } }} role="Developer" locale="en" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Push branch" }));
+    await waitFor(() => expect(fixture.push).toHaveBeenCalledWith("DRF-CHANGES"));
+  });
+
+  it("asks to sign in for push when GitLab is configured and the session is missing", async () => {
+    const fixture = new ChangesApi();
+    fixture.changes = { changed_files_count: 0, affected_projects: [], project_files: [], files: [] };
+    const onGitLabLogin = vi.fn();
+    render(<ChangesWorkspace api={gitPmApi(fixture)} draft={{ ...draft, sync: { head: "c".repeat(40), ahead: 1, behind: 0, default_branch: "main", default_branch_ahead: 0 } }} role="Developer" locale="en" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} gitlabConfigured gitlabSignedIn={false} onGitLabLogin={onGitLabLogin} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Sign in to GitLab to push" }));
+    expect(onGitLabLogin).toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Push branch" })).toBeNull();
+  });
 });

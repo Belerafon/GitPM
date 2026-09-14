@@ -14,7 +14,7 @@ non-empty values are rejected with a clear error. When nothing is set, GitPM use
 | Push | fast-forward `main` to `origin/main` (no force, no rebase, no merge commit) | push the draft branch, then open a Merge Request |
 | CLI | commands work without `--draft` | commands require `--draft <id>` |
 | Agent guidance | `direct`-mode `AGENTS.md` + skill at the checkout root | draft `AGENTS.md` + skill in each worktree |
-| UI | branch, changes, commit, push, sync state | drafts, writer mode, draft branch, Merge Request |
+| UI | branch, changes, commit, push, sync versus `origin/<default>` | drafts, writer mode, draft branch, unpublished commits versus `origin/<draft-branch>`, stale `origin/<default>`, Merge Request |
 
 Runtime metadata is mode-scoped. Worktree drafts remain in `<data-dir>/drafts/*.json`; the
 single internal direct workspace is stored in `<data-dir>/drafts/direct/DRF-LOCAL.json`.
@@ -102,6 +102,10 @@ gitpm push --json
 
 `gitpm status --json` returns the mode, the checkout path, the current branch,
 the HEAD commit, the dirty state, and ahead/behind counts versus the remote.
+The web session reconstructs the same publication actions from Git: dirty files
+enable commit, unpublished commits (`ahead > 0`) enable push after GitLab login
+when OAuth is configured, and a diverged or behind branch does not offer push.
+Counts use last-fetched remote-tracking refs; push still fetches first.
 
 History mutations preserve the same branch boundary. Selecting an old commit is a read-only
 snapshot view; GitPM never checks out a detached HEAD. The History UI can open any full commit SHA

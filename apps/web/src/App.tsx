@@ -221,7 +221,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
   if (drafts.session === null) return (
     <><ControlHints t={t} /><main className="center-card auth-card">
       <img className="brand-mark" src="/gitpm-icon.svg" alt="" /><h1>{t("auth.heading")}</h1><p>{t("auth.description")}</p>
-      <button className="primary" onClick={() => { void api.login().then(navigate); }}>{t("auth.login")}</button>
+      <button className="primary" onClick={() => { void api.login(`${window.location.pathname}${window.location.search}`).then(navigate); }}>{t("auth.login")}</button>
       <LocalePicker locale={locale} setLocale={setLocale} t={t} />
       {drafts.error !== null && <p className="alert error">{t("status.error", { message: drafts.error })}</p>}
     </main></>
@@ -233,23 +233,32 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
   const maintainer = drafts.session.role === "Maintainer";
   const repository = drafts.session.repository;
   const gitlab = drafts.session.gitlab;
-  const loginToGitLab = () => { void api.login().then(navigate); };
+  const loginToGitLab = () => { void api.login(`${window.location.pathname}${window.location.search}`).then(navigate); };
   const projectWorkspaceRoute = activeRoute?.projectId !== undefined && ["projects", "stages", "tasks"].includes(activeRoute.name);
   const pageTitle = activeRoute?.projectId !== undefined && ["projects", "stages", "tasks"].includes(activeRoute.name)
     ? t("projectTabs.overview")
     : view === "nav.administration"
       ? t(administrationActiveTab)
       : t(view);
-  const repositoryStatus = snapshot === null || snapshot.changes.changed_files_count === 0 ? undefined : {
+  const unpushedCount = snapshot?.draft.sync?.ahead ?? 0;
+  const repositoryStatus = snapshot !== null && snapshot.changes.changed_files_count > 0 ? {
     label: String(snapshot.changes.changed_files_count),
     description: t("changes.statusDescription", { files: snapshot.changes.changed_files_count }),
-  };
+  } : unpushedCount > 0 ? {
+    label: `↑${unpushedCount}`,
+    description: t("changes.syncAhead", { count: unpushedCount }),
+  } : undefined;
+  const headerBranch = active?.branch ?? (directMode ? repository?.branch : undefined);
+  const headerAhead = active?.sync?.ahead ?? 0;
+  const headerBehind = active?.sync?.behind ?? 0;
+  const headerSync = headerAhead > 0 && headerBehind > 0 ? ` ↑${headerAhead} ↓${headerBehind}` : headerAhead > 0 ? ` ↑${headerAhead}` : headerBehind > 0 ? ` ↓${headerBehind}` : "";
+  const headerMode = drafts.session.repository_mode === "direct" ? t("auth.modeDirect") : drafts.session.repository_mode === "worktree" ? t("auth.modeWorktree") : undefined;
   const openRepositoryStatus = () => navigateToRoute(routeForDestination("changes"));
   return (
     <><ControlHints t={t} /><PersonNameFormatProvider format={defaultPersonNameFormat}><AppShell activeView={shellActiveView}
       banner={drafts.error !== null && <div className="alert error">{t("status.error", { message: drafts.error })}<button onClick={() => { void drafts.refresh(); }}>{t("status.retry")}</button></div>}
       breadcrumbs={breadcrumbs}
-      headerMeta={<><strong>{repository?.name ?? t("app.repository")}</strong>{directMode && repository?.branch !== undefined && <span className="runtime-context"><code>{repository.branch}</code></span>}<span className="runtime-context">{t("auth.localMode")} · {t("auth.role", { role: drafts.session.role })}</span></>}
+      headerMeta={<><strong>{repository?.name ?? t("app.repository")}</strong>{headerMode !== undefined && <span className="runtime-context">{headerMode}</span>}{headerBranch !== undefined && <span className="runtime-context" title={headerAhead > 0 ? t("changes.syncAhead", { count: headerAhead }) : headerBehind > 0 ? t("changes.syncBehind", { count: headerBehind }) : undefined}><code>{headerBranch}</code><span className="sync-counts">{headerSync}</span></span>}{repository?.has_remote !== true && <span className="runtime-context">{t("auth.noRemote")}</span>}<span className="runtime-context">{t("auth.role", { role: drafts.session.role })}</span></>}
       headerSearch={<GlobalSearch api={api} draftId={active?.draft_id} onNavigate={openWorkspace} t={t} />}
       headerTitle={pageTitle}
       navigationGroups={navigationGroups}
@@ -283,8 +292,8 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
             <h2 aria-hidden="true">{t("drafts.heading")}</h2><p className="workspace-description">{t("drafts.description")}</p>
             <form onSubmit={submit}><label htmlFor="draft-id">{t("drafts.id")}</label><p className="field-hint" id="draft-id-hint">{t("drafts.idHint")}</p><div className="inline draft-create-row"><input aria-describedby="draft-id-hint" id="draft-id" placeholder={t("drafts.idExample")} value={draftId} onChange={(event) => setDraftId(event.target.value)} pattern="[A-Za-z0-9][A-Za-z0-9-]{0,127}" required /><button type="button" onClick={() => setDraftId(suggestedDraftId())}>{t("drafts.generateId")}</button><button className="primary" disabled={drafts.busy || drafts.session.role === "Reporter"}>{t("drafts.create")}</button></div></form>
             <div className="draft-items">{drafts.drafts.length === 0 ? <p>{t("drafts.empty")}</p> : drafts.drafts.map((draft) => (
-              <button aria-label={`${workspaceName(draft.draft_id)} · ${draft.draft_id} · ${draft.branch} · ${workspaceState(draft.state)}`} className={active?.draft_id === draft.draft_id ? "draft-item selected" : "draft-item"} key={draft.draft_id} onClick={() => { void drafts.select(draft.draft_id); }}>
-                <strong>{workspaceName(draft.draft_id)}</strong><code>{draft.draft_id}</code><span>{draft.branch}</span><span className={`state ${draft.state}`}>{workspaceState(draft.state)}</span>
+              <button aria-label={`${workspaceName(draft.draft_id)} · ${draft.draft_id} · ${draft.branch} · ${workspaceState(draft.state)}${(draft.sync?.ahead ?? 0) > 0 ? ` · ${t("drafts.unpushed", { count: draft.sync?.ahead ?? 0 })}` : ""}`} className={active?.draft_id === draft.draft_id ? "draft-item selected" : "draft-item"} key={draft.draft_id} onClick={() => { void drafts.select(draft.draft_id); }}>
+                <strong>{workspaceName(draft.draft_id)}</strong><code>{draft.draft_id}</code><span>{draft.branch}</span>{(draft.sync?.ahead ?? 0) > 0 && <span className="sync-counts">{t("drafts.unpushed", { count: draft.sync?.ahead ?? 0 })}</span>}<span className={`state ${draft.state}`}>{workspaceState(draft.state)}</span>
               </button>
             ))}</div>
           </div>
@@ -298,6 +307,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
                 <div><dt>{t("drafts.branch")}</dt><dd><code>{active.branch}</code></dd></div>
                 <div><dt>{t("drafts.writerMode")}</dt><dd>{t(external ? "drafts.writerExternal" : "drafts.writerUi")}</dd></div>
                 <div><dt>{t("drafts.dirty")}</dt><dd>{snapshot.changes.changed_files_count}</dd></div>
+                <div><dt>{t("drafts.sync")}</dt><dd>{(active.sync?.ahead ?? 0) > 0 ? t("drafts.unpushed", { count: active.sync?.ahead ?? 0 }) : (active.sync?.behind ?? 0) > 0 ? t("changes.syncBehind", { count: active.sync?.behind ?? 0 }) : t("changes.syncEven", { branch: active.branch })}</dd></div>
                 <div><dt>{t("drafts.validation")}</dt><dd className={snapshot.validation.valid ? "valid" : "invalid"}>{snapshot.validation.valid ? t("drafts.validationValid") : t("drafts.validationInvalid", { count: snapshot.validation.error_count })}</dd></div>
                 <div><dt>{t("drafts.mr")}</dt><dd>{snapshot.mergeRequest?.state ?? t("drafts.noMr")}</dd></div>
                 <div><dt>{t("drafts.state")}</dt><dd>{workspaceState(active.state)}</dd></div>
@@ -332,7 +342,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
           : view === "nav.people" && workspaceSelection.personId !== undefined
             ? <PeopleProfileWorkspace api={api} confirmAction={confirmAction} draft={active} locale={locale} onChanged={drafts.refresh} onNavigate={openWorkspace} personId={workspaceSelection.personId} role={drafts.session.role} />
             : <AdminWorkspace api={api} confirmAction={confirmAction} draft={active} role={drafts.session.role} locale={locale} initialCalendarId={workspaceSelection.calendarId} initialSection={settingsSection} onOpenCalendar={(calendarId) => openWorkspace("calendar", { calendarId })} onOpenPerson={(personId) => openWorkspace("people", { personId })} onOpenProject={(projectId) => openWorkspace("projects", { projectId })} onOpenView={(projectId, viewId) => openWorkspace("board", { projectId, query: { view: [viewId] } })} onPersonNameFormatChanged={setDefaultPersonNameFormat} surface={view === "nav.people" ? "people" : view === "nav.calendar" ? "calendar" : "settings"} onChanged={drafts.refresh} />)}
-        {view === "nav.changes" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <ChangesWorkspace api={api} draft={active} role={drafts.session.role} locale={locale} onChanged={drafts.refresh} confirmAction={confirmAction} remoteAvailable={repository?.has_remote === true} gitlabConfigured={gitlab?.configured === true} gitlabSignedIn={gitlab?.user !== undefined} onGitLabLogin={loginToGitLab} onNavigate={openWorkspace} directMode={directMode} />)}
+        {view === "nav.changes" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <ChangesWorkspace api={api} draft={active} role={drafts.session.role} locale={locale} onChanged={drafts.refresh} confirmAction={confirmAction} remoteAvailable={repository?.has_remote === true} gitlabConfigured={gitlab?.configured === true} gitlabSignedIn={gitlab?.user !== undefined} onGitLabLogin={loginToGitLab} onNavigate={openWorkspace} directMode={directMode} mergeRequest={snapshot?.mergeRequest} />)}
         {view === "nav.files" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <WorktreeWorkspace api={api} confirmAction={confirmAction} draft={active} key={`nav.files:${active.draft_id}:${active.external_fingerprint ?? ""}`} locale={locale} onChanged={drafts.refresh} role={drafts.session.role} />)}
         {view === "nav.history" && (active === undefined ? <div className="card empty-workspace">{t("core.selectProject")}</div> : <HistoryWorkspace api={api} confirmAction={confirmAction} directMode={directMode} draft={active} key={`nav.history:${workspaceSelection.commit ?? ""}`} locale={locale} canRevert={drafts.session.role !== "Reporter"} initialCommit={workspaceSelection.commit} onChanged={drafts.refresh} onNavigate={openWorkspace} onDraftCreated={drafts.select} />)}
         {view === "nav.repositoryConnection" && <div className="repository-connection-page"><RepositoryConnectionSettings api={api} locale={locale} maintainer={maintainer} confirmAction={confirmAction} /></div>}

@@ -199,11 +199,11 @@ export class RepositoryConnectionManager {
     return this.status();
   }
 
-  startLogin(): { authorization_url: string; state: string } {
-    return this.requireAuth().startLogin();
+  startLogin(returnTo?: string): { authorization_url: string; state: string } {
+    return this.requireAuth().startLogin(returnTo);
   }
 
-  async completeLogin(state: string, code: string): Promise<PublicSession> {
+  async completeLogin(state: string, code: string): Promise<PublicSession & { readonly return_to?: string }> {
     return await this.requireAuth().completeLogin(state, code);
   }
 

@@ -9,6 +9,9 @@
   "auth.logoutGitLab": "Выйти из GitLab",
   "auth.role": "Роль: {role}",
   "auth.localMode": "Локальный режим",
+  "auth.modeDirect": "Direct",
+  "auth.modeWorktree": "Worktree",
+  "auth.noRemote": "Нет remote",
   "locale.label": "Язык",
   "locale.en": "English",
   "locale.ru": "Русский",
@@ -117,6 +120,8 @@
   "drafts.writerHintExternal": "Возврат к записи через UI снова включит формы GitPM после синхронизации внешних изменений.",
   "drafts.closeHint": "Закрытие запрещает изменения, но рабочую копию можно будет открыть снова.",
   "drafts.dirty": "Изменённых файлов",
+  "drafts.unpushed": "Не отправлено: {count}",
+  "drafts.sync": "Синхронизация",
   "drafts.validation": "Проверка",
   "drafts.validationValid": "Ошибок нет",
   "drafts.validationInvalid": "Ошибок: {count}",
@@ -291,6 +296,7 @@
   ,"controlHint.openCommit": "Проверить сообщение и подготовить все текущие изменения к одному коммиту."
   ,"controlHint.commitAll": "Проверить репозиторий и закоммитить все текущие изменения с указанным сообщением."
   ,"controlHint.push": "Отправить ветку рабочей копии с коммитами в настроенный удалённый репозиторий."
+  ,"controlHint.loginForPush": "Войдите в GitLab и вернитесь сюда, чтобы отправить неотправленные коммиты."
   ,"controlHint.createMr": "Открыть Merge Request из отправленной ветки рабочей копии."
   ,"controlHint.refreshFiles": "Заново загрузить эту папку и сведения о её файлах из рабочей копии."
   ,"controlHint.newFolder": "Создать новую папку внутри открытой сейчас папки."
@@ -649,7 +655,16 @@
   ,"changes.unclassified": "Файлов без классификации сущности: {count}"
   ,"changes.publishEyebrow": "Публикация"
   ,"changes.publishHeading": "Коммит, push и Merge Request"
+  ,"changes.publishHeadingDirect": "Коммит и push"
   ,"changes.commitAllHint": "В коммит войдут все изменённые файлы этой рабочей копии."
+  ,"changes.syncLocal": "Локально {branch} {head}"
+  ,"changes.syncOrigin": "origin/{branch} {commit}"
+  ,"changes.syncAhead": "Не отправлено коммитов: {count}"
+  ,"changes.syncBehind": "origin впереди на {count} коммитов"
+  ,"changes.syncDiverged": "Локальная ветка и origin разошлись. GitPM не сделает force-push и не выполнит rebase."
+  ,"changes.syncEven": "Совпадает с origin/{branch}"
+  ,"changes.syncUnknown": "Нет tracking-ссылки origin. Счётчики относятся к последнему fetch."
+  ,"changes.defaultBranchMoved": "origin/{branch} уехал на {count} коммитов с момента создания этой рабочей копии."
   ,"changes.openCommit": "Подготовить коммит"
   ,"changes.commitHeading": "Закоммитить все изменения"
   ,"changes.commitScope": "В коммит войдут все изменённые файлы: {count}."

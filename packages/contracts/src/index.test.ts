@@ -109,6 +109,23 @@ describe("@gitpm/contracts runtime contracts", () => {
       draft_fingerprint: "fingerprint",
     })).toThrow(ApiContractError);
     expect(() => decodeDraftStatus({ draft_id: "DRF-1" })).toThrow(ApiContractError);
+    const draftStatus = {
+      draft_id: "DRF-1",
+      owner_gitlab_user_id: "42",
+      branch: "gitpm/42/DRF-1",
+      base_commit: "a".repeat(40),
+      writer_mode: "ui",
+      state: "open",
+      fingerprint: "b".repeat(64),
+      created_at: "2026-07-10T10:00:00.000Z",
+      updated_at: "2026-07-10T10:00:00.000Z",
+    };
+    expect(decodeDraftStatus(draftStatus).sync).toBeUndefined();
+    expect(decodeDraftStatus({
+      ...draftStatus,
+      sync: { head: "c".repeat(40), ahead: 2, behind: 0, default_branch: "main", default_branch_ahead: 1, remote_commit: "d".repeat(40) },
+    }).sync).toMatchObject({ ahead: 2, default_branch_ahead: 1 });
+    expect(() => decodeDraftStatus({ ...draftStatus, sync: { ahead: 1 } })).toThrow(ApiContractError);
   });
 
   it("requires authoritative server read state on every notification", () => {

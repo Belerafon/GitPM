@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, realpath, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
-import type { GitClient } from "@gitpm/git-client";
+import { GitCommandError, type GitClient } from "@gitpm/git-client";
 import { atomicWriteDomainFile, resolveDomainPath } from "@gitpm/security";
 import type { DraftBackend, DraftPushStrategy } from "./draft-backend.js";
 import { WorktreeDraftBackend, worktreePushStrategy } from "./draft-backend.js";
@@ -50,6 +50,15 @@ export interface RecoveryReport {
   readonly drafts: readonly DraftMetadata[];
   readonly orphaned_worktrees: readonly string[];
   readonly missing_worktrees: readonly string[];
+}
+
+export interface PublicationSync {
+  readonly head: string;
+  readonly ahead: number;
+  readonly behind: number;
+  readonly remote_commit?: string;
+  readonly default_branch: string;
+  readonly default_branch_ahead: number;
 }
 
 export class DraftRuntimeError extends Error {
@@ -382,6 +391,51 @@ export class DraftManager {
   async push(draftId: string, accessToken: string | undefined): Promise<{ branch: string; commit: string }> {
     const metadata = await this.getDraft(draftId);
     return await this.pushStrategy(metadata.worktree_path, metadata.branch, accessToken);
+  }
+
+  /**
+   * Local HEAD versus last-known origin tracking refs. Does not fetch.
+   * Direct mode compares HEAD to origin/<defaultBranch>. Worktree mode compares
+   * HEAD to origin/<draft-branch> (or to base_commit when that ref is missing)
+   * and reports how far origin/<defaultBranch> has moved past base_commit.
+   */
+  async publicationSync(metadata: DraftMetadata): Promise<PublicationSync | undefined> {
+    try {
+      const worktree = await realpath(metadata.worktree_path);
+      const head = await this.git.headCommit(worktree);
+      const defaultBranch = this.git.defaultBranchName;
+      if (this.backend.mode === "direct") {
+        const status = await this.git.checkoutAheadBehind(worktree);
+        return {
+          head,
+          ahead: status.ahead,
+          behind: status.behind,
+          ...(status.remoteCommit === undefined ? {} : { remote_commit: status.remoteCommit }),
+          default_branch: defaultBranch,
+          default_branch_ahead: 0,
+        };
+      }
+      const tracking = await this.git.aheadBehind(worktree, metadata.branch);
+      const ahead = tracking.remoteCommit === undefined
+        ? await this.git.commitCount(worktree, metadata.base_commit)
+        : tracking.ahead;
+      const behind = tracking.remoteCommit === undefined ? 0 : tracking.behind;
+      const defaultRemote = await this.git.remoteBranchCommit(worktree, defaultBranch);
+      const default_branch_ahead = defaultRemote === undefined || defaultRemote === metadata.base_commit
+        ? 0
+        : await this.git.commitCount(worktree, metadata.base_commit, { remoteBranch: defaultBranch });
+      return {
+        head,
+        ahead,
+        behind,
+        ...(tracking.remoteCommit === undefined ? {} : { remote_commit: tracking.remoteCommit }),
+        default_branch: defaultBranch,
+        default_branch_ahead,
+      };
+    } catch (error) {
+      if (error instanceof GitCommandError || (error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+      throw error;
+    }
   }
 
   async withUiMutation<T>(

@@ -9,6 +9,9 @@
   "auth.logoutGitLab": "Sign out of GitLab",
   "auth.role": "Role: {role}",
   "auth.localMode": "Local mode",
+  "auth.modeDirect": "Direct",
+  "auth.modeWorktree": "Worktree",
+  "auth.noRemote": "No remote",
   "locale.label": "Language",
   "locale.en": "English",
   "locale.ru": "Русский",
@@ -117,6 +120,8 @@
   "drafts.writerHintExternal": "Switching back to UI writer re-enables GitPM forms after external changes are synchronized.",
   "drafts.closeHint": "Closing prevents further edits but keeps this working copy available to reopen.",
   "drafts.dirty": "Changed files",
+  "drafts.unpushed": "{count} unpushed",
+  "drafts.sync": "Sync",
   "drafts.validation": "Validation",
   "drafts.validationValid": "Valid",
   "drafts.validationInvalid": "{count} errors",
@@ -291,6 +296,7 @@
   ,"controlHint.openCommit": "Review the commit message and prepare all current changes for one commit."
   ,"controlHint.commitAll": "Validate the repository and commit every current change with this message."
   ,"controlHint.push": "Push the committed working-copy branch to the configured remote repository."
+  ,"controlHint.loginForPush": "Sign in to GitLab, then return here to push unpublished commits."
   ,"controlHint.createMr": "Open a merge request from the pushed working-copy branch."
   ,"controlHint.refreshFiles": "Reload this folder and its file metadata from the working copy."
   ,"controlHint.newFolder": "Create a new folder inside the folder currently open."
@@ -649,7 +655,16 @@
   ,"changes.unclassified": "Files without a domain classification: {count}"
   ,"changes.publishEyebrow": "Publication"
   ,"changes.publishHeading": "Commit, push, and create a merge request"
+  ,"changes.publishHeadingDirect": "Commit and push"
   ,"changes.commitAllHint": "The commit will include all changed files in this working copy."
+  ,"changes.syncLocal": "Local {branch} {head}"
+  ,"changes.syncOrigin": "origin/{branch} {commit}"
+  ,"changes.syncAhead": "{count} unpushed commits"
+  ,"changes.syncBehind": "origin is {count} commits ahead"
+  ,"changes.syncDiverged": "Local and origin have diverged. GitPM will not force-push or rebase."
+  ,"changes.syncEven": "In sync with origin/{branch}"
+  ,"changes.syncUnknown": "No origin tracking ref yet. Counts are versus the last fetched remote."
+  ,"changes.defaultBranchMoved": "origin/{branch} has moved {count} commits since this working copy was created."
   ,"changes.openCommit": "Prepare commit"
   ,"changes.commitHeading": "Commit all changes"
   ,"changes.commitScope": "All {count} changed files will be committed."

@@ -33,6 +33,7 @@ function manager(overrides: Partial<DraftManager> = {}): DraftManager {
     closeDraft: vi.fn(async () => ({ ...metadata, state: "closed" })),
     reopenDraft: vi.fn(async () => metadata),
     cleanupDraft: vi.fn(async () => undefined),
+    publicationSync: vi.fn(async () => undefined),
     ...overrides,
   } as unknown as DraftManager;
 }
@@ -62,6 +63,26 @@ describe("draft lifecycle API", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual([expect.objectContaining({ draft_id: "DRF-API" })]);
     expect(response.body).not.toContain("worktree");
+  });
+
+  it("includes publication sync without exposing the worktree path", async () => {
+    const draftManager = manager({
+      publicationSync: vi.fn(async () => ({
+        head: "c".repeat(40),
+        ahead: 2,
+        behind: 0,
+        default_branch: "main",
+        default_branch_ahead: 0,
+      })),
+    });
+    const app = appFor({ userId: "42", role: "Developer" }, draftManager);
+    const response = await app.inject({ method: "GET", url: "/api/drafts" });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual([expect.objectContaining({
+      draft_id: "DRF-API",
+      sync: { head: "c".repeat(40), ahead: 2, behind: 0, default_branch: "main", default_branch_ahead: 0 },
+    })]);
+    expect(response.body).not.toContain("secret/server/worktree");
   });
 
   it("does not let a Maintainer read another user's draft", async () => {

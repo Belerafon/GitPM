@@ -247,6 +247,24 @@ describe("direct-mode checkout", () => {
     expect(status.ahead).toBe(1);
   });
 
+  it("counts unpublished worktree commits when the draft branch has no origin ref", async () => {
+    const fixture = await remoteFixture();
+    const client = new GitClient({
+      dataDirectory: path.join(fixture.root, "data"),
+      remoteUrl: fixture.remote,
+      defaultBranch: "main",
+      allowLocalTestRemote: true,
+    });
+    await client.initialize();
+    const base = await client.fetch();
+    const worktree = await client.addWorktree("gitpm/42/DRF-SYNC", "DRF-SYNC", base);
+    expect(await client.aheadBehind(worktree, "gitpm/42/DRF-SYNC")).toEqual({ ahead: 0, behind: 0 });
+    await writeFile(path.join(worktree, "draft.txt"), "d\n", "utf8");
+    await client.commitAll(worktree, "draft commit", "GitPM Test", "gitpm@example.test", []);
+    expect(await client.commitCount(worktree, base)).toBe(1);
+    expect(await client.remoteBranchCommit(worktree, "gitpm/42/DRF-SYNC")).toBeUndefined();
+  });
+
   it("pushes main fast-forward to origin/main", async () => {
     const fixture = await remoteFixture();
     const client = new GitClient({

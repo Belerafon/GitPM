@@ -22,6 +22,16 @@ The web client must pass a named decoder for every JSON response. There is inten
 generic `decodeDto<T>` fallback. A successful HTTP status with a malformed response raises
 `API_RESPONSE_CONTRACT_INVALID`.
 
+`DraftStatus` may include optional `sync`: HEAD, ahead/behind versus the publication
+tracking ref, and `default_branch_ahead` for worktree drafts whose `origin/<default>`
+has moved past `base_commit`. The server does not fetch when computing `sync`. Extra
+properties remain forbidden.
+
+`GET /api/auth/login?return_to=/changes` stores a same-origin app path on the in-memory
+OAuth state. The callback redirects to `GITPM_WEB_URL` plus that path. Absolute URLs,
+protocol-relative paths, credentials, and other origins are ignored. The return path is
+never placed on the GitLab authorize URL.
+
 Binary export is the explicit exception to the JSON decoder rule. The authenticated
 `GET /api/drafts/:draftId/export` route returns a PDF, standalone HTML file, spreadsheet
 workbook, or ZIP archive with a safe ASCII filename in `Content-Disposition` and

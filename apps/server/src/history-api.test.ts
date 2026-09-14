@@ -7,7 +7,7 @@ const metadata: DraftMetadata = { version: 1, draft_id: "DRF-HISTORY", owner_git
 
 describe("history API", () => {
   it("returns detail and creates a public revert draft contract", async () => {
-    const manager = { getDraft: vi.fn(async () => metadata) } as unknown as DraftManager;
+    const manager = { getDraft: vi.fn(async () => metadata), publicationSync: vi.fn(async () => undefined) } as unknown as DraftManager;
     const commit = "a".repeat(40);
     const history = {
       list: vi.fn(async () => []),

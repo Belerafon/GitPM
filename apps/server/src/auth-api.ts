@@ -13,10 +13,24 @@ function sessionCookieFlags(): string {
 }
 
 interface RepositoryAuthentication {
-  startLogin(): { authorization_url: string; state: string };
-  completeLogin(state: string, code: string): Promise<PublicSession>;
+  startLogin(returnTo?: string): { authorization_url: string; state: string };
+  completeLogin(state: string, code: string): Promise<PublicSession & { readonly return_to?: string }>;
   authorize(sessionId: string, operation: ProtectedOperation): Promise<{ session: PublicSession; accessToken: string }>;
   logout(sessionId: string): void;
+}
+
+export function sanitizeReturnTo(raw: unknown, webUrl: string): string | undefined {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (typeof value !== "string" || value.length === 0 || value.length > 1024) return undefined;
+  if (!value.startsWith("/") || value.startsWith("//") || value.includes("\\") || value.includes("\0")) return undefined;
+  let base: URL;
+  try { base = new URL(webUrl); } catch { return undefined; }
+  let target: URL;
+  try { target = new URL(value, base); } catch { return undefined; }
+  if (target.origin !== base.origin) return undefined;
+  if (target.username !== "" || target.password !== "") return undefined;
+  if (target.protocol !== "http:" && target.protocol !== "https:") return undefined;
+  return `${target.pathname}${target.search}`;
 }
 
 function cookie(request: FastifyRequest): string | undefined {
@@ -167,9 +181,9 @@ export function registerAuthApi(
     return { ...publicBaseSession, repository, gitlab: { configured: auth !== undefined && (connection?.status().gitlab.configured ?? true) } };
   });
 
-  app.get("/api/auth/login", async () => {
+  app.get<{ Querystring: { return_to?: string } }>("/api/auth/login", async (request) => {
     if (auth === undefined) throw new AuthError("GITLAB_NOT_CONFIGURED", "GitLab login is not configured for this repository");
-    return auth.startLogin();
+    return auth.startLogin(sanitizeReturnTo(request.query.return_to, webUrl));
   });
 
   app.get<{ Querystring: { state: string; code: string } }>("/api/auth/callback", async (request, reply) => {
@@ -177,7 +191,8 @@ export function registerAuthApi(
     const session = await auth.completeLogin(request.query.state, request.query.code);
     const maxAge = Math.max(0, Math.floor((Date.parse(session.expires_at) - Date.now()) / 1000));
     reply.header("set-cookie", `${COOKIE_NAME}=${encodeURIComponent(session.session_id)}; ${sessionCookieFlags()}; Max-Age=${maxAge}`);
-    return await reply.redirect(webUrl);
+    const returnTo = sanitizeReturnTo(session.return_to, webUrl);
+    return await reply.redirect(returnTo === undefined ? webUrl : new URL(returnTo, webUrl).toString());
   });
 
   app.post("/api/auth/logout", async (request, reply) => {

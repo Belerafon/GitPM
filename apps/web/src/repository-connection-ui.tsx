@@ -97,7 +97,7 @@ export function RepositoryConnectionSettings({ api, locale, maintainer, confirmA
 
   const login = async () => {
     setBusy(true); setError(null);
-    try { window.location.assign(await api.login()); }
+    try { window.location.assign(await api.login("/connection")); }
     catch (caught) { setError(explainError(caught, t)); setBusy(false); }
   };
 

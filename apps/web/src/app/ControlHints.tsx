@@ -125,6 +125,7 @@ export function ControlHints({ t }: {
     [t("changes.openCommit"), t("controlHint.openCommit")],
     [t("changes.commitAll"), t("controlHint.commitAll")],
     [t("changes.push"), t("controlHint.push")],
+    [t("changes.loginForPush"), t("controlHint.loginForPush")],
     [t("changes.createMr"), t("controlHint.createMr")],
     [t("worktree.refresh"), t("controlHint.refreshFiles")],
     [t("worktree.newFolder"), t("controlHint.newFolder")],

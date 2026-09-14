@@ -62,6 +62,17 @@ describe("OAuth PKCE and memory-only sessions", () => {
     expect(JSON.stringify(testDouble.captured)).not.toContain("test-access-token-secret");
   });
 
+  it("keeps the OAuth return path in memory and off the GitLab authorize URL", async () => {
+    const testDouble = protocol(30);
+    const auth = service(testDouble.implementation);
+    const started = auth.startLogin("/changes");
+    const url = new URL(started.authorization_url);
+    expect(url.searchParams.get("redirect_uri")).toBe("https://gitpm.example.test/auth/callback");
+    expect(started.authorization_url).not.toContain("changes");
+    const session = await auth.completeLogin(started.state, "authorization-code");
+    expect(session.return_to).toBe("/changes");
+  });
+
   it("requests only read_user and uses the Project Access Token for role and remote authorization", async () => {
     const testDouble = protocol(30);
     const auth = identityProjectTokenService(testDouble.implementation);
