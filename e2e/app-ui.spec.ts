@@ -38,7 +38,7 @@ test.describe("GitPM browser UI", () => {
     await page.goto("/");
 
     await expect(page.getByRole("heading", { name: "Проекты", exact: true })).toBeVisible();
-    await expect(page.getByText("Локальный режим · Роль: Maintainer", { exact: true })).toBeVisible();
+    await expect(page.getByText("Роль: Maintainer", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Git и публикация", exact: true })).toBeVisible();
     await expect(page.getByRole("combobox", { name: "Текущая рабочая копия", exact: true })).toHaveValue("DRF-APP-WORKSPACE");
     await expect(page.getByRole("heading", { name: "Проекты", exact: true })).toBeVisible();

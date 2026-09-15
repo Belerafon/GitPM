@@ -971,6 +971,17 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .directory-table tbody tr:hover > * { background-color: #f8faf7; }
 .directory-table tbody tr.recently-changed > * { background-color: #fff3c9; }
 .team-directory-table td:last-child { width: 1%; white-space: nowrap; }
+.people-toolbar { display: flex; flex-wrap: wrap; gap: .6rem; align-items: end; margin-bottom: 1rem; }
+.people-toolbar label { display: grid; gap: .3rem; color: #5d625f; font-size: .78rem; }
+.people-toolbar select { border: 1px solid #c9cbc5; border-radius: 8px; background: #fff; padding: .45rem .5rem; font: inherit; font-size: .82rem; color: #2a332d; }
+.people-directory-table td.team-cell { white-space: nowrap; }
+.people-directory-table td.load-cell strong { font-size: .8rem; color: #2f3a32; }
+.people-directory-table td.load-cell .load-note { display: block; color: #646b66; font-size: .72rem; }
+.people-directory-table td.load-cell.near strong { color: #755b1a; }
+.people-directory-table td.load-cell.overloaded strong { color: #8c3d20; }
+.people-directory-table td.load-cell.unavailable strong { color: #707570; }
+.people-directory-table td.absence-cell { white-space: nowrap; }
+.people-directory-table td.absence-cell.away-now { color: #755b1a; font-weight: 600; }
 .member-picker { display: block; min-width: 0; margin: 0; padding: .65rem; }
 .member-picker-scroll { max-height: 300px; overflow: auto; border: 1px solid #e2e4df; border-radius: 8px; background: #fff; }
 .member-picker-table { width: 100%; border-collapse: collapse; }

@@ -20,7 +20,7 @@ class AdminApi {
   mutations = 0;
   private config(kind: ConfigurationKind): ConfigurationResult { return { document: configDocument(kind), path: `.gitpm/${kind}.yaml`, blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) }; }
   private result(document: EntityDocument): EntityResult { this.mutations += 1; return { document, path: `${document.id}.yaml`, blob_id: String(this.mutations).padStart(40, "a"), draft_fingerprint: String(this.mutations).padStart(64, "b") }; }
-  async listEntities(_draftId: string, type: string) { const schemas: Record<string, string> = { calendars: "gitpm/calendar@1", people: "gitpm/person@1", teams: "gitpm/team@1", projects: "gitpm/project@2", tasks: "gitpm/task@2", milestones: "gitpm/milestone@2" }; return this.entities.filter((item) => item.document.schema === schemas[type]); }
+  async listEntities(_draftId: string, type: string) { const schemas: Record<string, string> = { calendars: "gitpm/calendar@1", people: "gitpm/person@1", teams: "gitpm/team@1", projects: "gitpm/project@2", tasks: "gitpm/task@2", milestones: "gitpm/milestone@2", "availability-events": "gitpm/availability-event@1" }; return this.entities.filter((item) => item.document.schema === schemas[type]); }
   async createEntity(_draftId: string, _type: string, _fingerprint: string, document: EntityDocument) { const result = this.result(document); this.entities.push(result); if (document.schema === "gitpm/calendar@1" && this.repository !== undefined && !this.entities.some((item) => item !== result && item.document.id === this.repository?.document.default_calendar)) this.repository = { ...this.repository, document: { ...this.repository.document, default_calendar: String(document.id) } }; return result; }
   async updateEntity(_draftId: string, _type: string, entity: EntityResult, _fingerprint: string, document: EntityDocument) { const result = this.result(document); this.entities = this.entities.map((item) => item === entity ? result : item); return result; }
   async archiveEntity(draftId: string, type: string, entity: EntityResult, fingerprint: string) { return await this.updateEntity(draftId, type, entity, fingerprint, { ...entity.document, lifecycle: "archived" }); }
@@ -490,5 +490,52 @@ describe("administration UI", () => {
     expect(within(peopleTable).getByRole("link", { name: "Beta" })).toBeTruthy();
     fireEvent.click(within(peopleTable).getByRole("link", { name: "Alpha" }));
     expect(onOpenProject).toHaveBeenCalledWith(ownedProjectId);
+  });
+
+  it("filters the roster by team and shows weekly load and next absence", async () => {
+    const aliceId = "U-26-ALICE";
+    const bobId = "U-26-BOB";
+    const teamId = "G-26-CORE";
+    const projectId = "P-26-LOAD";
+    const admin = new AdminApi(); const api = gitPmApi(admin);
+    const onNavigate = vi.fn();
+    await admin.createEntity("DRF-ADMIN", "calendars", "", { schema: "gitpm/calendar@1", id: "CAL-26-DEFAULT", name: "Default", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
+    await admin.createEntity("DRF-ADMIN", "people", "", { schema: "gitpm/person@1", id: aliceId, name: "Alice", weekly_capacity_hours: 40, calendar: "CAL-26-DEFAULT", lifecycle: "active" });
+    await admin.createEntity("DRF-ADMIN", "people", "", { schema: "gitpm/person@1", id: bobId, name: "Bob", weekly_capacity_hours: 40, calendar: "CAL-26-DEFAULT", lifecycle: "active" });
+    await admin.createEntity("DRF-ADMIN", "teams", "", { schema: "gitpm/team@1", id: teamId, name: "Core", members: [aliceId], lifecycle: "active" });
+    await admin.createEntity("DRF-ADMIN", "projects", "", { schema: "gitpm/project@2", id: projectId, name: "Load", owner: aliceId, status: "in-progress", lifecycle: "active" });
+    await admin.createEntity("DRF-ADMIN", "tasks", "", { schema: "gitpm/task@2", id: "T-26-LOAD", project: projectId, title: "Deliver", type: "task", status: "in-progress", assignees: [aliceId], schedules: { plan: { effort_hours: 20, start: "2026-07-06", finish: "2026-07-10" } }, lifecycle: "active" });
+    await admin.createEntity("DRF-ADMIN", "availability-events", "", { schema: "gitpm/availability-event@1", id: "A-26-BOB", person: bobId, start: "2026-07-20", finish: "2026-07-31", kind: "vacation", availability_percent: 0, state: "planned", lifecycle: "active" });
+    const rendered = render(<AdminWorkspace api={api} draft={draft} locale="en" now="2026-07-10" onNavigate={onNavigate} onOpenPerson={vi.fn()} role="Maintainer" surface="people" onChanged={vi.fn(async () => undefined)} />);
+
+    await screen.findByText("Alice");
+    const peopleTable = document.querySelector<HTMLElement>(".people-directory-table")!;
+    expect(within(peopleTable).getByRole("columnheader", { name: "Weekly load" })).toBeTruthy();
+    expect(within(peopleTable).getByRole("columnheader", { name: "Next absence" })).toBeTruthy();
+    const aliceRow = within(peopleTable).getByRole("link", { name: "Alice" }).closest("tr")!;
+    expect(aliceRow.textContent).toContain("20h / 40h");
+    expect(aliceRow.textContent).toContain("50% utilized");
+    const bobRow = within(peopleTable).getByRole("link", { name: "Bob" }).closest("tr")!;
+    expect(bobRow.textContent).toContain("0h / 40h");
+    expect(bobRow.querySelector('time[dateTime="2026-07-20"]')).toBeTruthy();
+    expect(bobRow.querySelector('time[dateTime="2026-07-20"]')?.getAttribute("title")).toContain("Vacation");
+
+    fireEvent.click(within(aliceRow).getByRole("button", { name: "Core" }));
+    expect(onNavigate).toHaveBeenCalledWith("people", { query: { team: [teamId] } });
+    await waitFor(() => expect(within(peopleTable).queryByRole("link", { name: "Bob" })).toBeNull());
+    expect(within(peopleTable).getByRole("link", { name: "Alice" })).toBeTruthy();
+
+    fireEvent.change(within(document.querySelector<HTMLElement>(".people-directory-card")!).getByLabelText("Team"), { target: { value: "" } });
+    expect(onNavigate).toHaveBeenCalledWith("people", { query: {} });
+    await waitFor(() => expect(within(peopleTable).getByRole("link", { name: "Bob" })).toBeTruthy());
+
+    fireEvent.click(screen.getByRole("tab", { name: /Teams/u }));
+    fireEvent.click(screen.getByRole("button", { name: "Show members" }));
+    const refreshedPeopleTable = await waitFor(() => { const table = document.querySelector<HTMLElement>(".people-directory-table"); expect(table).toBeTruthy(); return table!; });
+    await waitFor(() => expect(within(refreshedPeopleTable).queryByRole("link", { name: "Bob" })).toBeNull());
+    expect(within(refreshedPeopleTable).getByRole("link", { name: "Alice" })).toBeTruthy();
+
+    rendered.rerender(<AdminWorkspace api={api} draft={draft} locale="en" now="2026-07-10" onNavigate={onNavigate} onOpenPerson={vi.fn()} query={{ team: [teamId] }} role="Maintainer" surface="people" onChanged={vi.fn(async () => undefined)} />);
+    await waitFor(() => expect(within(refreshedPeopleTable).queryByRole("link", { name: "Bob" })).toBeNull());
   });
 });
