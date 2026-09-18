@@ -21,6 +21,14 @@ describe("Gantt overflow containment", () => {
     expect(rule(".gantt-timeline")).toContain("overflow: hidden");
   });
 
+  it("keeps every task-label line inside its fixed-height row", () => {
+    expect(rule(".gantt-label")).toContain("overflow: hidden");
+    expect(rule(".gantt-label strong, .gantt-label span, .gantt-label small")).toContain("overflow: hidden");
+    expect(rule(".gantt-label strong, .gantt-label span, .gantt-label small")).toContain("text-overflow: ellipsis");
+    expect(rule(".gantt-label strong, .gantt-label span, .gantt-label small")).toContain("white-space: nowrap");
+    expect(rule(".gantt-label .gantt-task-link")).toContain("overflow: hidden");
+  });
+
   it("rotates only the milestone diamond and leaves its long label untransformed", () => {
     expect(rule(".gantt-milestone")).not.toContain("transform:");
     expect(rule(".gantt-milestone::before")).toContain("transform: rotate(45deg)");

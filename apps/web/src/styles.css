@@ -1602,10 +1602,11 @@ fieldset label { display: flex; gap: .25rem; align-items: center; }
 .gantt-scroll { display: grid; grid-template-columns: 260px minmax(0, 1fr); overflow-x: auto; overflow-y: hidden; padding: 0; }
 .gantt-labels { position: sticky; z-index: 4; left: 0; border-right: 1px solid #daddd6; background: #fff; box-shadow: 6px 0 12px rgba(31,45,37,.04); }
 .gantt-label-head { height: 42px; border-bottom: 1px solid #daddd6; padding: .8rem; color: #5d625f; font-size: .75rem; font-weight: 700; text-transform: uppercase; }
-.gantt-label { display: grid; align-content: center; height: 58px; border-bottom: 1px solid #eceee9; padding: .45rem .75rem; }
-.gantt-label strong { overflow: hidden; font-size: .82rem; text-overflow: ellipsis; white-space: nowrap; }
+.gantt-label { display: grid; align-content: center; overflow: hidden; height: 58px; border-bottom: 1px solid #eceee9; padding: .45rem .75rem; }
+.gantt-label strong, .gantt-label span, .gantt-label small { display: block; overflow: hidden; min-width: 0; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+.gantt-label strong { font-size: .82rem; }
 .gantt-label span, .gantt-label small { color: #717772; font-size: .66rem; }
-.gantt-task-link { display: grid; gap: .1rem; width: 100%; text-decoration: none; }
+.gantt-label .gantt-task-link { display: grid; overflow: hidden; min-width: 0; gap: .05rem; width: 100%; text-decoration: none; }
 .gantt-timeline { position: relative; overflow: hidden; min-height: 180px; }
 .gantt-days { display: grid; height: 42px; border-bottom: 1px solid #daddd6; }
 .gantt-days time { display: grid; place-items: center; border-right: 1px solid #eceee9; color: #3f4943; font-size: .72rem; }
