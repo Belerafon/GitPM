@@ -9,6 +9,7 @@ import {
   AuthError,
   AuthService,
   GitLabHttpProtocol,
+  gitLabAuthRequiresLogin,
   type GitLabAuthMode,
   type MergeRequestPayload,
   type MergeRequestState,
@@ -219,7 +220,7 @@ export class RepositoryConnectionManager {
     let accessToken: string | undefined;
     if (sessionId !== undefined && this.auth !== undefined) {
       accessToken = (await this.authorize(sessionId, "push")).accessToken;
-    } else if (this.options.authMode === "oauth-identity-project-token") {
+    } else if (gitLabAuthRequiresLogin(this.options.authMode)) {
       throw new AuthError("SESSION_INVALID", "Sign in to GitLab before testing the configured project");
     } else {
       accessToken = process.env.GITPM_REMOTE_TOKEN?.trim() || undefined;

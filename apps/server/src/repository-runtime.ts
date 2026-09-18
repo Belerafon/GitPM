@@ -9,7 +9,7 @@ import { ChangesService } from "@gitpm/changes";
 import { DirectRepositoryBackend, directPushStrategy, DraftManager } from "@gitpm/drafts";
 import { CommentStore, DEFAULT_PROJECT_FILE_MAX_UPLOAD_BYTES, EntityStore, ProjectFileStore, TimeEntryStore } from "@gitpm/domain";
 import { GitClient, type GitClientSshOptions } from "@gitpm/git-client";
-import type { GitLabAuthMode } from "@gitpm/gitlab";
+import { gitLabAuthRequiresLogin, gitLabAuthUsesProjectToken, isGitLabAuthMode, type GitLabAuthMode } from "@gitpm/gitlab";
 import { assertSafeRepositoryUrl } from "@gitpm/security";
 import { HistoryService } from "@gitpm/history";
 import { ExportService } from "@gitpm/export";
@@ -185,20 +185,17 @@ export async function loadRepositoryRuntimeConfiguration(): Promise<RepositoryRu
   const project = process.env.GITPM_GITLAB_PROJECT?.trim()
     || (typeof fileGitLab.project === "string" ? fileGitLab.project.trim() : "");
   const authModeValue = process.env.GITPM_GITLAB_AUTH_MODE?.trim();
-  if (authModeValue !== undefined && authModeValue !== ""
-    && authModeValue !== "user-oauth-publication"
-    && authModeValue !== "oauth-identity-project-token") {
+  if (authModeValue !== undefined && authModeValue !== "" && !isGitLabAuthMode(authModeValue)) {
     throw new Error(`Unsupported GITPM_GITLAB_AUTH_MODE: ${authModeValue}`);
   }
-  const gitlabAuthMode: GitLabAuthMode | undefined = authModeValue === "user-oauth-publication"
-    || authModeValue === "oauth-identity-project-token"
+  const gitlabAuthMode: GitLabAuthMode | undefined = authModeValue !== undefined && isGitLabAuthMode(authModeValue)
     ? authModeValue
     : baseUrl && clientId && project ? "user-oauth-publication" : undefined;
   const gitlabProjectToken = await readProjectAccessToken();
-  if (gitlabProjectToken !== undefined && gitlabAuthMode !== "oauth-identity-project-token") {
+  if (gitlabProjectToken !== undefined && !gitLabAuthUsesProjectToken(gitlabAuthMode)) {
     throw new Error("GITPM_GITLAB_PROJECT_TOKEN requires GITPM_GITLAB_AUTH_MODE=oauth-identity-project-token");
   }
-  if (gitlabAuthMode === "oauth-identity-project-token") {
+  if (gitLabAuthUsesProjectToken(gitlabAuthMode)) {
     if (!process.env.GITPM_GITLAB_URL?.trim()
       || !process.env.GITPM_GITLAB_CLIENT_ID?.trim()
       || !process.env.GITPM_GITLAB_PROJECT?.trim()
@@ -210,8 +207,19 @@ export async function loadRepositoryRuntimeConfiguration(): Promise<RepositoryRu
       throw new Error("oauth-identity-project-token requires GITPM_REPOSITORY_MODE=worktree");
     }
   }
+  if (gitlabAuthMode === "oauth-identity-user-token") {
+    if (!process.env.GITPM_GITLAB_URL?.trim()
+      || !process.env.GITPM_GITLAB_CLIENT_ID?.trim()
+      || !process.env.GITPM_GITLAB_PROJECT?.trim()
+      || !process.env.GITPM_PUSH_REMOTE_URL?.trim()) {
+      throw new Error("oauth-identity-user-token requires administrator environment values for GitLab URL, project, OAuth Application ID, and repository URL");
+    }
+    if (repositoryMode !== "direct") {
+      throw new Error("oauth-identity-user-token requires GITPM_REPOSITORY_MODE=direct");
+    }
+  }
   const gitlab = baseUrl && clientId && project ? { baseUrl, clientId, project } : undefined;
-  if (gitlabAuthMode === "oauth-identity-project-token") {
+  if (gitLabAuthRequiresLogin(gitlabAuthMode)) {
     assertGitLabRemoteMatchesProject(supportedRemote!, gitlab!);
   }
 
@@ -224,8 +232,8 @@ export async function loadRepositoryRuntimeConfiguration(): Promise<RepositoryRu
     rawConfiguration: config,
     ...(supportedRemote === undefined ? {} : { pushRemoteUrl: supportedRemote }),
     remoteSource,
-    remoteEditable: environmentUrl === undefined && gitlabAuthMode !== "oauth-identity-project-token",
-    gitlabEditable: gitlabAuthMode !== "oauth-identity-project-token"
+    remoteEditable: environmentUrl === undefined && !gitLabAuthRequiresLogin(gitlabAuthMode),
+    gitlabEditable: !gitLabAuthRequiresLogin(gitlabAuthMode)
       && !process.env.GITPM_GITLAB_URL?.trim()
       && !process.env.GITPM_GITLAB_CLIENT_ID?.trim()
       && !process.env.GITPM_GITLAB_PROJECT?.trim(),
@@ -301,9 +309,9 @@ export async function buildRepositoryApp() {
     : await buildWorktreeRuntime(configuration, gitClient);
   const draftManager = runtime.draftManager;
 
-  const identityProjectTokenMode = configuration.gitlabAuthMode === "oauth-identity-project-token";
+  const loginRequiredMode = gitLabAuthRequiresLogin(configuration.gitlabAuthMode);
   const app = buildApp({
-    authenticate: identityProjectTokenMode
+    authenticate: loginRequiredMode
       ? async (request) => {
         const operation = request.method === "GET" || request.method === "HEAD" ? "read" : "mutation";
         const authorized = await connection.authorize(requiredRepositorySession(request), operation);
@@ -341,10 +349,10 @@ export async function buildRepositoryApp() {
   });
   registerAuthApi(app, {
     session_id: "repository-session",
-    user: identityProjectTokenMode
+    user: loginRequiredMode
       ? { id: "anonymous", username: "anonymous" }
       : { id: LOCAL_USER_ID, username: os.userInfo().username || "local" },
-    role: identityProjectTokenMode ? "Reporter" : "Maintainer",
+    role: loginRequiredMode ? "Reporter" : "Maintainer",
     mode: "repository",
     repository_mode: configuration.repositoryMode,
     repository: {

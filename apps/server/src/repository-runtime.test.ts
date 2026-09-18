@@ -290,6 +290,31 @@ describe("OAuth identity plus Project Access Token configuration", () => {
       .rejects.toMatchObject({ code: "GIT_REMOTE_PROJECT_MISMATCH" });
   });
 
+  it("requires direct mode and environment GitLab values for authenticated-direct publication", async () => {
+    const fixture = await fixtureRepository();
+    vi.stubEnv("GITPM_REPOSITORY_PATH", fixture.repository);
+    vi.stubEnv("GITPM_DATA_DIR", fixture.data);
+    vi.stubEnv("GITPM_CONFIG_PATH", path.join(fixture.root, "missing-config.json"));
+    vi.stubEnv("GITPM_REPOSITORY_MODE", "worktree");
+    vi.stubEnv("GITPM_GITLAB_AUTH_MODE", "oauth-identity-user-token");
+    vi.stubEnv("GITPM_GITLAB_URL", "https://gitlab.example");
+    vi.stubEnv("GITPM_GITLAB_PROJECT", "group/portfolio");
+    vi.stubEnv("GITPM_GITLAB_CLIENT_ID", "oauth-app");
+    vi.stubEnv("GITPM_PUSH_REMOTE_URL", "https://gitlab.example/group/portfolio.git");
+    await expect(loadRepositoryRuntimeConfiguration()).rejects.toThrow(/requires GITPM_REPOSITORY_MODE=direct/u);
+
+    vi.stubEnv("GITPM_REPOSITORY_MODE", "direct");
+    const configuration = await loadRepositoryRuntimeConfiguration();
+    expect(configuration).toMatchObject({
+      repositoryMode: "direct",
+      gitlabAuthMode: "oauth-identity-user-token",
+      pushRemoteUrl: "https://gitlab.example/group/portfolio.git",
+      remoteEditable: false,
+      gitlabEditable: false,
+    });
+    expect(configuration).not.toHaveProperty("gitlabProjectToken");
+  });
+
   it("rejects Project Access Tokens stored in config.json", async () => {
     const fixture = await fixtureRepository();
     const configPath = path.join(fixture.root, "config.json");

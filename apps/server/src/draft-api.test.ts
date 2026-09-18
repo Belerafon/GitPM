@@ -104,6 +104,31 @@ describe("draft lifecycle API", () => {
     expect(read.json()).toMatchObject({ error: { code: "DRAFT_FORBIDDEN" } });
   });
 
+  it("lets a GitLab member use the shared direct checkout owned by local-user", async () => {
+    const shared = {
+      ...metadata,
+      draft_id: "DRF-LOCAL",
+      owner_gitlab_user_id: "local-user",
+      branch: "main",
+    };
+    const draftManager = manager({
+      repositoryMode: "direct",
+      listDrafts: vi.fn(async () => [shared]),
+      getDraft: vi.fn(async () => shared),
+      poll: vi.fn(async () => ({
+        metadata: shared,
+        currentFingerprint: shared.fingerprint,
+        changedExternally: false,
+      })),
+    });
+    const app = appFor({ userId: "42", role: "Developer", provider: "gitlab", displayName: "Ada" }, draftManager);
+    const listed = await app.inject({ method: "GET", url: "/api/drafts" });
+    expect(listed.json()).toEqual([expect.objectContaining({ draft_id: "DRF-LOCAL" })]);
+    const read = await app.inject({ method: "GET", url: "/api/drafts/DRF-LOCAL" });
+    expect(read.statusCode).toBe(200);
+    expect(read.json()).toMatchObject({ draft_id: "DRF-LOCAL", owner_gitlab_user_id: "local-user" });
+  });
+
   it("rejects mutation for a read-only role with a stable error", async () => {
     const app = appFor({ userId: "42", role: "Reporter" });
     const response = await app.inject({

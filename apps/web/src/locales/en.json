@@ -1111,6 +1111,7 @@
   ,"repositoryConnection.error.GITLAB_NOT_CONFIGURED": "GitLab is not configured. Sign in after filling in the GitLab integration block."
   ,"repositoryConnection.error.SESSION_INVALID": "The session is missing or expired. Sign in to GitLab again."
   ,"repositoryConnection.credentialNoteIdentityProjectToken": "GitLab OAuth is used only for your identity and requests read_user. Fetch, push, role checks, and Merge Requests use the administrator-provisioned Project Access Token, which is never sent to the browser or stored in your session. Your GitLab Public email is required to create a commit."
+  ,"repositoryConnection.credentialNoteIdentityUserToken": "GitLab sign-in is required before the UI opens. Commits use your GitLab name and Public email. Push uses your OAuth token with write_repository. This profile keeps one shared checkout; it does not isolate writers with draft worktrees or Merge Requests."
   ,"taskHierarchy.parent": "Parent task"
   ,"taskHierarchy.newSubtask": "New subtask"
   ,"taskHierarchy.expand": "Expand subtasks of {title}"

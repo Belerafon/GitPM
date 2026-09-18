@@ -1111,6 +1111,7 @@
   ,"repositoryConnection.error.GITLAB_NOT_CONFIGURED": "GitLab не настроен. Войдите после заполнения блока интеграции с GitLab."
   ,"repositoryConnection.error.SESSION_INVALID": "Сессия истекла или отсутствует. Перезайдите в GitLab."
   ,"repositoryConnection.credentialNoteIdentityProjectToken": "GitLab OAuth используется только для вашей идентификации и запрашивает read_user. Fetch, push, проверка роли и Merge Request выполняются с серверным Project Access Token, который не передаётся в браузер и не хранится в вашей сессии. Для создания коммита нужен Public email в профиле GitLab."
+  ,"repositoryConnection.credentialNoteIdentityUserToken": "Без входа в GitLab интерфейс не открывается. Коммиты подписываются вашим именем и Public email из GitLab. Пуш идёт вашим OAuth-токеном с правом write_repository. Это один общий checkout: черновики-worktree и Merge Request здесь не используются."
   ,"taskHierarchy.parent": "Родительская задача"
   ,"taskHierarchy.newSubtask": "Новая подзадача"
   ,"taskHierarchy.expand": "Развернуть подзадачи «{title}»"

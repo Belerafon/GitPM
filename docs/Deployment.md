@@ -107,8 +107,12 @@ use Git branches/worktrees and the normal Git workflow.
 The legacy `user-oauth-publication` flow authenticates remote publication, not
 the whole HTTP API. The web UI in that profile lets the local Maintainer browse
 and edit without GitLab login; GitLab sign-in is requested only for push and
-Merge Requests. The authenticated multi-user profile requires worktree mode
-and `GITPM_GITLAB_AUTH_MODE=oauth-identity-project-token`, as described below.
+Merge Requests. `oauth-identity-user-token` is the authenticated-direct profile:
+GitLab login is required before the UI opens, commits use the OAuth user's name
+and Public email, and push uses that user's `write_repository` token on the one
+shared checkout. It does not isolate concurrent writers. The authenticated
+multi-user profile requires worktree mode and
+`GITPM_GITLAB_AUTH_MODE=oauth-identity-project-token`, as described below.
 
 ## Multi-user GitLab authentication
 
@@ -159,6 +163,24 @@ creator; the Git commit itself records the initiating user. GitPM adds
 `Initiated in GitPM by @username` to the Merge Request description and writes a
 sanitized server audit event with user ID/username, operation, result, branch,
 commit SHA, and Merge Request IID when applicable. Tokens are excluded.
+
+Authenticated-direct publication uses the same GitLab project coordinates, but
+keeps the user's OAuth token for push and requires `direct` mode:
+
+```bash
+GITPM_REPOSITORY_MODE=direct
+GITPM_GITLAB_AUTH_MODE=oauth-identity-user-token
+GITPM_GITLAB_URL=https://gitlab.example
+GITPM_GITLAB_PROJECT=group/portfolio
+GITPM_GITLAB_CLIENT_ID=<oauth-application-id>
+GITPM_GITLAB_REDIRECT_URI=https://gitpm.example/api/auth/callback
+GITPM_PUSH_REMOTE_URL=https://gitlab.example/group/portfolio.git
+```
+
+The OAuth application needs `api` and `write_repository`. There is no Project
+Access Token. GitLab records the signed-in user as the pusher; the Git commit
+records the same profile's name and Public email. The selected checkout remains
+a shared workspace owned by `local-user`. Parallel editing is still unsupported.
 
 The older `user-oauth-publication` mode remains available as a separate
 compatibility mode. It requests the historical publication scopes and must not

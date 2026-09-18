@@ -56,6 +56,28 @@ const localContext = {
   authorEmail: "local@example.test",
 };
 
+function identityUserTokenConnection(): RepositoryConnectionManager {
+  return {
+    authMode: "oauth-identity-user-token",
+    status: () => ({
+      repository_path: "D:/portfolio",
+      repository_mode: "direct",
+      default_branch: "main",
+      repository_url: "https://gitlab.example/group/portfolio.git",
+      remote_source: "environment",
+      remote_editable: false,
+      gitlab_editable: false,
+      gitlab: {
+        configured: true,
+        base_url: "https://gitlab.example",
+        project: "group/portfolio",
+        client_id: "app",
+        auth_mode: "oauth-identity-user-token",
+      },
+    }),
+  } as unknown as RepositoryConnectionManager;
+}
+
 function identityProjectTokenConnection(): RepositoryConnectionManager {
   return {
     authMode: "oauth-identity-project-token",
@@ -377,5 +399,72 @@ describe("optional GitLab repository session", () => {
       { draftId: "DRF-USER" },
       { title: "User change", description: "Details\n\nInitiated in GitPM by @maintainer" },
     );
+  });
+
+  it("signs a shared direct checkout with the GitLab profile and pushes with the user token", async () => {
+    const auth = repositoryAuth();
+    const publishing = {
+      commit: vi.fn(async () => ({
+        commit: "a".repeat(40),
+        branch: "main",
+        draft_fingerprint: "b".repeat(64),
+      })),
+      push: vi.fn(async () => ({ branch: "main", commit: "a".repeat(40) })),
+    } as unknown as PublicationService;
+    const app = buildApp({
+      draftManager: {} as DraftManager,
+      authenticate: () => ({ userId: "42", role: "Maintainer" }),
+    });
+    apps.push(app);
+    registerAuthApi(
+      app,
+      {
+        ...baseRepositorySession(),
+        user: { id: "anonymous", username: "anonymous" },
+        role: "Reporter",
+        repository_mode: "direct",
+      },
+      publishing,
+      localContext,
+      auth,
+      "http://127.0.0.1:5173",
+      identityUserTokenConnection(),
+    );
+
+    const unsigned = await app.inject({ method: "GET", url: "/api/auth/session" });
+    expect(unsigned.json()).toMatchObject({
+      user: { id: "anonymous", username: "anonymous" },
+      gitlab: { configured: true },
+    });
+    const denied = await app.inject({
+      method: "POST",
+      url: "/api/drafts/DRF-LOCAL/commit",
+      payload: { message: "Blocked" },
+    });
+    expect(denied.statusCode).toBe(401);
+    expect(denied.json()).toMatchObject({ error: { code: "SESSION_INVALID" } });
+
+    const committed = await app.inject({
+      headers: { cookie: "gitpm_gitlab_session=session-id" },
+      method: "POST",
+      url: "/api/drafts/DRF-LOCAL/commit",
+      payload: { message: "Signed direct commit" },
+    });
+    expect(committed.statusCode).toBe(200);
+    expect(publishing.commit).toHaveBeenCalledWith({
+      ownerId: "local-user",
+      authorName: "GitLab Maintainer",
+      authorEmail: "maintainer@example.test",
+    }, { draftId: "DRF-LOCAL" }, "Signed direct commit");
+
+    const pushed = await app.inject({
+      headers: { cookie: "gitpm_gitlab_session=session-id" },
+      method: "POST",
+      url: "/api/drafts/DRF-LOCAL/push",
+    });
+    expect(pushed.statusCode).toBe(200);
+    const pushedContext = vi.mocked(publishing.push).mock.calls[0]![0];
+    expect(pushedContext).toMatchObject({ ownerId: "local-user" });
+    expect(pushedContext.accessToken()).toBe("token");
   });
 });

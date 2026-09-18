@@ -175,8 +175,13 @@ For a multi-user GitLab server, `oauth-identity-project-token` requires
 `worktree` mode. Every draft is owned by the OAuth user's immutable GitLab user
 ID, and draft reads, writes, commits, and publication are restricted to that
 owner. The repository URL, GitLab origin, and `group/project` are supplied by
-the administrator and cannot be overridden through the API. See
-`docs/Deployment.md` for the complete environment and secret setup.
+the administrator and cannot be overridden through the API.
+
+`oauth-identity-user-token` requires `direct` mode. GitLab login gates the HTTP
+API and UI, commit author/committer come from the OAuth profile, and push uses
+the user's OAuth token. The selected checkout stays a shared workspace: GitLab
+identity does not partition drafts. See `docs/Deployment.md` for the complete
+environment and secret setup.
 
 ## Docker
 

@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { HTTP_REQUEST_BODY_SCHEMAS } from "@gitpm/contracts";
-import { AuthError } from "@gitpm/gitlab";
+import { AuthError, gitLabAuthRequiresLogin, gitLabAuthUsesProjectToken } from "@gitpm/gitlab";
 import type { ProtectedOperation, PublicSession } from "@gitpm/gitlab";
 import type { CommitPublicationContext, PublicationService, RemotePublicationContext } from "@gitpm/publishing";
 import type { RepositoryConnectionManager, RepositoryConnectionUpdate } from "./repository-connection.js";
@@ -83,7 +83,8 @@ export function registerAuthApi(
   webUrl: string,
   connection?: RepositoryConnectionManager,
 ): void {
-  const identityProjectTokenMode = connection?.authMode === "oauth-identity-project-token";
+  const loginRequiredMode = gitLabAuthRequiresLogin(connection?.authMode);
+  const identityProjectTokenMode = gitLabAuthUsesProjectToken(connection?.authMode);
   const publicBaseSession: Omit<RepositorySession, "session_id" | "gitlab"> = {
     user: baseSession.user,
     role: baseSession.role,
@@ -110,14 +111,14 @@ export function registerAuthApi(
         ownerId: identityProjectTokenMode ? authorized.session.user.id : localContext.ownerId,
         accessToken: () => authorized.accessToken,
       },
-      ...(identityProjectTokenMode ? { user: authorized.session.user } : {}),
+      ...(loginRequiredMode ? { user: authorized.session.user } : {}),
     };
   };
 
   const commitContext = async (
     request: FastifyRequest,
   ): Promise<{ context: CommitPublicationContext; user?: PublicSession["user"] }> => {
-    if (!identityProjectTokenMode || auth === undefined) return { context: localContext };
+    if (!loginRequiredMode || auth === undefined) return { context: localContext };
     const authorized = await auth.authorize(requiredRepositorySession(request), "commit");
     const user = authorized.session.user;
     if (!user.email) {
@@ -131,7 +132,7 @@ export function registerAuthApi(
     }
     return {
       context: {
-        ownerId: user.id,
+        ownerId: identityProjectTokenMode ? user.id : localContext.ownerId,
         authorName: user.name,
         authorEmail: user.email,
       },
@@ -166,7 +167,7 @@ export function registerAuthApi(
         };
         return {
           ...publicBaseSession,
-          ...(identityProjectTokenMode ? { user: authorized.session.user, role: authorized.session.role } : {}),
+          ...(loginRequiredMode ? { user: authorized.session.user, role: authorized.session.role } : {}),
           repository,
           gitlab: { configured: true, user: authorized.session.user, role: authorized.session.role },
         };
@@ -205,7 +206,7 @@ export function registerAuthApi(
   if (connection !== undefined) {
     app.get("/api/repository/connection", async () => connection.status());
     app.put<{ Body: RepositoryConnectionUpdate }>("/api/repository/connection", { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.repositoryConnectionUpdate } }, async (request) => {
-      if (identityProjectTokenMode && auth !== undefined) {
+      if (loginRequiredMode && auth !== undefined) {
         await auth.authorize(requiredRepositorySession(request), "mutation");
       }
       return await connection.update(request.body);

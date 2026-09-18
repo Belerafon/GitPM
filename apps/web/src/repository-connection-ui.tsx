@@ -136,7 +136,9 @@ export function RepositoryConnectionSettings({ api, locale, maintainer, confirmA
       {provider === "gitlab" && <div className="alert info">{t(
         connection.gitlab.auth_mode === "oauth-identity-project-token"
           ? "repositoryConnection.credentialNoteIdentityProjectToken"
-          : "repositoryConnection.credentialNote",
+          : connection.gitlab.auth_mode === "oauth-identity-user-token"
+            ? "repositoryConnection.credentialNoteIdentityUserToken"
+            : "repositoryConnection.credentialNote",
       )}</div>}
       {provider === "ssh" && <div className="alert info">{t("repositoryConnection.sshNote")}</div>}
       {provider === "https" && <div className="alert info">{t("repositoryConnection.httpsTokenNote")}</div>}

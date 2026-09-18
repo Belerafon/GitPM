@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { AuthError, AuthService, GitLabHttpProtocol, mapAccessLevel } from "./index.js";
+import type { GitLabAuthMode } from "./index.js";
 import type { GitLabProtocol } from "./index.js";
 
 function protocol(level: number | null = 30) {
@@ -42,6 +43,20 @@ function identityProjectTokenService(
     protocol: implementation,
     authMode: "oauth-identity-project-token",
     projectAccessToken: "project-access-token-secret",
+    now,
+  });
+}
+
+function identityUserTokenService(
+  implementation: GitLabProtocol,
+  now = () => Date.parse("2026-07-10T00:00:00Z"),
+) {
+  return new AuthService({
+    authorizeUrl: "https://gitlab.example.test/oauth/authorize",
+    clientId: "gitpm-client",
+    redirectUri: "https://gitpm.example.test/auth/callback",
+    protocol: implementation,
+    authMode: "oauth-identity-user-token" satisfies GitLabAuthMode,
     now,
   });
 }
@@ -94,8 +109,21 @@ describe("OAuth PKCE and memory-only sessions", () => {
     });
     expect(testDouble.implementation.projectAccessLevel)
       .toHaveBeenLastCalledWith("project-access-token-secret", "42");
-    expect((await auth.authorize(session.session_id, "push")).accessToken)
+      expect((await auth.authorize(session.session_id, "push")).accessToken)
       .toBe("project-access-token-secret");
+  });
+
+  it("keeps the user OAuth token for authenticated-direct publication", async () => {
+    const testDouble = protocol(30);
+    const auth = identityUserTokenService(testDouble.implementation);
+    const started = auth.startLogin();
+    const url = new URL(started.authorization_url);
+    expect(url.searchParams.get("scope")).toBe("api write_repository");
+    const session = await auth.completeLogin(started.state, "authorization-code");
+    expect(testDouble.implementation.projectAccessLevel)
+      .toHaveBeenLastCalledWith("test-access-token-secret", "42");
+    expect((await auth.authorize(session.session_id, "push")).accessToken)
+      .toBe("test-access-token-secret");
   });
 
   it("rejects missing state and non-members", async () => {

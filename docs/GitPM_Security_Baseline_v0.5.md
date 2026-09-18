@@ -104,7 +104,9 @@ OAuth tokens, PATs, and repository contents can otherwise be observed in transit
 В local single-user mode все клиенты, достигшие HTTP API, находятся внутри
 доверенной операторской границы и используют единую локальную Maintainer
 identity. Правила Guest/Reporter/Developer/Maintainer ниже применяются к
-`oauth-identity-project-token` mode.
+`oauth-identity-project-token` и `oauth-identity-user-token`. Direct
+authenticated-direct не делит checkout по GitLab user ID: роль проверяется,
+владение draft — нет.
 
 - Guest/non-member denied;
 - Reporter read-only;

@@ -6,7 +6,28 @@ const PENDING_LOGIN_MS = 10 * 60 * 1000;
 
 export type GitPmRole = "Reporter" | "Developer" | "Maintainer";
 export type ProtectedOperation = "read" | "mutation" | "commit" | "push" | "mr";
-export type GitLabAuthMode = "user-oauth-publication" | "oauth-identity-project-token";
+export type GitLabAuthMode =
+  | "user-oauth-publication"
+  | "oauth-identity-project-token"
+  | "oauth-identity-user-token";
+
+export const GITLAB_AUTH_MODES: readonly GitLabAuthMode[] = [
+  "user-oauth-publication",
+  "oauth-identity-project-token",
+  "oauth-identity-user-token",
+];
+
+export function isGitLabAuthMode(value: string): value is GitLabAuthMode {
+  return (GITLAB_AUTH_MODES as readonly string[]).includes(value);
+}
+
+export function gitLabAuthRequiresLogin(mode: GitLabAuthMode | undefined): boolean {
+  return mode === "oauth-identity-project-token" || mode === "oauth-identity-user-token";
+}
+
+export function gitLabAuthUsesProjectToken(mode: GitLabAuthMode | undefined): boolean {
+  return mode === "oauth-identity-project-token";
+}
 
 export interface OAuthTokenResponse {
   readonly access_token: string;
@@ -121,7 +142,7 @@ export class AuthService {
 
   constructor(private readonly options: AuthServiceOptions) {
     this.now = options.now ?? Date.now;
-    if (this.authMode === "oauth-identity-project-token" && !options.projectAccessToken?.trim()) {
+    if (gitLabAuthUsesProjectToken(this.authMode) && !options.projectAccessToken?.trim()) {
       throw new AuthError("GITLAB_PROJECT_TOKEN_REQUIRED", "Project Access Token is required for the configured authentication mode");
     }
   }
@@ -131,7 +152,7 @@ export class AuthService {
   }
 
   private roleAccessToken(session?: Session): string {
-    const accessToken = this.authMode === "oauth-identity-project-token"
+    const accessToken = gitLabAuthUsesProjectToken(this.authMode)
       ? this.options.projectAccessToken
       : session?.oauthAccessToken;
     if (!accessToken) throw new AuthError("GITLAB_ACCESS_TOKEN_REQUIRED", "GitLab access token is unavailable");
@@ -151,7 +172,7 @@ export class AuthService {
     url.searchParams.set("client_id", this.options.clientId);
     url.searchParams.set("redirect_uri", this.options.redirectUri);
     url.searchParams.set("response_type", "code");
-    url.searchParams.set("scope", this.authMode === "oauth-identity-project-token" ? "read_user" : "api write_repository");
+    url.searchParams.set("scope", gitLabAuthUsesProjectToken(this.authMode) ? "read_user" : "api write_repository");
     url.searchParams.set("state", state);
     url.searchParams.set("code_challenge", challenge);
     url.searchParams.set("code_challenge_method", "S256");
@@ -169,13 +190,13 @@ export class AuthService {
     });
     if (!token.access_token || token.expires_in <= 0) throw new AuthError("OAUTH_TOKEN_INVALID", "OAuth token response is invalid");
     const user = await this.options.protocol.currentUser(token.access_token);
-    const roleToken = this.authMode === "oauth-identity-project-token"
+    const roleToken = gitLabAuthUsesProjectToken(this.authMode)
       ? this.roleAccessToken()
       : token.access_token;
     const role = mapAccessLevel(await this.options.protocol.projectAccessLevel(roleToken, user.id));
     const session: Session = {
       id: randomUUID(),
-      ...(this.authMode === "user-oauth-publication" ? { oauthAccessToken: token.access_token } : {}),
+      ...(gitLabAuthUsesProjectToken(this.authMode) ? {} : { oauthAccessToken: token.access_token }),
       user,
       role,
       roleCheckedAt: this.now(),

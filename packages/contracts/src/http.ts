@@ -364,7 +364,7 @@ export interface RepositoryConnectionStatus {
     readonly base_url?: string;
     readonly project?: string;
     readonly client_id?: string;
-    readonly auth_mode?: "user-oauth-publication" | "oauth-identity-project-token";
+    readonly auth_mode?: "user-oauth-publication" | "oauth-identity-project-token" | "oauth-identity-user-token";
   };
 }
 
@@ -774,7 +774,7 @@ const repositoryConnectionStatusSchema = objectSchema({
     base_url: stringSchema,
     project: stringSchema,
     client_id: stringSchema,
-    auth_mode: { enum: ["user-oauth-publication", "oauth-identity-project-token"] },
+    auth_mode: { enum: ["user-oauth-publication", "oauth-identity-project-token", "oauth-identity-user-token"] },
   }, ["configured"]),
 }, ["repository_path", "repository_mode", "default_branch", "remote_source", "remote_editable", "gitlab_editable", "gitlab"]);
 

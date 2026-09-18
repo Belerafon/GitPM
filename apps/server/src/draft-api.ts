@@ -124,11 +124,20 @@ function requireEntityMutationRole(actor: RequestActor, entityType: string): voi
   }
 }
 
-export async function requireDraftRead(manager: DraftManager, actor: RequestActor, draftId: string): Promise<void> {
+function canAccessDraft(manager: DraftManager, actor: RequestActor, metadata: DraftMetadata): boolean {
+  return manager.repositoryMode === "direct" || metadata.owner_gitlab_user_id === actor.userId;
+}
+
+function workspaceOwnerId(manager: DraftManager, actor: RequestActor, metadata: DraftMetadata): string {
+  return manager.repositoryMode === "direct" ? metadata.owner_gitlab_user_id : actor.userId;
+}
+
+export async function requireDraftRead(manager: DraftManager, actor: RequestActor, draftId: string): Promise<DraftMetadata> {
   const metadata = await manager.getDraft(draftId);
-  if (metadata.owner_gitlab_user_id !== actor.userId) {
+  if (!canAccessDraft(manager, actor, metadata)) {
     throw new DraftRuntimeError("DRAFT_FORBIDDEN", "Draft owner mismatch");
   }
+  return metadata;
 }
 
 function statusFor(error: DraftRuntimeError): number {
@@ -264,7 +273,7 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
     const drafts = await manager.listDrafts();
     return await Promise.all(
       drafts
-        .filter((draft) => draft.owner_gitlab_user_id === actor.userId)
+        .filter((draft) => canAccessDraft(manager, actor, draft))
         .map((draft) => publicMetadata(manager, draft)),
     );
   });
@@ -272,7 +281,7 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
   app.get<{ Params: { draftId: string } }>("/api/drafts/:draftId", async (request) => {
     const actor = await authenticate(request);
     const status = await manager.poll(request.params.draftId);
-    if (status.metadata.owner_gitlab_user_id !== actor.userId) {
+    if (!canAccessDraft(manager, actor, status.metadata)) {
       throw new DraftRuntimeError("DRAFT_FORBIDDEN", "Draft owner mismatch");
     }
     return { ...await publicMetadata(manager, status.metadata), changed_externally: status.changedExternally, external_fingerprint: status.currentFingerprint };
@@ -539,8 +548,14 @@ export function registerHistoryApi(
     async (request) => {
       const actor = await authenticate(request);
       requireMutationRole(actor);
-      await requireDraftRead(manager, actor, request.params.draftId);
-      return await history.restoreCommitFiles(request.params.draftId, request.params.commit, request.body.paths, actor.userId, request.body.expected_fingerprint);
+      const metadata = await requireDraftRead(manager, actor, request.params.draftId);
+      return await history.restoreCommitFiles(
+        request.params.draftId,
+        request.params.commit,
+        request.body.paths,
+        workspaceOwnerId(manager, actor, metadata),
+        request.body.expected_fingerprint,
+      );
     },
   );
 
@@ -550,14 +565,14 @@ export function registerHistoryApi(
     async (request, reply) => {
       const actor = await authenticate(request);
       requireMutationRole(actor);
-      await requireDraftRead(manager, actor, request.params.draftId);
+      const metadata = await requireDraftRead(manager, actor, request.params.draftId);
       if (actor.provider === "gitlab" && actor.email === undefined) throw new AuthError("GITLAB_PUBLIC_EMAIL_REQUIRED", "Configure a Public email in your GitLab profile before creating a commit");
       if (actor.provider === "gitlab" && !actor.displayName?.trim()) throw new AuthError("GITLAB_PROFILE_NAME_REQUIRED", "GitLab profile name is required before creating a commit");
       const result = await history.revertDirect(
         request.params.draftId,
         request.params.commit,
         request.body.message,
-        actor.userId,
+        workspaceOwnerId(manager, actor, metadata),
         request.body.expected_fingerprint,
         actor.displayName?.trim() || actor.userId,
         actor.email?.trim() || `${actor.userId}@localhost`,

@@ -97,8 +97,10 @@ optimistic fingerprint защищают отдельные UI-операции, 
 обычный Git-процесс.
 
 GitLab OAuth в режиме `user-oauth-publication` используется для удалённой
-публикации и не является аутентификацией всего HTTP API. Для
-многопользовательской работы требуется `repositoryMode=worktree` и
+публикации и не является аутентификацией всего HTTP API.
+`oauth-identity-user-token` требует вход в GitLab для GUI на одном `direct`
+checkout и пушит пользовательским OAuth. Для изолированной многопользовательской
+работы требуется `repositoryMode=worktree` и
 `GITPM_GITLAB_AUTH_MODE=oauth-identity-project-token`.
 
 Локальный режим следует привязывать к loopback-интерфейсу либо размещать за

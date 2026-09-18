@@ -85,8 +85,11 @@ OAuth token after login. A single server-owned Project Access Token is used for
 membership checks, fetch, push, and Merge Request API calls for the configured
 project. The token is environment/Docker-Secret only and is excluded from
 browser input, HTTP responses, persisted config, Git URLs, sessions, and logs.
-The legacy user OAuth publication behavior remains a separate explicit
-`user-oauth-publication` mode. Webhook is absent; MR status is polled.
+`oauth-identity-user-token` requires GitLab login for the HTTP API on a shared
+`direct` checkout, signs commits with the OAuth name and Public email, and
+keeps the user token for push. The legacy user OAuth publication behavior
+remains a separate explicit `user-oauth-publication` mode. Webhook is absent;
+MR status is polled.
 Automated tests use local test doubles, not a live GitLab project.
 
 ## 12. Delete and restore

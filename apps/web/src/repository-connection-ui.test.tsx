@@ -109,6 +109,27 @@ describe("RepositoryConnectionSettings", () => {
     expect(screen.getByText(/Public email is required/)).toBeTruthy();
   });
 
+  it("explains authenticated-direct publication with the user OAuth token", async () => {
+    const api = mockApi(baseStatus({
+      repository_mode: "direct",
+      repository_url: "https://gitlab.example/group/portfolio.git",
+      transport: "https",
+      remote_source: "environment",
+      remote_editable: false,
+      gitlab_editable: false,
+      gitlab: {
+        configured: true,
+        base_url: "https://gitlab.example",
+        project: "group/portfolio",
+        client_id: "app",
+        auth_mode: "oauth-identity-user-token",
+      },
+    }));
+    render(<RepositoryConnectionSettings api={api} locale="en" maintainer={true} />);
+    expect(await screen.findByText(/GitLab sign-in is required before the UI opens/)).toBeTruthy();
+    expect(screen.getByText(/Push uses your OAuth token/)).toBeTruthy();
+  });
+
   it("shows the local provider with a disabled test button when no remote is configured", async () => {
     const api = mockApi(baseStatus({ remote_source: "none" }));
     const view = render(<RepositoryConnectionSettings api={api} locale="en" maintainer={true} />);

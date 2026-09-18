@@ -19,7 +19,8 @@
 #   GITPM_GITLAB_URL         Base URL of the GitLab instance.
 #   GITPM_GITLAB_PROJECT     group/project path.
 #   GITPM_GITLAB_CLIENT_ID   OAuth Application ID registered in GitLab.
-#   GITPM_GITLAB_AUTH_MODE   Set oauth-identity-project-token for multi-user mode.
+#   GITPM_GITLAB_AUTH_MODE   oauth-identity-project-token for multi-user worktree;
+#                            oauth-identity-user-token for authenticated direct.
 #   GITPM_PUSH_REMOTE_URL    Credential-free URL for the same GitLab project.
 #   GITPM_GITLAB_PROJECT_TOKEN Project Access Token (prefer *_TOKEN_FILE below).
 #   GITPM_GITLAB_PROJECT_TOKEN_FILE Path to a mounted Docker secret.

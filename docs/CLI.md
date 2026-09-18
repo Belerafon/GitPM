@@ -328,7 +328,7 @@ draft/publish-командам дополнительно нужен remote runt
 | `GITPM_GITLAB_PROJECT` | — | `group/project` для MR. |
 | `GITPM_GITLAB_CLIENT_ID` | — | OAuth Application ID, зарегистрированный в GitLab. |
 | `GITPM_GITLAB_REDIRECT_URI` | `http://127.0.0.1:3000/api/auth/callback` | Redirect URI OAuth. На сервере указать внешний URL (например `http://10.0.0.1:86/api/auth/callback`). |
-| `GITPM_GITLAB_AUTH_MODE` | — | `oauth-identity-project-token` для многопользовательского режима либо отдельный legacy-режим `user-oauth-publication`. |
+| `GITPM_GITLAB_AUTH_MODE` | — | `oauth-identity-project-token` для многопользовательского worktree-режима; `oauth-identity-user-token` для входа в GUI на одном direct checkout с пушем пользовательским OAuth; либо legacy `user-oauth-publication`. |
 | `GITPM_GITLAB_PROJECT_TOKEN` | — | Серверный Project Access Token единственного настроенного проекта; не сохраняется и не возвращается через HTTP. |
 | `GITPM_GITLAB_PROJECT_TOKEN_FILE` | — | Альтернативный путь к Docker Secret с Project Access Token. Нельзя задавать вместе с `GITPM_GITLAB_PROJECT_TOKEN`. |
 | `GITPM_COOKIE_SECURE` | `true` | Когда web UI опубликован по plain HTTP (без TLS-терминатора), поставьте `false` — иначе браузер не примет сессионную cookie. |

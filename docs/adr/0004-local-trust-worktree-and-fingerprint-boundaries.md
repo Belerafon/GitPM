@@ -19,9 +19,10 @@ external-change protection.
 1. The local single-user HTTP API trusts every network client that can reach it.
    Each such client acts as the one local Maintainer identity. Operators must bind
    this profile to loopback or provide perimeter authentication with a reverse
-   proxy. GitLab OAuth in `user-oauth-publication` authenticates remote
-   publication only. Per-user authorization requires worktree mode with
-   `oauth-identity-project-token`.
+    proxy. GitLab OAuth in `user-oauth-publication` authenticates remote
+    publication only. `oauth-identity-user-token` requires GitLab login for the
+    shared direct checkout but does not isolate writers. Per-user draft
+    authorization requires worktree mode with `oauth-identity-project-token`.
 2. The worktree file manager is a raw filesystem interface below the domain layer.
    It may change permitted non-Git paths, including domain paths. It enforces path
    containment, symlink protection, and optimistic fingerprint matching, but does
