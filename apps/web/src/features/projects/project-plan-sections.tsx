@@ -167,6 +167,7 @@ export function TaskRows({ roots, visibleIds, allTasks, projectId, query = {}, l
     const nodeChildren = node.children;
     const hasVisibleChildren = nodeChildren.some((child) => visibleEntryIds.has(child.id));
     const completedChildren = nodeChildren.filter((child) => isCompletedStatus(statusOptions, child.status)).length;
+    const isCompleted = isCompletedStatus(statusOptions ?? [], node.status);
     const isContextOnly = !visibleIds.has(node.id);
     const ancestorRailLevels: number[] = [];
     for (let level = 1; level < node.path.length - 1; level++) {
@@ -180,7 +181,7 @@ export function TaskRows({ roots, visibleIds, allTasks, projectId, query = {}, l
     const nextTask = nextEntry === undefined ? undefined : taskById.get(nextEntry.node.id);
     const nextParentId = nextEntry?.parentId;
     const insertDepth = nextEntry === undefined ? entry.depth : nextEntry.depth;
-    const rows = [<div className={`project-plan-task-row${selected ? " selected" : ""}${isContextOnly ? " filter-context" : ""}${changedTaskIds.has(node.id) ? " recently-changed" : ""}${savingTaskIds.has(node.id) ? " is-saving" : ""}`} data-depth={entry.depth} data-flip-key={`task:${node.id}`} key={node.id} style={style}>
+    const rows = [<div className={`project-plan-task-row${selected ? " selected" : ""}${isContextOnly ? " filter-context" : ""}${isCompleted ? " is-completed" : ""}${changedTaskIds.has(node.id) ? " recently-changed" : ""}${savingTaskIds.has(node.id) ? " is-saving" : ""}`} data-depth={entry.depth} data-flip-key={`task:${node.id}`} key={node.id} style={style}>
       <span className={`project-plan-task-tree${hasVisibleChildren ? " has-visible-children" : ""}`}>
         {ancestorRailLevels.map((level) => <span aria-hidden="true" className="project-plan-task-ancestor-rail" key={level} style={{ left: `${-.4 + level * .8}rem` }} />)}
         {entry.depth > 0 && <span aria-hidden="true" className={`project-plan-task-branch${isLastVisibleSibling ? " last" : ""}`} />}

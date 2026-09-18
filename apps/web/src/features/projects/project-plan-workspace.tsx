@@ -22,8 +22,8 @@ import type { WorkspaceNavigate } from "../../workspace-navigation.js";
 import { PersonLinks } from "../../person-link.js";
 import { DraftReadOnlyAlert, draftReadOnlyReason } from "../../draft-read-only.js";
 import { SchedulingOverflowWarnings } from "../../scheduling-overflow-warnings.js";
-import { AdvancedViewControls } from "../../advanced-view-controls.js";
-import { applyAdvancedViewQuery, countViewConditions, emptyViewQuery, filterOnlyViewQuery, newViewNodeId, parseAdvancedViewQuery, serializeAdvancedViewQuery, type AdvancedViewQuery, type ViewField, type ViewFilterNode } from "../../advanced-view-query.js";
+import { AdvancedViewControls, type QuickViewPreset } from "../../advanced-view-controls.js";
+import { applyAdvancedViewQuery, countViewConditions, emptyViewQuery, filterOnlyViewQuery, newViewNodeId, parseAdvancedViewQuery, serializeAdvancedViewQuery, type AdvancedViewQuery, type ViewField, type ViewFilterNode, type ViewFilterOperator } from "../../advanced-view-query.js";
 import { ProjectFilesPanel } from "./project-files-panel.js";
 import { ProjectFileMarkdownField, type ProjectFileReferenceContext } from "../../project-file-reference-ui.js";
 import { usePersonNameFormatter } from "../../person-name.js";
@@ -65,6 +65,33 @@ const withQuickOverdueFilter = (query: AdvancedViewQuery): AdvancedViewQuery => 
     ? { ...query, filter: { ...query.filter, children: [...query.filter.children, condition] } }
     : { ...query, filter: { kind: "group", id: newViewNodeId("group"), combinator: "and", children: [query.filter, condition] } };
 };
+
+const isQuickHideCompletedCondition = (node: ViewFilterNode): boolean =>
+  node.kind === "condition" && node.field === "completed" && node.operator === "is-false";
+
+const hasQuickHideCompletedFilter = (query: AdvancedViewQuery): boolean =>
+  query.filter.combinator === "and" && query.filter.children.some(isQuickHideCompletedCondition);
+
+const withoutQuickHideCompletedFilter = (query: AdvancedViewQuery): AdvancedViewQuery => {
+  if (query.filter.combinator !== "and") return query;
+  const children = query.filter.children.filter((child) => !isQuickHideCompletedCondition(child));
+  if (children.length === query.filter.children.length) return query;
+  const onlyChild = children.length === 1 ? children[0] : undefined;
+  return { ...query, filter: onlyChild?.kind === "group" ? onlyChild : { ...query.filter, children } };
+};
+
+const withQuickHideCompletedFilter = (query: AdvancedViewQuery): AdvancedViewQuery => {
+  if (hasQuickHideCompletedFilter(query)) return query;
+  const condition = { kind: "condition" as const, id: newViewNodeId("condition"), field: "completed", operator: "is-false" as const };
+  return query.filter.combinator === "and"
+    ? { ...query, filter: { ...query.filter, children: [...query.filter.children, condition] } }
+    : { ...query, filter: { kind: "group", id: newViewNodeId("group"), combinator: "and", children: [query.filter, condition] } };
+};
+
+const planFilterPreset = (field: string, operator: ViewFilterOperator): AdvancedViewQuery => ({
+  filter: { kind: "group", id: newViewNodeId("group"), combinator: "and", children: [{ kind: "condition", id: newViewNodeId("condition"), field, operator }] },
+  sort: [],
+});
 
 const localCalendarDate = (date: Date = new Date()): string => {
   const year = date.getFullYear();
@@ -282,14 +309,22 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     { id: "due", label: t("advancedView.field.due"), type: "date", read: (item) => text(item.document, "due") },
     { id: "estimate", label: t("advancedView.field.estimate"), type: "number", read: (item) => effortOf(item.document) },
     { id: "overdue", label: t("advancedView.field.overdue"), type: "boolean", hint: t("portfolioTasks.presetOverdueHint"), read: (item) => { const due = text(item.document, "due"); return /^\d{4}-\d{2}-\d{2}$/u.test(due) && due < today && !isCompletedStatus(statuses, text(item.document, "status")); } },
+    { id: "completed", label: t("advancedView.field.completed"), type: "boolean", hint: t("advancedView.field.completedHint"), read: (item) => isCompletedStatus(statuses, text(item.document, "status")) },
   ], [effortOf, locale, peopleOptions, statuses, text, today, types, workspace]);
+  const planTaskPresets = useMemo<readonly QuickViewPreset[]>(() => [
+    { id: "hide-completed", label: t("projectPlan.hideCompleted"), hint: t("controlHint.hideCompleted"), query: planFilterPreset("completed", "is-false") },
+    { id: "overdue", label: t("advancedView.field.overdue"), hint: t("portfolioTasks.presetOverdueHint"), query: planFilterPreset("overdue", "is-true") },
+    { id: "unassigned", label: t("advancedView.presetUnassigned"), query: planFilterPreset("assignees", "is-empty") },
+    { id: "without-milestone", label: t("advancedView.presetWithoutMilestone"), query: planFilterPreset("milestone", "is-empty") },
+    { id: "without-due", label: t("advancedView.presetWithoutDue"), query: planFilterPreset("due", "is-empty") },
+  ], [locale]);
   useEffect(() => {
     const parsed = filterOnlyViewQuery(parseAdvancedViewQuery(initialAdvancedQuery, taskAdvancedFields));
     const next = normalizeSummaryFilter(initialSummaryFilter) === "overdue" ? withQuickOverdueFilter(parsed) : parsed;
     setAdvancedQuery(next);
     if (hasQuickOverdueFilter(next)) setSummaryFilter("all");
   }, [initialAdvancedQuery, initialSummaryFilter, taskAdvancedFields]);
-  const advancedEvaluationQuery = useMemo(() => withoutQuickOverdueFilter(advancedQuery), [advancedQuery]);
+  const advancedEvaluationQuery = useMemo(() => withoutQuickHideCompletedFilter(withoutQuickOverdueFilter(advancedQuery)), [advancedQuery]);
   const advancedTasks = useMemo(() => applyAdvancedViewQuery(currentPlanTasks, taskAdvancedFields, advancedEvaluationQuery, locale), [advancedEvaluationQuery, currentPlanTasks, locale, taskAdvancedFields]);
   const taskCompare = useMemo(() => canonicalTaskComparator(locale, text), [locale, text]);
   const hierarchyCompare = useMemo<PayloadCompare>(() => { const compare = taskCompare; return (left, right) => compare(left.entity, right.entity); }, [taskCompare]);
@@ -349,6 +384,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   const blockedCount = summaryScopeTasks.filter((task) => isBlockedStatus(statuses, text(task.document, "status"))).length;
   const overdueCount = overdueTaskIds.size;
   const effectiveSummaryFilter: SummaryFilter = hasQuickOverdueFilter(advancedQuery) ? "overdue" : summaryFilter;
+  const hideCompleted = hasQuickHideCompletedFilter(advancedQuery);
   const visibleTasks = useMemo(() => advancedTasks.filter((task) =>
     (statusFilter === "" || text(task.document, "status") === statusFilter)
     && (milestoneFilter === "" || (milestoneFilter === "none" ? isOutsideActiveMilestone(activeStageIds, text(task.document, "milestone")) : text(task.document, "milestone") === milestoneFilter))
@@ -356,7 +392,8 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
       || (effectiveSummaryFilter === "completed" && isCompletedStatus(statuses, text(task.document, "status")))
       || (effectiveSummaryFilter === "active" && isInProgressStatus(statuses, text(task.document, "status")))
       || (effectiveSummaryFilter === "blocked" && isBlockedStatus(statuses, text(task.document, "status")))
-      || (effectiveSummaryFilter === "overdue" && overdueTaskIds.has(task.document.id)))), [advancedTasks, activeStageIds, effectiveSummaryFilter, milestoneFilter, overdueTaskIds, statusFilter, statuses, text]);
+      || (effectiveSummaryFilter === "overdue" && overdueTaskIds.has(task.document.id)))
+    && (!hideCompleted || effectiveSummaryFilter === "completed" || !isCompletedStatus(statuses, text(task.document, "status")))), [advancedTasks, activeStageIds, effectiveSummaryFilter, hideCompleted, milestoneFilter, overdueTaskIds, statusFilter, statuses, text]);
   const filterActive = effectiveSummaryFilter !== "all" || statusFilter !== "" || countViewConditions(advancedQuery.filter) > 0;
   const visibleStages = (milestoneFilter === "" ? activeStages : activeStages.filter((stage) => stage.document.id === milestoneFilter))
     .filter((stage) => !filterActive || visibleTasks.some((task) => task.document.milestone === stage.document.id));
@@ -393,7 +430,11 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     onNavigate("projects", { projectId, ...(show ? { query: { archive: ["1"] } } : {}) });
   };
   const applyFilters = (status: string, milestone: string, summary: SummaryFilter) => {
-    const nextAdvancedQuery = summary === "overdue" ? withQuickOverdueFilter(advancedQuery) : withoutQuickOverdueFilter(advancedQuery);
+    const nextAdvancedQuery = summary === "overdue"
+      ? withQuickOverdueFilter(advancedQuery)
+      : summary === "completed"
+        ? withoutQuickHideCompletedFilter(withoutQuickOverdueFilter(advancedQuery))
+        : withoutQuickOverdueFilter(advancedQuery);
     setStatusFilter(status);
     setMilestoneFilter(milestone);
     setSummaryFilter(summary === "overdue" ? "all" : summary);
@@ -410,7 +451,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
   const resetFilters = () => { setAdvancedQuery(emptyViewQuery()); setStatusFilter(""); setMilestoneFilter(""); setSummaryFilter("all"); onNavigate("projects", { projectId }); };
   const applyAdvancedQuery = (next: AdvancedViewQuery) => {
     const filterQuery = filterOnlyViewQuery(next);
-    const nextSummaryFilter = hasQuickOverdueFilter(filterQuery) ? "all" : summaryFilter;
+    const nextSummaryFilter = hasQuickOverdueFilter(filterQuery) || (hasQuickHideCompletedFilter(filterQuery) && summaryFilter === "completed") ? "all" : summaryFilter;
     setAdvancedQuery(filterQuery);
     setSummaryFilter(nextSummaryFilter);
     const query = {
@@ -421,6 +462,7 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
     };
     onNavigate("projects", { projectId, ...(Object.keys(query).length > 0 ? { query } : {}) });
   };
+  const toggleHideCompleted = () => applyAdvancedQuery(hideCompleted ? withoutQuickHideCompletedFilter(advancedQuery) : withQuickHideCompletedFilter(advancedQuery));
   const summaryMetricLabel = (value: SummaryFilter): string => value === "completed" ? t("projectPlan.summaryCompleted")
     : value === "active" ? t("projectPlan.summaryActive")
     : value === "blocked" ? t("projectPlan.summaryBlocked")
@@ -683,11 +725,13 @@ export function ProjectPlanWorkspace({ api, draft, locale, projectId, selectedSt
                   <button aria-label={`${t("projectPlan.summaryBlocked")}: ${blockedCount}`} aria-pressed={effectiveSummaryFilter === "blocked"} className="project-plan-summary-metric project-plan-summary-blocked" data-control-hint={t("controlHint.summaryBlocked")} onClick={() => toggleSummary("blocked")} type="button"><span>{t("projectPlan.summaryBlocked")}</span><strong>{blockedCount}</strong></button>
                   <button aria-label={`${t("projectPlan.summaryOverdue")}: ${overdueCount}`} aria-pressed={effectiveSummaryFilter === "overdue"} className="project-plan-summary-metric project-plan-summary-overdue" data-control-hint={t("controlHint.summaryOverdue")} onClick={() => toggleSummary("overdue")} type="button"><span>{t("projectPlan.summaryOverdue")}</span><strong>{overdueCount}</strong></button>
                   <button aria-label={`${t("projectPlan.summaryCompleted")}: ${completedCount}`} aria-pressed={effectiveSummaryFilter === "completed"} className="project-plan-summary-metric" data-control-hint={t("controlHint.summaryCompleted")} onClick={() => toggleSummary("completed")} type="button"><span>{t("projectPlan.summaryCompleted")}</span><strong>{completedCount}</strong></button>
+                  <button aria-pressed={hideCompleted} className="project-plan-hide-completed" data-control-hint={t("controlHint.hideCompleted")} onClick={toggleHideCompleted} type="button">{t("projectPlan.hideCompleted")}</button>
                 </div>}
                 locale={locale}
                 onChange={applyAdvancedQuery}
                 onClear={resetFilters}
                 query={advancedQuery}
+                quickPresets={planTaskPresets}
                 resultCount={visibleTasks.length}
                 t={t}
                 totalCount={currentPlanTasks.length}

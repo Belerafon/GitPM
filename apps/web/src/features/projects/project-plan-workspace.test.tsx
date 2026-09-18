@@ -807,6 +807,8 @@ describe("ProjectPlanWorkspace", () => {
     expect(screen.getByText("Without stage")).toBeTruthy();
     expect(stageCard.querySelector(".project-plan-stage-assignees")?.textContent).toContain("Ada");
     const linkedRow = screen.getByText("Linked task").closest(".project-plan-task-row")!;
+    expect(linkedRow.classList.contains("is-completed")).toBe(true);
+    expect(screen.getByText("Alpha task").closest(".project-plan-task-row")?.classList.contains("is-completed")).toBe(false);
     expect(linkedRow.querySelector(".task-assignees")?.textContent).toBe("Ada");
     expect(linkedRow.closest<HTMLElement>(".project-plan-task-list")?.style.getPropertyValue("--project-plan-task-meta-columns")).toContain("minmax(8rem, clamp(10rem, 16vw, 16rem))");
     expect(linkedRow.querySelector(".project-plan-task-due")?.textContent).toBe("");
@@ -1087,6 +1089,7 @@ describe("ProjectPlanWorkspace", () => {
     const dialog = screen.getByRole("dialog", { name: "Filters" });
     const presets = within(dialog).getByRole("group", { name: "Quick presets" });
     expect(within(presets).getAllByRole("button").map((button) => button.textContent)).toEqual([
+      "Hide completed",
       "Overdue",
       "Unassigned",
       "Without a milestone",
@@ -1286,6 +1289,58 @@ describe("ProjectPlanWorkspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Total tasks: 3" }));
     expect(screen.getByText("Active task")).toBeTruthy();
     expect(screen.getByText("Overdue task")).toBeTruthy();
+  });
+
+  it("hides completed tasks from the toolbar toggle without changing summary counts", async () => {
+    const client = api(summaryTasksFixture(), [summaryStage], summaryProject);
+    const onNavigate = vi.fn();
+    useSummaryStatusConfig(client);
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={onNavigate} projectId={summaryProject.document.id} />);
+
+    await screen.findByRole("heading", { name: "Summary project" });
+    const hide = screen.getByRole("button", { name: "Hide completed" });
+    expect(hide.getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByText("Done task").closest(".project-plan-task-row")?.classList.contains("is-completed")).toBe(true);
+
+    fireEvent.click(hide);
+    expect(hide.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Completed: 1" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Total tasks: 3" })).toBeTruthy();
+    expect(screen.queryByText("Done task")).toBeNull();
+    expect(screen.getByText("Active task")).toBeTruthy();
+    expect(screen.getByText("Overdue task")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Remove filter: Completed hidden" })).toBeTruthy();
+
+    const navigation = onNavigate.mock.calls.at(-1)?.[1] as { readonly query?: Readonly<Record<string, readonly string[]>> };
+    const stored = JSON.parse(navigation.query?.filters?.[0] ?? "{}") as AdvancedViewQuery;
+    expect(stored.filter.children).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "condition", field: "completed", operator: "is-false" }),
+    ]));
+
+    fireEvent.click(hide);
+    expect(hide.getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByText("Done task")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Remove filter: Completed hidden" })).toBeNull();
+  });
+
+  it("uses the same hide-completed state from the drawer preset and the toolbar toggle", async () => {
+    const client = api(summaryTasksFixture(), [summaryStage], summaryProject);
+    useSummaryStatusConfig(client);
+    render(<ProjectPlanWorkspace api={client} draft={draft} locale="en" onChanged={vi.fn(async () => undefined)} onNavigate={vi.fn()} projectId={summaryProject.document.id} />);
+
+    await screen.findByRole("heading", { name: "Summary project" });
+    fireEvent.click(screen.getByRole("button", { name: "Filters" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Filters" })).getByRole("button", { name: "Hide completed" }));
+
+    const hide = screen.getByRole("button", { name: "Hide completed" });
+    expect(hide.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByText("Done task")).toBeNull();
+    expect(screen.getByText("Active task")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Completed: 1" }));
+    expect(hide.getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByText("Done task")).toBeTruthy();
+    expect(screen.queryByText("Active task")).toBeNull();
   });
 
   it("renders the task estimate meta through the localized hours formatter", async () => {

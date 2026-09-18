@@ -144,10 +144,16 @@ function lifecycleFilterLabel<Row>(condition: ViewFilterCondition, field: ViewFi
   if ((condition.operator === "equals" && condition.value === "archived") || (condition.operator === "not-equals" && condition.value === "active")) return t("advancedView.lifecycleArchivedOnly");
   return undefined;
 }
+function completedFilterLabel<Row>(condition: ViewFilterCondition, field: ViewField<Row> | undefined, t: Translator): string | undefined {
+  if (field?.id !== "completed") return undefined;
+  if (condition.operator === "is-false") return t("advancedView.completedHidden");
+  if (condition.operator === "is-true") return t("advancedView.completedOnly");
+  return undefined;
+}
 function conditionChipContent<Row>(condition: ViewFilterCondition, fields: ReadonlyMap<string, ViewField<Row>>, locale: Locale, t: Translator): ReactNode {
   const field = fields.get(condition.field);
-  const lifecycleLabel = lifecycleFilterLabel(condition, field, t);
-  if (lifecycleLabel !== undefined) return <span className="filter-chip-semantic">{lifecycleLabel}</span>;
+  const semanticLabel = lifecycleFilterLabel(condition, field, t) ?? completedFilterLabel(condition, field, t);
+  if (semanticLabel !== undefined) return <span className="filter-chip-semantic">{semanticLabel}</span>;
   const noValue = ["is-empty", "is-not-empty", "is-true", "is-false"].includes(condition.operator);
   const value = optionLabel(field, condition.value ?? "");
   const second = optionLabel(field, condition.valueTo ?? "");
@@ -159,8 +165,8 @@ function conditionChipContent<Row>(condition: ViewFilterCondition, fields: Reado
   </>;
 }
 function conditionLabel<Row>(condition: ViewFilterCondition, fields: ReadonlyMap<string, ViewField<Row>>, locale: Locale, t: Translator): string {
-  const field = fields.get(condition.field); const lifecycleLabel = lifecycleFilterLabel(condition, field, t); const value = optionLabel(field, condition.value ?? ""); const second = optionLabel(field, condition.valueTo ?? "");
-  if (lifecycleLabel !== undefined) return lifecycleLabel;
+  const field = fields.get(condition.field); const semanticLabel = lifecycleFilterLabel(condition, field, t) ?? completedFilterLabel(condition, field, t); const value = optionLabel(field, condition.value ?? ""); const second = optionLabel(field, condition.valueTo ?? "");
+  if (semanticLabel !== undefined) return semanticLabel;
   return `${field?.label ?? condition.field}${condition.operator === "equals" ? ":" : ` ${operatorLabel(condition.operator, t).toLocaleLowerCase(locale)}`}${["is-empty", "is-not-empty", "is-true", "is-false"].includes(condition.operator) ? "" : ` ${value}${condition.operator === "between" ? ` — ${second}` : ""}`}`;
 }
 function operatorLabel(operator: ViewFilterOperator, t: Translator): string { return t(`advancedView.operator.${operator}` as MessageKey); }

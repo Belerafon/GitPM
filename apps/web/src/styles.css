@@ -506,6 +506,9 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .project-plan-summary-metric[aria-pressed="true"] { border-color: #6b9b87; background: #eaf4ee; color: #173f31; }
 .project-plan-summary-overdue[aria-pressed="true"] { border-color: #c97a6a; background: #fbeee9; color: #7a2f1f; }
 .project-plan-summary-blocked[aria-pressed="true"] { border-color: #c79a3e; background: #fbf3e0; color: #6b4f12; }
+.project-plan-hide-completed { display: inline-flex; align-items: center; border: 1px solid #d9ddd6; border-radius: 999px; background: #fff; padding: .3rem .75rem; font-size: .76rem; color: #49524d; cursor: pointer; }
+.project-plan-hide-completed:hover { border-color: #a7c0b5; }
+.project-plan-hide-completed[aria-pressed="true"] { border-color: #6b9b87; background: #eaf4ee; color: #173f31; }
 .project-schedule-summary dl { display: flex; flex-wrap: wrap; gap: 1.25rem; margin: 0; }
 .project-schedule-summary dt { font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; color: #647068; }
 .project-schedule-summary dd { margin: 0; font-weight: 600; }
@@ -651,6 +654,12 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .project-plan-task-list { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: .65rem; margin: 0 .8rem .7rem; }
 .project-plan-task-row { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; gap: .25rem; align-items: center; width: 100%; border: 0; border-top: 1px solid #e5e7e1; border-left: 3px solid transparent; border-radius: 0; background: transparent; padding: .48rem .4rem .48rem .2rem; text-align: left; }
 .project-plan-task-row.filter-context { opacity: .7; }
+.project-plan-task-row.is-completed { background: #eef4f0; border-left-color: #8fb89a; }
+.project-plan-task-row.is-completed .project-plan-task-selector strong { color: #5a6861; text-decoration: line-through; text-decoration-color: #8aa396; }
+.project-plan-task-row.is-completed .inline-status-select, .project-plan-task-row.is-completed .state.open { border-color: #5f9a78; background: #2f6b52; color: #f4faf6; }
+.project-plan-task-row.is-completed .inline-status-select:hover:not(:disabled) { border-color: #4d8668; background: #275c46; }
+.project-plan-task-row.is-completed:hover:not(:disabled) { background: #e6efe9; }
+.project-plan-task-row.is-completed.selected { background: #e3eee8; }
 .project-plan-task-tree { position: relative; align-self: stretch; width: var(--task-tree-width, 0); margin-block: -.48rem; }
 .project-plan-task-tree::after, .project-plan-task-ancestor-rail, .project-plan-task-branch::before, .project-plan-task-branch::after { position: absolute; z-index: 0; display: block; content: ""; background: #b9cec4; pointer-events: none; }
 .project-plan-task-tree.has-visible-children::after { top: 50%; bottom: 0; left: calc(100% - .4rem); width: 1px; }
