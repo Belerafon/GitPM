@@ -190,8 +190,13 @@ describe("read-only Gantt", () => {
     expect(container.querySelector('[data-date="2026-12-31"]')).not.toBeNull();
     expect(container.querySelector<HTMLElement>('[data-date="2026-07-02"]')?.title).toContain("200 h");
     expect(listProjectTimeEntries.mock.calls.map((call) => call[2]?.offset)).toEqual([0, 200]);
-    expect(within(screen.getByRole("combobox", { name: "Primary track" })).getAllByRole("option").map((option) => option.textContent)).toEqual(["Plan", "Target"]);
-    expect(within(screen.getByRole("combobox", { name: "Dependency track" })).getAllByRole("option").map((option) => option.textContent)).toEqual(["Links"]);
+    const primarySelect = screen.getByRole("combobox", { name: "Primary track" });
+    const dependencySelect = screen.getByRole("combobox", { name: "Dependency track" });
+    expect(within(primarySelect).getAllByRole("option").map((option) => option.textContent)).toEqual(["Plan", "Target"]);
+    expect(within(dependencySelect).getAllByRole("option").map((option) => option.textContent)).toEqual(["Links"]);
+    expect(document.getElementById(primarySelect.getAttribute("aria-describedby")!)?.textContent).toBe("The large green task bar and milestone dates use this track.");
+    expect(document.getElementById(dependencySelect.getAttribute("aria-describedby")!)?.textContent).toBe("The arrows between tasks use the links saved in this track.");
+    expect(screen.getByText("Shown as thin blue bars below the primary bar so you can compare dates.")).toBeTruthy();
     expect(screen.queryByText("Effort only")).toBeNull();
     expect(screen.getByText(/Track titles come from repository settings/u)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Open plan and actual-work settings" }));
@@ -226,6 +231,9 @@ describe("read-only Gantt", () => {
     render(<GanttWorkspace api={api} draft={draft} locale="ru" onNavigate={onNavigate} />);
     await waitFor(() => expect(screen.getByRole("combobox", { name: "Основной вариант расписания" })).toBeTruthy());
     expect(screen.getByText("Working plan", { selector: "option" })).toBeTruthy();
+    expect(screen.getByText("Большая зелёная полоса задачи и даты этапов берутся из этого варианта.")).toBeTruthy();
+    expect(screen.getByText("Показываются тонкими синими полосами под основной — так можно сравнить сроки.")).toBeTruthy();
+    expect(screen.queryByText("Стрелки между задачами строятся по связям из этого варианта.")).toBeNull();
     expect(screen.getByText(/Названия вариантов расписания берутся из настроек репозитория/u)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Открыть настройки планов и фактической работы" }));
     expect(onNavigate).toHaveBeenCalledWith("settings", { query: { section: ["planning"] } });
