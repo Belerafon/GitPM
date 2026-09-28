@@ -7,6 +7,7 @@ import type { DraftManager } from "@gitpm/drafts";
 import { resolveDomainPath, SecurityBoundaryError } from "@gitpm/security";
 import { HTTP_REQUEST_BODY_SCHEMAS } from "@gitpm/contracts";
 import type { Authenticate, RequestActor } from "./draft-api.js";
+import { requireDraftMutationOwner } from "./draft-access.js";
 
 const MAX_TEXT_FILE_BYTES = 1_048_576;
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
@@ -339,8 +340,9 @@ export function registerWorktreeApi(app: FastifyInstance, manager: DraftManager,
     async (request) => {
       const actor = await authenticate(request);
       requireMutationActor(actor);
+      const ownerId = await requireDraftMutationOwner(manager, actor, request.params.draftId);
       const relativePath = requestedPath(request.body.path, false);
-      const outcome = await manager.withUiMutation(request.params.draftId, actor.userId, request.body.expected_fingerprint, async (metadata) => {
+      const outcome = await manager.withUiMutation(request.params.draftId, ownerId, request.body.expected_fingerprint, async (metadata) => {
         const target = await safeTarget(metadata.worktree_path, relativePath);
         await assertExists(target);
         const parents = await snapshotParents([target]);
@@ -359,8 +361,9 @@ export function registerWorktreeApi(app: FastifyInstance, manager: DraftManager,
     async (request, reply) => {
       const actor = await authenticate(request);
       requireMutationActor(actor);
+      const ownerId = await requireDraftMutationOwner(manager, actor, request.params.draftId);
       const relativePath = requestedPath(request.body.path, false);
-      const outcome = await manager.withUiMutation(request.params.draftId, actor.userId, request.body.expected_fingerprint, async (metadata) => {
+      const outcome = await manager.withUiMutation(request.params.draftId, ownerId, request.body.expected_fingerprint, async (metadata) => {
         const target = await safeTarget(metadata.worktree_path, relativePath);
         await assertAbsent(target);
         const parents = await snapshotParents([target]);
@@ -380,9 +383,10 @@ export function registerWorktreeApi(app: FastifyInstance, manager: DraftManager,
     async (request, reply) => {
       const actor = await authenticate(request);
       requireMutationActor(actor);
+      const ownerId = await requireDraftMutationOwner(manager, actor, request.params.draftId);
       const relativePath = requestedPath(request.body.path, false);
       const bytes = decodeUpload(request.body.content_base64);
-      const outcome = await manager.withUiMutation(request.params.draftId, actor.userId, request.body.expected_fingerprint, async (metadata) => {
+      const outcome = await manager.withUiMutation(request.params.draftId, ownerId, request.body.expected_fingerprint, async (metadata) => {
         const target = await safeTarget(metadata.worktree_path, relativePath);
         await atomicWriteBytes(target, bytes);
         return { path: relativePath, size: bytes.byteLength };
@@ -397,9 +401,10 @@ export function registerWorktreeApi(app: FastifyInstance, manager: DraftManager,
     async (request) => {
       const actor = await authenticate(request);
       requireMutationActor(actor);
+      const ownerId = await requireDraftMutationOwner(manager, actor, request.params.draftId);
       const fromPath = requestedPath(request.body.from, false);
       const toPath = requestedPath(request.body.to, false);
-      const outcome = await manager.withUiMutation(request.params.draftId, actor.userId, request.body.expected_fingerprint, async (metadata) => {
+      const outcome = await manager.withUiMutation(request.params.draftId, ownerId, request.body.expected_fingerprint, async (metadata) => {
         const from = await safeTarget(metadata.worktree_path, fromPath);
         const to = await safeTarget(metadata.worktree_path, toPath);
         await assertExists(from);

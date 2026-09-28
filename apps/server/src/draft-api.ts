@@ -29,6 +29,9 @@ import { ExportError } from "@gitpm/export";
 import { buildWorkloadReport, type WorkloadEntityDocument } from "@gitpm/workload";
 import { DEFAULT_PERSON_NAME_FORMAT, isPersonNameFormat } from "@gitpm/shared";
 import { MemoryNotificationReadStore, type NotificationReadStore } from "./notification-read-store.js";
+import { canAccessDraft, requireDraftMutationOwner, requireDraftRead, workspaceOwnerId } from "./draft-access.js";
+
+export { requireDraftRead } from "./draft-access.js";
 
 export type ProjectRole = "Reporter" | "Developer" | "Maintainer";
 
@@ -90,9 +93,9 @@ function requireWorktreeDraftOperation(manager: DraftManager): void {
   }
 }
 
-function asCommentActor(actor: RequestActor): CommentActor {
+function asCommentActor(actor: RequestActor, ownerId: string): CommentActor {
   return {
-    userId: actor.userId,
+    userId: ownerId,
     role: actor.role,
     identity: {
       provider: actor.provider ?? "gitlab",
@@ -105,9 +108,9 @@ function asCommentActor(actor: RequestActor): CommentActor {
   };
 }
 
-function asTimeEntryActor(actor: RequestActor): TimeEntryActor {
+function asTimeEntryActor(actor: RequestActor, ownerId: string): TimeEntryActor {
   return {
-    userId: actor.userId,
+    userId: ownerId,
     identity: {
       provider: actor.provider ?? "gitlab",
       ...(actor.instance === undefined ? {} : { instance: actor.instance }),
@@ -122,22 +125,6 @@ function requireEntityMutationRole(actor: RequestActor, entityType: string): voi
   if (["people", "teams", "calendars", "availability-events"].includes(entityType) && actor.role !== "Maintainer") {
     throw new DraftRuntimeError("DRAFT_FORBIDDEN", "Administrative mutation requires Maintainer");
   }
-}
-
-function canAccessDraft(manager: DraftManager, actor: RequestActor, metadata: DraftMetadata): boolean {
-  return manager.repositoryMode === "direct" || metadata.owner_gitlab_user_id === actor.userId;
-}
-
-function workspaceOwnerId(manager: DraftManager, actor: RequestActor, metadata: DraftMetadata): string {
-  return manager.repositoryMode === "direct" ? metadata.owner_gitlab_user_id : actor.userId;
-}
-
-export async function requireDraftRead(manager: DraftManager, actor: RequestActor, draftId: string): Promise<DraftMetadata> {
-  const metadata = await manager.getDraft(draftId);
-  if (!canAccessDraft(manager, actor, metadata)) {
-    throw new DraftRuntimeError("DRAFT_FORBIDDEN", "Draft owner mismatch");
-  }
-  return metadata;
 }
 
 function statusFor(error: DraftRuntimeError): number {
@@ -310,7 +297,8 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
   app.post<{ Params: { draftId: string } }>("/api/drafts/:draftId/acknowledge-external-changes", async (request) => {
     const actor = await authenticate(request);
     requireMutationRole(actor);
-    return await publicMetadata(manager, await manager.acknowledgeExternalChanges(request.params.draftId, actor.userId));
+    const ownerId = await requireDraftMutationOwner(manager, actor, request.params.draftId);
+    return await publicMetadata(manager, await manager.acknowledgeExternalChanges(request.params.draftId, ownerId));
   });
 
   app.post<{ Params: { draftId: string } }>("/api/drafts/:draftId/close", async (request) => {
@@ -354,7 +342,7 @@ export function registerCommentApi(
     async (request) => {
       const actor = await authenticate(request);
       await requireDraftRead(manager, actor, request.params.draftId);
-      return await comments.list(request.params.draftId, request.params.projectId, request.params.taskId, asCommentActor(actor));
+      return await comments.list(request.params.draftId, request.params.projectId, request.params.taskId, asCommentActor(actor, actor.userId));
     },
   );
 
@@ -364,7 +352,8 @@ export function registerCommentApi(
     async (request, reply) => {
       const actor = await authenticate(request);
       requireMutationRole(actor);
-      const result = await comments.create(request.params.draftId, request.params.projectId, request.params.taskId, request.body.expected_fingerprint, request.body.body_markdown, asCommentActor(actor));
+      const ownerId = await requireDraftMutationOwner(manager, actor, request.params.draftId);
+      const result = await comments.create(request.params.draftId, request.params.projectId, request.params.taskId, request.body.expected_fingerprint, request.body.body_markdown, asCommentActor(actor, ownerId));
       await reply.code(201).send(result);
     },
   );
@@ -375,7 +364,8 @@ export function registerCommentApi(
     async (request) => {
       const actor = await authenticate(request);
       requireMutationRole(actor);
-      return await comments.update(request.params.draftId, request.params.projectId, request.params.taskId, request.params.commentId, request.body.expected_fingerprint, request.body.expected_blob_id, request.body.body_markdown, asCommentActor(actor));
+      const ownerId = await requireDraftMutationOwner(manager, actor, request.params.draftId);
+      return await comments.update(request.params.draftId, request.params.projectId, request.params.taskId, request.params.commentId, request.body.expected_fingerprint, request.body.expected_blob_id, request.body.body_markdown, asCommentActor(actor, ownerId));
     },
   );
 
@@ -385,14 +375,15 @@ export function registerCommentApi(
     async (request) => {
       const actor = await authenticate(request);
       requireMutationRole(actor);
-      return await comments.delete(request.params.draftId, request.params.projectId, request.params.taskId, request.params.commentId, request.body.expected_fingerprint, request.body.expected_blob_id, asCommentActor(actor));
+      const ownerId = await requireDraftMutationOwner(manager, actor, request.params.draftId);
+      return await comments.delete(request.params.draftId, request.params.projectId, request.params.taskId, request.params.commentId, request.body.expected_fingerprint, request.body.expected_blob_id, asCommentActor(actor, ownerId));
     },
   );
 
   app.get<{ Params: { draftId: string } }>("/api/drafts/:draftId/notifications", async (request) => {
     const actor = await authenticate(request);
     await requireDraftRead(manager, actor, request.params.draftId);
-    return await withReadState(await comments.notifications(request.params.draftId, asCommentActor(actor)));
+    return await withReadState(await comments.notifications(request.params.draftId, asCommentActor(actor, actor.userId)));
   });
 
   app.post<{ Params: { draftId: string }; Body: { keys: string[] } }>(
@@ -401,7 +392,7 @@ export function registerCommentApi(
     async (request) => {
       const actor = await authenticate(request);
       await requireDraftRead(manager, actor, request.params.draftId);
-      const result = await comments.notifications(request.params.draftId, asCommentActor(actor));
+      const result = await comments.notifications(request.params.draftId, asCommentActor(actor, actor.userId));
       if (result.recipient_person_id === undefined) return result;
       const visibleKeys = new Set(result.items.map((item) => item.key));
       const keys = [...new Set(request.body.keys)].filter((key) => visibleKeys.has(key));
@@ -463,13 +454,14 @@ export function registerTimeEntryApi(
     async (request, reply) => {
       const actor = await authenticate(request);
       requireMutationRole(actor);
+      const ownerId = await requireDraftMutationOwner(manager, actor, request.params.draftId);
       const result = await timeEntries.create(request.params.draftId, request.params.projectId, request.params.taskId, request.body.expected_fingerprint, {
         person: request.body.person,
         performed_on: request.body.performed_on,
         hours: request.body.hours,
         category: request.body.category,
         ...(request.body.note_markdown === undefined ? {} : { note_markdown: request.body.note_markdown }),
-      }, asTimeEntryActor(actor));
+      }, asTimeEntryActor(actor, ownerId));
       await reply.code(201).send(result);
     },
   );
@@ -480,7 +472,8 @@ export function registerTimeEntryApi(
     async (request) => {
       const actor = await authenticate(request);
       requireMutationRole(actor);
-      return await timeEntries.void(request.params.draftId, request.params.projectId, request.params.taskId, request.params.entryId, request.body.expected_fingerprint, request.body.expected_blob_id, asTimeEntryActor(actor), request.body.replacement);
+      const ownerId = await requireDraftMutationOwner(manager, actor, request.params.draftId);
+      return await timeEntries.void(request.params.draftId, request.params.projectId, request.params.taskId, request.params.entryId, request.body.expected_fingerprint, request.body.expected_blob_id, asTimeEntryActor(actor, ownerId), request.body.replacement);
     },
   );
 
@@ -490,13 +483,14 @@ export function registerTimeEntryApi(
     async (request) => {
       const actor = await authenticate(request);
       requireMutationRole(actor);
+      const ownerId = await requireDraftMutationOwner(manager, actor, request.params.draftId);
       return await timeEntries.replace(request.params.draftId, request.params.projectId, request.params.taskId, request.params.entryId, request.body.expected_fingerprint, request.body.expected_blob_id, {
         person: request.body.person,
         performed_on: request.body.performed_on,
         hours: request.body.hours,
         category: request.body.category,
         ...(request.body.note_markdown === undefined ? {} : { note_markdown: request.body.note_markdown }),
-      }, asTimeEntryActor(actor));
+      }, asTimeEntryActor(actor, ownerId));
     },
   );
 }
@@ -606,7 +600,8 @@ export function registerChangesApi(
     async (request) => {
       const actor = await authenticate(request);
       requireMutationRole(actor);
-      return await changes.restoreFile(request.params.draftId, actor.userId, request.body.expected_fingerprint, request.body.path);
+      const ownerId = await requireDraftMutationOwner(manager, actor, request.params.draftId);
+      return await changes.restoreFile(request.params.draftId, ownerId, request.body.expected_fingerprint, request.body.path);
     },
   );
 
@@ -616,9 +611,10 @@ export function registerChangesApi(
     async (request) => {
       const actor = await authenticate(request);
       requireMutationRole(actor);
+      const ownerId = await requireDraftMutationOwner(manager, actor, request.params.draftId);
       return await changes.restoreHunk(
         request.params.draftId,
-        actor.userId,
+        ownerId,
         request.body.expected_fingerprint,
         request.body.path,
         request.body.diff_token,
@@ -633,7 +629,8 @@ export function registerChangesApi(
     async (request) => {
       const actor = await authenticate(request);
       requireMutationRole(actor);
-      return await changes.discardAll(request.params.draftId, actor.userId, request.body.expected_fingerprint);
+      const ownerId = await requireDraftMutationOwner(manager, actor, request.params.draftId);
+      return await changes.discardAll(request.params.draftId, ownerId, request.body.expected_fingerprint);
     },
   );
 }
@@ -751,7 +748,8 @@ export function registerEntityApi(
       const actor = await authenticate(request);
       requireEntityMutationRole(actor, request.params.entityType);
       assertEntityType(request.params.entityType, repositoryDocument(request.body.document));
-      const result = await store.create(request.params.draftId, actor.userId, request.body.expected_fingerprint, repositoryInput(request.body.document), request.params.entityType);
+      const ownerId = await requireDraftMutationOwner(manager, actor, request.params.draftId);
+      const result = await store.create(request.params.draftId, ownerId, request.body.expected_fingerprint, repositoryInput(request.body.document), request.params.entityType);
       await reply.code(201).send(result);
     },
   );
@@ -765,9 +763,10 @@ export function registerEntityApi(
     async (request) => {
       const actor = await authenticate(request);
       requireEntityMutationRole(actor, request.params.entityType);
+      const ownerId = await requireDraftMutationOwner(manager, actor, request.params.draftId);
       return await store.update(
         request.params.draftId,
-        actor.userId,
+        ownerId,
         request.params.entityType,
         request.params.id,
         request.body.expected_fingerprint,
@@ -783,9 +782,10 @@ export function registerEntityApi(
     async (request) => {
       const actor = await authenticate(request);
       requireEntityMutationRole(actor, request.params.entityType);
+      const ownerId = await requireDraftMutationOwner(manager, actor, request.params.draftId);
       return await store.archive(
         request.params.draftId,
-        actor.userId,
+        ownerId,
         request.params.entityType,
         request.params.id,
         request.body.expected_fingerprint,
@@ -801,9 +801,10 @@ export function registerEntityApi(
     async (request) => {
       const actor = await authenticate(request);
       requireEntityMutationRole(actor, request.params.entityType);
+      const ownerId = await requireDraftMutationOwner(manager, actor, request.params.draftId);
       return await store.restore(
         request.params.draftId,
-        actor.userId,
+        ownerId,
         request.params.entityType,
         request.params.id,
         request.body.expected_fingerprint,
@@ -819,9 +820,10 @@ export function registerEntityApi(
     async (request) => {
       const actor = await authenticate(request);
       requireEntityMutationRole(actor, "tasks");
+      const ownerId = await requireDraftMutationOwner(manager, actor, request.params.draftId);
       return await store.moveTask(
         request.params.draftId,
-        actor.userId,
+        ownerId,
         request.params.id,
         request.body.expected_fingerprint,
         request.body.expected_blob_id,
@@ -838,9 +840,10 @@ export function registerEntityApi(
     async (request) => {
       const actor = await authenticate(request);
       requireEntityMutationRole(actor, request.params.entityType);
+      const ownerId = await requireDraftMutationOwner(manager, actor, request.params.draftId);
       return await store.delete(
         request.params.draftId,
-        actor.userId,
+        ownerId,
         request.params.entityType,
         request.params.id,
         request.body.expected_fingerprint,
@@ -888,9 +891,10 @@ export function registerEntityApi(
     async (request) => {
       const actor = await authenticate(request);
       if (actor.role !== "Maintainer") throw new DraftRuntimeError("DRAFT_FORBIDDEN", "Repository configuration mutation requires Maintainer");
+      const ownerId = await requireDraftMutationOwner(manager, actor, request.params.draftId);
       return await store.updateRepositoryConfiguration(
         request.params.draftId,
-        actor.userId,
+        ownerId,
         request.body.expected_fingerprint,
         request.body.expected_blob_id,
         repositoryDocument(request.body.document),
@@ -920,9 +924,10 @@ export function registerEntityApi(
     async (request) => {
       const actor = await authenticate(request);
       if (actor.role !== "Maintainer") throw new DraftRuntimeError("DRAFT_FORBIDDEN", "Configuration mutation requires Maintainer");
+      const ownerId = await requireDraftMutationOwner(manager, actor, request.params.draftId);
       return await store.updateConfiguration(
         request.params.draftId,
-        actor.userId,
+        ownerId,
         request.params.kind,
         request.body.expected_fingerprint,
         request.body.expected_blob_id,

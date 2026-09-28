@@ -8,7 +8,7 @@ import {
 import type { DraftManager } from "@gitpm/drafts";
 import { ProjectFileOperationError, type ProjectFileStore } from "@gitpm/domain";
 import type { Authenticate } from "./draft-api.js";
-import { requireDraftRead } from "./draft-api.js";
+import { requireDraftMutationOwner, requireDraftRead } from "./draft-access.js";
 
 const FILE_NAME_HEADER = "x-gitpm-file-name";
 const UPLOAD_SIZE_HEADER = "x-gitpm-upload-size";
@@ -156,7 +156,8 @@ export function registerProjectFilesApi(
         if (referenceMode !== undefined && referenceMode !== "preserve_checked" && referenceMode !== "ignore_unchecked") {
           throw new ProjectFileOperationError("PROJECT_FILE_REFERENCES_UNSUPPORTED", "Project file upload reference mode is unsupported");
         }
-        const result = await files.upload(request.params.draftId, actor.userId, request.params.projectId, expectedFingerprint, {
+        const ownerId = await requireDraftMutationOwner(manager, actor, request.params.draftId);
+        const result = await files.upload(request.params.draftId, ownerId, request.params.projectId, expectedFingerprint, {
           name,
           sizeBytes,
           mode,
@@ -188,9 +189,10 @@ export function registerProjectFilesApi(
         if (request.headers["content-encoding"] !== undefined) {
           throw new ProjectFileOperationError("PROJECT_FILE_UPLOAD_METADATA_INVALID", "Content-Encoding is not supported for Project file replacements");
         }
+        const ownerId = await requireDraftMutationOwner(manager, actor, request.params.draftId);
         const result = await files.replace(
           request.params.draftId,
-          actor.userId,
+          ownerId,
           request.params.projectId,
           request.params.fileName,
           singleHeader(request, EXPECTED_FINGERPRINT_HEADER)!,
@@ -218,9 +220,10 @@ export function registerProjectFilesApi(
     async (request) => {
       const actor = await authenticate(request);
       requireMutationRole(actor.role);
+      const ownerId = await requireDraftMutationOwner(manager, actor, request.params.draftId);
       return await files.rename(
         request.params.draftId,
-        actor.userId,
+        ownerId,
         request.params.projectId,
         request.params.fileName,
         request.body.expected_fingerprint,
@@ -239,9 +242,10 @@ export function registerProjectFilesApi(
     async (request) => {
       const actor = await authenticate(request);
       requireMutationRole(actor.role);
+      const ownerId = await requireDraftMutationOwner(manager, actor, request.params.draftId);
       return await files.delete(
         request.params.draftId,
-        actor.userId,
+        ownerId,
         request.params.projectId,
         request.params.fileName,
         request.body.expected_fingerprint,

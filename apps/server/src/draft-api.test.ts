@@ -129,6 +129,106 @@ describe("draft lifecycle API", () => {
     expect(read.json()).toMatchObject({ draft_id: "DRF-LOCAL", owner_gitlab_user_id: "local-user" });
   });
 
+  it("lets a GitLab member create tasks in the shared direct checkout owned by local-user", async () => {
+    const shared = {
+      ...metadata,
+      draft_id: "DRF-LOCAL",
+      owner_gitlab_user_id: "local-user",
+      branch: "main",
+    };
+    const draftManager = manager({
+      repositoryMode: "direct",
+      getDraft: vi.fn(async () => shared),
+    });
+    const entityStore = {
+      create: vi.fn(async () => ({
+        document: { schema: "gitpm/task@2", id: "T-26-FM5Q4W" },
+        path: "projects/P-26-MGP84K/tasks/T-26-FM5Q4W/task.yaml",
+        blob_id: "d".repeat(40),
+        draft_fingerprint: shared.fingerprint,
+      })),
+    } as unknown as EntityStore;
+    const app = buildApp({ authenticate: () => ({ userId: "42", role: "Developer", provider: "gitlab" }), draftManager, entityStore });
+    apps.push(app);
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/drafts/DRF-LOCAL/entities/tasks",
+      payload: { expected_fingerprint: shared.fingerprint, document: { schema: "gitpm/task@2", id: "T-26-FM5Q4W", project: "P-26-Y9S1D8", title: "Shared checkout task", type: "task", status: "backlog", lifecycle: "active" } },
+    });
+    expect(response.statusCode).toBe(201);
+    expect(entityStore.create).toHaveBeenCalledWith("DRF-LOCAL", "local-user", shared.fingerprint, expect.anything(), "tasks");
+  });
+
+  it("records shared direct checkout comments under the workspace owner with the acting identity", async () => {
+    const shared = {
+      ...metadata,
+      draft_id: "DRF-LOCAL",
+      owner_gitlab_user_id: "local-user",
+      branch: "main",
+    };
+    const draftManager = manager({
+      repositoryMode: "direct",
+      getDraft: vi.fn(async () => shared),
+    });
+    const commentStore = {
+      create: vi.fn(async () => ({ document: {}, path: "projects/P-26-MGP84K/comments/T-26-FM5Q4W/C-26-AAAAAA.yaml", blob_id: "e".repeat(40), draft_fingerprint: shared.fingerprint, can_edit: true, can_delete: true })),
+    } as unknown as CommentStore;
+    const app = buildApp({ authenticate: () => ({ userId: "42", role: "Developer", provider: "gitlab", displayName: "Ada" }), draftManager, commentStore });
+    apps.push(app);
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/drafts/DRF-LOCAL/projects/P-26-MGP84K/tasks/T-26-FM5Q4W/comments",
+      payload: { expected_fingerprint: shared.fingerprint, body_markdown: "Hello" },
+    });
+    expect(response.statusCode).toBe(201);
+    expect(commentStore.create).toHaveBeenCalledWith(
+      "DRF-LOCAL",
+      "P-26-MGP84K",
+      "T-26-FM5Q4W",
+      shared.fingerprint,
+      "Hello",
+      expect.objectContaining({ userId: "local-user", identity: expect.objectContaining({ subject: "42" }) }),
+    );
+  });
+
+  it("acknowledges external changes on the shared direct checkout for any GitLab member", async () => {
+    const shared = {
+      ...metadata,
+      draft_id: "DRF-LOCAL",
+      owner_gitlab_user_id: "local-user",
+      branch: "main",
+    };
+    const acknowledgeExternalChanges = vi.fn(async () => shared);
+    const draftManager = manager({
+      repositoryMode: "direct",
+      getDraft: vi.fn(async () => shared),
+      acknowledgeExternalChanges,
+    });
+    const app = appFor({ userId: "42", role: "Developer", provider: "gitlab" }, draftManager);
+    const response = await app.inject({ method: "POST", url: "/api/drafts/DRF-LOCAL/acknowledge-external-changes" });
+    expect(response.statusCode).toBe(200);
+    expect(acknowledgeExternalChanges).toHaveBeenCalledWith("DRF-LOCAL", "local-user");
+  });
+
+  it("keeps worktree draft mutations restricted to the draft owner", async () => {
+    const foreign = { ...metadata, draft_id: "DRF-OTHER", owner_gitlab_user_id: "99" };
+    const draftManager = manager({
+      repositoryMode: "worktree",
+      getDraft: vi.fn(async () => foreign),
+    });
+    const entityStore = { create: vi.fn() } as unknown as EntityStore;
+    const app = buildApp({ authenticate: () => ({ userId: "42", role: "Developer", provider: "gitlab" }), draftManager, entityStore });
+    apps.push(app);
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/drafts/DRF-OTHER/entities/tasks",
+      payload: { expected_fingerprint: foreign.fingerprint, document: { schema: "gitpm/task@2", id: "T-26-FM5Q4W", project: "P-26-Y9S1D8", title: "Foreign task", type: "task", status: "backlog", lifecycle: "active" } },
+    });
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toMatchObject({ error: { code: "DRAFT_FORBIDDEN", message: "Draft owner mismatch" } });
+    expect(entityStore.create).not.toHaveBeenCalled();
+  });
+
   it("rejects mutation for a read-only role with a stable error", async () => {
     const app = appFor({ userId: "42", role: "Reporter" });
     const response = await app.inject({

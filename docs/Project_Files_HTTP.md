@@ -259,7 +259,7 @@ transient-записей. Ответ и серверный журнал не р�
 | 400 | `PROJECT_FILE_NAME_INVALID` | Имя не является допустимым одним файловым сегментом. |
 | 400 | `PROJECT_FILE_UPLOAD_METADATA_INVALID` | Обязательный заголовок загрузки отсутствует, повреждён или имеет недопустимое значение. |
 | 400 | `PROJECT_FILE_UPLOAD_SIZE_MISMATCH` | Фактический размер потока отличается от объявленного. |
-| 403 | `DRAFT_FORBIDDEN` | Draft принадлежит другому пользователю. |
+| 403 | `DRAFT_FORBIDDEN` | Worktree-draft принадлежит другому пользователю; в direct-режиме общий checkout доступен всем участникам и эта ошибка на мутациях не возникает. |
 | 403 | `PROJECT_FILE_PATH_FORBIDDEN` | Путь содержит symlink, покидает границу Project или не может быть безопасно прочитан. |
 | 404 | `ENTITY_NOT_FOUND` | Project отсутствует в текущем draft. |
 | 404 | `PROJECT_FILE_NOT_FOUND` | Файл отсутствует в текущем Project. |
