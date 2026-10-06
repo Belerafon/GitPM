@@ -124,7 +124,7 @@ export function registerAuthApi(
     if (!user.email) {
       throw new AuthError(
         "GITLAB_PUBLIC_EMAIL_REQUIRED",
-        "Configure a Public email in your GitLab profile before creating a commit",
+        "Configure a Commit email or Public email in your GitLab profile before creating a commit",
       );
     }
     if (!user.name.trim()) {

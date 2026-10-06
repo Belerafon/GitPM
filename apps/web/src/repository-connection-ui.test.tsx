@@ -127,6 +127,7 @@ describe("RepositoryConnectionSettings", () => {
     }));
     render(<RepositoryConnectionSettings api={api} locale="en" maintainer={true} />);
     expect(await screen.findByText(/GitLab sign-in is required before the UI opens/)).toBeTruthy();
+    expect(screen.getByText(/selected Commit email, falling back to Public email/)).toBeTruthy();
     expect(screen.getByText(/Push uses your OAuth token/)).toBeTruthy();
   });
 

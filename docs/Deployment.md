@@ -109,9 +109,10 @@ the whole HTTP API. The web UI in that profile lets the local Maintainer browse
 and edit without GitLab login; GitLab sign-in is requested only for push and
 Merge Requests. `oauth-identity-user-token` is the authenticated-direct profile:
 GitLab login is required before the UI opens, commits use the OAuth user's name
-and Public email, and push uses that user's `write_repository` token on the one
-shared checkout. It does not isolate concurrent writers. The authenticated
-multi-user profile requires worktree mode and
+and selected Commit email (or Public email when unavailable), and push uses that
+user's `write_repository` token on the one shared checkout. It does not isolate
+concurrent writers. The authenticated multi-user profile requires worktree mode
+and
 `GITPM_GITLAB_AUTH_MODE=oauth-identity-project-token`, as described below.
 
 ## Multi-user GitLab authentication
@@ -154,9 +155,11 @@ changed through HTTP.
 Reporter sessions are read-only. Developer and Maintainer sessions may mutate
 data and publish their own drafts. Role membership is checked again through the
 Project Access Token before every mutation, commit, push, and Merge Request.
-Each commit uses the OAuth user's GitLab name and Public email for both author
-and committer without modifying Git config. A missing Public email blocks the
-commit until the user configures one in GitLab.
+Each commit uses the OAuth user's GitLab name and selected Commit email for both
+author and committer, falling back to Public email when Commit email is
+unavailable.
+Neither address is replaced with the account's primary email. When both are
+unavailable, the commit is blocked without modifying Git config.
 
 GitLab records the Project Access Token bot as the pusher and Merge Request
 creator; the Git commit itself records the initiating user. GitPM adds
@@ -179,7 +182,8 @@ GITPM_PUSH_REMOTE_URL=https://gitlab.example/group/portfolio.git
 
 The OAuth application needs `api` and `write_repository`. There is no Project
 Access Token. GitLab records the signed-in user as the pusher; the Git commit
-records the same profile's name and Public email. The selected checkout remains
+records the same profile's name and selected Commit email, or its Public email
+when Commit email is unavailable. The selected checkout remains
 a shared workspace owned by `local-user`. Parallel editing is still unsupported.
 
 The older `user-oauth-publication` mode remains available as a separate

@@ -217,6 +217,60 @@ describe("GitLab HTTP protocol", () => {
     expect(requests.map((request) => request.url).join(" ")).not.toContain("secret-token");
   });
 
+  it("uses the selected GitLab commit email without exposing the primary email", async () => {
+    const fetchImplementation = vi.fn(async () => new Response(JSON.stringify({
+      id: 42,
+      username: "developer",
+      name: "Dev User",
+      email: "private@example.test",
+      public_email: "public@example.test",
+      commit_email: "42-developer@users.noreply.gitlab.example.test",
+    }), { status: 200 }));
+    const protocol = new GitLabHttpProtocol({ baseUrl: "https://gitlab.example.test", clientId: "client", project: "group/project", fetch: fetchImplementation as typeof fetch });
+
+    expect((await protocol.currentUser("token")).email).toBe("42-developer@users.noreply.gitlab.example.test");
+  });
+
+  it("uses the selected commit email when the GitLab profile has no Public email", async () => {
+    const fetchImplementation = vi.fn(async () => new Response(JSON.stringify({
+      id: 42,
+      username: "developer",
+      name: "Dev User",
+      email: "private@example.test",
+      public_email: null,
+      commit_email: "42-developer@users.noreply.gitlab.example.test",
+    }), { status: 200 }));
+    const protocol = new GitLabHttpProtocol({ baseUrl: "https://gitlab.example.test", clientId: "client", project: "group/project", fetch: fetchImplementation as typeof fetch });
+
+    expect((await protocol.currentUser("token")).email).toBe("42-developer@users.noreply.gitlab.example.test");
+  });
+
+  it("uses the Public email when GitLab does not return a commit email", async () => {
+    const fetchImplementation = vi.fn(async () => new Response(JSON.stringify({
+      id: 42,
+      username: "developer",
+      name: "Dev User",
+      email: "private@example.test",
+      public_email: "public@example.test",
+    }), { status: 200 }));
+    const protocol = new GitLabHttpProtocol({ baseUrl: "https://gitlab.example.test", clientId: "client", project: "group/project", fetch: fetchImplementation as typeof fetch });
+
+    expect((await protocol.currentUser("token")).email).toBe("public@example.test");
+  });
+
+  it("does not put the primary email in commits when neither GitLab commit nor Public email is available", async () => {
+    const fetchImplementation = vi.fn(async () => new Response(JSON.stringify({
+      id: 42,
+      username: "developer",
+      name: "Dev User",
+      email: "private@example.test",
+      public_email: null,
+    }), { status: 200 }));
+    const protocol = new GitLabHttpProtocol({ baseUrl: "https://gitlab.example.test", clientId: "client", project: "group/project", fetch: fetchImplementation as typeof fetch });
+
+    expect((await protocol.currentUser("token")).email).toBeUndefined();
+  });
+
   it("maps a missing membership to no access and accepts HTTP for local-network instances", async () => {
     const fetchImplementation = vi.fn(async () => new Response("not found", { status: 404 }));
     const protocol = new GitLabHttpProtocol({ baseUrl: "https://gitlab.example.test", clientId: "client", project: "group/project", fetch: fetchImplementation as typeof fetch });
