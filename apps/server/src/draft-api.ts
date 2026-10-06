@@ -560,7 +560,7 @@ export function registerHistoryApi(
       const actor = await authenticate(request);
       requireMutationRole(actor);
       const metadata = await requireDraftRead(manager, actor, request.params.draftId);
-      if (actor.provider === "gitlab" && actor.email === undefined) throw new AuthError("GITLAB_PUBLIC_EMAIL_REQUIRED", "Configure a Commit email or Public email in your GitLab profile before creating a commit");
+      if (actor.provider === "gitlab" && actor.email === undefined) throw new AuthError("GITLAB_PUBLIC_EMAIL_REQUIRED", "Configure a Commit email in your GitLab profile before creating a commit");
       if (actor.provider === "gitlab" && !actor.displayName?.trim()) throw new AuthError("GITLAB_PROFILE_NAME_REQUIRED", "GitLab profile name is required before creating a commit");
       const result = await history.revertDirect(
         request.params.draftId,

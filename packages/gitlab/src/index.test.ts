@@ -186,6 +186,7 @@ describe("GitLab HTTP protocol", () => {
         id: 42,
         username: "developer",
         name: "Dev User",
+        commit_email: "dev@example.test",
         public_email: "dev@example.test",
       }), { status: 200 });
       if (url.includes("/members/all/42")) return new Response(JSON.stringify({ access_level: 30 }), { status: 200 });
@@ -245,7 +246,7 @@ describe("GitLab HTTP protocol", () => {
     expect((await protocol.currentUser("token")).email).toBe("42-developer@users.noreply.gitlab.example.test");
   });
 
-  it("uses the Public email when GitLab does not return a commit email", async () => {
+  it("does not substitute Public email when GitLab omits the selected commit email", async () => {
     const fetchImplementation = vi.fn(async () => new Response(JSON.stringify({
       id: 42,
       username: "developer",
@@ -255,10 +256,10 @@ describe("GitLab HTTP protocol", () => {
     }), { status: 200 }));
     const protocol = new GitLabHttpProtocol({ baseUrl: "https://gitlab.example.test", clientId: "client", project: "group/project", fetch: fetchImplementation as typeof fetch });
 
-    expect((await protocol.currentUser("token")).email).toBe("public@example.test");
+    expect((await protocol.currentUser("token")).email).toBeUndefined();
   });
 
-  it("does not put the primary email in commits when neither GitLab commit nor Public email is available", async () => {
+  it("does not put the primary email in commits when GitLab omits the selected commit email", async () => {
     const fetchImplementation = vi.fn(async () => new Response(JSON.stringify({
       id: 42,
       username: "developer",

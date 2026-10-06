@@ -281,9 +281,8 @@ export class GitLabHttpProtocol implements GitLabProtocol, GitLabMergeRequestPro
       username: string;
       name: string;
       commit_email?: string | null;
-      public_email?: string | null;
     }>("/api/v4/user", {}, accessToken);
-    const email = user.commit_email?.trim() || user.public_email?.trim() || undefined;
+    const email = user.commit_email?.trim() || undefined;
     return {
       id: String(user.id),
       username: user.username,

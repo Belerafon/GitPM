@@ -106,7 +106,7 @@ describe("RepositoryConnectionSettings", () => {
     }));
     render(<RepositoryConnectionSettings api={api} locale="en" maintainer={true} />);
     expect(await screen.findByText(/OAuth is used only for your identity/)).toBeTruthy();
-    expect(screen.getByText(/Public email is required/)).toBeTruthy();
+    expect(screen.getByText(/selected GitLab Commit email/)).toBeTruthy();
   });
 
   it("explains authenticated-direct publication with the user OAuth token", async () => {
@@ -127,7 +127,7 @@ describe("RepositoryConnectionSettings", () => {
     }));
     render(<RepositoryConnectionSettings api={api} locale="en" maintainer={true} />);
     expect(await screen.findByText(/GitLab sign-in is required before the UI opens/)).toBeTruthy();
-    expect(screen.getByText(/selected Commit email, falling back to Public email/)).toBeTruthy();
+    expect(screen.getByText(/selected Commit email/)).toBeTruthy();
     expect(screen.getByText(/Push uses your OAuth token/)).toBeTruthy();
   });
 

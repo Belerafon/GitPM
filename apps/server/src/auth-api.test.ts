@@ -297,7 +297,7 @@ describe("optional GitLab repository session", () => {
     expect(session.body).not.toContain("token");
   });
 
-  it("blocks commit when the GitLab profile has no Public email", async () => {
+  it("blocks commit when GitLab did not provide the selected Commit email", async () => {
     const auth = repositoryAuth();
     vi.mocked(auth.authorize).mockResolvedValue({
       session: {
@@ -334,7 +334,7 @@ describe("optional GitLab repository session", () => {
     expect(response.json()).toMatchObject({
       error: {
         code: "GITLAB_PUBLIC_EMAIL_REQUIRED",
-        message: expect.stringContaining("Public email"),
+        message: expect.stringContaining("Commit email"),
       },
     });
     expect(publishing.commit).not.toHaveBeenCalled();

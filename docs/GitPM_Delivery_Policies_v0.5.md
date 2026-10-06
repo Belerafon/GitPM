@@ -86,9 +86,9 @@ membership checks, fetch, push, and Merge Request API calls for the configured
 project. The token is environment/Docker-Secret only and is excluded from
 browser input, HTTP responses, persisted config, Git URLs, sessions, and logs.
 `oauth-identity-user-token` requires GitLab login for the HTTP API on a shared
-`direct` checkout, signs commits with the OAuth name and selected Commit email
-(falling back to Public email when unavailable), and keeps the user token for
-push. The legacy user OAuth publication behavior remains a separate explicit
+`direct` checkout, signs commits with the OAuth name and selected Commit email,
+and keeps the user token for push. The legacy user OAuth publication behavior
+remains a separate explicit
 `user-oauth-publication` mode. Webhook is absent;
 MR status is polled.
 Automated tests use local test doubles, not a live GitLab project.
