@@ -57,6 +57,13 @@ the conflict and resolve it explicitly rather than choosing one silently.
 Use Node.js 20.19.2, pnpm 10.12.1 through Corepack, and Python 3.11 with PyYAML for planning
 validators.
 
+On Windows, run `git config --local core.longpaths true` from this repository or any of its
+worktrees before installing dependencies. Git for Windows otherwise may fail to remove a worktree
+when a nested `node_modules/.pnpm` file exceeds the traditional 260-character path limit, even if
+the worktree directory itself has a short name. Check with `git config --local --get core.longpaths`
+before `git worktree remove`. This setting is stored in the shared local `.git/config`, not in a
+commit, so repeat it for each clone on each machine.
+
 Common commands:
 
 ```bash

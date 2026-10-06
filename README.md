@@ -30,9 +30,14 @@ Git остаётся единственным источником бизнес-
 Требуются Node.js `20.19.2`, pnpm `10.12.1` через Corepack и системный Git.
 
 ```powershell
+git config --local core.longpaths true
 corepack pnpm install --frozen-lockfile
 .\run-gitpm.bat
 ```
+
+Настройка `core.longpaths` нужна Git for Windows для вложенных путей в
+`node_modules/.pnpm`, в том числе при `git worktree remove`. Она хранится только в
+локальном `.git/config`, поэтому её надо задать в каждом клоне на каждой машине.
 
 Launcher подготовит актуальный русскоязычный demo repository, запустит API на
 `http://127.0.0.1:3000`, web UI на `http://127.0.0.1:5173` и откроет браузер.
