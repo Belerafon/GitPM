@@ -193,6 +193,22 @@ describe("control hints", () => {
 });
 
 describe("frontend draft lifecycle", () => {
+  it("shows the GitLab commit email below the username in the header", async () => {
+    const api = new FakeApi();
+    api.currentSession = {
+      ...session,
+      user: { id: "42", username: "developer", email: "primary@example.test" },
+      gitlab: { configured: true, user: { id: "42", username: "developer", email: "42@users.noreply.gitlab.example.test" } },
+    };
+    const { container } = render(<App api={api} browserLanguages={["en"]} />);
+
+    await screen.findByText("42@users.noreply.gitlab.example.test");
+    const identity = container.querySelector(".header-user-identity");
+    expect(identity?.querySelector("strong")?.textContent).toBe("developer");
+    expect(identity?.querySelector("small")?.textContent).toBe("42@users.noreply.gitlab.example.test");
+    expect(identity?.textContent).not.toContain("primary@example.test");
+  });
+
   it("keeps the compact change count with Git and publishing instead of duplicating it in the header", async () => {
     const api = new FakeApi();
     api.currentSession = { ...session, mode: "repository", repository: { name: "portfolio", path: "D:\\portfolio", has_remote: true }, gitlab: { configured: false } };

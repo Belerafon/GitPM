@@ -311,7 +311,7 @@ function Shell({ locale, setLocale, api, navigate, confirmAction }: {
             </div>}
             <InterfaceSettings locale={locale} setLocale={setLocale} t={t} />
             {gitlab?.configured === true && gitlab.user === undefined && <button onClick={loginToGitLab}>{t("auth.login")}</button>}
-            {gitlab?.user !== undefined && <><span>{gitlab.user.username}</span><button onClick={() => { void drafts.logout(); }}>{t("auth.logoutGitLab")}</button></>}
+            {gitlab?.user !== undefined && <><span className="header-user-identity"><strong>{gitlab.user.username}</strong>{gitlab.user.email !== undefined && <small>{gitlab.user.email}</small>}</span><button onClick={() => { void drafts.logout(); }}>{t("auth.logoutGitLab")}</button></>}
           </>}
     >
         {["nav.people", "nav.workload", "nav.vacations"].includes(view) && <SectionTabs active={view} ariaLabel={t("nav.team")} items={teamTabs} onNavigate={(destination, selection) => navigateToRoute(routeForDestination(destination, selection))} t={t} />}
