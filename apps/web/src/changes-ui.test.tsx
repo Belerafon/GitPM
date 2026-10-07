@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { gitPmApi } from "./test-gitpm-api.js";
+import { ApiError } from "./api.js";
 import { ChangesWorkspace, safeExternalUrl } from "./changes-ui.js";
 import type { ChangesList, DraftStatus, EntityResult, SemanticDiff } from "./types.js";
 
@@ -41,6 +42,7 @@ class ChangesApi {
   discardAll = vi.fn(async () => undefined);
   commitAll = vi.fn(async () => { this.committed = true; return { commit: "c".repeat(40), branch: draft.branch, draft_fingerprint: "d".repeat(64) }; });
   push = vi.fn(async () => ({ branch: draft.branch, commit: "c".repeat(40) }));
+  syncDirect = vi.fn(async () => ({ branch: "main", commit: "e".repeat(40), strategy: "merge" as const, draft_fingerprint: "f".repeat(64) }));
   createMergeRequest = vi.fn(async () => ({ iid: 7, state: "opened" as const, web_url: "https://gitlab.example.test/mr/7" }));
   pollMergeRequest = vi.fn(async () => ({ iid: 7, state: "opened" as const, web_url: "https://gitlab.example.test/mr/7" }));
 }
@@ -221,6 +223,7 @@ describe("Changes workspace", () => {
     fireEvent.change(screen.getByLabelText("Commit message"), { target: { value: "Direct publish" } });
     fireEvent.click(screen.getByRole("button", { name: "Commit all" }));
     await waitFor(() => expect(fixture.commitAll).toHaveBeenCalledWith("DRF-CHANGES", "Direct publish"));
+    expect(await screen.findByText("Committed")).toBeTruthy();
     fireEvent.click(await screen.findByRole("button", { name: "Push branch" }));
     await waitFor(() => expect(fixture.push).toHaveBeenCalledWith("DRF-CHANGES"));
     expect(await screen.findByText("Pushed to main")).toBeTruthy();
@@ -234,6 +237,29 @@ describe("Changes workspace", () => {
     render(<ChangesWorkspace api={gitPmApi(fixture)} draft={{ ...draft, sync: { head: "c".repeat(40), ahead: 2, behind: 0, default_branch: "main", default_branch_ahead: 0 } }} role="Developer" locale="en" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} />);
     fireEvent.click(await screen.findByRole("button", { name: "Push branch" }));
     await waitFor(() => expect(fixture.push).toHaveBeenCalledWith("DRF-CHANGES"));
+  });
+
+  it("offers direct sync for divergence and asks before merging", async () => {
+    const fixture = new ChangesApi();
+    fixture.changes = { changed_files_count: 0, affected_projects: [], project_files: [], files: [] };
+    const confirmAction = vi.fn(() => true);
+    render(<ChangesWorkspace api={gitPmApi(fixture)} draft={{ ...draft, branch: "main", sync: { head: "c".repeat(40), remote_commit: "d".repeat(40), ahead: 1, behind: 2, default_branch: "main", default_branch_ahead: 0 } }} role="Developer" locale="en" onChanged={vi.fn(async () => undefined)} confirmAction={confirmAction} directMode />);
+    expect(await screen.findByText("origin is 2 commits ahead")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Push branch" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Sync with origin" }));
+    await waitFor(() => expect(fixture.syncDirect).toHaveBeenCalledWith("DRF-CHANGES", draft.fingerprint));
+    expect(confirmAction).toHaveBeenCalled();
+    expect(await screen.findByText("Changes merged into local main. Review the result, then push.")).toBeTruthy();
+  });
+
+  it("reports merge conflicts in the selected locale and keeps Push unavailable", async () => {
+    const fixture = new ChangesApi();
+    fixture.changes = { changed_files_count: 0, affected_projects: [], project_files: [], files: [] };
+    fixture.syncDirect.mockRejectedValueOnce(new ApiError("GIT_SYNC_CONFLICT", "Merge conflicts require manual resolution", { conflicted_files: ["projects/P-26-111111/project.yaml"] }));
+    render(<ChangesWorkspace api={gitPmApi(fixture)} draft={{ ...draft, branch: "main", sync: { head: "c".repeat(40), remote_commit: "d".repeat(40), ahead: 1, behind: 1, default_branch: "main", default_branch_ahead: 0 } }} role="Developer" locale="ru" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} directMode />);
+    fireEvent.click(await screen.findByRole("button", { name: "Синхронизировать с origin" }));
+    expect(await screen.findByText(/Конфликт слияния в projects\/P-26-111111\/project.yaml/u)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Отправить ветку" })).toBeNull();
   });
 
   it("asks to sign in for push when GitLab is configured and the session is missing", async () => {

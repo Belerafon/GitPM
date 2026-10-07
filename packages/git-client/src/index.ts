@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdir, realpath, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { assertSafeBranchName, assertSafeRepositoryUrl, classifyRepositoryUrl, createGitProcessEnvironment, createSshGitProcessEnvironment, resolveDomainPath, type RepositoryTransport } from "@gitpm/security";
 
@@ -11,6 +11,7 @@ export class GitCommandError extends Error {
     public readonly code: string,
     message: string,
     public readonly exitCode?: number,
+    public readonly details?: unknown,
   ) {
     super(message);
     this.name = "GitCommandError";
@@ -260,6 +261,7 @@ async function executeStreamingGit(
 export class GitClient {
   public readonly bareRepository: string;
   public readonly worktreesDirectory: string;
+  private readonly dataDirectory: string;
   private readonly homeDirectory: string;
   private readonly remoteUrl: string;
   private readonly defaultBranch: string;
@@ -274,6 +276,7 @@ export class GitClient {
   private readonly onCommand?: (record: GitCommandRecord) => void;
 
   constructor(options: GitClientOptions) {
+    this.dataDirectory = path.resolve(options.dataDirectory);
     this.bareRepository = path.resolve(options.dataDirectory, "repository.git");
     this.worktreesDirectory = path.resolve(options.dataDirectory, "worktrees");
     this.homeDirectory = path.resolve(options.dataDirectory, "git-home");
@@ -1000,6 +1003,90 @@ export class GitClient {
    */
   async checkoutAheadBehind(checkoutPath: string): Promise<{ ahead: number; behind: number; remoteCommit?: string }> {
     return await this.aheadBehind(checkoutPath, this.defaultBranch);
+  }
+
+  /**
+   * Integrate the last fetched origin/main in a disposable worktree. The selected
+   * checkout only moves after Git and repository validation both succeed.
+   */
+  async syncMainWithoutConflicts(
+    checkoutPath: string,
+    authorName: string,
+    authorEmail: string,
+    validate: (worktree: string) => Promise<void>,
+    excludedPaths: readonly string[] = [],
+  ): Promise<{ commit: string; branch: string; strategy: "up-to-date" | "fast-forward" | "merge" }> {
+    const checkout = await realpath(checkoutPath);
+    await this.assertCheckoutOnDefaultBranch(checkout);
+    if ((await this.statusPorcelain(checkout, excludedPaths)).trim()) {
+      throw new GitCommandError("GIT_SYNC_DIRTY", "Sync requires a clean working copy");
+    }
+    const head = await this.headCommit(checkout);
+    const remote = await this.checkoutRemoteCommit(checkout);
+    if (remote === undefined) throw new GitCommandError("GIT_REMOTE_BRANCH_MISSING", "origin/main is unavailable; fetch it first");
+    if (head === remote) return { commit: head, branch: this.defaultBranch, strategy: "up-to-date" };
+    const isBehindOnly = await this.isAncestor(checkout, head, remote);
+    if (!isBehindOnly && await this.isAncestor(checkout, remote, head)) {
+      return { commit: head, branch: this.defaultBranch, strategy: "up-to-date" };
+    }
+    if (!isBehindOnly && (!authorName.trim() || /[\r\n\0]/u.test(authorName) || !/^[^\s@]+@[^\s@]+$/u.test(authorEmail))) {
+      throw new GitCommandError("GIT_AUTHOR_INVALID", "A valid GitLab commit name and email are required for a merge commit");
+    }
+    await mkdir(this.dataDirectory, { recursive: true });
+    const scratch = await mkdtemp(path.join(this.dataDirectory, "sync-main-"));
+    const worktree = path.join(scratch, "checkout");
+    const commitEnvironment = {
+      ...safeEnvironment(this.homeDirectory),
+      GIT_AUTHOR_NAME: authorName,
+      GIT_AUTHOR_EMAIL: authorEmail,
+      GIT_COMMITTER_NAME: authorName,
+      GIT_COMMITTER_EMAIL: authorEmail,
+    };
+    let registered = false;
+    try {
+      await this.git(["-C", checkout, "worktree", "add", "--detach", worktree, isBehindOnly ? remote : head]);
+      registered = true;
+      if (!isBehindOnly) {
+        try {
+          await this.gitWithEnvironment(["-C", worktree, "merge", "--no-commit", "--no-ff", remote], commitEnvironment);
+        } catch (error) {
+          if (error instanceof GitCommandError && error.code === "GIT_FAILED") {
+            const files = (await this.git(["-C", worktree, "diff", "--name-only", "-z", "--diff-filter=U"])).stdout.split("\0").filter(Boolean);
+            if (files.length > 0) throw new GitCommandError("GIT_SYNC_CONFLICT", "Merge conflicts require manual resolution", undefined, { conflicted_files: files });
+          }
+          throw error;
+        }
+      }
+      await validate(worktree);
+      let result = remote;
+      if (!isBehindOnly) {
+        await this.gitWithEnvironment(
+          ["-C", worktree, "commit", "-m", `Merge origin/${this.defaultBranch} into ${this.defaultBranch}`],
+          commitEnvironment,
+        );
+        result = await this.headCommit(worktree);
+      }
+      await this.assertCheckoutOnDefaultBranch(checkout);
+      if (await this.headCommit(checkout) !== head || await this.checkoutRemoteCommit(checkout) !== remote ||
+          (await this.statusPorcelain(checkout, excludedPaths)).trim()) {
+        throw new GitCommandError("GIT_SYNC_STALE", "Checkout or origin changed during sync; refresh and try again");
+      }
+      await this.git(["-C", checkout, "merge", "--ff-only", result]);
+      return { commit: result, branch: this.defaultBranch, strategy: isBehindOnly ? "fast-forward" : "merge" };
+    } finally {
+      if (registered) await this.git(["-C", checkout, "worktree", "remove", "--force", worktree]);
+      await rm(scratch, { recursive: true, force: true });
+    }
+  }
+
+  private async isAncestor(checkout: string, ancestor: string, descendant: string): Promise<boolean> {
+    try {
+      await this.git(["-C", checkout, "merge-base", "--is-ancestor", ancestor, descendant]);
+      return true;
+    } catch (error) {
+      if (error instanceof GitCommandError && error.code === "GIT_FAILED" && error.exitCode === 1) return false;
+      throw error;
+    }
   }
 
   async commitCount(repoPath: string, fromCommit: string, to: { readonly head: true } | { readonly remoteBranch: string } = { head: true }): Promise<number> {

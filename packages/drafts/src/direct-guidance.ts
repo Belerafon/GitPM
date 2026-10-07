@@ -381,8 +381,9 @@ supported. Do not substitute raw Git commands. Use \`--project\` on commit only 
 in the checkout belongs to that Project; otherwise review and commit the complete authorized
 change without it.
 
-Run \`gitpm push --json\` only when the user requested remote publication. GitPM fetches first and
-refuses non-fast-forward, force push, rebase, merge commit, hard reset, and stash. Never expose an
+Run \`gitpm push --json\` only when the user requested remote publication. CLI push fetches first and
+refuses non-fast-forward, force push, rebase, hard reset, and stash. The web UI can prepare a validated
+conflict-free merge through Sync; the CLI does not provide that operation. Never expose an
 access token in arguments, URLs, files, Git configuration, logs, or responses.
 
 ## Report errors, ambiguity, and improvement opportunities

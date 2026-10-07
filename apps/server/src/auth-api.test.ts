@@ -1,6 +1,7 @@
 import type { DraftManager } from "@gitpm/drafts";
 import type { PublicSession } from "@gitpm/gitlab";
 import type { PublicationService } from "@gitpm/publishing";
+import { GitCommandError } from "@gitpm/git-client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildApp } from "./app.js";
 import { registerAuthApi, sanitizeReturnTo } from "./auth-api.js";
@@ -216,6 +217,48 @@ describe("optional GitLab repository session", () => {
       if (previousToken === undefined) delete process.env.GITPM_REMOTE_TOKEN;
       else process.env.GITPM_REMOTE_TOKEN = previousToken;
     }
+  });
+
+  it("routes direct sync with commit identity and an in-memory remote credential", async () => {
+    const auth = repositoryAuth();
+    const publishing = {
+      syncDirect: vi.fn(async () => ({ branch: "main", commit: "a".repeat(40), strategy: "merge", draft_fingerprint: "b".repeat(64) })),
+    } as unknown as PublicationService;
+    const app = buildApp({ draftManager: {} as DraftManager, authenticate: () => ({ userId: "local-user", role: "Maintainer" }) });
+    apps.push(app);
+    registerAuthApi(app, baseRepositorySession(), publishing, localContext, auth, "http://127.0.0.1:5173");
+    const response = await app.inject({ headers: { cookie: "gitpm_gitlab_session=session-id" }, method: "POST", url: "/api/drafts/DRF-LOCAL/sync", payload: { expected_fingerprint: "b".repeat(64) } });
+    expect(response.statusCode).toBe(200);
+    expect(auth.authorize).toHaveBeenCalledWith("session-id", "push");
+    expect(publishing.syncDirect).toHaveBeenCalledWith({ ...localContext, accessToken: expect.any(Function) }, { draftId: "DRF-LOCAL" }, "b".repeat(64));
+    const context = vi.mocked(publishing.syncDirect).mock.calls[0]![0];
+    expect(context.accessToken()).toBe("token");
+    expect(response.body).not.toContain("token");
+  });
+
+  it("uses the selected GitLab commit identity for direct sync in login-required mode", async () => {
+    const auth = repositoryAuth();
+    const publishing = {
+      syncDirect: vi.fn(async () => ({ branch: "main", commit: "a".repeat(40), strategy: "merge", draft_fingerprint: "b".repeat(64) })),
+    } as unknown as PublicationService;
+    const app = buildApp({ draftManager: {} as DraftManager, authenticate: () => ({ userId: "local-user", role: "Maintainer" }) });
+    apps.push(app);
+    registerAuthApi(app, baseRepositorySession(), publishing, localContext, auth, "http://127.0.0.1:5173", identityUserTokenConnection());
+    const response = await app.inject({ headers: { cookie: "gitpm_gitlab_session=session-id" }, method: "POST", url: "/api/drafts/DRF-LOCAL/sync", payload: { expected_fingerprint: "b".repeat(64) } });
+    expect(response.statusCode).toBe(200);
+    expect(publishing.syncDirect).toHaveBeenCalledWith({ ownerId: "local-user", authorName: "GitLab Maintainer", authorEmail: "maintainer@example.test", accessToken: expect.any(Function) }, { draftId: "DRF-LOCAL" }, "b".repeat(64));
+  });
+
+  it("returns stable conflict details from direct sync", async () => {
+    const publishing = {
+      syncDirect: vi.fn(async () => { throw new GitCommandError("GIT_SYNC_CONFLICT", "Merge conflicts require manual resolution", undefined, { conflicted_files: ["projects/P-26-MGP84K/project.yaml"] }); }),
+    } as unknown as PublicationService;
+    const app = buildApp({ draftManager: {} as DraftManager, authenticate: () => ({ userId: "local-user", role: "Maintainer" }) });
+    apps.push(app);
+    registerAuthApi(app, baseRepositorySession(), publishing, localContext, undefined, "http://127.0.0.1:5173");
+    const response = await app.inject({ method: "POST", url: "/api/drafts/DRF-LOCAL/sync", payload: { expected_fingerprint: "b".repeat(64) } });
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ error: { code: "GIT_SYNC_CONFLICT", details: { conflicted_files: ["projects/P-26-MGP84K/project.yaml"] } } });
   });
 
   it("adapts the GitLab session to an in-memory publication context", async () => {

@@ -147,11 +147,14 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
     } else if (error instanceof GitCommandError) {
       status = error.code === "GIT_TIMEOUT"
         ? 504
-        : ["GIT_WRONG_BRANCH", "GIT_DETACHED_HEAD", "GIT_NON_FAST_FORWARD"].includes(error.code)
+        : error.code === "GIT_AUTHOR_INVALID"
+          ? 422
+          : ["GIT_WRONG_BRANCH", "GIT_DETACHED_HEAD", "GIT_NON_FAST_FORWARD", "GIT_SYNC_DIRTY", "GIT_SYNC_CONFLICT", "GIT_SYNC_STALE"].includes(error.code)
           ? 409
           : 502;
       code = error.code;
       message = error.message;
+      details = error.details;
     } else if (error instanceof DomainOperationError) {
       code = error.code;
       message = error.message;
@@ -201,6 +204,7 @@ export function registerDraftApi(app: FastifyInstance, manager: DraftManager, au
     } else if (error instanceof PublicationError) {
       code = error.code;
       message = error.message;
+      details = error.details;
       status = error.code === "VALIDATION_FAILED" ? 422 : 409;
     } else if (error instanceof HistoryError) {
       code = error.code;

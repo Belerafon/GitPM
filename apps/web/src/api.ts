@@ -26,6 +26,7 @@ import {
   decodeProjectFileUploadResult,
   decodePublicSession,
   decodePushResult,
+  decodeDirectSyncResult,
   decodeRepositoryConnectionStatus,
   decodeRepositoryConnectionTest,
   decodeRepositoryResult,
@@ -52,7 +53,7 @@ import {
   type ProjectFileRenameResult,
   type ProjectFileUploadResult,
 } from "@gitpm/contracts";
-import type { ChangesList, CommentResult, CommitFileDiff, CommitHistoryDetail, CommitHistoryItem, CommitResult, ConfigurationImpact, DirectRevertResult, DraftSnapshot, DraftStatus, EntityResult, GitPmDocument, GlobalSearchResult, MergeRequestStatus, NotificationsResult, ProjectWorkspaceResult, PublicSession, PushResult, RepositoryConnectionStatus, RepositoryConnectionTest, RepositoryConnectionUpdate, RepositoryDocument, RepositoryResult, RestoreCommitFilesResult, RevertDraftResult, SemanticDiff, TimeEntryDocument, WorkloadReport, WriterMode, WorktreeDirectory, WorktreeFile } from "./types.js";
+import type { ChangesList, CommentResult, CommitFileDiff, CommitHistoryDetail, CommitHistoryItem, CommitResult, ConfigurationImpact, DirectRevertResult, DirectSyncResult, DraftSnapshot, DraftStatus, EntityResult, GitPmDocument, GlobalSearchResult, MergeRequestStatus, NotificationsResult, ProjectWorkspaceResult, PublicSession, PushResult, RepositoryConnectionStatus, RepositoryConnectionTest, RepositoryConnectionUpdate, RepositoryDocument, RepositoryResult, RestoreCommitFilesResult, RevertDraftResult, SemanticDiff, TimeEntryDocument, WorkloadReport, WriterMode, WorktreeDirectory, WorktreeFile } from "./types.js";
 import { isPersonNameFormat, type PersonNameFormat } from "@gitpm/shared";
 
 export interface TimeEntryResult {
@@ -243,6 +244,7 @@ export interface GitPmApi {
   discardAll(draftId: string, fingerprint: string): Promise<void>;
   commitAll(draftId: string, message: string): Promise<CommitResult>;
   push(draftId: string): Promise<PushResult>;
+  syncDirect(draftId: string, expectedFingerprint: string): Promise<DirectSyncResult>;
   createMergeRequest(draftId: string, title: string, description?: string): Promise<MergeRequestStatus>;
   pollMergeRequest(draftId: string): Promise<MergeRequestStatus>;
   history(draftId: string): Promise<readonly CommitHistoryItem[]>;
@@ -617,6 +619,9 @@ export class HttpGitPmApi implements GitPmApi {
   }
   async push(draftId: string): Promise<PushResult> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/push`, decodePushResult, { method: "POST" });
+  }
+  async syncDirect(draftId: string, expectedFingerprint: string): Promise<DirectSyncResult> {
+    return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/sync`, decodeDirectSyncResult, { method: "POST", body: JSON.stringify({ expected_fingerprint: expectedFingerprint }) });
   }
   async createMergeRequest(draftId: string, title: string, description?: string): Promise<MergeRequestStatus> {
     return await this.request(`/api/drafts/${encodeURIComponent(draftId)}/merge-request`, decodeMergeRequestStatus, { method: "POST", body: JSON.stringify({ title, ...(description?.trim() ? { description } : {}) }) });

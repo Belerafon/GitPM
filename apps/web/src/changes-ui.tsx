@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { GitPmApi } from "./api.js";
+import { ApiError, type GitPmApi } from "./api.js";
 import { message, type Locale, type MessageKey } from "./i18n.js";
 import { usePersonNameFormatter } from "./person-name.js";
 import { ProjectLink } from "./project-link.js";
@@ -230,6 +230,7 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
   const [commit, setCommit] = useState<CommitResult>();
   const [optimisticAhead, setOptimisticAhead] = useState(0);
   const [branchPublished, setBranchPublished] = useState(false);
+  const [syncOutcome, setSyncOutcome] = useState<"fast-forward" | "merge" | "up-to-date" | null>(null);
   const [mrTitle, setMrTitle] = useState("");
   const [mrDescription, setMrDescription] = useState("");
   const [mergeRequest, setMergeRequest] = useState<MergeRequestStatus | undefined>(initialMergeRequest);
@@ -309,7 +310,38 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
   const push = async () => {
     setBusy(true); setError(null);
     try { await api.push(draft.draft_id); setOptimisticAhead(0); setBranchPublished(true); await onChanged(); }
-    catch (caught) { setError(caught instanceof Error ? caught.message : String(caught)); }
+    catch (caught) { setError(caught instanceof Error ? caught.message : String(caught)); await onChanged().catch(() => undefined); }
+    finally { setBusy(false); }
+  };
+  const syncDirect = async () => {
+    if (!confirmAction(t("changes.syncConfirm"))) return;
+    setBusy(true); setError(null); setSyncOutcome(null);
+    try {
+      const result = await api.syncDirect(draft.draft_id, draft.fingerprint);
+      setSyncOutcome(result.strategy);
+      setOptimisticAhead(0);
+      await onChanged(); await load(true);
+    } catch (caught) {
+      if (caught instanceof ApiError) {
+        const details = caught.details;
+        const conflictFiles = details !== null && typeof details === "object" && "conflicted_files" in details && Array.isArray(details.conflicted_files)
+          ? details.conflicted_files.filter((file): file is string => typeof file === "string") : [];
+        const validationIssues = Array.isArray(details) ? details.slice(0, 5).flatMap((issue: unknown) => {
+          if (issue === null || typeof issue !== "object" || !("code" in issue) || !("path" in issue)) return [];
+          return [`${String(issue.path)}: ${String(issue.code)}`];
+        }) : [];
+        const localized: Partial<Record<string, string>> = {
+          GIT_SYNC_CONFLICT: t("changes.syncErrorConflict", { files: conflictFiles.join(", ") || "—" }),
+          GIT_SYNC_DIRTY: t("changes.syncDirty"),
+          UNCOMMITTED_CHANGES: t("changes.syncDirty"),
+          GIT_SYNC_STALE: t("changes.syncErrorStale"),
+          DRAFT_CHANGED_EXTERNALLY: t("changes.syncErrorStale"),
+          GIT_AUTHOR_INVALID: t("changes.syncErrorAuthor"),
+          VALIDATION_FAILED: t("changes.syncErrorValidation", { issues: validationIssues.join("; ") || "—" }),
+        };
+        setError(localized[caught.code] ?? caught.message);
+      } else setError(caught instanceof Error ? caught.message : String(caught));
+    }
     finally { setBusy(false); }
   };
   const createMr = async () => {
@@ -328,8 +360,9 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
   const trackingBranch = directMode ? originBranch : draft.branch;
   const defaultMoved = !directMode && (draft.sync?.default_branch_ahead ?? 0) > 0;
   const canPushRemote = remoteAvailable && (!gitlabConfigured || gitlabSignedIn);
-  const needsGitLabLogin = remoteAvailable && gitlabConfigured && !gitlabSignedIn && ahead > 0 && behind === 0;
+  const needsGitLabLogin = remoteAvailable && gitlabConfigured && !gitlabSignedIn && ((ahead > 0 && behind === 0) || (directMode && behind > 0));
   const canPush = canMutate && canPushRemote && ahead > 0 && behind === 0 && !dirty;
+  const canSync = directMode && canMutate && canPushRemote && behind > 0 && !dirty;
   const showMrForm = !directMode && !dirty && ahead === 0 && published && mergeRequest === undefined && gitlabConfigured && gitlabSignedIn;
   const needsGitLabForMr = !directMode && !dirty && ahead === 0 && published && mergeRequest === undefined && gitlabConfigured && !gitlabSignedIn;
   const short = (value: string | undefined) => value === undefined ? "—" : value.slice(0, 12);
@@ -368,14 +401,18 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
           <div><dt>{t("changes.syncLocal", { branch: draft.branch, head: short(commit?.commit ?? draft.sync?.head) })}</dt><dd className="sync-counts">{ahead > 0 ? t("changes.syncAhead", { count: ahead }) : behind > 0 ? t("changes.syncBehind", { count: behind }) : remoteAvailable && draft.sync?.remote_commit !== undefined ? t("changes.syncEven", { branch: trackingBranch }) : remoteAvailable ? t("changes.syncUnknown") : t("changes.localOnly")}</dd></div>
           {draft.sync?.remote_commit !== undefined && <div><dt>{t("changes.syncOrigin", { branch: trackingBranch, commit: short(draft.sync.remote_commit) })}</dt><dd /></div>}
         </dl>
-        {diverged && <div className="alert warning">{t("changes.syncDiverged")}</div>}
+        {diverged && <div className="alert warning">{t("changes.syncDiverged")}{directMode && <span> {t("changes.syncBehind", { count: behind })}</span>}</div>}
         {!diverged && behind > 0 && <div className="alert warning">{t("changes.syncBehind", { count: behind })}</div>}
+        {directMode && behind > 0 && dirty && <div className="alert info">{t("changes.syncDirty")}</div>}
+        {syncOutcome !== null && <div className="alert info">{t(`changes.syncResult.${syncOutcome}`)}</div>}
         {defaultMoved && <div className="alert info">{t("changes.defaultBranchMoved", { branch: originBranch, count: draft.sync?.default_branch_ahead ?? 0 })}</div>}
       </div>
       <div className="publish-action">
+        {!dirty && ahead > 0 && <div className="publish-step complete"><span aria-hidden="true">✓</span><div><strong>{t("changes.committed")}</strong><code>{short(commit?.commit ?? draft.sync?.head)}</code></div></div>}
         {dirty && <button className="primary" disabled={!canMutate || busy} onClick={() => setCommitOpen(true)}>{t("changes.openCommit")}</button>}
-        {(needsGitLabLogin || needsGitLabForMr) && <button className="primary" onClick={onGitLabLogin}>{t("changes.loginForPush")}</button>}
+        {(needsGitLabLogin || needsGitLabForMr) && <button className="primary" onClick={onGitLabLogin}>{t(directMode && behind > 0 ? "changes.loginForSync" : "changes.loginForPush")}</button>}
         {canPush && <button className="primary" disabled={busy} onClick={() => void push()}>{t("changes.push")}</button>}
+        {canSync && <button className="primary" disabled={busy} onClick={() => void syncDirect()}>{t("changes.syncAction")}</button>}
         {!remoteAvailable && ahead > 0 && <span>{t("changes.localOnly")}</span>}
         {directMode && !dirty && ahead === 0 && published && <span className="mr-result">{t("changes.pushed", { branch: draft.branch })}</span>}
         {showMrForm && <div className="mr-form"><label>{t("changes.mrTitle")}<input maxLength={255} value={mrTitle} onChange={(event) => setMrTitle(event.target.value)} /></label><label>{t("changes.mrDescription")}<textarea value={mrDescription} onChange={(event) => setMrDescription(event.target.value)} /></label><button className="primary" disabled={busy || !mrTitle.trim()} onClick={() => void createMr()}>{t("changes.createMr")}</button></div>}

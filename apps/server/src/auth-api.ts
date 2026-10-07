@@ -236,6 +236,20 @@ export function registerAuthApi(
       throw error;
     }
   });
+  app.post<{ Params: { draftId: string }; Body: { expected_fingerprint: string } }>("/api/drafts/:draftId/sync", { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.expectedFingerprint } }, async (request) => {
+    const { context: remote, user } = await remoteContext(request, "push");
+    const author = user === undefined
+      ? { authorName: localContext.authorName, authorEmail: localContext.authorEmail }
+      : { authorName: user.name ?? "", authorEmail: user.email ?? "" };
+    try {
+      const result = await publishing.syncDirect({ ...remote, ...author }, { draftId: request.params.draftId }, request.body.expected_fingerprint);
+      audit(request, "sync", user, "succeeded", { commit_sha: result.commit, branch: result.branch, strategy: result.strategy });
+      return result;
+    } catch (error) {
+      audit(request, "sync", user, "failed");
+      throw error;
+    }
+  });
   app.post<{ Params: { draftId: string }; Body: { title: string; description?: string } }>("/api/drafts/:draftId/merge-request", { schema: { body: HTTP_REQUEST_BODY_SCHEMAS.mergeRequest } }, async (request) => {
     const { context, user } = await remoteContext(request, "mr");
     const initiatedBy = user === undefined ? undefined : `Initiated in GitPM by @${user.username}`;

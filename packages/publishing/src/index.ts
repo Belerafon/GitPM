@@ -28,6 +28,8 @@ export interface RemotePublicationContext extends PublicationContext {
   readonly accessToken: () => string | undefined;
 }
 
+export interface DirectSyncContext extends CommitPublicationContext, RemotePublicationContext {}
+
 export interface PublicationWorkspace {
   readonly draftId: string;
 }
@@ -90,6 +92,32 @@ export class PublicationService {
     }
     const result = await this.drafts.push(workspace.draftId, context.accessToken());
     return { branch: result.branch, commit: result.commit };
+  }
+
+  async syncDirect(context: DirectSyncContext, workspace: PublicationWorkspace, expectedFingerprint: string) {
+    await this.ownedWorkspace(context, workspace);
+    if (this.drafts.repositoryMode !== "direct") {
+      throw new PublicationError("DIRECT_SYNC_UNAVAILABLE", "Sync is available only in direct repository mode");
+    }
+    const { result, metadata } = await this.drafts.withUiMutation(workspace.draftId, context.ownerId, expectedFingerprint, async (current) => {
+      if ((await this.git.statusPorcelain(current.worktree_path, GITPM_GUIDANCE_PATHS)).trim()) {
+        throw new PublicationError("UNCOMMITTED_CHANGES", "Sync requires a clean working copy");
+      }
+      await this.git.fetchCheckoutRemote(current.worktree_path, context.accessToken());
+      return await this.git.syncMainWithoutConflicts(
+        current.worktree_path,
+        context.authorName,
+        context.authorEmail,
+        async (worktree) => {
+          const validation = await validateRepository(worktree);
+          if (!validation.valid) {
+            throw new PublicationError("VALIDATION_FAILED", "Sync is blocked by repository validation", validation.errors);
+          }
+        },
+        GITPM_GUIDANCE_PATHS,
+      );
+    });
+    return { ...result, draft_fingerprint: metadata.fingerprint };
   }
 
   async createMergeRequest(

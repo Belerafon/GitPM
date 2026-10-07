@@ -332,6 +332,93 @@ describe("direct-mode checkout", () => {
     await expect(client.pushMainFastForward(checkout, "unused-local-token")).rejects.toMatchObject({ code: "GIT_NON_FAST_FORWARD" });
   });
 
+  it("merges diverged main in an isolated checkout and preserves both commits", async () => {
+    const fixture = await remoteFixture();
+    const client = new GitClient({ dataDirectory: path.join(fixture.root, "data"), remoteUrl: fixture.source, pushRemoteUrl: fixture.remote, defaultBranch: "main", allowLocalTestRemote: true });
+    const other = path.join(fixture.root, "other");
+    await git(fixture.root, "clone", "--branch", "main", fixture.remote, other);
+    await writeFile(path.join(other, "remote-only.txt"), "remote\n", "utf8");
+    await git(other, "add", ".");
+    await git(other, "-c", "user.name=Remote", "-c", "user.email=remote@example.test", "commit", "-m", "remote only");
+    await git(other, "push", "origin", "main");
+    await writeFile(path.join(fixture.source, "local-only.txt"), "local\n", "utf8");
+    await client.commitAll(fixture.source, "local only", "Local", "local@example.test");
+    const local = await client.headCommit(fixture.source);
+    await client.fetchCheckoutRemote(fixture.source);
+    const remote = await client.checkoutRemoteCommit(fixture.source);
+    const validated: string[] = [];
+    const result = await client.syncMainWithoutConflicts(fixture.source, "Local", "local@example.test", async (worktree) => {
+      validated.push(await readFile(path.join(worktree, "remote-only.txt"), "utf8"));
+      expect(await readFile(path.join(worktree, "local-only.txt"), "utf8")).toBe("local\n");
+    });
+    expect(result.strategy).toBe("merge");
+    expect(validated).toEqual(["remote\n"]);
+    expect(await git(fixture.source, "rev-list", "--parents", "-n", "1", "HEAD")).toBe(`${result.commit} ${local} ${remote}`);
+    expect(await client.checkoutAheadBehind(fixture.source)).toMatchObject({ ahead: 2, behind: 0 });
+  });
+
+  it("fast-forwards a behind-only main and refuses a dirty checkout", async () => {
+    const fixture = await remoteFixture();
+    const client = new GitClient({ dataDirectory: path.join(fixture.root, "data"), remoteUrl: fixture.source, pushRemoteUrl: fixture.remote, defaultBranch: "main", allowLocalTestRemote: true });
+    const other = path.join(fixture.root, "other");
+    await git(fixture.root, "clone", "--branch", "main", fixture.remote, other);
+    await writeFile(path.join(other, "remote-only.txt"), "remote\n", "utf8");
+    await git(other, "add", ".");
+    await git(other, "-c", "user.name=Remote", "-c", "user.email=remote@example.test", "commit", "-m", "remote only");
+    await git(other, "push", "origin", "main");
+    await client.fetchCheckoutRemote(fixture.source);
+    await writeFile(path.join(fixture.source, "uncommitted.txt"), "keep\n", "utf8");
+    await expect(client.syncMainWithoutConflicts(fixture.source, "Local", "local@example.test", async () => undefined))
+      .rejects.toMatchObject({ code: "GIT_SYNC_DIRTY" });
+    expect(await readFile(path.join(fixture.source, "uncommitted.txt"), "utf8")).toBe("keep\n");
+    await rm(path.join(fixture.source, "uncommitted.txt"));
+    const validated: string[] = [];
+    const result = await client.syncMainWithoutConflicts(fixture.source, "", "", async (worktree) => {
+      validated.push(await readFile(path.join(worktree, "remote-only.txt"), "utf8"));
+    });
+    expect(result.strategy).toBe("fast-forward");
+    expect(validated).toEqual(["remote\n"]);
+    expect(await client.headCommit(fixture.source)).toBe(await client.checkoutRemoteCommit(fixture.source));
+  });
+
+  it("leaves local main unchanged on merge conflict", async () => {
+    const fixture = await remoteFixture();
+    const client = new GitClient({ dataDirectory: path.join(fixture.root, "data"), remoteUrl: fixture.source, pushRemoteUrl: fixture.remote, defaultBranch: "main", allowLocalTestRemote: true });
+    const other = path.join(fixture.root, "other");
+    await git(fixture.root, "clone", "--branch", "main", fixture.remote, other);
+    await writeFile(path.join(other, "shared.txt"), "remote\n", "utf8");
+    await git(other, "add", ".");
+    await git(other, "-c", "user.name=Remote", "-c", "user.email=remote@example.test", "commit", "-m", "remote only");
+    await git(other, "push", "origin", "main");
+    await writeFile(path.join(fixture.source, "shared.txt"), "local\n", "utf8");
+    await client.commitAll(fixture.source, "local only", "Local", "local@example.test");
+    const local = await client.headCommit(fixture.source);
+    await client.fetchCheckoutRemote(fixture.source);
+    await expect(client.syncMainWithoutConflicts(fixture.source, "Local", "local@example.test", async () => undefined))
+      .rejects.toMatchObject({ code: "GIT_SYNC_CONFLICT" });
+    expect(await client.headCommit(fixture.source)).toBe(local);
+    expect(await readFile(path.join(fixture.source, "shared.txt"), "utf8")).toBe("local\n");
+    expect((await git(fixture.source, "status", "--porcelain"))).toBe("");
+
+  });
+
+  it("leaves local main unchanged when the integrated repository fails validation", async () => {
+    const fixture = await remoteFixture();
+    const client = new GitClient({ dataDirectory: path.join(fixture.root, "data"), remoteUrl: fixture.source, pushRemoteUrl: fixture.remote, defaultBranch: "main", allowLocalTestRemote: true });
+    const other = path.join(fixture.root, "other");
+    await git(fixture.root, "clone", "--branch", "main", fixture.remote, other);
+    await writeFile(path.join(other, "remote-only.txt"), "remote\n", "utf8");
+    await git(other, "add", ".");
+    await git(other, "-c", "user.name=Remote", "-c", "user.email=remote@example.test", "commit", "-m", "remote only");
+    await git(other, "push", "origin", "main");
+    const local = await client.headCommit(fixture.source);
+    await client.fetchCheckoutRemote(fixture.source);
+    await expect(client.syncMainWithoutConflicts(fixture.source, "Local", "local@example.test", async () => { throw new Error("validation failed"); }))
+      .rejects.toThrow("validation failed");
+    expect(await client.headCommit(fixture.source)).toBe(local);
+    expect((await git(fixture.source, "status", "--porcelain"))).toBe("");
+  });
+
   it("reconfigures origin in place and publishes the selected checkout", async () => {
     const fixture = await remoteFixture();
     const upstream = path.join(fixture.root, "upstream.git");

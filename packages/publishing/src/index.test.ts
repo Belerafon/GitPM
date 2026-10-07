@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
-import { DraftManager } from "@gitpm/drafts";
+import { DirectRepositoryBackend, DraftManager, directPushStrategy } from "@gitpm/drafts";
 import { GitClient } from "@gitpm/git-client";
 import { GitLabProtocolTestDouble } from "@gitpm/gitlab";
 import { atomicWriteDomainFile } from "@gitpm/security";
@@ -91,5 +91,56 @@ describe("commit, push and Merge Request contract", () => {
     expect(captures).not.toContain("gitlab-test-double-access-token");
     expect(JSON.stringify(commands)).not.toContain("gitlab-test-double-access-token");
     expect(await filesContain(data, "gitlab-test-double-access-token")).toBe(false);
+  }, 60_000);
+});
+
+describe("direct sync", () => {
+  it("validates a conflict-free merge before moving main", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "gitpm-direct-sync-"));
+    roots.push(root);
+    const source = path.join(root, "source");
+    const remote = path.join(root, "remote.git");
+    const other = path.join(root, "other");
+    const data = path.join(root, "data");
+    await mkdir(source);
+    await cp(demo, source, { recursive: true });
+    await git(source, "init", "-b", "main");
+    await git(source, "add", ".");
+    await git(source, "-c", "user.name=GitPM Test", "-c", "user.email=gitpm@example.test", "commit", "-m", "fixture");
+    await git(root, "init", "--bare", remote);
+    await git(source, "remote", "add", "origin", remote);
+    await git(source, "push", "origin", "main");
+    await git(root, "clone", "--branch", "main", remote, other);
+
+    const client = new GitClient({ dataDirectory: data, remoteUrl: source, pushRemoteUrl: remote, defaultBranch: "main", allowLocalTestRemote: true });
+    const drafts = new DraftManager(client, data, { backend: new DirectRepositoryBackend(client, source), push: directPushStrategy(client) });
+    await drafts.ensureDirectWorkspace("DRF-LOCAL", "42");
+    const publishing = new PublicationService(drafts, client, { defaultBranch: "main" });
+    const localPath = "projects/P-26-8S9HQQ/project.yaml";
+    const remotePath = projectFile;
+    await atomicWriteDomainFile(source, localPath, (await readFile(path.join(source, ...localPath.split("/")), "utf8")).replace("name:", "name: Local "));
+    await publishing.commit({ ownerId: "42", authorName: "Local", authorEmail: "local@example.test" }, { draftId: "DRF-LOCAL" }, "local change");
+    const localHead = await client.headCommit(source);
+    await atomicWriteDomainFile(other, remotePath, (await readFile(path.join(other, ...remotePath.split("/")), "utf8")).replace("name: GitPM launch", "name: Remote launch"));
+    await git(other, "add", ".");
+    await git(other, "-c", "user.name=Remote", "-c", "user.email=remote@example.test", "commit", "-m", "remote change");
+    await git(other, "push", "origin", "main");
+    const context = { ownerId: "42", authorName: "Local", authorEmail: "local@example.test", accessToken: () => undefined };
+    const expectedFingerprint = (await drafts.getDraft("DRF-LOCAL")).fingerprint;
+    await expect(publishing.syncDirect(context, { draftId: "DRF-LOCAL" }, "0".repeat(64)))
+      .rejects.toMatchObject({ code: "DRAFT_CHANGED_EXTERNALLY" });
+    const result = await publishing.syncDirect(context, { draftId: "DRF-LOCAL" }, expectedFingerprint);
+    expect(result.strategy).toBe("merge");
+    expect(await git(source, "rev-list", "--parents", "-n", "1", "HEAD")).toContain(localHead);
+    expect(await git(source, "log", "-1", "--format=%an <%ae>")).toBe("Local <local@example.test>");
+    expect((await drafts.publicationSync(await drafts.getDraft("DRF-LOCAL")))?.behind).toBe(0);
+
+    const mergedHead = await client.headCommit(source);
+    await atomicWriteDomainFile(other, remotePath, (await readFile(path.join(other, ...remotePath.split("/")), "utf8")).replace("schema: gitpm/project@2", "schema: invalid/project@2"));
+    await git(other, "add", ".");
+    await git(other, "-c", "user.name=Remote", "-c", "user.email=remote@example.test", "commit", "-m", "invalid remote change");
+    await git(other, "push", "origin", "main");
+    await expect(publishing.syncDirect(context, { draftId: "DRF-LOCAL" }, result.draft_fingerprint)).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+    expect(await client.headCommit(source)).toBe(mergedHead);
   }, 60_000);
 });

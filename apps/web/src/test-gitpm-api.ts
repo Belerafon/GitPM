@@ -56,6 +56,7 @@ const fallback = {
   discardAll: unsupported,
   commitAll: unsupported,
   push: unsupported,
+  syncDirect: unsupported,
   createMergeRequest: unsupported,
   pollMergeRequest: unsupported,
   history: unsupported,

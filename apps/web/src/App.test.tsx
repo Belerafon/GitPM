@@ -5,7 +5,7 @@ import { App } from "./App.js";
 import type { ExportDownload, GitPmApi } from "./api.js";
 import { POLL_INTERVAL_MS } from "./draft-context.js";
 import { assertLocalePacks, formatDateOnly, formatDurationHours, formatNumber, formatVarianceDays, localeRegistry, LOCALE_STORAGE_KEY, message, pluralCategory, registerLocale, selectLocale } from "./i18n.js";
-import type { ChangesList, CommitFileDiff, CommitHistoryDetail, CommitResult, ConfigurationDocument, ConfigurationResult, DraftSnapshot, DraftStatus, EntityResult, MergeRequestStatus, PublicSession, PushResult, RepositoryDocument, RepositoryResult, RevertDraftResult, SemanticDiff, WriterMode, WorktreeDirectory, WorktreeFile } from "./types.js";
+import type { ChangesList, CommitFileDiff, CommitHistoryDetail, CommitResult, ConfigurationDocument, ConfigurationResult, DirectSyncResult, DraftSnapshot, DraftStatus, EntityResult, MergeRequestStatus, PublicSession, PushResult, RepositoryDocument, RepositoryResult, RevertDraftResult, SemanticDiff, WriterMode, WorktreeDirectory, WorktreeFile } from "./types.js";
 
 const session: PublicSession = {
   user: { id: "42", username: "developer" },
@@ -99,6 +99,7 @@ class FakeApi implements GitPmApi {
   async discardAll() { throw new Error("not used"); }
   async commitAll(): Promise<CommitResult> { throw new Error("not used"); }
   async push(): Promise<PushResult> { throw new Error("not used"); }
+  async syncDirect(): Promise<DirectSyncResult> { throw new Error("not used"); }
   async createMergeRequest(): Promise<MergeRequestStatus> { throw new Error("not used"); }
   async pollMergeRequest(): Promise<MergeRequestStatus> { throw new Error("not used"); }
   async history() { return []; }

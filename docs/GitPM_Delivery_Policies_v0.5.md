@@ -105,7 +105,7 @@ Only static process-protection limits exist. No counters, billing state, per-use
 
 ## 14. Git divergence
 
-No rebase and no conflict editor. Conflict resolution is external or the user creates a new draft from current remote main.
+No rebase and no conflict editor. In direct mode, a clean checkout can fast-forward or make a conflict-free merge through Sync after full repository validation. Conflicts still require external resolution. In worktree mode, conflict resolution is external or the user creates a new draft from current remote main.
 
 ## 15. Calendar, Gantt and Workload
 

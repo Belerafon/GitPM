@@ -58,7 +58,7 @@ Candidate и release gate приняты. Разработка после baseli
 
 - один configured repository на server runtime;
 - нет business database, backup/replication, migration или quota engine;
-- нет force push, rebase API, встроенного conflict editor или автоматического merge;
+- нет force push, rebase API или встроенного conflict editor; direct mode выполняет только проверенное бесконфликтное слияние при Sync;
 - Gantt остаётся read-only, Workload — объяснимой приблизительной моделью;
 - публичное размещение требует reverse proxy/TLS и отдельного deployment review;
 - отдельные `comment` и repository `config` команды агента доступны только в

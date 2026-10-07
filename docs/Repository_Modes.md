@@ -11,10 +11,10 @@ non-empty values are rejected with a clear error. When nothing is set, GitPM use
 | Working copy | the normal checkout selected in `repository` | bare `<data-dir>/repository.git` plus one `git worktree` per draft |
 | Branch | the configured default branch (`main`) | one `gitpm/<owner>/<draft>` branch per draft |
 | Commit | straight onto `main` | onto the draft branch |
-| Push | fast-forward `main` to `origin/main` (no force, no rebase, no merge commit) | push the draft branch, then open a Merge Request |
+| Push | fast-forward `main` to `origin/main` (no force or rebase); Sync can first create a validated conflict-free merge commit | push the draft branch, then open a Merge Request |
 | CLI | commands work without `--draft` | commands require `--draft <id>` |
 | Agent guidance | `direct`-mode `AGENTS.md` + skill at the checkout root | draft `AGENTS.md` + skill in each worktree |
-| UI | branch, changes, commit, push, sync versus `origin/<default>` | drafts, writer mode, draft branch, unpublished commits versus `origin/<draft-branch>`, stale `origin/<default>`, Merge Request |
+| UI | branch, changes, commit, push, and validated Sync with `origin/<default>` | drafts, writer mode, draft branch, unpublished commits versus `origin/<draft-branch>`, stale `origin/<default>`, Merge Request |
 
 Runtime metadata is mode-scoped. Worktree drafts remain in `<data-dir>/drafts/*.json`; the
 single internal direct workspace is stored in `<data-dir>/drafts/direct/DRF-LOCAL.json`.
@@ -79,9 +79,17 @@ Legacy direct metadata from `<data-dir>/drafts/*.json` is migrated automatically
 makes `worktree -> direct -> worktree` switching reversible while both physical checkouts remain
 available.
 
-Push always performs a `fetch` first and only allows a safe fast-forward. GitPM
-never does rebase, merge commit, hard reset, stash, or force push. When the local
-and remote branches have diverged, GitPM returns a clear error.
+Push always performs a `fetch` first and only allows a safe fast-forward. Direct
+mode also offers **Sync with origin** when the remote default branch is ahead.
+Sync fetches, requires a clean checkout, and prepares a fast-forward or
+conflict-free merge in a disposable worktree. It validates the complete resulting
+repository before moving the selected checkout. The request carries the UI's
+expected fingerprint, so a stale page cannot sync a newer workspace. A conflict or validation failure
+leaves local `main` unchanged; the user can resolve a conflict outside GitPM.
+A successful merge creates a merge commit with the configured commit identity
+(the OAuth user's identity in login-required mode) and still requires a separate
+Push. GitPM never rebases, hard resets,
+stashes, or force pushes.
 
 For an HTTP(S) origin, login supplies the OAuth access token only to the controlled
 ASKPASS child environment. The token is not placed in the origin URL, Git config,
@@ -104,7 +112,8 @@ gitpm push --json
 the HEAD commit, the dirty state, and ahead/behind counts versus the remote.
 The web session reconstructs the same publication actions from Git: dirty files
 enable commit, unpublished commits (`ahead > 0`) enable push after GitLab login
-when OAuth is configured, and a diverged or behind branch does not offer push.
+when OAuth is configured, and a diverged or behind direct branch offers Sync
+instead of Push.
 Counts use last-fetched remote-tracking refs; push still fetches first.
 
 History mutations preserve the same branch boundary. Selecting an old commit is a read-only

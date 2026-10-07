@@ -349,6 +349,13 @@ export interface PushResult {
   readonly commit: string;
 }
 
+export interface DirectSyncResult {
+  readonly branch: string;
+  readonly commit: string;
+  readonly strategy: "up-to-date" | "fast-forward" | "merge";
+  readonly draft_fingerprint: string;
+}
+
 export interface RepositoryConnectionStatus {
   readonly repository_path: string;
   readonly repository_mode: "direct" | "worktree";
@@ -959,6 +966,7 @@ export const HTTP_RESPONSE_SCHEMAS = {
   semanticDiff: semanticDiffSchema,
   commitResult: objectSchema({ commit: stringSchema, branch: stringSchema, draft_fingerprint: stringSchema }),
   pushResult: objectSchema({ branch: stringSchema, commit: stringSchema }),
+  directSyncResult: objectSchema({ branch: stringSchema, commit: stringSchema, strategy: { enum: ["up-to-date", "fast-forward", "merge"] }, draft_fingerprint: stringSchema }),
   mergeRequestStatus: mergeRequestStatusSchema,
   commitHistoryItems: arraySchema(commitHistoryItemSchema),
   commitHistoryDetail: commitHistoryDetailSchema,
@@ -1036,6 +1044,7 @@ export const decodeChangesList = createDecoder<ChangesList>("ChangesList", HTTP_
 export const decodeSemanticDiff = createDecoder<SemanticDiff>("SemanticDiff", HTTP_RESPONSE_SCHEMAS.semanticDiff);
 export const decodeCommitResult = createDecoder<CommitResult>("CommitResult", HTTP_RESPONSE_SCHEMAS.commitResult);
 export const decodePushResult = createDecoder<PushResult>("PushResult", HTTP_RESPONSE_SCHEMAS.pushResult);
+export const decodeDirectSyncResult = createDecoder<DirectSyncResult>("DirectSyncResult", HTTP_RESPONSE_SCHEMAS.directSyncResult);
 export const decodeMergeRequestStatus = createDecoder<MergeRequestStatus>("MergeRequestStatus", HTTP_RESPONSE_SCHEMAS.mergeRequestStatus);
 export const decodeCommitHistoryItems = createDecoder<readonly CommitHistoryItem[]>("CommitHistoryItem[]", HTTP_RESPONSE_SCHEMAS.commitHistoryItems);
 export const decodeCommitHistoryDetail = createDecoder<CommitHistoryDetail>("CommitHistoryDetail", HTTP_RESPONSE_SCHEMAS.commitHistoryDetail);

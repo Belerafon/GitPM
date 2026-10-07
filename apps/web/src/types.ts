@@ -18,6 +18,7 @@ export type {
   DraftState,
   DraftStatus,
   DirectRevertResult,
+  DirectSyncResult,
   EntityDocument,
   EntityResult,
   FileChange,
