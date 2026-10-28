@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { gitPmApi } from "./test-gitpm-api.js";
 import { ApiError } from "./api.js";
 import { ChangesWorkspace, safeExternalUrl } from "./changes-ui.js";
+import { PersonNameFormatProvider } from "./person-name.js";
 import type { ChangesList, DraftStatus, EntityResult, SemanticDiff } from "./types.js";
 
 const draft: DraftStatus = { draft_id: "DRF-CHANGES", owner_gitlab_user_id: "42", branch: "gitpm/42/DRF-CHANGES", base_commit: "a".repeat(40), writer_mode: "ui", state: "open", fingerprint: "b".repeat(64), created_at: "2026-07-10T10:00:00Z", updated_at: "2026-07-10T10:00:00Z" };
@@ -32,11 +33,12 @@ class ChangesApi {
     { document: { schema: "gitpm/project@2", id: "P-26-222222", name: "Бета", lifecycle: "active" }, path: "projects/P-26-222222/project.yaml", blob_id: "a".repeat(40), draft_fingerprint: "b".repeat(64) },
   ];
   people: EntityResult[] = [];
+  availabilityEvents: EntityResult[] = [];
   taskEntities: EntityResult[] = [];
   milestoneEntities: EntityResult[] = [];
   listChanges = vi.fn(async () => this.committed ? { changed_files_count: 0, affected_projects: [], files: [], project_files: [] } : this.changes);
   semanticChanges = vi.fn(async () => this.committed ? { created: [], updated: [], archived: [], deleted: [], counts: { created: 0, updated: 0, archived: 0, deleted: 0 }, affected_projects: [], file_entities: [], unclassified_files: [] } : this.semantic);
-  listEntities = vi.fn(async (_draftId: string, type: string) => type === "projects" ? this.projects : type === "people" ? this.people : type === "tasks" ? this.taskEntities : type === "milestones" ? this.milestoneEntities : []);
+  listEntities = vi.fn(async (_draftId: string, type: string) => type === "projects" ? this.projects : type === "people" ? this.people : type === "availability-events" ? this.availabilityEvents : type === "tasks" ? this.taskEntities : type === "milestones" ? this.milestoneEntities : []);
   restoreFile = vi.fn(async (_draftId: string, _fingerprint: string, path: string) => { this.restored.push(path); });
   restoreHunk = vi.fn(async (_draftId: string, _fingerprint: string, path: string) => { this.restored.push(path); });
   discardAll = vi.fn(async () => undefined);
@@ -123,6 +125,64 @@ describe("Changes workspace", () => {
     expect(screen.getAllByText("Задача").length).toBeGreaterThanOrEqual(2);
     fireEvent.click(screen.getAllByText("Alpha project")[0]!);
     expect(screen.getByText("Статус")).toBeTruthy();
+  });
+
+  it.each(["created", "updated", "archived", "deleted"] as const)("names %s availability events after their employee and keeps the event ID secondary", async (group) => {
+    const fixture = new ChangesApi();
+    const path = "availability/A-26-3451SP.yaml";
+    const person: EntityResult = { document: { schema: "gitpm/person@1", id: "U-26-900001", name: "Иван", family_name: "Иванов", middle_name: "Иванович", lifecycle: "active" }, path: "people/U-26-900001.yaml", blob_id: "a".repeat(40), draft_fingerprint: draft.fingerprint };
+    fixture.people = [person];
+    fixture.availabilityEvents = group === "deleted" ? [] : [{ ...person, path, document: { schema: "gitpm/availability-event@1", id: "A-26-3451SP", person: person.document.id, lifecycle: group === "archived" ? "archived" : "active" } }];
+    fixture.changes = { changed_files_count: 1, affected_projects: [], project_files: [], files: [{ path, kind: group === "created" ? "Added" : group === "deleted" ? "Deleted" : "Modified", diff_token: "availability", diff: "", hunks: [] }] };
+    fixture.semantic = {
+      created: [], updated: [], archived: [], deleted: [],
+      [group]: [{ id: "A-26-3451SP", path, schema: "gitpm/availability-event@1", fields: group === "deleted" ? [{ field: "person", before: person.document.id }] : group === "created" ? [{ field: "person", after: person.document.id }] : [{ field: "start", before: "2026-10-28", after: "2026-10-29" }] }],
+      counts: { created: 0, updated: 0, archived: 0, deleted: 0, [group]: 1 }, affected_projects: [], unclassified_files: [],
+      file_entities: [{ path, schema: "gitpm/availability-event@1", id: "A-26-3451SP" }],
+    };
+
+    const { container } = render(<ChangesWorkspace api={gitPmApi(fixture)} draft={draft} role="Developer" locale="ru" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} />);
+    await screen.findAllByText("Иванов Иван Иванович");
+    const summary = container.querySelector(".semantic-item summary")!;
+    expect(within(summary as HTMLElement).getByText("Событие доступности")).toBeTruthy();
+    expect(summary.querySelector("strong")?.textContent).toBe("Иванов Иван Иванович");
+    expect(summary.querySelector("code")?.textContent).toBe("A-26-3451SP");
+    expect(container.querySelector(".change-file-entity strong")?.textContent).toBe("Иванов Иван Иванович");
+    if (group === "deleted") {
+      fireEvent.click(summary);
+      expect(screen.getByText("Сотрудник")).toBeTruthy();
+      expect(screen.getByText("Иванов Иван Иванович (U-26-900001)")).toBeTruthy();
+    }
+  });
+
+  it("uses the new employee and configured name format when an availability event is reassigned", async () => {
+    const fixture = new ChangesApi();
+    const path = "availability/A-26-3451SP.yaml";
+    fixture.people = [{ document: { schema: "gitpm/person@1", id: "U-26-900002", name: "Анна", family_name: "Петрова", middle_name: "Ивановна", lifecycle: "active" }, path: "people/U-26-900002.yaml", blob_id: "a".repeat(40), draft_fingerprint: draft.fingerprint }];
+    fixture.semantic = {
+      created: [], archived: [], deleted: [],
+      updated: [{ id: "A-26-3451SP", path, schema: "gitpm/availability-event@1", fields: [{ field: "person", before: "U-26-900001", after: "U-26-900002" }] }],
+      counts: { created: 0, updated: 1, archived: 0, deleted: 0 }, affected_projects: [], unclassified_files: [],
+      file_entities: [{ path, schema: "gitpm/availability-event@1", id: "A-26-3451SP" }],
+    };
+    const { container } = render(<PersonNameFormatProvider format="family-initials"><ChangesWorkspace api={gitPmApi(fixture)} draft={draft} role="Developer" locale="ru" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} /></PersonNameFormatProvider>);
+    await screen.findByText("Петрова А. И.");
+    expect(container.querySelector(".semantic-item summary strong")?.textContent).toBe("Петрова А. И.");
+  });
+
+  it("keeps the event identity when its employee name cannot be resolved", async () => {
+    const fixture = new ChangesApi();
+    const path = "availability/A-26-3451SP.yaml";
+    fixture.semantic = {
+      created: [], updated: [], archived: [],
+      deleted: [{ id: "A-26-3451SP", path, schema: "gitpm/availability-event@1", fields: [{ field: "person", before: "U-26-900001" }] }],
+      counts: { created: 0, updated: 0, archived: 0, deleted: 1 }, affected_projects: [], unclassified_files: [],
+      file_entities: [{ path, schema: "gitpm/availability-event@1", id: "A-26-3451SP" }],
+    };
+    const { container } = render(<ChangesWorkspace api={gitPmApi(fixture)} draft={draft} role="Developer" locale="ru" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} />);
+    await screen.findAllByText("A-26-3451SP");
+    expect(container.querySelector(".semantic-item summary code")?.textContent).toBe("A-26-3451SP");
+    expect(container.querySelector(".semantic-item summary strong")?.textContent).toBe("A-26-3451SP");
   });
 
   it("shows localized field-level changes for configuration documents without IDs", async () => {

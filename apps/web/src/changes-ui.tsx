@@ -46,6 +46,7 @@ const fieldKeys: Readonly<Record<string, MessageKey>> = {
   name: "changes.fieldName",
   owner: "changes.fieldOwner",
   parent: "changes.fieldParent",
+  person: "admin.person",
   project: "changes.fieldProject",
   start: "changes.fieldStart",
   status: "changes.fieldStatus",
@@ -243,8 +244,15 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
   const namesById = useMemo(() => {
     const merged = new Map((semantic.file_entities ?? []).flatMap((entity) => entity.id === undefined || entity.display_name === undefined ? [] : [[entity.id, entity.display_name] as const]));
     for (const [id, name] of catalogNames) merged.set(id, name);
+    for (const item of [...semantic.created, ...semantic.updated, ...semantic.archived, ...semantic.deleted]) {
+      if (item.schema !== "gitpm/availability-event@1" || item.id === undefined) continue;
+      const personField = item.fields.find((field) => field.field === "person");
+      const person = personField?.after ?? personField?.before;
+      const name = typeof person === "string" ? merged.get(person) : undefined;
+      if (name !== undefined) merged.set(item.id, name);
+    }
     return merged;
-  }, [semantic.file_entities, catalogNames]);
+  }, [semantic, catalogNames]);
   const changedEntitiesCount = semantic.counts.created + semantic.counts.updated + semantic.counts.archived + semantic.counts.deleted;
 
   const load = async (keepData = true) => {
@@ -262,11 +270,19 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
             api.listEntities(draft.draft_id, "milestones"),
             api.listEntities(draft.draft_id, "calendars"),
             api.listEntities(draft.draft_id, "teams"),
+            (nextSemantic.file_entities ?? []).some((entity) => entity.schema === "gitpm/availability-event@1")
+              ? api.listEntities(draft.draft_id, "availability-events") : Promise.resolve([]),
           ]);
           nextCatalogNames = entityLists.flat().flatMap((entity) => {
             const name = referenceName(entity.document, formatPersonName);
             return name === "" ? [] : [[entity.document.id, name] as const];
           });
+          const names = new Map(nextCatalogNames);
+          nextCatalogNames = [...nextCatalogNames, ...entityLists.flat().flatMap(({ document }) => {
+            if (document.schema !== "gitpm/availability-event@1" || typeof document.person !== "string") return [];
+            const name = names.get(document.person);
+            return name === undefined ? [] : [[document.id, name] as const];
+          })];
         } catch {
           nextCatalogNames = [];
         }
