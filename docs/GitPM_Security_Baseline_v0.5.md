@@ -73,12 +73,22 @@ Webhook secret, backup assets, safety refs, token keyring, quota state and MCP c
 - exact redirect URI and `state`;
 - scopes `api` and `write_repository`;
 - no OIDC nonce;
-- access token only in process memory;
-- refresh token not persisted;
-- session <= token lifetime and 8 hours;
+- access and refresh tokens only in process memory; neither is persisted;
+- session has an absolute lifetime of 60 days from login; its HttpOnly cookie has the same lifetime;
+- user-token modes refresh expiring/expired access tokens on demand, including after idle periods,
+  rotating both tokens through one shared exchange per session; without a refresh token the
+  session remains capped by the original access-token lifetime;
+- rejected refresh credentials invalidate the session; temporary GitLab outages can be retried;
+- project-token mode discards user OAuth credentials after login and uses the Project Access
+  Token to recheck membership throughout the 60-day session;
 - restart requires login;
 - project membership and role refreshed before publish operations;
 - token absent from URL, argv, Git config, temp files, logs and metrics.
+
+The 60-day session policy supersedes the original eight-hour/access-token cap. It does not
+extend a GitLab access token itself: GitPM uses the [GitLab OAuth refresh flow](https://docs.gitlab.com/api/oauth2/#authorization-code-with-proof-key-for-code-exchange-pkce)
+before authorizing requests with a renewed user token. Logout, process restart, revoked refresh
+credentials, and missing project membership can end access earlier.
 
 ### 7.1. Non-GitLab transports (SSH, HTTP(S) token)
 

@@ -536,13 +536,21 @@ GitPM не выполняет rebase и не разрешает conflicts. Пр�
 
 - OAuth scopes: `api` и `write_repository`;
 - `state` обязателен; `nonce` не используется;
-- access token хранится только в памяти процесса;
-- refresh token не сохраняется;
-- session lifetime не превышает lifetime access token и 8 часов;
+- access и refresh tokens хранятся только в памяти процесса, без записи на диск;
+- session и HttpOnly cookie действуют максимум 60 дней от входа, без скользящего продления;
+- в user-token modes access token обновляется по refresh token перед запросом, включая
+  возобновление работы после паузы; параллельные запросы используют один обмен с ротацией токенов;
+- если refresh token отсутствует, session ограничена сроком access token;
+- отказ GitLab обновить credentials завершает session, временная недоступность допускает повтор;
+- в project-token mode пользовательские OAuth tokens удаляются после входа, session действует
+  до 60 дней с проверкой membership через Project Access Token;
 - restart завершает sessions;
 - пользователь без project membership получает deny;
 - role cache живет не более 60 секунд;
 - роль повторно запрашивается перед commit, push и MR.
+
+Политика 60 дней заменяет исходный лимит 8 часов и срок первого access token. Срок самого
+GitLab access token не увеличивается; GitPM получает новые токены через OAuth refresh flow.
 
 Для Git over HTTP(S) используется статический controlled `GIT_ASKPASS` helper. Token передается дочернему процессу только через environment, отсутствует в remote URL, argv, Git config, temp files и logs. Устанавливаются `GIT_TERMINAL_PROMPT=0`, isolated HOME и controlled Git config. Обычный HTTP поддерживается для доверенных локальных сетей и не обеспечивает шифрование токена или содержимого репозитория при передаче.
 

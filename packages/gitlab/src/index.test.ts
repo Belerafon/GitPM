@@ -9,8 +9,9 @@ function protocol(level: number | null = 30) {
   const implementation: GitLabProtocol = {
     exchangeAuthorizationCode: vi.fn(async (input) => {
       captured.push({ kind: "token", code: input.code, redirect_uri: input.redirectUri, verifier_hash: createHash("sha256").update(input.codeVerifier).digest("hex") });
-      return { access_token: "test-access-token-secret", refresh_token: "discarded", expires_in: 7200 };
+      return { access_token: "test-access-token-secret", refresh_token: "test-refresh-token-secret", expires_in: 7200 };
     }),
+    refreshAccessToken: vi.fn(async () => ({ access_token: "renewed-access-token-secret", refresh_token: "rotated-refresh-token-secret", expires_in: 7200 })),
     currentUser: vi.fn(async () => ({
       id: "42",
       username: "developer",
@@ -162,7 +163,7 @@ describe("OAuth PKCE and memory-only sessions", () => {
     await expect(auth.authorize(session.session_id, "mutation")).rejects.toMatchObject({ code: "ROLE_READ_ONLY" });
     expect((await auth.authorize(session.session_id, "read")).session.role).toBe("Reporter");
 
-    now += 2 * 60 * 60 * 1000 + 1;
+    now += 60 * 24 * 60 * 60 * 1000;
     await expect(auth.authorize(session.session_id, "read")).rejects.toMatchObject({ code: "SESSION_INVALID" });
     expect(auth.sessionCount()).toBe(0);
   });
@@ -173,9 +174,151 @@ describe("OAuth PKCE and memory-only sessions", () => {
     expect(mapAccessLevel(40)).toBe("Maintainer");
     expect(() => mapAccessLevel(null)).toThrowError(expect.objectContaining({ code: "PROJECT_MEMBERSHIP_REQUIRED" }));
   });
+
+  it.each([service, identityUserTokenService])("refreshes after a long pause and rotates credentials without extending the 60-day session", async (createService) => {
+    let now = Date.parse("2026-07-10T00:00:00Z");
+    const testDouble = protocol();
+    const auth = createService(testDouble.implementation, () => now);
+    const session = await auth.completeLogin(auth.startLogin().state, "code");
+    expect(session.expires_at).toBe("2026-09-08T00:00:00.000Z");
+    now += 40 * 24 * 60 * 60 * 1000;
+    const authorized = await auth.authorize(session.session_id, "push");
+    expect(authorized.accessToken).toBe("renewed-access-token-secret");
+    expect(authorized.session.expires_at).toBe(session.expires_at);
+    expect(JSON.stringify(authorized.session)).not.toMatch(/token-secret/u);
+    expect(testDouble.implementation.refreshAccessToken).toHaveBeenCalledWith({
+      refreshToken: "test-refresh-token-secret", redirectUri: "https://gitpm.example.test/auth/callback",
+    });
+    expect(testDouble.implementation.projectAccessLevel).toHaveBeenLastCalledWith("renewed-access-token-secret", "42");
+    now += 7200_000;
+    await auth.authorize(session.session_id, "read");
+    expect(testDouble.implementation.refreshAccessToken).toHaveBeenLastCalledWith({
+      refreshToken: "rotated-refresh-token-secret", redirectUri: "https://gitpm.example.test/auth/callback",
+    });
+    now = Date.parse(session.expires_at);
+    await expect(auth.authorize(session.session_id, "read")).rejects.toMatchObject({ code: "SESSION_INVALID" });
+    expect(testDouble.implementation.refreshAccessToken).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps project-token sessions for 60 days without retaining or refreshing user OAuth credentials", async () => {
+    let now = Date.parse("2026-07-10T00:00:00Z");
+    const testDouble = protocol();
+    const auth = identityProjectTokenService(testDouble.implementation, () => now);
+    const session = await auth.completeLogin(auth.startLogin().state, "code");
+    now += 59 * 24 * 60 * 60 * 1000;
+    expect((await auth.authorize(session.session_id, "push")).accessToken).toBe("project-access-token-secret");
+    expect(testDouble.implementation.refreshAccessToken).not.toHaveBeenCalled();
+    now = Date.parse(session.expires_at);
+    await expect(auth.authorize(session.session_id, "read")).rejects.toMatchObject({ code: "SESSION_INVALID" });
+  });
+
+  it("falls back to the access-token lifetime when GitLab supplies no refresh token", async () => {
+    let now = Date.parse("2026-07-10T00:00:00Z");
+    const testDouble = protocol();
+    vi.mocked(testDouble.implementation.exchangeAuthorizationCode).mockResolvedValue({ access_token: "token", expires_in: 7200 });
+    const auth = service(testDouble.implementation, () => now);
+    const session = await auth.completeLogin(auth.startLogin().state, "code");
+    expect(session.expires_at).toBe("2026-07-10T02:00:00.000Z");
+    now += 7200_000;
+    await expect(auth.authorize(session.session_id, "read")).rejects.toMatchObject({ code: "SESSION_INVALID" });
+    expect(testDouble.implementation.refreshAccessToken).not.toHaveBeenCalled();
+  });
+
+  it("shares a refresh across concurrent requests and still checks membership", async () => {
+    let now = Date.parse("2026-07-10T00:00:00Z");
+    const testDouble = protocol();
+    const auth = service(testDouble.implementation, () => now);
+    const session = await auth.completeLogin(auth.startLogin().state, "code");
+    now += 7200_000 - 15_000;
+    const results = await Promise.all([auth.authorize(session.session_id, "read"), auth.authorize(session.session_id, "push")]);
+    expect(results.map((result) => result.accessToken)).toEqual(["renewed-access-token-secret", "renewed-access-token-secret"]);
+    expect(testDouble.implementation.refreshAccessToken).toHaveBeenCalledTimes(1);
+    now += 7200_000;
+    vi.mocked(testDouble.implementation.projectAccessLevel).mockResolvedValue(null);
+    await expect(auth.authorize(session.session_id, "read")).rejects.toMatchObject({ code: "PROJECT_MEMBERSHIP_REQUIRED" });
+  });
+
+  it.each(["GITLAB_HTTP_400", "GITLAB_HTTP_401", "GITLAB_HTTP_403"])("invalidates a session when refresh is rejected with %s", async (code) => {
+    let now = Date.parse("2026-07-10T00:00:00Z");
+    const testDouble = protocol();
+    const auth = service(testDouble.implementation, () => now);
+    const session = await auth.completeLogin(auth.startLogin().state, "code");
+    vi.mocked(testDouble.implementation.refreshAccessToken).mockRejectedValue(new AuthError(code, "Rejected"));
+    now += 7200_000;
+    await expect(auth.authorize(session.session_id, "push")).rejects.toMatchObject({ code: "SESSION_INVALID" });
+    expect(auth.sessionCount()).toBe(0);
+    expect(testDouble.implementation.projectAccessLevel).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves a session across temporary GitLab outages so refresh can be retried", async () => {
+    let now = Date.parse("2026-07-10T00:00:00Z");
+    const testDouble = protocol();
+    const auth = service(testDouble.implementation, () => now);
+    const session = await auth.completeLogin(auth.startLogin().state, "code");
+    vi.mocked(testDouble.implementation.refreshAccessToken).mockRejectedValueOnce(new AuthError("GITLAB_UNAVAILABLE", "Unavailable"));
+    now += 7200_000;
+    await expect(auth.authorize(session.session_id, "read")).rejects.toMatchObject({ code: "GITLAB_UNAVAILABLE" });
+    expect(auth.sessionCount()).toBe(1);
+    expect((await auth.authorize(session.session_id, "push")).accessToken).toBe("renewed-access-token-secret");
+  });
+
+  it.each(["logout", "expiry"])("does not authorize or restore a session invalidated during refresh by %s", async (reason) => {
+    let now = Date.parse("2026-07-10T00:00:00Z");
+    const testDouble = protocol();
+    const auth = service(testDouble.implementation, () => now);
+    const session = await auth.completeLogin(auth.startLogin().state, "code");
+    vi.mocked(testDouble.implementation.refreshAccessToken).mockImplementation(async () => {
+      if (reason === "logout") auth.logout(session.session_id);
+      else now = Date.parse(session.expires_at);
+      return { access_token: "new", refresh_token: "new-refresh", expires_in: 7200 };
+    });
+    now += 7200_000;
+    await expect(auth.authorize(session.session_id, "read")).rejects.toMatchObject({ code: "SESSION_INVALID" });
+    expect(auth.sessionCount()).toBe(0);
+  });
+
+  it.each([
+    { access_token: "", refresh_token: "new", expires_in: 7200 },
+    { access_token: "new", expires_in: 7200 },
+    { access_token: "new", refresh_token: " ", expires_in: 7200 },
+  ])("rejects incomplete rotated credentials %#", async (token) => {
+    let now = Date.parse("2026-07-10T00:00:00Z");
+    const testDouble = protocol();
+    const auth = service(testDouble.implementation, () => now);
+    const session = await auth.completeLogin(auth.startLogin().state, "code");
+    vi.mocked(testDouble.implementation.refreshAccessToken).mockResolvedValue(token);
+    now += 7200_000;
+    await expect(auth.authorize(session.session_id, "read")).rejects.toMatchObject({ code: "SESSION_INVALID" });
+    expect(auth.sessionCount()).toBe(0);
+  });
+
+  it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])("rejects invalid refresh lifetime %s", async (expires_in) => {
+    let now = Date.parse("2026-07-10T00:00:00Z");
+    const testDouble = protocol();
+    const auth = service(testDouble.implementation, () => now);
+    const session = await auth.completeLogin(auth.startLogin().state, "code");
+    vi.mocked(testDouble.implementation.refreshAccessToken).mockResolvedValue({ access_token: "new", refresh_token: "new-refresh", expires_in });
+    now += 7200_000;
+    await expect(auth.authorize(session.session_id, "read")).rejects.toMatchObject({ code: "SESSION_INVALID" });
+    expect(auth.sessionCount()).toBe(0);
+  });
 });
 
 describe("GitLab HTTP protocol", () => {
+  it("refreshes through a form body with the original redirect URI and keeps secrets out of URLs and errors", async () => {
+    const fetchImplementation = vi.fn(async () => new Response(JSON.stringify({ access_token: "new", refresh_token: "rotated", expires_in: 7200 }), { status: 200 }));
+    const protocol = new GitLabHttpProtocol({ baseUrl: "https://gitlab.example.test", clientId: "client", project: "group/project", fetch: fetchImplementation as typeof fetch });
+    const input = { refreshToken: "refresh-secret", redirectUri: "https://gitpm.example.test/api/auth/callback" };
+    expect((await protocol.refreshAccessToken(input)).refresh_token).toBe("rotated");
+    const [url, init] = (fetchImplementation.mock.calls as unknown as Array<[string, RequestInit]>)[0]!;
+    expect(url).toBe("https://gitlab.example.test/oauth/token");
+    expect(init.method).toBe("POST");
+    expect(Object.fromEntries(new URLSearchParams(String(init.body)))).toEqual({
+      client_id: "client", refresh_token: "refresh-secret", grant_type: "refresh_token", redirect_uri: input.redirectUri,
+    });
+    fetchImplementation.mockRejectedValueOnce(new Error("refresh-secret"));
+    await expect(protocol.refreshAccessToken(input)).rejects.toMatchObject({ code: "GITLAB_UNAVAILABLE", message: "GitLab is unavailable" });
+  });
   it("uses bearer auth, encoded project paths and PKCE token exchange", async () => {
     const requests: Array<{ url: string; init?: RequestInit }> = [];
     const fetchImplementation = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {

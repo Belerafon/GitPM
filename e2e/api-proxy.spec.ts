@@ -8,6 +8,74 @@ import {
   type EntityResult,
 } from "./helpers.js";
 
+test("retains the OAuth cookie and renews authentication after a long idle period", async ({ context, page }) => {
+  const [{ buildApp }, { registerAuthApi }, { AuthService }] = await Promise.all([
+    import("../apps/server/dist/app.js"),
+    import("../apps/server/dist/auth-api.js"),
+    import("../packages/gitlab/dist/index.js"),
+  ]);
+  const originalSecure = process.env.GITPM_COOKIE_SECURE;
+  process.env.GITPM_COOKIE_SECURE = "false";
+  let now = Date.now();
+  const loggedInAt = now;
+  let refreshes = 0;
+  const auth = new AuthService({
+    authorizeUrl: "https://gitlab.example.test/oauth/authorize", clientId: "client",
+    redirectUri: "http://127.0.0.1/api/auth/callback", now: () => now,
+    protocol: {
+      exchangeAuthorizationCode: async () => ({ access_token: "initial-secret", refresh_token: "refresh-secret", expires_in: 7200 }),
+      refreshAccessToken: async () => {
+        refreshes += 1;
+        return { access_token: "renewed-secret", refresh_token: "rotated-secret", expires_in: 7200 };
+      },
+      currentUser: async () => ({ id: "42", username: "developer", name: "Разработчик" }),
+      projectAccessLevel: async () => 30,
+    },
+  });
+  const app = buildApp();
+  try {
+    registerAuthApi(app, {
+      session_id: "repository-session", user: { id: "anonymous", username: "anonymous" }, role: "Reporter",
+      mode: "repository", repository: { name: "test", path: "/test", has_remote: true },
+      expires_at: "9999-12-31T23:59:59.999Z",
+    }, {} as Parameters<typeof registerAuthApi>[2], {
+      ownerId: "local-user", authorName: "Local", authorEmail: "local@example.test",
+    }, auth, "http://127.0.0.1", {
+      authMode: "oauth-identity-user-token",
+      status: () => ({ repository_url: "https://gitlab.example.test/group/project.git", gitlab: { configured: true } }),
+    } as Parameters<typeof registerAuthApi>[6]);
+    const url = await app.listen({ host: "127.0.0.1", port: 0 });
+    const { state } = auth.startLogin();
+    const callback = await context.request.get(`${url}/api/auth/callback?state=${state}&code=test-code`, { maxRedirects: 0 });
+    expect(callback.status()).toBe(302);
+    const cookie = (await context.cookies(url)).find((entry) => entry.name === "gitpm_gitlab_session");
+    expect(cookie).toMatchObject({ httpOnly: true, sameSite: "Lax" });
+    expect(cookie!.expires - loggedInAt / 1000).toBeGreaterThan(60 * 24 * 60 * 60 - 10);
+
+    now += 40 * 24 * 60 * 60 * 1000;
+    const response = await page.goto(`${url}/api/auth/session`);
+    expect(response!.status()).toBe(200);
+    expect(await response!.json()).toMatchObject({
+      user: { id: "42", name: "Разработчик" },
+      expires_at: new Date(loggedInAt + 60 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+    expect(await response!.text()).not.toContain("secret");
+    expect(refreshes).toBe(1);
+    await page.reload();
+    expect(refreshes).toBe(1);
+
+    now = loggedInAt + 60 * 24 * 60 * 60 * 1000;
+    const expired = await page.reload();
+    expect(await expired!.json()).toMatchObject({ user: { id: "anonymous" }, gitlab: { configured: true } });
+    expect(auth.sessionCount()).toBe(0);
+    expect(refreshes).toBe(1);
+  } finally {
+    await app.close();
+    if (originalSecure === undefined) delete process.env.GITPM_COOKIE_SECURE;
+    else process.env.GITPM_COOKIE_SECURE = originalSecure;
+  }
+});
+
 test.describe("GitPM API through the Vite proxy", () => {
   test.beforeEach(async ({ request }) => await cleanupDrafts(request, "DRF-API-"));
   test.afterEach(async ({ request }) => await cleanupDrafts(request, "DRF-API-"));

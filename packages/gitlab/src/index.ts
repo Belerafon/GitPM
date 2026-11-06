@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 
-const MAX_SESSION_MS = 8 * 60 * 60 * 1000;
+const MAX_SESSION_MS = 60 * 24 * 60 * 60 * 1000;
+const TOKEN_REFRESH_LEEWAY_MS = 30_000;
 const ROLE_CACHE_MS = 60_000;
 const PENDING_LOGIN_MS = 10 * 60 * 1000;
 
@@ -48,6 +49,7 @@ export interface GitLabProtocol {
     readonly codeVerifier: string;
     readonly redirectUri: string;
   }): Promise<OAuthTokenResponse>;
+  refreshAccessToken(input: { readonly refreshToken: string; readonly redirectUri: string }): Promise<OAuthTokenResponse>;
   currentUser(accessToken: string): Promise<GitLabUser>;
   projectAccessLevel(accessToken: string, userId: string): Promise<number | null>;
 }
@@ -102,7 +104,10 @@ interface PendingLogin {
 
 interface Session {
   readonly id: string;
-  readonly oauthAccessToken?: string;
+  oauthAccessToken?: string;
+  oauthRefreshToken?: string;
+  oauthExpiresAt?: number;
+  refreshing?: Promise<void>;
   readonly user: GitLabUser;
   readonly expiresAt: number;
   role: GitPmRole;
@@ -127,6 +132,14 @@ export class AuthError extends Error {
 }
 
 const base64Url = (value: Buffer) => value.toString("base64url");
+
+function validateOAuthToken(token: OAuthTokenResponse): void {
+  if (typeof token?.access_token !== "string" || !token.access_token.trim()
+    || !Number.isFinite(token.expires_in) || token.expires_in <= 0
+    || (token.refresh_token !== undefined && typeof token.refresh_token !== "string")) {
+    throw new AuthError("OAUTH_TOKEN_INVALID", "OAuth token response is invalid");
+  }
+}
 
 export function mapAccessLevel(level: number | null): GitPmRole {
   if (level === null || level < 20) throw new AuthError("PROJECT_MEMBERSHIP_REQUIRED", "Project membership is required");
@@ -188,19 +201,26 @@ export class AuthService {
       codeVerifier: pending.verifier,
       redirectUri: this.options.redirectUri,
     });
-    if (!token.access_token || token.expires_in <= 0) throw new AuthError("OAUTH_TOKEN_INVALID", "OAuth token response is invalid");
+    validateOAuthToken(token);
     const user = await this.options.protocol.currentUser(token.access_token);
     const roleToken = gitLabAuthUsesProjectToken(this.authMode)
       ? this.roleAccessToken()
       : token.access_token;
     const role = mapAccessLevel(await this.options.protocol.projectAccessLevel(roleToken, user.id));
+    const projectTokenMode = gitLabAuthUsesProjectToken(this.authMode);
+    const refreshToken = token.refresh_token?.trim() || undefined;
     const session: Session = {
       id: randomUUID(),
-      ...(gitLabAuthUsesProjectToken(this.authMode) ? {} : { oauthAccessToken: token.access_token }),
+      ...(projectTokenMode ? {} : {
+        oauthAccessToken: token.access_token,
+        oauthExpiresAt: this.now() + token.expires_in * 1000,
+        ...(refreshToken === undefined ? {} : { oauthRefreshToken: refreshToken }),
+      }),
       user,
       role,
       roleCheckedAt: this.now(),
-      expiresAt: this.now() + Math.min(token.expires_in * 1000, MAX_SESSION_MS),
+      expiresAt: this.now() + (projectTokenMode || refreshToken !== undefined
+        ? MAX_SESSION_MS : Math.min(token.expires_in * 1000, MAX_SESSION_MS)),
     };
     this.sessions.set(session.id, session);
     return pending.returnTo === undefined ? this.public(session) : { ...this.public(session), return_to: pending.returnTo };
@@ -208,15 +228,15 @@ export class AuthService {
 
   async authorize(sessionId: string, operation: ProtectedOperation): Promise<{ session: PublicSession; accessToken: string }> {
     const session = this.sessions.get(sessionId);
-    if (!session || session.expiresAt <= this.now()) {
-      if (session) this.sessions.delete(sessionId);
-      throw new AuthError("SESSION_INVALID", "Session is unavailable or expired");
-    }
+    this.requireActiveSession(sessionId, session);
+    await this.ensureOAuthToken(session);
+    this.requireActiveSession(sessionId, session);
     const publishSensitive = operation !== "read";
     if (publishSensitive || this.now() - session.roleCheckedAt >= ROLE_CACHE_MS) {
       session.role = mapAccessLevel(await this.options.protocol.projectAccessLevel(this.roleAccessToken(session), session.user.id));
       session.roleCheckedAt = this.now();
     }
+    this.requireActiveSession(sessionId, session);
     if (operation !== "read" && session.role === "Reporter") {
       throw new AuthError("ROLE_READ_ONLY", "Reporter role is read-only");
     }
@@ -229,6 +249,52 @@ export class AuthService {
 
   sessionCount(): number {
     return this.sessions.size;
+  }
+
+  private requireActiveSession(sessionId: string, session: Session | undefined): asserts session is Session {
+    if (session === undefined || this.sessions.get(sessionId) !== session || session.expiresAt <= this.now()) {
+      this.sessions.delete(sessionId);
+      throw new AuthError("SESSION_INVALID", "Session is unavailable or expired");
+    }
+  }
+
+  private async ensureOAuthToken(session: Session): Promise<void> {
+    if (session.oauthExpiresAt === undefined) return;
+    if (session.oauthExpiresAt - this.now() > TOKEN_REFRESH_LEEWAY_MS) return;
+    if (session.oauthRefreshToken === undefined) {
+      if (session.oauthExpiresAt > this.now()) return;
+      this.sessions.delete(session.id);
+      throw new AuthError("SESSION_INVALID", "Session is unavailable or expired");
+    }
+    // GitLab rotates both tokens. Concurrent API requests must share one exchange.
+    const refreshing = session.refreshing ??= this.refreshOAuthToken(session, session.oauthRefreshToken);
+    try {
+      await refreshing;
+    } finally {
+      if (session.refreshing === refreshing) delete session.refreshing;
+    }
+  }
+
+  private async refreshOAuthToken(session: Session, refreshToken: string): Promise<void> {
+    try {
+      const token = await this.options.protocol.refreshAccessToken({ refreshToken, redirectUri: this.options.redirectUri });
+      validateOAuthToken(token);
+      if (typeof token.refresh_token !== "string" || !token.refresh_token.trim()) {
+        throw new AuthError("OAUTH_TOKEN_INVALID", "OAuth refresh response is invalid");
+      }
+      this.requireActiveSession(session.id, session);
+      session.oauthAccessToken = token.access_token;
+      session.oauthRefreshToken = token.refresh_token;
+      session.oauthExpiresAt = this.now() + token.expires_in * 1000;
+      // Recheck membership even if the previous cached role was still current.
+      session.roleCheckedAt = Number.NEGATIVE_INFINITY;
+    } catch (error) {
+      if (error instanceof AuthError && ["GITLAB_HTTP_400", "GITLAB_HTTP_401", "GITLAB_HTTP_403", "OAUTH_TOKEN_INVALID"].includes(error.code)) {
+        this.sessions.delete(session.id);
+        throw new AuthError("SESSION_INVALID", "Session is unavailable or expired");
+      }
+      throw error;
+    }
   }
 
   private public(session: Session): PublicSession {
@@ -270,6 +336,16 @@ export class GitLabHttpProtocol implements GitLabProtocol, GitLabMergeRequestPro
       code: input.code,
       code_verifier: input.codeVerifier,
       grant_type: "authorization_code",
+      redirect_uri: input.redirectUri,
+    });
+    return await this.request<OAuthTokenResponse>("/oauth/token", { method: "POST", body });
+  }
+
+  async refreshAccessToken(input: { refreshToken: string; redirectUri: string }): Promise<OAuthTokenResponse> {
+    const body = new URLSearchParams({
+      client_id: this.options.clientId,
+      refresh_token: input.refreshToken,
+      grant_type: "refresh_token",
       redirect_uri: input.redirectUri,
     });
     return await this.request<OAuthTokenResponse>("/oauth/token", { method: "POST", body });
@@ -328,8 +404,8 @@ export class GitLabHttpProtocol implements GitLabProtocol, GitLabMergeRequestPro
     let response: Response;
     try {
       response = await this.fetchImplementation(`${this.baseUrl}${pathname}`, { ...init, headers });
-    } catch (error) {
-      throw new AuthError("GITLAB_UNAVAILABLE", error instanceof Error ? error.message : "GitLab is unavailable");
+    } catch {
+      throw new AuthError("GITLAB_UNAVAILABLE", "GitLab is unavailable");
     }
     if (!response.ok) throw new AuthError(`GITLAB_HTTP_${response.status}`, `GitLab request failed (${response.status})`);
     return await response.json() as T;
@@ -358,6 +434,11 @@ export class GitLabProtocolTestDouble implements GitLabProtocol, GitLabMergeRequ
   async currentUser(_accessToken: string): Promise<GitLabUser> {
     this.captures.push({ operation: "current-user" });
     return this.user;
+  }
+
+  async refreshAccessToken(_input: { refreshToken: string; redirectUri: string }): Promise<OAuthTokenResponse> {
+    this.captures.push({ operation: "oauth-refresh" });
+    return { access_token: "gitlab-test-double-access-token", refresh_token: "gitlab-test-double-refresh-token", expires_in: 3600 };
   }
 
   async projectAccessLevel(_accessToken: string, userId: string): Promise<number | null> {

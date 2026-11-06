@@ -329,6 +329,7 @@ describe("optional GitLab repository session", () => {
       url: "/api/auth/session",
     });
     expect(session.json()).toMatchObject({
+      expires_at: (await auth.authorize()).session.expires_at,
       user: {
         id: "42",
         username: "maintainer",

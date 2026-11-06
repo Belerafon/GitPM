@@ -167,7 +167,7 @@ export function registerAuthApi(
         };
         return {
           ...publicBaseSession,
-          ...(loginRequiredMode ? { user: authorized.session.user, role: authorized.session.role } : {}),
+          ...(loginRequiredMode ? { user: authorized.session.user, role: authorized.session.role, expires_at: authorized.session.expires_at } : {}),
           repository,
           gitlab: { configured: true, user: authorized.session.user, role: authorized.session.role },
         };

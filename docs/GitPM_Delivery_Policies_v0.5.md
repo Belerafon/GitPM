@@ -91,6 +91,16 @@ and keeps the user token for push. The legacy user OAuth publication behavior
 remains a separate explicit
 `user-oauth-publication` mode. Webhook is absent;
 MR status is polled.
+Sessions and their HttpOnly cookies have a fixed maximum lifetime of 60 days from login.
+User-token modes retain access and refresh tokens only in process memory and rotate them
+on demand when the access token is near expiry or has expired, so idle periods do not force
+login every two hours. Concurrent requests share a single refresh. Without a refresh token,
+the session is capped by the access-token lifetime. Project-token mode keeps no user OAuth
+credentials after login and continues checking membership with the Project Access Token.
+Logout, server restart, or rejected refresh credentials require another login; temporary
+GitLab outages do not discard otherwise renewable sessions. Membership and role checks are
+unchanged. The session endpoint reports the authenticated session's actual expiry in modes
+that require login.
 Automated tests use local test doubles, not a live GitLab project.
 
 ## 12. Delete and restore
