@@ -88,6 +88,29 @@ test.describe("project overview geometry", () => {
       const workHeading = page.getByRole("heading", { name: "План работ", exact: true });
       await expect(workHeading).toBeVisible();
 
+      const descriptionGeometry = await page.locator(".project-plan-header").evaluate((header) => {
+        const headerBounds = header.getBoundingClientRect();
+        const actions = header.querySelector<HTMLElement>(".project-plan-actions")!.getBoundingClientRect();
+        const markdown = header.querySelector<HTMLElement>(".project-plan-description .safe-markdown")!;
+        const description = markdown.getBoundingClientRect();
+        const paragraph = markdown.querySelector("p")!.getBoundingClientRect();
+        const styles = getComputedStyle(markdown);
+        return {
+          headerLeft: headerBounds.left,
+          headerRight: headerBounds.right,
+          actionsBottom: actions.bottom,
+          descriptionLeft: description.left,
+          descriptionRight: description.right,
+          descriptionTop: description.top,
+          paragraphWidth: paragraph.width,
+          contentWidth: markdown.clientWidth - parseFloat(styles.paddingLeft) - parseFloat(styles.paddingRight),
+        };
+      });
+      expect(descriptionGeometry.descriptionLeft).toBeCloseTo(descriptionGeometry.headerLeft, 0);
+      expect(descriptionGeometry.descriptionRight).toBeCloseTo(descriptionGeometry.headerRight, 0);
+      expect(descriptionGeometry.descriptionTop).toBeGreaterThanOrEqual(descriptionGeometry.actionsBottom);
+      expect(descriptionGeometry.paragraphWidth).toBeCloseTo(descriptionGeometry.contentWidth, 0);
+
       // The work-plan toolbar stays compact: only the trigger and applied chips live inline.
       const toolbar = page.locator(".project-plan-toolbar");
       await expect(toolbar).toBeVisible();
