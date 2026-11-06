@@ -763,6 +763,9 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .task-detail-page { display: grid; gap: .8rem; margin-top: 1.25rem; }
 .back-link { width: fit-content; }
 .task-detail-card { display: grid; gap: 1rem; }
+.task-detail-card .detail-heading { flex-wrap: wrap; gap: .75rem; }
+.task-detail-card .detail-heading > div { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.task-detail-card .detail-heading > .inline-status-select, .task-detail-card .detail-heading > .state { flex: 0 0 auto; max-width: 100%; }
 .task-detail-card .detail-heading h2 { margin-bottom: .35rem; }
 .task-detail-meta { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; margin: 0; }
 .task-detail-meta div { border-radius: 8px; background: #f3f5f2; padding: .75rem; }

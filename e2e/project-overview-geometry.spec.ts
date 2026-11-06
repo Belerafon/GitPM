@@ -5,7 +5,7 @@ const activeDraftStorageKey = "gitpm.activeWorkingCopy";
 const e2eDraftInitializedKey = "gitpm.e2e.activeWorkingCopyInitialized";
 const geometryDraftId = "DRF-GEO-OVERVIEW";
 const wrappingTaskId = "T-26-WRP001";
-const wrappingTaskTitle = "Task with multiple long assignees";
+const wrappingTaskTitle = "Администрирование сервера";
 const wrappingAssignees = [
   { id: "U-26-WRP001", name: "Александр Александрович Александров" },
   { id: "U-26-WRP002", name: "Екатерина Константиновна Соколова" },
@@ -25,6 +25,18 @@ test.describe("project overview geometry", () => {
     sharedRequest = await createRequestContext.newContext({ baseURL: "http://127.0.0.1:5174" });
     await cleanupDrafts(sharedRequest, "DRF-GEO-");
     let fingerprint = (await createDraft(sharedRequest, geometryDraftId)).fingerprint;
+    const statusesResponse = await sharedRequest.get(`/api/drafts/${geometryDraftId}/config/statuses`);
+    expect(statusesResponse.status(), await statusesResponse.text()).toBe(200);
+    const statuses = await statusesResponse.json() as { readonly blob_id: string; readonly document: { readonly statuses: readonly { readonly slug: string; readonly title: string }[] } };
+    const updateStatuses = await sharedRequest.put(`/api/drafts/${geometryDraftId}/config/statuses`, {
+      data: {
+        expected_fingerprint: fingerprint,
+        expected_blob_id: statuses.blob_id,
+        document: { ...statuses.document, statuses: statuses.document.statuses.map((status) => ({ ...status, title: status.slug === "backlog" ? "В очереди" : status.slug === "in-progress" ? "В работе" : status.title })) },
+      },
+    });
+    expect(updateStatuses.status(), await updateStatuses.text()).toBe(200);
+    fingerprint = (await updateStatuses.json() as { readonly draft_fingerprint: string }).draft_fingerprint;
     const repositoryResponse = await sharedRequest.get(`/api/drafts/${geometryDraftId}/config/repository`);
     expect(repositoryResponse.status(), await repositoryResponse.text()).toBe(200);
     const repository = await repositoryResponse.json() as { readonly document: { readonly default_calendar: string } };
@@ -83,6 +95,42 @@ test.describe("project overview geometry", () => {
   });
 
   for (const viewport of viewports) {
+    test(`keeps the task details status readable beside a long title (${viewport.name})`, async ({ page }) => {
+      await page.goto(`/projects/${FIXTURE_PROJECT_ID}/tasks/${wrappingTaskId}`);
+      const inspector = page.getByRole("complementary", { name: "Детали задачи", exact: true });
+      await expect(inspector.getByRole("heading", { name: wrappingTaskTitle, exact: true })).toBeVisible();
+      const status = inspector.getByRole("combobox", { name: `Статус: ${wrappingTaskTitle}`, exact: true });
+      await status.selectOption("backlog");
+      await expect(status).toBeEnabled();
+      await expect(status).toHaveValue("backlog");
+
+      for (const value of ["backlog", "in-progress"]) {
+        if (value !== "backlog") {
+          await status.selectOption(value);
+          await expect(status).toBeEnabled();
+        }
+        await expect(status).toHaveValue(value);
+        const geometry = await status.evaluate((select: HTMLSelectElement) => {
+          const style = getComputedStyle(select);
+          const canvas = document.createElement("canvas");
+          const context = canvas.getContext("2d")!;
+          context.font = style.font;
+          const textWidth = context.measureText(select.selectedOptions[0]!.text).width;
+          const bounds = select.getBoundingClientRect();
+          const heading = select.closest(".detail-heading")!.getBoundingClientRect();
+          const title = select.closest(".detail-heading")!.querySelector("h2")!.getBoundingClientRect();
+          // Reserve space for the native select arrow as well as the CSS padding.
+          const availableWidth = select.clientWidth - Number.parseFloat(style.paddingLeft) - Number.parseFloat(style.paddingRight) - 20;
+          return { textWidth, availableWidth, left: bounds.left, right: bounds.right, top: bounds.top, headingLeft: heading.left, headingRight: heading.right, titleRight: title.right, titleBottom: title.bottom };
+        });
+        expect(geometry.availableWidth).toBeGreaterThanOrEqual(geometry.textWidth);
+        expect(geometry.left).toBeGreaterThanOrEqual(geometry.headingLeft - 1);
+        expect(geometry.right).toBeLessThanOrEqual(geometry.headingRight + 1);
+        expect(geometry.titleRight <= geometry.left || geometry.titleBottom <= geometry.top).toBe(true);
+      }
+      expect(await inspector.evaluate((element) => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+    });
+
     test(`keeps the plan toolbar inside the viewport without horizontal overflow (${viewport.name})`, async ({ page }) => {
       await page.goto(`/projects/${FIXTURE_PROJECT_ID}`);
       const workHeading = page.getByRole("heading", { name: "План работ", exact: true });
