@@ -62,6 +62,8 @@ describe("person profile", () => {
     expect(within(hint).getAllByText("Paused: person unavailable")).toHaveLength(1);
     fireEvent.click(within(hint).getByRole("button", { name: /Ship profile/u }));
     expect(onNavigate).toHaveBeenCalledWith("tasks", { projectId, taskId });
+    fireEvent.mouseLeave(overlapDay);
+    expect(screen.queryByRole("region", { name: "Jul 22, 2026" })).toBeNull();
     const occupiedDay = document.querySelector<HTMLElement>('[data-date="2026-07-20"]')!;
     expect(occupiedDay.className).toContain("occupied");
     expect(occupiedDay.className).not.toContain("overlap");
