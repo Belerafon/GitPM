@@ -64,6 +64,7 @@ describe("Changes workspace", () => {
     const fixture = new ChangesApi();
     render(<ChangesWorkspace api={gitPmApi(fixture)} draft={draft} role="Developer" locale="en" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} />);
     expect(await screen.findByRole("heading", { name: "What changed" })).toBeTruthy();
+    expect(screen.getByRole("list", { name: "Affected projects: 1" }).textContent).toContain("Alpha project");
     expect(screen.getAllByText("Alpha project").length).toBeGreaterThan(0);
     expect(screen.getByText("T-26-111111")).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "Archived" })).toBeNull();
@@ -73,7 +74,7 @@ describe("Changes workspace", () => {
     expect(technicalChanges?.open).toBe(true);
     expect(screen.getByText("Added")).toBeTruthy(); expect(screen.getAllByText("Modified").length).toBeGreaterThan(0); expect(screen.getAllByText("Deleted").length).toBeGreaterThan(0);
     expect(screen.getByText("-old")).toBeTruthy(); expect(screen.getByText("+new")).toBeTruthy();
-    fireEvent.click(screen.getAllByText("Alpha project")[0]!);
+    fireEvent.click(screen.getAllByText("Alpha project").map((node) => node.closest("summary")).find((node) => node !== null)!);
     expect(screen.getByText("Status")).toBeTruthy();
     expect(screen.getByText("backlog")).toBeTruthy(); expect(screen.getByText("active")).toBeTruthy();
     expect(screen.queryByText("Technical details")).toBeNull();
@@ -123,8 +124,64 @@ describe("Changes workspace", () => {
     expect(screen.getAllByText("Проект").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Alpha project").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Задача").length).toBeGreaterThanOrEqual(2);
-    fireEvent.click(screen.getAllByText("Alpha project")[0]!);
+    fireEvent.click(screen.getAllByText("Alpha project").map((node) => node.closest("summary")).find((node) => node !== null)!);
     expect(screen.getByText("Статус")).toBeTruthy();
+  });
+
+  it("names every affected project and keeps each entity under that project", async () => {
+    const fixture = new ChangesApi();
+    fixture.changes = {
+      changed_files_count: 3,
+      affected_projects: ["P-26-111111", "P-26-222222"],
+      project_files: [],
+      files: [
+        { path: "projects/P-26-111111/tasks/T-26-111111.yaml", kind: "Modified", diff_token: "alpha", diff: "", hunks: [] },
+        { path: "projects/P-26-222222/tasks/T-26-333333.yaml", kind: "Modified", diff_token: "beta", diff: "", hunks: [] },
+        { path: ".gitpm/statuses.yaml", kind: "Modified", diff_token: "statuses", diff: "", hunks: [] },
+      ],
+    };
+    fixture.semantic = {
+      created: [], archived: [], deleted: [],
+      updated: [
+        { id: "T-26-111111", path: "projects/P-26-111111/tasks/T-26-111111.yaml", schema: "gitpm/task@2", project: "P-26-111111", fields: [{ field: "title", before: "Старое", after: "Отладка стенда" }] },
+        { id: "M-26-28FKVJ", path: "projects/P-26-222222/milestones/M-26-28FKVJ.yaml", schema: "gitpm/milestone@2", project: "P-26-222222", fields: [{ field: "name", before: "Этап 3", after: "Этап 4" }] },
+        { path: ".gitpm/statuses.yaml", schema: "gitpm/statuses@2", fields: [{ field: "name", before: "Old", after: "New" }] },
+      ],
+      counts: { created: 0, updated: 3, archived: 0, deleted: 0 },
+      affected_projects: ["P-26-111111", "P-26-222222"],
+      unclassified_files: [],
+      file_entities: [
+        { path: "projects/P-26-111111/tasks/T-26-111111.yaml", schema: "gitpm/task@2", id: "T-26-111111", display_name: "Отладка стенда" },
+        { path: "projects/P-26-222222/milestones/M-26-28FKVJ.yaml", schema: "gitpm/milestone@2", id: "M-26-28FKVJ", display_name: "Этап 4" },
+        { path: ".gitpm/statuses.yaml", schema: "gitpm/statuses@2" },
+      ],
+    };
+    const onNavigate = vi.fn();
+    const { container } = render(<ChangesWorkspace api={gitPmApi(fixture)} draft={draft} role="Developer" locale="ru" onChanged={vi.fn(async () => undefined)} confirmAction={() => true} onNavigate={onNavigate} />);
+    const projects = await screen.findByRole("list", { name: "Затронуто проектов: 2" });
+    expect(within(projects).getByRole("link", { name: "Alpha project" })).toBeTruthy();
+    expect(within(projects).getByRole("link", { name: "Бета" })).toBeTruthy();
+    fireEvent.click(within(projects).getByRole("link", { name: "Бета" }));
+    expect(onNavigate).toHaveBeenCalledWith("projects", { projectId: "P-26-222222" });
+    expect(projects.textContent).toContain("P-26-111111");
+    expect(projects.textContent).toContain("P-26-222222");
+    expect(container.querySelector(".changes-summary-projects")?.textContent).toContain("Alpha project · Бета");
+
+    const groups = Array.from(container.querySelectorAll(".semantic-project"));
+    const alpha = groups.find((group) => group.querySelector("h5")?.textContent?.includes("Alpha project"));
+    const beta = groups.find((group) => group.querySelector("h5")?.textContent?.includes("Бета"));
+    const outside = groups.find((group) => group.querySelector("h5")?.textContent?.includes("Не в проекте"));
+    expect(alpha?.textContent).toContain("Отладка стенда");
+    expect(alpha?.textContent).toContain("Проект: Alpha project");
+    expect(alpha?.textContent).not.toContain("Этап 4");
+    expect(beta?.textContent).toContain("Этап 4");
+    expect(beta?.textContent).toContain("Проект: Бета");
+    expect(beta?.textContent).not.toContain("Отладка стенда");
+    expect(outside?.textContent).toContain("Статусы");
+    expect(outside?.textContent).not.toContain("Проект:");
+
+    fireEvent.click(screen.getByRole("button", { name: "Подготовить коммит" }));
+    expect(screen.getByText("Проекты: Alpha project, Бета.")).toBeTruthy();
   });
 
   it.each(["created", "updated", "archived", "deleted"] as const)("names %s availability events after their employee and keeps the event ID secondary", async (group) => {
@@ -231,11 +288,11 @@ describe("Changes workspace", () => {
     expect(screen.getByText("Файл переименован")).toBeTruthy();
     expect(screen.getByText("Файл заменён")).toBeTruthy();
     expect(screen.getByText("Текст · доступен Git diff")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Alpha project" })).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Бета" })).toBeTruthy();
+    expect(screen.getAllByRole("link", { name: "Alpha project" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: "Бета" }).length).toBeGreaterThan(0);
     expect(screen.getAllByText("P-26-111111").length).toBeGreaterThan(0);
     expect(screen.getAllByText("P-26-222222").length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByRole("link", { name: "Бета" }));
+    fireEvent.click(screen.getAllByRole("link", { name: "Бета" })[0]!);
     expect(onNavigate).toHaveBeenCalledWith("projects", { projectId: "P-26-222222" });
     fireEvent.click(screen.getByRole("button", { name: /Файл изменён.*notes\.md/u }));
     expect(screen.getByText("+новый")).toBeTruthy();
@@ -262,6 +319,7 @@ describe("Changes workspace", () => {
     await screen.findAllByText("projects/P-26-111111/project.yaml");
     fireEvent.click(screen.getByRole("button", { name: "Prepare commit" }));
     expect(screen.getByText("All 3 changed files will be committed.")).toBeTruthy();
+    expect(screen.getByText("Projects: Alpha project.")).toBeTruthy();
     expect(screen.queryByRole("checkbox")).toBeNull();
     fireEvent.change(screen.getByLabelText("Commit message"), { target: { value: "Publish Alpha" } });
     fireEvent.click(screen.getByRole("button", { name: "Commit all" }));
