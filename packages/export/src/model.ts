@@ -1,5 +1,6 @@
 import {
   annualVacationAllowance,
+  availabilityProgress,
   emptyVacationFilters,
   vacationSummary,
   vacationYearBalance,
@@ -697,7 +698,7 @@ function buildVacationReport(
       .map((event) => ({
         person: vacationPeople.find((person) => person.id === event.personId)?.name ?? event.personId,
         kind: absenceKindLabel(options.locale, event.kind),
-        state: absenceStateLabel(options.locale, event.state),
+        state: absenceStateLabel(options.locale, availabilityProgress(event, options.asOf)),
         start: event.start,
         finish: event.finish,
         note: event.note,
@@ -747,7 +748,11 @@ function buildPersonProfile(
     tasks: assigned.map((task) => ({ title: text(task, "title"), project: projectNames.get(text(task, "project")) ?? text(task, "project"), schedule: formatSchedule(scheduling, task) })),
     absences: events.filter((event) => text(event, "state") !== "cancelled").map((event) => ({
       kind: absenceKindLabel(options.locale, text(event, "kind")),
-      state: absenceStateLabel(options.locale, text(event, "state")),
+      state: absenceStateLabel(options.locale, availabilityProgress({
+        state: text(event, "state"),
+        start: text(event, "start"),
+        finish: text(event, "finish"),
+      }, options.asOf)),
       start: text(event, "start"),
       finish: text(event, "finish"),
     })),

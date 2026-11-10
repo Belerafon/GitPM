@@ -214,7 +214,9 @@ Apply these principles:
 
 The repository-wide documents are \`.gitpm/repository.yaml\`, \`.gitpm/statuses.yaml\`, and
 \`.gitpm/issue-types.yaml\`. Global entity directories are \`people/\`, \`teams/\`,
-\`calendars/\`, and \`availability/\`. A Project occupies \`projects/<P-id>/\` and contains \`project.yaml\`, plus
+\`calendars/\`, and \`availability/\`. Availability event \`state\` is only \`active\` or
+\`cancelled\`. Do not store \`planned\` or \`taken\`; views derive those labels from the dates.
+A Project occupies \`projects/<P-id>/\` and contains \`project.yaml\`, plus
 \`milestones/\`, \`tasks/\`, \`views/\`, and task-scoped \`comments/\`.
 
 IDs are immutable and have the form \`<type>-<UTC-year>-<six Crockford Base32 characters>\`.

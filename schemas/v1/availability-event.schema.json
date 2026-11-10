@@ -12,7 +12,7 @@
     "finish": {"$ref": "common.schema.json#/$defs/date"},
     "kind": {"enum": ["vacation", "day-off", "sick-leave", "training", "other"]},
     "availability_percent": {"type": "number", "minimum": 0, "maximum": 100, "multipleOf": 0.25},
-    "state": {"enum": ["planned", "taken", "cancelled"]},
+    "state": {"enum": ["active", "cancelled"]},
     "note_markdown": {"type": "string"},
     "lifecycle": {"$ref": "common.schema.json#/$defs/lifecycle"}
   }

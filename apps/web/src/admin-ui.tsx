@@ -28,7 +28,7 @@ const strings = (document: GitPmDocument, key: string) => Array.isArray(document
 const numbers = (document: GitPmDocument, key: string) => Array.isArray(document[key]) ? (document[key] as unknown[]).filter((item): item is number => typeof item === "number") : [];
 const calendarDates = (data: FormData) => data.getAll("holidays").map(String).filter(Boolean);
 const todayIso = (now?: string): string => (now ?? new Date().toISOString()).slice(0, 10);
-const asAbsenceRecord = (document: GitPmDocument): AvailabilityRecord => ({ start: text(document, "start"), finish: text(document, "finish"), kind: text(document, "kind") || "other", state: text(document, "state") || "planned", lifecycle: text(document, "lifecycle") });
+const asAbsenceRecord = (document: GitPmDocument): AvailabilityRecord => ({ start: text(document, "start"), finish: text(document, "finish"), kind: text(document, "kind") || "other", state: text(document, "state") || "active", lifecycle: text(document, "lifecycle") });
 const countableAbsence = (record: AvailabilityRecord): boolean => record.lifecycle === "active" && record.state !== "cancelled" && isIsoDate(record.start) && isIsoDate(record.finish) && record.start <= record.finish;
 interface PersonAbsence { readonly current: AvailabilityRecord | undefined; readonly next: AvailabilityRecord | undefined }
 const nextPersonAbsence = (events: readonly EntityResult[], today: string): PersonAbsence => {

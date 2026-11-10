@@ -4,6 +4,7 @@ export {
   addMonths,
   clipToWindow,
   dayNumber,
+  availabilityProgress,
   emptyVacationFilters,
   inclusiveDayCount,
   isCountableEvent,
@@ -26,6 +27,7 @@ export {
 import {
   DEFAULT_WORKING_CALENDAR,
   addMonths,
+  availabilityProgress,
   clipToWindow,
   dayNumber,
   inclusiveDayCount,
@@ -146,11 +148,11 @@ export function vacationCalendarWindow(today: string, period: VacationCalendarPe
   return buildWindow(start, lastDayOfMonth(addMonths(start, period - 1)), VACATION_CALENDAR_DAY_WIDTH[period]);
 }
 
-export function vacationBars(events: readonly VacationEvent[], people: readonly VacationPerson[], window: VacationCalendarWindow, filters: VacationCalendarFilters, calendars: ReadonlyMap<string, WorkingCalendar> = new Map()): readonly VacationCalendarBar[] {
+export function vacationBars(events: readonly VacationEvent[], people: readonly VacationPerson[], window: VacationCalendarWindow, filters: VacationCalendarFilters, today: string, calendars: ReadonlyMap<string, WorkingCalendar> = new Map()): readonly VacationCalendarBar[] {
   const visible = new Map(people.map((person) => [person.id, person]));
   return events.flatMap((event) => {
     const person = visible.get(event.personId);
-    if (person === undefined || !isCountableEvent(event, filters)) return [];
+    if (person === undefined || !isCountableEvent(event, filters, today)) return [];
     const clipped = clipToWindow(event.start, event.finish, window.start, window.finish);
     if (clipped === undefined) return [];
     const geometry = barGeometry(clipped.start, clipped.finish, window.start, window.dayWidth);
@@ -158,7 +160,7 @@ export function vacationBars(events: readonly VacationEvent[], people: readonly 
       id: event.id,
       personId: event.personId,
       kind: event.kind,
-      state: event.state,
+      state: availabilityProgress(event, today),
       start: event.start,
       finish: event.finish,
       note: event.note,

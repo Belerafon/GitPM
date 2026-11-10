@@ -5,5 +5,5 @@ start: 2026-08-17
 finish: 2026-08-21
 kind: vacation
 availability_percent: 0
-state: planned
+state: active
 lifecycle: active

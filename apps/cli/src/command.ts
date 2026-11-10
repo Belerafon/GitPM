@@ -158,7 +158,7 @@ const schemaExamples: Readonly<Record<string, string>> = {
   "availability-event": [
     "schema: gitpm/availability-event@1", "id: A-26-X8D2FW", "person: U-26-7K4M9Q",
     "start: 2026-08-17", "finish: 2026-08-28", "kind: vacation",
-    "availability_percent: 0", "state: planned", "lifecycle: active", "",
+    "availability_percent: 0", "state: active", "lifecycle: active", "",
   ].join("\n"),
   person: [
     "schema: gitpm/person@1", "id: U-26-7K4M9Q", "family_name: Lovelace", "name: Ada", "middle_name: Byron",

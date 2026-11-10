@@ -238,8 +238,8 @@ export const ABSENCE_KIND: Readonly<Record<ExportLocale, Readonly<Record<string,
 };
 
 export const ABSENCE_STATE: Readonly<Record<ExportLocale, Readonly<Record<string, string>>>> = {
-  en: { planned: "Planned", taken: "Taken", cancelled: "Cancelled" },
-  ru: { planned: "Запланировано", taken: "Использовано", cancelled: "Отменено" },
+  en: { planned: "Planned", "in-progress": "In progress", taken: "Taken", cancelled: "Cancelled" },
+  ru: { planned: "Запланировано", "in-progress": "Идёт", taken: "Использовано", cancelled: "Отменено" },
 };
 
 export function copyFor(locale: ExportLocale): CopyText {

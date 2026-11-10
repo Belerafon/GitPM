@@ -29,7 +29,7 @@ describe("person profile", () => {
     const entities = [
       result({ schema: "gitpm/person@1", id: personId, name: "Ada Lovelace", email: "ada@example.test", weekly_capacity_hours: 32, calendar: "C-26-DEFAULT", lifecycle: "active" }),
       result({ schema: "gitpm/calendar@1", id: "C-26-DEFAULT", name: "Default", working_weekdays: [1, 2, 3, 4, 5], holidays: ["2026-08-03"], lifecycle: "active" }),
-      result({ schema: "gitpm/availability-event@1", id: "A-26-VACATN", person: personId, start: "2026-07-22", finish: "2026-07-23", kind: "vacation", availability_percent: 0, state: "planned", lifecycle: "active" }),
+      result({ schema: "gitpm/availability-event@1", id: "A-26-VACATN", person: personId, start: "2026-07-22", finish: "2026-07-23", kind: "vacation", availability_percent: 0, state: "active", lifecycle: "active" }),
       result({ schema: "gitpm/team@1", id: "TEAM-26-CORE", name: "Core", members: [personId], lifecycle: "active" }),
       result({ schema: "gitpm/project@2", id: projectId, name: "Alpha", owner: personId, status: "in-progress", lifecycle: "active" }),
       result({ schema: "gitpm/project@2", id: contributingProjectId, name: "Beta", owner: "U-26-GRACE", status: "planned", lifecycle: "active" }),
@@ -157,7 +157,7 @@ describe("person profile", () => {
     expect((within(tasks).getByRole("checkbox", { name: "Done" }) as HTMLInputElement).checked).toBe(false);
   });
 
-  it("records a planned absence from the person profile", async () => {
+  it("records an active absence from the person profile", async () => {
     const personId = "U-26-ADA000";
     const person = result({ schema: "gitpm/person@1", id: personId, name: "Ada", weekly_capacity_hours: 40, calendar: "C-26-DEFAULT", lifecycle: "active" });
     const calendar = result({ schema: "gitpm/calendar@1", id: "C-26-DEFAULT", name: "Default", working_weekdays: [1, 2, 3, 4, 5], holidays: [], lifecycle: "active" });
@@ -182,7 +182,7 @@ describe("person profile", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(createEntity).toHaveBeenCalledTimes(1));
-    expect(createEntity).toHaveBeenCalledWith(draft.draft_id, "availability-events", "b".repeat(64), expect.objectContaining({ schema: "gitpm/availability-event@1", id: expect.stringMatching(/^A-/u), person: personId, start: "2026-08-17", finish: "2026-08-21", kind: "vacation", availability_percent: 0, state: "planned" }));
+    expect(createEntity).toHaveBeenCalledWith(draft.draft_id, "availability-events", "b".repeat(64), expect.objectContaining({ schema: "gitpm/availability-event@1", id: expect.stringMatching(/^A-/u), person: personId, start: "2026-08-17", finish: "2026-08-21", kind: "vacation", availability_percent: 0, state: "active" }));
     expect(await screen.findByText("Aug 17, 2026 — Aug 21, 2026")).toBeTruthy();
   });
 

@@ -58,7 +58,7 @@ describe("workload calculator", () => {
     const report = calculateWorkload([
       projectTask({ id: "T-26-LEAVE0", title: "Spans leave", lifecycle: "active", estimate_hours: 40, start: "2026-07-06", finish: "2026-07-10", assignees: [ada.id] }),
     ], [ada], [calendar], [project], [{
-      id: "A-26-LEAVE0", person: ada.id, start: "2026-07-09", finish: "2026-07-09", availability_percent: 0, state: "planned", lifecycle: "active",
+      id: "A-26-LEAVE0", person: ada.id, start: "2026-07-09", finish: "2026-07-09", availability_percent: 0, state: "active", lifecycle: "active",
     }]);
 
     expect(report.formula).toBe("equal-assignee-share/capacity-weighted-person-day/v2");
