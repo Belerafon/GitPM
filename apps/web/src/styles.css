@@ -1046,41 +1046,48 @@ select.inline-status-select:disabled { cursor: wait; opacity: .65; }
 .people-calendar-navigation { display: grid; grid-template-columns: auto minmax(150px, 1fr) auto; gap: .45rem; align-items: center; }
 .people-calendar-navigation strong { text-align: center; text-transform: capitalize; }
 .people-calendar-navigation button { padding: .4rem .6rem; }
-.people-calendar-summary, .people-calendar-legend, .people-project-legend { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .75rem; }
-.people-calendar-summary span, .people-calendar-legend span, .people-project-legend span { border-radius: 999px; padding: .23rem .5rem; font-size: .71rem; }
+.people-calendar-summary, .people-project-legend { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .75rem; }
+.people-calendar-summary button { border: 1px solid transparent; border-radius: 999px; padding: .23rem .5rem; font-size: .71rem; }
+.people-calendar-summary button[aria-pressed="true"] { box-shadow: inset 0 0 0 1px currentColor; }
+.people-calendar-summary button:hover:not(:disabled) { border-color: currentColor; }
 .calendar-summary-work { background: #edf1ed; color: #4f5b54; }
-.calendar-summary-free, .people-calendar-legend .free { background: #e2f2e5; color: #285936; }
-.calendar-summary-overlap, .people-calendar-legend .overlap { background: #fbe3df; color: #85362e; }
-.people-calendar-legend .today { background: #fde8e6; color: #9a3b34; }
-.people-calendar-legend .busy { background: #e6edf5; color: #315473; }
-.people-calendar-legend .off { background: #eff0ee; color: #727873; }
-.people-project-legend span { border: 1px solid #dce2dd; background: #fff; color: #48554d; }
+.calendar-summary-free { background: #e2f2e5; color: #285936; }
+.calendar-summary-tasks { background: #e7eef4; color: #315473; }
+.calendar-summary-availability { background: #f8e8e5; color: #8a332b; }
+.people-project-legend span { display: inline-flex; align-items: center; gap: .35rem; border: 1px solid #dce2dd; border-radius: 999px; background: #fff; color: #48554d; padding: .18rem .5rem .18rem .35rem; font-size: .71rem; }
+.people-project-legend i { width: .55rem; height: .55rem; border-radius: 999px; }
 .people-calendar-scroll { overflow-x: auto; margin-top: .75rem; border: 1px solid #d9ddd7; border-radius: 10px; }
 .people-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(92px, 1fr)); min-width: 644px; background: #dfe3de; gap: 1px; }
 .people-calendar-weekday { background: #f2f4f1; color: #606963; padding: .28rem .35rem; font-size: .65rem; font-weight: 750; text-align: center; }
-.people-calendar-day { display: grid; align-content: start; min-height: 56px; gap: .2rem; background: #fff; padding: .28rem; }
-.people-calendar-day.outside { background: #f7f8f6; opacity: .48; }
+.people-calendar-day { display: flex; align-items: flex-start; width: 100%; height: 52px; min-height: 52px; border: 0; border-radius: 0; background: #fff; padding: .28rem; text-align: left; }
+.people-calendar-day:hover:not(:disabled) { border-color: transparent; }
+.people-calendar-day.outside { background: #f7f8f6; color: #8b928c; }
 .people-calendar-day.off { background: #f3f4f2; }
-.people-calendar-day.free { background: #f1f8f2; box-shadow: inset 0 2px 0 #94c79f; }
-.people-calendar-day.busy { background: #f7faff; box-shadow: inset 0 2px 0 #8aa8c4; }
-.people-calendar-day.overlap { background: #fff6f3; box-shadow: inset 0 2px 0 #d66b5f; }
-.people-calendar-day.today { position: relative; z-index: 1; outline: 2px solid #d94d43; outline-offset: -2px; }
+.people-calendar-day.free { background: #f3f8f4; }
+.people-calendar-day.occupied { background: #fff; }
+.people-calendar-day.unavailable, .people-calendar-day.partial { background: #fbf3e4; }
 .people-calendar-day.today time { display: inline-grid; place-items: center; min-width: 1.35rem; height: 1.35rem; border-radius: 999px; background: #d94d43; color: #fff; }
-.people-calendar-date { display: flex; align-items: center; justify-content: space-between; gap: .2rem; min-height: 1.35rem; }
-.people-calendar-date time { color: #38423c; font-size: .73rem; font-weight: 750; }
-.people-calendar-date span { color: #69716c; font-size: .63rem; }
-.people-calendar-date strong { border-radius: 999px; background: #f6d8d4; color: #87372f; padding: .12rem .32rem; font-size: .6rem; }
-.people-calendar-events { display: grid; gap: .15rem; min-width: 0; }
-.people-calendar-events button { display: grid; min-width: 0; gap: .04rem; border: 0; border-left: 3px solid #4f806d; border-radius: 4px; background: rgba(255, 255, 255, .82); padding: .16rem .28rem; text-align: left; }
-.people-calendar-events button:hover { background: #fff; box-shadow: 0 1px 4px rgba(25, 55, 43, .12); }
-.people-calendar-events strong, .people-calendar-events small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.people-calendar-events strong { color: #25352e; font-size: .65rem; }
-.people-calendar-events small { color: #66716b; font-size: .58rem; }
-.people-calendar-more { color: #7b4c47; font-size: .62rem; font-weight: 700; }
-.people-calendar-day.unavailable { background: repeating-linear-gradient(135deg, #f8e8e5, #f8e8e5 7px, #f3dcd8 7px, #f3dcd8 14px); }
-.people-calendar-day.partial { background: #fff4db; }
-.people-calendar-absence { color: #8a332b; font-weight: 750; }
-.people-calendar-legend .unavailable, .calendar-summary-availability { color: #8a332b; }
+.people-calendar-day.hint-open { position: relative; z-index: 1; box-shadow: inset 0 0 0 1px #8aa898; }
+.people-calendar-day.matched { box-shadow: inset 0 0 0 2px #315f50; }
+.people-calendar-day.dimmed { opacity: .34; }
+.people-calendar-date { display: flex; align-items: center; gap: .25rem; width: 100%; min-width: 0; min-height: 1.35rem; }
+.people-calendar-date time { flex: none; color: #38423c; font-size: .73rem; font-weight: 750; }
+.people-calendar-status { overflow: hidden; color: #69716c; font-size: .62rem; text-overflow: ellipsis; white-space: nowrap; }
+.people-calendar-count { flex: none; margin-left: auto; border-radius: 999px; background: #edf1ed; color: #4f5b54; padding: .08rem .32rem; font-size: .62rem; font-weight: 750; }
+.people-calendar-day.conflict .people-calendar-count { background: #f6d8d4; color: #87372f; }
+.people-calendar-alert { flex: none; width: .45rem; height: .45rem; margin-left: auto; border-radius: 999px; background: #d94d43; }
+.people-calendar-hint { position: fixed; z-index: 40; display: grid; gap: .35rem; width: min(280px, calc(100vw - 1rem)); max-height: min(360px, calc(100vh - 1rem)); overflow: auto; border: 1px solid #d5ddd6; border-radius: 10px; background: #fff; box-shadow: 0 10px 28px rgba(19, 37, 28, .18); padding: .65rem .7rem; }
+.people-calendar-hint header { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; }
+.people-calendar-hint header strong { color: #173f31; font-size: .82rem; }
+.people-calendar-hint header span { color: #9a3b34; font-size: .68rem; font-weight: 700; }
+.people-calendar-hint-status, .people-calendar-hint-empty { margin: 0; color: #5d675f; font-size: .72rem; }
+.people-calendar-hint-pause { margin: 0; color: #8a332b; font-size: .72rem; font-weight: 700; }
+.people-calendar-hint ul { display: grid; gap: .28rem; margin: 0; padding: 0; list-style: none; }
+.people-calendar-hint li button { display: grid; width: 100%; min-width: 0; gap: .04rem; border: 0; border-left: 3px solid #4f806d; border-radius: 4px; background: #f7faf8; padding: .32rem .42rem; text-align: left; }
+.people-calendar-hint li button:hover:not(:disabled) { border-top-color: transparent; border-right-color: transparent; border-bottom-color: transparent; background: #fff; }
+.people-calendar-hint li button.paused { border-left-style: dashed; opacity: .78; }
+.people-calendar-hint li button strong { color: #25352e; font-size: .78rem; font-weight: 700; overflow-wrap: anywhere; white-space: normal; }
+.people-calendar-hint li button small { color: #66716b; font-size: .66rem; }
 .people-availability-section { display: grid; gap: .75rem; }
 .people-availability-summary { display: flex; gap: 1rem; margin: 0; }
 .people-availability-summary div { display: flex; gap: .35rem; align-items: baseline; }

@@ -51,10 +51,24 @@ describe("person profile", () => {
     expect(screen.getByLabelText("Working week preview").querySelectorAll(".working")).toHaveLength(5);
     const overlapDay = document.querySelector<HTMLElement>('[data-date="2026-07-22"]')!;
     expect(overlapDay.className).toContain("unavailable");
-    expect(within(overlapDay).getByText("Ship profile")).toBeTruthy();
-    expect(within(overlapDay).getByText("Review calendar")).toBeTruthy();
-    expect(within(overlapDay).getAllByText("Paused: person unavailable")).toHaveLength(2);
+    expect(overlapDay.className).toContain("conflict");
+    expect(within(overlapDay).getByText("Vacation")).toBeTruthy();
+    expect(within(overlapDay).queryByText("Ship profile")).toBeNull();
+    expect(within(overlapDay).queryByText("Paused: person unavailable")).toBeNull();
+    fireEvent.mouseEnter(overlapDay);
+    const hint = screen.getByRole("region", { name: "Jul 22, 2026" });
+    expect(within(hint).getByText("Ship profile")).toBeTruthy();
+    expect(within(hint).getByText("Review calendar")).toBeTruthy();
+    expect(within(hint).getAllByText("Paused: person unavailable")).toHaveLength(1);
+    fireEvent.click(within(hint).getByRole("button", { name: /Ship profile/u }));
+    expect(onNavigate).toHaveBeenCalledWith("tasks", { projectId, taskId });
+    const occupiedDay = document.querySelector<HTMLElement>('[data-date="2026-07-20"]')!;
+    expect(occupiedDay.className).toContain("occupied");
+    expect(occupiedDay.className).not.toContain("overlap");
     expect(document.querySelector<HTMLElement>('[data-date="2026-07-27"]')?.className).toContain("free");
+    fireEvent.click(screen.getByRole("button", { name: /With tasks:/u }));
+    expect(occupiedDay.className).toContain("matched");
+    expect(document.querySelector<HTMLElement>('[data-date="2026-07-27"]')?.className).toContain("dimmed");
     const tasks = screen.getByRole("heading", { name: "Tasks by project" }).closest("section")!;
     expect(within(tasks).getByRole("button", { name: /Alpha.*Project owner/u })).toBeTruthy();
     expect(within(tasks).getByRole("button", { name: /Beta.*Contributor/u })).toBeTruthy();
@@ -66,6 +80,42 @@ describe("person profile", () => {
     const participating = screen.getByRole("heading", { name: "Participates in" }).closest("section")!;
     expect(within(participating).getByRole("button", { name: /Alpha/u })).toBeTruthy();
     expect(within(participating).getByRole("button", { name: /Beta/u })).toBeTruthy();
+  });
+
+  it("keeps holidays and weekends quiet and explains them in the day hint", async () => {
+    const personId = "U-26-ADA";
+    const projectId = "P-26-ALPHA";
+    const entities = [
+      result({ schema: "gitpm/person@1", id: personId, name: "Ada Lovelace", weekly_capacity_hours: 32, calendar: "C-26-DEFAULT", lifecycle: "active" }),
+      result({ schema: "gitpm/calendar@1", id: "C-26-DEFAULT", name: "Default", working_weekdays: [1, 2, 3, 4, 5], holidays: ["2026-07-21"], lifecycle: "active" }),
+      result({ schema: "gitpm/project@2", id: projectId, name: "Alpha", owner: personId, status: "in-progress", lifecycle: "active" }),
+      result({ schema: "gitpm/task@2", id: "T-26-SPAN", project: projectId, title: "Span the holiday", status: "in-progress", assignees: [personId], schedules: { plan: { start: "2026-07-20", finish: "2026-07-26" } }, lifecycle: "active" }),
+    ];
+    const schemaByType: Record<string, string> = { people: "gitpm/person@1", calendars: "gitpm/calendar@1", teams: "gitpm/team@1", projects: "gitpm/project@2", tasks: "gitpm/task@2" };
+    const api = gitPmApi({ listEntities: vi.fn(async (_draftId: string, type: string) => entities.filter((item) => item.document.schema === schemaByType[type])), getConfiguration: vi.fn(async (_draftId: string, kind: string) => kind === "schedule-tracks" ? tracksConfig() : statusesConfig()) });
+
+    render(<PeopleProfileWorkspace api={api} draft={draft} locale="en" onNavigate={vi.fn()} personId={personId} />);
+    expect(await screen.findByRole("heading", { name: "Ada Lovelace" })).toBeTruthy();
+
+    const holiday = document.querySelector<HTMLElement>('[data-date="2026-07-21"]')!;
+    expect(holiday.className).toContain("off");
+    expect(holiday.className).not.toContain("overlap");
+    expect(within(holiday).getByText("Holiday")).toBeTruthy();
+    expect(within(holiday).queryByText("Span the holiday")).toBeNull();
+    expect(holiday.querySelector(".people-calendar-alert")).toBeTruthy();
+    fireEvent.mouseEnter(holiday);
+    const holidayHint = screen.getByRole("region", { name: "Jul 21, 2026" });
+    expect(within(holidayHint).getByText("Span the holiday")).toBeTruthy();
+    expect(within(holidayHint).getByText(/Tasks fall on this holiday/u)).toBeTruthy();
+
+    const weekend = document.querySelector<HTMLElement>('[data-date="2026-07-25"]')!;
+    expect(weekend.className).toContain("off");
+    expect(within(weekend).queryByText("Span the holiday")).toBeNull();
+    expect(weekend.querySelector(".people-calendar-count")).toBeNull();
+    fireEvent.mouseEnter(weekend);
+    const weekendHint = await screen.findByRole("region", { name: "Jul 25, 2026" });
+    expect(within(weekendHint).getByText(/Not counted as workload/u)).toBeTruthy();
+    expect(within(weekendHint).getByText("Span the holiday")).toBeTruthy();
   });
 
   it("hides done tasks by default, translates status titles, and keeps counts in sync", async () => {
@@ -314,10 +364,11 @@ describe("person profile", () => {
 
     render(<PeopleProfileWorkspace api={api} draft={draft} locale="en" onNavigate={vi.fn()} personId={personId} today="2026-07-22" />);
 
-    expect(await screen.findByText("Today")).toBeTruthy();
-    expect(document.querySelector<HTMLElement>('[data-date="2026-07-22"]')?.className).toContain("today");
+    const todayCell = await screen.findByLabelText(/Jul 22, 2026 · Today/u);
+    expect(todayCell.className).toContain("today");
     expect(document.querySelector<HTMLElement>('[data-date="2026-07-21"]')?.className).not.toContain("today");
-    expect(screen.getByLabelText(/Jul 22, 2026 · Today/u)).toBeTruthy();
+    fireEvent.mouseEnter(todayCell);
+    expect(within(screen.getByRole("region", { name: "Jul 22, 2026" })).getByText("Today")).toBeTruthy();
   });
 
   it("shows leftover calendar exceptions instead of silently dropping them", async () => {
