@@ -127,27 +127,103 @@ function ChangeFileButton({ file, entity, namesById, selected, select, t }: {
   </button>;
 }
 
-function SemanticGroup({ title, items, entitiesByPath, namesById, empty, fieldCount, t }: {
+function projectDisplayName(projectId: string, namesById: ReadonlyMap<string, string>): string {
+  return namesById.get(projectId) ?? projectId;
+}
+
+function projectGroups(items: readonly SemanticChange[], projectOrder: readonly string[]): { projectId: string | undefined; items: SemanticChange[] }[] {
+  const byProject = new Map<string, SemanticChange[]>();
+  const outside: SemanticChange[] = [];
+  for (const item of items) {
+    if (item.project === undefined) {
+      outside.push(item);
+      continue;
+    }
+    const bucket = byProject.get(item.project) ?? [];
+    bucket.push(item);
+    byProject.set(item.project, bucket);
+  }
+  const ordered = [
+    ...projectOrder.filter((projectId) => byProject.has(projectId)),
+    ...[...byProject.keys()].filter((projectId) => !projectOrder.includes(projectId)).sort((left, right) => left.localeCompare(right)),
+  ];
+  return [
+    ...ordered.map((projectId) => ({ projectId, items: byProject.get(projectId) ?? [] })),
+    ...(outside.length > 0 ? [{ projectId: undefined, items: outside }] : []),
+  ];
+}
+
+function SemanticItem({ item, entity, namesById, showProject, empty, fieldCount, t }: {
+  readonly item: SemanticChange;
+  readonly entity?: SemanticFileEntity;
+  readonly namesById: ReadonlyMap<string, string>;
+  readonly showProject: boolean;
+  readonly empty: string;
+  readonly fieldCount: (count: number) => string;
+  readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string;
+}) {
+  const name = (item.id !== undefined ? namesById.get(item.id) : undefined) ?? entity?.display_name ?? entity?.id ?? item.id;
+  const projectName = showProject && item.project !== undefined && item.schema !== "gitpm/project@2"
+    ? projectDisplayName(item.project, namesById)
+    : undefined;
+  return <details className="semantic-item">
+    <summary>
+      <span className="semantic-identity">
+        <span>{entityType(item.schema, t)}</span>
+        <span className="semantic-identity-text">
+          {name !== undefined && <strong>{name}</strong>}
+          {projectName !== undefined && <small>{t("changes.rowProject", { project: projectName })}</small>}
+        </span>
+        {item.id !== undefined && <code>{item.id}</code>}
+      </span>
+      <span className="semantic-field-count">{fieldCount(item.fields.length)}</span>
+    </summary>
+    {item.fields.length > 0 && <dl>{item.fields.map((field) => <div key={field.field}><dt>{fieldLabel(field.field, t)}</dt><dd><del>{valueText(field.before, empty, namesById)}</del><span aria-hidden="true">→</span><ins>{valueText(field.after, empty, namesById)}</ins></dd></div>)}</dl>}
+  </details>;
+}
+
+function SemanticGroup({ title, items, entitiesByPath, namesById, projectOrder, showProjectOnRow, onOpenProject, empty, fieldCount, t }: {
   readonly title: string;
   readonly items: readonly SemanticChange[];
   readonly entitiesByPath: ReadonlyMap<string, SemanticFileEntity>;
   readonly namesById: ReadonlyMap<string, string>;
+  readonly projectOrder: readonly string[];
+  readonly showProjectOnRow: boolean;
+  readonly onOpenProject?: (projectId: string) => void;
   readonly empty: string;
   readonly fieldCount: (count: number) => string;
-  readonly t: (key: MessageKey) => string;
+  readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string;
 }) {
   if (items.length === 0) return null;
-  return <section className="semantic-group"><h4>{title}<span>{items.length}</span></h4><div className="semantic-items">{items.map((item) => {
-    const entity = entitiesByPath.get(item.path);
-    const name = (item.id !== undefined ? namesById.get(item.id) : undefined) ?? entity?.display_name ?? entity?.id ?? item.id;
-    return <details className="semantic-item" key={`${title}-${item.path}`}>
-      <summary>
-        <span className="semantic-identity"><span>{entityType(item.schema, t)}</span>{name !== undefined && <strong>{name}</strong>}{item.id !== undefined && <code>{item.id}</code>}</span>
-        <span className="semantic-field-count">{fieldCount(item.fields.length)}</span>
-      </summary>
-      {item.fields.length > 0 && <dl>{item.fields.map((field) => <div key={field.field}><dt>{fieldLabel(field.field, t)}</dt><dd><del>{valueText(field.before, empty, namesById)}</del><span aria-hidden="true">→</span><ins>{valueText(field.after, empty, namesById)}</ins></dd></div>)}</dl>}
-    </details>;
+  return <section className="semantic-group"><h4>{title}<span>{items.length}</span></h4><div className="semantic-project-groups">{projectGroups(items, projectOrder).map((group) => {
+    const projectName = group.projectId === undefined ? undefined : projectDisplayName(group.projectId, namesById);
+    return <div className="semantic-project" key={group.projectId ?? "outside-project"}>
+      <h5 className="semantic-project-heading">
+        <span>{group.projectId === undefined ? t("changes.outsideProject") : t("changes.entityProject")}</span>
+        {group.projectId !== undefined && <ProjectLink className="semantic-project-name" name={projectName ?? group.projectId} onOpen={onOpenProject} projectId={group.projectId} />}
+        {group.projectId !== undefined && projectName !== group.projectId && <code>{group.projectId}</code>}
+        <span className="semantic-project-count">{group.items.length}</span>
+      </h5>
+      <div className="semantic-items">{group.items.map((item) => <SemanticItem key={`${title}-${item.path}`} item={item} entity={entitiesByPath.get(item.path)} namesById={namesById} showProject={showProjectOnRow} empty={empty} fieldCount={fieldCount} t={t} />)}</div>
+    </div>;
   })}</div></section>;
+}
+
+function AffectedProjects({ projectIds, namesById, onOpenProject, t }: {
+  readonly projectIds: readonly string[];
+  readonly namesById: ReadonlyMap<string, string>;
+  readonly onOpenProject?: (projectId: string) => void;
+  readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string;
+}) {
+  if (projectIds.length === 0) return <p className="semantic-no-projects">{t("changes.noProjects")}</p>;
+  return <ul className="semantic-projects" aria-label={t("changes.projects", { count: projectIds.length })}>{projectIds.map((projectId) => {
+    const name = projectDisplayName(projectId, namesById);
+    return <li className="semantic-project-chip" key={projectId}>
+      <span>{t("changes.entityProject")}</span>
+      <ProjectLink className="semantic-project-name" name={name} onOpen={onOpenProject} projectId={projectId} />
+      {name !== projectId && <code>{projectId}</code>}
+    </li>;
+  })}</ul>;
 }
 
 function ProjectFileGroups({ items, namesById, onOpenProject, select, t }: {
@@ -254,6 +330,15 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
     return merged;
   }, [semantic, catalogNames]);
   const changedEntitiesCount = semantic.counts.created + semantic.counts.updated + semantic.counts.archived + semantic.counts.deleted;
+  const affectedProjectIds = useMemo(() => {
+    const ids = new Set([...semantic.affected_projects, ...changes.affected_projects]);
+    for (const item of [...semantic.created, ...semantic.updated, ...semantic.archived, ...semantic.deleted]) {
+      if (item.project !== undefined) ids.add(item.project);
+    }
+    return [...ids].sort();
+  }, [changes.affected_projects, semantic]);
+  const affectedProjectNames = affectedProjectIds.map((projectId) => projectDisplayName(projectId, namesById));
+  const openProject = onNavigate === undefined ? undefined : (projectId: string) => onNavigate("projects", { projectId });
 
   const load = async (keepData = true) => {
     await loadRequest.run(async () => {
@@ -392,18 +477,19 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
     <div className="changes-summary">
       <div><strong>{changedEntitiesCount}</strong><span>{t("changes.entities")}</span></div>
       <div><strong>{changes.changed_files_count}</strong><span>{t("changes.files")}</span></div>
-      <div><strong>{semantic.affected_projects.length}</strong><span>{t("changes.projectsShort")}</span></div>
+      <div className={affectedProjectNames.length > 0 ? "changes-summary-projects" : undefined} title={affectedProjectNames.length > 0 ? affectedProjectNames.join(", ") : undefined}><strong>{affectedProjectIds.length}</strong><span>{affectedProjectNames.length > 0 ? affectedProjectNames.join(" · ") : t("changes.projectsShort")}</span></div>
     </div>
-    <div className="card semantic-diff"><div className="semantic-heading"><div><span className="eyebrow">{t("changes.semanticEyebrow")}</span><h3>{t("changes.semanticHeading")}</h3><p>{t("changes.semanticHint")}</p></div><span>{t("changes.projects", { count: semantic.affected_projects.length })}</span></div>
+    <div className="card semantic-diff"><div className="semantic-heading"><div><span className="eyebrow">{t("changes.semanticEyebrow")}</span><h3>{t("changes.semanticHeading")}</h3><p>{t("changes.semanticHint")}</p></div></div>
+      {changedEntitiesCount > 0 && <AffectedProjects projectIds={affectedProjectIds} namesById={namesById} onOpenProject={openProject} t={t} />}
       <div className="semantic-groups">
-        <SemanticGroup title={t("changes.created")} items={semantic.created} entitiesByPath={entitiesByPath} namesById={namesById} empty={t("changes.emptyValue")} fieldCount={(count) => t("changes.fieldCount", { count })} t={t} />
-        <SemanticGroup title={t("changes.updated")} items={semantic.updated} entitiesByPath={entitiesByPath} namesById={namesById} empty={t("changes.emptyValue")} fieldCount={(count) => t("changes.fieldCount", { count })} t={t} />
-        <SemanticGroup title={t("changes.archived")} items={semantic.archived} entitiesByPath={entitiesByPath} namesById={namesById} empty={t("changes.emptyValue")} fieldCount={(count) => t("changes.fieldCount", { count })} t={t} />
-        <SemanticGroup title={t("changes.deleted")} items={semantic.deleted} entitiesByPath={entitiesByPath} namesById={namesById} empty={t("changes.emptyValue")} fieldCount={(count) => t("changes.fieldCount", { count })} t={t} />
+        <SemanticGroup title={t("changes.created")} items={semantic.created} entitiesByPath={entitiesByPath} namesById={namesById} projectOrder={affectedProjectIds} showProjectOnRow={affectedProjectIds.length > 1} onOpenProject={openProject} empty={t("changes.emptyValue")} fieldCount={(count) => t("changes.fieldCount", { count })} t={t} />
+        <SemanticGroup title={t("changes.updated")} items={semantic.updated} entitiesByPath={entitiesByPath} namesById={namesById} projectOrder={affectedProjectIds} showProjectOnRow={affectedProjectIds.length > 1} onOpenProject={openProject} empty={t("changes.emptyValue")} fieldCount={(count) => t("changes.fieldCount", { count })} t={t} />
+        <SemanticGroup title={t("changes.archived")} items={semantic.archived} entitiesByPath={entitiesByPath} namesById={namesById} projectOrder={affectedProjectIds} showProjectOnRow={affectedProjectIds.length > 1} onOpenProject={openProject} empty={t("changes.emptyValue")} fieldCount={(count) => t("changes.fieldCount", { count })} t={t} />
+        <SemanticGroup title={t("changes.deleted")} items={semantic.deleted} entitiesByPath={entitiesByPath} namesById={namesById} projectOrder={affectedProjectIds} showProjectOnRow={affectedProjectIds.length > 1} onOpenProject={openProject} empty={t("changes.emptyValue")} fieldCount={(count) => t("changes.fieldCount", { count })} t={t} />
       </div>
       {semantic.unclassified_files.length > 0 && <p className="unclassified">{t("changes.unclassified", { count: semantic.unclassified_files.length })}</p>}
     </div>
-    <ProjectFileGroups items={changes.project_files} namesById={namesById} onOpenProject={onNavigate === undefined ? undefined : (projectId) => onNavigate("projects", { projectId })} select={(path) => { setSelectedPath(path); setTechnicalOpen(true); }} t={t} />
+    <ProjectFileGroups items={changes.project_files} namesById={namesById} onOpenProject={openProject} select={(path) => { setSelectedPath(path); setTechnicalOpen(true); }} t={t} />
     <details className="technical-changes" open={technicalOpen} onToggle={(event) => setTechnicalOpen(event.currentTarget.open)}><summary><span><strong>{t("changes.fileChanges")}</strong><small>{t("changes.fileChangesHint")}</small></span><span>{changes.changed_files_count}</span></summary>
       <div className={`changes-layout${changes.files.length === 0 ? " clean" : ""}`}>
         <aside className="card change-files"><div className="change-files-heading"><h3>{t("changes.changedFiles")}</h3>{changes.files.length > 0 && canMutate && <button className="danger subtle" disabled={busy} onClick={() => { if (confirmAction(t("changes.discardConfirm"))) void run(() => api.discardAll(draft.draft_id, draft.fingerprint)); }}>{t("changes.discardAll")}</button>}</div>
@@ -439,7 +525,7 @@ export function ChangesWorkspace({ api, draft, role, locale, onChanged, confirmA
       </div>
     </div>
     <details className="repository-rules"><summary>{t("changes.repositoryRules")}</summary><p>{t("changes.alphaLimitations")}</p></details>
-    {commitOpen && <div className="modal-backdrop" role="presentation"><section className="commit-dialog" role="dialog" aria-modal="true" aria-labelledby="commit-heading"><h3 id="commit-heading">{t("changes.commitHeading")}</h3><p>{t("changes.commitScope", { count: changes.changed_files_count })}</p><label>{t("changes.commitMessage")}<input autoFocus maxLength={500} value={commitMessage} onChange={(event) => setCommitMessage(event.target.value)} /></label><div className="actions"><button onClick={() => setCommitOpen(false)}>{t("changes.cancel")}</button><button className="primary" disabled={busy || !commitMessage.trim()} onClick={() => void commitEverything()}>{t("changes.commitAll")}</button></div></section></div>}
+    {commitOpen && <div className="modal-backdrop" role="presentation"><section className="commit-dialog" role="dialog" aria-modal="true" aria-labelledby="commit-heading"><h3 id="commit-heading">{t("changes.commitHeading")}</h3><p>{t("changes.commitScope", { count: changes.changed_files_count })}</p><p>{affectedProjectNames.length === 0 ? t("changes.noProjects") : t("changes.commitProjects", { projects: affectedProjectNames.join(", ") })}</p><label>{t("changes.commitMessage")}<input autoFocus maxLength={500} value={commitMessage} onChange={(event) => setCommitMessage(event.target.value)} /></label><div className="actions"><button onClick={() => setCommitOpen(false)}>{t("changes.cancel")}</button><button className="primary" disabled={busy || !commitMessage.trim()} onClick={() => void commitEverything()}>{t("changes.commitAll")}</button></div></section></div>}
     </>
     </AsyncBoundary>
   </section>;
