@@ -21,6 +21,11 @@ describe("People schedule calendar density", () => {
     expect(rule(".people-calendar-day")).toContain("height: 52px");
     expect(rule(".people-calendar-day.today")).not.toContain("outline");
     expect(rule(".people-calendar-day.today time")).toContain("background: #d94d43");
+    expect(rule(".people-calendar-day.free")).toContain("#c8e6cf");
+    expect(rule(".people-calendar-day.occupied")).toContain("#d4e4f6");
+    expect(rule(".people-calendar-day.unavailable")).toContain("#f6c56b");
+    expect(rule(".people-calendar-day.off")).toContain("#e3e5e2");
+    expect(rule(".people-calendar-hint")).toContain("pointer-events: none");
     expect(rule(".people-calendar-hint")).toContain("position: fixed");
   });
 });
