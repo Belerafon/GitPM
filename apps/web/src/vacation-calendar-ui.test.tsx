@@ -12,9 +12,9 @@ const result = (document: EntityDocument): EntityResult => ({ document, path: `$
 const ada = result({ schema: "gitpm/person@1", id: adaId, name: "Ada", weekly_capacity_hours: 40, annual_vacation_extra_days: 5, annual_vacation_extra_days_reason: "Overtime compensation", calendar: "C-26-444444", lifecycle: "active" });
 const linus = result({ schema: "gitpm/person@1", id: linusId, name: "Linus", weekly_capacity_hours: 32, calendar: "C-26-444444", lifecycle: "active" });
 const reviewers = result({ schema: "gitpm/team@1", id: "G-26-555555", name: "Reviewers", members: [linusId], lifecycle: "active" });
-const vacation = result({ schema: "gitpm/availability-event@1", id: "A-26-VACATN", person: adaId, start: "2026-08-17", finish: "2026-08-21", kind: "vacation", availability_percent: 0, state: "planned", note_markdown: "Summer leave", lifecycle: "active" });
-const sick = result({ schema: "gitpm/availability-event@1", id: "A-26-SICK", person: linusId, start: "2026-09-10", finish: "2026-09-12", kind: "sick-leave", availability_percent: 0, state: "taken", lifecycle: "active" });
-const later = result({ schema: "gitpm/availability-event@1", id: "A-26-JULY", person: adaId, start: "2027-07-01", finish: "2027-07-05", kind: "training", availability_percent: 0, state: "planned", lifecycle: "active" });
+const vacation = result({ schema: "gitpm/availability-event@1", id: "A-26-VACATN", person: adaId, start: "2026-08-17", finish: "2026-08-21", kind: "vacation", availability_percent: 0, state: "active", note_markdown: "Summer leave", lifecycle: "active" });
+const sick = result({ schema: "gitpm/availability-event@1", id: "A-26-SICK", person: linusId, start: "2026-09-10", finish: "2026-09-12", kind: "sick-leave", availability_percent: 0, state: "active", lifecycle: "active" });
+const later = result({ schema: "gitpm/availability-event@1", id: "A-26-JULY", person: adaId, start: "2027-07-01", finish: "2027-07-05", kind: "training", availability_percent: 0, state: "active", lifecycle: "active" });
 const cancelled = result({ schema: "gitpm/availability-event@1", id: "A-26-CANCEL", person: adaId, start: "2026-10-01", finish: "2026-10-02", kind: "day-off", availability_percent: 0, state: "cancelled", lifecycle: "active" });
 
 afterEach(cleanup);
@@ -46,7 +46,7 @@ describe("Vacation calendar UI", () => {
     expect(adaBar.style.left).toBe(`${16 * VACATION_CALENDAR_DAY_WIDTH[6]}px`);
     expect(adaBar.style.width).toBe(`${5 * VACATION_CALENDAR_DAY_WIDTH[6]}px`);
     expect(adaBar.textContent).toBe("17.08 — 21.08");
-    expect(adaBar.getAttribute("data-control-hint")).toBe("Ada\nVacation · Planned\n17.08.2026 — 21.08.2026\nTotal days: 5\nWorking days: 5\nSummer leave");
+    expect(adaBar.getAttribute("data-control-hint")).toBe("Ada\nVacation · Taken\n17.08.2026 — 21.08.2026\nTotal days: 5\nWorking days: 5\nSummer leave");
     fireEvent.click(adaBar);
     expect(onNavigate).toHaveBeenCalledWith("people", { personId: adaId });
     expect(container.querySelector(`.vacation-calendar-label[data-person-id="${adaId}"]`)?.className).not.toContain("away");
@@ -101,7 +101,7 @@ describe("Vacation calendar UI", () => {
   });
 
   it("paints a person red while they are away and shows leave-until in the hint", async () => {
-    const current = result({ schema: "gitpm/availability-event@1", id: "A-26-NOW", person: adaId, start: "2026-08-25", finish: "2026-08-28", kind: "vacation", availability_percent: 0, state: "planned", lifecycle: "active" });
+    const current = result({ schema: "gitpm/availability-event@1", id: "A-26-NOW", person: adaId, start: "2026-08-25", finish: "2026-08-28", kind: "vacation", availability_percent: 0, state: "active", lifecycle: "active" });
     const entities = [ada, linus, reviewers, current];
     const api = {
       listEntities: vi.fn(async (_draftId: string, type: string) => entities.filter((item) => ({ people: "gitpm/person@1", teams: "gitpm/team@1", "availability-events": "gitpm/availability-event@1" })[type] === item.document.schema)),

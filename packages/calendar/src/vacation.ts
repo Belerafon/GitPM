@@ -138,6 +138,19 @@ export function workingDayCount(start: string, finish: string, calendar: Working
   return count;
 }
 
+export type AvailabilityProgress = "planned" | "in-progress" | "taken" | "cancelled";
+
+export function availabilityProgress(
+  event: { readonly state: string; readonly start: string; readonly finish: string },
+  today: string,
+): AvailabilityProgress {
+  if (event.state === "cancelled") return "cancelled";
+  if (!isIsoDate(event.start) || !isIsoDate(event.finish) || event.start > event.finish) return "planned";
+  if (event.finish < today) return "taken";
+  if (event.start > today) return "planned";
+  return "in-progress";
+}
+
 export function isPastAbsence(finish: string, today: string): boolean {
   return finish < today;
 }
@@ -176,10 +189,10 @@ export function vacationYearBalance(
   return { taken, planned, remaining: Math.max(0, allowance - taken), allowance };
 }
 
-export function isCountableEvent(event: VacationEvent, filters: VacationCalendarFilters): boolean {
+export function isCountableEvent(event: VacationEvent, filters: VacationCalendarFilters, today: string): boolean {
   if (event.lifecycle !== "active" || !isIsoDate(event.start) || !isIsoDate(event.finish) || event.start > event.finish) return false;
   if (filters.kind !== "" && event.kind !== filters.kind) return false;
-  if (filters.state !== "") return event.state === filters.state;
+  if (filters.state !== "") return availabilityProgress(event, today) === filters.state;
   return event.state !== "cancelled";
 }
 
@@ -204,7 +217,7 @@ export function vacationSummary(
   today: string,
 ): VacationCalendarSummary {
   const visible = new Set(people.map((person) => person.id));
-  const countable = events.filter((event) => visible.has(event.personId) && isCountableEvent(event, filters));
+  const countable = events.filter((event) => visible.has(event.personId) && isCountableEvent(event, filters, today));
   const absent = new Set<string>();
   const leaving = new Set<string>();
   const until = addDays(today, 30);

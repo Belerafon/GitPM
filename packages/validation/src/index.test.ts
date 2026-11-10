@@ -312,7 +312,7 @@ describe("repository validation", () => {
     ]));
 
     const overlap = await fixture();
-    await writeFile(path.join(overlap, "availability", "A-26-DAY0FF.yaml"), "schema: gitpm/availability-event@1\nid: A-26-DAY0FF\nperson: U-26-5EBAE3\nstart: 2026-08-20\nfinish: 2026-08-25\nkind: day-off\navailability_percent: 0\nstate: planned\nlifecycle: active\n", "utf8");
+    await writeFile(path.join(overlap, "availability", "A-26-DAY0FF.yaml"), "schema: gitpm/availability-event@1\nid: A-26-DAY0FF\nperson: U-26-5EBAE3\nstart: 2026-08-20\nfinish: 2026-08-25\nkind: day-off\navailability_percent: 0\nstate: active\nlifecycle: active\n", "utf8");
     report = await validateRepository(overlap);
     expect(report.errors).toEqual(expect.arrayContaining([expect.objectContaining({ code: "AVAILABILITY_EVENT_OVERLAP", path: "availability/A-26-VACATN.yaml" })]));
   });

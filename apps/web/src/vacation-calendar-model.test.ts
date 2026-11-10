@@ -24,7 +24,7 @@ const grace: VacationPerson = { id: "U-26-GRACE", name: "Grace", lifecycle: "arc
 const core: VacationTeam = { id: "G-26-CORE", name: "Core", members: [ada.id], lifecycle: "active" };
 const vacation = (overrides: Partial<VacationEvent> & Pick<VacationEvent, "id" | "personId" | "start" | "finish">): VacationEvent => ({
   kind: "vacation",
-  state: "planned",
+  state: "active",
   note: "",
   lifecycle: "active",
   ...overrides,
@@ -70,8 +70,8 @@ describe("vacation calendar geometry", () => {
     const event = vacation({ id: "A-26-VACATN", personId: ada.id, start: "2026-12-28", finish: "2026-12-31" });
     const six = vacationCalendarWindow("2026-08-26", 6);
     const twelve = vacationCalendarWindow("2026-08-26", 12);
-    const sixBar = vacationBars([event], [ada], six, { teamId: "", personId: "", kind: "", state: "", search: "" })[0]!;
-    const twelveBar = vacationBars([event], [ada], twelve, { teamId: "", personId: "", kind: "", state: "", search: "" })[0]!;
+    const sixBar = vacationBars([event], [ada], six, { teamId: "", personId: "", kind: "", state: "", search: "" }, "2026-08-26")[0]!;
+    const twelveBar = vacationBars([event], [ada], twelve, { teamId: "", personId: "", kind: "", state: "", search: "" }, "2026-08-26")[0]!;
     expect(sixBar.offset).toBe(twelveBar.offset);
     expect(sixBar.duration).toBe(4);
     expect(sixBar.width).toBe(4 * VACATION_CALENDAR_DAY_WIDTH[6]);
@@ -114,8 +114,8 @@ describe("vacation calendar geometry", () => {
 
   it("shows a far-future absence only in the 12-month view", () => {
     const event = vacation({ id: "A-26-JULY", personId: ada.id, start: "2027-07-01", finish: "2027-07-05" });
-    const six = vacationBars([event], [ada], vacationCalendarWindow("2026-08-26", 6), { teamId: "", personId: "", kind: "", state: "", search: "" });
-    const twelve = vacationBars([event], [ada], vacationCalendarWindow("2026-08-26", 12), { teamId: "", personId: "", kind: "", state: "", search: "" });
+    const six = vacationBars([event], [ada], vacationCalendarWindow("2026-08-26", 6), { teamId: "", personId: "", kind: "", state: "", search: "" }, "2026-08-26");
+    const twelve = vacationBars([event], [ada], vacationCalendarWindow("2026-08-26", 12), { teamId: "", personId: "", kind: "", state: "", search: "" }, "2026-08-26");
     expect(six).toHaveLength(0);
     expect(twelve).toHaveLength(1);
     expect(twelve[0]?.duration).toBe(5);
@@ -125,7 +125,7 @@ describe("vacation calendar geometry", () => {
 describe("vacation calendar filters and summary", () => {
   const events: readonly VacationEvent[] = [
     vacation({ id: "A-26-TODAY", personId: ada.id, start: "2026-08-26", finish: "2026-08-28", kind: "vacation" }),
-    vacation({ id: "A-26-SOON", personId: linus.id, start: "2026-09-10", finish: "2026-09-12", kind: "sick-leave", state: "taken" }),
+    vacation({ id: "A-26-SOON", personId: linus.id, start: "2026-09-10", finish: "2026-09-12", kind: "sick-leave", state: "active" }),
     vacation({ id: "A-26-CANCEL", personId: ada.id, start: "2026-10-01", finish: "2026-10-02", state: "cancelled" }),
     vacation({ id: "A-26-ARCHIVED", personId: grace.id, start: "2026-08-26", finish: "2026-08-27" }),
   ];
@@ -141,9 +141,15 @@ describe("vacation calendar filters and summary", () => {
 
   it("hides cancelled events by default and can isolate them by state", () => {
     const window = vacationCalendarWindow("2026-08-26", 6);
-    expect(vacationBars(events, [ada, linus], window, empty).map((bar) => bar.id)).toEqual(["A-26-TODAY", "A-26-SOON"]);
-    expect(vacationBars(events, [ada, linus], window, { ...empty, state: "cancelled" }).map((bar) => bar.id)).toEqual(["A-26-CANCEL"]);
-    expect(vacationBars(events, [ada, linus], window, { ...empty, kind: "sick-leave" }).map((bar) => bar.id)).toEqual(["A-26-SOON"]);
+    expect(vacationBars(events, [ada, linus], window, empty, "2026-08-26").map((bar) => bar.id)).toEqual(["A-26-TODAY", "A-26-SOON"]);
+    expect(vacationBars(events, [ada, linus], window, { ...empty, state: "cancelled" }, "2026-08-26").map((bar) => bar.id)).toEqual(["A-26-CANCEL"]);
+    expect(vacationBars(events, [ada, linus], window, { ...empty, kind: "sick-leave" }, "2026-08-26").map((bar) => bar.id)).toEqual(["A-26-SOON"]);
+    expect(vacationBars(events, [ada, linus], window, { ...empty, state: "in-progress" }, "2026-08-26").map((bar) => bar.id)).toEqual(["A-26-TODAY"]);
+    expect(vacationBars(events, [ada, linus], window, { ...empty, state: "planned" }, "2026-08-26").map((bar) => bar.id)).toEqual(["A-26-SOON"]);
+    const past = vacation({ id: "A-26-PAST", personId: ada.id, start: "2026-08-17", finish: "2026-08-21", state: "active" });
+    const taken = vacationBars([past], [ada], window, { ...empty, state: "taken" }, "2026-08-26");
+    expect(taken.map((bar) => bar.id)).toEqual(["A-26-PAST"]);
+    expect(taken[0]?.state).toBe("taken");
   });
 
   it("counts people absent today, leaving within 30 days, and the peak overlap in the window", () => {

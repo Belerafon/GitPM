@@ -194,9 +194,13 @@ CLI предоставляет `gitpm calendar presets`, `gitpm calendar create 
 `gitpm/availability-event@1` задаёт персональное исключение поверх общего Calendar.
 Обязательные поля: `id`, `person`, `start`, `finish`, `kind`, `availability_percent`,
 `state` и `lifecycle`. `kind` принимает `vacation`, `day-off`, `sick-leave`, `training`
-или `other`; `state` — `planned`, `taken` или `cancelled`. Planning учитывает активные
-`planned` и `taken` события, а `cancelled` не уменьшает ёмкость. Пересекающиеся активные
-события одного Person запрещены кодом `AVAILABILITY_EVENT_OVERLAP`.
+или `other`; `state` — `active` или `cancelled`. Planning учитывает события с
+`lifecycle: active` и `state: active`, а `cancelled` не уменьшает ёмкость. Значения `planned` и `taken` больше
+не хранятся и не принимаются валидацией; отдельной команды миграции нет. Запланировано,
+идёт и использовано выводятся из диапазона дат относительно даты просмотра: ещё не
+начавшийся диапазон — запланированный, текущий делится по дням, завершённый считается
+использованным. Отмена не зависит от дат. Пересекающиеся события одного Person с `lifecycle: active`
+и `state: active` запрещены кодом `AVAILABILITY_EVENT_OVERLAP`.
 
 Годовой баланс отпусков считает только события с `kind: vacation`. Базовая норма составляет
 20 рабочих дней; персональная пара `annual_vacation_extra_days` и

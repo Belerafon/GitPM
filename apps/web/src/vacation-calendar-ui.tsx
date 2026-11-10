@@ -39,7 +39,7 @@ const asWorkingCalendar = (entity: EntityResult): WorkingCalendar => {
   return { workingWeekdays: weekdays.length === 0 ? DEFAULT_WORKING_CALENDAR.workingWeekdays : weekdays, holidays: strings(entity.document, "holidays") };
 };
 const kindClass = (kind: string): string => ({ vacation: "kind-vacation", "day-off": "kind-day-off", "sick-leave": "kind-sick-leave", training: "kind-training", other: "kind-other" }[kind] ?? "kind-other");
-const stateKey = (state: string): MessageKey => ({ planned: "availability.statePlanned", taken: "availability.stateTaken", cancelled: "availability.stateCancelled" }[state] ?? "availability.statePlanned") as MessageKey;
+const stateKey = (state: string): MessageKey => ({ planned: "availability.statePlanned", "in-progress": "availability.stateInProgress", taken: "availability.stateTaken", cancelled: "availability.stateCancelled" }[state] ?? "availability.statePlanned") as MessageKey;
 const numericDate = (value: string, withYear = false): string => withYear ? `${value.slice(8, 10)}.${value.slice(5, 7)}.${value.slice(0, 4)}` : `${value.slice(8, 10)}.${value.slice(5, 7)}`;
 
 function asPerson(entity: EntityResult, personName: (document: EntityResult["document"]) => string): VacationPerson {
@@ -64,7 +64,7 @@ function asEvent(entity: EntityResult): VacationEvent {
     start: text(entity.document, "start"),
     finish: text(entity.document, "finish"),
     kind: text(entity.document, "kind") || "other",
-    state: text(entity.document, "state") || "planned",
+    state: text(entity.document, "state") || "active",
     note: text(entity.document, "note_markdown"),
     lifecycle: text(entity.document, "lifecycle"),
   };
@@ -114,7 +114,7 @@ export function VacationCalendarWorkspace({ api, draft, locale, onNavigate = () 
   const window = useMemo(() => vacationCalendarWindow(today, period), [today, period]);
   const weekends = useMemo(() => weekendBands(window.days, window.dayWidth, displayCalendar), [window, displayCalendar]);
   const rows = useMemo(() => visiblePeople(modeledPeople, modeledTeams, filters), [modeledPeople, modeledTeams, filters]);
-  const bars = useMemo(() => vacationBars(modeledEvents, rows, window, filters, calendarsById), [modeledEvents, rows, window, filters, calendarsById]);
+  const bars = useMemo(() => vacationBars(modeledEvents, rows, window, filters, today, calendarsById), [modeledEvents, rows, window, filters, today, calendarsById]);
   const summary = useMemo(() => vacationSummary(modeledEvents, rows, window, filters, today), [modeledEvents, rows, window, filters, today]);
   const barsByPerson = useMemo(() => {
     const grouped = new Map<string, typeof bars>();
@@ -154,7 +154,7 @@ export function VacationCalendarWorkspace({ api, draft, locale, onNavigate = () 
       <label data-field-hint={t("fieldHint.vacationCalendarFilter")}>{t("people.calendar")}<select aria-label={t("people.calendar")} value={resolvedCalendarId} onChange={(event) => setCalendarId(event.target.value)}>{calendars.map((item) => <option key={item.document.id} value={item.document.id}>{text(item.document, "name") || item.document.id}</option>)}</select></label>
       <label data-field-hint={t("fieldHint.vacationPersonFilter")}>{t("vacationCalendar.personFilter")}<select aria-label={t("vacationCalendar.personFilter")} value={filters.personId} onChange={(event) => updateFilter("personId", event.target.value)}><option value="">{t("vacationCalendar.allPeople")}</option>{personOptions.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select></label>
       <label data-field-hint={t("fieldHint.vacationKindFilter")}>{t("availability.kind")}<select aria-label={t("availability.kind")} value={filters.kind} onChange={(event) => updateFilter("kind", event.target.value)}><option value="">{t("vacationCalendar.allKinds")}</option><option value="vacation">{t("availability.kindVacation")}</option><option value="day-off">{t("availability.kindDayOff")}</option><option value="sick-leave">{t("availability.kindSickLeave")}</option><option value="training">{t("availability.kindTraining")}</option><option value="other">{t("availability.kindOther")}</option></select></label>
-      <label data-field-hint={t("fieldHint.vacationStateFilter")}>{t("availability.state")}<select aria-label={t("availability.state")} value={filters.state} onChange={(event) => updateFilter("state", event.target.value)}><option value="">{t("vacationCalendar.allStates")}</option><option value="planned">{t("availability.statePlanned")}</option><option value="taken">{t("availability.stateTaken")}</option><option value="cancelled">{t("availability.stateCancelled")}</option></select></label>
+      <label data-field-hint={t("fieldHint.vacationStateFilter")}>{t("availability.state")}<select aria-label={t("availability.state")} value={filters.state} onChange={(event) => updateFilter("state", event.target.value)}><option value="">{t("vacationCalendar.allStates")}</option><option value="planned">{t("availability.statePlanned")}</option><option value="in-progress">{t("availability.stateInProgress")}</option><option value="taken">{t("availability.stateTaken")}</option><option value="cancelled">{t("availability.stateCancelled")}</option></select></label>
       <label data-field-hint={t("fieldHint.vacationSearch")}>{t("vacationCalendar.search")}<input aria-label={t("vacationCalendar.search")} onChange={(event) => updateFilter("search", event.target.value)} type="search" value={filters.search} /></label>
       <button onClick={() => setFilters(emptyVacationFilters())} type="button">{t("people.resetFilters")}</button>
     </section>

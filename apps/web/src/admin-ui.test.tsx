@@ -505,7 +505,7 @@ describe("administration UI", () => {
     await admin.createEntity("DRF-ADMIN", "teams", "", { schema: "gitpm/team@1", id: teamId, name: "Core", members: [aliceId], lifecycle: "active" });
     await admin.createEntity("DRF-ADMIN", "projects", "", { schema: "gitpm/project@2", id: projectId, name: "Load", owner: aliceId, status: "in-progress", lifecycle: "active" });
     await admin.createEntity("DRF-ADMIN", "tasks", "", { schema: "gitpm/task@2", id: "T-26-LOAD", project: projectId, title: "Deliver", type: "task", status: "in-progress", assignees: [aliceId], schedules: { plan: { effort_hours: 20, start: "2026-07-06", finish: "2026-07-10" } }, lifecycle: "active" });
-    await admin.createEntity("DRF-ADMIN", "availability-events", "", { schema: "gitpm/availability-event@1", id: "A-26-BOB", person: bobId, start: "2026-07-20", finish: "2026-07-31", kind: "vacation", availability_percent: 0, state: "planned", lifecycle: "active" });
+    await admin.createEntity("DRF-ADMIN", "availability-events", "", { schema: "gitpm/availability-event@1", id: "A-26-BOB", person: bobId, start: "2026-07-20", finish: "2026-07-31", kind: "vacation", availability_percent: 0, state: "active", lifecycle: "active" });
     const rendered = render(<AdminWorkspace api={api} draft={draft} locale="en" now="2026-07-10" onNavigate={onNavigate} onOpenPerson={vi.fn()} role="Maintainer" surface="people" onChanged={vi.fn(async () => undefined)} />);
 
     await screen.findByText("Alice");

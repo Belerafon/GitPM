@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ENTITY_ID_PREFIX, newUniqueEntityId } from "@gitpm/shared";
 import { EditorDrawer } from "./editor-drawer.js";
 import { dayUnit, formatDateOnly, formatNumber, type Locale, type MessageKey } from "./i18n.js";
-import { ANNUAL_VACATION_DAYS, annualVacationAllowance, isPastAbsence, vacationYearBalance, type AvailabilityRecord } from "./people-availability-model.js";
+import { ANNUAL_VACATION_DAYS, annualVacationAllowance, availabilityProgress, isPastAbsence, vacationYearBalance, type AvailabilityRecord } from "./people-availability-model.js";
 import type { EntityResult, GitPmDocument } from "./types.js";
 import { DEFAULT_WORKING_CALENDAR, isIsoDate, localCalendarDate, workingDayCount, type WorkingCalendar } from "./vacation-calendar-model.js";
 
@@ -19,6 +19,7 @@ const kindKey = (kind: string): MessageKey => ({
 }[kind] ?? "availability.kindOther") as MessageKey;
 const stateKey = (state: string): MessageKey => ({
   planned: "availability.statePlanned",
+  "in-progress": "availability.stateInProgress",
   taken: "availability.stateTaken",
   cancelled: "availability.stateCancelled",
 }[state] ?? "availability.statePlanned") as MessageKey;
@@ -32,7 +33,7 @@ function asRecord(event: EntityResult): AvailabilityRecord {
     start: text(event.document, "start"),
     finish: text(event.document, "finish"),
     kind: text(event.document, "kind") || "other",
-    state: text(event.document, "state") || "planned",
+    state: text(event.document, "state") || "active",
     lifecycle: text(event.document, "lifecycle"),
   };
 }
@@ -41,12 +42,6 @@ function eventDays(event: EntityResult, calendar: WorkingCalendar): number {
   const start = text(event.document, "start");
   const finish = text(event.document, "finish");
   return isIsoDate(start) && isIsoDate(finish) && start <= finish ? workingDayCount(start, finish, calendar) : 0;
-}
-
-function displayStateKey(event: EntityResult, today: string): MessageKey {
-  const state = text(event.document, "state");
-  if (state !== "cancelled" && isPastAbsence(text(event.document, "finish"), today)) return "availability.past";
-  return stateKey(state);
 }
 
 export function PeopleAvailability({ events, extraDays = 0, extraDaysReason = "", locale, onCreate, onUpdate, onUpdateAllowance, personId, readOnly, t, today = localCalendarDate(), calendar = DEFAULT_WORKING_CALENDAR }: {
@@ -88,7 +83,7 @@ export function PeopleAvailability({ events, extraDays = 0, extraDaysReason = ""
       finish: String(data.get("finish") ?? ""),
       kind: String(data.get("kind") ?? "other"),
       availability_percent: Number(data.get("availability_percent")),
-      state: String(data.get("state") ?? "planned"),
+      state: String(data.get("state") ?? "active"),
       ...(note === "" ? {} : { note_markdown: note }),
       lifecycle: "active",
     };
@@ -121,7 +116,7 @@ export function PeopleAvailability({ events, extraDays = 0, extraDaysReason = ""
         <label data-field-hint={t("fieldHint.availabilityFinish")}>{t("availability.finish")}<input defaultValue={selected === undefined ? "" : text(selected.document, "finish")} name="finish" required type="date" /></label>
         <label data-field-hint={t("fieldHint.availabilityKind")}>{t("availability.kind")}<select defaultValue={selected === undefined ? "vacation" : text(selected.document, "kind")} name="kind"><option value="vacation">{t("availability.kindVacation")}</option><option value="day-off">{t("availability.kindDayOff")}</option><option value="sick-leave">{t("availability.kindSickLeave")}</option><option value="training">{t("availability.kindTraining")}</option><option value="other">{t("availability.kindOther")}</option></select></label>
         <label>{t("availability.percent")}<input defaultValue={selected === undefined ? 0 : number(selected.document, "availability_percent")} max="100" min="0" name="availability_percent" required step="0.25" type="number" /></label>
-        <label data-field-hint={t("fieldHint.availabilityState")}>{t("availability.state")}<select defaultValue={selected === undefined ? "planned" : text(selected.document, "state")} name="state"><option value="planned">{t("availability.statePlanned")}</option><option value="taken">{t("availability.stateTaken")}</option><option value="cancelled">{t("availability.stateCancelled")}</option></select></label>
+        <label data-field-hint={t("fieldHint.availabilityState")}>{t("availability.state")}<select defaultValue={selected === undefined ? "active" : text(selected.document, "state")} name="state"><option value="active">{t("availability.stateActive")}</option><option value="cancelled">{t("availability.stateCancelled")}</option></select></label>
         <label>{t("availability.note")}<textarea defaultValue={selected === undefined ? "" : text(selected.document, "note_markdown")} name="note" rows={4} /></label>
         <div className="editor-drawer-actions"><button onClick={() => setEditing(null)} type="button">{t("core.cancel")}</button><button className="primary" disabled={readOnly}>{t("core.save")}</button></div>
       </form>}
@@ -146,9 +141,14 @@ function AbsenceRow({ calendar, event, locale, onOpen, readOnly, t, today }: {
   readonly today: string;
 }) {
   const days = eventDays(event, calendar);
+  const progress = availabilityProgress({
+    state: text(event.document, "state") || "active",
+    start: text(event.document, "start"),
+    finish: text(event.document, "finish"),
+  }, today);
   const past = isPastAbsence(text(event.document, "finish"), today);
-  return <button className={`${text(event.document, "state")}${past ? " past" : ""}`} disabled={readOnly} onClick={onOpen} type="button">
-    <span><strong>{availabilityKindLabel(t, text(event.document, "kind"))}</strong><small>{t(displayStateKey(event, today))}</small></span>
+  return <button className={`${progress}${past ? " past" : ""}`} disabled={readOnly} onClick={onOpen} type="button">
+    <span><strong>{availabilityKindLabel(t, text(event.document, "kind"))}</strong><small>{t(stateKey(progress))}</small></span>
     <time>{t("availability.range", { start: formatDateOnly(locale, text(event.document, "start")), finish: formatDateOnly(locale, text(event.document, "finish")) })}</time>
     <span>{t("availability.eventDays", { count: days, unit: dayUnit(locale, days) })}</span>
     <span>{t("availability.availablePercent", { percent: formatNumber(locale, number(event.document, "availability_percent")) })}</span>

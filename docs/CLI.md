@@ -106,8 +106,9 @@ repository schema и аналитическими `report-*.csv`, repository ZIP
 Availability Event создаётся тем же generic-контуром, например
 `gitpm entity create --type availability-event --file absence.yaml`. Коллекция
 `availability-events` поддерживает `list/show/update/archive/restore/delete`; канонический
-путь — `availability/<A-id>.yaml`. Состояния `planned` и `taken` влияют на будущий Workload,
-`cancelled` сохраняет историю без уменьшения capacity.
+путь — `availability/<A-id>.yaml`. Состояние `active` влияет на Workload,
+`cancelled` сохраняет историю без уменьшения capacity. `planned` и `taken` в файл не
+записываются: календари, баланс и экспорт считают их по датам.
 
 `entity update` атомарно изменяет любую поддерживаемую сущность. `--type` и `--id` однозначно
 выбирают существующую сущность. Небольшой patch задаётся повторяемыми `--set field=yaml-value` и

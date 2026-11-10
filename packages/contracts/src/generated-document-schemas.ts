@@ -49,8 +49,7 @@ export const availabilityEventSchema = {
     },
     "state": {
       "enum": [
-        "planned",
-        "taken",
+        "active",
         "cancelled"
       ]
     },

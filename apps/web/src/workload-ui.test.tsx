@@ -26,7 +26,7 @@ const archivedProjectId = "P-26-999999";
 const archivedProject = result({ schema: "gitpm/project@2", id: archivedProjectId, name: "Legacy", status: "backlog", lifecycle: "archived" });
 const archivedProjectTask = result({ ...shared.document, id: "T-26-999999", project: archivedProjectId, title: "Legacy active task" });
 const reviewers = result({ schema: "gitpm/team@1", id: "G-26-555555", name: "Reviewers", members: [linusId], lifecycle: "active" });
-const absence = result({ schema: "gitpm/availability-event@1", id: "A-26-555555", person: adaId, start: "2026-07-09", finish: "2026-07-09", kind: "vacation", availability_percent: 0, state: "planned", lifecycle: "active" });
+const absence = result({ schema: "gitpm/availability-event@1", id: "A-26-555555", person: adaId, start: "2026-07-09", finish: "2026-07-09", kind: "vacation", availability_percent: 0, state: "active", lifecycle: "active" });
 
 afterEach(cleanup);
 describe("Workload UI", () => {

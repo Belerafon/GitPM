@@ -255,8 +255,9 @@ Create/import input может не содержать `calendar`; mutation boun
 Availability Event хранится в `availability/<id>.yaml` и содержит `schema`, `id`,
 `person`, `start`, `finish`, `kind`, `availability_percent`, `state` и `lifecycle`.
 Это глобальное персональное исключение поверх Calendar, а не Project-сущность.
-Активные состояния `planned` и `taken` уменьшают capacity; `cancelled` не влияет на расчёт.
-Диапазоны активных событий одного Person не пересекаются. Пересечение с Task остаётся
+Состояние `active` уменьшает capacity; `cancelled` не влияет на расчёт. Признаки
+planned и taken не хранятся и вычисляются по датам.
+Диапазоны событий с `lifecycle: active` и `state: active` одного Person не пересекаются. Пересечение с Task остаётся
 допустимым плановым окном, но создаёт warning и отображается как пауза выполнения.
 
 ### 6.9. Saved View

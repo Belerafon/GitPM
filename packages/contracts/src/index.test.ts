@@ -51,7 +51,7 @@ describe("@gitpm/contracts runtime contracts", () => {
         finish: "2026-08-21",
         kind: "vacation",
         availability_percent: 0,
-        state: "planned",
+        state: "active",
         lifecycle: "active",
       },
       path: "availability/A-26-VACATN.yaml",
@@ -60,6 +60,18 @@ describe("@gitpm/contracts runtime contracts", () => {
     });
 
     expect(result.document.schema).toBe("gitpm/availability-event@1");
+    expect(() => decodeEntityResult({
+      document: { ...result.document, state: "planned" },
+      path: "availability/A-26-VACATN.yaml",
+      blob_id: "a".repeat(40),
+      draft_fingerprint: "b".repeat(64),
+    })).toThrow(ApiContractError);
+    expect(() => decodeEntityResult({
+      document: { ...result.document, state: "taken" },
+      path: "availability/A-26-VACATN.yaml",
+      blob_id: "a".repeat(40),
+      draft_fingerprint: "b".repeat(64),
+    })).toThrow(ApiContractError);
   });
 
   it("decodes paired personal vacation adjustment fields and rejects either field alone", () => {

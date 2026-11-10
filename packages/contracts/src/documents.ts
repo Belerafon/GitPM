@@ -67,7 +67,7 @@ export interface EntityDocument extends Readonly<Record<string, unknown>> {
   readonly start?: string;
   readonly finish?: string;
   readonly availability_percent?: number;
-  readonly state?: "planned" | "taken" | "cancelled";
+  readonly state?: "active" | "cancelled";
   readonly note_markdown?: string;
   readonly kind?: "list" | "board" | "vacation" | "day-off" | "sick-leave" | "training" | "other";
   readonly filters?: SavedViewFilters;

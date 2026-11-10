@@ -37,7 +37,7 @@ export interface WorkloadCalendar extends CalendarDefinition {
 export interface WorkloadAvailabilityEvent extends AvailabilityException {
   readonly id: string;
   readonly person: string;
-  readonly state: "planned" | "taken" | "cancelled";
+  readonly state: "active" | "cancelled";
   readonly lifecycle: "active" | "archived";
 }
 
@@ -305,7 +305,7 @@ export function buildWorkloadReport(input: WorkloadWorkspaceInput): WorkloadRepo
   const availabilityEvents = (input.availabilityEvents ?? []).map((event): WorkloadAvailabilityEvent => ({
     id: entityId(event), person: documentText(event, "person") ?? "", start: documentText(event, "start") ?? "",
     finish: documentText(event, "finish") ?? "", availability_percent: documentNumber(event, "availability_percent") ?? 100,
-    state: documentText(event, "state") === "taken" ? "taken" : documentText(event, "state") === "cancelled" ? "cancelled" : "planned",
+    state: documentText(event, "state") === "cancelled" ? "cancelled" : "active",
     lifecycle: lifecycle(event),
   }));
   const activeCalendarIds = new Set(calendars.filter((calendar) => calendar.lifecycle === "active").map((calendar) => calendar.id));

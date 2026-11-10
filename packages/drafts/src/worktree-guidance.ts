@@ -256,8 +256,9 @@ Core schemas and relations:
   optional email. Omitted display format inherits repository \`default_person_name_format\`.
 - \`gitpm/team@1\`: name, Person members, lifecycle.
 - \`gitpm/calendar@1\`: working weekdays, holidays, lifecycle.
-- \`gitpm/availability-event@1\`: Person, date range, kind, availability percentage, state,
-  lifecycle, and an optional note.
+- \`gitpm/availability-event@1\`: Person, date range, kind, availability percentage, state
+  (\`active\` or \`cancelled\` only), lifecycle, and an optional note. Do not store \`planned\`
+  or \`taken\`; views derive planned, in progress, and taken from the dates.
 - \`gitpm/saved-view@1\`: owning Project, list or board kind, filters, optional status grouping.
 - \`gitpm/comment@1\`: owning Project and Task, author snapshot, timestamps, state, body, and
   mentions.
