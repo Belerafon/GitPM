@@ -110,7 +110,7 @@ test.describe("GitPM browser UI", () => {
 
       await expect(page.getByRole("heading", { name: "Petrova Anna", exact: true })).toBeVisible();
       await expect(page.getByRole("heading", { name: "Schedule", exact: true })).toBeVisible();
-      await expect(page.locator('[data-date="2026-07-01"]')).toHaveClass(/busy/u);
+      await expect(page.locator('[data-date="2026-07-01"]')).toHaveClass(/occupied/u);
       await expect(page.locator('[data-date="2026-07-03"]')).toHaveClass(/free/u);
       const responsibilities = page.getByRole("heading", { name: "Responsible for", exact: true }).locator("xpath=ancestor::section[1]");
       await expect(responsibilities.getByRole("button", { name: /GitPM launch/u })).toBeVisible();
