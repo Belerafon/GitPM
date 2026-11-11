@@ -358,9 +358,7 @@ function ProjectResponsibility({ title, empty, projects, projectTaskCounts, onNa
 }
 
 const isoDate = (date: Date) => date.toISOString().slice(0, 10);
-const monthKey = (date: Date) => date.toISOString().slice(0, 7);
 const monthDate = (value: string) => new Date(`${value}-01T00:00:00.000Z`);
-const moveMonth = (value: string, offset: number) => { const date = monthDate(value); date.setUTCMonth(date.getUTCMonth() + offset); return monthKey(date); };
 type TaskFieldReader = (document: Readonly<Record<string, unknown>>, key: string) => string;
 const taskCoversDate = (task: EntityResult, date: string, text: TaskFieldReader) => {
   const start = text(task.document, "start"); const due = text(task.document, "due");
@@ -372,12 +370,13 @@ const initialTaskMonth = (tasks: readonly EntityResult[], text: TaskFieldReader,
   const dates = tasks.flatMap((task) => [text(task.document, "start"), text(task.document, "due")]).filter(validDate).sort();
   return (dates.find((date) => date >= today) ?? dates.at(-1) ?? today).slice(0, 7);
 };
-const calendarDates = (value: string) => {
-  const first = monthDate(value); const firstWeekday = (first.getUTCDay() + 6) % 7; first.setUTCDate(first.getUTCDate() - firstWeekday);
-  const last = monthDate(moveMonth(value, 1)); last.setUTCDate(0); const trailing = 6 - ((last.getUTCDay() + 6) % 7); last.setUTCDate(last.getUTCDate() + trailing);
-  const result: Date[] = [];
-  for (const current = new Date(first); current <= last; current.setUTCDate(current.getUTCDate() + 1)) result.push(new Date(current));
-  return result;
+const monthCells = (year: number, monthIndex: number): Array<Date | null> => {
+  const lead = (new Date(Date.UTC(year, monthIndex, 1)).getUTCDay() + 6) % 7;
+  const count = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
+  const cells: Array<Date | null> = Array.from({ length: lead }, () => null);
+  for (let day = 1; day <= count; day += 1) cells.push(new Date(Date.UTC(year, monthIndex, day)));
+  while (cells.length % 7 !== 0) cells.push(null);
+  return cells;
 };
 
 const PROJECT_COLORS = ["#4f806d", "#3d6f99", "#a56b32", "#6d5b99", "#2f7d78", "#8d4d55", "#5d7a32", "#8a6230"] as const;
@@ -406,14 +405,17 @@ const dayMatches = (day: CalendarDayView, filter: DayFilter) => {
 };
 
 function TaskCalendar({ availabilityEvents, tasks, calendar, projectNames, locale, onNavigate, text, t, today }: { readonly availabilityEvents: readonly EntityResult[]; readonly tasks: readonly EntityResult[]; readonly calendar?: EntityResult; readonly projectNames: ReadonlyMap<string, string>; readonly locale: Locale; readonly onNavigate: WorkspaceNavigate; readonly text: (document: Readonly<Record<string, unknown>>, key: string) => string; readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string; readonly today: string }) {
-  const [month, setMonth] = useState(() => initialTaskMonth(tasks, text, today));
+  const [year, setYear] = useState(() => Number(initialTaskMonth(tasks, text, today).slice(0, 4)));
   const [filter, setFilter] = useState<DayFilter | null>(null);
   const [openDate, setOpenDate] = useState<string | null>(null);
   const [hintPosition, setHintPosition] = useState<{ readonly top: number; readonly left: number } | null>(null);
   const hintId = useId();
   const hintRef = useRef<HTMLDivElement | null>(null);
   const anchorRef = useRef<HTMLButtonElement | null>(null);
-  const dates = calendarDates(month);
+  const months = Array.from({ length: 12 }, (_, index) => {
+    const key = `${year}-${String(index + 1).padStart(2, "0")}`;
+    return { index, key, label: new Intl.DateTimeFormat(locale, { month: "long", timeZone: "UTC" }).format(monthDate(key)), cells: monthCells(year, index) };
+  });
   const workingWeekdays = new Set(calendar === undefined ? [1, 2, 3, 4, 5] : numbers(calendar.document, "working_weekdays"));
   const holidays = new Set(calendar === undefined ? [] : strings(calendar.document, "holidays").filter(validDate));
   const availabilityText = (event: EntityResult, key: string) => typeof event.document[key] === "string" ? event.document[key] as string : "";
@@ -421,23 +423,23 @@ function TaskCalendar({ availabilityEvents, tasks, calendar, projectNames, local
   const exceptions = activeAvailability.map((event) => ({ start: availabilityText(event, "start"), finish: availabilityText(event, "finish"), availability_percent: number(event.document, "availability_percent") }));
   const availability = (date: Date) => availabilityPercentOnDate(isoDate(date), exceptions);
   const isWorking = (date: Date) => workingWeekdays.has(date.getUTCDay() === 0 ? 7 : date.getUTCDay()) && !holidays.has(isoDate(date));
-  const days: CalendarDayView[] = dates.map((date) => {
+  const days: CalendarDayView[] = months.flatMap((month) => month.cells.flatMap((date) => {
+    if (date === null) return [];
     const dateValue = isoDate(date);
     const tasksForDay = tasks.filter((task) => taskCoversDate(task, dateValue, text));
     const events = activeAvailability.filter((event) => availabilityText(event, "start") <= dateValue && dateValue <= availabilityText(event, "finish"));
     const availablePercent = availability(date);
-    const inMonth = monthKey(date) === month;
     const holiday = holidays.has(dateValue);
     const working = isWorking(date);
     const tone: DayTone = availablePercent === 0 ? "unavailable" : availablePercent < 100 ? "partial" : !working ? "off" : tasksForDay.length === 0 ? "free" : "occupied";
-    return { date, dateValue, inMonth, holiday, working, availablePercent, tasks: tasksForDay, events, tone, conflict: inMonth && working && availablePercent < 100 && tasksForDay.length > 0 };
-  });
-  const monthDays = days.filter((day) => day.inMonth);
+    return [{ date, dateValue, inMonth: true, holiday, working, availablePercent, tasks: tasksForDay, events, tone, conflict: working && availablePercent < 100 && tasksForDay.length > 0 }];
+  }));
+  const monthDays = days;
   const workdays = monthDays.filter((day) => day.working);
   const freeDays = workdays.filter((day) => day.availablePercent === 100 && day.tasks.length === 0).length;
   const taskDays = workdays.filter((day) => day.tasks.length > 0).length;
   const availabilityConflictDays = workdays.filter((day) => day.conflict).length;
-  const monthLabel = new Intl.DateTimeFormat(locale, { month: "long", year: "numeric", timeZone: "UTC" }).format(monthDate(month));
+  const yearLabel = String(year);
   const projectIds = [...new Set(days.flatMap((day) => day.tasks.map((task) => text(task.document, "project"))))].sort((left, right) => (projectNames.get(left) ?? left).localeCompare(projectNames.get(right) ?? right, locale));
   const openDay = days.find((day) => day.dateValue === openDate) ?? null;
   const closeHint = () => {
@@ -450,9 +452,9 @@ function TaskCalendar({ availabilityEvents, tasks, calendar, projectNames, local
     setHintPosition({ top: rect.top, left: rect.right + 8 });
     setOpenDate(dateValue);
   };
-  const changeMonth = (offset: number) => {
+  const changeYear = (offset: number) => {
     closeHint();
-    setMonth((current) => moveMonth(current, offset));
+    setYear((current) => current + offset);
   };
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -487,7 +489,17 @@ function TaskCalendar({ availabilityEvents, tasks, calendar, projectNames, local
   }, [openDate]);
   const toggleFilter = (next: DayFilter) => setFilter((current) => current === next ? null : next);
 
-  return <section className="card people-task-calendar"><div className="people-calendar-heading"><div><h3>{t("people.schedule")}</h3><p>{t("people.scheduleDescription")}</p></div><div className="people-calendar-navigation"><button aria-label={t("people.previousMonth")} onClick={() => changeMonth(-1)} title={t("people.previousMonth")} type="button">←</button><strong aria-live="polite">{monthLabel}</strong><button aria-label={t("people.nextMonth")} onClick={() => changeMonth(1)} title={t("people.nextMonth")} type="button">→</button></div></div>
+  const dayByDate = new Map(days.map((day) => [day.dateValue, day]));
+  const dayButton = (day: CalendarDayView) => {
+    const cellLabel = day.events[0] !== undefined ? availabilityKindLabel(t, availabilityText(day.events[0], "kind")) : day.holiday ? t("people.holiday") : day.availablePercent < 100 ? t("people.availableShort", { percent: formatNumber(locale, day.availablePercent) }) : "";
+    const showAlert = day.holiday && day.tasks.length > 0;
+    const matched = filter !== null && dayMatches(day, filter);
+    const dimmed = filter !== null && !matched;
+    const ariaLabel = [formatDateOnly(locale, day.dateValue), day.dateValue === today ? t("people.legendToday") : "", cellLabel, day.tasks.length > 0 ? t("people.tasksOnDay", { count: day.tasks.length }) : "", day.conflict ? t("availability.taskPaused") : ""].filter((part) => part !== "").join(" · ");
+    return <button aria-controls={openDate === day.dateValue ? hintId : undefined} aria-expanded={openDate === day.dateValue} aria-label={ariaLabel} className={["people-calendar-day", day.tone, day.dateValue === today ? "today" : "", day.conflict ? "conflict" : "", openDate === day.dateValue ? "hint-open" : "", matched ? "matched" : "", dimmed ? "dimmed" : ""].filter((part) => part !== "").join(" ")} data-date={day.dateValue} key={day.dateValue} onBlur={(event) => { if (event.relatedTarget instanceof Node && hintRef.current?.contains(event.relatedTarget) === true) return; closeHint(); }} onFocus={(event) => showHint(day.dateValue, event.currentTarget)} onMouseEnter={(event) => showHint(day.dateValue, event.currentTarget)} onMouseLeave={closeHint} type="button"><time dateTime={day.dateValue}>{day.date.getUTCDate()}</time>{showAlert && <span aria-hidden="true" className="people-calendar-alert" />}</button>;
+  };
+
+  return <section className="card people-task-calendar"><div className="people-calendar-heading"><div><h3>{t("people.schedule")}</h3><p>{t("people.scheduleDescription")}</p></div><div className="people-calendar-navigation"><button aria-label={t("people.previousYear")} onClick={() => changeYear(-1)} title={t("people.previousYear")} type="button">←</button><strong aria-live="polite">{yearLabel}</strong><button aria-label={t("people.nextYear")} onClick={() => changeYear(1)} title={t("people.nextYear")} type="button">→</button></div></div>
     <div className="people-calendar-summary" role="group" aria-label={t("people.filterDays")}>
       <button aria-pressed={filter === "work"} className="calendar-summary-work" onClick={() => toggleFilter("work")} type="button">{t("people.workdayCount", { count: workdays.length })}</button>
       <button aria-pressed={filter === "free"} className="calendar-summary-free" onClick={() => toggleFilter("free")} type="button">{t("people.freeDayCount", { count: freeDays })}</button>
@@ -495,18 +507,9 @@ function TaskCalendar({ availabilityEvents, tasks, calendar, projectNames, local
       <button aria-pressed={filter === "conflict"} className="calendar-summary-availability" onClick={() => toggleFilter("conflict")} type="button">{t("availability.conflictDayCount", { count: availabilityConflictDays })}</button>
     </div>
     {projectIds.length > 0 && <div className="people-project-legend">{projectIds.map((projectId) => <span key={projectId}><i aria-hidden="true" style={{ background: projectColor(projectId, projectIds) }} />{projectNames.get(projectId) ?? projectId}</span>)}</div>}
-    <div className="people-calendar-scroll"><div className="people-calendar-grid" aria-label={t("people.calendarGrid")}>
-      {[1, 2, 3, 4, 5, 6, 7].map((day) => <div className="people-calendar-weekday" key={day}>{t(`admin.day${day}` as MessageKey)}</div>)}
-      {days.map((day) => {
-        const cellLabel = day.events[0] !== undefined ? availabilityKindLabel(t, availabilityText(day.events[0], "kind")) : day.holiday ? t("people.holiday") : day.availablePercent < 100 ? t("people.availableShort", { percent: formatNumber(locale, day.availablePercent) }) : "";
-        const showCount = day.inMonth && day.working && day.tasks.length > 0;
-        const showAlert = day.inMonth && day.holiday && day.tasks.length > 0;
-        const matched = filter !== null && dayMatches(day, filter);
-        const dimmed = filter !== null && day.inMonth && !matched;
-        const ariaLabel = [formatDateOnly(locale, day.dateValue), day.dateValue === today ? t("people.legendToday") : "", cellLabel, showCount || showAlert ? t("people.tasksOnDay", { count: day.tasks.length }) : "", day.conflict ? t("availability.taskPaused") : ""].filter((part) => part !== "").join(" · ");
-        return <button aria-controls={openDate === day.dateValue ? hintId : undefined} aria-expanded={openDate === day.dateValue} aria-label={ariaLabel} className={["people-calendar-day", day.tone, day.inMonth ? "" : "outside", day.dateValue === today ? "today" : "", day.conflict ? "conflict" : "", openDate === day.dateValue ? "hint-open" : "", matched ? "matched" : "", dimmed ? "dimmed" : ""].filter((part) => part !== "").join(" ")} data-date={day.dateValue} key={day.dateValue} onBlur={(event) => { if (event.relatedTarget instanceof Node && hintRef.current?.contains(event.relatedTarget) === true) return; closeHint(); }} onFocus={(event) => showHint(day.dateValue, event.currentTarget)} onMouseEnter={(event) => showHint(day.dateValue, event.currentTarget)} onMouseLeave={closeHint} type="button"><span className="people-calendar-date"><time dateTime={day.dateValue}>{day.date.getUTCDate()}</time>{cellLabel !== "" && <span className="people-calendar-status">{cellLabel}</span>}{showCount && <strong className="people-calendar-count">{day.tasks.length}</strong>}{showAlert && <span aria-hidden="true" className="people-calendar-alert" />}</span></button>;
-      })}
-    </div></div>
+    <div className="people-calendar-year" aria-label={t("people.calendarGrid")}>
+      {months.map((month) => <section className="people-calendar-month" key={month.key}><h4>{month.label}</h4><div className="people-calendar-grid">{[1, 2, 3, 4, 5, 6, 7].map((weekday) => <div className={`people-calendar-weekday${workingWeekdays.has(weekday) ? "" : " weekend"}`} key={weekday}>{t(`admin.day${weekday}` as MessageKey)}</div>)}{month.cells.map((date, index) => { const day = date === null ? undefined : dayByDate.get(isoDate(date)); return day === undefined ? <span className="people-calendar-pad" key={`${month.key}-pad-${index}`} /> : dayButton(day); })}</div></section>)}
+    </div>
     {openDay !== null && typeof document !== "undefined" && createPortal(<DayHint availabilityText={availabilityText} day={openDay} hintId={hintId} hintRef={hintRef} locale={locale} place={hintPosition} projectIds={projectIds} projectNames={projectNames} t={t} text={text} today={today} onNavigate={onNavigate} />, document.body)}
   </section>;
 }
