@@ -52,11 +52,12 @@ describe("person profile", () => {
     const overlapDay = document.querySelector<HTMLElement>('[data-date="2026-07-22"]')!;
     expect(overlapDay.className).toContain("unavailable");
     expect(overlapDay.className).toContain("conflict");
-    expect(within(overlapDay).getByText("Vacation")).toBeTruthy();
+    expect(within(overlapDay).queryByText("Vacation")).toBeNull();
     expect(within(overlapDay).queryByText("Ship profile")).toBeNull();
     expect(within(overlapDay).queryByText("Paused: person unavailable")).toBeNull();
     fireEvent.mouseEnter(overlapDay);
     const hint = screen.getByRole("region", { name: "Jul 22, 2026" });
+    expect(within(hint).getByText(/Vacation/u)).toBeTruthy();
     expect(within(hint).getByText("Ship profile")).toBeTruthy();
     expect(within(hint).getByText("Review calendar")).toBeTruthy();
     expect(within(hint).getAllByText("Paused: person unavailable")).toHaveLength(1);
@@ -68,6 +69,7 @@ describe("person profile", () => {
     expect(occupiedDay.className).toContain("occupied");
     expect(occupiedDay.className).not.toContain("overlap");
     expect(document.querySelector<HTMLElement>('[data-date="2026-07-27"]')?.className).toContain("free");
+    expect(document.querySelectorAll(".people-calendar-month")).toHaveLength(12);
     fireEvent.click(screen.getByRole("button", { name: /With tasks:/u }));
     expect(occupiedDay.className).toContain("matched");
     expect(document.querySelector<HTMLElement>('[data-date="2026-07-27"]')?.className).toContain("dimmed");
@@ -102,7 +104,7 @@ describe("person profile", () => {
     const holiday = document.querySelector<HTMLElement>('[data-date="2026-07-21"]')!;
     expect(holiday.className).toContain("off");
     expect(holiday.className).not.toContain("overlap");
-    expect(within(holiday).getByText("Holiday")).toBeTruthy();
+    expect(within(holiday).queryByText("Holiday")).toBeNull();
     expect(within(holiday).queryByText("Span the holiday")).toBeNull();
     expect(holiday.querySelector(".people-calendar-alert")).toBeTruthy();
     fireEvent.mouseEnter(holiday);
